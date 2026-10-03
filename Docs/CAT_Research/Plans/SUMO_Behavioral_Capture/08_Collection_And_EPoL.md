@@ -29,6 +29,7 @@ Findings set. Every external claim is cited.
 | 2026-09-30 | §5.7, §7.5, §8.4, §8.6, §10.2, §10.5, §12.2, §13, D8.5, D8.36: the render volume, its margin and the render-cap leak removed; D8.16a withdrawn. The cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has is drawn, so a vehicle appears in frame only where SUMO inserts it, and a heavier scenario runs slower, never thinner. |
 | 2026-10-01 | §5.7: a vehicle SUMO inserts in view appears on the frame SUMO first reports it in, already moving, never on a frame before; measured live on Bahonar, it had appeared a step early, standing at its insertion point. |
 | 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
+| 2026-10-02 | §2.4, §3.5: every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none. A client names each camera as it chooses, used as given or refused, never rewritten; one it does not name is `CARLA-SENSOR-<camera id>`. A name is unique within a process and, set as the camera's `role_name`, visible to every client, so one another camera in the world holds is refused. The uid is unchanged. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -307,8 +308,10 @@ fps" (`run_SCTMV.py:215-219`). Two streams is today's rig. Multi-camera multipli
 
 ### 2.4 What a capture already carries
 
-Per capture, two files sharing a filename stem built from local wall-clock time to the millisecond
-(`FrameRecorder.cs:223-232`):
+Per capture, two files sharing a filename stem: the camera's name and local wall-clock time to the
+millisecond, `<camera name>_<yyyy.MM.dd_HH.mm.ss.fff>` (`CameraName.StillStem`). The name is the one
+the client gave the camera, used as given or refused, or `CARLA-SENSOR-<camera id>` where it gave none;
+captures written before 2026-10-02 carry `SCTMV` where the name is, whatever camera took them:
 
 - a lossless PNG with `carla:solar`, `carla:sensor` and `carla:capture` tEXt chunks
   (`FrameRecorder.cs:225-229`);
@@ -316,8 +319,10 @@ Per capture, two files sharing a filename stem built from local wall-clock time 
   — tick, simulation time, `run_id`, `scenario_id`, `seed` (`CotWriter.cs:40-48`); a `<_solar>` block
   (`:52-66`); the collection platform as a CoT air track with a standard `<sensor>` element and a
   `<_carla_intrinsics>` child carrying `fx, fy, cx, cy, hfov, vfov, distortion, align_offset_m`
-  (`:71-128`); and one `<event>` per telemetered vehicle with `point/lat,lon,hae`, `track/course,speed`,
-  `contact/callsign` and a `_carla` extras block (`:130-198`).
+  (`:71-128`), whose `contact/callsign` is the camera's name and whose uid is
+  `CARLA-SENSOR-<camera id>` unless one is given; and one `<event>` per telemetered vehicle with
+  `point/lat,lon,hae`, `track/course,speed`, `contact/callsign` and a `_carla` extras block
+  (`:130-198`).
 
 Occlusion rides that extras block when it was measured: `occlusion`, `occlusion_level`,
 `occlusion_samples`, `apparent_width_px`, `apparent_height_px`, all absent when unmeasured
@@ -326,8 +331,8 @@ Occlusion rides that extras block when it was measured: `occlusion`, `occlusion_
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
 RunId, ScenarioId, Seed)` (`CaptureMetadata.cs:24-29`) is taken from the very sensor frame that
 produced the pixels (`FrameRecorder.cs:179`), and the record's own doc comment explains why wall-clock
-time cannot serve (`CaptureMetadata.cs:9-14`). Filenames are wall-clock and must never be used to pair
-anything.
+time cannot serve (`CaptureMetadata.cs:9-14`). Filenames are a camera's name and the wall clock, and
+must never be used to pair anything.
 
 **The solar block is already there, and it is already bound to the pixels.** `_solar` carries
 `solar_time`, `date`, `time_zone`, `lat`, `lon`, `sun_elevation_deg`, `sun_azimuth_deg`, `advancing` and
@@ -836,7 +841,13 @@ Three identity defects, one already half-solved:
   `actor_id` has. **Decision: for a session with more than one channel, an authored `sensor_id` is
   required, validated unique within the session, and stable across runs.** Everything in §8, §10 and
   §11 keys on it, and §2.9's finding sharpens it: a camera that must be respawned to change exposure
-  would otherwise change identity mid-session.
+  would otherwise change identity mid-session. **As built (2026-10-02), the `sensor_id` is the
+  camera's name:** its directory, the first part of every capture's file name and its platform
+  track's callsign, which had defaulted to `OVERWATCH` for every camera given none. It is unique
+  within the session without regard to case, since a Windows file system holds `Deck` and `deck` as
+  one name, and the camera is spawned under it as its `role_name`, so a name another client's camera
+  in the same world holds refuses the run at pre-roll. A single channel given none is
+  `CARLA-SENSOR-<camera id>`, unstable across runs as before.
 - **`scenario_id` is still never supplied** (§2.8). Under SUMO drive the analogous identity is the
   scenario configuration, and it must reach `CaptureIdentity` (`CaptureMetadata.cs:24-29`) or the
   captures cannot be tied to the annotations. This belongs to [`04_Contracts.md`](04_Contracts.md); the
@@ -882,20 +893,22 @@ this**, and §15 records the consequence for
 [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s `roots.score` configuration key.
 
 **On-disk layout.** One session directory; one subdirectory per `sensor_id`; the manifest at the
-session root, written by one writer (doc 20 §7.5). Filenames stay local wall-clock stems
-(`FrameRecorder.cs:223-224`) and **nothing pairs across channels by filename** — the join key is the
-tick, which every capture already carries (`CotWriter.cs:42`, `CaptureMetadata.cs:24-29`).
+session root, written by one writer (doc 20 §7.5). A filename is the camera's name and a local
+wall-clock stem (`CameraName.StillStem`), so two channels' captures never share a name, and **nothing
+pairs across channels by filename** — the join key is the tick, which every capture already carries
+(`CotWriter.cs:42`, `CaptureMetadata.cs:24-29`). Captures written before 2026-10-02 are
+`SCTMV_<stem>`.
 
 ```
 <session_root>/
   manifest.json                    # one per session, written incrementally, closed at end   TRUTH
   coverage.jsonl                   # per (sensor, tick, actor) observability, appended       TRUTH
   <sensor_id>/
-    SCTMV_<stem>.png               # imagery                                   OBSERVATION
-    SCTMV_<stem>.collect.json      # pose, intrinsics, RADIOMETRY, solar, tick  OBSERVATION
-    SCTMV_<stem>.xml               # CoT truth sidecar (+ solar policy, residual)  TRUTH
-    SCTMV_<stem>.labels.json       # per-image labels (+ light state, signature)   TRUTH
-    SCTMV_<stem>.depth.png         # optional depth capture                    TRUTH
+    <sensor_id>_<stem>.png             # imagery                                   OBSERVATION
+    <sensor_id>_<stem>.collect.json    # pose, intrinsics, RADIOMETRY, solar, tick  OBSERVATION
+    <sensor_id>_<stem>.xml             # CoT truth sidecar (+ solar policy, residual)  TRUTH
+    <sensor_id>_<stem>.labels.json     # per-image labels (+ light state, signature)   TRUTH
+    <sensor_id>_<stem>.depth.png       # optional depth capture                    TRUTH
 ```
 
 Physically the two roots are two directory trees with the same shape; a release materialises them as

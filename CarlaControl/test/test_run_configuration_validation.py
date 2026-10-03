@@ -210,6 +210,17 @@ def test_two_channels_must_name_distinct_sensors(layout):
     assert "no sensor_id" in only(findings, 11).message
 
 
+def test_two_sensor_names_that_differ_only_in_case_are_one_name(layout):
+    # A sensor_id names its channel's directory and begins every still's file name, and a Windows
+    # file system holds the two as one.
+    document = run_document()
+    first = dict(document["capture"]["channels"][0], sensor_id="Deck-1")
+    document["capture"]["channels"] = [first, dict(first, sensor_id="DECK-1")]
+    *_, findings, _, _ = offline(layout, document)
+    assert ("both name sensor_ids 'Deck-1' and 'DECK-1', which differ only in case"
+            in only(findings, 11).message)
+
+
 # -- render, pacing, mode ------------------------------------------------------------------------
 
 def test_by_default_no_field_limits_the_rendered_population_and_the_old_checks_stay_retired(layout):

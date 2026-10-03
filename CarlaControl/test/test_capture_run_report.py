@@ -68,7 +68,7 @@ class _Arguments:
     fov = 90.0
     platform_type = "uas-fixed"
     platform_affiliation = "f"
-    platform_callsign = "OVERWATCH"
+    camera_name = None
     platform_uid = None
     scenario = None
     scenario_id = None

@@ -10,8 +10,11 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
   * the second shape has none, and a body the pool reused for another vehicle is counted as the
     expected reuse it is, not as a defect;
   * a uid carrying two SUMO vehicles is a defect whatever else is right;
-  * a traffic-manager capture is not faulted for carrying no SUMO id; and
-  * a capture with no moving vehicle draws no band unless a floor is stated.
+  * a traffic-manager capture is not faulted for carrying no SUMO id;
+  * a capture with no moving vehicle draws no band unless a floor is stated; and
+  * every sidecar is read whatever it is named: the recorder names each after its camera,
+    `<camera name>_<capture time>.xml`, and those written before cameras were named are
+    `SCTMV_<capture time>.xml`, so a directory may hold both.
 """
 from __future__ import annotations
 
@@ -49,9 +52,10 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
             f'  </event>\n')
 
 
-def sidecar(directory: Path, tick: int, events: list[str], vehicles: str | None = None) -> None:
+def sidecar(directory: Path, tick: int, events: list[str], vehicles: str | None = None,
+            stem: str | None = None) -> None:
     marker = "" if vehicles is None else f' vehicles="{vehicles}"'
-    (directory / f"SCTMV_{tick}.xml").write_text(
+    (directory / f"{stem or f'SCTMV_{tick}'}.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<events captured="t" count="{len(events)}" source="truth" tick="{tick}" '
         f'sim_time_s="{tick * 0.05:.3f}" telemetry_tick="{tick}"{marker}>\n'
@@ -149,3 +153,26 @@ def test_a_capture_with_no_moving_vehicle_draws_no_band_unless_a_floor_is_stated
 
     floored = audit(tmp_path, floor_hae=1400.0)
     assert [record.sumo_id for record in floored.below_band] == ["b"]
+
+
+def test_sidecars_named_after_their_camera_and_those_from_before_cameras_had_names_are_all_read(
+        tmp_path):
+    # One directory, as a record directory used before and after cameras were named holds: the
+    # old stem, and two cameras' stills under the new one, a name with spaces among them.
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a")],
+            stem="SCTMV_2026.09.16_14.44.31.487")
+    sidecar(tmp_path, 110, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD + 1, 9.0, "a")],
+            stem="DECK-I25_2026.10.02_14.07.22.481")
+    sidecar(tmp_path, 110, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD + 1, 9.0, "a")],
+            stem="Deck Cam #2_2026.10.02_14.07.22.493")
+    (tmp_path / "DECK-I25_2026.10.02_14.07.22.481.png").write_bytes(b"not a sidecar")
+
+    auditor = TruthSidecarAudit()
+    found = auditor.sidecars(tmp_path)
+    result = auditor.audit(found)
+
+    assert sorted(path.name for path in found) == ["DECK-I25_2026.10.02_14.07.22.481.xml",
+                                                   "Deck Cam #2_2026.10.02_14.07.22.493.xml",
+                                                   "SCTMV_2026.09.16_14.44.31.487.xml"]
+    assert result.sidecars == 3 and len(result.records) == 3
+    assert result.defects() == []

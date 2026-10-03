@@ -276,7 +276,8 @@ class RunConfigurationValidator:
     def _channels(effective: EffectiveRunConfiguration,
                   findings: RunConfigurationFindings) -> None:
         count = effective.channel_count
-        seen: dict[str, int] = {}
+        # Each sensor_id taken, compared without regard to case, with the channel that took it.
+        seen: dict[str, tuple[int, str]] = {}
         for index in range(count):
             subject = f"capture.channels[{index}]"
             try:
@@ -295,14 +296,20 @@ class RunConfigurationValidator:
                 RunConfigurationValidator._traffic_prewarm(effective, subject, findings)
             sensor_id = description.sensor_id
             if count > 1:
+                # Compared without regard to case: the sensor_id is the camera's name, which names
+                # the channel's directory and begins every still's file name, and a Windows file
+                # system holds "Deck" and "deck" as one name.
                 if not sensor_id:
                     findings.refuse(11, subject, f"{count} channels are declared and this one has "
                                     "no sensor_id; every channel needs one when there are several")
-                elif sensor_id in seen:
-                    findings.refuse(11, subject, f"channels {seen[sensor_id]} and {index} both name "
-                                    f"sensor_id '{sensor_id}'")
+                elif sensor_id.upper() in seen:
+                    first, taken = seen[sensor_id.upper()]
+                    named = (f"sensor_id '{sensor_id}'" if taken == sensor_id
+                             else f"sensor_ids '{taken}' and '{sensor_id}', which differ only in "
+                                  "case and so name the same files")
+                    findings.refuse(11, subject, f"channels {first} and {index} both name {named}")
                 else:
-                    seen[sensor_id] = index
+                    seen[sensor_id.upper()] = (index, sensor_id)
 
     @staticmethod
     def _traffic_prewarm(effective: EffectiveRunConfiguration, subject: str,

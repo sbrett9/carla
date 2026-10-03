@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 22 | 2026-10-02. `C4`: a `sensor_id` is the camera's name, and every camera has one (§6.1, §6.3). Every capture is named after it, `<sensor_id>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the platform track's callsign is it, where it defaulted to `OVERWATCH` for every camera given none; a camera given none is `CARLA-SENSOR-<actor id>`. Its grammar loses `:`, which no Windows file name holds, and a name is used as given or refused, never rewritten. It is unique within a process and, spawned as the camera's `role_name`, refused where another camera in the world holds it, case aside. The platform track's uid stays `CARLA-SENSOR-<actor id>` |
 | 21 | 2026-10-02. `C2`: two optional performance controls, off by default and recommended for no scenario (§4.2, D4.44, D4.45). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity, chosen by the run -- adds `in_limit` to the admission predicate, two eviction rows (E5, E6) under new numbers and the reason `outside_limit`; a vehicle outside it is simulated, has no body and no imagery-side truth, and is counted. A draw distance changes no admission: every vehicle keeps its body and its truth, and each camera's sidecar marks the vehicles beyond it, which are not observed by that camera (§4.5). The participant guarantee holds with no limit, the default (§4.4). E2, E4, V2.3 and V2.4 stay withdrawn |
 | 20 | 2026-10-02. `C1`: the catalogue carries each body's width without its mirrors (`body_width_m`, §3.2b), measured from the mesh in the editor, beside the box's full extent; SUMO is given the body width (D4.3). `C3`: Bahonar is recompiled with 3 s lane changes and runs as before (§5.2a). `C7`: a body's heading is its own path's, its truth velocity the path's, and SUMO's angle is recorded beside them (§9.1, D4.13) |
 | 19 | 2026-10-01. `C3`: a lane change takes 3 s for every vehicle — the compiler writes `lanechange.duration` 3 into every configuration and the lock records it (§5.2a, D4.42). Measured on the three shipped scenarios; Bahonar deadlocks behind a body wider than its lanes and is not recompiled with it |
@@ -1825,7 +1826,7 @@ is keyed on.
 | `actor_id` | The CARLA server at spawn | spawn → destroy | **No** | sidecar `_carla@actor_id`; CoT `uid` as `CARLA-TRUTH-<actor_id>` (`CotWriter.cs:134`) |
 | `entity_id` | The author | The scenario | **Yes** | spawn attribute `capture:entity_id`; sidecar `_carla@entity_id` |
 | `instance_id` | The annotation compiler, deterministically from `scenario_id` + authored instance name | The scenario | **Yes** | annotation set; sidecar `<_supervision><annotation instance=…>` |
-| `sensor_id` | The operator, in the collection configuration | The capture session | **Yes, once authored** | `platform_uid` on the recorder; the platform event's `uid` in the sidecar |
+| `sensor_id` | The operator, in the collection configuration; `CARLA-SENSOR-<actor id>` where none is given | The capture session | **Yes, once authored** | the camera's name: every capture's file name begins with it, the platform event's `contact/callsign` in the sidecar and `callsign` in the `carla:sensor` PNG chunk, and the camera's `role_name` on the server |
 
 **`sensor_id` today.** The shim defaults it to `platform_uid or f"CARLA-SENSOR-{camera.id}"`
 (`CarlaNet/python/carlanet/__init__.py:1910`; doc 20 §6.3 cites `:1818`, re-resolved here), and a
@@ -1834,6 +1835,23 @@ stable one exists and is plumbed — `CarlaControl/src/carlacontrol/NativeRecord
 `--platform-uid` (`CarlaControlArgumentParser.py:538`). What is missing is a convention requiring it
 and a check. `C4` requires it: a capture session with more than one sensor **must** supply
 `platform_uid` for every sensor, and the driver refuses to start otherwise.
+
+**As built (2026-10-02): the `sensor_id` is the camera's name.** It is carried as the camera's name
+rather than as `platform_uid`: `run_capture` refuses a session of several channels without one per
+channel (check 11, case aside), and every recording entry point takes one — a channel's `sensor_id`,
+`--camera-name` on `run_SCTMV.py`, `run_sumo_drive.py` and `orbiting_drone.py`, and `camera_name` on
+the shim's `start_recording` and `spawn_camera`. Every capture is written as
+`<sensor_id>_<local capture time>` (`CameraName.StillStem`), which was `SCTMV_<local capture time>`
+whatever camera took it, and the platform event's callsign is the `sensor_id`, which defaulted to
+`OVERWATCH` for every camera given none, so two cameras' telemetry collided on it. A camera given no
+name is `CARLA-SENSOR-<actor id>`, unique on its server. The camera is spawned with the name as its
+`role_name`, so any client reading the world's actors sees it: a name another camera in the world
+holds is refused at spawn, and two recorders in one process cannot hold one name. The platform
+event's uid stays `CARLA-SENSOR-<actor id>` unless `platform_uid` is given. CoT keeps the two apart
+by design — the uid a machine identity, the callsign the label a person reads — and the actor id is
+unique on the server with no client having to agree it with another, while a reader that knows the
+platform event by its `CARLA-SENSOR-` prefix keeps working. What the uid does not give is stability
+across runs; the name now does, in the callsign and in every file name.
 
 ### 6.2 Cardinality, and the one that surprises people
 
@@ -1893,7 +1911,7 @@ encode anything about a particular object, which is the structural fact `C8` §1
 | `sumo_vehicle_id` | `[A-Za-z0-9_-]+(\.[0-9]+)?` | SUMO appends `.N` to a flow id to name the vehicles it generates (measured: `<flow id="corridor_d0_p0_h0">` yields `corridor_d0_p0_h0.0`). A flow or trip id containing `.` therefore makes the suffix ambiguous, and the existing bridge already splits on the last `.` to recover the flow (`CarlaControl/src/carlacontrol/SumoCotBridge.py:329`). **A flow, trip or vehicle id must not contain `.`** |
 | `entity_id` | `[a-z][a-z0-9_]{0,63}` | Referenced by annotations and by name-convention shorthand |
 | `instance_id` | `[a-z][a-z0-9_]{0,63}` | Derived deterministically, so no counter and no timestamp |
-| `sensor_id` | `[A-Za-z0-9_.:-]{1,63}` | Authored; freer because it may follow an external naming scheme |
+| `sensor_id` | `[A-Za-z0-9_.-]{1,63}`, not a Windows device name (CON, PRN, AUX, NUL, COM0–9, LPT0–9, alone or before a dot), not ending in `.`, and not `CARLA-SENSOR-<digits>` | Authored; freer because it may follow an external naming scheme. It is the camera's name, so it begins every capture's file name and names the channel's directory: `:` was dropped from the grammar on 2026-10-02 because no Windows file name holds it, and the rest is the rule every camera name meets (`CameraName`), whose default form is reserved for cameras given no name. Unique within a session without regard to case |
 
 ### 6.4 Spawn attributes, and the verification of doc 20 §4.5
 
@@ -1995,7 +2013,7 @@ performing it.
 | truth event | SUMO behaviour record | `sumo_vehicle_id` | The primary join. Requires `capture:sumo_id` to reach the sidecar |
 | truth event | truth event, across ticks | `actor_id` | Intra-run, within one rendering only |
 | truth event | annotation set | `entity_id`, then `instance_id` | Cross-run comparison rests on `entity_id`; `actor_id` cannot |
-| capture | capture, across sensors | `tick` | **Not filenames.** The recorder's file stem is local wall-clock time to the millisecond and two cameras sample on their own phase, so the same simulated instant carries different names in different directories (doc 20 §7.5; the tick is on every capture) |
+| capture | capture, across sensors | `tick` | **Not filenames.** The recorder's file stem is the camera's name and local wall-clock time to the millisecond, and two cameras sample on their own phase, so the same simulated instant carries different names in different directories (doc 20 §7.5; the tick is on every capture) |
 | an external consumer's track | truth | position and time, **never uid** | The rule `C8` §10.6 *documents* and this pipeline does not perform. [doc 09 §9](../../Findings/09_Telemetry_CoT_Contract.md) fixes it; `C8` §10.8 is why the corpus keeps an identifier join unavailable |
 | run manifest | captures | `run_id` + `scenario_id` | Both must be supplied — §5.6 |
 | render state | truth | `sumo_vehicle_id`, then `rendered_spans[].actor_id` | The only way to recover which actor was which rendering |
@@ -4609,7 +4627,7 @@ cheapest one: it touches neither the server nor the tick thread.
 | Question | Answer, from the directory alone |
 |---|---|
 | How many frames have been written? | Count the files in the `OBSERVATION` root. Under W3 every one of them is a completed write, and under W1 every one of them is complete |
-| How far has the run got? | The `tick` and `sim_time_s` attributes on the most recent complete sidecar (`CotWriter.cs:42-43`) — **not** the file name, which is local wall-clock to the millisecond (`FrameRecorder.cs:223-224`) and is not a join key (`C4` §6.6) |
+| How far has the run got? | The `tick` and `sim_time_s` attributes on the most recent complete sidecar (`CotWriter.cs:42-43`) — **not** the file name, which is the camera's name and local wall-clock to the millisecond (`CameraName.StillStem`) and is not a join key (`C4` §6.6) |
 | Which vehicles are in the render set, and which were released? | The run manifest's appended admission and release rows (`C2` §4.5) |
 | How many annotated intervals have closed? | The manifest's interval close rows — for intervals that were rendered and written; see gap 1 below |
 | What did the run bind to, and what is it a regeneration of? | `run_record.jsonl`'s first line, present from before the first capture (§12.2) |

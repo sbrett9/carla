@@ -24,6 +24,11 @@ The world must already be running and loaded (RunCarlaServer, then the world bui
 run_SCTMV.py). The session takes its clock, hides the generated road and signal layers, drives the
 vehicles from SUMO, and gives everything back when the run ends however it ends.
 
+Each channel's camera is named by its `sensor_id` -- or, a single channel given none,
+`CARLA-SENSOR-<camera id>` -- and every capture in the channel's directory is
+`<name>_<local capture time>`, with the name as its platform track's callsign. A name another camera
+in the world already holds refuses the run at pre-roll.
+
 Exit status, read from the run result's outcome:
   0 run_finished       the window's end, or the scenario's, was reached
   1 usage_error        the invocation could not be resolved

@@ -114,10 +114,10 @@ caller's to supply, is in
 flight controls and heads-up display of CarlaControl/scripts/run_free_move_camera.py, opened over
 the centre of the world's staging bounds at `--camera-z`, looking straight down. F starts a
 recording span from that camera and F again ends it; each span is written to a folder of its own
-under `--record-dir`, named by the camera and the span's start (`CARLA-SENSOR-<camera id>-<UTC>`), with the render set, illumination
-and occlusion the fixed camera's captures carry. A span starts once the camera's photoreal tiles
-are in, waiting up to 90 s for them, and only from the capture window's opening. Esc or closing
-the window ends the drive. The window runs on a thread of its own and never ticks the world, so the
+under `--record-dir`, named by the camera and the span's start (`<camera name>-<UTC>`), with the
+render set, illumination and occlusion the fixed camera's captures carry. A span starts once the
+camera's photoreal tiles are in, waiting up to 90 s for them, and only from the capture window's
+opening. Esc or closing the window ends the drive. The window runs on a thread of its own and never ticks the world, so the
 drive keeps its clock and its pace; the pacing lines say what it held.
 
 By default every vehicle SUMO has is rendered, wherever it is and however many there are
@@ -147,6 +147,16 @@ smaller than the world, with the arguments that take all of it in.
 posed and is in the truth -- and each capture's sidecar marks the vehicles its camera did not draw
 (`beyond_draw_distance`), so none is read as a vehicle the image shows. A server built before it
 carried the call refuses it, and the drive goes on drawing every body at any range and says so.
+
+Every still is named after its camera, `<camera name>_<local capture time>.png` and `.xml`, and the
+camera's platform track carries the name as its callsign. `--camera-name` names the camera, fixed or
+free, so that cameras sharing a world -- this drive's and another client's -- are told apart in their
+files and their telemetry; without it the camera is `CARLA-SENSOR-<camera id>`, which no other camera
+on the server holds. The name is used as given or refused before the drive starts, never rewritten:
+1 to 63 printable ASCII characters, none of `< > : " / \\ | ? *`, no space at either end and no dot
+at the end, not a Windows device name and not of the form `CARLA-SENSOR-<number>`. It is set as the
+camera's `role_name` when the camera is spawned, so a name another camera in the world already holds,
+in any case, is refused then.
 
 Flying: hold the right mouse button and move the mouse to look; W/S A/D E/Q to fly; the wheel sets
 the speed, Shift triples it; Ctrl+click measures a point; B/M draw the perimeter and margin; Space
@@ -341,6 +351,15 @@ def parse_args() -> argparse.Namespace:
                         help="where captures are written; a free view writes each span to a folder "
                              "of its own under it")
     parser.add_argument("--record-hz", type=float, default=2.0)
+    parser.add_argument("--camera-name", default=None, metavar="NAME",
+                        help="the camera's name, fixed or free: every still is written as "
+                             "<NAME>_<local capture time>.png and .xml, a free view's span folders as "
+                             "<NAME>-<UTC>, and it is the callsign of the camera's platform track. "
+                             "Default: CARLA-SENSOR-<camera id>. Used as given or refused, never "
+                             "rewritten: 1 to 63 printable ASCII characters, none of < > : \" / \\ | ? "
+                             "*, no space at either end or dot at the end, not a Windows device name, "
+                             "not CARLA-SENSOR-<number>, and not a name another camera in the world "
+                             "holds")
     parser.add_argument("--camera-z", type=float, default=300.0,
                         help="camera height, metres; a free view starts there over the centre of the "
                              "world's staging bounds, looking straight down")
@@ -663,10 +682,13 @@ def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
     if blueprint.has_attribute("sensor_tick") and args.record_hz > 0:
         blueprint.set_attribute("sensor_tick", str(1.0 / args.record_hz))
     transform = camera_transform(args, centre)
-    camera = world.spawn_actor(blueprint, transform)
-    logger.info("camera %s at (%.1f, %.1f, %.1f), pitch %.1f, yaw %.1f, looking at (%.1f, %.1f)",
-                camera.id, transform.location.x, transform.location.y, transform.location.z,
-                transform.rotation.pitch, transform.rotation.yaw, centre[0], centre[1])
+    # Spawned under its name, which every client reads as the camera's role_name; a name another
+    # camera in the world holds is refused here.
+    camera = world.spawn_camera(blueprint, transform, name=args.camera_name)
+    logger.info("camera %s (%s) at (%.1f, %.1f, %.1f), pitch %.1f, yaw %.1f, looking at (%.1f, %.1f)",
+                world.camera_name(camera), camera.id, transform.location.x, transform.location.y,
+                transform.location.z, transform.rotation.pitch, transform.rotation.yaw, centre[0],
+                centre[1])
     return camera
 
 
@@ -781,7 +803,9 @@ def free_view_settings(args: argparse.Namespace, centre: tuple[float, float], fe
         # Frames are kept as they arrive: this window never ticks the world.
         asynchronous=True,
         fixed_delta=args.fixed_delta,
-        time_rate=1.0)
+        time_rate=1.0,
+        # The flown camera is spawned under it, and every span from it is named after it.
+        camera_name=args.camera_name)
 
 
 class FreeViewParts:
@@ -837,7 +861,8 @@ class FreeViewParts:
 
         It records through a world object of its own, so its recorder is the only one that
         object's stop_recording ever stops. Every span shares this drive's run id, so the spans of
-        one drive can be gathered back into it.
+        one drive can be gathered back into it, and every span's folder and stills are named after
+        the camera: the name it was spawned under, or its default.
         """
         from carlacontrol.SpanRecorder import SpanRecorder
 
@@ -858,7 +883,7 @@ class FreeViewParts:
             return None
 
         return SpanRecorder(
-            args.record_dir, f"CARLA-SENSOR-{camera.id}", args.record_hz,
+            args.record_dir, recording.camera_name(camera), args.record_hz,
             start_recording=start, stop_recording=recording.stop_recording,
             view_readiness=lambda: recording.get_view_readiness(camera),
             may_record=window_open,
@@ -901,6 +926,13 @@ def main() -> int:
                         ("catalogue", args.catalogue)):
         if not os.path.isfile(path):
             logger.error("no %s at %s", label, path)
+            return 2
+    # Refused before anything starts rather than when the camera is spawned, after the prewarm. A
+    # name another camera holds can only be known once the world is reached, at the spawn.
+    if args.camera_name is not None:
+        refused = carla.camera_name_problem(args.camera_name)
+        if refused is not None:
+            logger.error("--camera-name: %s", refused)
             return 2
 
     sun = SunDeclaration(args)
@@ -1053,7 +1085,7 @@ def main() -> int:
                                              render_set=session.RenderSet)
             if recorder is None:
                 return 1
-            logger.info("recording -> %s", args.record_dir)
+            logger.info("recording %s -> %s", recorder.Name, args.record_dir)
 
         started = time.time()
         try:

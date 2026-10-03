@@ -70,8 +70,10 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "carlanet-sensor-pose-" + Guid.NewGuid().ToString("N"));
     private readonly StandInStreams _streams = new(Patience);
+    // The callsign is the camera's name, which a recorder holds for the whole process, so it is one no
+    // other test class records under.
     private readonly SensorPlatformOptions _platform =
-        new(90.0, "a-f-A-M-F-Q", "OVERWATCH", $"CARLA-SENSOR-{Camera}");
+        new(90.0, "a-f-A-M-F-Q", "POSE-CHECK", $"CARLA-SENSOR-{Camera}");
     private MsgPackRpcServer? _rpc;
     private CarlaClient? _client;
 

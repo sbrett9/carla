@@ -122,7 +122,11 @@ class TruthSidecarAudit:
 
     @staticmethod
     def sidecars(directory: Path) -> list[Path]:
-        """Every truth sidecar under `directory`, one channel directory or a whole capture."""
+        """Every truth sidecar under `directory`, one channel directory or a whole capture.
+
+        A sidecar is known by its content, not its name: it is `<camera name>_<capture time>.xml`,
+        or `SCTMV_<capture time>.xml` where it was written before cameras were named, and a
+        directory may hold both, and the stills of several cameras."""
         return sorted(path for path in Path(directory).rglob("*.xml")
                       if TruthSidecarAudit._is_truth_sidecar(path))
 

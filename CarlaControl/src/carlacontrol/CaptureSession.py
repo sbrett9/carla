@@ -33,11 +33,14 @@ world (D1.12):
   `fault:<type>`. A SUMO failure is such a refusal. Anything else raised is `internal_error`.
 * **Place the cameras**: each channel's RGB camera at its stare pose -- or at the pose its orbit
   opens on, flown by `OrbitSensorController` from the window's opening -- with `sensor_tick` at the
-  capture interval and the post-process profile set by name; and, where occlusion is measured, a
-  depth camera at the stare's pose. The cameras exist through the prewarm, so the tiles their views
-  select are streamed before the first capture. A stare aimed at the rendered traffic starts over
-  the centre of the world's staging bounds. Every camera's frames are listened to from here until
-  the recorders start (`ViewReadinessGate`). Under the optional `capture.render_set` `cameras`, each
+  capture interval and the post-process profile set by name, spawned under the channel's
+  `sensor_id` as its `role_name`, so a name another camera in the world already holds refuses at
+  pre-roll; a single channel with no `sensor_id` is named `CARLA-SENSOR-<actor id>`. That name is
+  the channel's directory, the first part of every still's file name in it and the callsign of its
+  platform track. And, where occlusion is measured, a depth camera at the stare's pose. The cameras
+  exist through the prewarm, so the tiles their views select are streamed before the first capture.
+  A stare aimed at the rendered traffic starts over the centre of the world's staging bounds. Every
+  camera's frames are listened to from here until the recorders start (`ViewReadinessGate`). Under the optional `capture.render_set` `cameras`, each
   RGB camera is registered with the session (`AddCamera`), so the render set follows every channel's
   view, an orbit's as it flies, and is let go (`RemoveCamera`) before the camera is destroyed; its
   depth camera shares its view and is not registered. Under any other render set where the cameras
@@ -602,7 +605,15 @@ class CaptureSession:
         rgb.set_attribute("sensor_tick", str(tick))
         rgb.set_attribute("post_process_profile", str(values["post_process_profile"]))
         transform = self._start_transform(rig)
-        rig.camera = rig.world.spawn_actor(rgb, transform)
+        # Spawned under the channel's sensor_id, which every client then reads as the camera's
+        # role_name, so a name another camera in the world holds is refused here. A channel with none
+        # -- a single channel may go unnamed -- is its camera's default, CARLA-SENSOR-<actor id>. That
+        # name is the channel's from here: its directory, every still in it and its platform track's
+        # callsign carry it.
+        rig.camera = rig.world.spawn_camera(rgb, transform, name=description.sensor_id)
+        rig.sensor_id = rig.world.camera_name(rig.camera)
+        rig.directory = self.capture_directory / rig.sensor_id
+        rig.aim_record["sensor_id"] = rig.sensor_id
         rig.pose = transform
         self.termination.add_step(RELEASE_WORLD, f"destroy camera {rig.sensor_id}",
                                   lambda: self._release_camera(rig), CAMERA_TIMEOUT_S, ORDER_CAMERA)
@@ -899,7 +910,7 @@ class CaptureSession:
             rig.directory.mkdir(parents=True, exist_ok=True)
             rig.recorder = rig.world.start_recording(
                 rig.camera, str(rig.directory), hz, fov=float(description.fov),
-                platform_callsign=rig.sensor_id, run_id=self.session_id,
+                camera_name=rig.sensor_id, run_id=self.session_id,
                 depth_camera=rig.depth,
                 occlusion_margin_m=float(effective.value("occlusion.margin_m")),
                 occlusion_samples=int(effective.value("occlusion.samples")),

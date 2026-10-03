@@ -46,8 +46,11 @@ class NativeRecorder:
             world: CARLA world object
             camera: CARLA camera sensor actor to record
             args: Parsed arguments with record_dir, record_hz, affiliation, stale, fov,
-                  platform_type, platform_affiliation, platform_callsign, platform_uid,
-                  scenario, scenario_id, seed, occlusion, occlusion_margin, occlusion_samples
+                  platform_type, platform_affiliation, camera_name, platform_uid,
+                  scenario, scenario_id, seed, occlusion, occlusion_margin, occlusion_samples.
+                  `camera_name` (`--camera-name`) is the name every capture is written under and
+                  the platform track's callsign; None records under the name the camera was
+                  spawned with, or its default, CARLA-SENSOR-<camera id>.
             run_id: Identifier grouping every capture of this run
             depth_camera: Depth camera held at the recorded camera's pose. When given (and
                   --no-occlusion was not passed) each capture also records how much of each
@@ -65,7 +68,7 @@ class NativeRecorder:
         self.fov = args.fov
         self.platform_type = args.platform_type
         self.platform_affiliation = args.platform_affiliation
-        self.platform_callsign = args.platform_callsign
+        self.camera_name = args.camera_name
         self.platform_uid = args.platform_uid
         self.scenario_id = self.resolve_scenario_id(args)
 
@@ -130,7 +133,7 @@ class NativeRecorder:
                 fov=self.fov,
                 platform_type=self.platform_type,
                 platform_affiliation=self.platform_affiliation,
-                platform_callsign=self.platform_callsign,
+                camera_name=self.camera_name,
                 platform_uid=self.platform_uid,
                 run_id=self.run_id,
                 scenario_id=self.scenario_id,
@@ -151,7 +154,8 @@ class NativeRecorder:
             note = (
                 "" if self._handle.HaveTelemetryOrigin else " (PNG only; no georef origin for XML)"
             )
-            self.logger.info(f"recording (native) -> {self.record_dir} @ {self.record_hz} Hz{note}")
+            self.logger.info(f"recording (native) {self._handle.Name} -> {self.record_dir} "
+                             f"@ {self.record_hz} Hz{note}")
 
         elif not self.want_enabled and self.recording:
             # Counted after the stop, not before it: stopping flushes the captures still in the

@@ -168,7 +168,9 @@ class EffectiveRunConfiguration:
         return ChannelDescription(**{name: values[name] for name in names})
 
     def channel_sensor_label(self, index: int) -> str:
-        """The channel's `sensor_id`, or `channel-<n>` where it has none (a single channel)."""
+        """The channel's `sensor_id`, or `channel-<n>` where it has none (a single channel): what a
+        channel is called until its camera is spawned. An unnamed channel's camera is then named
+        `CARLA-SENSOR-<actor id>`, and that is the name its directory and its stills carry."""
         sensor_id = self.channel_values(index).get("sensor_id")
         return str(sensor_id) if sensor_id else f"channel-{index}"
 

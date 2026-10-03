@@ -39,6 +39,8 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
     private const double DeltaSeconds = 0.05;
     private const int WideHeaderSize = 132;
     private const int ActorSize = 119;
+    // A recorder holds its camera's name for the whole process, so no other test class records under it.
+    private const string RecordedCamera = "LIVE-TRUTH";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
     private static readonly GeoLocation Origin = new(27.15012, 56.18065, 12.0);
 
@@ -291,7 +293,8 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
     {
         string directory = Path.Combine(_dir, Guid.NewGuid().ToString("N"));
         var recorder = new FrameRecorder(_client!, _streams.Token(stream), directory, 2.0,
-                                         renderSet: source, drawDistanceMetres: drawDistance);
+                                         renderSet: source, drawDistanceMetres: drawDistance,
+                                         cameraName: RecordedCamera);
         try
         {
             await _streams.SendAsync(stream, frame, frame * DeltaSeconds, camera, Image());
@@ -320,7 +323,8 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
     /// Records a camera, streams it one image of <paramref name="frame"/>, and returns the sidecar.
     private async Task<XElement> RecordOneImage(ulong frame)
     {
-        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0);
+        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0,
+                                         cameraName: RecordedCamera);
         try
         {
             await _streams.SendAsync(CameraStream, frame, frame * DeltaSeconds, default, Image());

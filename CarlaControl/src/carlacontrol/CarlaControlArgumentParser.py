@@ -8,6 +8,8 @@ import argparse
 import os
 import random
 
+from carlacontrol.CameraName import CameraName
+
 
 class CarlaControlArgumentParser:
     """Parse CarlaControl command-line arguments into a configuration dict.
@@ -549,7 +551,9 @@ class CarlaControlArgumentParser:
             help="folder for recordings (default Build/SCTMV_recordings). F toggles recording: "
             "each capture writes a lossless PNG of the clean streamed imagery (no HUD) plus "
             "a matching .xml Cursor-on-Target sidecar at that instant — the vehicle tracks "
-            "and the collection platform (the camera itself) as an air track.",
+            "and the collection platform (the camera itself) as an air track — named "
+            "<camera name>_<local capture time to the millisecond> (see --camera-name). "
+            "Captures from before cameras were named are SCTMV_<local capture time>.",
         )
         rec.add_argument(
             "--record-hz",
@@ -572,14 +576,27 @@ class CarlaControlArgumentParser:
             "own asset) / n neutral / u unknown / h hostile.",
         )
         rec.add_argument(
+            "--camera-name",
             "--platform-callsign",
-            default="OVERWATCH",
-            help="callsign for the recorded platform track (default OVERWATCH).",
+            dest="camera_name",
+            type=CameraName.argument,
+            default=None,
+            metavar="NAME",
+            help="the camera's name. Every capture is named after it, "
+            "<NAME>_<local capture time>.png and .xml, and it is the callsign of the camera's "
+            "platform track, so cameras sharing a world are told apart in their files and their "
+            "telemetry. Default: CARLA-SENSOR-<camera id>, which no other camera on the server "
+            "holds. A name is used as given or refused, never rewritten: 1 to 63 printable ASCII "
+            "characters, none of < > : \" / \\ | ? *, no space at either end and no dot at the end, "
+            "not a Windows device name (CON, NUL, COM1, ...) and not of the form "
+            "CARLA-SENSOR-<number>. A name another camera in the world holds, in any case, is "
+            "refused when the camera is spawned. --platform-callsign is the older spelling.",
         )
         rec.add_argument(
             "--platform-uid",
             default=None,
-            help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).",
+            help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>, whatever the "
+            "camera is named).",
         )
         rec.add_argument(
             "--no-occlusion",

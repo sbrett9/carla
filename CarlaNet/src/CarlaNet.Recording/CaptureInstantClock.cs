@@ -5,7 +5,8 @@ namespace CarlaNet.Recording;
 /// from one capture to the next.
 /// </summary>
 /// <remarks>
-/// A capture's files are named by this instant to the millisecond, so two captures stamped in the same
+/// A capture's files are named by its camera and this instant to the millisecond
+/// (<see cref="CameraName.StillStem"/>), so two captures of one recorder stamped in the same
 /// millisecond would be written to the same two paths by two encoding workers at once, and one of them
 /// would fail with the file in use by the other -- which happens whenever frames arrive in a burst, as
 /// they do after any stall. A capture stamped in a millisecond already used is moved to the next one,

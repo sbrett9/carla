@@ -377,8 +377,13 @@ _FIELDS: tuple[RunField, ...] = (
 )
 
 _CHANNEL_HELP = {
-    "sensor_id": "The channel's name, required when there is more than one channel; it names the "
-                 "channel's capture directory and the platform track.",
+    "sensor_id": "The channel's camera's name, required when there is more than one channel and "
+                 "unique among them, case aside: it names the channel's capture directory, begins "
+                 "every still's file name (<sensor_id>_<local capture time>) and is the platform "
+                 "track's callsign. 1 to 63 of A-Z a-z 0-9 _ . -, not a Windows device name, not "
+                 "ending in a dot and not of the form CARLA-SENSOR-<number>; refused at pre-roll "
+                 "where a camera in the world already holds it. A single channel without one is "
+                 "named CARLA-SENSOR-<camera actor id>.",
     "pattern": "stare holds one pose; orbit circles a centre with the view held on it.",
     "fov": "Horizontal field of view, degrees.",
     "width": "Picture width, pixels.",
