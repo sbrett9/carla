@@ -1,0 +1,608 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using CarlaNet.Recording;
+using Xunit.Abstractions;
+
+namespace CarlaNet.CoSim.Tests;
+
+/// <summary>
+/// The world truth track: a row for every vehicle SUMO has at every sampled frame inside the capture
+/// window, stamped with TraCI's clock, drawn or not, written so that a file cut off anywhere is the rows
+/// before the cut.
+/// </summary>
+/// <remarks>
+/// <para>Run against a real SUMO on the fixture cross. With no CARLA at all the session ticks a counter
+/// and renders no world, so every vehicle is simulated and none drawn; with the recording world double
+/// the succession fixture hands one body from a measured vehicle to the next, with an unmeasured one
+/// between them that no body can draw.</para>
+///
+/// <para>What each row is checked against is what the session told an observer registered beside the
+/// track -- each SUMO frame's clock and every vehicle's state, each rendered frame's bodies and sun --
+/// read through the seam rather than through the track's own code, and SUMO's own stamp for a departure,
+/// asked on demand, a step before the clock the track writes.</para>
+/// </remarks>
+public sealed class WorldTruthTrackWriterTests : IDisposable
+{
+    private const double StepSeconds = 1.0;
+    private const int StepLimit = 2000;
+
+    private readonly ITestOutputHelper _output;
+    private readonly string _directory = Path.Combine(Path.GetTempPath(),
+                                                      "carlanet-track-" + Guid.NewGuid().ToString("n"));
+
+    public WorldTruthTrackWriterTests(ITestOutputHelper output)
+    {
+        _output = output;
+        Directory.CreateDirectory(_directory);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
+        catch (IOException)
+        {
+            // A temporary directory left behind is not the test's failure.
+        }
+    }
+
+    [RequiresSumoFact]
+    public void AWorldLessRunWritesEveryVehicleAtEverySumoFrameRenderedAtTraCISClock()
+    {
+        // The ground rises east and falls north, so a height read with the northing's sign wrong is a
+        // different number.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            at => 5.0 + (0.01 * at.X) + (0.02 * at.Y), CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "nested", "world_truth_track.csv");
+        var watcher = new Watcher { AskDepartures = true };
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, watcher);
+        options.WorldTruthTrackPath = track;
+
+        int ticksPerStep;
+        long rowsReported;
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < StepLimit && session.Advance(); step++)
+            {
+            }
+
+            ticksPerStep = session.Clock.WorldTicksPerSumoStep;
+            rowsReported = session.WorldTruthTrack!.Rows;
+        }
+
+        List<Row> rows = ReadRows(File.ReadAllText(track), out string[] header);
+        Assert.Equal(WorldTruthTrackWriter.Columns, header);
+        Assert.NotEmpty(rows);
+        Assert.Equal(rowsReported, rows.Count);
+
+        // Every SUMO frame but the last two has a row for every vehicle SUMO had at it, and nothing else
+        // does. The last advance read the last of them and rendered the ticks up to the one before it:
+        // SUMO had nothing left, so no tick rendered either.
+        List<StepSeen> rendered = watcher.Steps[..^2];
+        Assert.Equal(
+            rendered.SelectMany(step => step.Frames.Keys.Order(StringComparer.Ordinal)
+                                            .Select(id => (Seconds(step.FrameSeconds), id))),
+            rows.Select(row => (row["sim_time_s"], row["sumo_id"])));
+
+        VehicleCatalogue catalogue = VehicleCatalogue.Load(CoSimFixtures.VehicleCatalogue);
+        Dictionary<double, (int Index, StepSeen Step)> byInstant = rendered
+            .Select((step, index) => (index, step))
+            .ToDictionary(entry => entry.step.FrameSeconds, entry => (entry.index, entry.step));
+        foreach (Row row in rows)
+        {
+            // TraCI's clock for the frame, which is the instant the frame that renders it is stamped with.
+            double instant = double.Parse(row["sim_time_s"], CultureInfo.InvariantCulture);
+            (int index, StepSeen step) = byInstant[instant];
+            CoSimVehicleFrame state = step.Frames[row["sumo_id"]];
+            Assert.Equal(((ulong)(index * ticksPerStep) + 1).ToString(CultureInfo.InvariantCulture), row["frame"]);
+
+            // The state the session read, in SUMO's frame and CARLA's.
+            Assert.Equal(F(state.X, "0.00"), row["sumo_x"]);
+            Assert.Equal(F(state.Y, "0.00"), row["sumo_y"]);
+            Assert.Equal(F(state.X, "0.00"), row["carla_x"]);
+            Assert.Equal(F(-state.Y, "0.00"), row["carla_y"]);
+            Assert.Equal(F(state.SpeedMetresPerSecond, "0.00"), row["speed_mps"]);
+            Assert.Equal(state.EdgeId, row["edge"]);
+            Assert.Equal(state.LaneId, row["lane"]);
+
+            // The bare earth under the bumper, the CARLA frame's y being SUMO's negated.
+            Assert.Equal(1000.0 + 5.0 + (0.01 * state.X) + (0.02 * -state.Y),
+                         double.Parse(row["hae_m"], CultureInfo.InvariantCulture), 0.006);
+            // At the equator a degree of latitude is 110 574 m and one of longitude 111 320 m.
+            Assert.Equal(state.Y / 110_574.0, double.Parse(row["lat"], CultureInfo.InvariantCulture), 1e-6);
+            Assert.Equal(state.X / 111_320.0, double.Parse(row["lon"], CultureInfo.InvariantCulture), 1e-6);
+
+            // Identity follows the SUMO vehicle; its kind and dimensions are its type's as declared.
+            Assert.Equal(row["sumo_id"], row["entity_id"]);
+            Assert.Equal("CARLA-TRUTH-SUMO-" + row["sumo_id"], row["uid"]);
+            Assert.Equal("truck-" + row["sumo_id"], row["callsign"]);
+            Assert.Equal(row["sumo_id"], row["role_name"]);
+            Assert.Equal(("truck", "measured_truck", "7.02", "2.51"),
+                         (row["base_type"], row["type_id"], row["length_m"], row["width_m"]));
+            Assert.Equal(catalogue.SpecialTypes["vehicle.fuso.mitsubishi"], row["special_type"]);
+            Assert.Matches(@"^\d+,\d+,\d+$", row["color"]);
+
+            // No world: nothing drawn, no sun, and with no epoch no civil instant.
+            Assert.Equal(("simulated_only", "no_world", string.Empty, "1", string.Empty, string.Empty),
+                         (row["render_state"], row["render_reason"], row["actor_id"], row["in_window"],
+                          row["sun_elevation_deg"], row["time_utc"]));
+        }
+
+        // A vehicle's first row is at the clock its departure was listed at, a step after SUMO's own stamp.
+        foreach ((string vehicleId, (double listedAt, double? stamped)) in watcher.Departures)
+        {
+            Row first = rows.First(row => row["sumo_id"] == vehicleId);
+            Assert.Equal(Seconds(listedAt), first["sim_time_s"]);
+            Assert.Equal(listedAt - StepSeconds, stamped!.Value, 9);
+        }
+
+        Assert.Equal(["dweller", "parker"], watcher.Departures.Keys.Order(StringComparer.Ordinal));
+
+        // The summary: the rate, what the track holds, and that SUMO had nothing left.
+        using JsonDocument summary = ReadSummary(track);
+        JsonElement root = summary.RootElement;
+        Assert.Equal(1, root.GetProperty("world_truth_track_version").GetInt32());
+        Assert.Equal("world_truth_track.csv", root.GetProperty("track").GetString());
+        Assert.Equal(StepSeconds, root.GetProperty("sumo_step_s").GetDouble());
+        Assert.Equal(StepSeconds, root.GetProperty("interval_s").GetDouble());
+        Assert.Equal(1, root.GetProperty("every_sumo_steps").GetInt32());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("outside_window_interval_s").ValueKind);
+        Assert.Equal(rows.Count, root.GetProperty("rows").GetInt64());
+        // A sample is a frame, so the fast-forward's, with no vehicle yet, is one with no rows.
+        Assert.Equal(rendered.Count, root.GetProperty("samples").GetInt64());
+        Assert.Equal(rendered[0].FrameSeconds, root.GetProperty("first_sample_s").GetDouble());
+        Assert.Equal(rendered[^1].FrameSeconds, root.GetProperty("last_sample_s").GetDouble());
+        JsonElement ended = root.GetProperty("ended");
+        Assert.Equal("scenario_finished", ended.GetProperty("reason").GetString());
+        Assert.Equal(watcher.Steps[^1].FrameSeconds, ended.GetProperty("last_sumo_frame_s").GetDouble());
+        Assert.False(File.Exists(WorldTruthTrackWriter.SummaryPathFor(track) + ".partial"));
+    }
+
+    [RequiresSumoFact]
+    public void EveryRowIsOnDiskAsItIsWrittenAndATrackCutOffAnywhereIsTheRowsBeforeTheCut()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        options.WorldTruthTrackPath = track;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            // Read while the session holds the file open: every row it has written is there, whole, and
+            // its summary does not yet say the track ended.
+            for (int step = 0; step < 12 && session.Advance(); step++)
+            {
+                string onDisk = ReadWhileOpen(track);
+                Assert.EndsWith("\n", onDisk);
+                Assert.Equal(session.WorldTruthTrack!.Rows, onDisk.Count(character => character == '\n') - 1);
+                using JsonDocument written = ReadSummary(track);
+                Assert.Equal(JsonValueKind.Null, written.RootElement.GetProperty("ended").ValueKind);
+            }
+
+            Assert.True(session.WorldTruthTrack!.Rows > 10, "too few rows to cut");
+        }
+
+        // Stopped by its caller before SUMO had finished.
+        using (JsonDocument summary = ReadSummary(track))
+        {
+            Assert.Equal("caller_stopped", summary.RootElement.GetProperty("ended").GetProperty("reason").GetString());
+        }
+
+        byte[] whole = File.ReadAllBytes(track);
+        List<Row> all = ReadRows(Encoding.UTF8.GetString(whole), out string[] header);
+        List<int> cuts = [0, 1, whole.Length];
+        for (int at = 0; at < whole.Length; at++)
+        {
+            if (whole[at] == (byte)'\n')
+            {
+                // Before the line break, after it, one into the next line, and half way along that line.
+                int nextBreak = Array.IndexOf(whole, (byte)'\n', at + 1);
+                cuts.AddRange([at, at + 1, at + 2, nextBreak < 0 ? at + 1 : (at + nextBreak) / 2]);
+            }
+        }
+
+        foreach (int cut in cuts.Where(cut => cut <= whole.Length).Distinct())
+        {
+            string prefix = Encoding.UTF8.GetString(whole, 0, cut);
+            int completeLines = prefix.Count(character => character == '\n');
+            List<Row> kept = ReadRows(prefix, out string[] keptHeader);
+            if (completeLines == 0)
+            {
+                Assert.Empty(kept);
+                continue;
+            }
+
+            Assert.Equal(header, keptHeader);
+            Assert.Equal(completeLines - 1, kept.Count);
+            Assert.Equal(all.Take(kept.Count).Select(row => row.Line), kept.Select(row => row.Line));
+        }
+    }
+
+    [RequiresSumoFact]
+    public void WithNoPathTheSessionWritesNoTrack()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        var watcher = new Watcher();
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, watcher);
+        Assert.Null(options.WorldTruthTrackPath);
+        Assert.Null(options.WorldTruthTrackIntervalSeconds);
+        string[] before = Directory.GetFiles(world.Directory, "*", SearchOption.AllDirectories);
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < StepLimit && session.Advance(); step++)
+            {
+            }
+
+            Assert.Null(session.WorldTruthTrack);
+        }
+
+        Assert.NotEmpty(watcher.Steps);
+        Assert.Empty(Directory.GetFiles(_directory, "*", SearchOption.AllDirectories));
+        Assert.Equal(before, Directory.GetFiles(world.Directory, "*", SearchOption.AllDirectories));
+    }
+
+    [RequiresSumoFact]
+    public void AnIntervalSamplesEveryFewSumoFramesFromTheWindowSOpeningAndThePrewarmWritesNothing()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        var watcher = new Watcher();
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, watcher);
+        options.WorldTruthTrackPath = track;
+        options.WorldTruthTrackIntervalSeconds = 2.0;
+        options.WindowOpensAtSimulatedSecond = 3.0;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            Assert.Equal(2, session.WorldTruthTrack!.SumoStepsPerSample);
+            for (int step = 0; step < StepLimit && session.Advance(); step++)
+            {
+            }
+        }
+
+        List<Row> rows = ReadRows(File.ReadAllText(track), out _);
+        List<double> instants = [.. rows.Select(row => double.Parse(row["sim_time_s"], CultureInfo.InvariantCulture))
+                                        .Distinct()];
+        Assert.True(instants.Count >= 3, $"only {instants.Count} samples");
+
+        // From the window's opening, every second SUMO frame inside it, each with every vehicle SUMO had.
+        Assert.Equal(3.0, instants[0]);
+        Assert.All(instants.Zip(instants.Skip(1)), pair => Assert.Equal(2.0, pair.Second - pair.First, 9));
+        foreach (double instant in instants)
+        {
+            StepSeen step = watcher.Steps.Single(seen => Math.Abs(seen.FrameSeconds - instant) < 1e-9);
+            Assert.Equal(step.Frames.Keys.Order(StringComparer.Ordinal),
+                         rows.Where(row => row["sim_time_s"] == Seconds(instant)).Select(row => row["sumo_id"]));
+        }
+
+        using JsonDocument summary = ReadSummary(track);
+        Assert.Equal(2.0, summary.RootElement.GetProperty("interval_s").GetDouble());
+        Assert.Equal(2, summary.RootElement.GetProperty("every_sumo_steps").GetInt32());
+        Assert.Equal(3.0, summary.RootElement.GetProperty("first_sample_s").GetDouble());
+    }
+
+    [RequiresSumoFact]
+    public void ADrawnVehicleIsNamedByItsBodyAndOneNotDrawnSaysWhy()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        var watcher = new Watcher();
+        var options = new SumoDriveSessionOptions(
+            CoSimFixtures.SuccessionScenario, world.PackagePath, CoSimFixtures.VehicleCatalogue,
+            "test://" + Guid.NewGuid().ToString("n"))
+        {
+            World = new RecordedWorld { Loaded = world.AsLoaded() },
+            Epoch = SolarLeaseTests.PortEpoch(),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+            WorldTruthTrackPath = track,
+        };
+        options.StepObservers.Add(watcher);
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < StepLimit && session.Advance(); step++)
+            {
+            }
+
+            _output.WriteLine(session.Report.ToString());
+        }
+
+        List<Row> rows = ReadRows(File.ReadAllText(track), out _);
+        Dictionary<string, FrameSeen> frames = watcher.Frames.ToDictionary(frame => frame.Frame);
+        foreach (Row row in rows)
+        {
+            FrameSeen frame = frames[row["frame"]];
+            Assert.Equal(row["sim_time_s"], Seconds(frame.SimulatedTimeSeconds));
+
+            // Drawn exactly where the frame's render set has a body for it, and named by that body.
+            Assert.Equal(frame.Bodies.TryGetValue(row["sumo_id"], out uint body)
+                             ? ("rendered", string.Empty, body.ToString(CultureInfo.InvariantCulture))
+                             : ("simulated_only", row["render_reason"], string.Empty),
+                         (row["render_state"], row["render_reason"], row["actor_id"]));
+
+            // The sun the world reported on the frame's tick, and the frame's civil instant in UTC.
+            Assert.NotNull(frame.SunElevationDegrees);
+            Assert.Equal(F(frame.SunElevationDegrees!.Value, "0.###"), row["sun_elevation_deg"]);
+            Assert.Equal(SolarLeaseTests.PortEpoch().CivilInstantAt(frame.SimulatedTimeSeconds).UtcDateTime
+                             .ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture) + "Z",
+                         row["time_utc"]);
+        }
+
+        // The measured vehicles are drawn but on their last SUMO frame, after which the ticks have
+        // nothing to carry them towards -- where that frame was rendered at all: the second vehicle is
+        // the scenario's last, and its last frame is among the two read after the last frame rendered.
+        // The unmeasured one is never drawn, for want of a body.
+        foreach (string measured in (string[])["first", "second"])
+        {
+            List<Row> life = [.. rows.Where(row => row["sumo_id"] == measured)];
+            string lastSeen = Seconds(watcher.Steps.Last(step => step.Frames.ContainsKey(measured)).FrameSeconds);
+            Assert.True(life.Count > 2, $"{measured} has {life.Count} rows");
+            Assert.All(life, row => Assert.Equal(
+                             row["sim_time_s"] == lastSeen ? ("simulated_only", "left_the_simulation") : ("rendered", ""),
+                             (row["render_state"], row["render_reason"])));
+        }
+
+        Assert.Equal(("simulated_only", "left_the_simulation"),
+                     (rows.Last(row => row["sumo_id"] == "first")["render_state"],
+                      rows.Last(row => row["sumo_id"] == "first")["render_reason"]));
+
+        List<Row> unmeasured = [.. rows.Where(row => row["sumo_id"] == "unrenderable")];
+        Assert.NotEmpty(unmeasured);
+        Assert.All(unmeasured[..^1], row => Assert.Equal(("simulated_only", "no_blueprint"),
+                                                          (row["render_state"], row["render_reason"])));
+        Assert.Equal("car", unmeasured[0]["base_type"]);
+        Assert.Equal(string.Empty, unmeasured[0]["special_type"]);
+
+        // The body the first vehicle gave back drew the second.
+        Assert.Equal(rows.First(row => row["sumo_id"] == "first")["actor_id"],
+                     rows.First(row => row["sumo_id"] == "second")["actor_id"]);
+    }
+
+    [RequiresSumoFact]
+    public void ARunThatStopsSaysSoInTheSummaryAndKeepsItsRows()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        options.WorldTruthTrackPath = track;
+        int ticks = 0;
+        options.TickWorld = () => ++ticks <= 100;
+
+        long rows;
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            CoSimSessionRefusedException stopped = Assert.Throws<CoSimSessionRefusedException>(() =>
+            {
+                while (session.Advance())
+                {
+                }
+            });
+            Assert.Equal(CoSimStopCause.WorldTickTimeout, stopped.Cause);
+            rows = session.WorldTruthTrack!.Rows;
+        }
+
+        Assert.True(rows > 0);
+        Assert.Equal(rows, ReadRows(File.ReadAllText(track), out _).Count);
+        using JsonDocument summary = ReadSummary(track);
+        JsonElement ended = summary.RootElement.GetProperty("ended");
+        Assert.Equal("run_stopped", ended.GetProperty("reason").GetString());
+        Assert.Equal("world-tick-timeout", ended.GetProperty("cause").GetString());
+        Assert.Equal("Window", ended.GetProperty("stage").GetString());
+    }
+
+    [RequiresSumoFact]
+    public void AnIntervalBetweenSumoFramesIsRefusedOnceTheStepIsKnownAndLeavesNoTrack()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        options.WorldTruthTrackPath = track;
+        options.WorldTruthTrackIntervalSeconds = 1.5;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options).Dispose());
+
+        Assert.Equal(CoSimSessionStage.Launch, refused.Stage);
+        Assert.Contains("whole number of SUMO steps", refused.Message);
+        Assert.False(File.Exists(track));
+        Assert.False(File.Exists(WorldTruthTrackWriter.SummaryPathFor(track)));
+    }
+
+    [Fact]
+    public void ATrackAlreadyWrittenARateWithNoPathAndARateOfNoTimeAreRefusedBeforeAnythingStarts()
+    {
+        string track = Path.Combine(_directory, "track.csv");
+        File.WriteAllText(track, "another run's track\n");
+        SumoDriveSessionOptions Given(string? path, double? interval) =>
+            new("missing.sumocfg", "missing.cwp", "missing.catalogue.json", "test://track")
+            {
+                TickWorld = () => true,
+                WorldTruthTrackPath = path,
+                WorldTruthTrackIntervalSeconds = interval,
+            };
+
+        foreach ((SumoDriveSessionOptions options, string said) in new[]
+                 {
+                     (Given(track, null), "already written"),
+                     (Given(null, 2.0), "no path was given"),
+                     (Given(Path.Combine(_directory, "other.csv"), 0.0), "positive number of seconds"),
+                     (Given("  ", null), "blank path"),
+                 })
+        {
+            CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+                () => SumoDriveSession.Start(options).Dispose());
+            Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+            Assert.Contains(said, refused.Message);
+        }
+
+        Assert.Equal("another run's track\n", File.ReadAllText(track));
+    }
+
+    [Fact]
+    public void ASummaryIsNamedAfterItsTrack()
+    {
+        Assert.Equal(Path.Combine("truth", "world_truth_track.summary.json"),
+                     WorldTruthTrackWriter.SummaryPathFor(Path.Combine("truth", "world_truth_track.csv")));
+    }
+
+    private static SumoDriveSessionOptions WorldLess(SyntheticWorld world, string scenario, Watcher watcher)
+    {
+        var options = new SumoDriveSessionOptions(
+            scenario, world.PackagePath, CoSimFixtures.VehicleCatalogue, "test://" + Guid.NewGuid().ToString("n"))
+        {
+            TickWorld = () => true,
+            SumoStepOverrideSeconds = StepSeconds,
+        };
+        options.StepObservers.Add(watcher);
+        return options;
+    }
+
+    /// <summary>The track as it stands on disk while the session still holds it open.</summary>
+    private static string ReadWhileOpen(string path)
+    {
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(file, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
+    private static JsonDocument ReadSummary(string track)
+    {
+        using var file = new FileStream(WorldTruthTrackWriter.SummaryPathFor(track), FileMode.Open,
+                                        FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        return JsonDocument.Parse(file);
+    }
+
+    /// <summary>
+    /// The rows a reader takes from a track: every line that ends in a line break, the first of them the
+    /// header; a last line without one was cut off, and is left off.
+    /// </summary>
+    private static List<Row> ReadRows(string text, out string[] header)
+    {
+        header = [];
+        int end = text.LastIndexOf('\n');
+        if (end < 0)
+        {
+            return [];
+        }
+
+        string[] lines = text[..end].Split('\n');
+        header = ParseLine(lines[0]);
+        string[] columns = header;
+        return [.. lines.Skip(1).Select(line => new Row(columns, ParseLine(line), line))];
+    }
+
+    /// <summary>One CSV line, with quoted fields unquoted.</summary>
+    private static string[] ParseLine(string line)
+    {
+        List<string> fields = [];
+        var field = new StringBuilder();
+        bool quoted = false;
+        for (int index = 0; index < line.Length; index++)
+        {
+            char character = line[index];
+            if (quoted)
+            {
+                if (character == '"' && index + 1 < line.Length && line[index + 1] == '"')
+                {
+                    field.Append('"');
+                    index++;
+                }
+                else if (character == '"')
+                {
+                    quoted = false;
+                }
+                else
+                {
+                    field.Append(character);
+                }
+            }
+            else if (character == '"')
+            {
+                quoted = true;
+            }
+            else if (character == ',')
+            {
+                fields.Add(field.ToString());
+                field.Clear();
+            }
+            else
+            {
+                field.Append(character);
+            }
+        }
+
+        fields.Add(field.ToString());
+        return [.. fields];
+    }
+
+    private static string Seconds(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static string F(double value, string format) =>
+        (value == 0.0 ? 0.0 : value).ToString(format, CultureInfo.InvariantCulture);
+
+    /// <summary>One row of a track, by column name.</summary>
+    private sealed class Row(string[] columns, string[] fields, string line)
+    {
+        public string Line { get; } = line;
+
+        public string this[string column]
+        {
+            get
+            {
+                Assert.Equal(columns.Length, fields.Length);
+                return fields[Array.IndexOf(columns, column)];
+            }
+        }
+    }
+
+    /// <summary>A SUMO frame as an observer beside the track was told of it, its states copied.</summary>
+    private sealed record StepSeen(double FrameSeconds, Dictionary<string, CoSimVehicleFrame> Frames);
+
+    /// <summary>A rendered frame as an observer beside the track was told of it.</summary>
+    private sealed record FrameSeen(string Frame, double SimulatedTimeSeconds, Dictionary<string, uint> Bodies,
+                                    double? SunElevationDegrees);
+
+    /// <summary>
+    /// An observer registered beside the track, keeping what the session told it: each SUMO frame's
+    /// clock and states, each rendered frame's bodies and sun, and each vehicle's departure as SUMO
+    /// listed it and as SUMO stamps it.
+    /// </summary>
+    private sealed class Watcher : ISumoStepObserver
+    {
+        public List<StepSeen> Steps { get; } = [];
+
+        public List<FrameSeen> Frames { get; } = [];
+
+        public Dictionary<string, (double ListedAt, double? Stamped)> Departures { get; } = [];
+
+        public bool AskDepartures { get; init; }
+
+        public void OnSumoStep(SumoStepRecord step)
+        {
+            Steps.Add(new StepSeen(step.FrameSeconds, new Dictionary<string, CoSimVehicleFrame>(step.Frames)));
+            if (AskDepartures)
+            {
+                foreach (string vehicleId in step.Events.Departed)
+                {
+                    Departures[vehicleId] = (step.FrameSeconds, step.Vehicles.Departure(vehicleId));
+                }
+            }
+        }
+
+        public void OnFrameRendered(RenderedFrameRecord frame) =>
+            Frames.Add(new FrameSeen(
+                frame.Frame.ToString(CultureInfo.InvariantCulture),
+                frame.SimulatedTimeSeconds,
+                frame.RenderSet?.ByActor.Values.ToDictionary(vehicle => vehicle.SumoId, vehicle => vehicle.ActorId)
+                    ?? [],
+                frame.SunElevationDegrees));
+
+        public void OnSessionEnded(SessionEndRecord end)
+        {
+        }
+    }
+}

@@ -2205,6 +2205,7 @@ class World:
                          region_hysteresis_m=60.0, capacity=None, render_min_pixels=2.0,
                          render_admit_lead_s=3.0, render_release_lag_s=5.0,
                          render_max_speed_mps=40.0,
+                         world_truth_track=None, world_truth_track_interval_s=None,
                          on_pose=None, on_release=None, on_divergence=None,
                          on_admission_pass=None, on_collision=None,
                          on_vehicle_not_inserted=None):
@@ -2278,6 +2279,20 @@ class World:
         and `session.Report.DrawDistanceRefused` says why. `session.Report.DrawDistanceMetres` is
         what was asked for, `session.DrawDistanceMetres` what the bodies carry. A value that is not a
         positive number of metres is refused before anything starts.
+
+        `world_truth_track` is where the session writes the world truth track, None (the default)
+        writing none: every vehicle SUMO has, drawn or not, at each sampled SUMO frame inside the
+        capture window, one CSV row per vehicle -- the record of what the world contained, which a base
+        rate is taken over (06_Truth_And_Annotation §8.3). Every value is SUMO's, at TraCI's clock for
+        the frame; each row says whether a body drew the vehicle on the frame stamped with that instant
+        (`render_state` 'rendered', with its `actor_id`) or why none did ('simulated_only', with a
+        `render_reason`), and carries the sun the world reported for the frame. Rows are appended and
+        flushed one at a time, so a run cut off leaves the rows written before the cut, and a summary
+        beside it (`<name>.summary.json`) states the rate and, once the session ends, what the track
+        holds and why it ended. A path that already holds a track is refused before anything starts.
+        `world_truth_track_interval_s` samples every so many simulated seconds from the window's
+        opening, a whole number of SUMO steps, where None samples every SUMO frame.
+        `session.WorldTruthTrack` says where it is going and how many rows it holds.
 
         `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
         because the imagery this mode produces is of the photogrammetry: the generated road mesh is
@@ -2519,6 +2534,10 @@ class World:
         options.HeadlightOffAboveDegrees = float(headlight_off_above_deg)
         if draw_distance_m is not None:
             options.DrawDistanceMetres = float(draw_distance_m)
+        if world_truth_track is not None:
+            options.WorldTruthTrackPath = str(world_truth_track)
+        if world_truth_track_interval_s is not None:
+            options.WorldTruthTrackIntervalSeconds = float(world_truth_track_interval_s)
         options.RenderSet = policy
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.

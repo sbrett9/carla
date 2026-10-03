@@ -24,7 +24,11 @@ world (D1.12):
   so no camera draws a body farther away while every vehicle keeps its body, its pose and its truth;
   and `capture.render_set` with its `capture.render_*` fields, which limits which vehicles get a body
   at all -- the region given in CARLA's frame and negated into SUMO's -- leaving every vehicle
-  outside the limit simulated by SUMO and out of CARLA and the truth.
+  outside the limit simulated by SUMO and out of CARLA and the truth. And it is always handed the
+  world truth track's path, `truth/world_truth_track.csv` under the capture directory, beside the
+  channels' directories: every vehicle SUMO has, drawn or not, at every SUMO frame inside the window,
+  which a base rate is taken over where the sidecars list only what was drawn (06 §8.3, D6.17). The
+  session writes it a row at a time with its summary beside it; the run result names it.
 * **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
   `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
   and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
@@ -152,6 +156,9 @@ SESSION_STAGE_OUTCOMES = {
     "PreRoll": ("refused_preroll", "aborted_at_preroll"),
 }
 SESSION_STAGE_WINDOW = "Window"
+# Where under the capture directory the session writes the world truth track, the truth of the run
+# rather than of any one channel; its summary is written beside it.
+WORLD_TRUTH_TRACK = Path("truth") / "world_truth_track.csv"
 
 
 class _RefusedError(Exception):
@@ -477,6 +484,9 @@ class CaptureSession:
             allow_sumo_version_mismatch=bool(effective.value("sumo.allow_version_mismatch")),
             draw_distance_m=effective.value("capture.draw_distance_m"),
             **self._render_set_arguments(effective),
+            # Every capture run writes it, at every SUMO frame inside the window: a base rate is taken
+            # over what the world contained, and the sidecars hold only what was drawn.
+            world_truth_track=str(self.world_truth_track),
             # Bound only where a channel aims at the traffic: the session reads its callbacks once
             # and hands this a record per rendered vehicle per tick for the whole run.
             on_pose=None if self.traffic is None else self.traffic.collect,
@@ -500,6 +510,12 @@ class CaptureSession:
             self.logger.info("%s: %s", key, value)
         self._log_scenario_checks(self.closeout.scenario_checks)
         self._check_stop()
+
+    @property
+    def world_truth_track(self) -> Path:
+        """Where the session writes the world truth track: under the capture directory, beside the
+        channels' directories."""
+        return self.capture_directory / WORLD_TRUTH_TRACK
 
     @staticmethod
     def _render_set_arguments(effective: EffectiveRunConfiguration) -> dict:
@@ -996,6 +1012,7 @@ class CaptureSession:
         reached = self.end_reached_s if self.end_reached_s is not None else snapshot["sim_time_s"]
         self.result.produced = {
             "capture_directory": str(self.capture_directory),
+            "world_truth_track": str(self.world_truth_track),
             "closed_by": self.result.closed_by or self.termination.closed_by,
             "window": {"name": window.name, "begin_s": window.begin_s,
                        "end_declared_s": window.end_s, "end_source": window.end_source,

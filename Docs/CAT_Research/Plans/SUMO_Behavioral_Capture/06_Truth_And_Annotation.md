@@ -23,6 +23,7 @@ the real scenario artifacts. No code changed, no build run.
 | 15 · 2026-10-02 | `special_type` comes from the vehicle catalogue, as the owner ruled. A vehicle whose body's blueprint a catalogue class draws carries that class's `cot_special_type`, empty where the class curates none, whatever the blueprint declares; a blueprint no class draws keeps the kind it declares. It holds in the capture sidecar and the live pull of the process that runs the drive, which read it from the client the session drives through, and in the standalone producer's XML and CSV when it is given the catalogue. The author's marking still never goes in `special_type` (D6.18, §2.4, §4.2, §8.2, §8.3). |
 | 16 · 2026-10-02 | A capture names the sensor that took it: every still is `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`, and the platform event's callsign is the camera's name, which defaulted to `OVERWATCH` for every camera given none, so the truth of two cameras in one world no longer reports under one callsign. The `sensor_id` is that name; a camera given none is `CARLA-SENSOR-<camera actor id>` (§7.1). |
 | 17 · 2026-10-02 | The compiled plan is completed without changing the interval shape. A row's `parameters` — on an instance, an absence, a series or a cohort — are checked against its labels' `parameters{}` declarations, key and type (§3.8); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and never vary, `null` where none is declared (§3.9(d)); a term's `exemplar_instances` and a counterfactual naming a subject resolve against the plan, an exemplar by the instance's authored name (§3.8); an absence's `expected` carries `site_lane` and `site_pos_m` (§3.5); and the plan carries `additional_digest`, bound like the others (§8.1). [07](07_Scenario_Authoring.md) checks 56 and 57 are added and check 8 extended. All three shipped scenarios are recompiled. |
+| 18 · 2026-10-02 | The world truth track is built inside the capture window: the capture session writes every vehicle SUMO has at every SUMO frame of the window, drawn or not, one CSV row per vehicle at TraCI's clock, with `SumoCotBridge`'s columns less `marked` and the vehicle's id, entity, frame, render state and reason, body, window flag and the sun the world reported; appended a row at a time under [04](04_Contracts.md) C10's W2, with a summary saying the rate and why it ended. `run_capture` always writes it; outside every window nothing is written yet, and `illumination_band` waits for the band function (§8.3). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2398,6 +2399,53 @@ not from the sidecar:
 - A compiled scenario marks nothing in the sidecar. Its labels are its `*.supervision.json`, whose
   participants name SUMO ids, joined to the sidecar's rows by vehicle id — so no information is lost
   (`test_cot_display_convention.py`, measured on the Bahonar plan's nine annotated participants).
+
+**As built (2026-10-02): the track inside the capture window.** The capture session writes it
+(`WorldTruthTrackWriter`, an observer the session registers ahead of any its caller adds, switched on
+by `SumoDriveSessionOptions.WorldTruthTrackPath`). `run_capture` always writes it, to
+`truth/world_truth_track.csv` under the run's capture directory, beside the channels' directories, and
+names it in its result's `produced` block; `run_sumo_drive.py` writes it only when given
+`--world-truth-track PATH`, and the shim takes `start_sumo_drive(world_truth_track=...)`. It holds one
+row for every vehicle SUMO has at every SUMO frame inside the window, by default; an interval, a whole
+number of SUMO steps counted from the window's opening, samples fewer. That is open question 4's
+in-window half. Outside every window nothing is written yet, and the track's summary records it so
+(`outside_window_interval_s` null).
+
+Its columns are `SumoCotBridge`'s 31 less `marked`, because an author's marking never travels in this
+track and a compiled scenario's labels join from its plan by vehicle id (D6.18), and then `sumo_id`,
+`entity_id` (the SUMO id, D6.13), `frame`, `render_state`, `render_reason`, `actor_id`, `in_window` and
+`sun_elevation_deg`. The uid is the one a capture sidecar gives the same vehicle,
+`CARLA-TRUTH-SUMO-<sumo_id>`, so the two join on it as well as on `sumo_id` and `frame`. Every value is
+SUMO's, taken from the state the session already reads each step: no question goes to SUMO per vehicle,
+and a type's class, declared dimensions and colour are asked once per type. Position is converted on the
+world's own georeference; `hae_m` is the bare-earth grid under the bumper, the lookup the standalone
+producer makes; course and speed are SUMO's. The reconciled record of a vehicle drawn -- the body's
+pose, box and residuals -- stays the sidecar's. Every instant is TraCI's clock for the frame, never
+SUMO's own stamps, which are a step earlier ([13](13_Work_Breakdown.md) stage J).
+
+A frame's rows are written when the frame stamped with its instant has rendered, which is what gives
+them `frame`, `in_window`, the body that drew each vehicle and `sun_elevation_deg`: the geometric
+elevation the world reported on that frame's tick, the value the `_solar` block of a capture of that
+frame carries. A CSV has no record per instant, so it is repeated on each row. `illumination_band` is
+not yet written: the band function is not built on the C# side, and once it is the band is taken from
+the same row's elevation. `render_state` takes [04](04_Contracts.md) C2's words, read for one frame:
+`rendered`, with the body's `actor_id`, or `simulated_only`, where §4.4's table says `never`, with a
+`render_reason`. Three reasons are C2 §4.5's: `outside_limit`, `no_blueprint` and `unknown_extent`. Four
+more are a single frame's, and C2 has no word for them. `left_the_simulation` and `vanished` mark a vehicle's last SUMO frame:
+the ticks after it have nothing to carry it towards, so the frame stamped with it does not draw it.
+`no_ground` marks a vehicle off the world's ground grid, and `no_world` a session that renders no world.
+`not_drawn` is a frame that drew no body for it for a reason the track cannot name.
+
+The track is written under [04](04_Contracts.md) C10's W2: the header first, then every row appended and flushed as one
+line before the next is composed. A reader keeps every line that ends in a line break, so a track cut
+off at any byte is the rows before the cut; that is tested, and so is every row being on disk while the
+session still holds the file. A summary beside it, `world_truth_track.summary.json`, is written whole
+under a temporary name and renamed into place (W1). From the start it gives the columns, the SUMO step
+and the interval. When the session ends it is rewritten with the samples, the rows, the first and last
+instants and `ended`: `scenario_finished`, `caller_stopped` (the window the caller wanted closed, or it
+stopped the run), or `run_stopped` with the stage and cause. `ended: null` is a track whose run was killed. A path that
+already holds a track is refused before anything starts, and a start refused deletes the track it
+began.
 
 ### 8.4 The run supervision manifest
 

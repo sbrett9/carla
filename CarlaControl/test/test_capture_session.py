@@ -131,6 +131,18 @@ def test_the_session_is_started_from_the_compiled_package_and_the_resolved_field
     assert started["sumo_home"] == str(layout.root / "sumo")
 
 
+def test_every_run_writes_the_world_truth_track_beside_its_channels(layout, server):
+    # The record of what the world contained, which a base rate is taken over: every capture run
+    # writes one, at every SUMO frame inside the window, under the capture directory's truth folder.
+    _, result = capture(layout, server)
+    assert result.outcome == "run_finished"
+    started = started_with(server)
+    track = Path(result.produced["capture_directory"]) / "truth" / "world_truth_track.csv"
+    assert Path(started["world_truth_track"]) == track
+    assert started.get("world_truth_track_interval_s") is None
+    assert Path(result.produced["world_truth_track"]) == track
+
+
 def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_traffic(
         layout, server):
     capture(layout, server)

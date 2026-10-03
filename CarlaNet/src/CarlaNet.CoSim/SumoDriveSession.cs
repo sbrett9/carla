@@ -52,7 +52,9 @@ namespace CarlaNet.CoSim;
 /// <para><b>Observers, where any are registered.</b> What follows the run from inside it -- a truth
 /// track, a manifest, an interval binder -- is told of every SUMO frame read, with what SUMO did to its
 /// vehicles in that step at TraCI's clock, of every frame rendered, and of the session's end
-/// (<see cref="SumoDriveSessionOptions.StepObservers"/>), rather than being written into the loop.</para>
+/// (<see cref="SumoDriveSessionOptions.StepObservers"/>), rather than being written into the loop. The
+/// world truth track is one, built by the session itself where it is asked for one
+/// (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>).</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -78,6 +80,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly SumoSimulationSubscription _simulation;
     private readonly SumoVehicleQueries _vehicleQueries;
     private readonly ISumoStepObserver[] _observers;
+    private readonly WorldTruthTrackWriter? _track;
     private readonly SumoConsoleTail _console;
     private readonly SumoCollisionHandling _collisionHandling;
     private readonly SubscribedPopulation _population;
@@ -134,6 +137,7 @@ public sealed class SumoDriveSession : IDisposable
     private double? _lastCompleteSeconds;
     private ulong? _lastCompleteFrame;
     private double? _reportedSunElevation;
+    private double? _sunElevationThisTick;
     private RenderSet? _renderSetNow;
     private double? _drawDistanceAsked;
     private double? _drawDistanceApplied;
@@ -162,7 +166,8 @@ public sealed class SumoDriveSession : IDisposable
                              LayerVisibilityLease? layers,
                              VehicleBodyPool? pool,
                              (double Latitude, double Longitude) origin,
-                             long seed)
+                             long seed,
+                             int trackSumoStepsPerSample)
     {
         _options = options;
         _world = world;
@@ -173,10 +178,6 @@ public sealed class SumoDriveSession : IDisposable
         _bodyReach = catalogue.BodyReachMetres;
         _sumo = sumo;
         _simulation = sumo.Simulation.Subscription;
-
-        // Read once, as the pace is: an observer added to the options after the start is told nothing,
-        // rather than part of a run.
-        _observers = options.StepObservers is { } observers ? [.. observers] : [];
         _console = console;
         _collisionHandling = collisionHandling;
         _headlights = headlights;
@@ -231,6 +232,19 @@ public sealed class SumoDriveSession : IDisposable
             RenderSetCapacity = options.RenderSet.Capacity,
         };
         _vehicleQueries = new SumoVehicleQueries(sumo.Vehicles, Report);
+
+        // Last, so nothing after it can leave the files it creates behind a constructor that threw. The
+        // track is told ahead of the caller's observers, so none of theirs that fails can starve it.
+        _track = options.WorldTruthTrackPath is { } trackPath
+            ? WorldTruthTrackWriter.Open(trackPath, trackSumoStepsPerSample, clock,
+                                         typeId => WorldTruthVehicleType.Read(sumo.TraCI, _binder, catalogue, typeId),
+                                         ground, origin, options.Epoch)
+            : null;
+
+        // Read once, as the pace is: an observer added to the options after the start is told nothing,
+        // rather than part of a run.
+        ISumoStepObserver[] given = options.StepObservers is { } observers ? [.. observers] : [];
+        _observers = _track is { } track ? [track, .. given] : given;
     }
 
     /// <summary>The three rates the session resolved and validated.</summary>
@@ -294,6 +308,12 @@ public sealed class SumoDriveSession : IDisposable
     /// frames are held.
     /// </remarks>
     public IRenderSetSource RenderSet => _renderSets;
+
+    /// <summary>
+    /// The world truth track the session writes -- where, at what rate, and how much it holds so far --
+    /// or null where none was asked for (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>).
+    /// </summary>
+    public WorldTruthTrackWriter? WorldTruthTrack => _track;
 
     /// <summary>The cameras registered with the session, in actor order.</summary>
     public IReadOnlyCollection<ActorId> Cameras => _cameras.Keys;
@@ -521,6 +541,7 @@ public sealed class SumoDriveSession : IDisposable
         RequireABoundOnSumoSAnswers(options);
         RequireAUsableDrawDistance(options);
         RequireARenderSetPolicy(options);
+        RequireAUsableWorldTruthTrack(options);
         HeadlightRule? headlights = options.VehicleLampsDriven
             ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
             : null;
@@ -652,6 +673,13 @@ public sealed class SumoDriveSession : IDisposable
                 options.CaptureRateHz,
                 settings is { } asked ? asked.Applied.SynchronousMode : options.WorldIsSynchronous);
 
+            // Settled as soon as SUMO's step is known, before anything is rendered: a track sampled
+            // between two SUMO frames would record states nobody simulated.
+            int trackSumoStepsPerSample = options.WorldTruthTrackPath is null
+                ? 1
+                : WorldTruthTrackWriter.SumoStepsPerSampleAt(options.WorldTruthTrackIntervalSeconds,
+                                                             clock.SumoStepSeconds);
+
             stage = CoSimSessionStage.Authority;
             PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
                 .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
@@ -669,7 +697,7 @@ public sealed class SumoDriveSession : IDisposable
                                                headlights, clock,
                                                network, ground, roads, catalogue, lease, settings, layers,
                                                pool, (manifest.OriginLatitude, manifest.OriginLongitude),
-                                               seed);
+                                               seed, trackSumoStepsPerSample);
                 session.Prime();
                 session.BindTheSun();
                 return session;
@@ -678,7 +706,9 @@ public sealed class SumoDriveSession : IDisposable
             {
                 // Each step is attempted whatever the one before it did: a server that dropped the
                 // connection fails every step that writes to it, and none of those may stop the lease
-                // -- this process's own -- from being given back.
+                // -- this process's own -- from being given back. A start refused writes no track: it
+                // rendered nothing, and a track begun for it would read as a run cut off.
+                Attempt(giveBack, "delete the world truth track", () => session?._track?.Discard());
                 Attempt(giveBack, "give back the world's sun", () => session?._sun?.Dispose());
                 Attempt(giveBack, "destroy the bodies the session spawned", () => pool?.DestroyAll());
                 Attempt(giveBack, "give back the population lease", lease.Dispose);
@@ -907,6 +937,8 @@ public sealed class SumoDriveSession : IDisposable
                     () => observer.OnSessionEnded(end));
         }
 
+        // Closed already where it was told the end; closed here where telling it failed.
+        Attempt(failures, "close the world truth track", () => _track?.Dispose());
         Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
         Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
         Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
@@ -1240,6 +1272,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void AuditTheSun(ulong frame)
     {
+        _sunElevationThisTick = null;
         if (_world is not { } world || _options.Illumination is not { } policy)
         {
             return;
@@ -1252,6 +1285,7 @@ public sealed class SumoDriveSession : IDisposable
             {
                 sample = audit.AuditTick(_tickIndex, RenderedTimeSeconds, world.ObservedSolarState());
                 _reportedSunElevation = sample.Observed.ElevationDegrees;
+                _sunElevationThisTick = _reportedSunElevation;
             }
         }
         catch (SolarAuditFailedException failed)
@@ -1403,7 +1437,10 @@ public sealed class SumoDriveSession : IDisposable
             Clock.IsCaptureTick(_tickIndex),
             StageOfTheTickBeingRendered() == CoSimSessionStage.Window,
             _renderSets.TryGetRenderSet(frame, out RenderSet set) ? set : null,
-            _illumination.TryGetDeclaration(frame, out IlluminationDeclaration declared) ? declared : null);
+            _illumination.TryGetDeclaration(frame, out IlluminationDeclaration declared) ? declared : null)
+        {
+            SunElevationDegrees = _sunElevationThisTick,
+        };
         foreach (ISumoStepObserver observer in _observers)
         {
             observer.OnFrameRendered(rendered);
@@ -2080,6 +2117,47 @@ public sealed class SumoDriveSession : IDisposable
                 "The session was given no render-set policy. Leave it at its default to draw every vehicle "
                 + "SUMO has, or give a circle, the cameras or a capacity as a limit.");
         }
+    }
+
+    /// <summary>
+    /// Refuse a world truth track with no usable path or rate, or one whose path already holds a track.
+    /// </summary>
+    /// <remarks>
+    /// Settled before anything is started. A rate given with no path is a setting that does nothing, and
+    /// a path that already holds a track belongs to another run, whose record is not written over.
+    /// Whether the rate is a whole number of SUMO steps waits for SUMO's step, which is known once SUMO
+    /// has loaded the scenario.
+    /// </remarks>
+    private static void RequireAUsableWorldTruthTrack(SumoDriveSessionOptions options)
+    {
+        if (options.WorldTruthTrackPath is not { } path)
+        {
+            if (options.WorldTruthTrackIntervalSeconds is { } orphan)
+            {
+                throw new CoSimSessionRefusedException(
+                    $"The world truth track is to be sampled every {orphan.ToString("0.###", CultureInfo.InvariantCulture)} s, "
+                    + "and no path was given to write it to. Give the track a path, or leave the rate unset.");
+            }
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new CoSimSessionRefusedException(
+                "The world truth track was given a blank path. Give the file it is to be written to, or leave "
+                + "it unset to write none.");
+        }
+
+        if (options.WorldTruthTrackIntervalSeconds is { } interval && (!double.IsFinite(interval) || interval <= 0.0))
+        {
+            throw new CoSimSessionRefusedException(
+                $"The world truth track is to be sampled every {interval.ToString(CultureInfo.InvariantCulture)} s. "
+                + "The interval is the simulated time between its samples, so it has to be a positive number "
+                + "of seconds; leave it unset to sample every SUMO frame.");
+        }
+
+        WorldTruthTrackWriter.RefuseAnExistingTrack(path);
     }
 
     /// <summary>
