@@ -77,6 +77,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-01 | The compiler writes `lanechange.duration` 3 beside the other processing options (§5.1, §7.1; [`04`](04_Contracts.md) D4.42), the lock records it and the resolution report lists every processing option; Gardnerville and Arapahoe are recompiled with it, and Bahonar, which deadlocks with it behind a body wider than its lanes, is not. |
 | 2026-10-02 | The compiler gives SUMO each body's width without its mirrors and refuses a class whose body has none measured (§7.1; [`04`](04_Contracts.md) D4.43); all three shipped scenarios are recompiled with it and with 3 s lane changes, Bahonar included, which runs as before (§3.4.1, §3.4.2). |
 | 2026-10-02 | Ramp meters are a world-build decision (§6 gotcha 13, D7.38): the world build keeps every OSM `traffic_signals=ramp_meter` out of junction joining and gives it a one-vehicle-per-green cycle, so Arapahoe's freeway is no longer signalised by the loop ramp's meter. The Arapahoe incident is notified on the stretch the loop ramp joins as well (§3.4.2, gotcha 14, D7.39), measured offline on the metered network; the shipped files await the world's rebuild and a recompile. |
+| 2026-10-02 | The supervision plan says nothing its terms do not define (§3.6, §5.2). A row's `parameters` — on an instance, an absence, a series or a cohort — are keys its labels' terms declare, of the declared types (check 56); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and may not vary (check 57); a term's exemplars and a counterfactual naming a subject resolve against the plan (check 8). An absence's `expected` names its site, and the plan carries the additional file's digest (§5.1). All three shipped scenarios are recompiled; their route files, configurations and lane closures are unchanged, and so is every network fingerprint. |
 
 ---
 
@@ -1180,16 +1181,27 @@ An author writes supervision in the specification's `supervision` block, and the
 
 | Declared | Compiles to |
 |---|---|
-| `instances[]` — `annotated` or `nominal`, with `labels`, `participants` (actor and role), `intervals` (participant, phase, begin, end or duration, in civil time), `aoi_refs`, `parameters`, `counterfactual` | a pattern instance, id `<scenario_id>/<name>`, with its participants and its intervals in seconds and civil time |
-| `cohorts[]` — a flow, `annotated` whole-life or `unlabelled` | a cohort row; `nominal` (check 49) and intervals (check 23) refuse |
-| `series[]` — a rota read as a recurring series, with the members' role, the slot length, each subject's area and the members' state | a series with one slot per occasion, realised by the rota's entry or unrealised where the rota skips; each realised member is an entity in the declared state |
-| `absences[]` — a skipped rota occasion, annotated | an instance with `realisation: absent`, no participant, one `vacancy` interval over the slot, its `expected` route in edges, and the series' realised count as counter-evidence |
+| `instances[]` — `annotated` or `nominal`, with `labels`, `participants` (actor and role), `intervals` (participant, phase, begin, end or duration, in civil time), `aoi_refs`, `parameters`, `hard_negative_for`, `counterfactual` | a pattern instance, id `<scenario_id>/<name>`, with its participants and its intervals in seconds and civil time, its parameters as written, and — when nominal — its terms' `hard_negative_for` |
+| `cohorts[]` — a flow, `annotated` whole-life or `unlabelled`, with `parameters` | a cohort row with its parameters; `nominal` (check 49) and intervals (check 23) refuse |
+| `series[]` — a rota read as a recurring series, with the members' role, the slot length, each subject's area, the members' state, `parameters` and `hard_negative_for` | a series with one slot per occasion, realised by the rota's entry or unrealised where the rota skips; each realised member is an entity in the declared state. The row carries its parameters and, when nominal, its terms' `hard_negative_for` |
+| `absences[]` — a skipped rota occasion, annotated, with `parameters` | an instance with `realisation: absent`, no participant, one `vacancy` interval over the slot, its `expected` route in edges and its site — the lane and position of the subject's place, null where that place names no one lane position — and the series' realised count as counter-evidence |
+
+**A row says nothing its terms do not define.** `parameters` on any row are keys its labels' terms declare
+in `parameters{}`, each value of the declared type (check 56): it is the one channel an author has for
+structured metadata about a subject, and it reaches a consumer with a unit and a definition. A nominal
+row's `hard_negative_for` is copied from its terms, so the plan can be read without the vocabulary; an
+author may restate it and may not vary it (check 57), and the plan writes `null` where nothing narrows
+the subject, which means unspecified rather than a negative for nothing ([`06`](06_Truth_And_Annotation.md)
+§3.9(d), D6.32). A term's `exemplar_instances` and its `counterfactual` name subjects of this scenario —
+an exemplar by an instance's authored name, as an instance's counterfactual names one — and each must
+resolve (check 8).
 
 Every actor not in an instance or a series, and every flow not in `cohorts`, is written explicitly as
 `unlabelled`: absence of an element must not stand for an asserted negative (06 §3.1). The set of rows is
 fixed at compile time; the runtime may only bind them (06 §3.6). The plan carries the resolved,
-import-flattened vocabulary with its digest, and the digests of the route file, the network and the
-configuration it was compiled against. It carries no epoch and no solar field.
+import-flattened vocabulary with its digest, and the digests of the route file, the network, the
+configuration and — `additional_digest`, null where there is none — the lane closures' additional file
+it was compiled against. It carries no epoch and no solar field.
 
 Two alignments between that and the surface proposed here:
 
@@ -1588,7 +1600,7 @@ place index, area table and solar frame — and the vehicle catalogue. Nothing e
 | `<scenario_id>.sumocfg` | the run configuration: the network and route files, `begin` 0, `end` and `step-length` in plain seconds with the epoch restated as a comment above them, the SUMO seed, and the processing options that decide how the traffic moves — `time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn, `lanechange.duration` 3 |
 | `<scenario_id>.add.xml` | written only when the specification declares `lane_closures`: one rerouter per closure, its lanes closed to all but `authority` for the closure's window, times in plain seconds; the configuration names it in `additional-files`. The route file cannot carry a closure (D7.37) |
 | `<MapName>.net.xml` | the world package's own network, **byte for byte**, so the network SUMO runs is the world's; nothing about it is scenario-specific |
-| `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, the vocabulary resolved with its digest, and the digests of the route file, network and configuration it was compiled against |
+| `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, each row's parameters and each nominal row's `hard_negative_for`, each absence's expected route and site, the vocabulary resolved with its digest, and the digests of the route file, network, configuration and additional file it was compiled against — `additional_digest` the same SHA-256 the lock records for the additional file, null where there is none |
 | `<scenario_id>.resolution.json`, `.resolution.md` | **what it resolved** — §5.3 |
 | `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — and the lane closures' additional file where there is one, each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, the `duarouter` release that routed it, the world's converter, how the two stand by release number and whether a mismatch was accepted (check 6); **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
 
@@ -1624,7 +1636,7 @@ the same ids and outcomes.
 | 6 | The SUMO release routing the scenario is the one that built the world, compared by release number with the co-simulation session's own function (`CarlaNet.Sumo.SumoReleaseCheck`, reached through `SumoInstallation.release_check`) | `world.json` `NetconvertVersion` and the installation `duarouter` runs from | **refuse**, naming both releases, the installation and the rule that found it; **warn** when the mismatch is accepted with `--allow-sumo-version-mismatch`, and the lock records the acceptance (`traffic.routed_by.release_agreement`, `mismatch_accepted`); **warn** when the package records no converter | A different `duarouter` release can route the same demand differently, so the traffic would not be the world's — the same rule the session refuses a run by ([`03`](03_CoSimulation_Runtime.md) §2.6). *Measured:* `SUMO_HOME` on this machine is an external **1.27.1** while the repository stages **1.27.0**; `compile_scenario.py` routes with the staged installation unless `--sumo-home` names another |
 | **References** ||||
 | 7 | Every declared place resolves, and to exactly one thing where one is needed; every lane a closure names is on its edge | the resolver, §4.2 | **refuse**, with candidates | An authored place that silently becomes a different place |
-| 8 | Every reference names what the specification declares: places, instants, rotas, series, flows and counterfactuals | the specification | **refuse** | A typo becoming a valid-looking identifier |
+| 8 | Every reference names what the specification declares: places, instants, rotas, series, flows, counterfactuals — an instance's, an absence's, and a term's naming a series, cohort or instance — and a term's `exemplar_instances`, each an instance or absence of this scenario by its authored name | the specification | **refuse** | A typo becoming a valid-looking identifier, and an exemplar that is prose rather than a reference ([`06`](06_Truth_And_Annotation.md) §3.8). An exemplar written as a plan's id, `<scenario_id>/<name>`, is refused with the name to use: a sweep's members carry their own scenario ids |
 | 54 | Every actor, rota entry, flow, lane closure and capture window id is unique | the specification | **refuse** | Two vehicles SUMO would read as one, or a window cited ambiguously |
 | 9 | Every stop position lies within its lane's length | `map.net.xml` | **refuse** | A dwell clamped to somewhere other than where it was authored — `write_dwell_routes` clamps silently (`SumoScenarioBuilder.py:533`) |
 | 10 | Every vehicle's class may drive every edge of its route | lane `allow`/`disallow`, before routing and on the routed edges | **refuse**, naming the class and the edges | The fenced-network fragmentation the skill records |
@@ -1642,6 +1654,8 @@ the same ids and outcomes.
 | 18 | Every label is a declared term and every role but `subject` a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary | the vocabulary block | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2), or a label no consumer can read |
 | 45 | Every label's `applies_to` includes the subject kind, and its `realisation` the instance's | the vocabulary | **refuse** | A per-member term on a `<flow>`, or an absence term on a vehicle. This is how [`06`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret |
 | 46 | Every namespace appearing in a label, role, phase or area kind was declared in `vocabulary.namespaces[]` or imported | the specification | **refuse** | A term resolving against a namespace that travels in nobody's bundle (06 §8.7) |
+| 56 | Every key in an instance's, absence's, series' or cohort's `parameters` is declared in the `parameters{}` of one of its labels' terms, and its value is of the declared type; two labels declaring one key agree on its type and unit | the vocabulary | **refuse**, naming the key, the value, the declaring term and the type it declares | A magnitude no consumer can read: `group_size` in one scenario and `n_vehicles` in another, or a count written as a fraction ([`06`](06_Truth_And_Annotation.md) §3.8). A parameter is the author's structured metadata, carried in the one channel that defines it, so there is no free-form map beside it |
+| 57 | A nominal instance's or series' `hard_negative_for` is the set its labels' terms declare, which the plan copies onto the row; an author may restate it exactly and may not vary it, and no subject that is not nominal declares one | the vocabulary | **refuse** | A matched negative on which the record and its term disagree. The term is the authority and the row a projection of it ([`06`](06_Truth_And_Annotation.md) §3.9(d)) |
 | 19 | Every participant names a declared actor | the specification | **refuse** | An instance with a participant that never exists |
 | 20 | Every `aoi_ref`, and every slot's area, names an area in the world's area table | `areas.resolved.json` | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
 | 21 | Instance ids are `<scenario_id>/<name>`, deterministic and unique | the specification | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
@@ -1772,7 +1786,7 @@ flowchart TD
   P6 --> P7
 
   subgraph ANN["4 · Supervision"]
-    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>participants, areas, ids · 19, 20, 21<br/>cohorts, reserved words · 23, 49, 50<br/>series and absences · 8, 20"] -->|refused| R4(["REFUSE"])
+    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>parameters and hard negatives fit their terms · 56, 57<br/>participants, areas, ids · 19, 20, 21<br/>cohorts, reserved words · 23, 49, 50<br/>series, absences, counterfactuals, exemplars · 8, 20"] -->|refused| R4(["REFUSE"])
     P7 --> P8["intervals vs departures · 22<br/>interval past the run · 31<br/>hard negatives present · 24<br/>referenced areas' warnings · 27, 28"] --> W4[/"WARN"/]
   end
 

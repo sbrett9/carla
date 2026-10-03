@@ -17,7 +17,13 @@ What it refuses is only what it can establish from the declarations in front of 
   (`broader`, `contrast_with`, `hard_negative_for`, `superseded_by`, a `term` counterfactual) that does
   not resolve inside the published document, and a `broader` chain with a cycle;
 * check 45 -- a label whose `applies_to` excludes the kind of subject it is attached to, or whose
-  `realisation` excludes the instance's.
+  `realisation` excludes the instance's;
+* check 56 -- a parameter that none of the subject's labels declares in its `parameters{}`, a value
+  not of the declared type, and one key that two of its labels declare differently.
+
+It also projects a term's `hard_negative_for` onto the subjects that carry it (06 §3.9(d)): the term is
+the authority, and the record carries a copy so neither the plan nor a sidecar has to be read against
+the vocabulary to be usable.
 
 The core is written here from 06 §3.7, which names `CarlaNet.Types` as its eventual source; nothing in
 that assembly enumerates it yet. The one family not written here is `illumination_band`: its terms are
@@ -41,6 +47,7 @@ CORE_VOCABULARY_VERSION = 1
 TERM_CHECK = 18
 APPLIES_CHECK = 45
 NAMESPACE_CHECK = 46
+PARAMETER_CHECK = 56
 
 SUBJECT_ROLE = "subject"
 VACANCY_PHASE = "vacancy"
@@ -205,6 +212,53 @@ class AnnotationVocabulary:
         """A phase or area kind is free, but a namespace it names must be declared."""
         if ":" in value:
             self._namespace_declared(value, where, what)
+
+    def check_parameters(self, parameters: dict, labels: list[str], where: str) -> None:
+        """Check 56: each parameter is a key one of the labels' terms declares, of the declared type.
+
+        A parameter is read against the declaration of every label declaring its key, so two such
+        labels must agree on its type and unit: a value carries one meaning (06 §3.8). A label that
+        is not a term was refused by `check_labels` and declares nothing here.
+        """
+        declared = {label: self.terms[label].get("parameters", {}) for label in labels
+                    if label in self.terms}
+        for key, value in parameters.items():
+            declaring = [(label, keys[key]) for label, keys in declared.items() if key in keys]
+            if not declaring:
+                known = sorted({name for keys in declared.values() for name in keys})
+                self.findings.refuse(
+                    PARAMETER_CHECK, where,
+                    f"carries parameter '{key}', which none of its labels declares"
+                    + (f" (they declare {', '.join(known)})" if known
+                       else " (they declare none)" if labels else ", and it carries no label")
+                    + ". A parameter is a key its label's term declares in parameters{} with a "
+                    "type, a unit and a definition (06 §3.8): declare it there, or remove it")
+                continue
+            for label, declaration in declaring:
+                if ScenarioSchema.validate_against(value, {"type": declaration["type"]}):
+                    self.findings.refuse(
+                        PARAMETER_CHECK, where,
+                        f"parameter '{key}' is {json.dumps(value)}, and '{label}' declares it "
+                        f"{declaration['type']} ({declaration['definition']})")
+            meanings = {(d["type"], d.get("unit", "")) for _, d in declaring}
+            if len(meanings) > 1:
+                self.findings.refuse(
+                    PARAMETER_CHECK, where,
+                    f"parameter '{key}' is declared differently by its labels: "
+                    + "; ".join(f"'{label}' as {d['type']}" + (f" in {d['unit']}" if d.get("unit")
+                                                              else "")
+                                for label, d in declaring)
+                    + ". One value cannot be read in two ways; declare the key alike or rename one")
+
+    def hard_negatives_of(self, labels: list[str]) -> list[str]:
+        """The terms a subject carrying these labels is a matched negative for: every label's
+        `hard_negative_for`, in declaration order, once each (06 §3.9(d))."""
+        found: list[str] = []
+        for label in labels:
+            for other in self.terms.get(label, {}).get("hard_negative_for", []):
+                if other not in found:
+                    found.append(other)
+        return found
 
     def _namespace_declared(self, spelled: str, where: str, what: str = "") -> bool:
         name = spelled.split(":", 1)[0]

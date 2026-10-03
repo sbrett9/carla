@@ -15,6 +15,7 @@ scenario changes (07 §3.4.2), not asserted here.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -102,6 +103,10 @@ def test_the_shipped_dwell_carries_its_incident_and_its_marked_vehicle():
         "218965860#0_0", "1800.00", "true")
     lock = json.loads((IMPORT / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
     assert lock["files"]["additional"]["path"] == f"{SCENARIO}.add.xml"
+    # The supervision plan is bound to the closures as the lock is, by the file's digest.
+    digest = hashlib.sha256((IMPORT / f"{SCENARIO}.add.xml").read_bytes()).hexdigest()
+    plan = json.loads((IMPORT / f"{SCENARIO}.supervision.json").read_text(encoding="utf-8"))
+    assert plan["additional_digest"] == lock["files"]["additional"]["sha256"] == digest
 
 
 def test_sumo_runs_the_shipped_incident_on_the_one_lane_it_leaves_open(tmp_path):

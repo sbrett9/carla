@@ -770,7 +770,7 @@ class ScenarioCompiler:
             flow_ids=[f["id"] for f in self.flows],
             rota_entries=self.rota_entries, rota_skips=self.rota_skips,
             rota_templates=self.rota_templates, areas=self.areas,
-            skip_routes=self._skip_routes())
+            skip_routes=self._skip_routes(), skip_sites=self._skip_sites())
         self.supervision = SupervisionPlanCompiler(self.vocabulary, self.resolver, self.findings)
         self.plan_rows = self.supervision.compile(self.spec.get("supervision"), inputs)
         for area_id in sorted(self.supervision.referenced_areas):
@@ -791,6 +791,23 @@ class ScenarioCompiler:
                 route["via"] = self._via(body.get("via", []), where)
                 routes[skip.entry_id] = route
         return routes
+
+    def _skip_sites(self) -> dict[str, dict]:
+        """Where each skipped rota occasion is sited, for its absence's `expected`: its subject's
+        place as a lane and a position on it, resolved from the network as a stop at it is.
+
+        The subject is what a series sites a slot at (its area is keyed by it), so the place it names
+        is where the vehicle would have been. A subject naming an edge or several lanes, rather than
+        one lane position, sites the absence at its area alone, and both fields are null.
+        """
+        sites = {}
+        for skips in self.rota_skips.values():
+            for skip in skips:
+                place = self.places.resolved.get(skip.subject)
+                at_lane = place is not None and place.lane is not None and place.end_pos is not None
+                sites[skip.entry_id] = {"site_lane": place.lane if at_lane else None,
+                                        "site_pos_m": place.end_pos if at_lane else None}
+        return sites
 
     # -- stage: epoch and illumination --------------------------------------------------------------------
     def _stage_epoch_and_illumination(self) -> None:
@@ -944,6 +961,9 @@ class ScenarioCompiler:
             # stamp, which a rebuilt world changes while the network stays the same.
             "network_digest": self.network_fingerprint,
             "config_digest": digests["config"],
+            # The lane closures' file, where the configuration names one: it decides the traffic as
+            # the route file does, so the plan is bound to it the same way. None where there is none.
+            "additional_digest": digests.get("additional"),
             "vocabulary_version": self.vocabulary.to_document()["core"]["vocabulary_version"],
             "vocabulary_digest": self.vocabulary.digest,
             "vocabulary": self.vocabulary.to_document(),

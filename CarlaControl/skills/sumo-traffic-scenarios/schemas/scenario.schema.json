@@ -1307,7 +1307,29 @@
                 }
               },
               "parameters": {
-                "type": "object"
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "hard_negative_for": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+                },
+                "description": "Optional, and only on a nominal subject: the set its labels' terms declare, restated exactly (check 57). The plan copies it from the terms either way"
               },
               "counterfactual": {
                 "$ref": "#/$defs/counterfactual"
@@ -1341,6 +1363,23 @@
                 "items": {
                   "type": "string",
                   "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+                }
+              },
+              "parameters": {
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
                 }
               },
               "intervals": {
@@ -1407,6 +1446,31 @@
                   "type": "string",
                   "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
                 }
+              },
+              "parameters": {
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "hard_negative_for": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+                },
+                "description": "Optional, and only on a nominal subject: the set its labels' terms declare, restated exactly (check 57). The plan copies it from the terms either way"
               }
             }
           }
@@ -1449,6 +1513,23 @@
                 "items": {
                   "type": "string",
                   "minLength": 1
+                }
+              },
+              "parameters": {
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
                 }
               },
               "counterfactual": {

@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 22 | 2026-10-02. `C3`: the supervision plan carries `additional_digest`, the lane closures' additional file's SHA-256 as the lock's `files` records it, null where a scenario closes no lane, beside the routes', configuration's and network's (§5.2, §5.3). The lock's `files` table names `additional` where there is one. The plan's other completions — checked parameters, projected `hard_negative_for`, resolved exemplars, an absence's site — are [`06`](06_Truth_And_Annotation.md) §8.1's |
 | 21 | 2026-10-02. `C2`: two optional performance controls, off by default and recommended for no scenario (§4.2, D4.44, D4.45). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity, chosen by the run -- adds `in_limit` to the admission predicate, two eviction rows (E5, E6) under new numbers and the reason `outside_limit`; a vehicle outside it is simulated, has no body and no imagery-side truth, and is counted. A draw distance changes no admission: every vehicle keeps its body and its truth, and each camera's sidecar marks the vehicles beyond it, which are not observed by that camera (§4.5). The participant guarantee holds with no limit, the default (§4.4). E2, E4, V2.3 and V2.4 stay withdrawn |
 | 20 | 2026-10-02. `C1`: the catalogue carries each body's width without its mirrors (`body_width_m`, §3.2b), measured from the mesh in the editor, beside the box's full extent; SUMO is given the body width (D4.3). `C3`: Bahonar is recompiled with 3 s lane changes and runs as before (§5.2a). `C7`: a body's heading is its own path's, its truth velocity the path's, and SUMO's angle is recorded beside them (§9.1, D4.13) |
 | 19 | 2026-10-01. `C3`: a lane change takes 3 s for every vehicle — the compiler writes `lanechange.duration` 3 into every configuration and the lock records it (§5.2a, D4.42). Measured on the three shipped scenarios; Bahonar deadlocks behind a body wider than its lanes and is not recompiled with it |
@@ -1642,7 +1643,7 @@ Three findings from that measurement:
 | `<scenario_id>.rou.xml` | Vehicle types bound to measured bodies (`C1`), every actor and flow already routed, departure-sorted, in plain seconds, with no supervision |
 | `<scenario_id>.add.xml` | Only where the specification declares `lane_closures`: the rerouter that closes each set of lanes for its interval, named by the configuration ([`07`](07_Scenario_Authoring.md) check 55) |
 | `<MapName>.net.xml` | The world package's `map.net.xml`, byte for byte |
-| `<scenario_id>.supervision.json` | The supervision plan — the annotation set, payload owned by [`06`](06_Truth_And_Annotation.md) §8.1 — carrying the resolved vocabulary it was checked against, import-flattened, with its digest ([`06`](06_Truth_And_Annotation.md) §8.7) |
+| `<scenario_id>.supervision.json` | The supervision plan — the annotation set, payload owned by [`06`](06_Truth_And_Annotation.md) §8.1 — carrying the resolved vocabulary it was checked against, import-flattened, with its digest ([`06`](06_Truth_And_Annotation.md) §8.7), and the digests of the files it was compiled against: `routes_digest`, `config_digest` and `additional_digest`, each the SHA-256 the lock's `files` records for that file (`additional_digest` null where there is no additional file), and `network_digest`, the network fingerprint |
 | `<scenario_id>.resolution.json`, `.resolution.md` | What the compile resolved, and every finding ([`07`](07_Scenario_Authoring.md) §5.3). Written by every compile; the only files a refused compile writes |
 
 - **Written whole, and only when the compile passes.** Every self-check runs on the files in memory
@@ -1715,7 +1716,7 @@ runs as it did before lane changes were spread.
 | `scenario_id`, `scenario_name` | Stable across runs. `scenario_id` is **the field the recorder accepts and is never given** — §5.6 |
 | `spec_version`, `specification`, `specification_sha256` | The specification compiled, by name and digest |
 | `compiler` | `name` and `version` |
-| `files` | `routes`, `config`, `network`, `supervision`: each a `path` relative to the lock, and its `sha256` |
+| `files` | `routes`, `config`, `network`, `supervision`, and `additional` where the scenario closes lanes: each a `path` relative to the lock, and its `sha256`. The supervision plan restates the routes', configuration's and additional file's digests, so the plan and the files it was compiled against are bound both ways |
 | **`world`** | `package`, `map_name`, `network_fingerprint`, `netconvert_argv`, `netconvert_version`, `opendrive_sha256`, `source_osm_sha256`, `origin_latitude`, `origin_longitude`, `georeference` — copied from the world package the specification was compiled against |
 | **`catalogue`** | `catalogue_id`, `catalogue_digest`, `blueprint_set_digest`, `content_build_id` (`C1` §3.11) |
 | **`vocabulary`** | `core_version`, `namespaces` with their versions, and `vocabulary_digest`, the digest of the vocabulary document the supervision plan carries |

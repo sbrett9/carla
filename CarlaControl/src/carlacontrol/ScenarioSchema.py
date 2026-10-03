@@ -9,7 +9,8 @@ reads is one its author will later believe was honoured.
 The schema fixes the **shape**. What a value means is checked where it is resolved: a time's form by
 `CivilTimeResolver` (check 47), a place by `PlaceResolver` (check 7), the epoch and the illumination
 default by the session's own readers (checks 33, 34, 39), a label by the vocabulary (checks 18, 45,
-46). The epoch and illumination objects are typed only as objects here for that reason: their rules
+46), and a subject's `parameters` and `hard_negative_for` against its labels' terms (checks 56, 57).
+The epoch and illumination objects are typed only as objects here for that reason: their rules
 are `CarlaNet.CoSim.SolarEpoch`'s and `IlluminationPolicy`'s, and restating them here would be a second
 copy that can drift.
 
@@ -37,6 +38,14 @@ _TIME = {"description": "A time: seconds, 'dN HH:MM[:SS]', 'HH:MM[:SS]', an ISO-
 _DURATION = {"description": "Seconds, or '[Nd][Nh][Nm][Ns]'",
              "anyOf": [{"type": "number", "minimum": 0}, {"type": "string", "minLength": 1}]}
 _STRINGS = {"type": "array", "items": {"type": "string", "minLength": 1}}
+_TERMS = {"type": "array", "items": {"type": "string", "pattern": _TERM}}
+_PARAMETERS = {"description": "Keys a label's term declares in its parameters{}, each value of the "
+                              "declared type (check 56)",
+               "type": "object",
+               "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "string"},
+                                                  {"type": "boolean"}]}}
+_HARD_NEGATIVE_FOR = ("Optional, and only on a nominal subject: the set its labels' terms declare, "
+                      "restated exactly (check 57). The plan copies it from the terms either way")
 
 SCHEMA: dict = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -355,7 +364,8 @@ SCHEMA: dict = {
                                            "role": {"type": "string", "minLength": 1}}}},
                         "intervals": {"type": "array", "items": {"$ref": "#/$defs/interval"}},
                         "aoi_refs": _STRINGS,
-                        "parameters": {"type": "object"},
+                        "parameters": _PARAMETERS,
+                        "hard_negative_for": dict(_TERMS, description=_HARD_NEGATIVE_FOR),
                         "counterfactual": {"$ref": "#/$defs/counterfactual"},
                     }}},
                 "cohorts": {"type": "array", "items": {
@@ -365,6 +375,7 @@ SCHEMA: dict = {
                                    "supervision": {"enum": ["annotated", "unlabelled", "nominal"]},
                                    "labels": {"type": "array",
                                               "items": {"type": "string", "pattern": _TERM}},
+                                   "parameters": _PARAMETERS,
                                    "intervals": {"type": "array"}}}},
                 "series": {"type": "array", "items": {
                     "type": "object", "additionalProperties": False,
@@ -379,6 +390,8 @@ SCHEMA: dict = {
                                           "additionalProperties": {"type": "string"}},
                         "supervision": {"enum": ["annotated", "nominal", "unlabelled"]},
                         "labels": {"type": "array", "items": {"type": "string", "pattern": _TERM}},
+                        "parameters": _PARAMETERS,
+                        "hard_negative_for": dict(_TERMS, description=_HARD_NEGATIVE_FOR),
                     }}},
                 "absences": {"type": "array", "items": {
                     "type": "object", "additionalProperties": False,
@@ -391,6 +404,7 @@ SCHEMA: dict = {
                         "labels": {"type": "array", "minItems": 1,
                                    "items": {"type": "string", "pattern": _TERM}},
                         "aoi_refs": _STRINGS,
+                        "parameters": _PARAMETERS,
                         "counterfactual": {"$ref": "#/$defs/counterfactual"},
                     }}},
             },

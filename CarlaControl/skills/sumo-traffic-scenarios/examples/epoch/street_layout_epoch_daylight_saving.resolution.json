@@ -404,7 +404,8 @@
       {
         "flow_id": "ambient",
         "supervision": "unlabelled",
-        "labels": []
+        "labels": [],
+        "parameters": {}
       }
     ],
     "series": []
@@ -435,7 +436,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_daylight_saving.supervision.json",
-        "sha256": "b1f58521b5422d12f641eaf130499540fa03dc5069692871a2dd55d1a1eed8a2"
+        "sha256": "39b597dbb1b1882ed6d48e4faba7e6c99bd23b3afd491abcabc6e92a80a37f43"
       }
     },
     "world": {

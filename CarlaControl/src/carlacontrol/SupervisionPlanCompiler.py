@@ -15,10 +15,18 @@ What an author declares, and what it compiles to:
 | `instances[]` -- annotated or nominal, over actors | a pattern instance with participants, roles and intervals |
 | `cohorts[]` -- a flow, annotated whole-life or unlabelled | a cohort row; `nominal` and intervals refuse (D6.2) |
 | `series[]` -- a rota read as a recurring series | a series with one slot per occasion, each realised slot's vehicle an entity in the declared state |
-| `absences[]` -- a skipped rota occasion, annotated | an instance with `realisation: absent`, no participant, one `vacancy` interval |
+| `absences[]` -- a skipped rota occasion, annotated | an instance with `realisation: absent`, no participant, one `vacancy` interval, and the route and site its vehicle would have had |
 
 Every actor not named in an instance and every flow not named in a cohort is written explicitly as
 `unlabelled`, because absence of an element must not stand for an asserted negative (06 §3.1).
+
+**A row says nothing its terms do not define.** A row's `parameters` are keys its labels' terms
+declare, each of the declared type (check 56), so a magnitude reaches a consumer with its unit and
+meaning. A nominal row carries a copy of its terms' `hard_negative_for`, which an author may restate
+and never vary (check 57): the term is the authority and the row a projection of it (06 §3.9(d)), and
+`null` there means unspecified, not a negative for nothing. A term's `exemplar_instances` and its
+`counterfactual` name subjects of this plan, by the authored names an instance's own counterfactual
+uses, and each must resolve (check 8).
 
 The plan carries no solar field and no epoch (06 §8.1): intervals carry their declared seconds and the
 civil instant the epoch names them, which is a statement of *when*, not of what the light was.
@@ -59,6 +67,7 @@ class SupervisionInputs:
     rota_templates: dict[str, dict] = field(default_factory=dict)
     areas: dict[str, dict] = field(default_factory=dict)
     skip_routes: dict[str, dict] = field(default_factory=dict)
+    skip_sites: dict[str, dict] = field(default_factory=dict)
 
 
 class SupervisionPlanCompiler:
@@ -85,6 +94,7 @@ class SupervisionPlanCompiler:
         instances = [row for row in instances if row]
         cohorts = self._cohorts(block.get("cohorts", []))
         self._check_counterfactuals(block, instances, series_by_id)
+        self._check_exemplars(instances)
         entities = self._entities(instances, series_rows)
         self._check_hard_negatives(instances, series_rows, cohorts)
         return {
@@ -111,10 +121,14 @@ class SupervisionPlanCompiler:
         instance_id = self._instance_id(name, where)
         supervision = entry["supervision"]
         participants = entry.get("participants", [])
-        self.vocabulary.check_labels(entry.get("labels", []), "entity", "present", where)
-        if supervision == "annotated" and not entry.get("labels"):
+        labels = list(entry.get("labels", []))
+        self.vocabulary.check_labels(labels, "entity", "present", where)
+        if supervision == "annotated" and not labels:
             self.findings.refuse(18, where, "is annotated and carries no label; an annotation "
                                  "names what the author asserts")
+        parameters = dict(entry.get("parameters", {}))
+        self.vocabulary.check_parameters(parameters, labels, where)
+        hard_negative_for = self._hard_negatives(entry, supervision, labels, where)
 
         rows = []
         for participant in participants:
@@ -143,8 +157,9 @@ class SupervisionPlanCompiler:
             "instance_id": instance_id,
             "supervision": supervision,
             "realisation": "present",
-            "labels": list(entry.get("labels", [])),
-            "parameters": dict(entry.get("parameters", {})),
+            "labels": labels,
+            "parameters": parameters,
+            "hard_negative_for": hard_negative_for,
             "counterfactual": entry.get("counterfactual"),
             "series_ref": None,
             "slot_ref": None,
@@ -223,6 +238,9 @@ class SupervisionPlanCompiler:
         elif labels:
             self.findings.refuse(18, where, "is unlabelled and carries labels; an unlabelled "
                                  "subject asserts nothing")
+        parameters = dict(entry.get("parameters", {}))
+        self.vocabulary.check_parameters(parameters, labels, where)
+        hard_negative_for = self._hard_negatives(entry, supervision, labels, where)
         length = self.resolver.duration(entry["slot_length"], f"{where} slot_length")
         aoi_by_subject = entry["slot_aoi_refs"]
         entries = self._inputs.rota_entries.get(rota_id, [])
@@ -257,6 +275,8 @@ class SupervisionPlanCompiler:
             "member_role": member_role,
             "supervision": supervision,
             "labels": labels,
+            "parameters": parameters,
+            "hard_negative_for": hard_negative_for,
             "slots": slots,
         }
 
@@ -277,8 +297,11 @@ class SupervisionPlanCompiler:
                                  f"rota leaves unrealised (skipped: {skipped or 'none'})")
             return None
         self.vocabulary.check_labels(entry["labels"], "slot", "absent", where)
+        parameters = dict(entry.get("parameters", {}))
+        self.vocabulary.check_parameters(parameters, entry["labels"], where)
         aoi_refs = self._aoi_refs(entry.get("aoi_refs") or ([slot["aoi_ref"]] if slot["aoi_ref"]
                                                              else []), where)
+        site = self._inputs.skip_sites.get(slot["slot_key"], {})
         begin = self.resolver.instant(slot["declared_start_s"], f"{where} vacancy begin")
         end_s = slot["declared_end_s"]
         end = None if end_s is None else self.resolver.instant(end_s, f"{where} vacancy end")
@@ -291,7 +314,8 @@ class SupervisionPlanCompiler:
             "supervision": "annotated",
             "realisation": "absent",
             "labels": list(entry["labels"]),
-            "parameters": {},
+            "parameters": parameters,
+            "hard_negative_for": None,
             "counterfactual": entry.get("counterfactual"),
             "series_ref": series["series_id"],
             "slot_ref": slot["slot_key"],
@@ -301,6 +325,8 @@ class SupervisionPlanCompiler:
                 "role": series["member_role"],
                 "expected_entity_id": slot["expected_entity_id"],
                 "route": self._inputs.skip_routes.get(slot["slot_key"], {}),
+                "site_lane": site.get("site_lane"),
+                "site_pos_m": site.get("site_pos_m"),
                 "declared_start_s": slot["declared_start_s"],
                 "declared_end_s": slot["declared_end_s"],
             },
@@ -348,8 +374,12 @@ class SupervisionPlanCompiler:
                 self.vocabulary.check_labels(labels, "cohort", "present", where)
             elif labels:
                 self.findings.refuse(18, where, "is unlabelled and carries labels")
-            by_flow[flow] = {"flow_id": flow, "supervision": supervision, "labels": labels}
-        return [by_flow.get(flow, {"flow_id": flow, "supervision": "unlabelled", "labels": []})
+            parameters = dict(entry.get("parameters", {}))
+            self.vocabulary.check_parameters(parameters, labels, where)
+            by_flow[flow] = {"flow_id": flow, "supervision": supervision, "labels": labels,
+                             "parameters": parameters}
+        return [by_flow.get(flow, {"flow_id": flow, "supervision": "unlabelled", "labels": [],
+                                   "parameters": {}})
                 for flow in self._inputs.flow_ids]
 
     # -- entities ---------------------------------------------------------------------------------
@@ -378,21 +408,72 @@ class SupervisionPlanCompiler:
 
     def _check_counterfactuals(self, block: dict, instances: list[dict],
                                series_by_id: dict[str, dict]) -> None:
+        """Check 8: every counterfactual, a row's or a term's, names what this scenario declares.
+
+        A term's counterfactual of kind `term` resolves inside the vocabulary, which checks it
+        (check 18); one naming a series, a cohort or an instance points at a subject of this plan.
+        """
         names = {row["instance_id"].split("/", 1)[1] for row in instances}
-        for group in ("instances", "absences"):
-            for entry in block.get(group, []):
-                counterfactual = entry.get("counterfactual")
-                if not counterfactual:
+        known = {"series": set(series_by_id), "instance": names,
+                 "cohort": set(self._inputs.flow_ids), "term": set(self.vocabulary.terms)}
+        declared = [(f"{group[:-1]} {entry['name']}", entry.get("counterfactual"))
+                    for group in ("instances", "absences") for entry in block.get(group, [])]
+        declared += [(f"namespace {spelled.split(':', 1)[0]}", term["counterfactual"])
+                     for spelled, term in sorted(self.vocabulary.terms.items())
+                     if term.get("counterfactual") and term["counterfactual"]["kind"] != "term"]
+        for where, counterfactual in declared:
+            if not counterfactual:
+                continue
+            kind, ref = counterfactual["kind"], counterfactual["ref"]
+            if ref not in known[kind]:
+                self.findings.refuse(8, where, f"counterfactual {kind} '{ref}' names nothing this "
+                                     "scenario declares; a counterfactual is a resolved reference "
+                                     "(06 §3.9(c))")
+
+    def _check_exemplars(self, instances: list[dict]) -> None:
+        """Check 8: every exemplar a term names is an instance of this plan (06 §3.8).
+
+        An exemplar is named as an instance's counterfactual names one, by its authored name, which
+        the plan's id prefixes with the scenario id: so it resolves in every member of a sweep,
+        whose ids carry the member's own scenario id. Prose about a term is unverifiable; an
+        exemplar is checkable because it resolves.
+        """
+        names = {row["instance_id"].split("/", 1)[1] for row in instances}
+        for spelled, term in sorted(self.vocabulary.terms.items()):
+            for ref in term.get("exemplar_instances", []):
+                if ref in names:
                     continue
-                kind, ref = counterfactual["kind"], counterfactual["ref"]
-                known = {"series": set(series_by_id), "instance": names,
-                         "cohort": set(self._inputs.flow_ids),
-                         "term": set(self.vocabulary.terms)}[kind]
-                if ref not in known:
-                    self.findings.refuse(8, f"{group[:-1]} {entry['name']}",
-                                         f"counterfactual {kind} '{ref}' names nothing this "
-                                         "scenario declares; a counterfactual is a resolved "
-                                         "reference (06 §3.9(c))")
+                named = ref.rsplit("/", 1)[-1]
+                hint = (f"; an exemplar names the instance as the specification does, '{named}', "
+                        "not by its id in one plan, which the members of a sweep do not share"
+                        if named in names else "")
+                self.findings.refuse(8, f"namespace {spelled.split(':', 1)[0]}",
+                                     f"'{spelled}' exemplar_instances names '{ref}', which is no "
+                                     f"instance or absence of this scenario{hint}. An exemplar "
+                                     "resolves or it is prose (06 §3.8)")
+
+    def _hard_negatives(self, entry: dict, supervision: str, labels: list[str],
+                        where: str) -> list[str] | None:
+        """Check 57: a nominal subject carries its terms' `hard_negative_for`, and only that.
+
+        The term is the authority and the row a copy of it (06 §3.9(d)), so a nominal row carries the
+        union of its labels' declarations, an author who restates the set restates it exactly, and a
+        subject that is not nominal declares none: the field narrows an authored negative. `None`
+        where nothing narrows it, which means unspecified, not a negative for nothing.
+        """
+        projected = self.vocabulary.hard_negatives_of(labels) if supervision == "nominal" else []
+        declared = entry.get("hard_negative_for")
+        if declared is not None and set(declared) != set(projected):
+            if supervision != "nominal":
+                self.findings.refuse(57, where, f"is {supervision} and declares hard_negative_for "
+                                     f"{declared}. The field narrows a nominal subject's negative "
+                                     f"(06 §3.9(d)), and an {supervision} subject asserts none")
+            else:
+                self.findings.refuse(57, where, f"declares hard_negative_for {declared}, and its "
+                                     f"labels' terms declare {projected or 'none'}. The term is the "
+                                     "authority and the row a copy of it (06 §3.9(d)): declare the "
+                                     "set on the term, and restate it here exactly or not at all")
+        return projected or None
 
     def _check_hard_negatives(self, instances: list[dict], series_rows: list[dict | None],
                               cohorts: list[dict]) -> None:

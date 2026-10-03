@@ -6,6 +6,7 @@
   "routes_digest": "75d800404a046bccceaf48c012439a514effeab259ce0c427c3d698b1aa00928",
   "network_digest": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
   "config_digest": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f",
+  "additional_digest": null,
   "vocabulary_version": 1,
   "vocabulary_digest": "8a7b088c401f5e7722dbfc7a6ff5d9a8e04610e28dd38837800718d4dbf0c4c4",
   "vocabulary": {
@@ -293,6 +294,7 @@
         "group_size": 5,
         "departure_spread_s": 16
       },
+      "hard_negative_for": null,
       "counterfactual": {
         "kind": "term",
         "ref": "bahonar:routine_freight_haul"
@@ -387,6 +389,7 @@
       "parameters": {
         "dwell_s": 300
       },
+      "hard_negative_for": null,
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -422,6 +425,7 @@
       "parameters": {
         "dwell_s": 300
       },
+      "hard_negative_for": null,
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -458,6 +462,7 @@
         "speed_factor": 0.45,
         "circuit_edges": 7
       },
+      "hard_negative_for": null,
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -489,6 +494,7 @@
         "bahonar:arrival_without_departure"
       ],
       "parameters": {},
+      "hard_negative_for": null,
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -522,6 +528,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -543,6 +553,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -564,6 +578,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -585,6 +603,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -606,6 +628,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -627,6 +653,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -648,6 +678,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -669,6 +703,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -690,6 +728,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -711,6 +753,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -732,6 +778,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -753,6 +803,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -774,6 +828,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -795,6 +853,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -816,6 +878,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -837,6 +903,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -858,6 +928,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -879,6 +953,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -900,6 +978,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -921,6 +1003,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -942,6 +1028,10 @@
         "bahonar:routine_freight_haul"
       ],
       "parameters": {},
+      "hard_negative_for": [
+        "bahonar:coordinated_group_transit",
+        "bahonar:destination_off_pattern"
+      ],
       "counterfactual": null,
       "series_ref": null,
       "slot_ref": null,
@@ -963,6 +1053,7 @@
         "bahonar:post_unmanned"
       ],
       "parameters": {},
+      "hard_negative_for": null,
       "counterfactual": {
         "kind": "series",
         "ref": "tower_relief"
@@ -983,6 +1074,8 @@
             "26413459"
           ]
         },
+        "site_lane": "26413459_0",
+        "site_pos_m": 58.9,
         "declared_start_s": 345600.0,
         "declared_end_s": 374400.0
       },
@@ -1012,6 +1105,11 @@
       "supervision": "nominal",
       "labels": [
         "bahonar:tower_posting"
+      ],
+      "parameters": {},
+      "hard_negative_for": [
+        "bahonar:standoff_dwell_at_access_point",
+        "bahonar:arrival_without_departure"
       ],
       "slots": [
         {
@@ -4381,1438 +4479,1686 @@
     {
       "flow_id": "corridor_d0_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d0_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d1_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d2_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d3_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d4_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d5_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p0_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p0_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p0_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p1_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p1_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p1_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p2_h10",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p2_h16",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d6_p2_h20",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d7_p0_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d7_p0_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d7_p1_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d7_p1_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d7_p2_h0",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "corridor_d7_p2_h6",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d0_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d0_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d0_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d0_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d0_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d0_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d0_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d0_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d0_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d0_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d0_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d0_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d1_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d1_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d2_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d2_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d3_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d3_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d4_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d4_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d5_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d5_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h8",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h10",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h12",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h14",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h16",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d6_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d6_h18",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_in_d7_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "ferry_out_d7_h6",
       "supervision": "annotated",
       "labels": [
         "bahonar:cleared_gate_transit"
-      ]
+      ],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d0_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d0_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d0_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d0_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d0_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d0_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d1_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d1_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d1_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d1_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d1_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d1_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d2_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d2_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d2_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d2_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d2_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d2_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d3_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d3_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d3_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d3_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d3_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d3_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d4_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d4_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d4_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d4_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d4_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d4_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d5_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d5_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d5_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d5_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d5_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d5_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d6_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d6_h7",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d6_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d6_h15",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_in_d6_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     },
     {
       "flow_id": "shift_out_d6_h23",
       "supervision": "unlabelled",
-      "labels": []
+      "labels": [],
+      "parameters": {}
     }
   ],
   "entities": [

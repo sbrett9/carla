@@ -55,8 +55,8 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "the network, the place index and the area table", _R, COMPILER,
                   "An authored place that silently becomes a different place"),
     ScenarioCheck(8, "references", "Every reference names what the specification declares: places, "
-                  "instants, rotas, series, flows and counterfactuals", "the specification", _R,
-                  COMPILER, "A typo becoming a valid-looking identifier"),
+                  "instants, rotas, series, flows, counterfactuals and exemplar instances",
+                  "the specification", _R, COMPILER, "A typo becoming a valid-looking identifier"),
     ScenarioCheck(54, "references", "Every actor, rota entry, flow, lane closure and capture window "
                   "id is unique",
                   "the specification", _R, COMPILER,
@@ -105,6 +105,14 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(46, "annotation", "Every namespace in a label, role, phase or area kind was "
                   "declared or imported", "the vocabulary block", _R, COMPILER,
                   "A term no published vocabulary defines"),
+    ScenarioCheck(56, "annotation", "Every parameter an instance, absence, series or cohort carries "
+                  "is declared by one of its labels' terms and is of the declared type; labels "
+                  "declaring one key agree on its type and unit", "the vocabulary block", _R,
+                  COMPILER, "A magnitude no consumer can read: a key nobody defined, or a value "
+                  "that is not what its definition says"),
+    ScenarioCheck(57, "annotation", "A nominal subject's hard_negative_for is the set its labels' "
+                  "terms declare, and no other subject declares one", "the vocabulary block", _R,
+                  COMPILER, "A matched negative the record and its term disagree about"),
     ScenarioCheck(19, "annotation", "Every participant names a declared actor",
                   "the specification", _R, COMPILER, "An instance whose participant never exists"),
     ScenarioCheck(20, "annotation", "Every aoi_ref names an area in the world's area table",

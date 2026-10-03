@@ -24,7 +24,7 @@
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-      "sha256": "836c2a73c54901e58027dc8c7f966df74a5734a85367a7b826dd458bb3d7ec5c"
+      "sha256": "6d3f22824e1c6b849e44c4f9201695b9a7af49c5e04761c0d3c838ca0de618be"
     }
   },
   "world": {
