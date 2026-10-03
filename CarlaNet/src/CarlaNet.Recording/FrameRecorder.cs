@@ -83,6 +83,7 @@ public sealed class FrameRecorder : IDisposable
     private long _saved, _dropped;
     private long _telemetryExact, _telemetryOffset, _telemetryWorstOffset;
     private long _illuminationPaired, _illuminationUnpaired;
+    private long _solarBlockMissing;
     private long _drawDistanceCaptures, _beyondDrawDistance, _partlyBeyondDrawDistance;
 
     /// <summary>
@@ -120,6 +121,15 @@ public sealed class FrameRecorder : IDisposable
     /// did not answer for. Every one is a still whose sun cannot be traced to a declaration.
     /// </summary>
     public long IlluminationUnpaired => Interlocked.Read(ref _illuminationUnpaired);
+
+    /// <summary>
+    /// Captures written without a solar block: no <c>_solar</c> element in the sidecar and no
+    /// <c>carla:solar</c> chunk in the PNG, because the snapshot nearest the pixels carried no sun or
+    /// fewer than the eleven values that make one. Every one is a still with no recorded sun and no
+    /// illumination band, which a corpus can neither stratify nor replay, so a run's closeout holds it
+    /// at zero.
+    /// </summary>
+    public long SolarBlockMissing => Interlocked.Read(ref _solarBlockMissing);
 
     /// <summary>Whether captures list their frame's render set rather than every vehicle actor.</summary>
     public bool PairsRenderSet => _renderSet is not null;
@@ -551,6 +561,10 @@ public sealed class FrameRecorder : IDisposable
                                           job.CapturedUtc, job.Telemetry, _affiliation, _stale,
                                           job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles,
                                           job.DrawDistance);
+                    // Both writers leave the sun out of a capture whose block holds none, which is
+                    // right for the frame and wrong for the run: counted, so it is never silent.
+                    if (!SolarMetadata.HasData(job.Solar))
+                        Interlocked.Increment(ref _solarBlockMissing);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)

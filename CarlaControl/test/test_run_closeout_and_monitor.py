@@ -185,6 +185,23 @@ def test_a_capture_listed_without_its_frame_s_render_set_is_a_gate_not_met(layou
     assert "render set unpaired 3" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
 
 
+def test_a_capture_written_without_a_solar_block_is_a_gate_not_met(layout):
+    # Doc 11 §8.4: a capture with no recorded sun can be neither stratified by band nor replayed, and
+    # the gate is that there are none.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    met = gate(report.gates(report.snapshot(), 0), "capture.solar_block_missing[OVERWATCH-1]")
+    assert (met["status"], met["observed"], met["threshold"], met["met"]) == ("evaluated", 0, 0, True)
+
+    recorder.SolarBlockMissing = 2
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["solar_block_missing"] == 2
+    missing = gate(report.gates(snapshot, 0), "capture.solar_block_missing[OVERWATCH-1]")
+    assert (missing["observed"], missing["threshold"], missing["met"]) == (2, 0, False)
+    assert missing["owner"] == "11 §8.4"
+    assert "solar block missing 2" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+
+
 def test_a_capture_whose_image_header_disagreed_with_its_frame_s_snapshot_is_a_gate_not_met(layout):
     # The recorder wrote the snapshot's pose, so the still is placed right; the gate records that the
     # server stamped the header after the frame.

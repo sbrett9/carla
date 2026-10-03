@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Xml;
+using CarlaNet.Types.Illumination;
 
 namespace CarlaNet.Recording;
 
@@ -81,7 +82,9 @@ public static class CotWriter
             w.WriteAttributeString("draw_distance_m", F(drawDistance, "0.###"));
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
-        // once here, before the per-vehicle events, so it is present even for a vehicle-free frame.
+        // once here, before the per-vehicle events, so it is present even for a vehicle-free frame. A
+        // block too short to hold a sun writes nothing here, which is right for the frame and wrong for
+        // a run, so the recorder counts every such capture (FrameRecorder.SolarBlockMissing).
         if (solar is { Count: >= 11 })
         {
             w.WriteStartElement("_solar");
@@ -99,6 +102,14 @@ public static class CotWriter
             w.WriteAttributeString("sun_azimuth_deg", F(solar[8], "0.###"));
             w.WriteAttributeString("advancing", solar[9] != 0.0 ? "true" : "false");
             w.WriteAttributeString("rate", F(solar[10], "0.####"));
+            // The band of the sun above, derived from it alone and so from the sun the world
+            // achieved, never from the time the run declared; and which of its elevations the band
+            // was cut from, the corrected one wherever the block carries it.
+            if (SolarMetadata.Band(solar) is { } band)
+            {
+                w.WriteAttributeString("illumination_band", IlluminationBands.Name(band.Band));
+                w.WriteAttributeString("illumination_band_elevation", SolarElevationKinds.Name(band.AssignedFrom));
+            }
             w.WriteEndElement(); // _solar
         }
 

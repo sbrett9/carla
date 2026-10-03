@@ -24,6 +24,7 @@ the real scenario artifacts. No code changed, no build run.
 | 16 · 2026-10-02 | A capture names the sensor that took it: every still is `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`, and the platform event's callsign is the camera's name, which defaulted to `OVERWATCH` for every camera given none, so the truth of two cameras in one world no longer reports under one callsign. The `sensor_id` is that name; a camera given none is `CARLA-SENSOR-<camera actor id>` (§7.1). |
 | 17 · 2026-10-02 | The compiled plan is completed without changing the interval shape. A row's `parameters` — on an instance, an absence, a series or a cohort — are checked against its labels' `parameters{}` declarations, key and type (§3.8); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and never vary, `null` where none is declared (§3.9(d)); a term's `exemplar_instances` and a counterfactual naming a subject resolve against the plan, an exemplar by the instance's authored name (§3.8); an absence's `expected` carries `site_lane` and `site_pos_m` (§3.5); and the plan carries `additional_digest`, bound like the others (§8.1). [07](07_Scenario_Authoring.md) checks 56 and 57 are added and check 8 extended. All three shipped scenarios are recompiled. |
 | 18 · 2026-10-02 | SUMO's own distribution edits are checked at session start and stated on the run report, as D6.12 decides (§6.2). Refused: a `collision.action` other than `warn` or `none`, SUMO's default included; every teleport trigger besides `time-to-teleport` — `.highways`, `.disconnected`, `.bidi`, `.railsignal-deadlock` and a vehicle type's own `timeToTeleport` and `timeToTeleportBidi` — unless the run accepts teleporting; a positive `random-depart-offset`; and `random`. Recorded: `scale`, a type's own `scale`, `max-num-vehicles` and `max-depart-delay`. §6.2 is corrected: `time-to-teleport.highways` is off at its default of 0 and on only where positive, measured, so it is no trap; `.disconnected` is on from 0 up. `none` stays permitted until the owner rules on it; the hard failure for a discarded plan subject is not built. |
+| 19 · 2026-10-02 | Every capture's `<_solar>` and `carla:solar` carry `illumination_band`, from the sun the world achieved on the capture's tick and never the declared time, cut from its refraction-corrected elevation wherever the block carries it, with `illumination_band_elevation` naming the elevation used. The bands are one table in `CarlaNet.Types`, which the core vocabulary and the association statistic read through `carlanet`. A capture written without a solar block is counted by its recorder and is a closeout gate not met, rather than a silent omission (§3.7, §5.3, §8.2). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -878,7 +879,7 @@ author term appears in that diff only as bytes.
 | `interval_onset` | `declared` · `committed` · `observed` | three separate producers write three separate fields | Three field names with three authorities, not a list an author picks from (§3.3) |
 | `closed_by` | the nine values of §3.4 | the interval lifecycle; consumer filtering, where `render_released` must never read as `entity_arrived` | The distinction the corpus exists to preserve (§3.4) |
 | `observability_outcome` | `observed` · `out_of_frame` · `occluded` · `not_rendered` · `site_unobserved` | the export step — D6.11 excludes `not_rendered` from the corpus's contents | A sixth value changes what the corpus claims to hold; D6.22 already reserves the slot for `unlit` (§5.1) |
-| `illumination_band` | `day` · `golden` · `civil_twilight` · `nautical_twilight` · `astronomical_twilight` · `night` — [11](11_Time_And_Illumination.md) §4.4's six bands, defined there and nowhere else | the manifest writer — D6.23 stratifies every prevalence unit by it; the scenario compiler's illumination–label statistic buckets by it ([07](07_Scenario_Authoring.md) check 41) | Computed by us from `sun_elevation_deg`; an author never supplies it (§5.3). The built core takes these terms from the function that assigns the band (`carlacontrol.IlluminationBand`), so the vocabulary and the statistic read one table |
+| `illumination_band` | `day` · `golden` · `civil_twilight` · `nautical_twilight` · `astronomical_twilight` · `night` — [11](11_Time_And_Illumination.md) §4.4's six bands, defined there and nowhere else | the manifest writer — D6.23 stratifies every prevalence unit by it; the scenario compiler's illumination–label statistic buckets by it ([07](07_Scenario_Authoring.md) check 41) | Computed by us from the achieved sun's elevation; an author never supplies it (§5.3). The bands are one table, `CarlaNet.Types`'s `IlluminationBands`: the recorder writes every capture's band from it (§8.2), and the built core takes these terms from it through the function that assigns the band (`carlacontrol.IlluminationBand`), so the vocabulary, the statistic and the truth read one table |
 | `cadence` form | `enumerated`, or `period_s` + `offsets_s[]` + `span` | the slot enumerator, which has to expand a series into slots | Without it a `RecurringSeries` cannot be compiled (§3.4) |
 | reserved `role` | `subject`, and nothing else | the compiler: an instance with exactly one participant must name that participant `subject` | One handle a consumer can rely on for "the participant this instance is about" |
 | reserved `phase` | `vacancy`, and nothing else | the absence writer emits it; no author writes it | Produced by the pipeline, so its spelling is ours (§3.5) |
@@ -1679,7 +1680,7 @@ consumer who pools them gets a number that describes neither.
 
 | Property | How it is recorded |
 |---|---|
-| **The band is derived from the achieved sun, never from the declared time** | If the two disagree, the declared time is a claim about a world that was not rendered, and stratifying by it would sort the corpus by an assertion rather than by the light the frames were actually captured under. The residual of §4.5 is what makes the disagreement visible; the stratification is computed from `sun_elevation_deg` regardless |
+| **The band is derived from the achieved sun, never from the declared time** | If the two disagree, the declared time is a claim about a world that was not rendered, and stratifying by it would sort the corpus by an assertion rather than by the light the frames were actually captured under. The residual of §4.5 is what makes the disagreement visible; the stratification is computed from the achieved elevation regardless — the refraction-corrected one each capture's band is cut from (§8.2) |
 | **Every band that has any capture in it gets a row, including empty numerators** | A band with observed vehicle-seconds and zero annotated seconds is a real and important fact — it is a corpus that has ordinary traffic at that illumination and no anomalies. Suppressing the row turns "we captured nothing anomalous at night" into "we did not capture at night", which are different statements and only one of them is a gap |
 | **Per band, the same three units and the same per-sensor and unioned breakdown** | The units do not collapse under stratification. A night window can shift the per-vehicle and the per-vehicle-second prevalences in opposite directions, because the night population is small and heavily weighted towards long parked dwells — measured at Bahonar, the overnight floor is "almost entirely the 17 parked" vehicles ([10 §3.1](10_Scale_And_Performance.md)) |
 | **The band boundaries used are recorded beside the numbers** | §5.1. A stratification whose cut points are undocumented cannot be recomputed or compared across corpora |
@@ -2279,7 +2280,8 @@ Notes, each carrying a decision:
 - **A sidecar with no `<_solar>` element is a failed capture, not a capture with unknown lighting.**
   `CotWriter.cs:52` writes nothing below eleven doubles (§2.7). Under this section that condition fails
   the session at the first capture rather than producing a corpus whose stratification (§5.3) silently
-  omits an unknown fraction of its frames.
+  omits an unknown fraction of its frames. As built, the recorder counts every such capture and the
+  run's closeout records the count as a gate not met at the first one (below).
 - **`<_supervision>` is identical in every camera's sidecar for a given tick**; only the sensor block
   and anything derived from it differs. A disagreement between two sidecars at one tick is a defect
   (doc 20 decision 15), which is why the snapshot is tick-stamped and captured into the encoding job
@@ -2344,6 +2346,29 @@ occlusion attributes, which here as everywhere means unmeasured. A capture with 
 every capture of a run whose server refused the distance, carries none of the three. The renderer's
 `r.ViewDistanceScale`, 1 at the server's default quality, multiplies every draw distance; the mark is
 taken at 1.
+
+**As built (2026-10-02): the band on the sun, and a capture without one.** Of `<_solar>`'s four
+additions, the band is written; the declared instant, the policy and the residual went into
+`<_illumination>` instead ([11](11_Time_And_Illumination.md) §8.2), beside the sun rather than inside
+it, so a reader never tells the world's sun from the run's declaration by attribute name. Every
+`<_solar>` and every `carla:solar` chunk carries **`illumination_band`**, one of
+[11](11_Time_And_Illumination.md) §4.4's six, after the attributes it already carried, so none of them
+moves. It is derived from the block it sits in and from nothing else, so it is the band of the sun the
+world achieved on the capture's tick, never of the time the run declared (D6.23), and it is identical
+in every camera's sidecar for one tick, because one sun lit every camera. It is cut from the
+refraction-corrected elevation wherever the block carries it — the elevation the light is rotated by,
+and the one §4.4's edges are stated against ([11](11_Time_And_Illumination.md) question 7) — and from
+the geometric one from a server that carries only that, and **`illumination_band_elevation`**
+(`refraction_corrected` or `geometric`) names which. A sun the engine could not compute, which it
+reports at −180°, carries no band rather than `night`. The bands are one table, `CarlaNet.Types`'s
+`IlluminationBands`, which the core vocabulary's `illumination_band` terms and the association
+statistic read through `carlanet` (§3.7). A capture whose snapshot carried no sun, or fewer values than
+make one, is still written without `<_solar>` and its chunk, and is counted: the recorder's
+`SolarBlockMissing`, which the run's closeout records as the gate `capture.solar_block_missing[<sensor>]`
+at a threshold of zero, the manifest's `sidecars_missing_solar` (§8.4) until the manifest exists. The
+session's audit already stops a run whose snapshot carries no sun after one was bound
+([11](11_Time_And_Illumination.md) §8.3); the count is what makes a capture without a sun loud in a
+recording no session audits as well.
 
 **Under an optional render-set limit the sidecar is unchanged in shape.** It lists exactly the bodies
 its frame drew, as always; a vehicle the limit left out has no body and so no record, and the manifest,

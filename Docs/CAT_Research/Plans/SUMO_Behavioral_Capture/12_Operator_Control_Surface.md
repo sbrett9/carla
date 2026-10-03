@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-02` — §7.2: the closeout gates `capture.solar_block_missing[<sensor>]`, a channel's captures written without a solar block, at zero; the channel's closeout line states the count.
 `2026-10-02` — Every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none (§5.2, §6.2, §9.6). A channel's `sensor_id` is its camera's name: it loses `:` from its grammar, check 11 compares it without regard to case, and a single channel without one is `CARLA-SENSOR-<camera id>`. The camera is spawned under the name as its `role_name`, so one another camera in the world holds refuses at pre-roll. `run_SCTMV.py --camera-name` (`--platform-callsign` its older spelling, no longer defaulting to `OVERWATCH`) and `run_sumo_drive.py --camera-name` name the camera; a free view's span folder is `<camera name>-<UTC>`.
 `2026-10-02` — Two optional performance controls, off by default and recommended for no scenario (§5.2, D12.39). `capture.render_set` is offered again with `all` -- every vehicle SUMO has -- as its default, beside `circle` and `cameras` and the settings `capture.render_region`, `capture.render_hysteresis_m`, `capture.render_cap` (no limit by default), `capture.render_min_pixels`, `capture.render_admit_lead_s` and `capture.render_release_lag_s`; `capture.draw_distance_m` (no limit by default) is new. Checks 52 and 53 are new numbers; 20, 21 and 33 stay retired. The echo, the closeout and `population / rendered` say what a chosen limit left out (§7.1); `run_sumo_drive.py` takes `--render-set`, its region and settings, `--capacity` and `--draw-distance` (§9.6).
 `2026-10-01` — §9.6: during a drive any process's truth -- `world.get_vehicle_telemetry()`, the CoT feed, a recorder started outside the drive -- lists only the bodies a frame drew, by SUMO vehicle, from the render set the server carries on each snapshot; the drive's report prints how many changes it named to the server, or the server's refusal.
@@ -1945,7 +1946,9 @@ finished or was stopped; the difference between those two is `closed_by`, not a 
 
 **As built**, the gate records `RunCloseoutReport` evaluates are `capture.recorder_dropped[<sensor>]`
 (threshold 0), `capture.illumination_unpaired[<sensor>]` (captures written without their frame's
-illumination declaration, threshold 0), `capture.render_set_unpaired[<sensor>]` (captures written
+illumination declaration, threshold 0), `capture.solar_block_missing[<sensor>]` (captures written
+without a solar block, so with no recorded sun and no illumination band, threshold 0;
+[`11`](11_Time_And_Illumination.md) §8.4), `capture.render_set_unpaired[<sensor>]` (captures written
 with no vehicle list because their frame's render set was no longer held, threshold 0;
 [`06`](06_Truth_And_Annotation.md) §8.2), `capture.sensor_pose_header_disagreed[<sensor>]` (captures
 whose image header placed the camera elsewhere than the snapshot of their own frame, threshold 0;

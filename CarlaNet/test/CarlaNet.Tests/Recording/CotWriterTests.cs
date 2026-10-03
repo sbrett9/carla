@@ -1,6 +1,8 @@
 // Guards the CoT sidecar's _carla block against the schema in
 // Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md.
+using System.Xml.Linq;
 using CarlaNet.Recording;
+using CarlaNet.Types.Illumination;
 
 namespace CarlaNet.Tests.Recording;
 
@@ -55,6 +57,73 @@ public class CotWriterTests
             Assert.DoesNotContain("sun_corrected_elevation_deg", File.ReadAllText(path));
         }
         finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void The_Sun_Block_Names_Its_Band_Cut_From_The_Elevation_The_Frame_Was_Lit_At()
+    {
+        // A sun just below the horizon whose light refraction lifts just above it: the band is the
+        // corrected elevation's (golden), never the geometric one's (civil twilight), wherever the
+        // block carries it; a server that carries only the geometric elevation is banded by that, and
+        // the sidecar says which.
+        double[] geometricOnly = [6.0, 2026, 3, 21, 3.5, 27.15012, 56.18065, -0.25, 95.4, 0.0, 0.0];
+        double[] withCorrected = [.. geometricOnly, 0.31];
+
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        try
+        {
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [],
+                                  solar: withCorrected);
+            XElement corrected = XDocument.Load(path).Root!.Element("_solar")!;
+            Assert.Equal("golden", (string?)corrected.Attribute("illumination_band"));
+            Assert.Equal("refraction_corrected", (string?)corrected.Attribute("illumination_band_elevation"));
+            // Written after every attribute the element already carried.
+            Assert.Equal("illumination_band_elevation", corrected.Attributes().Last().Name.LocalName);
+
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [],
+                                  solar: geometricOnly);
+            XElement geometric = XDocument.Load(path).Root!.Element("_solar")!;
+            Assert.Equal("civil_twilight", (string?)geometric.Attribute("illumination_band"));
+            Assert.Equal("geometric", (string?)geometric.Attribute("illumination_band_elevation"));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void A_Sun_The_Engine_Could_Not_Compute_Is_Recorded_Without_A_Band()
+    {
+        // -180 degrees is the engine's sentinel for an impossible date (doc 11 F4), not a night.
+        double[] sentinel = [12.0, 2026, 2, 31, 3.5, 27.15012, 56.18065, -180.0, 0.0, 0.0, 0.0, -180.0];
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        try
+        {
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [],
+                                  solar: sentinel);
+            XElement solar = XDocument.Load(path).Root!.Element("_solar")!;
+            Assert.Equal("-180", (string?)solar.Attribute("sun_elevation_deg"));
+            Assert.Null(solar.Attribute("illumination_band"));
+            Assert.Null(solar.Attribute("illumination_band_elevation"));
+            Assert.DoesNotContain("illumination_band", SolarMetadata.ToJson(sentinel));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void The_Png_Sun_Chunk_Carries_The_Same_Band_As_The_Sidecar()
+    {
+        double[] port = [17.0, 2026, 12, 21, 3.5, 27.15012, 56.18065, -1.58296, 244.3416, 0.0, 0.0, -1.37418];
+        (string keyword, string json) = Assert.Single(SolarMetadata.PngTextChunks(port));
+        Assert.Equal("carla:solar", keyword);
+        Assert.EndsWith(",\"sun_corrected_elevation_deg\":-1.37418,\"illumination_band\":\"civil_twilight\","
+                        + "\"illumination_band_elevation\":\"refraction_corrected\"}", json);
+        var band = SolarMetadata.Band(port);
+        Assert.NotNull(band);
+        Assert.Equal(IlluminationBand.CivilTwilight, band.Value.Band);
+        Assert.Equal(SolarElevationKind.RefractionCorrected, band.Value.AssignedFrom);
+
+        // No sun, no band, and no chunk to carry one.
+        Assert.Null(SolarMetadata.Band([]));
+        Assert.Empty(SolarMetadata.PngTextChunks([]));
     }
 
     private static IlluminationDeclaration PortWindow() =>
@@ -168,7 +237,8 @@ public class CotWriterTests
     {
         // What a traffic-manager run writes: no render-set source, so every vehicle actor is listed,
         // keyed by its actor id, with nothing on the container saying which vehicles they are. Taken
-        // byte for byte from the writer as it stood before the render set was introduced.
+        // byte for byte from the writer as it stood before the render set was introduced; its sun has
+        // since gained the band it falls in, after the attributes it always carried.
         var parked = new VehicleTelemetry(
             8, "vehicle.fuso.mitsubishi", "truck", "", "10,20,30", "autopilot",
             37.7801234, -122.4507890, -238.8, 58.0,
@@ -189,7 +259,7 @@ public class CotWriterTests
                 """
                 <?xml version="1.0" encoding="utf-8"?>
                 <events captured="2026-07-10T18:00:00.000Z" count="2" source="truth" tick="260042" sim_time_s="310.21974" telemetry_tick="260042" run_id="run-1" seed="103">
-                  <_solar solar_time="7" date="2026-03-21" time_zone="3.5" lat="27.1501200" lon="56.1806500" sun_elevation_deg="4.981" sun_azimuth_deg="119.56" advancing="false" rate="0" />
+                  <_solar solar_time="7" date="2026-03-21" time_zone="3.5" lat="27.1501200" lon="56.1806500" sun_elevation_deg="4.981" sun_azimuth_deg="119.56" advancing="false" rate="0" illumination_band="golden" illumination_band_elevation="geometric" />
                   <event version="2.0" uid="CARLA-TRUTH-7" type="a-n-G-E-V" how="m-g" time="2026-07-10T18:00:00.000Z" start="2026-07-10T18:00:00.000Z" stale="2026-07-10T18:00:03.000Z">
                     <point lat="37.7841234" lon="-122.4567890" hae="61.20" ce="0.0" le="0.0" />
                     <detail>

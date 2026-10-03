@@ -6,8 +6,8 @@ newest frame's illumination declaration, its latest admission pass, and the comp
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
 the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
 recorder (`FrameRecorder`: captures written, captures dropped, illumination
-pairing, render-set pairing, occlusion pairing, where each capture's pose came from, and the vehicles
-it marked beyond the draw distance) -- never at
+pairing, captures written without a solar block, render-set pairing, occlusion pairing, where each
+capture's pose came from, and the vehicles it marked beyond the draw distance) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
 the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
 the run result carries the last one taken. Nothing here measures anything of its own.
@@ -21,6 +21,7 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 |---|---|---|
 | `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 (10 D10.7) | measured |
 | `capture.illumination_unpaired` | captures written without their frame's illumination declaration, threshold 0 | measured |
+| `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 (11 §8.4) | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
 | `capture.sensor_pose_header_disagreed` | captures whose image header placed the camera elsewhere than their own frame's snapshot, threshold 0 | measured |
 | `capture.depth_pose_header_disagreed` | the same for the depth captures occlusion is measured against, threshold 0 | measured where the channel has a depth camera |
@@ -213,7 +214,7 @@ class RunCloseoutReport:
         entry = {"sensor_id": channel.sensor_id, "directory": str(channel.directory),
                  "captured": None, "written": None, "recorder_dropped": None,
                  "illumination_paired": None, "illumination_unpaired": None,
-                 "render_set_paired": None, "render_set_unpaired": None,
+                 "solar_block_missing": None, "render_set_paired": None, "render_set_unpaired": None,
                  "occlusion_measured": None, "occlusion_unmatched": None,
                  "sensor_pose_from_snapshot": None, "sensor_pose_header_disagreed": None,
                  "sensor_pose_from_header": None,
@@ -225,6 +226,7 @@ class RunCloseoutReport:
         entry.update({"written": int(recorder.Saved), "recorder_dropped": int(recorder.Dropped),
                       "illumination_paired": int(recorder.IlluminationPaired),
                       "illumination_unpaired": int(recorder.IlluminationUnpaired),
+                      "solar_block_missing": int(recorder.SolarBlockMissing),
                       "render_set_paired": int(recorder.RenderSetPaired),
                       "render_set_unpaired": int(recorder.RenderSetUnpaired),
                       "occlusion_measured": int(recorder.OcclusionMeasured),
@@ -275,6 +277,13 @@ class RunCloseoutReport:
                                     "captures written without their frame's illumination "
                                     "declaration", "12 §7.2", channel["illumination_unpaired"], 0,
                                     "equals"))
+            # A capture whose snapshot carried no sun: written with no _solar and no carla:solar, so
+            # a still whose illumination, and band, nothing records, which a corpus can neither
+            # stratify nor replay.
+            gates.append(self._gate(f"capture.solar_block_missing[{channel['sensor_id']}]",
+                                    "captures written without a solar block, so with no recorded "
+                                    "sun and no illumination band", "11 §8.4",
+                                    channel["solar_block_missing"], 0, "equals"))
             # A capture listed with no vehicles because its frame's render set had aged out: truth
             # missing from a still that shows vehicles, which a corpus has to know about.
             gates.append(self._gate(f"capture.render_set_unpaired[{channel['sensor_id']}]",
@@ -399,7 +408,8 @@ class RunCloseoutReport:
         for channel in snapshot["channels"]:
             lines.append(f"  channel {channel['sensor_id']}: written {channel['written']}, "
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
-                         f"{channel['illumination_unpaired']}, render set unpaired "
+                         f"{channel['illumination_unpaired']}, solar block missing "
+                         f"{channel['solar_block_missing']}, render set unpaired "
                          f"{channel['render_set_unpaired']}  -> {channel['directory']}")
             if channel.get("draw_distance_captures"):
                 lines.append(f"    under the draw distance {channel['draw_distance_captures']} "

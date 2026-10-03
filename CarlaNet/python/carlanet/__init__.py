@@ -2079,6 +2079,12 @@ class World:
         `<_illumination>` element beside `<_solar>` and a `carla:illumination` PNG chunk. The recorder's
         `IlluminationUnpaired` counts captures that went without one.
 
+        Every capture's `<_solar>` element and `carla:solar` PNG chunk carry the sun of the snapshot
+        nearest its pixels and its `illumination_band` (doc 11 §4.4's six), cut from the
+        refraction-corrected elevation wherever the server carries it, with
+        `illumination_band_elevation` naming the elevation it was cut from. A capture whose snapshot
+        carried no sun is written with neither, and `SolarBlockMissing` counts it.
+
         Pass `render_set` -- a SUMO drive session's `session.RenderSet` -- to have each capture list
         only the vehicle bodies its own frame rendered, each named by the SUMO vehicle it rendered
         (`sumo_id`, `vtype_id` and `admitted_tick` in the truth extras, uid

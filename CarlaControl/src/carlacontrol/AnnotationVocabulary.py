@@ -26,9 +26,10 @@ the authority, and the record carries a copy so neither the plan nor a sidecar h
 the vocabulary to be usable.
 
 The core is written here from 06 §3.7, which names `CarlaNet.Types` as its eventual source; nothing in
-that assembly enumerates it yet. The one family not written here is `illumination_band`: its terms are
-`11_Time_And_Illumination.md` §4.4's six bands, taken from `IlluminationBand`, the function that assigns
-them, so the vocabulary and the statistic that buckets by band read one table. The published document is
+that assembly enumerates it yet but one family, and that one is not written here: `illumination_band`'s
+terms are `11_Time_And_Illumination.md` §4.4's six bands, taken from `IlluminationBand`, the function
+that assigns them, which reads them from `CarlaNet.Types`. So the vocabulary, the statistic that buckets
+by band and the band in every capture's truth read one table. The published document is
 resolved and import-flattened, and `digest` is over exactly what is published, so a consumer can bind it
 (`04_Contracts.md` C3 V3.15).
 """

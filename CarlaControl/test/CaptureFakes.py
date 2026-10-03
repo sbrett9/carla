@@ -157,6 +157,7 @@ class FakeRecorder:
         self.Dropped = 0
         self.IlluminationPaired = 0
         self.IlluminationUnpaired = 0
+        self.SolarBlockMissing = 0
         self.RenderSetPaired = 0
         self.RenderSetUnpaired = 0
         self.RenderSetBodiesMissing = 0
