@@ -26,6 +26,7 @@ the real scenario artifacts. No code changed, no build run.
 | 18 · 2026-10-02 | SUMO's own distribution edits are checked at session start and stated on the run report, as D6.12 decides (§6.2). Refused: a `collision.action` other than `warn` or `none`, SUMO's default included; every teleport trigger besides `time-to-teleport` — `.highways`, `.disconnected`, `.bidi`, `.railsignal-deadlock` and a vehicle type's own `timeToTeleport` and `timeToTeleportBidi` — unless the run accepts teleporting; a positive `random-depart-offset`; and `random`. Recorded: `scale`, a type's own `scale`, `max-num-vehicles` and `max-depart-delay`. §6.2 is corrected: `time-to-teleport.highways` is off at its default of 0 and on only where positive, measured, so it is no trap; `.disconnected` is on from 0 up. `none` stays permitted until the owner rules on it; the hard failure for a discarded plan subject is not built. |
 | 19 · 2026-10-02 | Every capture's `<_solar>` and `carla:solar` carry `illumination_band`, from the sun the world achieved on the capture's tick and never the declared time, cut from its refraction-corrected elevation wherever the block carries it, with `illumination_band_elevation` naming the elevation used. The bands are one table in `CarlaNet.Types`, which the core vocabulary and the association statistic read through `carlanet`. A capture written without a solar block is counted by its recorder and is a closeout gate not met, rather than a silent omission (§3.7, §5.3, §8.2). |
 | 20 · 2026-10-02 | The world truth track is built inside the capture window: the capture session writes every vehicle SUMO has at every SUMO frame of the window, drawn or not, one CSV row per vehicle at TraCI's clock, with `SumoCotBridge`'s columns less `marked` and the vehicle's id, entity, frame, render state and reason, body, window flag and the sun the world reported; appended a row at a time under [04](04_Contracts.md) C10's W2, with a summary saying the rate and why it ended. `run_capture` always writes it; outside every window nothing is written yet, and `illumination_band` waits for the band function (§8.3). |
+| 21 · 2026-10-02 | The world truth track carries the illumination band. Each row gains the refraction-corrected elevation the world reported on its frame's tick, beside the geometric one, and `illumination_band` with `illumination_band_elevation`, cut by the rule and the table a capture's band is cut by: from the corrected elevation, and from the geometric one only from a server that carries no other. So the base rate's denominator is stratified by the same band as the sidecars' numerator (§8.3, D6.23). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2447,8 +2448,10 @@ in-window half. Outside every window nothing is written yet, and the track's sum
 
 Its columns are `SumoCotBridge`'s 31 less `marked`, because an author's marking never travels in this
 track and a compiled scenario's labels join from its plan by vehicle id (D6.18), and then `sumo_id`,
-`entity_id` (the SUMO id, D6.13), `frame`, `render_state`, `render_reason`, `actor_id`, `in_window` and
-`sun_elevation_deg`. The uid is the one a capture sidecar gives the same vehicle,
+`entity_id` (the SUMO id, D6.13), `frame`, `render_state`, `render_reason`, `actor_id`, `in_window`,
+and the sun in the order a capture's `<_solar>` writes it: `sun_elevation_deg`,
+`sun_corrected_elevation_deg`, `illumination_band` and `illumination_band_elevation`. The uid is the
+one a capture sidecar gives the same vehicle,
 `CARLA-TRUTH-SUMO-<sumo_id>`, so the two join on it as well as on `sumo_id` and `frame`. Every value is
 SUMO's, taken from the state the session already reads each step: no question goes to SUMO per vehicle,
 and a type's class, declared dimensions and colour are asked once per type. Position is converted on the
@@ -2458,11 +2461,17 @@ pose, box and residuals -- stays the sidecar's. Every instant is TraCI's clock f
 SUMO's own stamps, which are a step earlier ([13](13_Work_Breakdown.md) stage J).
 
 A frame's rows are written when the frame stamped with its instant has rendered, which is what gives
-them `frame`, `in_window`, the body that drew each vehicle and `sun_elevation_deg`: the geometric
-elevation the world reported on that frame's tick, the value the `_solar` block of a capture of that
-frame carries. A CSV has no record per instant, so it is repeated on each row. `illumination_band` is
-not yet written: the band function is not built on the C# side, and once it is the band is taken from
-the same row's elevation. `render_state` takes [04](04_Contracts.md) C2's words, read for one frame:
+them `frame`, `in_window`, the body that drew each vehicle and the sun the world reported on that
+frame's tick, the sun the `<_solar>` block of a capture of that frame carries. `sun_elevation_deg` is
+its geometric elevation and `sun_corrected_elevation_deg` its refraction-corrected one, empty from a
+server that carries only the geometric. Both are written to a millionth of a degree. `illumination_band` is cut from them by the
+same rule and the same table as a capture's band (§8.2, `IlluminationBands`): from the
+refraction-corrected elevation, which [11](11_Time_And_Illumination.md) §4.4's edges are stated against,
+and from the geometric one only where the reading carries no other. `illumination_band_elevation`
+(`refraction_corrected` or `geometric`) names which, and a sun the engine could not compute has no
+band. So the track's band and a capture's band of the same frame are one band, and the base rate's
+denominator is stratified as its numerator is (D6.23). A CSV has no record per instant, so the sun is
+repeated on each row. `render_state` takes [04](04_Contracts.md) C2's words, read for one frame:
 `rendered`, with the body's `actor_id`, or `simulated_only`, where §4.4's table says `never`, with a
 `render_reason`. Three reasons are C2 §4.5's: `outside_limit`, `no_blueprint` and `unknown_extent`. Four
 more are a single frame's, and C2 has no word for them. `left_the_simulation` and `vanished` mark a vehicle's last SUMO frame:

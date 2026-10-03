@@ -137,7 +137,7 @@ public sealed class SumoDriveSession : IDisposable
     private double? _lastCompleteSeconds;
     private ulong? _lastCompleteFrame;
     private double? _reportedSunElevation;
-    private double? _sunElevationThisTick;
+    private SolarReading? _sunReadThisTick;
     private RenderSet? _renderSetNow;
     private double? _drawDistanceAsked;
     private double? _drawDistanceApplied;
@@ -1281,7 +1281,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void AuditTheSun(ulong frame)
     {
-        _sunElevationThisTick = null;
+        _sunReadThisTick = null;
         if (_world is not { } world || _options.Illumination is not { } policy)
         {
             return;
@@ -1294,7 +1294,7 @@ public sealed class SumoDriveSession : IDisposable
             {
                 sample = audit.AuditTick(_tickIndex, RenderedTimeSeconds, world.ObservedSolarState());
                 _reportedSunElevation = sample.Observed.ElevationDegrees;
-                _sunElevationThisTick = _reportedSunElevation;
+                _sunReadThisTick = sample.Observed;
             }
         }
         catch (SolarAuditFailedException failed)
@@ -1448,7 +1448,8 @@ public sealed class SumoDriveSession : IDisposable
             _renderSets.TryGetRenderSet(frame, out RenderSet set) ? set : null,
             _illumination.TryGetDeclaration(frame, out IlluminationDeclaration declared) ? declared : null)
         {
-            SunElevationDegrees = _sunElevationThisTick,
+            SunElevationDegrees = _sunReadThisTick?.ElevationDegrees,
+            SunCorrectedElevationDegrees = _sunReadThisTick?.CorrectedElevationDegrees,
         };
         foreach (ISumoStepObserver observer in _observers)
         {

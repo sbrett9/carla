@@ -43,4 +43,11 @@ public sealed record RenderedFrameRecord(
     /// the frame's capture, rather than the one declared for it. Null where the session audits no sun.
     /// </summary>
     public double? SunElevationDegrees { get; init; }
+
+    /// <summary>
+    /// The refraction-corrected elevation the world reported on the same tick, degrees: the elevation
+    /// the sun's light is rotated by, which the illumination bands are cut from. Null where the session
+    /// audits no sun, or the world's reading carries only the geometric one.
+    /// </summary>
+    public double? SunCorrectedElevationDegrees { get; init; }
 }

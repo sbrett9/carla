@@ -33,14 +33,11 @@ public static class SolarMetadata
     public static (IlluminationBand Band, SolarElevationKind AssignedFrom)? Band(IReadOnlyList<double> s)
     {
         if (!HasData(s)) return null;
-        SolarElevationKind kind = IlluminationBands.Elevation == SolarElevationKind.RefractionCorrected
-                                  && s.Count > CorrectedElevation
-            ? SolarElevationKind.RefractionCorrected
-            : SolarElevationKind.Geometric;
-        double elevation = kind == SolarElevationKind.RefractionCorrected
-            ? s[CorrectedElevation]
-            : s[GeometricElevation];
-        return IlluminationBands.TryOf(elevation, out IlluminationBand band) ? (band, kind) : null;
+        double? corrected = s.Count > CorrectedElevation ? s[CorrectedElevation] : null;
+        return IlluminationBands.TryOfReported(s[GeometricElevation], corrected, out IlluminationBand band,
+                                               out SolarElevationKind kind)
+            ? (band, kind)
+            : null;
     }
 
     /// PNG tEXt chunks to embed: one "carla:solar" JSON chunk. Empty when there is no solar data,
