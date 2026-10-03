@@ -218,7 +218,7 @@ class ResolutionReport:
                 or "no participant"
             lines.append(f"- **{instance['instance_id']}**: {instance['supervision']}, "
                          f"{instance['realisation']}, labels {', '.join(instance['labels']) or '-'}; "
-                         f"{who}")
+                         f"{who}" + ResolutionReport._declared(instance))
             for interval in instance["intervals"]:
                 lines.append(f"  - {interval['phase']}: {interval['declared_start_civil']} to "
                              f"{interval['declared_end_civil'] or 'open'}")
@@ -228,5 +228,16 @@ class ResolutionReport:
                              f"{', '.join(cohort['labels'])}")
         for series in supervision["series"]:
             lines.append(f"- series **{series['series_id']}**: {series['slots']} slots, members "
-                         f"{series['supervision']}")
+                         f"{series['supervision']}" + ResolutionReport._declared(series))
         return [*lines, ""]
+
+    @staticmethod
+    def _declared(row: dict) -> str:
+        """A row's parameters and the terms it is a matched negative for, where it has any."""
+        text = ""
+        if row.get("parameters"):
+            text += "; parameters " + ", ".join(f"{key} = {json.dumps(value)}"
+                                                for key, value in row["parameters"].items())
+        if row.get("hard_negative_for"):
+            text += "; a hard negative for " + ", ".join(row["hard_negative_for"])
+        return text

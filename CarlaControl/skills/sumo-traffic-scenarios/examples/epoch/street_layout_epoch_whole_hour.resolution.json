@@ -404,7 +404,8 @@
       {
         "flow_id": "ambient",
         "supervision": "unlabelled",
-        "labels": []
+        "labels": [],
+        "parameters": {}
       }
     ],
     "series": []
@@ -435,7 +436,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_whole_hour.supervision.json",
-        "sha256": "68a1a6a4fe54187de8cccdc44b8f4680a0ae6839fcbd717e51424b027ce22480"
+        "sha256": "9f1c7435a6f2be20283d4c2e63bf4c5e2b62cbf933e9e068e7794e28bc385710"
       }
     },
     "world": {

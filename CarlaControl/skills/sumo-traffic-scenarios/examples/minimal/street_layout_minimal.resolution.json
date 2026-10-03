@@ -403,7 +403,8 @@
       {
         "flow_id": "ambient",
         "supervision": "unlabelled",
-        "labels": []
+        "labels": [],
+        "parameters": {}
       }
     ],
     "series": []
@@ -434,7 +435,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "ac7568b33994881b3c33f0825c629f4e279a0641d7a00910635c2bedbd3fa52f"
+        "sha256": "729c382dcb9ac3f08fbde95340335d392e21aeff1d383a213ecf1475741b5f8e"
       }
     },
     "world": {

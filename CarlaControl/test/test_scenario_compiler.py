@@ -156,6 +156,9 @@ def test_the_lock_binds_the_four_files_the_epoch_and_the_traffic(world, installa
     assert "sumo-install" not in json.dumps(lock), "the lock names no machine path"
     plan = result.plan
     assert plan["routes_digest"] == lock["files"]["routes"]["sha256"]
+    assert plan["config_digest"] == lock["files"]["config"]["sha256"]
+    # No lane closure, so no additional file for the plan to be bound to.
+    assert plan["additional_digest"] is None
 
 
 def test_a_lane_change_takes_three_seconds_and_the_lock_and_the_report_say_so(world, installation,
@@ -176,10 +179,13 @@ def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path)
     plan = compile_spec(world, installation, tmp_path).plan
     assert {row["entity_id"]: row["supervision"] for row in plan["entities"]} == {
         "hauler": ["nominal"], "patrol_d0_h6": ["nominal"], "probe": ["annotated"]}
-    assert plan["cohorts"] == [{"flow_id": "ambient", "supervision": "unlabelled", "labels": []}]
+    assert plan["cohorts"] == [{"flow_id": "ambient", "supervision": "unlabelled", "labels": [],
+                                "parameters": {}}]
     absence = next(i for i in plan["instances"] if i["realisation"] == "absent")
     assert absence["participants"] == [] and absence["slot_ref"] == "patrol_d0_h8"
     assert absence["expected"]["route"] == {"from": "900", "to": "901#1", "via": []}
+    # Sited where the patrol would have stopped: the one lane of area kerb, at its end.
+    assert (absence["expected"]["site_lane"], absence["expected"]["site_pos_m"]) == ("901#0_0", 51.5)
     assert absence["intervals"][0]["phase"] == "vacancy"
     assert absence["intervals"][0]["declared_start_civil"] == "2026-03-21T08:15:00-06:00"
     assert absence["counter_evidence"] == {"series_slots_total": 2, "series_slots_realised": 1}
@@ -385,6 +391,8 @@ def test_a_lane_closure_compiles_into_an_additional_file_the_configuration_names
     locked = result.lock["files"]["additional"]
     assert locked == {"path": additional.name,
                       "sha256": hashlib.sha256(additional.read_bytes()).hexdigest()}
+    # The plan is bound to the closures as to the routes: by the file's digest, the lock's own.
+    assert result.plan["additional_digest"] == locked["sha256"]
     reported = result.report["lane_closures"][0]
     assert (reported["lanes"], reported["open_lanes"]) == (["-900_0"], 0)
     assert reported["begin"]["civil"] == "2026-03-21T07:10:00-06:00"
@@ -841,6 +849,230 @@ def test_annotating_without_any_nominal_subject_is_warned_under_check_24(world, 
     block["series"][0]["labels"] = []
     result = compile_spec(world, installation, tmp_path, supervision=block)
     assert not result.refused and 24 in checks(result, "warn")
+
+
+# ---- what a row says, against the terms that define it ----------------------------------------------
+
+STANDOFF_PARAMETERS = {"dwell_s": {"type": "number", "unit": "s", "definition": "the authored halt"},
+                       "repeats": {"type": "integer", "definition": "halts at the kerb"}}
+COHORT_TERM = {"definition": "Traffic that passes the kerb without stopping.",
+               "applies_to": ["cohort"], "realisation": ["present"], "since": 1, "status": "active"}
+
+
+def vocabulary_with(world, terms: dict[str, dict]) -> dict:
+    """The fixture vocabulary with each named term updated, or added when it is not there."""
+    vocabulary = world.specification()["vocabulary"]
+    declared = vocabulary["namespaces"][0]["terms"]
+    for spelled, fields in terms.items():
+        term = next((t for t in declared if t["term"] == spelled), None)
+        if term is None:
+            declared.append({"term": spelled, **fields})
+        else:
+            term.update(fields)
+    return vocabulary
+
+
+def plan_rows(plan: dict) -> dict[str, dict]:
+    return {row["instance_id"].split("/", 1)[1]: row for row in plan["instances"]}
+
+
+def test_parameters_their_label_declares_compile_into_the_plan_as_written(world, installation,
+                                                                         tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["parameters"] = {"dwell_s": 360, "repeats": 1}
+    vocabulary = vocabulary_with(world, {"fixture:standoff": {"parameters": STANDOFF_PARAMETERS}})
+    result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    assert plan_rows(result.plan)["probe_standoff"]["parameters"] == {"dwell_s": 360, "repeats": 1}
+    assert "parameters dwell_s = 360, repeats = 1" in \
+        result.files["resolution_md"].read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(("instance", "parameters", "says"), [
+    (0, {"dwell": 360}, "carries parameter 'dwell', which none of its labels declares (they declare "
+                        "dwell_s, repeats). A parameter is a key its label's term declares"),
+    (0, {"repeats": 1.5}, "parameter 'repeats' is 1.5, and 'fixture:standoff' declares it integer "
+                          "(halts at the kerb)"),
+    (0, {"dwell_s": "six minutes"}, "parameter 'dwell_s' is \"six minutes\", and 'fixture:standoff' "
+                                    "declares it number"),
+    (0, {"dwell_s": True}, "parameter 'dwell_s' is true, and 'fixture:standoff' declares it number"),
+    (1, {"dwell_s": 360}, "carries parameter 'dwell_s', which none of its labels declares, and it "
+                          "carries no label"),
+])
+def test_a_parameter_no_label_declares_or_of_another_type_is_refused_under_check_56(
+        world, installation, tmp_path, instance, parameters, says):
+    block = supervision_with(world)
+    block["instances"][instance]["parameters"] = parameters
+    vocabulary = vocabulary_with(world, {"fixture:standoff": {"parameters": STANDOFF_PARAMETERS}})
+    result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
+    assert checks(result) == {56}
+    assert says in messages(result, 56)
+
+
+def test_a_parameter_that_is_not_a_single_value_is_refused_under_check_53(world, installation,
+                                                                         tmp_path):
+    block = supervision_with(world)
+    block["instances"][0]["parameters"] = {"dwell_s": {"value": 360, "unit": "s"}}
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert checks(result) == {53}
+    assert "$.supervision.instances[0].parameters.dwell_s" in messages(result, 53)
+
+
+def test_two_labels_declaring_one_key_differently_are_refused_under_check_56(world, installation,
+                                                                             tmp_path):
+    vocabulary = vocabulary_with(world, {
+        "fixture:standoff": {"parameters": STANDOFF_PARAMETERS},
+        "fixture:loiter": {"definition": "A vehicle lingers at the kerb.", "applies_to": ["entity"],
+                           "realisation": ["present"], "since": 1, "status": "active",
+                           "parameters": {"dwell_s": {"type": "number", "unit": "min",
+                                                      "definition": "the lingering"}}}})
+    block = supervision_with(world)
+    block["instances"][0]["labels"] = ["fixture:standoff", "fixture:loiter"]
+    block["instances"][0]["parameters"] = {"dwell_s": 6}
+    result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
+    assert checks(result) == {56}
+    assert ("parameter 'dwell_s' is declared differently by its labels: 'fixture:standoff' as "
+            "number in s; 'fixture:loiter' as number in min") in messages(result, 56)
+
+
+def test_series_cohort_and_absence_rows_carry_the_parameters_their_labels_declare(world, installation,
+                                                                                tmp_path):
+    vocabulary = vocabulary_with(world, {
+        "fixture:routine_patrol": {"parameters": {"halt_s": {
+            "type": "number", "unit": "s", "definition": "the authored halt at the kerb"}}},
+        "fixture:patrol_missed": {"parameters": {"vacancy_s": {
+            "type": "number", "unit": "s", "definition": "how long the kerb goes unwatched"}}},
+        "fixture:through_traffic": {**COHORT_TERM, "parameters": {"vehs_per_hour": {
+            "type": "number", "unit": "1/h", "definition": "the authored rate"}}}})
+    block = supervision_with(world, cohorts=[{"flow": "ambient", "supervision": "annotated",
+                                              "labels": ["fixture:through_traffic"],
+                                              "parameters": {"vehs_per_hour": 200}}])
+    block["series"][0]["parameters"] = {"halt_s": 600}
+    block["absences"][0]["parameters"] = {"vacancy_s": 600}
+    result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    assert result.plan["series"][0]["parameters"] == {"halt_s": 600}
+    assert result.plan["cohorts"][0]["parameters"] == {"vehs_per_hour": 200}
+    assert plan_rows(result.plan)["patrol_missed_d0_h8"]["parameters"] == {"vacancy_s": 600}
+
+
+def test_a_series_cohort_or_absence_parameter_no_label_declares_is_refused_under_check_56(
+        world, installation, tmp_path):
+    block = supervision_with(world, cohorts=[{"flow": "ambient", "supervision": "unlabelled",
+                                              "parameters": {"vehs_per_hour": 200}}])
+    block["series"][0]["parameters"] = {"halt_s": 600}
+    block["absences"][0]["parameters"] = {"vacancy_s": 600}
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert checks(result) == {56}
+    assert {f.subject for f in result.findings.by_check(56)} == {
+        "cohort ambient", "series kerb_patrol", "absence patrol_missed_d0_h8"}
+    assert "'vehs_per_hour', which none of its labels declares, and it carries no label" in \
+        messages(result, 56)
+
+
+def test_a_nominal_subject_carries_its_terms_hard_negative_for_and_no_other_does(world, installation,
+                                                                               tmp_path):
+    plan = compile_spec(world, installation, tmp_path / "a").plan
+    rows = plan_rows(plan)
+    assert plan["series"][0]["hard_negative_for"] == ["fixture:standoff"]
+    # Nominal with no label to narrow it: unspecified, which is null and not an empty set.
+    assert rows["hauler_nominal"]["hard_negative_for"] is None
+    assert rows["probe_standoff"]["hard_negative_for"] is None
+    assert rows["patrol_missed_d0_h8"]["hard_negative_for"] is None
+    block = supervision_with(world)
+    block["instances"][1]["labels"] = ["fixture:routine_patrol"]
+    labelled = compile_spec(world, installation, tmp_path / "b", supervision=block).plan
+    assert plan_rows(labelled)["hauler_nominal"]["hard_negative_for"] == ["fixture:standoff"]
+
+
+def test_a_subject_restating_its_terms_hard_negative_for_exactly_compiles(world, installation,
+                                                                         tmp_path):
+    block = supervision_with(world)
+    block["series"][0]["hard_negative_for"] = ["fixture:standoff"]
+    block["instances"][1]["labels"] = ["fixture:routine_patrol"]
+    block["instances"][1]["hard_negative_for"] = ["fixture:standoff"]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+
+
+@pytest.mark.parametrize(("group", "index", "declared", "subject", "says"), [
+    ("series", 0, ["fixture:patrol_missed"], "series kerb_patrol",
+     "declares hard_negative_for ['fixture:patrol_missed'], and its labels' terms declare "
+     "['fixture:standoff']. The term is the authority"),
+    ("instances", 1, ["fixture:standoff"], "instance hauler_nominal",
+     "declares hard_negative_for ['fixture:standoff'], and its labels' terms declare none"),
+    ("instances", 0, ["fixture:standoff"], "instance probe_standoff",
+     "is annotated and declares hard_negative_for ['fixture:standoff']. The field narrows a "
+     "nominal subject's negative"),
+])
+def test_a_hard_negative_for_other_than_the_terms_is_refused_under_check_57(
+        world, installation, tmp_path, group, index, declared, subject, says):
+    block = supervision_with(world)
+    block[group][index]["hard_negative_for"] = declared
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert checks(result) == {57}
+    (finding,) = result.findings.by_check(57)
+    assert finding.subject == subject and says in finding.message
+
+
+def test_a_term_s_exemplars_resolve_to_an_instance_and_an_absence_of_the_plan(world, installation,
+                                                                             tmp_path):
+    vocabulary = vocabulary_with(world, {
+        "fixture:standoff": {"exemplar_instances": ["probe_standoff"]},
+        "fixture:patrol_missed": {"exemplar_instances": ["patrol_missed_d0_h8"]}})
+    result = compile_spec(world, installation, tmp_path, vocabulary=vocabulary)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+
+
+@pytest.mark.parametrize(("exemplar", "says"), [
+    ("probe_standof", "'fixture:standoff' exemplar_instances names 'probe_standof', which is no "
+                      "instance or absence of this scenario. An exemplar resolves or it is prose"),
+    ("street_layout_probe/probe_standoff", "an exemplar names the instance as the specification "
+                                           "does, 'probe_standoff', not by its id in one plan"),
+])
+def test_a_dangling_exemplar_is_refused_under_check_8(world, installation, tmp_path, exemplar, says):
+    vocabulary = vocabulary_with(world, {"fixture:standoff": {"exemplar_instances": [exemplar]}})
+    result = compile_spec(world, installation, tmp_path, vocabulary=vocabulary)
+    assert checks(result) == {8}
+    (finding,) = result.findings.by_check(8)
+    assert finding.subject == "namespace fixture" and says in finding.message
+
+
+def test_a_term_s_counterfactual_naming_a_subject_must_resolve_under_check_8(world, installation,
+                                                                            tmp_path):
+    resolving = vocabulary_with(world, {"fixture:patrol_missed": {
+        "counterfactual": {"kind": "series", "ref": "kerb_patrol"}}})
+    assert not compile_spec(world, installation, tmp_path / "a", vocabulary=resolving).refused
+    dangling = vocabulary_with(world, {"fixture:patrol_missed": {
+        "counterfactual": {"kind": "series", "ref": "kerb_patrols"}}})
+    result = compile_spec(world, installation, tmp_path / "b", vocabulary=dangling)
+    assert checks(result) == {8}
+    assert "counterfactual series 'kerb_patrols' names nothing this scenario declares" in \
+        messages(result, 8)
+
+
+def test_an_absence_whose_subject_names_no_lane_position_is_sited_at_its_area_alone(
+        world, installation, tmp_path):
+    """A rota whose subject is an edge -- driven to, never stopped at -- leaves no lane position to
+    site the vacancy at, so the absence's site is null and its area the only place it names."""
+    rota = {"id": "visit", "days": [0], "at": ["06:15", "08:15"], "subjects": ["east_end"],
+            "id_pattern": "visit_d{day}_h{hour}",
+            "template": {"type": "car", "from": "west_gate", "to": "$subject"},
+            "skip": [{"day": 0, "at": "08:15", "subject_index": 0,
+                      "because": "the second visit does not come"}]}
+    block = supervision_with(
+        world,
+        series=[{"series_id": "end_visit", "rota": "visit", "member_role": "fixture:patroller",
+                 "slot_length": "10m", "slot_aoi_refs": {"east_end": "kerb"},
+                 "supervision": "nominal", "labels": ["fixture:routine_patrol"]}],
+        absences=[{"name": "visit_missed", "series": "end_visit", "entry": "visit_d0_h8",
+                   "labels": ["fixture:patrol_missed"]}])
+    result = compile_spec(world, installation, tmp_path, rotas=[rota], supervision=block)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    expected = plan_rows(result.plan)["visit_missed"]["expected"]
+    assert expected["route"] == {"from": "900", "to": "901#1", "via": []}
+    assert (expected["site_lane"], expected["site_pos_m"]) == (None, None)
+    assert plan_rows(result.plan)["visit_missed"]["aoi_refs"] == ["kerb"]
 
 
 # ---- capture windows and the sun --------------------------------------------------------------------

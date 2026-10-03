@@ -733,41 +733,41 @@ Remedies:
 
 ## Supervision
 
-- **Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3**: annotated, present, labels bahonar:coordinated_group_transit, bahonar:destination_off_pattern; escort_0 (bahonar:lead), escort_1 (bahonar:follower), escort_2 (bahonar:follower), escort_3 (bahonar:follower), escort_4 (bahonar:follower)
+- **Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3**: annotated, present, labels bahonar:coordinated_group_transit, bahonar:destination_off_pattern; escort_0 (bahonar:lead), escort_1 (bahonar:follower), escort_2 (bahonar:follower), escort_3 (bahonar:follower), escort_4 (bahonar:follower); parameters group_size = 5, departure_spread_s = 16
   - transit: 2026-10-02T10:00:00+03:30 to open
   - transit: 2026-10-02T10:00:04+03:30 to open
   - transit: 2026-10-02T10:00:08+03:30 to open
   - transit: 2026-10-02T10:00:12+03:30 to open
   - transit: 2026-10-02T10:00:16+03:30 to open
-- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d2 (subject)
+- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d2 (subject); parameters dwell_s = 300
   - standoff: 2026-10-01T11:04:34+03:30 to open
-- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d5 (subject)
+- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d5 (subject); parameters dwell_s = 300
   - standoff: 2026-10-04T11:11:25+03:30 to open
-- **Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6**: annotated, present, labels bahonar:perimeter_transit_off_cadence; shadow (subject)
+- **Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6**: annotated, present, labels bahonar:perimeter_transit_off_cadence; shadow (subject); parameters speed_factor = 0.45, circuit_edges = 7
   - transit: 2026-10-05T02:30:00+03:30 to open
 - **Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1**: annotated, present, labels bahonar:arrival_without_departure; staybehind (subject)
   - dwell: 2026-09-30T08:00:00+03:30 to open
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_2 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_2 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_2 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_2 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_2 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_2 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_0 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_1 (subject)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_2 (subject)
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
 - **Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned**: annotated, absent, labels bahonar:post_unmanned; no participant
   - vacancy: 2026-10-03T07:00:00+03:30 to 2026-10-03T15:00:00+03:30
 - cohort **ferry_in_d0_h8**: annotated, labels bahonar:cleared_gate_transit
@@ -868,7 +868,7 @@ Remedies:
 - cohort **ferry_out_d6_h18**: annotated, labels bahonar:cleared_gate_transit
 - cohort **ferry_in_d7_h6**: annotated, labels bahonar:cleared_gate_transit
 - cohort **ferry_out_d7_h6**: annotated, labels bahonar:cleared_gate_transit
-- series **tower_relief**: 336 slots, members nominal
+- series **tower_relief**: 336 slots, members nominal; a hard negative for bahonar:standoff_dwell_at_access_point, bahonar:arrival_without_departure
 
 ## Traffic
 
@@ -899,7 +899,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "836c2a73c54901e58027dc8c7f966df74a5734a85367a7b826dd458bb3d7ec5c"
+    "sha256": "6d3f22824e1c6b849e44c4f9201695b9a7af49c5e04761c0d3c838ca0de618be"
   }
 }
 ```

@@ -22,6 +22,7 @@ the real scenario artifacts. No code changed, no build run.
 | 14 · 2026-10-02 | Two optional performance controls, off by default and recommended for no scenario, and what each does to the truth. A draw distance keeps every vehicle's body, pose and record; a camera does not draw a vehicle beyond it, and that camera's sidecar says so -- `draw_distance_m` on the container, `beyond_draw_distance` (`wholly` or `partly`) and `camera_range_m` on the vehicle -- and a vehicle wholly beyond it is neither observed nor measured for occlusion by that camera, a sixth observability outcome that exists only under a draw distance (§5.1, §8.2, D6.39). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity -- leaves a vehicle outside it simulated, in no sidecar and `not_rendered` with reason `outside_limit`, counted, and its drawn vehicles a sample a consumer must treat as one (§4.4, §10.4, D6.40). D6.16 stays withdrawn. |
 | 15 · 2026-10-02 | `special_type` comes from the vehicle catalogue, as the owner ruled. A vehicle whose body's blueprint a catalogue class draws carries that class's `cot_special_type`, empty where the class curates none, whatever the blueprint declares; a blueprint no class draws keeps the kind it declares. It holds in the capture sidecar and the live pull of the process that runs the drive, which read it from the client the session drives through, and in the standalone producer's XML and CSV when it is given the catalogue. The author's marking still never goes in `special_type` (D6.18, §2.4, §4.2, §8.2, §8.3). |
 | 16 · 2026-10-02 | A capture names the sensor that took it: every still is `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`, and the platform event's callsign is the camera's name, which defaulted to `OVERWATCH` for every camera given none, so the truth of two cameras in one world no longer reports under one callsign. The `sensor_id` is that name; a camera given none is `CARLA-SENSOR-<camera actor id>` (§7.1). |
+| 17 · 2026-10-02 | The compiled plan is completed without changing the interval shape. A row's `parameters` — on an instance, an absence, a series or a cohort — are checked against its labels' `parameters{}` declarations, key and type (§3.8); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and never vary, `null` where none is declared (§3.9(d)); a term's `exemplar_instances` and a counterfactual naming a subject resolve against the plan, an exemplar by the instance's authored name (§3.8); an absence's `expected` carries `site_lane` and `site_pos_m` (§3.5); and the plan carries `additional_digest`, bound like the others (§8.1). [07](07_Scenario_Authoring.md) checks 56 and 57 are added and check 8 extended. All three shipped scenarios are recompiled. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -733,6 +734,14 @@ PatternInstance                       -- the absence, at Bahonar
 `realisation: absent` is a first-class field rather than an inference from an empty participant list,
 so a consumer cannot mistake an absence for a malformed instance. `expected` is filled from the
 generator's own loop state — measured as reconstructible in §2.2 — so authoring it costs nothing.
+**As built**, the compiler fills it from the rota: the route is the skipped occasion's template, its
+origin, destination and vias resolved to edges, and `site_lane` and `site_pos_m` are the lane position
+of the occasion's subject place,
+resolved against the network as a stop at that place is — the place a series sites its slots at. At
+Bahonar that is `26413459_0` at 58.90 m, the labels' described gap. A subject naming an edge or several
+lanes rather than one lane position leaves both null, and the absence is sited by its area alone. The
+built instance id is `<scenario_id>/<name>`, so the absence above is
+`Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned`.
 
 **One safeguard.** An absence is the only supervision state a geometric predicate could produce
 convincingly ("nothing was at the site, therefore absence"), which makes it the sharpest edge of
@@ -910,7 +919,15 @@ considered and are not published (§3.9).
 | `counterfactual` — `{kind, ref}` | no | §3.9(c) |
 | `contrast_with[]` — sibling terms | no | §3.9(b) |
 | `hard_negative_for[]` — terms this `nominal` term is a matched negative for | no | §3.9(d) |
-| `exemplar_instances[]` — instance ids in a shipped example scenario | no | Prose alone is unverifiable; an exemplar reference is checkable, because [07 §8.5](07_Scenario_Authoring.md) compiles every shipped example in the ordinary test run |
+| `exemplar_instances[]` — instances of the scenario that declares the term, by their authored names | no | Prose alone is unverifiable; an exemplar reference is checkable, because the compiler resolves each against the plan, as it resolves an instance's counterfactual, and refuses one that dangles ([07](07_Scenario_Authoring.md) check 8), and [07 §8.5](07_Scenario_Authoring.md) compiles every shipped example in the ordinary test run. It is named as the specification names the instance, not by the plan's `<scenario_id>/<name>`, because every member of a sweep carries its own scenario id |
+
+**A `parameters{}` declaration is binding on every row that uses it.** The compiler refuses a row's
+parameter that none of its labels' terms declares, a value that is not of the declared type, and one key
+two of its labels declare with different types or units ([07](07_Scenario_Authoring.md) check 56). A
+parameter may sit on an instance, an absence, a series or a cohort row, wherever a label applies: it is
+the one channel an author has for structured metadata about a subject, and it never travels without the
+definition that makes it readable. At Bahonar the perimeter shadow's `speed_factor` (a number) and
+`circuit_edges` (an integer) are checked against `bahonar:perimeter_transit_off_cadence`.
 
 **Three fields are deliberately absent, and their absence is load-bearing.** A term may not declare
 itself anomalous, may not carry a severity, and may not carry a confidence. A term that declares itself
@@ -1089,7 +1106,12 @@ never widens, and its absence means unspecified, not none.** A `nominal` subject
 once, on the term (§3.8), and the instance in the manifest and the `<annotation>` in the sidecar carry
 a copy so that neither artifact has to be read against the vocabulary to be usable. An instance may not
 declare a different set from its term's; a disagreement is a compile error, for the same reason §8.2
-makes a disagreement between two sidecars at one tick a defect rather than a choice.
+makes a disagreement between two sidecars at one tick a defect rather than a choice. **As built**, the
+plan carries the copy: every nominal instance and nominal series row has `hard_negative_for`, the union
+of its labels' declarations, and `null` where none declares one — unspecified, never an empty "negative
+for nothing". An author may restate the set on the instance or series and may not vary it, and a subject
+that is not nominal may not declare one ([07](07_Scenario_Authoring.md) check 57). At Bahonar the 21
+hauls carry the escort's two terms and the guard-posting series the two dwell-shaped ones.
 
 **(e) A statement of what the author believes carries the signal is deferred, and is not published at
 v1.** The case for it is real and is already measured: §9.3 distinguishes `anomaly_shadow`'s
@@ -1942,6 +1964,7 @@ erDiagram
         string routes_digest
         string network_digest
         string config_digest
+        string additional_digest "the lane closures' file; null where there is none"
     }
     PATTERN_INSTANCE {
         string instance_id PK
@@ -1949,7 +1972,8 @@ erDiagram
         string supervision "annotated|nominal"
         string realisation "present|absent"
         string labels "vocabulary terms, one or more; permitted on nominal"
-        string parameters "swept values"
+        string parameters "keys its labels' terms declare, of the declared types"
+        string hard_negative_for "copied from its terms when nominal; null is unspecified"
         string counterfactual "kind + ref; a pointer, never a supervision write"
         string series_ref FK "null unless in a series"
         string slot_ref FK "null unless in a series"
@@ -1979,6 +2003,10 @@ erDiagram
         string plan_id FK
         string cadence
         string member_role
+        string supervision "the members' state"
+        string labels
+        string parameters "keys its labels' terms declare"
+        string hard_negative_for "copied from its terms when nominal; null is unspecified"
     }
     SERIES_SLOT {
         string series_id PK, FK
@@ -1994,6 +2022,7 @@ erDiagram
         string plan_id FK
         string supervision "unlabelled|annotated - NEVER nominal, see D6.2"
         string labels "whole-life only"
+        string parameters "keys its labels' terms declare"
     }
     VOCABULARY {
         int vocabulary_version PK "core"
@@ -2039,9 +2068,16 @@ The properties the plan must have, each for a reason already established:
   check 7 of [07 §5.2](07_Scenario_Authoring.md), and the Bahonar generator's specification is
   compiled by it), so the stance
   is established in this codebase.
-- **The plan is digest-bound to the four scenario files** it was compiled against. A route file is
+- **The plan is digest-bound to the scenario files** it was compiled against. A route file is
   regenerated whenever the network is (`rou.xml:3`, measured), so a plan compiled against an older
-  generation must fail loudly rather than resolve half its ids.
+  generation must fail loudly rather than resolve half its ids. As built, the plan carries
+  `routes_digest`, `network_digest` (the network's canonical fingerprint), `config_digest` and
+  `additional_digest` — the lane closures' additional file, the same SHA-256 the lock records for it,
+  and null where a scenario closes no lane — and the lock binds the plan's own digest.
+- **What a row says, its terms define.** A row's `parameters` are keys its labels' terms declare, each of
+  the declared type (§3.8); a nominal row carries its terms' `hard_negative_for` (§3.9(d)); a term's
+  `exemplar_instances` and a counterfactual naming a series, cohort or instance resolve against the plan
+  ([07](07_Scenario_Authoring.md) checks 56, 57 and 8).
 - **The plan has no solar field, and its absence is the code boundary of §3.6.** The scenario's epoch
   is compiled into a separate civil-time map (§4.2's diagram) that the capture session consumes and the
   supervision binder does not see. This is deliberate and is worth stating in the plan's own section,
@@ -2862,7 +2898,9 @@ different times, and none of them is a convention:
 1. **At compile.** Check 18 of [07 §5.2](07_Scenario_Authoring.md) already refuses a label outside the
    declared vocabulary. Two clauses are required beyond it: refuse a label whose `applies_to` excludes
    the subject kind it was asserted of — which is how D6.2's cohort rule reaches terms the compiler
-   cannot interpret — and refuse a namespace the specification neither declared nor imported.
+   cannot interpret — and refuse a namespace the specification neither declared nor imported. Both are
+   built (checks 45 and 46), and so are the refusals of a parameter its row's terms do not declare as
+   written (check 56) and of a `hard_negative_for` other than the term's (check 57).
 2. **At run time — nothing, and that is the strength.** D6.8 fixes the row set before the run and
    permits the runtime only to *bind*. The label set of a run is therefore a subset of the plan's by
    construction, and §3.6 point 2's two-manifest diff already tests it. There is no runtime path that

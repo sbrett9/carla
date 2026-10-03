@@ -239,6 +239,13 @@ carries none, and the compiler refuses a route file carrying anything but the ve
   definition, `applies_to` (`entity`/`cohort`/`slot`), `realisation` (`present`/`absent`), `since` and
   `status`. **Invent no terms on the author's behalf** — the label is a contract between the author and
   the model trainer, and this pipeline carries it without judging it. Ask for the author's words.
+- **A subject's magnitudes go in `parameters`** — on an instance, an absence, a series or a cohort — and
+  each key must be declared in the `parameters{}` of one of its labels' terms, with a `type`
+  (`number`, `integer`, `string`, `boolean`), a `unit` where it has one and a `definition`. An
+  undeclared key, or a value of another type, is refused (check 56); there is no free-form attribute map.
+- A term carried by `nominal` subjects may declare `hard_negative_for`; the plan copies it onto them, so
+  restate it on a subject only exactly, or not at all (check 57). A term's `exemplar_instances` name
+  instances of this scenario by their authored names, and each must resolve (check 8).
 - Some subject should be `nominal` when any is `annotated` — hard negatives are the most valuable output.
 
 ### Light — derived context, never a label

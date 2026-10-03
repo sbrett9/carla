@@ -97,7 +97,7 @@
     {
       "id": 8,
       "group": "references",
-      "title": "Every reference names what the specification declares: places, instants, rotas, series, flows and counterfactuals",
+      "title": "Every reference names what the specification declares: places, instants, rotas, series, flows, counterfactuals and exemplar instances",
       "against": "the specification",
       "outcomes": [
         "refuse"
@@ -258,6 +258,28 @@
       ],
       "status": "compiler",
       "prevents": "A term no published vocabulary defines"
+    },
+    {
+      "id": 56,
+      "group": "annotation",
+      "title": "Every parameter an instance, absence, series or cohort carries is declared by one of its labels' terms and is of the declared type; labels declaring one key agree on its type and unit",
+      "against": "the vocabulary block",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A magnitude no consumer can read: a key nobody defined, or a value that is not what its definition says"
+    },
+    {
+      "id": 57,
+      "group": "annotation",
+      "title": "A nominal subject's hard_negative_for is the set its labels' terms declare, and no other subject declares one",
+      "against": "the vocabulary block",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A matched negative the record and its term disagree about"
     },
     {
       "id": 19,

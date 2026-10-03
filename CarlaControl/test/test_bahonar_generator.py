@@ -22,6 +22,9 @@ package (`07_Scenario_Authoring.md` §3.4). Held here:
 * **The six anomalies are supervision.** The nine planted vehicles are the participants of the five
   annotated instances, and the guard no-show is an absence in the guard rota's series, at the tower,
   instant and length the labels' described gap gave it.
+* **The plan says nothing its terms do not define.** The perimeter shadow's `speed_factor` and
+  `circuit_edges` are the keys its term declares, of the declared types, and a value of another type
+  is refused (check 56); the hauls and the guard postings carry their terms' `hard_negative_for`.
 
 What these cannot see: whether the traffic behaves as intended in SUMO -- that is measured when the
 scenario changes (07 §3.4) -- and whether a body suits the vehicle it is drawn for, which is the
@@ -154,13 +157,10 @@ def test_the_shipped_scenario_is_what_its_generator_writes_today(tmp_path):
             assert any(f"'{blueprint}'" in line for blueprint in missing), line
 
 
-def test_with_only_the_unmeasured_bodies_swapped_it_compiles_and_the_session_admits_it(tmp_path):
-    """Every stage after the vehicle binding runs on the world package: routes through duarouter,
-    supervision, emission and its self-checks; and the session's own checks -- network, compile
-    lock, teleporting and route errors -- admit the result, each raising where it would refuse."""
-    require_world()
-    catalogue = VehicleCatalogue.load(CATALOGUE)
-    measured = catalogue.blueprint_ids
+def compilable_specification() -> dict:
+    """The generated specification bound to the world package and the catalogue, with any body the
+    catalogue has not measured swapped for one it has."""
+    measured = VehicleCatalogue.load(CATALOGUE).blueprint_ids
     specification = generated_specification()
     specification["world"] = {"package": str(PACKAGE), "network_fingerprint":
                               NetworkFingerprint.of_text(WorldPackageReader(PACKAGE).network_text())}
@@ -169,9 +169,22 @@ def test_with_only_the_unmeasured_bodies_swapped_it_compiles_and_the_session_adm
     for entry in specification["vehicle_classes"]:
         entry["blueprints"] = list(dict.fromkeys(
             b if b in measured else stand_in for b in entry["blueprints"]))
+    return specification
+
+
+def compile_specification(specification: dict, tmp_path: Path):
     path = tmp_path / f"{SCENARIO}.scenario.json"
     path.write_text(json.dumps(specification, indent=2), encoding="utf-8")
-    result = ScenarioCompiler(SumoInstallation.locate(STAGED_SUMO)).compile(path, tmp_path / "out")
+    return ScenarioCompiler(SumoInstallation.locate(STAGED_SUMO)).compile(path, tmp_path / "out")
+
+
+def test_with_only_the_unmeasured_bodies_swapped_it_compiles_and_the_session_admits_it(tmp_path):
+    """Every stage after the vehicle binding runs on the world package: routes through duarouter,
+    supervision, emission and its self-checks; and the session's own checks -- network, compile
+    lock, teleporting and route errors -- admit the result, each raising where it would refuse."""
+    require_world()
+    specification = compilable_specification()
+    result = compile_specification(specification, tmp_path)
     assert not result.refused, [str(f) for f in result.findings.refusals]
     routes = ET.parse(result.files["routes"]).getroot()
     entries = [e for e in routes if e.tag in ("vehicle", "flow")]
@@ -182,6 +195,75 @@ def test_with_only_the_unmeasured_bodies_swapped_it_compiles_and_the_session_adm
                               SolarEpoch.FromJson(json.dumps(specification["epoch"])))
     TeleportingCheck.Require(config, False)
     RouteErrorCheck.Require(config)
+
+
+# ---- the plan, against the terms that define it ------------------------------------------------------
+
+def shipped_plan() -> dict:
+    return json.loads((IMPORT / f"{SCENARIO}.supervision.json").read_text(encoding="utf-8"))
+
+
+def declared_term(term: str) -> dict:
+    (namespace,) = load_generator().VOCABULARY["namespaces"]
+    return next(t for t in namespace["terms"] if t["term"] == term)
+
+
+def test_the_shipped_plan_carries_the_shadow_s_parameters_of_the_types_its_term_declares():
+    """speed_factor and circuit_edges reach the plan as written, and are what the term defines."""
+    shadow = next(i for i in shipped_plan()["instances"]
+                  if i["instance_id"] == f"{SCENARIO}/pi_perimeter_shadow_d6")
+    assert shadow["labels"] == ["bahonar:perimeter_transit_off_cadence"]
+    assert shadow["parameters"] == {"speed_factor": 0.45, "circuit_edges": 7}
+    declared = declared_term("bahonar:perimeter_transit_off_cadence")["parameters"]
+    assert {key: entry["type"] for key, entry in declared.items()} == {
+        "speed_factor": "number", "circuit_edges": "integer"}
+
+
+@pytest.mark.parametrize(("parameters", "says"), [
+    ({"speed_factor": 0.45, "circuit_edges": 7.5},
+     "parameter 'circuit_edges' is 7.5, and 'bahonar:perimeter_transit_off_cadence' declares it "
+     "integer (fence-line roads driven)"),
+    ({"speed_factor": "crawl", "circuit_edges": 7},
+     "parameter 'speed_factor' is \"crawl\", and 'bahonar:perimeter_transit_off_cadence' declares "
+     "it number"),
+    ({"speed_factor": 0.45, "circuit_edges": 7, "laps": 1},
+     "carries parameter 'laps', which none of its labels declares (they declare circuit_edges, "
+     "speed_factor)"),
+])
+def test_a_shadow_parameter_its_term_does_not_declare_as_written_is_refused(tmp_path, parameters,
+                                                                            says):
+    require_world()
+    specification = compilable_specification()
+    shadow = next(i for i in specification["supervision"]["instances"]
+                  if i["name"] == "pi_perimeter_shadow_d6")
+    shadow["parameters"] = parameters
+    result = compile_specification(specification, tmp_path)
+    assert {f.check_id for f in result.findings.refusals} == {56}
+    (finding,) = result.findings.by_check(56)
+    assert finding.subject == "instance pi_perimeter_shadow_d6" and says in finding.message
+
+
+def test_the_shipped_plan_projects_hard_negative_for_from_the_terms_onto_its_negatives():
+    """The 21 hauls are matched negatives for the escort's terms and the guard postings for the
+    dwell-shaped ones, copied from the terms; the anomalies, all annotated, carry none."""
+    plan = shipped_plan()
+    hauls = [i for i in plan["instances"] if i["supervision"] == "nominal"]
+    assert len(hauls) == 21
+    assert {tuple(i["hard_negative_for"]) for i in hauls} == {
+        tuple(declared_term("bahonar:routine_freight_haul")["hard_negative_for"])}
+    (series,) = plan["series"]
+    assert series["hard_negative_for"] == declared_term("bahonar:tower_posting")["hard_negative_for"]
+    assert all(i["hard_negative_for"] is None for i in plan["instances"]
+               if i["supervision"] == "annotated")
+
+
+def test_the_shipped_absence_is_sited_where_the_labels_described_the_gap():
+    labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
+    (gap,) = labels["anomaly_notes"]
+    (absence,) = [i for i in shipped_plan()["instances"] if i["realisation"] == "absent"]
+    expected = absence["expected"]
+    assert expected["site_lane"].rsplit("_", 1)[0] == gap["edge"]
+    assert expected["site_pos_m"] == gap["edge_pos_m"]
 
 
 # ---- the owner's epoch ---------------------------------------------------------------------------------
