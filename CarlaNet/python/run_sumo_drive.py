@@ -88,10 +88,12 @@ A compiled scenario is checked against the compile lock the compiler wrote besid
 (`<stem>.lock.json`) before SUMO is started: its configuration, route file and network must be the
 ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
 scenario with no lock runs and is logged as uncompiled. A scenario whose configuration lets SUMO
-teleport a blocked vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s -- is
-refused unless `--allow-teleporting` is given, and one that sets `ignore-route-errors` is refused
-outright, because SUMO then keeps a vehicle it cannot route standing at the end of an edge and says
-nothing.
+teleport a waiting vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s, or any
+of SUMO's other teleport triggers -- is refused unless `--allow-teleporting` is given. One that sets
+`ignore-route-errors` is refused outright, because SUMO then keeps a vehicle it cannot route standing at
+the end of an edge and says nothing; so is one whose `collision.action` is not `warn` or `none` (SUMO's
+default is `teleport`), one with a positive `random-depart-offset`, and one that sets `random`. The
+report names the demand scale, the cap on vehicles running and `max-depart-delay` the run ran under.
 
 If either side fails part-way -- SUMO dies, closes the connection or does not answer within
 `--sumo-answer-timeout`, the server drops the connection or leaves a tick unanswered, or the sun
@@ -225,9 +227,11 @@ def parse_args() -> argparse.Namespace:
                              "where the installation has none (CarlaSetup builds and stages it). "
                              "Pausing the window pauses the drive; closing it stops the run")
     parser.add_argument("--allow-teleporting", action="store_true",
-                        help="run a scenario whose configuration lets SUMO teleport a blocked vehicle "
-                             "(a positive time-to-teleport, or none, which SUMO takes as 300 s) "
-                             "instead of refusing it. The run report records that it was accepted")
+                        help="run a scenario whose configuration lets SUMO teleport a waiting vehicle "
+                             "(a positive time-to-teleport, or none, which SUMO takes as 300 s; or "
+                             "another teleport trigger, such as time-to-teleport.highways or a vehicle "
+                             "type's own timeToTeleport) instead of refusing it. The run report records "
+                             "that it was accepted. It accepts no collision.action but warn or none")
     parser.add_argument("--no-vehicle-lamps", action="store_true",
                         help="write no lamp to any body: no brake lights or indicators from SUMO and no "
                              "headlights from the sun. A control condition; lamps are driven by default")

@@ -58,6 +58,7 @@ advancement policy, the headlight predicate),
 | 2026-10-02 | §5.4, §5.5, §6.4, Q3.11, D3.40: a body's heading follows the path its bumper takes, the rear axle trailing it, turned only by forward travel and held across a jump; its velocity is the path's; SUMO's reported angle is recorded beside the pose and in the render set. |
 | 2026-10-02 | §8.3, §8.3.1, §8.3.2, §8.3.3, §8.8, §8.9, D3.10, D3.31, D3.38, D3.41, D3.42: two optional performance controls, off by default and recommended for no scenario. A draw distance, set once on each pooled body by the new `set_actors_max_draw_distance`, so no camera draws a body beyond it while every vehicle keeps its body, pose and truth; each frame's render set records the distance and the recorder marks every vehicle a camera did not draw. And the circle, the cameras' footprints and a capacity, restored from history as limits a caller chooses: a vehicle outside one is simulated by SUMO and in no frame and no truth record, and is counted; every vehicle stays subscribed, so the subscription tiers are not restored. D3.38 stays withdrawn as a default. Written and tested offline; the plugin awaits a build. |
 | 2026-10-02 | §3.4: a ramp meter reaches the imagery through the vehicles it holds, one leaving per green, with no meter head drawn. |
+| 2026-10-02 | §9.7, §11.5, §11.6, §11.10, D3.14, D3.33: SUMO's own distribution edits checked before SUMO is started and stated on the run report. A collision action other than `warn` or `none` is refused, SUMO's default and an action SUMO does not name included; every other teleport trigger, a vehicle type's own included, is refused under the acceptance `time-to-teleport` has; a positive `random-depart-offset` and `random` are refused; the scale, the cap on vehicles running and `max-depart-delay` are recorded. Measured: `time-to-teleport.highways` is off at its default and `.disconnected` on from zero. The test fixtures now set `collision.action warn`. |
 
 ---
 
@@ -3190,6 +3191,10 @@ session.start():
     if <stem>.lock.json beside the sumocfg:               # §2.7; else recorded as uncompiled
         assert sha256(config, routes, network) == the lock's; catalogue digest and epoch digest too
     assert sumocfg time-to-teleport <= 0                  # absent is 300; unless accepted, §11.6
+    assert no other teleport trigger on                   # .highways, .disconnected, .bidi, a type's own;
+                                                          # unless accepted, §11.6
+    assert collision.action in (warn, none)               # absent is teleport; never accepted, §11.5
+    assert random-depart-offset <= 0 and not random       # report the scale and insertion limits, §11.6
     assert world.settings.synchronous_mode and world.settings.fixed_delta_seconds == Δw
     Δs = Simulation.getDeltaT();  R = Δs / Δw;  assert R is a positive integer
     assert 1 / captureRateHz is a whole number of Δw      # a frame falls on the tick it is stamped
@@ -3754,10 +3759,11 @@ report counts collisions once each, keeps the first ten, and says what SUMO does
 asked of SUMO where it registers none.
 
 **Whether the compiled scenario sets the action: it does.** The compiler writes `collision.action warn`
-into every configuration and records it in the lock (`PROCESSING_OPTIONS`, `ScenarioCompiler.py`), and both
-shipped scenarios set `warn`. The fixture, and any hand-written configuration that names no action, gets
-SUMO's default `teleport` (`MSFrame.cpp:399`). The report's `collisions` line names which governed the run
-(`SumoCollisionHandling`), because the same collision renders differently under each:
+into every configuration and records it in the lock (`PROCESSING_OPTIONS`, `ScenarioCompiler.py`), and all
+three shipped scenarios set `warn`, as the test fixtures now do. A hand-written configuration that names no
+action gets SUMO's default `teleport` (`MSFrame.cpp:399`), and the session refuses it (below). The report's
+`collisions` line names which governed the run (`SumoCollisionHandling`), because the same collision
+renders differently under each:
 
 | Action | What SUMO does | What the session can record |
 |---|---|---|
@@ -3766,15 +3772,20 @@ SUMO's default `teleport` (`MSFrame.cpp:399`). The report's `collisions` line na
 | `remove` | registers it and takes both vehicles out | the span; both leave the render set as arrivals |
 | `none`, or `ignore-accidents` set | the lane's check returns before registering anything (`MSLane::detectCollisions`) | nothing — and the report says none can be |
 
-`TeleportingCheck` does not refuse a `collision.action` of `teleport` (§11.6), and the session does not
-refuse `none`; which actions a corpus may carry belongs to behavioural truth's enumeration of SUMO's
-distribution-editing behaviours ([`13`](13_Work_Breakdown.md) §11).
+**Which actions a run may carry: `warn` and `none`** ([`06`](06_Truth_And_Annotation.md) D6.12). Since
+2026-10-02 the session refuses `teleport` and `remove` at `Validation`, before SUMO is started, SUMO's
+default included and whatever `AllowTeleporting` says (`SumoDistributionEditCheck`, §11.6). It refuses an
+action SUMO does not name as well: SUMO compares the word case-sensitively (`MSLane::initCollisionAction`),
+and measured, `Warn` is an `Error:` line on its console and the run goes on under `teleport`, the static
+default (`MSLane.cpp:107`). `ignore-accidents` set true runs as `none`. The report's `distribution edits`
+block names the action in force. `none` is permitted until the owner rules on it; refusing it is one entry
+taken out of `PermittedCollisionActions`, which refuses `ignore-accidents` with it.
 
 **Exercised by** `SumoDriveSessionFailureTests` (on the fixture under `warn`, a vehicle moved over the rear
 of another, as a client moving it would: one span, collider and victim as SUMO registered them, the lane,
 beginning on the frame after the move and lasting more than one step, both bodies named and distinct, the
-run going on, and SUMO's warning kept on the report; the fixture itself recording none and naming SUMO's
-default), `SumoCollisionHandlingTests` (each action, the default, `ignore-accidents`, the compiled
+run going on, and SUMO's warning kept on the report; the fixture itself recording none and naming the
+`warn` it sets), `SumoCollisionHandlingTests` (each action, the default, `ignore-accidents`, the compiled
 scenario) and `SumoCollisionDecodingTests` (the layout SUMO's server writes, none, the generic reading
 stopping part-way, a value that is not a compound, a field of the wrong kind). Each was seen failing
 against a wrong implementation: a new span on every step; a span closed on the step it began; a body not
@@ -3817,10 +3828,10 @@ an option set twice, or to something that is not a time, is refused. `AllowTelep
 (`run_sumo_drive.py --allow-teleporting`, `allow_teleporting` on `start_sumo_drive`) runs anyway, and
 the report's `teleporting` line records the wait and that it was accepted; otherwise it records the
 value that disabled it. Both shipped scenarios set `-1`, and the compiled one's lock records the same
-(`traffic.processing`). **What it cannot see:** a vehicle type's own `timeToTeleport` attribute, which
-overrides the option for that type, since route files are not read for it; the other teleport triggers
-(`time-to-teleport.highways`, `.disconnected`, `.bidi`, `.railsignal-deadlock`, all off by default); and
-a `collision.action` of `teleport`, SUMO's default, which the compiler sets to `warn`.
+(`traffic.processing`). **What it leaves to the next check:** a vehicle type's own `timeToTeleport`
+attribute, which overrides the option for that type; the other teleport triggers
+(`time-to-teleport.highways`, `.disconnected`, `.bidi`, `.railsignal-deadlock`); and a `collision.action`
+of `teleport`, SUMO's default, which the compiler sets to `warn`.
 
 **Exercised by** `TeleportingCheckTests` (the measured values, the three ways SUMO reads an option, the
 clock forms, the absent option, the acceptance, an option set twice or garbled, and both shipped
@@ -3830,6 +3841,67 @@ at zero, as `>= 0` would; one that takes an absent option as disabled; one that 
 attribute; one that does not read the clock form; one that ignores the acceptance; one that never
 refuses; one that takes the first of two values; a session that never makes the check; and a check made
 after SUMO has started.
+
+**The other teleport triggers, and SUMO's other edits to its population, as built (2026-10-02).**
+`SumoDistributionEditCheck`, called from `SumoDriveSession.Start` straight after `RouteErrorCheck` and
+before `SumoConnection.Start`, reads the configuration as SUMO reads one (§2.7), and the vehicle types of
+every route file and additional file it names, since SUMO loads types from both. It refuses what the truth
+record cannot carry, naming every problem in one refusal, and records the rest
+([`06`](06_Truth_And_Annotation.md) §6.2, D6.12). Read from SUMO 1.27.0 and measured on the fixture network
+with the staged `sumo`:
+
+| Setting | SUMO 1.27.0 | Measured | The session |
+|---|---|---|---|
+| `time-to-teleport.highways` | default 0; teleports a vehicle waiting on a lane that does not continue its route, on a road faster than 69 km/h, only where positive (`MSLane.cpp:2413`) | under `time-to-teleport` -1, a vehicle held on `approach_0` with its route turning off `approach_1`, both blocked: absent, 0 and -1 never in 1000 s; 5 after 5.05 s of waiting, `(wrong lane, highway)` | refuses a positive value unless accepted |
+| `time-to-teleport.disconnected` | default -1; on from 0 up (`MSLane.cpp:2406`, `>= 0`) | a vehicle routed `ahead` to `approach` under `ignore-route-errors`: absent and -1 never; 0 after 0.05 s; 5 after 5.05 s | refuses 0 and above unless accepted |
+| `time-to-teleport.bidi`, `.railsignal-deadlock` | default -1; on where positive (`:2418`, `:2420`) | not measured: no fixture has a bidirectional edge or a rail signal | refuses a positive value unless accepted |
+| a type's `timeToTeleport`, `timeToTeleportBidi` | stand in for `time-to-teleport` and `.bidi` for its vehicles (`SUMOVTypeParameter::getTimeToTeleport`) | `timeToTeleport` 5 under `time-to-teleport` -1: the follower blocked behind a stopped vehicle teleported after 5.05 s | refuses a positive value unless accepted, naming the type and its file |
+| `collision.action` | default `teleport`; compared case-sensitively | `Warn`: an `Error:` line, and the run went on | refuses all but `warn` and `none`, never accepted (§11.5) |
+| `random-depart-offset` | default 0; on where positive (`MSInsertionControl.cpp:422`) | 5 moved the fixture's four departures from 0, 2, 6 and 10 s to 0.85, 5.75, 6.45 and 13.45 s; -5 moved none | refuses a positive value |
+| `random`, or its old name `abs-rand` | false; true seeds from the wall clock (`RandHelper.cpp:79`) | | refuses true |
+| `scale`, a type's own `scale` | 1; discards or duplicates vehicles (`MSInsertionControl.cpp:229`) | | records |
+| `max-num-vehicles` | -1, no limit; delays an insertion that would exceed it (`MSInsertionControl.cpp:163`) | | records |
+| `max-depart-delay` | -1, never; discards from 0 up (`MSInsertionControl.cpp:168`) | the discard, §11.4 | records; each vehicle discarded is recorded as not inserted (§11.4) |
+
+So the `.highways` default is not the trap an earlier reading of it took it for: it is off, and so is
+every trigger at SUMO's default. The trap is a value that turns one on, which `time-to-teleport -1` does
+not turn off — and for `.disconnected` that value is 0. An option set twice, a time or a type's attribute
+SUMO cannot read and a negative scale are refused, as SUMO refuses each (measured, each quits as it loads).
+A boolean, whole-number or number option it cannot read — `random`, `ignore-accidents`, `scale`,
+`max-num-vehicles` — is refused too, although SUMO does not refuse it: measured, it writes `Error: While
+processing option` and runs on under the option's default. A route file that is not there is left to SUMO,
+which refuses it as it loads (§11.10); one that is there and is not XML is refused, because SUMO reads route
+files a slice at a time and would meet the fault part-way through the run. `AllowTeleporting` accepts the
+teleport triggers as it accepts `time-to-teleport`, and the report names each enabled one; nothing accepts
+the rest, and no reason was found to let anything do so. The report carries the whole as
+`DistributionEdits`, a summary on its `distribution edits` line and one line each beneath it, here for the
+fixture with `.highways` 5 accepted and `max-depart-delay` 900:
+
+```
+distribution edits collision.action 'warn'; a teleport trigger ENABLED, accepted explicitly; departures as declared, from the seed; demand as written; no vehicle limit; a vehicle not inserted within 900 s discarded
+  collision action 'warn' (collision.action 'warn'); a run may carry warn or none
+  teleport paths   ENABLED, accepted explicitly: time-to-teleport.highways '5', ENABLED after 5 s; time-to-teleport.disconnected not set, so SUMO's default of -1 s; time-to-teleport.bidi not set, so SUMO's default of -1 s; time-to-teleport.railsignal-deadlock not set, so SUMO's default of -1 s; no vehicle type sets its own
+  depart offset    none: no departure moved by a random offset (random-depart-offset not set, so SUMO's default of 0 s)
+  seeding          from the seed, so the traffic can be run again (random not set)
+  demand scale     1, the demand as written (scale not set, so SUMO's default of 1); no vehicle type scales its own
+  vehicle limit    none (max-num-vehicles not set, so SUMO's default of -1)
+  depart delay     a vehicle not inserted within 900 s of its departure is DISCARDED, and recorded as not inserted (max-depart-delay '900')
+```
+
+All three shipped scenarios pass it, each recording `warn`, every trigger off, the scale as written, no
+vehicle limit and a discard after 900 s. **What it does not do:** fail a run whose discarded vehicle the
+supervision plan names, which needs the plan bound at run time; and refuse a `lanechange.duration` of
+zero, which the report records as instantaneous (§6.4).
+
+**Exercised by** `SumoDistributionEditCheckTests` (each refused setting at the measured thresholds, each
+recorded setting, the acceptance and what it does not accept, types in route files, additional files,
+distributions and compressed files, values SUMO would not read, options set twice, every refusal named in
+one, a missing and a malformed route file, and the shipped scenarios and fixtures passing) and
+`SumoDriveSessionLockTests` (a `collision.action remove` refused with SUMO never launched, accepted or not;
+a `.highways` trigger refused, then run once accepted, with every line on the report). Each was seen
+failing against a wrong implementation: `.disconnected` taken as off at zero; every trigger taken as on at
+zero; additional files not read; a session that accepts the triggers whatever the run said; and
+`teleport` among the permitted actions.
 
 Also note `<max-depart-delay value="900"/>`: a vehicle that cannot be inserted within 900 s is
 dropped. The bridge must therefore allocate actors on **actual departure**
@@ -4029,7 +4101,7 @@ unreachable server holds (§11.2).
 
 | Stage | Where in the sequence | What the refusals are | What it had taken, all given back |
 |---|---|---|---|
-| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4) | nothing |
+| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4); SUMO's other edits to its population — the other teleport triggers, the collision action, a random departure offset and `random` (§11.5, §11.6) | nothing |
 | `Launch` | SUMO started on the scenario; the world's clock and layers taken; no lease | SUMO could not load the scenario; the world would not hold synchronous mode at the delta asked; the SUMO step, the delta and the capture rate do not divide; the connection failed while the clock or the layers were written | SUMO, the world's settings, the layers |
 | `Authority` | the population lease | another holds it, named (`PopulationAuthorityHeldException.HeldBy`) | as above |
 | `PreRoll` | the lease held, before the window opens: in `Start`, and in `Advance` on a prewarm tick (§9.5) | from `Start`, SUMO failing or not answering during the fast-forward or the step of lookahead, the sun refused, read back other than written, or disagreeing with the declaration for the window's opening, or the connection failing while the sun is bound; from `Advance`, any `Window` refusal raised on a prewarm tick | from `Start`, as above plus the lease, the sun and any bodies; from `Advance`, the caller disposes the session |
@@ -4154,7 +4226,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.11** | In a SUMO-drive session **SUMO is the only removal authority**. The bridge translates removals; it never originates one. This resolves [issue #18](https://github.com/sbrett9/carla/issues/18) for this mode by deleting both of its deciders rather than adding a third. |
 | **D3.12** | `SumoDriveSession` owns the advance of simulated time on both sides. `R = Δs/Δw` must be a positive integer; the session refuses to start otherwise. Neither side can outrun the other, because the loop is serial and the world clock is simulated. |
 | **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
-| **D3.14** | A session refuses to start against a configuration whose `time-to-teleport` enables teleporting — a positive value, or none, which SUMO takes as 300 s; measured, `0` disables it as `-1` does (§11.6) — unless the run accepts it explicitly, which the report records; and carries a non-overridable runtime jump detector that releases and re-admits rather than interpolating across a discontinuity. |
+| **D3.14** | A session refuses to start against a configuration whose `time-to-teleport` enables teleporting — a positive value, or none, which SUMO takes as 300 s; measured, `0` disables it as `-1` does (§11.6) — unless the run accepts it explicitly, which the report records; and carries a non-overridable runtime jump detector that releases and re-admits rather than interpolating across a discontinuity. Every other teleport trigger — `time-to-teleport.highways`, `.disconnected` (on from 0), `.bidi`, `.railsignal-deadlock` and a vehicle type's own — is refused under the same acceptance (2026-10-02, §11.6). |
 | **D3.15** | Any fault that makes the truth record unreliable — SUMO connection loss, a world-tick timeout — **stops the run**. It does not degrade, does not restart `sumo`, and does not keep ticking a frozen pose buffer. |
 | **D3.17** | **Vehicle light state rides the existing per-tick `apply_batch`** as `SetVehicleLightStateCommand` (variant **18**), emitted when a body is lent and on a change, and `None` when it is given back, with the last written flags held client-side because the getter is an RPC and the snapshot carries no light state. **Built** (§3.5.3). Brake and indicator bits come from SUMO's `VAR_SIGNALS`, read at zero extra cost in the subscription the bridge already makes; `Position` and `LowBeam` come from sun elevation, because **SUMO has no headlight model at all** (§3.5.1). Measured batching cost: mean 14.44 / p90 31 / max 47 extra commands in one of the 20 sub-step batches per SUMO step — **0.72 amortised per tick, and zero extra RPCs**. |
 | **D3.18** | **The session owns the solar clock**, because the sun is a function of simulated time and only the clock owner knows what instant a frame is. It binds the sun at window open, writes it for every frame under `advance` with the engine's own advance off, and audits it every tick. No other component in a SUMO-drive session calls `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance`. |
@@ -4172,7 +4244,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message. A SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console; so is a failure of the connection to the CARLA server — a socket closed or reset, or a call left unanswered past the client's timeout — at the stage it happens in, with the connection's failure as its inner exception. A failure of one side also names the side (`Cause`), and a refusal from `Advance` stops the run for good and is recorded on the report with the last complete frame. Every other exception passes through unwrapped (§11.10). |
 | **D3.31** | **Each admission pass is published as it is made**, once per SUMO step: the population SUMO has, the vehicles rendered after the pass, those admitted and released at it, and the running total of admissions, and under an optional limit the eligible, the drawn and the shed, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` (§8.8). |
 | **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |
-| **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5). |
+| **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5): `warn` and `none` ([`06`](06_Truth_And_Annotation.md) D6.12), and since 2026-10-02 the session refuses every other before SUMO is started, SUMO's default `teleport` included. |
 | **D3.34** | **A route SUMO cannot follow stops the run, and a vehicle SUMO cannot insert is recorded.** A scenario setting `ignore-route-errors` is refused before SUMO starts, because SUMO then keeps an unroutable vehicle standing at the end of an edge and says nothing (measured); a vehicle that leaves SUMO's insertion queue without departing is recorded with the frame it was last waiting and the first it was gone, because SUMO drops it without a word; SUMO's console warnings are counted and kept verbatim (§11.4). |
 | **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release the lookahead cannot place, so it has its own reason (§11.3). |
 | **D3.36** | **A session can launch `sumo-gui` in place of `sumo`** (`SumoGui`; `run_sumo_drive.py --sumo-gui`), from the installation it resolved and no other, with `sumo`'s arguments followed by `--start --quit-on-end --delay 0 --message-log stdout --error-log stderr`, so the one SUMO process the session steps is on screen, follows the session with nobody at the window, exits when the session closes it, never sets the pace and keeps the console the session reads. The release pin holds for the binary that runs: the release compared with the world's converter is `sumo-gui`'s own. An installation without `sumo-gui` is refused before anything starts, naming the file and the setup script that stages it. The report records the binary that ran on every run (§2.6). |

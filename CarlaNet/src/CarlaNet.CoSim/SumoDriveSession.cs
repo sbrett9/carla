@@ -149,6 +149,7 @@ public sealed class SumoDriveSession : IDisposable
                              ScenarioLockCheck compiled,
                              TeleportingCheck teleporting,
                              RouteErrorCheck routeErrors,
+                             SumoDistributionEditCheck distributionEdits,
                              SumoCollisionHandling collisionHandling,
                              SumoLaneChangeDuration laneChanges,
                              HeadlightRule? headlights,
@@ -214,6 +215,7 @@ public sealed class SumoDriveSession : IDisposable
             CompileLock = compiled,
             Teleporting = teleporting,
             RouteErrors = routeErrors,
+            DistributionEdits = distributionEdits,
             CollisionHandling = collisionHandling,
             LaneChanges = laneChanges,
             VehicleLampsDriven = options.VehicleLampsDriven,
@@ -588,6 +590,13 @@ public sealed class SumoDriveSession : IDisposable
         // And whether a route SUMO cannot follow stops SUMO, and so the run, as it does by default.
         RouteErrorCheck routeErrors = RouteErrorCheck.Require(options.ScenarioPath);
 
+        // And how SUMO would edit the population on its own: a collision action that moves or removes
+        // vehicles, the teleport triggers time-to-teleport leaves open, a random offset on every departure
+        // and a seed from the wall clock are refused; the demand scale and the insertion limits it will
+        // run under are what the report names.
+        SumoDistributionEditCheck distributionEdits = SumoDistributionEditCheck.Require(
+            options.ScenarioPath, options.AllowTeleporting);
+
         // What SUMO will do about a collision, which the report carries and which decides whether
         // there is anything to ask SUMO for on each step.
         SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
@@ -665,8 +674,8 @@ public sealed class SumoDriveSession : IDisposable
                     ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
                     : null;
                 session = new SumoDriveSession(options, world, sumo, console, release, compiled,
-                                               teleporting, routeErrors, collisionHandling, laneChanges,
-                                               headlights, clock,
+                                               teleporting, routeErrors, distributionEdits,
+                                               collisionHandling, laneChanges, headlights, clock,
                                                network, ground, roads, catalogue, lease, settings, layers,
                                                pool, (manifest.OriginLatitude, manifest.OriginLongitude),
                                                seed);

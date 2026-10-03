@@ -542,10 +542,9 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         using SyntheticWorld world = Fixture();
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CollisionSpan> spans = [];
-        SumoDriveSessionOptions options = Driving(world, carla) with
-        {
-            ScenarioPath = FixtureScenario("<collision.action value=\"warn\"/>"),
-        };
+
+        // The fixture carries warn, as a capture scenario does; SUMO's default would move the collider on.
+        SumoDriveSessionOptions options = Driving(world, carla);
         options.OnCollision = spans.Add;
 
         using SumoDriveSession session = SumoDriveSession.Start(options);
@@ -609,9 +608,9 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         Assert.Empty(spans);
         Assert.Equal(0, session.Report.Collisions);
 
-        // The fixture names no action, so SUMO's default governs, and the report says so.
-        Assert.Contains("collisions         registered, and the collider moved to the next edge of its route "
-                        + "(collision.action not set, so SUMO's default 'teleport')", session.Report.ToString());
+        // The fixture names warn, which governs, and the report says so.
+        Assert.Contains("collisions         registered, warned and carried on (collision.action 'warn')",
+                        session.Report.ToString());
     }
 
     // -- A world with no sun ----------------------------------------------------------------------
