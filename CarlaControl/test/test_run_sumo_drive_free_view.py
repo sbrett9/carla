@@ -334,6 +334,18 @@ def test_a_world_truth_track_reaches_the_session_only_when_asked_for(drive, monk
     assert world.drive_arguments["world_truth_track_interval_s"] == 2.0
 
 
+def test_a_run_manifest_reaches_the_session_only_when_asked_for(drive, monkeypatch, tmp_path):
+    world = _run_main(drive, monkeypatch, tmp_path)
+    assert world.drive_arguments["run_manifest"] is None
+    assert world.drive_arguments["run_manifest_header"] is None
+    manifest = str(tmp_path / "truth" / "manifest.jsonl")
+    world = _run_main(drive, monkeypatch, tmp_path, "--run-manifest", manifest)
+    assert world.drive_arguments["run_manifest"] == manifest
+    header = world.drive_arguments["run_manifest_header"]
+    assert header["tool"] == "run_sumo_drive.py" and header["run_id"].startswith("run-")
+    assert header["view"] == "fixed"
+
+
 def test_the_launch_says_where_the_world_truth_track_goes_and_how_often(drive):
     assert drive.describe_world_truth_track(None) == \
         "none written; give --world-truth-track to write one"

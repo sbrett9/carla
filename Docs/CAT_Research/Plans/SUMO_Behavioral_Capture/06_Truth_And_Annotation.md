@@ -32,6 +32,7 @@ the real scenario artifacts. No code changed, no build run.
 | 24 · 2026-10-05 | The closed core is generated from `CarlaNet.Types` and is at version 2 (§3.7, D6.27, D6.30 as built). Its enumerations are `CarlaNet.Types.Supervision`, published by `CoreVocabulary`; the scenario compiler reads them through `carlanet` and the world truth track writes its render state and reasons from them. Version 2 adds `beyond_draw_distance` to the observability outcomes, as ruled, and three families: the interval anchor events, `render_state` and `render_reason`, which this pipeline writes and accounts by, so are core by D6.27's test. Every shipped plan's vocabulary digest changes. |
 | 25 · 2026-10-05 | `collision.action` is constrained to `warn` alone, as the owner ruled: the record of collisions must always exist, and under `none` SUMO skips the check that makes it, so the run could not say whether any collision happened, while under `warn` SUMO changes nothing about the traffic and only registers the event. `none` and `ignore-accidents` are refused at session start with the rest (D6.12, §6.2). Every collision is kept on the run report whatever is printed; how much the drive prints about them is an operator's switch, off by default, that changes nothing recorded ([03](03_CoSimulation_Runtime.md) §11.5). |
 | 26 · 2026-10-05 | The supervision plan is read at session start and bound to the files the run loads (§8.1, D6.8 and D6.30 as built). `CarlaNet.CoSim.SupervisionPlan` reads a compiled plan into sealed records made only by reading the plan, with private constructors, no setter and no collection that can be changed, so nothing in a run can make, change or add a row; a test walks every type the plan reaches and holds it to that. Core values are read through `CarlaNet.Types.Supervision`'s enumerations and a spelling outside them is refused, as is a plan whose vocabulary is not this core or does not digest as it says. The session's compile-lock check reads the plan the lock binds, refuses it where its digest is not the lock's or its own digests are not the files the run loads, and hands it to the session on the run report; a lock that names no plan runs without one, and one that names a plan that is not there is refused. The interval binder is not built. |
+| 27 · 2026-10-05 | The run supervision manifest is built as rows of JSON closed by a terminal row, as the owner settled, rather than the one document §8.4 described before D4.36: the run's opening with its identity, plan, vocabulary, SUMO settings and declared sun; every admission to and release from the render set; the events that change the population; the sun at the window's opening and end; and why the run ended. `run_capture` always writes it beside the world truth track. Supervision rows wait for the interval binder (§8.4). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2648,13 +2649,53 @@ began.
 
 ### 8.4 The run supervision manifest
 
-JSON, written incrementally and closed at session end. The format follows the precedent already in the
-tree: a world package's manifest is JSON "because it is small, and because a human resolving why is
-this world wrong" needs to read it (`CarlaNet.Map/WorldPackage/WorldPackage.cs:10-20`).
+Rows of JSON, one self-contained object per line, appended as the run goes and closed by a terminal
+row ([04](04_Contracts.md) §12.7, W2, D4.36). JSON because a human resolving why a run is wrong needs
+to read it, the precedent a world package's manifest set (`CarlaNet.Map/WorldPackage/WorldPackage.cs:10-20`);
+rows because a document is readable only once it is closed, and a run is routinely stopped before it
+closes. This section once described the manifest as one JSON document closed at session end. That
+predates D4.36, and the content is written as rows and a closing summary instead: the object below
+gathers what they carry between them, for reading, and is not a file anything writes.
 
 Incremental writing is not an optimisation here. A capture session against a seven-day scenario can
 run a long time, and doc 20 §7.5 already requires that a run which fails part way keeps its
 supervision rather than keeping every capture and losing the thing that explains them.
+
+**As built (2026-10-05): the rows, before supervision.** The capture session writes the manifest
+(`RunManifestWriter`, registered beside the world truth track, switched on by
+`SumoDriveSessionOptions.RunManifestPath`). `run_capture` always writes it, to `truth/manifest.jsonl`
+under the run's capture directory beside the world truth track, and names it in its result's
+`produced` block; `run_sumo_drive.py` writes it when given `--run-manifest PATH`, and the shim takes
+`start_sumo_drive(run_manifest=..., run_manifest_header=...)`. Each row carries its kind in `row`,
+and every instant is TraCI's clock for the SUMO frame it describes:
+
+- `manifest_opened`, first: the caller's header verbatim under `run` -- `run_capture`'s run and session
+  id, scenario id, caller, effective-configuration digest, window and declared channels -- beside what
+  the session established itself: the compile lock's digests, the supervision plan's id, digest and
+  counts, its vocabulary's version, digest and author namespaces, the SUMO settings checked at start
+  (the collision action, every teleport trigger, the departure and seeding options, the scale and the
+  insertion limits), the clock, the render set, and [04](04_Contracts.md) C9's epoch verbatim with its
+  digest, the illumination declared and in force, `epoch_honoured` and `advance_mechanism`;
+- `sensor_placed`, for each camera as it is placed, under the name its captures carry;
+- `render_admitted`, at the instant of the pass that admitted the vehicle, with why
+  (`rendering_began`, `inserted` or `entered_limit`) and the frame and body that first drew it, null
+  where no body did; and `render_released`, the interval the session hands out, with its span, body and
+  reason ([04](04_Contracts.md) C2 §4.1). A vehicle still in the render set when the run ends has an
+  admission row and no release row;
+- `collision_began` and `collision_ended`, the second with the span; `vehicle_not_inserted`,
+  `emergency_stop` and `teleport`;
+- `solar_window_open` and `solar_window_end`: C9 §11.8.1's begin and end fields from the sun the world
+  reported at the window's first and last capture tick, with its band, and at the end §11.8.2's
+  residual and `corpus_eligible`;
+- `manifest_closed`, last: `ended` (`scenario_finished`, `caller_stopped`, or `run_stopped` with its
+  stage and cause), the caller's own reason, and what the manifest holds.
+
+`run_capture` closes the manifest, giving its `closed_by`, before it reads its closing gates, so
+`supervision.manifest_closing_record` is measured; the session's end closes a manifest its caller did
+not. Not yet written: the supervision rows -- instances, intervals, observability, prevalence -- which
+wait for the interval binder; `illumination_override`, since nothing overrides the declaration at run
+start yet; `lamp_gaps[]`; and `sidecars_missing_solar`, which is still each recorder's count and its
+gate. The gate records stay in the run result.
 
 ```jsonc
 {

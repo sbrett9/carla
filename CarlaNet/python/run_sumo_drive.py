@@ -163,6 +163,13 @@ drive ends, what the track holds and why it ended. `--world-truth-track-interval
 every so many simulated seconds instead of every SUMO frame, a whole number of SUMO steps. A path that
 already holds a track is refused before anything starts.
 
+`--run-manifest PATH` writes the run manifest there: one JSON object per line, opened with what the
+run is, then every vehicle entering and leaving the render set, the events that change the population
+at TraCI's clock, the sun at the window's first and last capture tick and, last, a `manifest_closed`
+row saying why the drive ended. A manifest without that row is one whose drive was interrupted. The
+fixed camera is named on it as it is spawned. Off unless asked for here; `run_capture` always writes
+one. A path that already holds a manifest is refused before anything starts.
+
 Every still is named after its camera, `<camera name>_<local capture time>.png` and `.xml`, and the
 camera's platform track carries the name as its callsign. `--camera-name` names the camera, fixed or
 free, so that cameras sharing a world -- this drive's and another client's -- are told apart in their
@@ -332,6 +339,10 @@ def parse_args() -> argparse.Namespace:
                         help="with --world-truth-track: simulated seconds between its samples, from "
                              "the window's opening, a whole number of SUMO steps. Default: every SUMO "
                              "frame")
+    parser.add_argument("--run-manifest", default=None, metavar="PATH",
+                        help="write the run manifest to PATH: one JSON object per line, from what the "
+                             "run is to a closing row saying why it ended. Refused where PATH already "
+                             "holds a manifest. Default: none written")
 
     parser.add_argument("--show-road-mesh", action="store_true",
                         help="draw the generated road surface. Hidden by default: it is a flat grey "
@@ -1042,6 +1053,9 @@ def main() -> int:
             render_release_lag_s=args.render_release_lag,
             world_truth_track=args.world_truth_track,
             world_truth_track_interval_s=args.world_truth_track_interval,
+            run_manifest=args.run_manifest,
+            run_manifest_header={"run_id": run_id, "tool": "run_sumo_drive.py",
+                                 "view": args.view} if args.run_manifest else None,
             # What is printed about collisions, and nothing else: the session keeps every one either
             # way, and a line per collision is bound only where every collision is to be printed.
             collision_detail=args.collision_detail,
@@ -1083,6 +1097,8 @@ def main() -> int:
         logger.info("render set: %s", describe_render_set(session.Report))
         logger.info("draw distance: %s", describe_draw_distance(session.Report.DrawDistanceMetres))
         logger.info("world truth track: %s", describe_world_truth_track(session.WorldTruthTrack))
+        logger.info("run manifest: %s", session.RunManifest.Path if session.RunManifest is not None
+                    else "none written; give --run-manifest to write one")
 
         steps = 0
         # Everything up to the recorder starting happens with the world already in synchronous mode:
@@ -1115,6 +1131,8 @@ def main() -> int:
                     centre = aim.centre()
                     logger.info("aimed at %d rendered vehicles", aim.count)
             camera = spawn_camera(world, args, centre)
+            if session.RunManifest is not None:
+                session.RunManifest.PlaceSensor(world.camera_name(camera), camera.id)
             if args.render_set == "cameras":
                 # From the next step a render set that follows the cameras follows this one's view.
                 session.AddCamera(camera.id)

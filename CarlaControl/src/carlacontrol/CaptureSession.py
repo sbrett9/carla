@@ -28,7 +28,10 @@ world (D1.12):
   world truth track's path, `truth/world_truth_track.csv` under the capture directory, beside the
   channels' directories: every vehicle SUMO has, drawn or not, at every SUMO frame inside the window,
   which a base rate is taken over where the sidecars list only what was drawn (06 §8.3, D6.17). The
-  session writes it a row at a time with its summary beside it; the run result names it.
+  session writes it a row at a time with its summary beside it; the run result names it. And the run
+  manifest's, `truth/manifest.jsonl` beside it, with a header of what the run is -- its identity, its
+  window, its channels -- which the session writes verbatim on the manifest's opening row beside what it
+  established itself (04 §12.7, 06 §8.4); each channel's camera is named on it as it is placed.
 * **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
   `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
   and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
@@ -146,6 +149,8 @@ DISPOSE_TIMEOUT_S = 60.0
 # Within the world's release: nothing moves a camera that is gone, and the cameras leave the world
 # before the session gives back its bodies, its lease and the world's clock.
 ORDER_ORBIT, ORDER_CAMERA, ORDER_SESSION, ORDER_REPORT = 0, 1, 2, 3
+# Within the record's closing: the manifest's terminal row is written before the snapshot reads it.
+ORDER_MANIFEST = -1
 ADJUDICATED_AT_TERMINAL = "the operator at the terminal"
 # How far the session had got when it refused (CoSimSessionStage), and the outcome that makes the
 # run's. A refusal at the Window stage is the run stopping, not a refusal: see _conclude_refusal.
@@ -159,6 +164,8 @@ SESSION_STAGE_WINDOW = "Window"
 # Where under the capture directory the session writes the world truth track, the truth of the run
 # rather than of any one channel; its summary is written beside it.
 WORLD_TRUTH_TRACK = Path("truth") / "world_truth_track.csv"
+# And the run manifest, beside it: the rows the session appends from the run's opening to its close.
+RUN_MANIFEST = Path("truth") / "manifest.jsonl"
 
 
 class _RefusedError(Exception):
@@ -488,6 +495,8 @@ class CaptureSession:
             # Every capture run writes it, at every SUMO frame inside the window: a base rate is taken
             # over what the world contained, and the sidecars hold only what was drawn.
             world_truth_track=str(self.world_truth_track),
+            run_manifest=str(self.run_manifest),
+            run_manifest_header=self._manifest_header(),
             # Bound only where a channel aims at the traffic: the session reads its callbacks once
             # and hands this a record per rendered vehicle per tick for the whole run.
             on_pose=None if self.traffic is None else self.traffic.collect,
@@ -506,8 +515,12 @@ class CaptureSession:
                                   CAMERA_TIMEOUT_S, ORDER_REPORT)
         self.closeout = RunCloseoutReport(effective, self.clock)
         self.closeout.attach(session, self.admissions)
+        self.closeout.attach_manifest(self.run_manifest)
         self.monitor = self.monitor_override or SessionMonitor(
             enabled=effective.value("monitor") == "on", clock=self.clock)
+        # Closed before the closing snapshot, whose gate reads the manifest's terminal row.
+        self.termination.add_step(CLOSE_RECORD, "close the run manifest", self._close_the_manifest,
+                                  CAMERA_TIMEOUT_S, ORDER_MANIFEST)
         self.termination.add_step(CLOSE_RECORD, "take the closing snapshot",
                                   self._close_the_record)
         self.session_facts = self._session_facts(session)
@@ -515,6 +528,45 @@ class CaptureSession:
             self.logger.info("%s: %s", key, value)
         self._log_scenario_checks(self.closeout.scenario_checks)
         self._check_stop()
+
+    @property
+    def run_manifest(self) -> Path:
+        """Where the session writes the run manifest: beside the world truth track."""
+        return self.capture_directory / RUN_MANIFEST
+
+    def _manifest_header(self) -> dict:
+        """What the run is, as the manifest's opening row carries it: what this tool knows of the run
+        and the session does not. Each channel is listed as declared; its camera is named on the
+        manifest as it is placed, which is when a channel declaring no name gets its default."""
+        effective = self.effective
+        window = effective.window
+        return {
+            "run_id": self.session_id,
+            "session_id": self.session_id,
+            "scenario_id": effective.value("scenario.scenario_id"),
+            "caller": effective.value("caller"),
+            "caller_label": effective.value("caller_label"),
+            "tool_version": effective.tool_version,
+            "effective_configuration_sha256": effective.digest,
+            "window": {"name": window.name, "begin_s": window.begin_s,
+                       "end_s": window.end_s if math.isfinite(window.end_s) else None,
+                       "end_source": window.end_source,
+                       "rendered_from_s": float(effective.first_rendered_s)},
+            "channels": [{"channel": index,
+                          "sensor_id": effective.channel_values(index).get("sensor_id"),
+                          "pattern": effective.channel_description(index).pattern}
+                         for index in range(effective.channel_count)],
+            "capture_directory": str(self.capture_directory),
+            "world_truth_track": str(self.world_truth_track),
+            "run_manifest": str(self.run_manifest),
+        }
+
+    def _close_the_manifest(self) -> None:
+        """Write the manifest's terminal row, saying why the run ended in this tool's words, before the
+        closing snapshot reads it. The session's end would write it too, after the gates were read."""
+        manifest = None if self.session is None else self.session.RunManifest
+        if manifest is not None:
+            manifest.Close(self.result.closed_by or self.termination.closed_by or self.result.outcome)
 
     @property
     def world_truth_track(self) -> Path:
@@ -638,6 +690,8 @@ class CaptureSession:
         # callsign carry it.
         rig.camera = rig.world.spawn_camera(rgb, transform, name=description.sensor_id)
         rig.sensor_id = rig.world.camera_name(rig.camera)
+        if self.session.RunManifest is not None:
+            self.session.RunManifest.PlaceSensor(rig.sensor_id, rig.camera.id)
         rig.directory = self.capture_directory / rig.sensor_id
         rig.aim_record["sensor_id"] = rig.sensor_id
         rig.pose = transform
@@ -1023,6 +1077,7 @@ class CaptureSession:
         self.result.produced = {
             "capture_directory": str(self.capture_directory),
             "world_truth_track": str(self.world_truth_track),
+            "run_manifest": str(self.run_manifest),
             "closed_by": self.result.closed_by or self.termination.closed_by,
             "window": {"name": window.name, "begin_s": window.begin_s,
                        "end_declared_s": window.end_s, "end_source": window.end_source,

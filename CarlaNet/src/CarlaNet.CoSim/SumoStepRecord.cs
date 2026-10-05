@@ -66,4 +66,13 @@ public sealed record SumoStepRecord(
     IReadOnlyDictionary<string, CoSimVehicleFrame> Frames,
     IReadOnlyCollection<string> RenderedVehicleIds,
     AdmissionPass Pass,
-    SumoVehicleQueries Vehicles);
+    SumoVehicleQueries Vehicles)
+{
+    /// <summary>
+    /// The vehicles that left the render set at the frame's pass, each with the span it held a place
+    /// over, the body that drew it and why it left -- the intervals handed to
+    /// <see cref="SumoDriveSessionOptions.OnRelease"/>, in the order they were released. A vehicle still
+    /// in the render set when the session ends is released by the end, not by a frame, and is in none.
+    /// </summary>
+    public IReadOnlyList<RenderedVehicleInterval> Released { get; init; } = [];
+}

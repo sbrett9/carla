@@ -143,6 +143,36 @@ def test_every_run_writes_the_world_truth_track_beside_its_channels(layout, serv
     assert Path(result.produced["world_truth_track"]) == track
 
 
+def test_every_run_writes_its_manifest_beside_the_track_and_closes_it_before_its_gates(layout,
+                                                                                       server):
+    # The run manifest's rows from the run's opening to its terminal row, which this tool writes, with
+    # its reason, before the closing snapshot reads the gate on it.
+    _, result = capture(layout, server)
+    assert (result.outcome, result.closed_by) == ("run_finished", "window_end")
+    started = started_with(server)
+    capture_directory = Path(result.produced["capture_directory"])
+    manifest = capture_directory / "truth" / "manifest.jsonl"
+    assert Path(started["run_manifest"]) == manifest
+    assert Path(result.produced["run_manifest"]) == manifest
+
+    header = started["run_manifest_header"]
+    assert (header["run_id"], header["session_id"], header["scenario_id"]) == \
+        (SESSION_ID, SESSION_ID, SCENARIO_ID)
+    assert header["window"]["begin_s"] == 25200.0
+    assert header["channels"] == [{"channel": 0, "sensor_id": A_STARE["sensor_id"], "pattern": "stare"}]
+    assert Path(header["world_truth_track"]) == capture_directory / "truth" / "world_truth_track.csv"
+
+    rows = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+    assert [row["row"] for row in rows] == ["manifest_opened", "sensor_placed", "manifest_closed"]
+    camera = next(actor for actor in server.actors if actor.type_id == "sensor.camera.rgb")
+    assert (rows[1]["sensor_id"], rows[1]["camera_actor_id"]) == (A_STARE["sensor_id"], camera.id)
+    assert rows[2]["caller_reason"] == "window_end"
+
+    closing = next(g for g in result.produced["gates"]
+                   if g["id"] == "supervision.manifest_closing_record")
+    assert (closing["status"], closing["observed"], closing["met"]) == ("evaluated", True, True)
+
+
 def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_traffic(
         layout, server):
     capture(layout, server)
@@ -362,6 +392,12 @@ def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, se
     assert start[4]["camera_name"] == name
     assert [rig.sensor_id for rig in session.channels] == [name]
     assert session.channels[0].aim_record["sensor_id"] == name
+    # The manifest lists the channel as declared, with no name, and names its camera as it is placed.
+    assert started_with(server)["run_manifest_header"]["channels"][0]["sensor_id"] is None
+    rows = [json.loads(line) for line in
+            Path(result.produced["run_manifest"]).read_text(encoding="utf-8").splitlines()]
+    placed = next(row for row in rows if row["row"] == "sensor_placed")
+    assert (placed["sensor_id"], placed["camera_actor_id"]) == (name, camera.id)
 
 
 def test_a_sensor_id_another_client_s_camera_holds_refuses_at_preroll(layout, server):
@@ -529,6 +565,11 @@ def test_a_world_that_stops_ticking_mid_window_stops_the_run(layout, server):
     assert result.closed_by == "fault:CoSimSessionRefusedException"
     assert result.detail == "the session refused at Window: the world produced no frame"
     assert server.session.disposed
+    # Its manifest is closed all the same, saying why, before the gate reads it.
+    assert server.session.RunManifest.reasons == ["fault:CoSimSessionRefusedException"]
+    closing = next(g for g in result.produced["gates"]
+                   if g["id"] == "supervision.manifest_closing_record")
+    assert closing["met"] is True
 
 
 def test_an_unexpected_fault_is_an_internal_error_and_still_cleans_up(layout, server):

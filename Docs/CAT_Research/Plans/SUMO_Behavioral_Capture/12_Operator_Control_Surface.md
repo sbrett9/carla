@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — `run_capture` writes the run manifest, `truth/manifest.jsonl` under the capture directory beside the world truth track (`truth/world_truth_track.csv`), and names both in its result's `produced`; it closes the manifest with its `closed_by` before it reads its closing gates, so `supervision.manifest_closing_record` is measured: met where the manifest's last complete row is `manifest_closed` (§3.10.3, §7.2). `run_sumo_drive.py --run-manifest PATH` writes one for a drive (§9.6).
 `2026-10-05` — How much a run prints about collisions is a switch, off by default: `collision_detail` (`--collision-detail on`) in `run_capture`, and `run_sumo_drive.py --collision-detail`. Off, the session's report prints the count; on, each collision is printed as it ends and the report lists every collision and every collision warning SUMO wrote. Printing only: every collision is recorded either way (§5.2, §9.6).
 `2026-10-05` — A camera name is short and plain: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as `Overwatch_1`, `Southeast_1700m_orbit` or `NapOfEarth_2`; a Windows device name, a sensor's stock role name (`front`, …) and another camera's default stay refused, and every refusal says what is allowed (§5.2, §6.2). The schema states a `sensor_id`'s characters (check 1), and check 11 refuses what the characters allow and the rule does not. `run_free_move_camera.py --camera-name` names the free-move camera as it is created (§9.6).
 `2026-10-02` — §7.2: the closeout gates `capture.solar_block_missing[<sensor>]`, a channel's captures written without a solar block, at zero; the channel's closeout line states the count.
@@ -882,19 +883,20 @@ over the passes inside the window how many there were and the largest population
 records, the session's clock, SUMO release, pace,
 sun and layers, its compile lock — whether the scenario was compiled, the SUMO release that routed it
 and the world it was compiled for — and whether SUMO could teleport a blocked vehicle, the prewarm's
-achieved factor, the run id every recorder was given, and each termination step as it ran. Three differences from the sketch above, each a fact about the tree:
+achieved factor, the run id every recorder was given, each termination step as it ran, and where the session wrote the world truth track and the run manifest (`world_truth_track`, `run_manifest`; [`06`](06_Truth_And_Annotation.md) §8.3, §8.4). Three differences from the sketch above, each a fact about the tree:
 
 - **One root, not two.** The recorder writes a capture's image and sidecar into one directory, so
   `produced` names `capture_directory`, with one directory per channel inside it.
 - **`captured` is null.** The recorder counts captures written (`Saved`) and captures its queue had no
   room for (`Dropped`), and none accepted into the queue, so the difference a kill leaves (K4) cannot
   be stated; the gate `capture.captured_minus_written` is recorded as skipped with that reason.
-- **The gate records are written once, at the terminal outcome.** There is no run manifest to append
-  them to as they change (§7.2), so a run killed with no chance to flush leaves its lock, its resolution
-  report and its captures, and no gate records.
+- **The gate records are written once, at the terminal outcome.** The run manifest exists and is
+  appended as the run goes, but the gate records are not among its rows (§7.2), so a run killed with no
+  chance to flush leaves its lock, its resolution report, its captures and its manifest's rows so far,
+  and no gate records.
 
 `C10`'s `run_record.jsonl` is not written. `C10` makes it the run manifest's owner's to write, and
-most of its required rows project the run manifest, which does not exist; its `run_closed.completion`
+most of its required rows project the run manifest, whose supervision rows do not exist yet; its `run_closed.completion`
 values also have no counterpart for a window's declared end or for a loud condition's self-stop, which
 `closed_by` above carries.
 
@@ -1959,14 +1961,17 @@ whose image header placed the camera elsewhere than the snapshot of their own fr
 measured against, threshold 0; skipped for a channel with no depth camera), `clock.ratio_recorded`,
 `pacing.achieved_factor` under
 `wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
-skipped where the policy binds no sun) and `launch.warnings_adjudicated`. Three are recorded as
+skipped where the policy binds no sun), `launch.warnings_adjudicated` and
+`supervision.manifest_closing_record` (whether the run manifest's last complete row is its terminal
+row, `manifest_closed`; [`04`](04_Contracts.md) §12.7, D4.36). `run_capture` closes the manifest
+before it reads the gate, which is skipped only for a run that writes no manifest. Two are recorded as
 `skipped`, each with its reason, so that *not measured* never reads as *met*:
-`capture.captured_minus_written`, `radiometry.profile_digest_present` and
-`supervision.manifest_closing_record`. A record carries `id`,
+`capture.captured_minus_written` and `radiometry.profile_digest_present`. A record carries `id`,
 `name`, `owner`, `status` (`evaluated` or `skipped`), `observed`, `threshold`, `comparison` and `met`.
-**With no run manifest in the tree, the records are not appended as they change**: they are computed
-from the live session and recorders at any instant, rendered by the closeout, and written into the run
-result at the terminal outcome. Appending them as they change waits for `RunManifestWriter`. Beside
+**The records are not appended as they change**: they are computed from the live session and
+recorders at any instant, rendered by the closeout, and written into the run result at the terminal
+outcome. `RunManifestWriter` writes the run's rows as they happen, and appending the gate records to
+it as well is not built. Beside
 them, recorded and not compared, the run result carries whether SUMO could teleport a blocked vehicle
 and whether that was accepted (`produced.session.teleporting`) and the scenario's compile lock
 (`produced.session.compile_lock`).
@@ -2565,6 +2570,14 @@ collisions SUMO registered and how many collision warnings it wrote, and nothing
 warning in the report. It changes what is printed and nothing else: the session records every collision
 either way, and asks SUMO for the same things on the same steps ([`03`](03_CoSimulation_Runtime.md)
 §11.5).
+
+**What a drive writes beside its captures (2026-10-05).** Nothing, unless asked: `run_capture` writes
+both of these for every run, and a drive is not a capture run. `--world-truth-track PATH` writes the
+world truth track ([`06`](06_Truth_And_Annotation.md) §8.3), and `--world-truth-track-interval
+SECONDS` samples it every so many simulated seconds instead of every SUMO frame. `--run-manifest PATH`
+writes the run manifest ([`06`](06_Truth_And_Annotation.md) §8.4), opened with the drive's run id and
+view, naming the fixed camera as it is spawned, and closed at the drive's end. Either is refused,
+before anything starts, at a path that already holds one.
 
 **Exercised by** `test_span_recorder.py` (the wait, the first answer not trusted, the ceiling, a
 failed tile, cancelling, the capture window, a server with no answer, the folders and their suffix,
