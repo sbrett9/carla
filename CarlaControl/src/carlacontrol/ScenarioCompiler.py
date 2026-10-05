@@ -478,7 +478,7 @@ class ScenarioCompiler:
                  "depart_lane": declared.get("depart_lane", DEFAULT_DEPART_LANE),
                  "depart_speed": declared.get("depart_speed", DEFAULT_DEPART_SPEED),
                  "arrival_speed": declared.get("arrival_speed"), "stops": [], "route": None,
-                 "waypoints": [], "phases": []}
+                 "waypoints": [], "phases": [], "phase_entries": []}
         if "phases" in declared:
             if not self._resolve_phases(declared, actor, where):
                 return
@@ -540,6 +540,10 @@ class ScenarioCompiler:
         waypoint spanning the whole of each of its edges, on the edge's first lane. `hold` is a speed
         in m/s capped at each edge's limit, or `posted`, each edge's own limit. A stop is refused
         beside phases: on a repeated route it names no one pass.
+
+        Where each phase is entered is recorded as the index in the compiled route of its first
+        edge's first pass, which is what SUMO reports a vehicle's progress by, so an interval can be
+        anchored to entering it (06 §3.3).
         """
         if any(key in declared for key in ("route", "from", "to", "via")):
             self.findings.refuse(53, where, "gives phases and also route or from/to/via; an actor's "
@@ -558,6 +562,7 @@ class ScenarioCompiler:
             repeat = int(phase.get("repeat", 1))
             hold = phase.get("hold")
             actor["phases"].append({"edges": len(phase_edges), "repeat": repeat, "hold": hold})
+            actor["phase_entries"].append({"route_index": len(edges), "edge": phase_edges[0]})
             for _ in range(repeat):
                 edges.extend(phase_edges)
                 if hold is None:
@@ -768,6 +773,8 @@ class ScenarioCompiler:
             scenario_id=self.scenario_id,
             actor_departures={a["id"]: a["depart"] for a in self.actors},
             flow_ids=[f["id"] for f in self.flows],
+            actor_stops={a["id"]: a["stops"] for a in self.actors},
+            actor_phases={a["id"]: a["phase_entries"] for a in self.actors},
             rota_entries=self.rota_entries, rota_skips=self.rota_skips,
             rota_templates=self.rota_templates, areas=self.areas,
             skip_routes=self._skip_routes(), skip_sites=self._skip_sites())
@@ -881,8 +888,10 @@ class ScenarioCompiler:
         if end_s > self.end.seconds:
             self.findings.refuse(38, where, f"runs to {self.epoch.civil_instant_at(end_s)}, after the "
                                  f"run ends at {self.end.civil}")
+        # Only declared bounds can be compared with a window. An interval anchored to a stop's
+        # arrival or to a later phase declares no start (06 D6.4); where it falls is the run's.
         for interval in self.supervision.intervals:
-            if interval.end is None:
+            if interval.begin is None or interval.end is None:
                 continue
             s, t = interval.begin.seconds, interval.end.seconds
             if s < begin.seconds < t or s < end_s < t:

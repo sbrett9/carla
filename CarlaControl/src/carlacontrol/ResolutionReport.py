@@ -220,8 +220,7 @@ class ResolutionReport:
                          f"{instance['realisation']}, labels {', '.join(instance['labels']) or '-'}; "
                          f"{who}" + ResolutionReport._declared(instance))
             for interval in instance["intervals"]:
-                lines.append(f"  - {interval['phase']}: {interval['declared_start_civil']} to "
-                             f"{interval['declared_end_civil'] or 'open'}")
+                lines.append(f"  - {interval['phase']}: " + ResolutionReport._bounds(interval))
         for cohort in supervision["cohorts"]:
             if cohort["supervision"] != "unlabelled":
                 lines.append(f"- cohort **{cohort['flow_id']}**: {cohort['supervision']}, labels "
@@ -230,6 +229,20 @@ class ResolutionReport:
             lines.append(f"- series **{series['series_id']}**: {series['slots']} slots, members "
                          f"{series['supervision']}" + ResolutionReport._declared(series))
         return [*lines, ""]
+
+    @staticmethod
+    def _bounds(interval: dict) -> str:
+        """An interval's declared bounds, and the events that commit them where it is anchored."""
+        start, end = interval["declared_start_civil"], interval["declared_end_civil"]
+        anchor = interval.get("anchor")
+        if not anchor:
+            return f"{start} to {end or 'open'}"
+        text = f"from {anchor['start']['event']}" + (f" ({start})" if start else "")
+        text += " to " + ("open" if anchor["end"] is None
+                          else anchor["end"]["event"] + (f" ({end})" if end else ""))
+        if start is None and interval["declared_duration_s"] is not None:
+            text += f", {interval['declared_duration_s']:g} s declared"
+        return text
 
     @staticmethod
     def _declared(row: dict) -> str:

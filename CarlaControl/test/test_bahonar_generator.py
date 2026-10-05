@@ -257,6 +257,44 @@ def test_the_shipped_plan_projects_hard_negative_for_from_the_terms_onto_its_neg
                if i["supervision"] == "annotated")
 
 
+def test_the_shipped_anomalies_are_anchored_to_the_events_that_commit_them():
+    """Each transit opens at its vehicle's departure, which it declares; each probe's standoff and
+    the stay-behind's dwell are their one stop, which declares a length (06 D6.4) or an end."""
+    intervals = {i["instance_id"].split("/", 1)[1]: i["intervals"]
+                 for i in shipped_plan()["instances"]
+                 if i["supervision"] == "annotated" and i["realisation"] == "present"}
+    reading = Reading(generated_specification())
+    departs = {a["id"]: reading.resolver.instant(a["depart"], a["id"]).seconds
+               for a in reading.spec["actors"]}
+    for name in ("pi_escort_drydock_d3", "pi_perimeter_shadow_d6"):
+        for interval in intervals[name]:
+            assert interval["anchor"] == {"start": {"event": "depart"}, "end": None}
+            assert interval["declared_start_s"] == departs[interval["entity_id"]]
+    for day in (2, 5):
+        (standoff,) = intervals[f"pi_gate_probe_d{day}"]
+        lane, offset = reading.stop({"place": "port_gate_standoff"})
+        stop = {"lane": lane, "end_pos_m": offset}
+        assert standoff["anchor"] == {"start": {"event": "stop:0", **stop},
+                                      "end": {"event": "stop_end:0", **stop}}
+        assert (standoff["declared_start_s"], standoff["declared_end_s"],
+                standoff["declared_duration_s"]) == (None, None, 300.0)
+    (dwell,) = intervals["pi_ferry_stay_behind_d1"]
+    assert dwell["anchor"]["start"]["event"] == "stop:0"
+    assert (dwell["declared_start_s"], dwell["declared_end_s"]) == (None, float(SHIPPED_END_S))
+
+
+def test_a_probe_anchored_to_a_stop_it_does_not_make_is_refused_under_check_58(tmp_path):
+    require_world()
+    specification = compilable_specification()
+    probe = next(i for i in specification["supervision"]["instances"]
+                 if i["name"] == "pi_gate_probe_d2")
+    probe["intervals"][0]["anchor"] = {"start": "stop:1", "end": "stop_end:1"}
+    result = compile_specification(specification, tmp_path)
+    assert {f.check_id for f in result.findings.refusals} == {58}
+    assert "'probe_d2' makes 1 stop, numbered 0 to 0" in " ".join(
+        f.message for f in result.findings.by_check(58))
+
+
 def test_the_shipped_absence_is_sited_where_the_labels_described_the_gap():
     labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
     (gap,) = labels["anomaly_notes"]

@@ -1178,12 +1178,12 @@
       }
     },
     "interval": {
+      "description": "Declared by a civil begin, with an end or a duration, or by an anchor; never both (check 58)",
       "type": "object",
       "additionalProperties": false,
       "required": [
         "participant",
-        "phase",
-        "begin"
+        "phase"
       ],
       "properties": {
         "participant": {
@@ -1236,6 +1236,27 @@
               "minLength": 1
             }
           ]
+        },
+        "anchor": {
+          "$ref": "#/$defs/anchor"
+        }
+      }
+    },
+    "anchor": {
+      "description": "The events of the participant that commit the interval's start and, where given, its end: 'depart', its insertion; 'stop:<i>' and 'stop_end:<i>', arriving at and leaving its i-th stop; 'phase:<i>', entering its i-th declared phase. Counted from 0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "pattern": "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
         }
       }
     },

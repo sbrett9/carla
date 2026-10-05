@@ -121,6 +121,11 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(21, "annotation", "Instance ids are derived from the scenario id and the authored "
                   "name, and unique", "the specification", _R, COMPILER,
                   "Sweep members that cannot be joined"),
+    ScenarioCheck(58, "annotation", "Every interval is declared by a begin or by an anchor, not "
+                  "both; an anchor names its participant's departure, one of its stops or one of "
+                  "its phases, and its end comes after its start; only an entity's interval is "
+                  "anchored", "the participant's resolved stops and route", _R, COMPILER,
+                  "An interval bound to an event its vehicle never has, so it never opens"),
     ScenarioCheck(22, "annotation", "No annotated interval begins before its participant departs",
                   "the resolved departures", _W, COMPILER,
                   "An interval no vehicle could have been in"),

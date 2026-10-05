@@ -58,6 +58,8 @@ instances, the no-show as an absence in the guard rota's recurring series, the g
 the air-freight hauls as nominal hard negatives, and the ferry pulses as a cleared-gate cohort. The
 terms are the scenario's own, in namespace `bahonar` (`06_Truth_And_Annotation.md` §9.4). A slot
 and an instance are sited at the world's areas of interest, `Import/Shahid_Bahonar_Port.aoi.geojson`.
+Each anomaly's interval is anchored to the event of its vehicle that commits it: the escort's and the
+shadow's transits to their departures, each probe's standoff and the stay-behind's dwell to their stop.
 
 Usage:
     python make_bahonar_scenario.py [--days 7] [--out-dir ../../Import]
@@ -245,6 +247,12 @@ VEHICLE_MIXES = [
      "Port-cleared traffic: ferry passengers and port freight."),
     ("mil_mix", {"mil_jeep": 0.6, "mil_truck": 0.4}, "Naval and base traffic inside the wire."),
 ]
+
+# What commits each anomaly's interval (06_Truth_And_Annotation.md §3.3): a transit opens when SUMO
+# inserts the vehicle; a standoff or a dwell is the vehicle's one stop, from arriving to leaving, so
+# a probe's standoff declares its five minutes and no instant, wherever the queue lets it arrive.
+FROM_DEPARTURE = {"start": "depart"}
+AT_THE_STOP = {"start": "stop:0", "end": "stop_end:0"}
 
 # The scenario's own vocabulary (06_Truth_And_Annotation.md §9.4): its terms, roles and area kinds.
 VOCABULARY = {"namespaces": [{
@@ -605,8 +613,7 @@ class BahonarPatternOfLifeSpecification:
                                   "role": "bahonar:lead" if index == 0 else "bahonar:follower"}
                                  for index, escort in enumerate(escorts)],
                 "intervals": [{"participant": escort, "phase": "transit",
-                               "begin": self.escort_departure(index)}
-                              for index, escort in enumerate(escorts)],
+                               "anchor": dict(FROM_DEPARTURE)} for escort in escorts],
                 "aoi_refs": ["drydock"],
                 "parameters": {"group_size": len(escorts),
                                "departure_spread_s": (len(escorts) - 1) * ESCORT_SPACING_S},
@@ -614,16 +621,16 @@ class BahonarPatternOfLifeSpecification:
         for day in self.probe_days():
             instances.append(self._subject_instance(
                 f"pi_gate_probe_d{day}", f"probe_d{day}", "bahonar:standoff_dwell_at_access_point",
-                "standoff", self.probe_departure(day), ["port_gate"], {"dwell_s": 300}))
+                "standoff", AT_THE_STOP, ["port_gate"], {"dwell_s": 300}))
         if self.shadow_in_run():
             instances.append(self._subject_instance(
                 "pi_perimeter_shadow_d6", "shadow", "bahonar:perimeter_transit_off_cadence",
-                "transit", {"instant": "shadow_departs"}, [],
+                "transit", FROM_DEPARTURE, [],
                 {"speed_factor": 0.45, "circuit_edges": len(FENCE_LINE)}))
         if self.staybehind_in_run():
             instances.append(self._subject_instance(
                 "pi_ferry_stay_behind_d1", "staybehind", "bahonar:arrival_without_departure",
-                "dwell", {"instant": "staybehind_departs"}, ["ferry_terminal"], {}))
+                "dwell", AT_THE_STOP, ["ferry_terminal"], {}))
         for haul in self.hauls():
             instances.append({"name": haul["id"], "supervision": "nominal",
                               "labels": ["bahonar:routine_freight_haul"],
@@ -648,11 +655,11 @@ class BahonarPatternOfLifeSpecification:
         return block
 
     @staticmethod
-    def _subject_instance(name: str, actor: str, label: str, phase: str, begin: object,
+    def _subject_instance(name: str, actor: str, label: str, phase: str, anchor: dict,
                           aoi_refs: list[str], parameters: dict) -> dict:
         instance = {"name": name, "supervision": "annotated", "labels": [label],
                     "participants": [{"actor": actor, "role": "subject"}],
-                    "intervals": [{"participant": actor, "phase": phase, "begin": begin}]}
+                    "intervals": [{"participant": actor, "phase": phase, "anchor": dict(anchor)}]}
         if aoi_refs:
             instance["aoi_refs"] = aoi_refs
         if parameters:

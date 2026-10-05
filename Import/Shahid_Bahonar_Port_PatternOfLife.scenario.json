@@ -3781,40 +3781,36 @@
           {
             "participant": "escort_0",
             "phase": "transit",
-            "begin": {
-              "instant": "escort_departs"
+            "anchor": {
+              "start": "depart"
             }
           },
           {
             "participant": "escort_1",
             "phase": "transit",
-            "begin": {
-              "instant": "escort_departs",
-              "plus": 4
+            "anchor": {
+              "start": "depart"
             }
           },
           {
             "participant": "escort_2",
             "phase": "transit",
-            "begin": {
-              "instant": "escort_departs",
-              "plus": 8
+            "anchor": {
+              "start": "depart"
             }
           },
           {
             "participant": "escort_3",
             "phase": "transit",
-            "begin": {
-              "instant": "escort_departs",
-              "plus": 12
+            "anchor": {
+              "start": "depart"
             }
           },
           {
             "participant": "escort_4",
             "phase": "transit",
-            "begin": {
-              "instant": "escort_departs",
-              "plus": 16
+            "anchor": {
+              "start": "depart"
             }
           }
         ],
@@ -3846,9 +3842,9 @@
           {
             "participant": "probe_d2",
             "phase": "standoff",
-            "begin": {
-              "at": "d2 11:00",
-              "plus": 274
+            "anchor": {
+              "start": "stop:0",
+              "end": "stop_end:0"
             }
           }
         ],
@@ -3875,9 +3871,9 @@
           {
             "participant": "probe_d5",
             "phase": "standoff",
-            "begin": {
-              "at": "d5 11:00",
-              "plus": 685
+            "anchor": {
+              "start": "stop:0",
+              "end": "stop_end:0"
             }
           }
         ],
@@ -3904,8 +3900,8 @@
           {
             "participant": "shadow",
             "phase": "transit",
-            "begin": {
-              "instant": "shadow_departs"
+            "anchor": {
+              "start": "depart"
             }
           }
         ],
@@ -3930,8 +3926,9 @@
           {
             "participant": "staybehind",
             "phase": "dwell",
-            "begin": {
-              "instant": "staybehind_departs"
+            "anchor": {
+              "start": "stop:0",
+              "end": "stop_end:0"
             }
           }
         ],
