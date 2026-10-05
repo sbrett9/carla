@@ -70,6 +70,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(WriteRenderSet), () => _world.WriteRenderSet(lent, parked));
 
     /// <inheritdoc/>
+    public SupervisionWrite WriteSupervision(SupervisionChange change) =>
+        Guard(nameof(WriteSupervision), () => _world.WriteSupervision(change));
+
+    /// <inheritdoc/>
     public DrawDistanceWrite WriteDrawDistance(IReadOnlyList<ActorId> bodies, double metres) =>
         Guard(nameof(WriteDrawDistance), () => _world.WriteDrawDistance(bodies, metres));
 

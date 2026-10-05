@@ -29,6 +29,7 @@ public sealed class SnapshotHistory
     private readonly object _lock = new();
     private readonly Dictionary<ulong, IReadOnlyDictionary<ActorId, ActorSnapshot>> _byFrame = new();
     private readonly Dictionary<ulong, ObservedRenderSet> _renderSets = new();
+    private readonly Dictionary<ulong, ObservedSupervision> _supervision = new();
     private readonly Queue<ulong> _order = new();
 
     public SnapshotHistory(int capacity = DefaultCapacity)
@@ -65,25 +66,37 @@ public sealed class SnapshotHistory
     /// so a reader of either has the other as of the same frame.
     /// </summary>
     public void Retain(ulong frame, IReadOnlyDictionary<ActorId, ActorSnapshot> actors, ObservedRenderSet renderSet)
+        => Retain(frame, actors, renderSet, ObservedSupervision.None);
+
+    /// <summary>
+    /// Keep the actors of <paramref name="frame"/>, the render set its snapshot carried and the
+    /// supervision it carried, together, so a reader of any of them has the others as of the same frame.
+    /// </summary>
+    public void Retain(ulong frame, IReadOnlyDictionary<ActorId, ActorSnapshot> actors, ObservedRenderSet renderSet,
+                       ObservedSupervision supervision)
     {
         ArgumentNullException.ThrowIfNull(actors);
         ArgumentNullException.ThrowIfNull(renderSet);
+        ArgumentNullException.ThrowIfNull(supervision);
         lock (_lock)
         {
             if (_byFrame.ContainsKey(frame))
             {
                 _byFrame[frame] = actors;
                 _renderSets[frame] = renderSet;
+                _supervision[frame] = supervision;
                 return;
             }
             _byFrame[frame] = actors;
             _renderSets[frame] = renderSet;
+            _supervision[frame] = supervision;
             _order.Enqueue(frame);
             while (_order.Count > _capacity)
             {
                 ulong dropped = _order.Dequeue();
                 _byFrame.Remove(dropped);
                 _renderSets.Remove(dropped);
+                _supervision.Remove(dropped);
             }
         }
     }
@@ -102,6 +115,22 @@ public sealed class SnapshotHistory
         lock (_lock)
         {
             return _renderSets.TryGetValue(frame, out ObservedRenderSet? renderSet) ? renderSet : null;
+        }
+    }
+
+    /// <summary>
+    /// The supervision the snapshot of <paramref name="frame"/> carried, where that frame itself is
+    /// held; null otherwise. <see cref="ObservedSupervision.None"/> for a held frame that carried none.
+    /// </summary>
+    /// <remarks>
+    /// Exact, never the nearest frame's, for the reason <see cref="RenderSetOf"/> is: supervision names
+    /// bodies, and a body draws another vehicle on another frame.
+    /// </remarks>
+    public ObservedSupervision? SupervisionOf(ulong frame)
+    {
+        lock (_lock)
+        {
+            return _supervision.TryGetValue(frame, out ObservedSupervision? supervision) ? supervision : null;
         }
     }
 
@@ -151,11 +180,32 @@ public sealed class SnapshotHistory
         }
     }
 
+    /// <summary>
+    /// The actors of <paramref name="frame"/>, or of the retained frame closest to it, together with the
+    /// render set and the supervision that same frame's snapshot carried, read under one lock so all
+    /// three are of the frame <paramref name="servedFrame"/> names. Null, with <paramref name="renderSet"/>
+    /// <see cref="ObservedRenderSet.None"/> and <paramref name="supervision"/>
+    /// <see cref="ObservedSupervision.None"/>, when nothing has been retained.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? Nearest(ulong frame, out ulong servedFrame,
+                                                               out ObservedRenderSet renderSet,
+                                                               out ObservedSupervision supervision)
+    {
+        lock (_lock)
+        {
+            IReadOnlyDictionary<ActorId, ActorSnapshot>? actors = Nearest(frame, out servedFrame, out renderSet);
+            supervision = actors is not null && _supervision.TryGetValue(servedFrame, out ObservedSupervision? held)
+                ? held
+                : ObservedSupervision.None;
+            return actors;
+        }
+    }
+
     /// <summary>Whether <paramref name="frame"/> itself is held.</summary>
     public bool Holds(ulong frame) { lock (_lock) return _byFrame.ContainsKey(frame); }
 
     public void Clear()
     {
-        lock (_lock) { _byFrame.Clear(); _renderSets.Clear(); _order.Clear(); }
+        lock (_lock) { _byFrame.Clear(); _renderSets.Clear(); _supervision.Clear(); _order.Clear(); }
     }
 }

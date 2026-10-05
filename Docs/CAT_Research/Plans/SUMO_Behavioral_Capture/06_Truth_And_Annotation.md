@@ -32,10 +32,12 @@ the real scenario artifacts. No code changed, no build run.
 | 24 · 2026-10-05 | The closed core is generated from `CarlaNet.Types` and is at version 2 (§3.7, D6.27, D6.30 as built). Its enumerations are `CarlaNet.Types.Supervision`, published by `CoreVocabulary`; the scenario compiler reads them through `carlanet` and the world truth track writes its render state and reasons from them. Version 2 adds `beyond_draw_distance` to the observability outcomes, as ruled, and three families: the interval anchor events, `render_state` and `render_reason`, which this pipeline writes and accounts by, so are core by D6.27's test. Every shipped plan's vocabulary digest changes. |
 | 25 · 2026-10-05 | `collision.action` is constrained to `warn` alone, as the owner ruled: the record of collisions must always exist, and under `none` SUMO skips the check that makes it, so the run could not say whether any collision happened, while under `warn` SUMO changes nothing about the traffic and only registers the event. `none` and `ignore-accidents` are refused at session start with the rest (D6.12, §6.2). Every collision is kept on the run report whatever is printed; how much the drive prints about them is an operator's switch, off by default, that changes nothing recorded ([03](03_CoSimulation_Runtime.md) §11.5). |
 | 26 · 2026-10-05 | The supervision plan is read at session start and bound to the files the run loads (§8.1, D6.8 and D6.30 as built). `CarlaNet.CoSim.SupervisionPlan` reads a compiled plan into sealed records made only by reading the plan, with private constructors, no setter and no collection that can be changed, so nothing in a run can make, change or add a row; a test walks every type the plan reaches and holds it to that. Core values are read through `CarlaNet.Types.Supervision`'s enumerations and a spelling outside them is refused, as is a plan whose vocabulary is not this core or does not digest as it says. The session's compile-lock check reads the plan the lock binds, refuses it where its digest is not the lock's or its own digests are not the files the run loads, and hands it to the session on the run report; a lock that names no plan runs without one, and one that names a plan that is not there is refused. The interval binder is not built. |
+| 27 · 2026-10-05 | Per-frame supervision is held on the CARLA server, as the owner ruled: "They have to be on the server. I do not want two clients ever having different truth state." The session puts each change on the server (`update_supervision`) for the bodies drawing the vehicles it is about, and the world observer writes what the server holds -- the plan id, the vocabulary version and digest, a row per lent body whose vehicle is annotated or nominal, and the absences -- on every snapshot after the render set's entries; an unlabelled vehicle has no row and costs nothing. Every reader, a recorder beside the session included, takes it from there, so `<_supervision>` is identical in every camera's sidecar by construction, not by discipline. The interval binder that decides it and the sidecar elements that write it are not built (§3.3, §8.2, D6.41). |
+| 28 · 2026-10-05 | The `carla:supervision` PNG chunk is withdrawn by the owner's ruling: a still carries `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, and never any supervision, because truth stays out of the observation artifacts ([04](04_Contracts.md) D4.20, [08](08_Collection_And_EPoL.md) D8.17). Supervision lives in the truth sidecar, and in the run supervision manifest once it exists; the vocabulary version and digest travel with `<events>` and every `<_supervision>` (§8.2, §8.7, D6.30). Nothing in the tree ever wrote the chunk. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
-field. Decisions are numbered D6.1 to D6.40 and are stable — sibling documents cite them.
+field. Decisions are numbered D6.1 to D6.41 and are stable — sibling documents cite them.
 **Scope:** How an author's assertion about what a vehicle is doing reaches the truth record when the
 authoring surface is a SUMO scenario rather than an OpenSCENARIO storyboard; how positional truth,
 behavioural truth and **the illumination the frame was rendered under** are produced by different
@@ -616,8 +618,12 @@ minutes wherever the queue lets the probe arrive.
 The mechanics: the component that fills these in is the SUMO bridge, because it is the only component
 holding both the plan and the per-step TraCI events. It writes into `WorldSupervisionState`
 ([01 §4.1](01_Architecture.md)), which is published on change and stamped with the tick it describes,
-and which the recorders read. [07](07_Scenario_Authoring.md) owns how an author declares a phase; this
-section owns what is recorded when one opens and closes.
+and which the recorders read. **As built (2026-10-05), that state is held on the CARLA server** (D6.41):
+the binder states each vehicle's supervision to the session (`SumoDriveSession.Supervision`), the
+session puts each change on the server for the body drawing the vehicle, before the tick cue of the
+frame it is drawn in, and the world observer carries it on every snapshot of that frame and after, so
+the stamp is the snapshot's own frame. [07](07_Scenario_Authoring.md) owns how an author declares a
+phase; this section owns what is recorded when one opens and closes.
 
 ### 3.4 Pattern instances, participants and recurring series
 
@@ -958,7 +964,7 @@ that counts them is not yet. An author never supplies either.
 
 | Term family | Bahonar example | Why it is not core |
 |---|---|---|
-| `labels[]` | `bahonar:post_unmanned`, `bahonar:coordinated_group_transit` | The pipeline never inspects a label. It copies it from plan to manifest to sidecar to PNG chunk and never branches on its value |
+| `labels[]` | `bahonar:post_unmanned`, `bahonar:coordinated_group_transit` | The pipeline never inspects a label. It copies it from plan to manifest to sidecar and never branches on its value |
 | `role` values beyond `subject` | `bahonar:lead`, `bahonar:follower`, `bahonar:guard` | Nothing branches on `lead`. What §3.4 needs is that a participant *has* a role and that the triple is stable; the word is the author's |
 | `phase` values beyond `vacancy` | `approach`, `wait`, `depart`, `transit`, `dwell` | [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls a phase "a free term within the instance". Only its **stability** matters, and §3.6's diff enforces that without knowing the word |
 | `parameters{}` keys and values | `group_size: 5`, `departure_spread_s: 16`, `dwell_s: 300` | [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) sends magnitudes and places here precisely so they stay out of terms |
@@ -2437,18 +2443,24 @@ Notes, each carrying a decision:
 - **`<_supervision>` is identical in every camera's sidecar for a given tick**; only the sensor block
   and anything derived from it differs. A disagreement between two sidecars at one tick is a defect
   (doc 20 decision 15), which is why the snapshot is tick-stamped and captured into the encoding job
-  alongside `CaptureIdentity` (`FrameRecorder.cs:179-183`) rather than read at write time.
+  alongside `CaptureIdentity` (`FrameRecorder.cs:179-183`) rather than read at write time. **Since
+  2026-10-05 the supervision itself is held on the server and rides on that snapshot** (D6.41, below), so
+  two sidecars of one tick read it from the same bytes, whichever process wrote each.
 
-The PNG already carries `carla:capture` so a still is self-describing when separated from its sidecar
-(`CaptureMetadata.cs:31-36`), and **already carries `carla:solar`** for the same reason
-(`SolarMetadata.cs:14-20`, composed into the chunk set at `FrameRecorder.cs:227`). A compact
-`carla:supervision` chunk listing annotated actor ids, their labels, and the `vocabulary` version and
-`vocabulary_digest` extends that property to the annotation, with the sidecar authoritative on any
-disagreement. The two vocabulary fields are what make a separated still self-describing rather than
-merely self-identifying: a label without the version and digest that pin its meaning is a string whose
-definition a reader cannot locate. The solar chunk gains the four added
-attributes alongside the nine it already carries, which is what makes the frame-by-frame replay check
-of §7.3 work on stills alone.
+The PNG carries `carla:capture` so a still is self-describing when separated from its sidecar
+(`CaptureMetadata.cs:31-36`), **`carla:solar`** for the same reason (`SolarMetadata.cs:14-20`, composed
+into the chunk set at `FrameRecorder.cs:227`), and `carla:illumination` and `carla:sensor` beside them.
+**It carries no supervision, as the owner ruled on 2026-10-05.** A compact `carla:supervision` chunk --
+annotated actor ids, their labels, the `vocabulary` version and `vocabulary_digest` -- was proposed here
+to make a separated still self-describing for the annotation as well, and it is withdrawn: a still is an
+observation artifact, and truth stays out of every observation artifact ([04](04_Contracts.md) D4.20,
+[08](08_Collection_And_EPoL.md) D8.17). A label inside the pixels' own file is one copy away from a
+model's input. Supervision lives in the truth sidecar, and in the run supervision manifest once it
+exists; the vocabulary version and digest travel with `<events>` and every `<_supervision>`, which is
+what makes a separated sidecar readable rather than merely self-identifying: a label without the
+version and digest that pin its meaning is a string whose definition a reader cannot locate. Nothing in
+the tree ever wrote the chunk. The solar chunk gains the four added attributes alongside the nine it
+already carries, which is what makes the frame-by-frame replay check of §7.3 work on stills alone.
 
 **As built (2026-09-30), of the shape above:** `vehicles` on `<events>`; on every vehicle record of a
 SUMO drive the SUMO-keyed uid and callsign, and `sumo_id`, `vtype_id` and `admitted_tick` in `_carla`
@@ -2525,6 +2537,39 @@ recording no session audits as well.
 **Under an optional render-set limit the sidecar is unchanged in shape.** It lists exactly the bodies
 its frame drew, as always; a vehicle the limit left out has no body and so no record, and the manifest,
 not the sidecar, says why (§4.4).
+
+**As built (2026-10-05): the supervision in force is held on the server, for every reader.** The owner
+ruled that per-frame supervision -- the author's labels in force for each vehicle at each frame -- is
+held on the CARLA server and not inside one client: "They have to be on the server. I do not want two
+clients ever having different truth state." It is the render set's mechanism
+([03](03_CoSimulation_Runtime.md) §8.9, D3.39, D3.43), carrying the second of the world-scoped facts
+[01](01_Architecture.md) D1.10 publishes:
+
+- **What the binder hands over.** The interval binder states, per SUMO vehicle, what the author asserts
+  of it -- `annotated`, `nominal` or `unlabelled`, spelled as the core does (§3.7), with each instance in
+  force: its id, labels, phase and role -- and opens and closes absences, each with its id, labels,
+  areas and the phase `vacancy`, all under one bound plan (`SumoDriveSession.Supervision`, a
+  `DriveSupervision`). It copies rows from the plan and mints none (D6.8). The binder itself is not
+  built; until it is, nothing binds a plan and nothing is put.
+- **What the server holds.** The session puts each change on the server (`update_supervision`, [04](04_Contracts.md)
+  §8.3b) for the body drawing each vehicle, after the render set and before the tick cue of the frame it
+  is drawn in. A body's supervision is held on its own record and only while it is lent, and is dropped
+  when the body is given back or handed to another vehicle, so a body never carries one vehicle's
+  assertion while it draws another; the session names it again for a vehicle's new body. The plan id,
+  the vocabulary version and digest and the absences are held for the world, on the episode.
+- **What every snapshot carries.** While a plan is held, the world observer writes a supervision block
+  after the render set's entries, inside the render set block: the plan id, version and digest, a row
+  per lent body whose vehicle is annotated or nominal, and the absences. An unlabelled vehicle has no
+  row, so the population costs the block nothing; a reader joins the block to the frame's render set and
+  answers every drawn vehicle's state explicitly, `unlabelled` included, which is what lets `state` be
+  always written here. A world no session supervises carries no block, and its snapshot is as it was.
+- **What a recorder reads.** The frame's actors, render set and supervision together
+  (`CarlaClient.GetSnapshotFrame(frame, out served, out renderSet, out supervision)`, or
+  `GetSupervisionFrame(frame)` exactly), and `ObservedSupervision.ForVehicles(renderSet)` for each drawn
+  vehicle's state by SUMO id. There is deliberately no in-process supervision source beside the
+  session, as the render set has: a recorder beside the session reads the server's truth like any
+  other, so the property this section asks of `<_supervision>` holds by construction. Writing
+  `<_supervision>` from it is not built.
 
 ### 8.3 The world truth track
 
@@ -2957,7 +3002,7 @@ sequenceDiagram
         Bridge->>Registry: every vehicle SUMO has: departed and removed this step
         Registry->>Carla: spawn (fully opaque) / release<br/>record admission and release instants
         Bridge->>Carla: pose command (Z from the drape)
-        Bridge->>Carla: publish WorldSupervisionState (on change, tick-stamped)
+        Bridge->>Carla: update_supervision: WorldSupervisionState on change,<br/>carried on every snapshot from the next frame
     end
 
     loop every captured frame
@@ -2967,7 +3012,7 @@ sequenceDiagram
         Recorder->>Sun: GetCachedSolarState for THIS tick (cache read, no RPC)
         Recorder->>Recorder: reconcile; fill observed onsets; measure occlusion
         Recorder->>Recorder: declared vs achieved sun; residual + illumination band
-        Recorder->>Recorder: read WorldSupervisionState snapshot for THIS tick
+        Recorder->>Recorder: read the supervision block of THIS tick's snapshot
         Recorder->>Recorder: write PNG (carla:solar chunk) + capture truth sidecar
         Recorder->>Manifest: observed spans (band-qualified), residuals, refusals (incremental)
     end
@@ -3002,7 +3047,7 @@ flowchart TB
 
     subgraph L2["SUMO bridge"]
         B1["bind events to plan rows<br/>(never create a row)"] --> B2["fill committed onsets"]
-        B2 --> B3["publish WorldSupervisionState<br/>stamped with tick T"]
+        B2 --> B3["put WorldSupervisionState on the server;<br/>carried on the snapshot of tick T"]
         B4["project pose:<br/>Y negate, yaw minus 90,<br/>bumper to body centre"] --> B5["command CARLA transform"]
     end
 
@@ -3090,7 +3135,7 @@ reason `<_supervision>` is.
 
 **The vocabulary is not a fifth truth artifact.** The four of D6.17 are unchanged. A vocabulary is a
 *compile-time* product: it is resolved into the supervision plan (artifact one), it is quoted by
-version and digest in every sidecar and every PNG chunk (artifact two), it is summarised in the
+version and digest on every sidecar's `<events>` and every `<_supervision>` (artifact two), it is summarised in the
 manifest (artifact four), and it is republished beside the corpus by the release step, which
 [08](08_Collection_And_EPoL.md) owns. Nothing new is written during a run, which is the same statement
 as D6.8 seen from the vocabulary's side: a run cannot mint a term any more than it can mint a row.
@@ -3100,7 +3145,7 @@ as D6.8 seen from the vocabulary's side: a run cannot mint a term any more than 
 | Authored | the scenario specification's `vocabulary` block — `import[]` and `terms[]` ([07 §3.5](07_Scenario_Authoring.md)) | the author's declarations, reviewed and version-controlled with the scenario |
 | Compiled | `SupervisionPlan` (§8.1) | the resolved, import-flattened term set, `vocabulary_version` and `vocabulary_digest` |
 | Packaged | the scenario package (`C3`, [04](04_Contracts.md)) | the same document, digest-bound alongside the routes, the network and the annotations |
-| Per capture | `<events>`, every `<_supervision>`, the `carla:supervision` PNG chunk (§8.2) | `vocabulary` and `vocabulary_digest`, so a separated still is still readable |
+| Per capture | `<events>` and every `<_supervision>` in the truth sidecar (§8.2); never the PNG, which carries no supervision | `vocabulary` and `vocabulary_digest`, so a separated sidecar is still readable |
 | Per session | the run supervision manifest (§8.4) | the core version, the digest, and every author namespace with its version |
 | Published | beside the corpus, in both the training export and the full-truth export (§10.3) | the whole document: core, namespaces, terms and their definitions |
 
@@ -3153,7 +3198,7 @@ different times, and none of them is a convention:
    construction, and §3.6 point 2's two-manifest diff already tests it. There is no runtime path that
    could introduce a term, so there is nothing to validate.
 3. **At release.** The anti-leak validator gains one check: every term appearing anywhere in the corpus
-   — sidecars, `carla:supervision` chunks, manifest — is defined in the published vocabulary at the
+   — sidecars and manifest — is defined in the published vocabulary at the
    declared digest. This is what makes a corpus auditable by somebody who was not there, the same
    property §8.4's four manifest checks have.
 
@@ -3619,7 +3664,7 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 
 | Needed from | Property required |
 |---|---|
-| [01](01_Architecture.md) | `RenderedVehicleRegistry` records an **admission tick and a release tick per vehicle**, exposed to the manifest (already D1.14) — this is what §5.1's `not_rendered` boundary keys on, and it replaces the arrival/opacity notion that fade used to supply (§4.4). `RenderSetSelector` admits every vehicle SUMO has inside a capture window and reads no supervision, so render-set membership is independent of the label (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10) |
+| [01](01_Architecture.md) | `RenderedVehicleRegistry` records an **admission tick and a release tick per vehicle**, exposed to the manifest (already D1.14) — this is what §5.1's `not_rendered` boundary keys on, and it replaces the arrival/opacity notion that fade used to supply (§4.4). `RenderSetSelector` admits every vehicle SUMO has inside a capture window and reads no supervision, so render-set membership is independent of the label (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10), and since 2026-10-05 is held on the server and carried on every world-observer snapshot (D6.41) |
 | [03](03_CoSimulation_Runtime.md) | The SUMO snapshot used for reconciliation is of the **same tick** as the frame, and is captured into the encoding job rather than read at write time (§4.3) |
 | [04](04_Contracts.md) | `scenario_id`, `session_id` and a stable `sensor_id` are supplied, not derived from a start instant (§7.1). The `vType`-to-blueprint dimension tolerance, so `dimension_separation_m` has a threshold |
 | [07](07_Scenario_Authoring.md) | The supervision file is emitted by the builder beside the routes, an unrealised slot is emitted rather than discarded (§2.2, §3.5), and the confounder rules of §9.3 are enforced at authoring |
@@ -3677,7 +3722,7 @@ owner acts on it rather than rediscovers it.
 | **D6.27** | **The vocabulary is layered, and one test decides where a term sits: does the pipeline's own code branch on it?** If yes, the term is core — closed, versioned and testable, because a value outside the set is a defect the machinery cannot detect. If no, it is author space and is carried opaquely. The core is supervision state, subject kind, realisation, the three interval onsets, `closed_by`, the five observability outcomes, the illumination band, the cadence form, and two reserved words. Everything else — labels, role and phase values, `parameters` keys, area kinds — is the author's. **Labelling is a contract between the scenario author and the model trainer**, and neither party is this pipeline; carrying a term we do not understand is a property of the design rather than a gap in it (§3.7). **As built at core version 2 (2026-10-05)**, the outcomes are six with `beyond_draw_distance` (D6.39), and the core also holds the interval anchor events, the render state and its reasons, by the same test (§3.7) |
 | **D6.28** | **An author term is self-describing or it is not published.** Required: a namespaced identifier, a natural-language definition, `applies_to` naming the subject kinds it may be asserted of, `realisation`, `since`, and `status` with `superseded_by` when deprecated. Optional: `broader`, `parameters`, `counterfactual`, `contrast_with`, `hard_negative_for`, `exemplar_instances`. `applies_to` is what makes D6.2 enforceable for a term the compiler cannot interpret. A term may **not** declare itself anomalous, nor carry a severity or a confidence — that would invite a consumer to read every subject without such a term as a negative, which is the `unlabelled`-to-negative collapse [08 D8.20](08_Collection_And_EPoL.md) names (§3.8) |
 | **D6.29** | **Core terms are unprefixed and reserved; every author term carries a namespace; a namespace is first-come and free-form.** `vocabulary_version` covers the core alone; each author namespace versions independently as `{namespace, version}` and a term's identity is the pair `(namespace, name)`. **There is no rename operation** — the only sanctioned retirement is `status: deprecated` plus `superseded_by`, which is what joins a corpus captured under the old spelling to one captured under the new. No registry governs namespaces: a collision is made **visible** by the release attestation recording every namespace present, not prevented by us (§3.8) |
-| **D6.30** | **The vocabulary is resolved into the supervision plan and is not a fifth truth artifact.** D6.17's four stand. The plan carries the import-flattened term set with a `vocabulary_digest`; `<events>`, every `<_supervision>` element and the `carla:supervision` PNG chunk carry the version **and** the digest; the manifest carries both plus every author namespace and its version; the release step republishes the whole document. **The core half is generated from the enumerations in `CarlaNet.Types`**, so a new `closed_by` value or D6.22's `unlit` outcome reaches every shipped vocabulary without anyone remembering — [07 §8.5](07_Scenario_Authoring.md)'s mechanism applied where a stale copy would misdescribe a corpus already handed over. Three enforcement points: the compiler refuses an undeclared term, the runtime cannot mint one (D6.8), and the release validator refuses a corpus containing a term the published vocabulary does not define (§8.7). **As built (2026-10-05):** the enumerations are `CarlaNet.Types.Supervision`, published by its `CoreVocabulary` at version 2, which the scenario compiler reads through `carlanet` into every plan and the world truth track writes its render state and reasons from; nothing in the tree restates the core by hand (§3.7). The session's reader of the plan reads every core value through the same enumerations and refuses a plan whose vocabulary publishes any other core, or does not digest as it says (§8.1) |
+| **D6.30** | **The vocabulary is resolved into the supervision plan and is not a fifth truth artifact.** D6.17's four stand. The plan carries the import-flattened term set with a `vocabulary_digest`; `<events>` and every `<_supervision>` element carry the version **and** the digest, and the PNG carries no supervision (§8.2, withdrawn by the owner's ruling of 2026-10-05); the manifest carries both plus every author namespace and its version; the release step republishes the whole document. **The core half is generated from the enumerations in `CarlaNet.Types`**, so a new `closed_by` value or D6.22's `unlit` outcome reaches every shipped vocabulary without anyone remembering — [07 §8.5](07_Scenario_Authoring.md)'s mechanism applied where a stale copy would misdescribe a corpus already handed over. Three enforcement points: the compiler refuses an undeclared term, the runtime cannot mint one (D6.8), and the release validator refuses a corpus containing a term the published vocabulary does not define (§8.7). **As built (2026-10-05):** the enumerations are `CarlaNet.Types.Supervision`, published by its `CoreVocabulary` at version 2, which the scenario compiler reads through `carlanet` into every plan and the world truth track writes its render state and reasons from; nothing in the tree restates the core by hand (§3.7). The session's reader of the plan reads every core value through the same enumerations and refuses a plan whose vocabulary publishes any other core, or does not digest as it says (§8.1) |
 | **D6.31** | **`nominal` may carry labels, and the assertion lives in `state` alone.** A `nominal` instance may carry `<annotation>` children in the sidecar exactly as an `annotated` one does, and labels in the plan and the manifest; a `nominal` element with children and one without assert precisely the same thing. An anonymous hard negative is worth little: a sidecar-only consumer that can read `bahonar:tower_posting` can build the matched negative set, while one reading a bare `state="nominal"` has 356 indistinguishable vehicles and is one bit away from §3.1's binary collapse (§8.2) |
 | **D6.32** | **A `nominal` term may declare `hard_negative_for`, and the field narrows and never widens.** `nominal` as defined in §3.1 is untargeted — not executing *any* target pattern — and cannot say which negative a subject is a negative *for*. The 335 guard postings are matched negatives for the dwell-shaped terms and the 21 hauls for the escort terms, and without the field a trainer samples 356 negatives at random instead of building the matched set [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) calls this system's unique product. **The published vocabulary states in these words that the field narrows, never widens, and that its absence means unspecified rather than none** (§3.9) |
 | **D6.33** | **A term may declare one `broader` parent and a resolved `counterfactual`, and a counterfactual is a pointer rather than a supervision write.** `broader` is one parent, acyclic, resolving inside the published document, never branched on — it lets a consumer roll an unknown term up to a known ancestor and makes adding a term cheap. `counterfactual` is `{kind: series \| cohort \| instance \| term, ref}`, resolved by the compiler and a compile error when it dangles; free text is refused because it joins to nothing. **A counterfactual reference asserts nothing about the referenced subjects beyond what they already carry**: naming `tower_relief` as the no-show's counterfactual annotates none of the 335 postings and adds no triple, which §3.6 point 2's row-set invariant enforces (§3.9) |
@@ -3688,6 +3733,7 @@ owner acts on it rather than rediscovers it.
 | **D6.38** | **Supervision reaches the training export per image, attached to the box**: the three-valued state, the labels in force and the phase at that instant. The pattern-instance *structure* — participants, phase sequences, interval bounds, series and slot membership — does not. It is joinable only through `instance_id` and its siblings, which §10.2 withholds; shipping the structure without them yields rows that cannot be assembled, and shipping the identifiers to make them assemblable yields a handle constant across every frame of an instance — the memorisation defect [04](04_Contracts.md) D4.20 excluded `scenario_id` for. Assembling supervision onto tracks is the consumer's step, performed on **its own** tracks through the transfer rule §10.1 publishes (§10.2) |
 | **D6.39** | **Under an optional draw distance, a vehicle a camera did not draw is listed in that camera's sidecar and marked, never counted as seen.** The draw distance is a performance control, off by default: every vehicle keeps its body, pose and record. The sidecar states `draw_distance_m`, and a vehicle the distance reached carries `beyond_draw_distance` (`wholly` or `partly`) and `camera_range_m`, judged from the capture's own camera pose by the vehicle's bounding sphere as the renderer judges each primitive; a vehicle wholly beyond it is a sixth observability outcome, `beyond_draw_distance`, reported with render coverage as a sensor-scoped exclusion, and is never measured for occlusion. With no draw distance the outcome does not occur (§5.1, §8.2) |
 | **D6.40** | **Under an optional render-set limit, a vehicle outside it is `not_rendered` with the reason `outside_limit`, absent from every sidecar, and counted.** A circle, the cameras' footprints or a capacity is a performance control, off by default and recommended for no scenario; a vehicle it leaves out is simulated and has behavioural truth, no imagery-side truth, and no sidecar record. The drawn vehicles are then a sample of the simulated ones, chosen by place or by the seed, and a consumer treats them so; no limit reads supervision, and none is a default (§4.4, §10.4) |
+| **D6.41** | **Per-frame supervision is held on the CARLA server, and every reader takes it from the world-observer snapshot** (owner's ruling, 2026-10-05: "They have to be on the server. I do not want two clients ever having different truth state."). The session puts each change on the server for the body drawing each vehicle (`update_supervision`), after the render set and before the tick cue of the frame it is drawn in; the server holds a body's supervision on its own record while it is lent, dropping it when the body is given back or handed on, and the plan id, vocabulary version and digest and the absences for the world; the world observer writes all of it on every snapshot after the render set's entries. An unlabelled vehicle has no row and costs nothing; a reader joins the block to the frame's render set and answers every drawn vehicle's state. No supervision is read from an in-process source, so `<_supervision>` is identical across sidecars and processes by construction. The binder that decides the supervision and the sidecar elements that write it are separate work (§3.3, §8.2) |
 
 ---
 

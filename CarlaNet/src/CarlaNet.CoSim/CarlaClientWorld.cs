@@ -5,6 +5,8 @@ using CarlaNet.Types.Rpc.Actors;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Enums;
 using CarlaNet.Types.Rpc.Environment;
+using CarlaNet.Types.Rpc.Supervision;
+using CarlaNet.Types.Supervision;
 
 using ActorId = uint;
 
@@ -231,6 +233,49 @@ public sealed class CarlaClientWorld : ICarlaWorld
         catch (CarlaRpcException refused)
         {
             return new RenderSetWrite(0, refused.Message);
+        }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Each state goes as the vocabulary's core spells it (<see cref="CoreVocabulary.Name(SupervisionState)"/>),
+    /// and a withdrawal as a change naming no plan. A server that answers with an error -- one built
+    /// before it carried supervision, which has no such call -- is answered as a refusal carrying its
+    /// words, as the render set is, rather than thrown: the run goes on, and the report says what the
+    /// server said.
+    /// </remarks>
+    public SupervisionWrite WriteSupervision(SupervisionChange change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        var actors = new SupervisionUpdateActor[change.Bodies.Count];
+        for (int index = 0; index < change.Bodies.Count; index++)
+        {
+            (ActorId actor, SupervisionInForce supervision) = change.Bodies[index];
+            actors[index] = new SupervisionUpdateActor(
+                actor,
+                CoreVocabulary.Name(supervision.State),
+                [.. supervision.Annotations.Select(annotation => new SupervisionUpdateAnnotation(
+                    annotation.InstanceId, [.. annotation.Labels], annotation.Phase, annotation.Role))]);
+        }
+
+        var update = new SupervisionUpdate(
+            change.Fresh,
+            change.Plan?.PlanId ?? string.Empty,
+            (uint)(change.Plan?.VocabularyVersion ?? 0),
+            change.Plan?.VocabularyDigest ?? string.Empty,
+            actors,
+            [.. change.AbsencesOpened.Select(absence => new SupervisionUpdateAbsence(
+                absence.InstanceId, [.. absence.Labels], [.. absence.Areas], absence.Phase))],
+            [.. change.AbsencesClosed]);
+
+        try
+        {
+            uint applied = _client.UpdateSupervisionAsync(update).GetAwaiter().GetResult();
+            return new SupervisionWrite((int)applied, null);
+        }
+        catch (CarlaRpcException refused)
+        {
+            return new SupervisionWrite(0, refused.Message);
         }
     }
 

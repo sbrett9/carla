@@ -8,6 +8,7 @@
 
 #include "Carla/Actor/ActorInfo.h"
 #include "Carla/Actor/ActorData.h"
+#include "Carla/Actor/ActorSupervision.h"
 #include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Vehicle/CarlaWheeledVehicle.h"
 #include "Carla/Walker/WalkerController.h"
@@ -159,6 +160,19 @@ public:
   void SetRenderSetMembership(const FRenderSetMembership &InMembership)
   {
     RenderSetMembership = InMembership;
+  }
+
+  /// What the scenario's author asserts of the vehicle this actor draws, where a co-simulation
+  /// session has put supervision in force for it while the actor is lent. Kept on this record until
+  /// the actor is destroyed, given back, or lent to another vehicle.
+  const FActorSupervision &GetSupervision() const
+  {
+    return Supervision;
+  }
+
+  void SetSupervision(const FActorSupervision &InSupervision)
+  {
+    Supervision = InSupervision;
   }
 
   void BuildActorData();
@@ -473,6 +487,8 @@ private:
   TArray<IdType> Children;
 
   FRenderSetMembership RenderSetMembership;
+
+  FActorSupervision Supervision;
 
 protected:
 

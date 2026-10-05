@@ -61,6 +61,7 @@ advancement policy, the headlight predicate),
 | 2026-10-02 | §9.7, §11.5, §11.6, §11.10, D3.14, D3.33: SUMO's own distribution edits checked before SUMO is started and stated on the run report. A collision action other than `warn` or `none` is refused, SUMO's default and an action SUMO does not name included; every other teleport trigger, a vehicle type's own included, is refused under the acceptance `time-to-teleport` has; a positive `random-depart-offset` and `random` are refused; the scale, the cap on vehicles running and `max-depart-delay` are recorded. Measured: `time-to-teleport.highways` is off at its default and `.disconnected` on from zero. The test fixtures now set `collision.action warn`. |
 | 2026-10-05 | §9.7, §11.4, §11.5, §11.6, D3.33: `collision.action none` and `ignore-accidents` refused as the owner ruled, so a run that starts always has the record of collisions. The collision list is asked for only where it can hold something: SUMO's colliding-vehicles count arrives with each step's own answer, and the list is fetched on the first frame and on a step a collision began or one is still going on. Measured, the list is about 50 µs a round trip on Gardnerville at 35 vehicles, between 0.04 and 0.085 ms of a step, and a run with no collision now asks for it once. The report keeps every collision and every collision warning SUMO wrote; how much is printed is a switch, off by default, that changes nothing recorded. |
 | 2026-10-05 | §2.7, §9.7, D3.29: the compile-lock check binds the lane closures' additional file and the supervision plan. The plan is refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not those of the route file, configuration, additional file and network the run loads; once bound it is handed to the session on the run report. A lock that names no plan runs without one. |
+| 2026-10-05 | §8.9, D3.43: the supervision in force is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The binder states it per SUMO vehicle (`SumoDriveSession.Supervision`); the session puts each change for the body drawing the vehicle in one `update_supervision` after the render set's and before the tick cue; the server holds a body's on its record while it is lent and the plan and absences on the episode; the world observer carries it on every snapshot inside the render set block, where a reader built before it skips it. An unlabelled vehicle costs nothing. Written; the plugin awaits a build. |
 
 ---
 
@@ -2723,6 +2724,90 @@ wrong implementation: the set named after the tick; no body ever named parked; t
 the parked filter; the live pull pairing the newest actors with another frame's set; a reader ignoring
 the block; and a recorder with no source not marking its sidecar.
 
+**The supervision in force, on the server beside the render set (2026-10-05).** Per-frame supervision --
+what the scenario's author asserts of each drawn vehicle, and the absences declared for the world -- is
+the other world-scoped fact [`01`](01_Architecture.md) D1.10 publishes, and the owner ruled where it
+lives: "They have to be on the server. I do not want two clients ever having different truth state." So
+it is built exactly as the render set is, and unlike the render set it has **no** in-process source for
+the recorder beside the session: every reader takes it from the snapshot.
+
+> **D3.43 — The session puts each change to the supervision in force on the server -- per body drawing a
+> supervised vehicle, its state with the instances in force, and the absences that open and close, under
+> one bound plan -- in one `update_supervision` call after the render set's and before the tick cue of the
+> frame it is drawn in, and the world observer carries what the server holds on every snapshot, after the
+> render set's entries and inside the render set block. A body's supervision is held on its own record
+> only while it is lent and is dropped when the body is given back or handed on; an unlabelled vehicle
+> has no row; a world no session supervises is unchanged; a server that refuses is recorded and told
+> nothing more.**
+
+- **What the binder hands over.** `SumoDriveSession.Supervision`, a `DriveSupervision`: the plan bound
+  (its id, the vocabulary's core version and the plan's vocabulary digest), each SUMO vehicle's
+  `SupervisionInForce` -- `annotated`, `nominal` or `unlabelled` with its `AnnotationInForce`s (instance,
+  labels, phase, role) -- and the `AbsenceInForce`s open (instance, labels, areas, phase `vacancy`). The
+  binder writes it between ticks, from a step observer, stating a vehicle once when its supervision
+  changes; it knows SUMO vehicles and nothing of the pool. Binding starts afresh. The table refuses a
+  state no vehicle can be in and checks nothing against the plan: the binder copies rows and mints none
+  ([`06`](06_Truth_And_Annotation.md) D6.8). The binder itself is not built, and until it is no plan is
+  bound and nothing is put.
+- **What the session puts, and when.** `SumoDriveSession.NameTheSupervision`, after
+  `NameTheRenderSet` in the same drain: for every body the server holds lent, the vehicle's supervision
+  where it differs from what the server holds for that body, and every absence opened, changed or
+  closed. The server drops the supervision of a body the render set change just parked or handed to
+  another vehicle, and the session forgets it too, so a supervised vehicle lent a body anew is named
+  again for the new body -- word for word the same assertion included, as every member of a cohort
+  carries. The first change after a plan is bound is fresh. The binder withdrawing the plan, or the
+  session ending, withdraws everything: on disposal it is the session's last change, put before the
+  bodies are destroyed. A world that refused the render set is put no supervision, since it is carried
+  per lent body.
+- **What the server holds.** `update_supervision(SupervisionUpdate)` (`CarlaServer.cpp`; the message is
+  `carla/rpc/SupervisionUpdate.h`, contract in [`04`](04_Contracts.md) §8.3b) checks the whole change
+  before applying any of it, holds the plan and the absences on the episode (`FWorldSupervisionState`)
+  and each body's on its `FCarlaActor` (`FActorSupervision`), gives a body not lent none, and answers how
+  many bodies took theirs. `update_render_set` clears a body's supervision as it parks the body or lends
+  it to another vehicle.
+- **What the snapshot carries.** While a plan is held, the render set block carries a supervision block
+  after its entries, flagged `SupervisionCarried` beside `RenderSetCarried` (`EpisodeStateSerializer.h`
+  gives the layout): the plan id, version and digest, a row per lent body whose vehicle is annotated or
+  nominal, and the absences. The render set block's size counts it, so a reader built with the render
+  set and before supervision finds the actors and the set as before and skips it; with a plan held and no
+  body lent yet, the block is written with no entries, which every render set reader reads as no set.
+  The client reads it (`EpisodeStateLayout.ReadSupervision`, `CarlaClient.GetCachedSupervision`) and keeps
+  it with the frame's actors and render set in `SnapshotHistory`
+  (`CarlaClient.GetSnapshotFrame(frame, out served, out renderSet, out supervision)`).
+- **Why every snapshot carries the whole state, as the render set does.** A change is sent once, but a
+  reader may join at any frame, and a recorder pairs an image with the snapshot of its own frame, several
+  ticks old by the time the image arrives; a block of changes would make a frame's truth depend on every
+  frame before it, and one dropped snapshot would corrupt every later one. So the block is the state in
+  force, the client keeps one parsed instance for every frame whose block is the same bytes, and its size
+  is bounded by the assertions in force rather than the population: an unlabelled vehicle has no row.
+  A row is 7 bytes and each annotation its strings with a 2-byte length each: Bahonar's escort lead
+  costs 156 bytes. With up to sixteen guards on their postings and a handful of annotated vehicles at
+  once, Bahonar's block is of the order of 2 KB a frame (inference, from the compiled plan's strings),
+  beside an actor array of 119 bytes per actor.
+- **The cost.** One round trip on a tick whose supervision changed or whose lending changed a
+  supervised body, none on any other; `CoSimRunReport.SupervisionUpdates` counts them, and
+  `SupervisionBodiesNotApplied` the bodies the server did not take.
+- **A server that refuses.** One built before this has no such call. The session records the refusal
+  (`CoSimRunReport.SupervisionRefused`, printed in its report) and puts nothing more; the run goes on,
+  and no reader is told any supervision.
+
+**Exercised by** `SumoDriveSessionSupervisionTests` (every frame's published supervision the plan bound,
+a row on exactly the bodies drawing a supervised vehicle and that vehicle's row whichever vehicle the body
+drew before, the absence on every frame until it closed and on none after; one fresh change before the
+first cue and the rest only on a change, no body ever named unlabelled; a body handed on carrying the next
+vehicle's identical assertion; nothing put before a plan is bound; a refusing server asked once and the
+run going on; everything withdrawn on disposal), `DriveSupervisionTests`, `CarlaClientWorldTests` (the
+change in the nested arrays the server unpacks, the state spelled as the core spells it, a withdrawal
+naming no plan, a missing call answered as a refusal), `EpisodeStateSupervisionTests` (the block after
+the render set's entries and the actors after both; every lent vehicle read with its state, unlabelled
+included; a reader that knows only the render set finding the actors and the set; a world supervised
+before any body is lent; three hundred unlabelled vehicles costing the block nothing; a truncated block
+refused with the actors and the set still read; an unknown state refused), `SnapshotHistoryTests` and
+`LiveSupervisionTests` (through a stand-in server holding what it is put as the plugin does: the change
+as it arrives, a change the server would refuse refused before it is sent, two clients reading the same
+supervision for each frame, a withdrawal read by both). Seen failing against a session that did not
+forget a body's supervision when the body was handed on: the second vehicle's body carried nothing.
+
 ---
 
 ## 9. Tick, clock and sun ownership
@@ -4355,6 +4440,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.40** | **A body's heading is the heading of its own path, and its velocity the path's.** The rear axle, 0.75 of the measured body's length behind the bumper, trails the bumper along the path the interpolation put it on, taken exactly per tick; only forward travel turns it, a move no vehicle drives holds it, and SUMO's angle starts it. The bumper stays where SUMO put it, the truth's heading is the body's, its course and speed the path's, and SUMO's reported angle is recorded beside them for audit (§5.4, §6.4). |
 | **D3.41** | **A draw distance is an optional performance control, off by default, and rendering only.** Where one is set, each pooled body is given it once -- the maximum draw distance of every mesh and lamp of the body and of what is attached to it, by `set_actors_max_draw_distance` before the cue of the tick it is first drawn in -- so no camera draws a body beyond it, while every vehicle keeps its body, its pose, its naming and its truth. Each frame's render set records the distance it was drawn under, and the recorder marks, in each camera's sidecar, every vehicle wholly or partly beyond it. A server without the call refuses it once; the run goes on drawing every body at any range and says so (§8.3.3). It is recommended for no scenario. |
 | **D3.42** | **A limit on which vehicles get a body is an optional performance control, off by default.** The default policy draws every vehicle SUMO has (D3.38's rule); a circle, the registered cameras' footprints and a capacity under any policy may be chosen in its place. A vehicle outside the chosen limit is simulated by SUMO and has no body, no frame, no render set entry and no truth record; the report states the policy and counts what it left out, and its releases say why each track ended. Every vehicle stays subscribed, so one inside the limit is drawn exactly where and as it would be with none, inserted vehicles from SUMO's first frame. No limit is a default, a recommendation or a sizing rule (§8.3.2). |
+| **D3.43** | **The supervision in force is held on the server, beside the render set, for every reader** (owner's ruling, 2026-10-05) — the session puts each change (per body drawing a supervised vehicle, its state and instances in force; absences opened and closed; one bound plan with its vocabulary version and digest) in one `update_supervision` after the render set's and before the tick cue of the frame it is drawn in; the server holds a body's on its record only while it is lent and drops it when the body is given back or handed on, and holds the plan and absences on the episode; the world observer carries all of it on every snapshot inside the render set block. An unlabelled vehicle has no row; no reader takes supervision from an in-process source; a world no session supervises is unchanged; a server that refuses is recorded and told nothing more (§8.9). |
 
 ---
 

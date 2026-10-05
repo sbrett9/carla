@@ -20,6 +20,14 @@ namespace CarlaNet.Types.Streaming;
 /// has named a body, and says so with <see cref="RenderSetCarried"/>, so a snapshot of a world no
 /// session has named a body in is laid out exactly as before.</para>
 ///
+/// <para>A supervision block can follow the render set's entries, inside the render set block: the plan
+/// a co-simulation session has bound, what the author asserts of the vehicle each lent body draws, and
+/// the absences in force (<see cref="ObservedSupervision"/>). The server carries it only while a plan
+/// is held, says so with <see cref="SupervisionCarried"/>, and always writes the render set block with
+/// it -- with no entries where no body is lent yet -- whose size counts it. So a reader that knows the
+/// render set and not the supervision finds the actors and the render set as before and skips the
+/// supervision unread, and every reader of a world no session supervises reads it as before.</para>
+///
 /// <para>Both readers of the header in this tree -- the client's own world-observer parse and the
 /// episode-state sensor decoder -- read it through here, so the two cannot come to disagree about
 /// where the actors start.</para>
@@ -51,8 +59,15 @@ public static class EpisodeStateLayout
     public const byte RenderSetCarried = 0x10;
 
     /// <summary>
+    /// The flag saying a supervision block follows the render set's entries, inside the render set
+    /// block. Mirrors <c>EpisodeStateSerializer::SupervisionCarried</c>.
+    /// </summary>
+    public const byte SupervisionCarried = 0x20;
+
+    /// <summary>
     /// Where the first actor starts: straight after the header, or after the render set block where
-    /// the snapshot carries one. Zero where the payload is too short to say.
+    /// the snapshot carries one, the supervision block inside it included. Zero where the payload is
+    /// too short to say.
     /// </summary>
     /// <remarks>
     /// The block states its own size, so the actors are found whether or not its entries can be
@@ -89,12 +104,67 @@ public static class EpisodeStateLayout
     /// through an entry.</exception>
     public static ObservedRenderSet ReadRenderSet(ReadOnlySpan<byte> payload, ObservedRenderSet? previous = null)
     {
-        int header = HeaderSize(payload);
-        if (header == 0 || payload.Length < header || (payload[FlagsOffset] & RenderSetCarried) == 0)
+        if (!Carries(payload, RenderSetCarried))
         {
             return ObservedRenderSet.None;
         }
 
+        // The set's own entries, and not the supervision block that can follow them inside the block.
+        ReadOnlySpan<byte> block = RenderSetBlock(payload);
+        return ObservedRenderSet.Read(block[..ObservedRenderSet.Measure(block)], previous);
+    }
+
+    /// <summary>
+    /// The supervision the snapshot carried, or <see cref="ObservedSupervision.None"/> where it carried
+    /// none.
+    /// </summary>
+    /// <param name="payload">The snapshot, from its episode-state header on.</param>
+    /// <param name="previous">
+    /// The supervision read from the frame before, which is answered again, instance and all, where this
+    /// snapshot's block is the same bytes.
+    /// </param>
+    /// <exception cref="InvalidDataException">The snapshot says it carries supervision outside a render
+    /// set block; or the block is shorter than it says, ends part-way through what it holds, or names a
+    /// state this reader does not know.</exception>
+    public static ObservedSupervision ReadSupervision(ReadOnlySpan<byte> payload, ObservedSupervision? previous = null)
+    {
+        if (!Carries(payload, SupervisionCarried))
+        {
+            return ObservedSupervision.None;
+        }
+
+        if (!Carries(payload, RenderSetCarried))
+        {
+            throw new InvalidDataException(
+                "The snapshot says it carries supervision and no render set block, which the supervision "
+                + "block is written inside.");
+        }
+
+        ReadOnlySpan<byte> block = RenderSetBlock(payload);
+        ReadOnlySpan<byte> after = block[ObservedRenderSet.Measure(block)..];
+        if (after.Length < 4)
+        {
+            throw new InvalidDataException(
+                $"The snapshot says it carries supervision and its render set block ends {after.Length} "
+                + "byte(s) after the render set's entries, before the supervision block's size.");
+        }
+
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(after);
+        if (4L + size > after.Length)
+        {
+            throw new InvalidDataException(
+                $"The snapshot's supervision block says it is {size} bytes, and the render set block it is "
+                + $"written inside ends {after.Length - 4} bytes after its size.");
+        }
+
+        return ObservedSupervision.Read(after.Slice(4, (int)size), previous);
+    }
+
+    /// <summary>The render set block after its size field, where the snapshot says it carries one.</summary>
+    /// <exception cref="InvalidDataException">The block is shorter than it says.</exception>
+    private static ReadOnlySpan<byte> RenderSetBlock(ReadOnlySpan<byte> payload)
+    {
+        int header = HeaderSize(payload);
         if (payload.Length < header + 4)
         {
             throw new InvalidDataException(
@@ -110,7 +180,14 @@ public static class EpisodeStateLayout
                 + $"{payload.Length - header - 4} bytes after its size.");
         }
 
-        return ObservedRenderSet.Read(payload.Slice(header + 4, (int)size), previous);
+        return payload.Slice(header + 4, (int)size);
+    }
+
+    /// <summary>Whether the snapshot's header is whole and its flags byte carries the flag.</summary>
+    private static bool Carries(ReadOnlySpan<byte> payload, byte flag)
+    {
+        int header = HeaderSize(payload);
+        return header != 0 && payload.Length >= header && (payload[FlagsOffset] & flag) != 0;
     }
 
     /// <summary>
