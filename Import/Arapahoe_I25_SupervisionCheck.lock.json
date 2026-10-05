@@ -1,34 +1,30 @@
 {
   "lock_version": 1,
-  "scenario_id": "Arapahoe_I25_UnderpassDwell",
-  "scenario_name": "Arapahoe I-25 underpass dwell",
+  "scenario_id": "Arapahoe_I25_SupervisionCheck",
+  "scenario_name": "Arapahoe supervision check",
   "spec_version": 1,
-  "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-  "specification_sha256": "9b3508430dca72c7621754b543d02deedbbd37ffba54ac18dceb355cabf1b622",
+  "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
+  "specification_sha256": "1c2748c47f80f6edc9947f6fdf0fa73ddaebc82d47892d58d5b0eb0f4c6fa203",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "1.0.0"
   },
   "files": {
     "routes": {
-      "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-      "sha256": "728d66ea19a2378b08ffbc090ce294fbfba5117fbcf735b80bc4b136fcff21b6"
+      "path": "Arapahoe_I25_SupervisionCheck.rou.xml",
+      "sha256": "08d1ad4acbc21105bc7f407394325206262c4ae9fdbf693aaf20ca11dc1058c0"
     },
     "config": {
-      "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
-      "sha256": "ead68759a136dddff82943cdcc2d7d897638d4f515a68c9fd346e4ca1b2b56ed"
+      "path": "Arapahoe_I25_SupervisionCheck.sumocfg",
+      "sha256": "79a64f258e881cdb5d81638b6c4a95b467d036551ccdefc74f823bd9b1a856ff"
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
       "sha256": "dea811c20fd2b2e6965d0eb55d98c23f8132a7423a1f1fb749aa1780c75e2458"
     },
-    "additional": {
-      "path": "Arapahoe_I25_UnderpassDwell.add.xml",
-      "sha256": "e36c37f8c6e183e8338f395621d8380743c62ee9a8c3fd8145e3c4187fc78d76"
-    },
     "supervision": {
-      "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-      "sha256": "82482b0ed312e9d85f81bae8a7be2ea10f9ff255c4f2348b3c5942a1f9023555"
+      "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
+      "sha256": "b292a1ef9ad78722131b9dcc692cb5cc604aae4690b14c95ff349704107720f7"
     }
   },
   "world": {
@@ -89,13 +85,18 @@
   },
   "vocabulary": {
     "core_version": 2,
-    "namespaces": [],
-    "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
+    "namespaces": [
+      {
+        "namespace": "check",
+        "version": 1
+      }
+    ],
+    "vocabulary_digest": "f4ee7b480df7209dfa2404bced4ff6d0504692e5e4cbc03d9781326c14a604ff"
   },
   "traffic": {
     "sumo_seed": 42,
     "step_length_s": 0.05,
-    "end_s": 2700.0,
+    "end_s": 360.0,
     "processing": {
       "time-to-teleport": "-1",
       "max-depart-delay": "900",
@@ -114,46 +115,69 @@
     "ran": true,
     "sumo_release": "1.27.0",
     "begin_s": 0.0,
-    "end_s": 2700.0,
+    "end_s": 360.0,
     "vehicles": {
-      "loaded": 7433,
-      "inserted": 7433,
+      "loaded": 133,
+      "inserted": 133,
       "discarded": 0,
       "waiting_at_end": 0
     },
     "planned_vehicles": {
-      "total": 0,
-      "inserted": 0
+      "total": 3,
+      "inserted": 3
     },
     "collisions": 0
   },
   "epoch": {
     "calendar_advances": true,
-    "civil_datetime": "2026-09-29T07:00:00-06:00",
+    "civil_datetime": "2026-09-29T07:26:00-06:00",
     "dst_in_effect": true,
     "epoch_version": 1,
-    "note": "Arapahoe County, Colorado: simulated second zero is 07:00 Mountain Daylight Time on 29 September 2026, in the morning peak",
+    "note": "Arapahoe County, Colorado: simulated second zero is 07:26:00 Mountain Daylight Time on 29 September 2026, when the sun is about to cross +6 degrees",
     "time_zone_id": "America/Denver",
-    "utc_datetime": "2026-09-29T13:00:00Z",
+    "utc_datetime": "2026-09-29T13:26:00Z",
     "utc_offset_hours": -6
   },
-  "epoch_block_sha256": "ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f",
+  "epoch_block_sha256": "b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831",
   "illumination": {
     "illumination_version": 1,
     "policy": "freeze_at_window_start"
   },
-  "capture_windows": [],
+  "capture_windows": [
+    {
+      "id": "dwell_golden",
+      "begin_s": 60.0,
+      "end_s": 240.0,
+      "civil_begin": "2026-09-29T07:27:00-06:00",
+      "civil_end": "2026-09-29T07:30:00-06:00",
+      "civil_date": "2026-09-29"
+    },
+    {
+      "id": "stop_day",
+      "begin_s": 240.0,
+      "end_s": 360.0,
+      "civil_begin": "2026-09-29T07:30:00-06:00",
+      "civil_end": "2026-09-29T07:32:00-06:00",
+      "civil_date": "2026-09-29"
+    }
+  ],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
   "illumination_label_association": {
-    "normalized_mutual_information": null,
+    "normalized_mutual_information": 0.098,
     "bands": {
-      "golden": {
+      "day": {
         "annotated": 0,
-        "nominal": 0,
-        "unlabelled": 52,
-        "total": 52
+        "nominal": 1,
+        "unlabelled": 9,
+        "total": 10
+      },
+      "golden": {
+        "annotated": 2,
+        "nominal": 1,
+        "unlabelled": 9,
+        "total": 12
       }
     },
-    "entries": 52
+    "entries": 22
   }
 }

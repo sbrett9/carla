@@ -81,6 +81,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-05 | An interval may be declared by an `anchor` instead of civil bounds, naming the events of its participant that commit its start and end — `depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>` over the actor's `phases[]` — resolved against its stops and compiled route and refused where the vehicle has no such event, where the end does not follow the start, beside civil bounds, or on a cohort (§3.5, §3.6, check 58). The plan carries each interval's anchor, null when unanchored, and an interval over a `duration` stop declares a length and no start; check 38 compares only declared bounds. Bahonar's anomaly intervals are anchored and the scenario recompiled; Arapahoe's and Gardnerville's plans, which carry no interval, are unchanged. |
 | 2026-10-05 | The vocabulary's closed core is generated from the enumerations in `CarlaNet.Types` and published at core version 2, with `beyond_draw_distance` among the observability outcomes and the interval anchor, render state and render reason families added (§8.3, D7.25; [`06`](06_Truth_And_Annotation.md) §3.7). The compiler reads it through `carlanet`, so nothing restates it by hand. All three shipped scenarios are recompiled: every plan's vocabulary digest, and the lock's, changes; their traffic files do not. |
 | 2026-10-05 | A scenario is run in SUMO alone before it is written, as the owner ruled, and refused when a vehicle the supervision plan names is discarded after waiting `max-depart-delay` or is still waiting at the end (§5.1, §5.2 check 59, §5.4). The report states every planned vehicle's wait, the other vehicles discarded and every collision; the lock records the run, or that `--skip-dry-run` skipped it. Measured, the run adds 130 to 160 s to Bahonar's week, 176 to 219 s to the Arapahoe dwell and 6 s to the Gardnerville orbit; all three shipped scenarios are recompiled, every planned vehicle enters, and none had a discard or a collision. |
+| 2026-10-05 | The supervision check (§3.4.3): a six-minute scenario on the Arapahoe world, generated and compiled into `Import/` with a run configuration beside it, carrying an annotated dwell anchored to its stop, an annotated transit with a phase past the kerb, and a nominal stop that is the dwell's matched negative, in two capture windows in two illumination bands. No series or absence: the Arapahoe package publishes no area. The Arapahoe dwell is recompiled against its world rebuilt the same day, its network fingerprint unchanged, so the two scenarios bind one network copy. |
 
 ---
 
@@ -949,6 +950,35 @@ shipped files in `Import/` are still the current network's: they are recompiled 
 matter only to a vehicle stopped in the running lane: under `--stop-in-lane` no lane lets a driver cross
 the centre line to pass the marked vehicle, where with the pairs traffic still crept past it at 0.6 m/s
 and queued both ways. The shipped scenario parks it off the lane.
+
+### 3.4.3 The supervision check, as built
+
+`CarlaControl/scripts/make_supervision_check_scenario.py` writes and compiles
+`Import/Arapahoe_I25_SupervisionCheck`, six minutes on the Arapahoe world that exercise every kind of
+supervision a vehicle can carry, sited for one camera. It takes the Arapahoe dwell's places, vehicle
+classes, mixes and nine of its flows -- those on East Arapahoe Road west of the freeway and on South
+Yosemite Street, at the rates measured there -- and adds three planned vehicles, all entering from the
+map's west edge and turning left up Yosemite at the signal. *Measured* in SUMO alone: a car pulls to the
+kerb of Yosemite's northbound carriageway just north of Arapahoe Road at 109 s and waits two minutes,
+annotated `check:kerbside_dwell` with its interval anchored `stop:0` to `stop_end:0`; a second car departs
+at 90 s and drives through, annotated `check:through_transit` from its departure, with its route written
+in three phases so the stretch past the kerb, which it drives between 144 s and 160 s while the first car
+waits, is an interval anchored `phase:1` to `phase:2`; and a van stops at the same kerb 30 m short of the
+car, from 254 s to 274 s, nominal under `check:brief_kerb_stop`, whose `hard_negative_for` names the dwell.
+The epoch, 07:26:00 Mountain Daylight Time on 29 September 2026, puts the two capture windows in two
+illumination bands: `dwell_golden` opens at 07:27:00 under a 5.69° sun and `stop_day` at 07:30:00 under a
+6.26° one. The Arapahoe package publishes no area of interest, so the check declares no series and no
+absence: a slot is sited at an area (check 20) and none can be invented. The compile's dry run inserts all
+133 vehicles, the three planned ones on their declared seconds, with no collision, in 2.5 s.
+
+Beside it the generator writes `Arapahoe_I25_SupervisionCheck.run.json`, a run configuration capturing
+`dwell_golden` through one camera, `Check_Overhead_1`, looking down from 70 m on the kerb midway between
+the two stops, so `run_capture --run Import/Arapahoe_I25_SupervisionCheck.run.json` gives sidecars with
+the plan's supervision, a manifest with its interval rows and a world truth track.
+`test_supervision_check_generator.py` holds `Import/` to the generator byte for byte, and drives the
+compiled scenario with no world at the compiled 0.05 s step and at 0.1 s: each interval closes as it
+should -- the stops and the stretch on their ends, the transit as the car leaves the map -- and
+`diff_run_manifests.py` finds the two manifests name the same rows.
 
 ### 3.5 Shape of the specification
 
