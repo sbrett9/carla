@@ -2315,9 +2315,10 @@ public sealed class CarlaClient : IAsyncDisposable
             frameRenderSet = ObservedRenderSet.None;
         }
         _renderSet = frameRenderSet;
-        // The supervision, where a co-simulation session has bound a plan: read the same way, a block
-        // that cannot be read counted and read as none rather than losing the frame. It is inside the
-        // render set block, whose size the actors are found by, so they are found either way.
+        // The supervision, where a co-simulation session has bound a plan: a block that cannot be read
+        // is counted and read as unreadable rather than losing the frame -- never as none, which would
+        // say no plan was in force. It is inside the render set block, whose size the actors are found
+        // by, so they are found either way.
         try
         {
             frameSupervision = EpisodeStateLayout.ReadSupervision(payload, _supervision);
@@ -2326,7 +2327,7 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             Interlocked.Increment(ref _supervisionBlocksUnreadable);
             _log?.LogWarning(ex, "World observer supervision unreadable");
-            frameSupervision = ObservedSupervision.None;
+            frameSupervision = ObservedSupervision.Unreadable;
         }
         _supervision = frameSupervision;
         const int ActorSize  = 119;
@@ -2562,8 +2563,9 @@ public sealed class CarlaClient : IAsyncDisposable
     public ObservedSupervision? GetSupervisionFrame(ulong frame) => _history.SupervisionOf(frame);
 
     /// <summary>
-    /// World-observer snapshots whose supervision block could not be read, and were read as carrying
-    /// none. Nonzero only where the server lays the block out differently from this client.
+    /// World-observer snapshots whose supervision block could not be read, each held as
+    /// <see cref="ObservedSupervision.Unreadable"/>. Nonzero only where the server lays the block out
+    /// differently from this client.
     /// </summary>
     public long SupervisionBlocksUnreadable => Interlocked.Read(ref _supervisionBlocksUnreadable);
 

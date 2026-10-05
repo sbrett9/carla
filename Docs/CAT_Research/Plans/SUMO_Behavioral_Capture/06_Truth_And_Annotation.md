@@ -37,6 +37,7 @@ the real scenario artifacts. No code changed, no build run.
 | 29 · 2026-10-05 | The run supervision manifest is built as rows of JSON closed by a terminal row, as the owner settled, rather than the one document §8.4 described before D4.36: the run's opening with its identity, plan, vocabulary, SUMO settings and declared sun; every admission to and release from the render set; the events that change the population; the sun at the window's opening and end; and why the run ended. `run_capture` always writes it beside the world truth track. Supervision rows wait for the interval binder (§8.4). |
 | 30 · 2026-10-05 | D6.12's hard failure for a discarded plan subject is enforced at compile time, as the owner ruled: SUMO's insertion and its `max-depart-delay` discards are deterministic for one configuration and seed, so the scenario compiler runs the compiled files in SUMO alone over the whole span and refuses a scenario in which a vehicle the plan names never enters ([07](07_Scenario_Authoring.md) check 59). Every planned vehicle's wait, the other vehicles discarded and every collision are reported, and the lock records the run (§6.2, D6.12). |
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
+| 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2615,8 +2616,8 @@ clients ever having different truth state." It is the render set's mechanism
   of it -- `annotated`, `nominal` or `unlabelled`, spelled as the core does (§3.7), with each instance in
   force: its id, labels, phase and role -- and opens and closes absences, each with its id, labels,
   areas and the phase `vacancy`, all under one bound plan (`SumoDriveSession.Supervision`, a
-  `DriveSupervision`). It copies rows from the plan and mints none (D6.8). The binder itself is not
-  built; until it is, nothing binds a plan and nothing is put.
+  `DriveSupervision`). It copies rows from the plan and mints none (D6.8). The binder is built since
+  (§3.3, `SupervisionBinder`), and states it from the frame at each change's instant.
 - **What the server holds.** The session puts each change on the server (`update_supervision`, [04](04_Contracts.md)
   §8.3b) for the body drawing each vehicle, after the render set and before the tick cue of the frame it
   is drawn in. A body's supervision is held on its own record and only while it is lent, and is dropped
@@ -2634,8 +2635,66 @@ clients ever having different truth state." It is the render set's mechanism
   `GetSupervisionFrame(frame)` exactly), and `ObservedSupervision.ForVehicles(renderSet)` for each drawn
   vehicle's state by SUMO id. There is deliberately no in-process supervision source beside the
   session, as the render set has: a recorder beside the session reads the server's truth like any
-  other, so the property this section asks of `<_supervision>` holds by construction. Writing
-  `<_supervision>` from it is not built.
+  other, so the property this section asks of `<_supervision>` holds by construction.
+
+**As built (2026-10-05): the supervision in the sidecar.** Every capture of a frame a plan was in force
+on carries that frame's supervision, as the server held it, read by the recorder from the snapshot of
+the capture's own frame in the same read as its vehicles and their render set (`FrameRecorder`,
+`CaptureSupervision`, `CotWriter`). Nothing is handed to the recorder for it, so a recorder in any
+process writes the same thing for one frame. Of the shape above, as written:
+
+```xml
+<events ... tick="1044000" telemetry_tick="1044000" vehicles="rendered"
+        plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="2"
+        vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
+  <_supervision scope="world" vocabulary="2" vocabulary_digest="e3571085...">
+    <absence instance="Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned"
+             labels="bahonar:post_unmanned" areas="tower_03" phase="vacancy" />
+  </_supervision>
+  ...
+  <event uid="CARLA-TRUTH-SUMO-escort_0" ...>
+    <detail> ... <_carla ... sumo_id="escort_0" ... />
+      <_supervision state="annotated" vocabulary="2" vocabulary_digest="e3571085...">
+        <annotation instance="Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3"
+                    labels="bahonar:coordinated_group_transit bahonar:destination_off_pattern"
+                    phase="transit" role="bahonar:lead" />
+      </_supervision>
+    </detail>
+  </event>
+  <event uid="CARLA-TRUTH-SUMO-corridor_d0_p0_h6.12" ...>
+    <detail> ... <_carla ... sumo_id="corridor_d0_p0_h6.12" ... />
+      <_supervision state="unlabelled" vocabulary="2" vocabulary_digest="e3571085..." />
+    </detail>
+  </event>
+</events>
+```
+
+- **One `<annotation>` per pattern instance in force, its labels a set.** `labels` and an absence's
+  `areas` are space-separated: a term is `namespace:name` in lower snake case and an area id lower snake
+  case, so neither admits a space. `phase` and `role` are written where the plan declares them. The
+  attributes the shape above shows and the server does not carry -- the onsets, `series`, `slot`,
+  `hard_negative_for`, `expected_entity_id` -- are the manifest's to record, with the interval.
+- **`state` on every rendered SUMO vehicle, `unlabelled` included**, and nowhere else: a vehicle actor
+  no session named is no subject of the plan. A nominal vehicle names the ordinary behaviour it is where
+  the plan does (D6.31). The world element is written whenever a plan is in force, empty where no
+  absence is, so its absence never stands for "none in force". No absence is ever an `<event>` (D6.6).
+- **The capture's own frame, or unknown.** The vehicles of a capture whose frame the client no longer
+  held are read from the nearest frame it did hold, which `telemetry_tick` names; its supervision is not,
+  because an interval can open or close between two frames and a body change hands. Such a capture, and
+  one whose frame's supervision block could not be read, says `supervision="unknown"` on its container
+  and carries no supervision. The recorder counts `SupervisionPaired` and `SupervisionUnpaired`, and the
+  run's closeout gates `capture.supervision_unpaired[<sensor>]` at zero ([12](12_Operator_Control_Surface.md)
+  §7.2). A capture of a frame no plan was in force on is written exactly as before.
+- **Checked from the files.** `TruthSidecarAudit` (`audit_truth_sidecars.py`) holds a capture whose run
+  had a plan -- a sidecar names one or says its supervision was unknown -- to a `<_supervision>` on every
+  SUMO vehicle record, in one of the three states and consistent with what it names, and to the world
+  element on every sidecar naming the plan; a sidecar of such a run saying nothing of supervision is a
+  defect too.
+- **The PNG carries none**, as ruled: a test reads every text chunk of a supervised capture's still and
+  finds only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, and none of the
+  frame's plan, digest, states, instances, labels or areas. The capture sidecar has no CSV twin, so no CSV
+  carries it; the CSV that mirrors a sidecar's per-vehicle fields is the standalone producer's
+  (`SumoCotBridge`), which runs without a CARLA server and so without the server's supervision.
 
 ### 8.3 The world truth track
 
@@ -3839,7 +3898,7 @@ owner acts on it rather than rediscovers it.
 | **D6.38** | **Supervision reaches the training export per image, attached to the box**: the three-valued state, the labels in force and the phase at that instant. The pattern-instance *structure* — participants, phase sequences, interval bounds, series and slot membership — does not. It is joinable only through `instance_id` and its siblings, which §10.2 withholds; shipping the structure without them yields rows that cannot be assembled, and shipping the identifiers to make them assemblable yields a handle constant across every frame of an instance — the memorisation defect [04](04_Contracts.md) D4.20 excluded `scenario_id` for. Assembling supervision onto tracks is the consumer's step, performed on **its own** tracks through the transfer rule §10.1 publishes (§10.2) |
 | **D6.39** | **Under an optional draw distance, a vehicle a camera did not draw is listed in that camera's sidecar and marked, never counted as seen.** The draw distance is a performance control, off by default: every vehicle keeps its body, pose and record. The sidecar states `draw_distance_m`, and a vehicle the distance reached carries `beyond_draw_distance` (`wholly` or `partly`) and `camera_range_m`, judged from the capture's own camera pose by the vehicle's bounding sphere as the renderer judges each primitive; a vehicle wholly beyond it is a sixth observability outcome, `beyond_draw_distance`, reported with render coverage as a sensor-scoped exclusion, and is never measured for occlusion. With no draw distance the outcome does not occur (§5.1, §8.2) |
 | **D6.40** | **Under an optional render-set limit, a vehicle outside it is `not_rendered` with the reason `outside_limit`, absent from every sidecar, and counted.** A circle, the cameras' footprints or a capacity is a performance control, off by default and recommended for no scenario; a vehicle it leaves out is simulated and has behavioural truth, no imagery-side truth, and no sidecar record. The drawn vehicles are then a sample of the simulated ones, chosen by place or by the seed, and a consumer treats them so; no limit reads supervision, and none is a default (§4.4, §10.4) |
-| **D6.41** | **Per-frame supervision is held on the CARLA server, and every reader takes it from the world-observer snapshot** (owner's ruling, 2026-10-05: "They have to be on the server. I do not want two clients ever having different truth state."). The session puts each change on the server for the body drawing each vehicle (`update_supervision`), after the render set and before the tick cue of the frame it is drawn in; the server holds a body's supervision on its own record while it is lent, dropping it when the body is given back or handed on, and the plan id, vocabulary version and digest and the absences for the world; the world observer writes all of it on every snapshot after the render set's entries. An unlabelled vehicle has no row and costs nothing; a reader joins the block to the frame's render set and answers every drawn vehicle's state. No supervision is read from an in-process source, so `<_supervision>` is identical across sidecars and processes by construction. The binder that decides the supervision is built (§3.3, 2026-10-05); the sidecar elements that write it are separate work (§8.2) |
+| **D6.41** | **Per-frame supervision is held on the CARLA server, and every reader takes it from the world-observer snapshot** (owner's ruling, 2026-10-05: "They have to be on the server. I do not want two clients ever having different truth state."). The session puts each change on the server for the body drawing each vehicle (`update_supervision`), after the render set and before the tick cue of the frame it is drawn in; the server holds a body's supervision on its own record while it is lent, dropping it when the body is given back or handed on, and the plan id, vocabulary version and digest and the absences for the world; the world observer writes all of it on every snapshot after the render set's entries. An unlabelled vehicle has no row and costs nothing; a reader joins the block to the frame's render set and answers every drawn vehicle's state. No supervision is read from an in-process source, so `<_supervision>` is identical across sidecars and processes by construction. The binder that decides the supervision is built (§3.3, 2026-10-05), and so is the sidecar that writes it: every capture writes its own frame's -- the plan and vocabulary on `<events>`, the world element with its absences, every rendered SUMO vehicle's state -- or says `supervision="unknown"` and writes none, never a neighbour's, counted and gated at zero (§8.2) |
 
 ---
 

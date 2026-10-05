@@ -279,6 +279,11 @@ def test_the_heads_up_display_reads_the_recorders_counts_while_it_records(tmp_pa
     handle.PairsRenderSet = False
     assert recorder.render_set_paired is None
 
+    # A recorder built before the sidecar carried supervision counts none, and none is shown.
+    assert (recorder.supervision_paired, recorder.supervision_unpaired) == (None, None)
+    handle.SupervisionPaired, handle.SupervisionUnpaired = 10, 2
+    assert (recorder.supervision_paired, recorder.supervision_unpaired) == (10, 2)
+
 
 def test_while_recording_the_tiles_are_asked_once_per_capture_period_and_changes_are_logged(
         tmp_path, caplog):

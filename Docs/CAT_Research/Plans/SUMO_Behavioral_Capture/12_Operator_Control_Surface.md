@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — §7.2: the closeout gates `capture.supervision_unpaired[<sensor>]`, a channel's captures of a frame a supervision plan was in force on that were written with `supervision="unknown"`, at zero, skipped from a recorder built before it counted them; the channel's closeout line states the supervision paired and unknown, and the free view's status shows an unknown count as it climbs ([`06`](06_Truth_And_Annotation.md) §8.2).
 `2026-10-05` — `run_capture` writes the run manifest, `truth/manifest.jsonl` under the capture directory beside the world truth track (`truth/world_truth_track.csv`), and names both in its result's `produced`; it closes the manifest with its `closed_by` before it reads its closing gates, so `supervision.manifest_closing_record` is measured: met where the manifest's last complete row is `manifest_closed` (§3.10.3, §7.2). `run_sumo_drive.py --run-manifest PATH` writes one for a drive (§9.6).
 `2026-10-05` — How much a run prints about collisions is a switch, off by default: `collision_detail` (`--collision-detail on`) in `run_capture`, and `run_sumo_drive.py --collision-detail`. Off, the session's report prints the count; on, each collision is printed as it ends and the report lists every collision and every collision warning SUMO wrote. Printing only: every collision is recorded either way (§5.2, §9.6).
 `2026-10-05` — A camera name is short and plain: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as `Overwatch_1`, `Southeast_1700m_orbit` or `NapOfEarth_2`; a Windows device name, a sensor's stock role name (`front`, …) and another camera's default stay refused, and every refusal says what is allowed (§5.2, §6.2). The schema states a `sensor_id`'s characters (check 1), and check 11 refuses what the characters allow and the rule does not. `run_free_move_camera.py --camera-name` names the free-move camera as it is created (§9.6).
@@ -1955,6 +1956,9 @@ illumination declaration, threshold 0), `capture.solar_block_missing[<sensor>]` 
 without a solar block, so with no recorded sun and no illumination band, threshold 0;
 [`11`](11_Time_And_Illumination.md) §8.4), `capture.render_set_unpaired[<sensor>]` (captures written
 with no vehicle list because their frame's render set was no longer held, threshold 0;
+[`06`](06_Truth_And_Annotation.md) §8.2), `capture.supervision_unpaired[<sensor>]` (captures of a frame
+a supervision plan was in force on, written with `supervision="unknown"` because their own frame's
+supervision was not to be had, threshold 0; skipped from a recorder built before it counted them;
 [`06`](06_Truth_And_Annotation.md) §8.2), `capture.sensor_pose_header_disagreed[<sensor>]` (captures
 whose image header placed the camera elsewhere than the snapshot of their own frame, threshold 0;
 §9.6), `capture.depth_pose_header_disagreed[<sensor>]` (the same for the depth captures occlusion is

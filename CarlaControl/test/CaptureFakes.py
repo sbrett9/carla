@@ -162,6 +162,8 @@ class FakeRecorder:
         self.RenderSetPaired = 0
         self.RenderSetUnpaired = 0
         self.RenderSetBodiesMissing = 0
+        self.SupervisionPaired = 0
+        self.SupervisionUnpaired = 0
         self.OcclusionMeasured = 0
         self.OcclusionUnmatched = 0
         self.ChecksSensorPose = True
@@ -184,6 +186,7 @@ class FakeRecorder:
         self.Saved += captures
         self.IlluminationPaired += captures
         self.RenderSetPaired += captures
+        self.SupervisionPaired += captures
         self.OcclusionMeasured += captures
         self.SensorPoseFromSnapshot += captures
         self.Dropped += self.drop_every_step

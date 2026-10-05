@@ -777,6 +777,14 @@ def report_captures(recorder) -> None:
         "because the frame's set was no longer held; %s rendered bodies had no truth "
         "record", recorder.RenderSetPaired, recorder.RenderSetUnpaired,
         recorder.RenderSetBodiesMissing)
+    # The supervision each capture carries is the server's for its own frame. A capture of a frame a
+    # plan was in force on whose supervision was not to be had says so and carries none, which is
+    # truth missing, and is said louder. A recorder built before it counted none.
+    unknown = getattr(recorder, "SupervisionUnpaired", None)
+    if unknown is not None:
+        (logger.warning if unknown else logger.info)(
+            "supervision        %s captures carry their frame's supervision, %s say it was unknown",
+            recorder.SupervisionPaired, unknown)
     if recorder.ChecksSensorPose:
         # A capture is placed where its frame's snapshot holds the camera, and its image header is
         # checked against that. A header that disagreed is a server stamping the image's pose after

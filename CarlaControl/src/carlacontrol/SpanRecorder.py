@@ -45,8 +45,10 @@ class SpanRecorder:
     or of the window.
 
     The heads-up display reads it as it reads `NativeRecorder`: `recording`, `saved`, `dropped`,
-    `record_hz` and `toggle_want()`, plus `waiting`, `waiting_s`, `tiles`, `render_set_paired` and
-    `render_set_unpaired`, and it takes one-line messages for the operator from `notices`.
+    `record_hz` and `toggle_want()`, plus `waiting`, `waiting_s`, `tiles`, `render_set_paired`,
+    `render_set_unpaired`, `supervision_paired` and `supervision_unpaired`, and it takes one-line
+    messages for the operator from `notices`. Each capture's supervision is the server's for its own
+    frame, read by the recorder from the snapshot, so nothing about it is handed to the recorder here.
     """
 
     TILE_CEILING_S = 90.0
@@ -151,6 +153,17 @@ class SpanRecorder:
     def render_set_unpaired(self) -> int | None:
         """Captures listing no vehicle because their frame's set was no longer held."""
         return self._counter("RenderSetUnpaired") if self._pairs_render_set() else None
+
+    @property
+    def supervision_paired(self) -> int | None:
+        """Captures carrying their own frame's supervision, as the server held it; None from a recorder
+        that counts none (one built before the sidecar carried supervision), or with no span open."""
+        return self._counter("SupervisionPaired") if self._counts_supervision() else None
+
+    @property
+    def supervision_unpaired(self) -> int | None:
+        """Captures of a frame a plan was in force on, written with their supervision unknown."""
+        return self._counter("SupervisionUnpaired") if self._counts_supervision() else None
 
     def toggle_want(self, enabled: bool | None = None) -> None:
         """Ask for a span, or for the one waiting or recording to end. Returns at once."""
@@ -379,6 +392,12 @@ class SpanRecorder:
     def _pairs_render_set(self) -> bool:
         try:
             return self._handle is not None and bool(self._handle.PairsRenderSet)
+        except Exception:
+            return False
+
+    def _counts_supervision(self) -> bool:
+        try:
+            return self._handle is not None and hasattr(self._handle, "SupervisionUnpaired")
         except Exception:
             return False
 
