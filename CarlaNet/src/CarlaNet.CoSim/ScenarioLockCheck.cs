@@ -1,11 +1,14 @@
 using System.Security.Cryptography;
+using System.Xml;
+using CarlaNet.Map;
 
 namespace CarlaNet.CoSim;
 
 /// <summary>
 /// Establishes whether a scenario is the one its compile lock binds -- the same configuration, route
-/// file and network, compiled against the same catalogue and epoch -- and refuses a session where it
-/// is not; or, where no lock sits beside the configuration, records that the scenario is uncompiled.
+/// file, network and additional file, compiled against the same catalogue and epoch, with the
+/// supervision plan compiled against those files -- and refuses a session where it is not; or, where no
+/// lock sits beside the configuration, records that the scenario is uncompiled.
 /// </summary>
 /// <remarks>
 /// <para><b>Why a session checks it.</b> The lock is the scenario compiler's statement of what it
@@ -25,6 +28,10 @@ namespace CarlaNet.CoSim;
 /// <item><b>The network</b> the configuration names: the one the lock names, with the lock's digest.
 /// Whether that network is the world package's is <see cref="ScenarioNetworkCheck"/>'s, made
 /// before this one.</item>
+/// <item><b>The additional files</b> the configuration names, read as SUMO reads them: exactly the one
+/// the lock names, with its digest, or none where the lock names none.</item>
+/// <item><b>The supervision plan</b>, where the lock names one: <c>&lt;stem&gt;.supervision.json</c>
+/// beside the configuration, with the lock's digest.</item>
 /// <item><b>The catalogue</b>: the digest the catalogue the session loads declares, against the one
 /// the lock records.</item>
 /// <item><b>The epoch</b>, where the session declares one: <see cref="SolarEpoch.Digest"/> of it,
@@ -36,21 +43,33 @@ namespace CarlaNet.CoSim;
 /// identity are recorded on the run report, not compared: the world is compared by the checks that
 /// read the package and the loaded world.</para>
 ///
-/// <para><b>No lock is not a refusal.</b> A scenario a generator wrote directly as SUMO files -- the
-/// shipped Arapahoe scenario is one -- has no lock, and it runs. The report records it as uncompiled,
-/// so a run of one can never be mistaken for a run of a compiled scenario.</para>
+/// <para><b>The plan is bound to the files both ways.</b> Once the files agree with the lock, the plan
+/// is read (<see cref="SupervisionPlan.Read"/>, which refuses a plan it cannot bind) and its own
+/// digests are compared with the files the session runs: the route file's, the configuration's and the
+/// additional file's SHA-256, or none where it was compiled against none, the network's canonical
+/// fingerprint, and its vocabulary's digest against the lock's. A plan compiled against another
+/// generation of the files would resolve some of its ids and not others (<c>06</c> §8.1), and nothing
+/// in a run would show it. The plan is then <see cref="Plan"/>, for the session to bind.</para>
+///
+/// <para><b>No lock is not a refusal.</b> A scenario a generator wrote directly as SUMO files has no
+/// lock, and it runs. The report records it as uncompiled, so a run of one can never be mistaken for a
+/// run of a compiled scenario. Its supervision is not read: a <c>.supervision.json</c> beside an
+/// uncompiled scenario is nothing a lock binds, and may be a legacy sidecar of the same name.</para>
+///
+/// <para><b>A lock that names no plan is not a refusal either.</b> Every lock the compiler writes names
+/// one, since every compile writes a plan; a lock without one binds no supervision, and the run binds
+/// none and says so. A lock that names a plan which is not there is refused: supervision travels in
+/// the plan alone (06 D6.1), and a run without it would bind none of the rows its author declared.</para>
 ///
 /// <para><b>What it cannot see.</b></para>
 /// <list type="bullet">
 /// <item><b>The catalogue's contents.</b> The catalogue's declared digest is compared, not recomputed:
 /// a catalogue edited without re-digesting it passes.</item>
-/// <item><b>Files the lock does not bind.</b> Additional files, and the supervision plan, which the
-/// session does not run. An additional file named by a configuration whose digest matches is the one
-/// the compiler named, but its bytes are not checked.</item>
 /// <item><b>A file changed after the check.</b> It is taken once, when the session starts, just before
 /// SUMO reads the files.</item>
 /// <item><b>Whether the lock is the compiler's.</b> A lock rewritten to match edited files passes; the
-/// check establishes that the files are the ones the lock describes, not who wrote the lock.</item>
+/// check establishes that the files are the ones the lock describes, not who wrote the lock. A plan
+/// edited with its vocabulary's digest recomputed and the lock rewritten to match passes too.</item>
 /// </list>
 /// </remarks>
 public sealed class ScenarioLockCheck
@@ -58,11 +77,19 @@ public sealed class ScenarioLockCheck
     private static readonly StringComparison PathComparison =
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
-    private ScenarioLockCheck(string expectedLockPath, ScenarioLock? locked, bool epochCompared)
+    /// <summary>
+    /// The names SUMO takes its additional-files option by in a configuration: the option, its synonym
+    /// and its one-letter abbreviation.
+    /// </summary>
+    private static readonly string[] AdditionalOptionNames = ["additional-files", "additional", "a"];
+
+    private ScenarioLockCheck(string expectedLockPath, ScenarioLock? locked, bool epochCompared,
+                              SupervisionPlan? plan)
     {
         ExpectedLockPath = expectedLockPath;
         Lock = locked;
         EpochCompared = epochCompared;
+        Plan = plan;
     }
 
     /// <summary>Where the session looked for the lock: <c>&lt;stem&gt;.lock.json</c> beside the configuration.</summary>
@@ -78,6 +105,12 @@ public sealed class ScenarioLockCheck
     public bool EpochCompared { get; }
 
     /// <summary>
+    /// The supervision plan the lock binds, read and bound to the files the session runs: every row the
+    /// run may bind. Null for an uncompiled scenario and for a lock that names no plan.
+    /// </summary>
+    public SupervisionPlan? Plan { get; }
+
+    /// <summary>
     /// Where the compile lock of a configuration is: beside it, named for it, <c>X.sumocfg</c> to
     /// <c>X.lock.json</c>.
     /// </summary>
@@ -88,15 +121,27 @@ public sealed class ScenarioLockCheck
     }
 
     /// <summary>
-    /// Check the scenario against its compile lock, or record that it has none.
+    /// Where a session reads a compiled scenario's supervision plan: beside its configuration, named for
+    /// it, <c>X.sumocfg</c> to <c>X.supervision.json</c>, as the compiler writes it.
+    /// </summary>
+    public static string PlanPathFor(string configurationPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configurationPath);
+        return System.IO.Path.ChangeExtension(System.IO.Path.GetFullPath(configurationPath), ".supervision.json");
+    }
+
+    /// <summary>
+    /// Check the scenario against its compile lock, and its supervision plan against both, or record
+    /// that it has no lock.
     /// </summary>
     /// <param name="scenarioPath">The scenario's SUMO configuration.</param>
     /// <param name="catalogue">The catalogue the session loads.</param>
     /// <param name="epoch">The epoch the session declares, or null where it declares none.</param>
-    /// <returns>What was found, for the run report.</returns>
+    /// <returns>What was found, for the run report, with the plan for the session to bind.</returns>
     /// <exception cref="CoSimSessionRefusedException">
-    /// A lock sits beside the configuration and cannot be read, or the files, the catalogue or the
-    /// epoch disagree with it; every disagreement is named.
+    /// A lock sits beside the configuration and cannot be read; the files, the catalogue or the epoch
+    /// disagree with it; the plan it names is not there, cannot be bound, or was compiled against other
+    /// files. Every disagreement of one kind is named in one refusal.
     /// </exception>
     public static ScenarioLockCheck Require(string scenarioPath, VehicleCatalogue catalogue,
                                             SolarEpoch? epoch)
@@ -107,7 +152,7 @@ public sealed class ScenarioLockCheck
         string lockPath = LockPathFor(scenarioPath);
         if (!System.IO.File.Exists(lockPath))
         {
-            return new ScenarioLockCheck(lockPath, null, epochCompared: false);
+            return new ScenarioLockCheck(lockPath, null, epochCompared: false, plan: null);
         }
 
         ScenarioLock locked = ScenarioLock.Read(lockPath);
@@ -118,6 +163,7 @@ public sealed class ScenarioLockCheck
         List<string> disagreements = [];
 
         // The configuration being run: the one the lock names, with the bytes the lock digests.
+        string? configDigest = null;
         string lockedConfig = System.IO.Path.GetFullPath(locked.Config.Path, lockDirectory);
         if (!string.Equals(lockedConfig, configuration.Path, PathComparison))
         {
@@ -125,21 +171,21 @@ public sealed class ScenarioLockCheck
         }
         else
         {
-            CompareDigest(disagreements, "configuration", configuration.Path, locked.Config.Sha256);
+            configDigest = CompareDigest(disagreements, "configuration", configuration.Path, locked.Config.Sha256);
         }
 
         // The route files SUMO will load: exactly the one the lock names.
+        string? routesDigest = null;
         string lockedRoutes = System.IO.Path.GetFullPath(locked.Routes.Path, lockDirectory);
         IReadOnlyList<string> routes = configuration.FilesOf("route-files", "routes", "r");
         if (routes.Count != 1 || !string.Equals(routes[0], lockedRoutes, PathComparison))
         {
-            disagreements.Add("the configuration runs the route file(s) "
-                              + (routes.Count == 0 ? "(none)" : string.Join(", ", routes))
+            disagreements.Add("the configuration runs the route file(s) " + Listed(routes)
                               + $" and the lock binds {lockedRoutes}");
         }
         else
         {
-            CompareDigest(disagreements, "route file", lockedRoutes, locked.Routes.Sha256);
+            routesDigest = CompareDigest(disagreements, "route file", lockedRoutes, locked.Routes.Sha256);
         }
 
         // The network SUMO will load: the one the lock names.
@@ -152,6 +198,51 @@ public sealed class ScenarioLockCheck
         else
         {
             CompareDigest(disagreements, "network", lockedNetwork, locked.Network.Sha256);
+        }
+
+        // The additional files SUMO will load: the one the lock names, or none where it names none.
+        string? additionalDigest = null;
+        IReadOnlyList<string> additional = configuration.FilesOf(AdditionalOptionNames);
+        if (locked.Additional is { } lockedAdditionalFile)
+        {
+            string lockedAdditional = System.IO.Path.GetFullPath(lockedAdditionalFile.Path, lockDirectory);
+            if (additional.Count != 1 || !string.Equals(additional[0], lockedAdditional, PathComparison))
+            {
+                disagreements.Add("the configuration runs the additional file(s) " + Listed(additional)
+                                  + $" and the lock binds {lockedAdditional}");
+            }
+            else
+            {
+                additionalDigest = CompareDigest(disagreements, "additional file", lockedAdditional,
+                                                 lockedAdditionalFile.Sha256);
+            }
+        }
+        else if (additional.Count > 0)
+        {
+            disagreements.Add("the configuration runs the additional file(s) " + Listed(additional)
+                              + " and the lock binds none");
+        }
+
+        // The supervision plan, where the lock names one: beside the configuration, with its digest.
+        string planPath = PlanPathFor(scenarioPath);
+        if (locked.Supervision is { } lockedPlanFile)
+        {
+            string lockedPlan = System.IO.Path.GetFullPath(lockedPlanFile.Path, lockDirectory);
+            if (!string.Equals(lockedPlan, planPath, PathComparison))
+            {
+                disagreements.Add($"the lock binds the supervision plan {lockedPlan}, and a session reads the "
+                                  + $"plan beside its configuration, at {planPath}");
+            }
+            else if (!System.IO.File.Exists(planPath))
+            {
+                disagreements.Add($"the lock binds the supervision plan {planPath} and it is not there; a "
+                                  + "compiled scenario's supervision travels in its plan alone, so a run "
+                                  + "without it would bind none of the rows its author declared");
+            }
+            else
+            {
+                CompareDigest(disagreements, "supervision plan", planPath, lockedPlanFile.Sha256);
+            }
         }
 
         if (!string.Equals(catalogue.CatalogueDigest, locked.CatalogueDigest, StringComparison.Ordinal))
@@ -174,14 +265,32 @@ public sealed class ScenarioLockCheck
         {
             throw new CoSimSessionRefusedException(
                 $"The scenario {scenarioPath} is not the one its compile lock {lockPath} binds: "
-                + string.Join("; ", disagreements.Select((problem, index) => $"({index + 1}) {problem}"))
+                + Numbered(disagreements)
                 + ". The compiler's output is byte-reproducible, so a file whose digest has moved was "
                 + "changed after it was compiled, and the traffic it produces is not the traffic the lock "
                 + "and the resolution report describe. SUMO has not been started. Recompile the scenario, "
                 + "or give the session the catalogue and epoch it was compiled against.");
         }
 
-        return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null);
+        SupervisionPlan? plan = null;
+        if (locked.Supervision is { } bound)
+        {
+            plan = SupervisionPlan.Read(planPath);
+            List<string> unbound = PlanDisagreements(plan, locked, bound, configuration.Path, configDigest!,
+                                                     lockedRoutes, routesDigest!, network, additional,
+                                                     additionalDigest);
+            if (unbound.Count > 0)
+            {
+                throw new CoSimSessionRefusedException(
+                    $"The supervision plan {planPath} was not compiled against the files the scenario "
+                    + $"{scenarioPath} runs: " + Numbered(unbound)
+                    + ". A plan is bound to the files it was compiled against, so one compiled against "
+                    + "another generation of them would resolve some of its ids and not others, and nothing "
+                    + "in the run would show it. SUMO has not been started. Recompile the scenario.");
+            }
+        }
+
+        return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null, plan);
     }
 
     /// <summary>What was found, in the report's words.</summary>
@@ -192,10 +301,30 @@ public sealed class ScenarioLockCheck
             return $"none at {ExpectedLockPath}: an uncompiled scenario, nothing compared";
         }
 
-        return $"{locked.ScenarioId}, compiled by {Shown(locked.Compiler)}; configuration, route file, "
-               + "network and catalogue agree with it; "
+        List<string> agreeing = ["configuration", "route file", "network"];
+        if (locked.Additional is not null)
+        {
+            agreeing.Add("additional file");
+        }
+
+        if (Plan is not null)
+        {
+            agreeing.Add("supervision plan");
+        }
+
+        agreeing.Add("catalogue");
+        return $"{locked.ScenarioId}, compiled by {Shown(locked.Compiler)}; "
+               + string.Join(", ", agreeing.SkipLast(1)) + $" and {agreeing[^1]} agree with it; "
                + (EpochCompared ? "so does the epoch" : "the epoch not compared, as the session declares none");
     }
+
+    /// <summary>The supervision plan the run binds, in the report's words.</summary>
+    public string PlanText =>
+        Lock is null
+            ? "not read: an uncompiled scenario binds no supervision plan"
+            : Plan is not { } plan
+                ? "none: the lock names no supervision plan, so the run binds no supervision"
+                : $"{plan}; compiled against the files the run loads";
 
     /// <summary>The routing release the lock records, in the report's words.</summary>
     public string RoutedByText =>
@@ -224,12 +353,104 @@ public sealed class ScenarioLockCheck
               + $"{Shown(locked.WorldNetworkFingerprint)}, OpenDRIVE {Shown(locked.WorldOpenDriveSha256)}, "
               + $"converted by {Shown(locked.WorldConverter)}";
 
-    private static void CompareDigest(List<string> disagreements, string role, string path, string expected)
+    /// <summary>
+    /// Every way the plan's own digests disagree with the files the session runs, which already agree
+    /// with the lock: so each digest here is the file's as the lock binds it.
+    /// </summary>
+    private static List<string> PlanDisagreements(SupervisionPlan plan, ScenarioLock locked, LockedFile bound,
+                                                  string configuration, string configDigest,
+                                                  string routes, string routesDigest, string network,
+                                                  IReadOnlyList<string> additional, string? additionalDigest)
+    {
+        List<string> unbound = [];
+
+        // The bytes read are the bytes the lock digests: a plan changed between the two reads is not.
+        if (!string.Equals(plan.Sha256, bound.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            unbound.Add($"the plan read digests as {plan.Sha256} and the lock records {bound.Sha256}");
+        }
+
+        if (locked.ScenarioId.Length > 0 && !string.Equals(plan.ScenarioId, locked.ScenarioId, StringComparison.Ordinal))
+        {
+            unbound.Add($"it is the plan of the scenario '{plan.ScenarioId}' and the lock binds "
+                        + $"'{locked.ScenarioId}'");
+        }
+
+        ComparePlanDigest(unbound, "configuration", configuration, plan.ConfigDigest, configDigest);
+        ComparePlanDigest(unbound, "route file", routes, plan.RoutesDigest, routesDigest);
+
+        string? fingerprint = FingerprintOf(unbound, network);
+        if (fingerprint is not null && !string.Equals(fingerprint, plan.NetworkDigest, StringComparison.Ordinal))
+        {
+            unbound.Add($"it was compiled against the network fingerprint {plan.NetworkDigest} and the "
+                        + $"network {network} fingerprints as {fingerprint}");
+        }
+
+        if (plan.AdditionalDigest is null)
+        {
+            if (additional.Count > 0)
+            {
+                unbound.Add("it was compiled against no additional file and the configuration runs "
+                            + Listed(additional));
+            }
+        }
+        else if (additional.Count == 0)
+        {
+            unbound.Add($"it was compiled against the additional file digest {plan.AdditionalDigest} and the "
+                        + "configuration runs none");
+        }
+        else
+        {
+            // One, the lock's: the files agree with the lock, which names none where none is run.
+            ComparePlanDigest(unbound, "additional file", additional[0], plan.AdditionalDigest, additionalDigest!);
+        }
+
+        if (locked.VocabularyDigest is { } vocabulary
+            && !string.Equals(plan.Vocabulary.Digest, vocabulary, StringComparison.Ordinal))
+        {
+            unbound.Add($"it carries the vocabulary digest {plan.Vocabulary.Digest} and the lock records "
+                        + vocabulary);
+        }
+
+        return unbound;
+    }
+
+    private static void ComparePlanDigest(List<string> unbound, string role, string path, string compiled,
+                                          string actual)
+    {
+        if (!string.Equals(compiled, actual, StringComparison.OrdinalIgnoreCase))
+        {
+            unbound.Add($"it was compiled against the {role} digest {compiled} and the {role} {path} digests "
+                        + $"as {actual}");
+        }
+    }
+
+    /// <summary>The canonical fingerprint of the network, or a disagreement saying why there is none.</summary>
+    private static string? FingerprintOf(List<string> unbound, string network)
+    {
+        try
+        {
+            return NetworkFingerprint.ComputeFile(network);
+        }
+        catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException
+                                               or XmlException or InvalidDataException)
+        {
+            unbound.Add($"the network {network} cannot be read as a SUMO network to fingerprint: "
+                        + unreadable.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Compare a file's bytes with the digest the lock records for it, adding a disagreement where they
+    /// differ or the file cannot be read; the file's digest, or null where it has none.
+    /// </summary>
+    private static string? CompareDigest(List<string> disagreements, string role, string path, string expected)
     {
         if (!System.IO.File.Exists(path))
         {
             disagreements.Add($"the {role} {path} is not there");
-            return;
+            return null;
         }
 
         string actual;
@@ -240,13 +461,15 @@ public sealed class ScenarioLockCheck
         catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException)
         {
             disagreements.Add($"the {role} {path} cannot be read: {unreadable.Message}");
-            return;
+            return null;
         }
 
         if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
         {
             disagreements.Add($"the {role} {path} digests as {actual} and the lock records {expected}");
         }
+
+        return actual;
     }
 
     /// <summary>Lowercase hex SHA-256 of a file's bytes, as the compiler digests what it wrote.</summary>
@@ -255,6 +478,12 @@ public sealed class ScenarioLockCheck
         using FileStream stream = System.IO.File.OpenRead(path);
         return Convert.ToHexStringLower(SHA256.HashData(stream));
     }
+
+    private static string Listed(IReadOnlyList<string> files) =>
+        files.Count == 0 ? "(none)" : string.Join(", ", files);
+
+    private static string Numbered(List<string> problems) =>
+        string.Join("; ", problems.Select((problem, index) => $"({index + 1}) {problem}"));
 
     private static string Shown(string? value) => string.IsNullOrEmpty(value) ? "(not recorded)" : value;
 }

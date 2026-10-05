@@ -2,7 +2,8 @@
 
 Nothing here runs SUMO, the scenario compiler or a CARLA server. The scenario package is written
 directly in the shape `ScenarioCompiler._lock` and `_stage_emission` give it -- a lock naming a route
-file, a SUMO configuration, the world's network and a supervision plan, each with its SHA-256 -- so
+file, a SUMO configuration, the world's network and a supervision plan, each with its SHA-256, and a
+plan carrying the compiler's vocabulary and the digests of the files it was compiled against -- so
 the binding code reads exactly what a compile writes. The world package is a zip of `world.json`,
 `map.xodr` and `map.net.xml` with the manifest keys `CarlaNet.Map` writes, at Gardnerville's origin.
 The catalogue is the repository's measured one, so its digest is real.
@@ -75,12 +76,44 @@ CONFIG = ('<?xml version="1.0" encoding="UTF-8"?>\n<configuration>\n'
           f'  <time><step-length value="{STEP_S!r}"/></time>\n'
           '  <processing><time-to-teleport value="-1"/></processing>\n'
           f'  <random_number><seed value="{SEED}"/></random_number>\n</configuration>\n')
-SUPERVISION = json.dumps({"supervision_plan_version": 1, "plan_id": SCENARIO_ID,
-                          "instances": [], "cohorts": [], "series": []}, indent=2) + "\n"
 
 
 def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def fixture_vocabulary():
+    """The vocabulary the compiler publishes for a scenario that declares no author namespace."""
+    from carlacontrol.AnnotationVocabulary import AnnotationVocabulary
+    from carlacontrol.CompileFindings import CompileFindings
+    return AnnotationVocabulary({}, CompileFindings())
+
+
+def supervision_plan(package: Path, files: dict[str, dict]) -> str:
+    """The plan `ScenarioCompiler._stage_emission` writes for this fixture: no instance, series or
+    flow, its one vehicle written unlabelled, the vocabulary the compiler publishes, and the digests of
+    the files it was compiled against -- the network's by its canonical fingerprint, which the session
+    compares it with."""
+    from CarlaNet.Map import NetworkFingerprint
+    vocabulary = fixture_vocabulary()
+    plan = {
+        "supervision_plan_version": 1,
+        "plan_id": SCENARIO_ID,
+        "spec_version": 1,
+        "scenario_id": SCENARIO_ID,
+        "routes_digest": files["routes"]["sha256"],
+        "network_digest": str(NetworkFingerprint.ComputeFile(str(package / files["network"]["path"]))),
+        "config_digest": files["config"]["sha256"],
+        "additional_digest": None,
+        "vocabulary_version": vocabulary.to_document()["core"]["vocabulary_version"],
+        "vocabulary_digest": vocabulary.digest,
+        "vocabulary": vocabulary.to_document(),
+        "instances": [],
+        "series": [],
+        "cohorts": [],
+        "entities": [{"entity_id": "v0", "supervision": ["unlabelled"], "refs": []}],
+    }
+    return json.dumps(plan, indent=2, ensure_ascii=False) + "\n"
 
 
 def write_world_package(directory: Path, manifest: dict | None = None,
@@ -115,7 +148,8 @@ def lock_document(world_package_name: str, files: dict[str, dict], **changes) ->
                   "georeference": MANIFEST["GeoReferenceString"]},
         "catalogue": {"catalogue_id": "carla-0.10.0-windows", "catalogue_digest": CATALOGUE_DIGEST,
                       "blueprint_set_digest": "2" * 64, "content_build_id": "fixture"},
-        "vocabulary": {"core_version": 1, "namespaces": {}, "vocabulary_digest": "3" * 64},
+        "vocabulary": {"core_version": fixture_vocabulary().to_document()["core"]["vocabulary_version"],
+                       "namespaces": [], "vocabulary_digest": fixture_vocabulary().digest},
         "traffic": {"sumo_seed": SEED, "step_length_s": STEP_S, "end_s": END_S,
                     "processing": {"time-to-teleport": "-1"},
                     "routed_by": {"tool": "duarouter", "version": "1.27.0",
@@ -146,12 +180,14 @@ def write_scenario_package(directory: Path, world_package_name: str = f"{MAP_NAM
         "routes": (package / f"{SCENARIO_ID}.rou.xml", ROUTES),
         "config": (package / f"{SCENARIO_ID}.sumocfg", CONFIG),
         "network": (package / f"{MAP_NAME}.net.xml", NETWORK),
-        "supervision": (package / f"{SCENARIO_ID}.supervision.json", SUPERVISION),
     }
     files = {}
     for role, (path, text) in written.items():
         path.write_text(text, encoding="utf-8", newline="\n")
         files[role] = {"path": path.name, "sha256": sha256_of(path)}
+    plan = package / f"{SCENARIO_ID}.supervision.json"
+    plan.write_text(supervision_plan(package, files), encoding="utf-8", newline="\n")
+    files["supervision"] = {"path": plan.name, "sha256": sha256_of(plan)}
     lock = lock_document(world_package_name, files, **lock_changes)
     lock_path = package / f"{SCENARIO_ID}.lock.json"
     lock_path.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n")

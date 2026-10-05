@@ -13,7 +13,9 @@ namespace CarlaNet.CoSim;
 /// <para>Only the fields a session compares or records are read. The ones it compares are required,
 /// and a lock that lacks one is refused whole: a lock that cannot be checked is not evidence of
 /// anything. The ones it records are carried where present and reported as not recorded where
-/// not.</para>
+/// not. The two files a lock may leave out -- the lane closures' additional file, which only a
+/// scenario that closes lanes has, and the supervision plan -- are none where absent and refused
+/// where named without both their path and their digest.</para>
 /// </remarks>
 public sealed class ScenarioLock
 {
@@ -44,6 +46,21 @@ public sealed class ScenarioLock
 
     /// <summary>The network the compiler copied from the world package, byte for byte.</summary>
     public LockedFile Network { get; private init; } = new(string.Empty, string.Empty);
+
+    /// <summary>
+    /// The lane closures' additional file the compiler wrote, where the scenario closes lanes; null
+    /// where the lock names none.
+    /// </summary>
+    public LockedFile? Additional { get; private init; }
+
+    /// <summary>
+    /// The supervision plan the compiler wrote; null where the lock names none. Every lock the compiler
+    /// writes names one, since every compile writes a plan.
+    /// </summary>
+    public LockedFile? Supervision { get; private init; }
+
+    /// <summary>The digest of the vocabulary document the supervision plan carries, as the lock records it.</summary>
+    public string? VocabularyDigest { get; private init; }
 
     /// <summary>The digest the catalogue the scenario was compiled against declares.</summary>
     public string CatalogueDigest { get; private init; } = string.Empty;
@@ -153,6 +170,9 @@ public sealed class ScenarioLock
                 Config = LockedFileOf(root, missing, "config"),
                 Routes = LockedFileOf(root, missing, "routes"),
                 Network = LockedFileOf(root, missing, "network"),
+                Additional = OptionalLockedFileOf(root, missing, "additional"),
+                Supervision = OptionalLockedFileOf(root, missing, "supervision"),
+                VocabularyDigest = Text(root, missing, required: false, "vocabulary", "vocabulary_digest"),
                 CatalogueDigest = Text(root, missing, required: true, "catalogue", "catalogue_digest")
                                   ?? string.Empty,
                 CatalogueId = Text(root, missing, required: false, "catalogue", "catalogue_id"),
@@ -192,6 +212,13 @@ public sealed class ScenarioLock
     private static LockedFile LockedFileOf(JsonElement root, List<string> missing, string role) =>
         new(Text(root, missing, required: true, "files", role, "path") ?? string.Empty,
             Text(root, missing, required: true, "files", role, "sha256") ?? string.Empty);
+
+    /// <summary>A file the lock names only where the scenario has one: absent is none, and present it is whole.</summary>
+    private static LockedFile? OptionalLockedFileOf(JsonElement root, List<string> missing, string role) =>
+        root.TryGetProperty("files", out JsonElement files) && files.ValueKind == JsonValueKind.Object
+        && files.TryGetProperty(role, out _)
+            ? LockedFileOf(root, missing, role)
+            : null;
 
     private static string? Text(JsonElement root, List<string> missing, bool required,
                                 params string[] keys)
