@@ -222,7 +222,7 @@ public sealed class SupervisionBinderSessionTests
     /// left-turner's second route part, a nominal instance and a nominal series member, an absence and an
     /// annotated flow.
     /// </summary>
-    private static CompiledFixture Supervised()
+    internal static CompiledFixture Supervised()
     {
         CompiledFixture compiled = CompiledFixture.Write(routes: CoSimFixtures.SupervisedRoutes);
         compiled.WritePlan(WithRows(compiled.PlanDocument(),

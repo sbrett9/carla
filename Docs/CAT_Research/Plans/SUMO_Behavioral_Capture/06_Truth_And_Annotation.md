@@ -2314,7 +2314,7 @@ SHA-256 of the bytes read, which is what the lock binds.
   binder that takes it runs in the session's process. The per-frame state published to the server, which
   §3.6 places in `CarlaNet.Types`, is another type; keeping the plan out of `CarlaNet.Types` keeps it out of
   every assembly that reads that state.
-- **Not built:** the interval binder, D6.8's two-run manifest diff, and supervision for Arapahoe and
+- **Not built:** supervision for Arapahoe and
   Gardnerville, whose plans assert nothing: every flow and their one authored vehicle are unlabelled.
 
 ### 8.2 The capture truth sidecar
@@ -2861,10 +2861,59 @@ and every instant is TraCI's clock for the SUMO frame it describes:
 
 `run_capture` closes the manifest, giving its `closed_by`, before it reads its closing gates, so
 `supervision.manifest_closing_record` is measured; the session's end closes a manifest its caller did
-not. Not yet written: the supervision rows -- instances, intervals, observability, prevalence -- which
-wait for the interval binder; `illumination_override`, since nothing overrides the declaration at run
-start yet; `lamp_gaps[]`; and `sidecars_missing_solar`, which is still each recorder's count and its
-gate. The gate records stay in the run result.
+not.
+
+**As built (2026-10-05): the supervision rows.** The writer is one of the interval binder's sinks
+(`ISupervisionIntervalSink`, §3.3), so a run whose compile lock binds a plan writes its supervision
+beside everything else, from the first frame, with nothing more to switch on:
+
+- `instance`, `series` and `cohort`, straight after `manifest_opened`: each of the plan's pattern
+  instances, recurring series and cohorts as declared -- identity, supervision state and realisation,
+  labels, parameters, `hard_negative_for`, series and slot references and areas; an instance's
+  participants with their SUMO ids and roles and the intervals it declares, each with its participant,
+  phase, anchors as spelled and declared seconds and civil times; an absence's `expected`; a series'
+  cadence, member role and slots;
+- `interval_opened`, as the binder opens an interval: its `(instance_id, participant, phase)` triple,
+  the role, `declared_start_s`, `declared_end_s` and `declared_duration_s`, `committed_start_s` by
+  TraCI's clock, `observed_start_s` and `observed_start_frame` where a rendered frame showed it, and
+  `begun_before_window`; stamped with the committed onset, or failing that the declared one, and with
+  none where neither is known, as for a phase entered before the window, whose instant cannot be
+  recovered;
+- `interval_closed`, as the binder closes it: the triple, `closed_by` in the core's words (§3.7),
+  stamped with the instant it closed, the onsets as bound by then, `committed_end_s`, and `not_drawn`,
+  the spans its participant was not drawn. An interval whose participant SUMO never inserted closes
+  `never_inserted` without having opened;
+- `supervision_defect`, each seam defect the binder finds -- a departure observed on another frame than
+  the one SUMO committed it at, a stop the body never stood still for, a stop SUMO made on another lane
+  than its anchor names -- in the binder's words, with `found_by_s`, the last SUMO frame read when it
+  was written: as the binder next opens or closes an interval, at the next frame, or at the close,
+  whichever comes first, so before any row the binder's finding bears on;
+- and on `manifest_closed`: `intervals_opened`, `intervals_closed`, `supervision_defects`,
+  `open_intervals` (each with `opened_s` and `begun_before_window`), `open_intervals_close_as`, and
+  `never_opened`. The binder closes the intervals the session's end leaves open --
+  `scenario_end` where SUMO had nothing left, `capture_window_end` otherwise -- after the terminal row,
+  which is the manifest's last, so they are listed on it as open with the word they close with rather
+  than written as closed. With the opened and closed rows and `never_opened`, a closed manifest names
+  every triple the plan declares, once (D6.8).
+
+A manifest with no terminal row was interrupted, and nothing in it says `open_at_interruption`: a
+reader infers it, for every triple opened and never closed in the rows already written, which are each
+whole. A test reads the manifest after every SUMO step of a supervised run and finds that inference
+equal to the intervals the binder holds open at that instant.
+
+`CarlaControl/scripts/diff_run_manifests.py` makes D6.8's diff of two manifests of one scenario
+(`carlacontrol.RunManifestDiff`): it compares the triples each names and exits 1 on any one named by
+one manifest and not the other, on plans that declare different triples, and, within either manifest,
+on a triple its plan does not declare, a triple opened or closed twice, or a closed manifest that names
+a planned triple nowhere; it exits 2 for a file that is not a manifest or two of different scenarios.
+What the runs bound differently -- onsets, closing instants, `begun_before_window`, `closed_by` -- is
+listed and is not a difference. An interrupted manifest names only the triples its run reached, and the
+diff says so beside the triples it lacks. The world truth track is not compared: its samples are per
+SUMO frame, and the frames differ whenever two runs' steps do.
+
+Not yet written: per-sensor observability and its spans, and prevalence; `illumination_override`,
+since nothing overrides the declaration at run start yet; `lamp_gaps[]`; and `sidecars_missing_solar`,
+which is still each recorder's count and its gate. The gate records stay in the run result.
 
 ```jsonc
 {
@@ -3865,7 +3914,7 @@ owner acts on it rather than rediscovers it.
 | **D6.5** | **`RecurringSeries` and `SeriesSlot` are added above `PatternInstance`.** A cadence is a first-class record, its realisations are its members, and the 335 realised guard postings are the evidence that makes the 336th slot's vacancy meaningful (§3.4) |
 | **D6.6** | **An absence is a pattern instance with `realisation: absent`, no participants, an `expected` block, and a `slot_ref`.** It is anchored to an area of interest and a window rather than to a track. It is **world-scoped**: it appears in the manifest and as a child of the sidecar's `<events>` container, and **never as a CoT `<event>`**, because emitting an event for a vehicle that does not exist is fabricating a detection (§3.5) |
 | **D6.7** | **An area of interest is a hard prerequisite for an absence**, not a later tier as in [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). An absence with no area cannot be expressed, and its observability is computed over the site, including the vehicles that *were* observed there (§3.5, §5.2) |
-| **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of [20 decision 3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and is a regression test (§3.6). **As built (2026-10-05):** the plan's types expose no writer — sealed records made only by reading the plan, with private constructors, no setter and only immutable collections, held to that by a test over every type the plan reaches — and a session binds the plan the lock names to the files it runs (§8.1). The binder holds one record per interval of the plan and states only copies of the plan's rows (§3.3); a test runs one scenario three ways -- at another SUMO step, and with its window opening mid-run -- and finds the same triples, the plan's own, with the times differing. The diff of two manifests waits for the manifest |
+| **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of [20 decision 3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and is a regression test (§3.6). **As built (2026-10-05):** the plan's types expose no writer — sealed records made only by reading the plan, with private constructors, no setter and only immutable collections, held to that by a test over every type the plan reaches — and a session binds the plan the lock names to the files it runs (§8.1). The binder holds one record per interval of the plan and states only copies of the plan's rows (§3.3); a test runs one scenario three ways -- at another SUMO step, and with its window opening mid-run -- and finds the same triples, the plan's own, with the times differing. **As built (2026-10-05), the diff:** the run manifest writes every interval as the binder opens and closes it and names every triple the plan declares, and `CarlaControl/scripts/diff_run_manifests.py` compares two runs' manifests by those triples, exiting non-zero on any difference (§8.4); it passes on the manifests of the three runs above and fails on one altered to name a phase its plan does not declare. |
 | **D6.9** | **Truth authority is settled field by field, not producer by producer.** CARLA is authoritative for pose, height, bounding box and everything camera-relative; SUMO is authoritative for kinematics, existence in the simulation and network state. Neither producer is discarded and the reconciled record can recover both (§4.2) |
 | **D6.10** | **The SUMO-to-CARLA disagreement is recorded, never absorbed.** `pose_separation_m`, `heading_separation_deg`, `speed_separation_mps` and `dimension_separation_m` per vehicle per captured tick, summarised in the manifest. It is the only mechanism that catches a pose-convention error, which otherwise produces plausible imagery and bounding boxes wrong by half a car length (§4.3) |
 | **D6.11** | **Observability has five outcomes, and `not_rendered` is not one of the corpus's contents.** `out_of_frame` and `occluded` are collection-geometry facts and are honest content, reported as coverage; `not_rendered` is a corpus-construction artifact, is **reported as an exclusion** and is not counted among the intervals the corpus holds, because it is a row in the plan with no pixels behind it. The boundary between them is the **rendered span**, bounded by the recorded admission and release instants of D6.19, never by opacity or an arrival latch (§5.1) |

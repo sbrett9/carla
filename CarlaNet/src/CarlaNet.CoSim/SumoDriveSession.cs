@@ -279,6 +279,12 @@ public sealed class SumoDriveSession : IDisposable
             ? new SupervisionBinder(plan, Supervision, clock, () => WindowOpensAtSeconds,
                                     sinkCandidates.OfType<ISupervisionIntervalSink>())
             : null;
+        if (SupervisionBinder is { } defectsFrom)
+        {
+            // The manifest writes the binder's seam defects beside its intervals.
+            _manifest?.Supervise(defectsFrom);
+        }
+
         List<ISumoStepObserver> told = [];
         if (_track is { } track)
         {

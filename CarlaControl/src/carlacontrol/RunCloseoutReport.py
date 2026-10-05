@@ -62,7 +62,8 @@ SKIPPED = {
 }
 MANIFEST_CLOSING_RECORD = "supervision.manifest_closing_record"
 MANIFEST_CLOSED_ROW = "manifest_closed"
-# Enough of a manifest's end to hold its last complete row, which is short.
+# The first read of a manifest's end: enough for its last complete row, unless that row lists the open
+# intervals of a large plan, when the read grows.
 MANIFEST_TAIL_BYTES = 65536
 LOUD_RECORDER_DROPPED = "recorder_dropped"
 LOUD_PACE_BELOW_FLOOR = "pace_below_floor"
@@ -130,16 +131,25 @@ class RunCloseoutReport:
     def last_manifest_row(path: Path) -> str | None:
         """The `row` of a manifest's last complete line -- one that ends in a line break -- or None
         where the file holds no complete line or does not exist. Read from the file's end, so a long
-        manifest costs no more than a short one."""
+        manifest costs no more than a short one; the read grows until it holds the whole of that line,
+        since the terminal row lists the intervals still open and grows with the plan."""
         try:
             with open(path, "rb") as file:
                 file.seek(0, 2)
                 size = file.tell()
-                file.seek(max(0, size - MANIFEST_TAIL_BYTES))
-                tail = file.read()
+                span = MANIFEST_TAIL_BYTES
+                while True:
+                    begin = max(0, size - span)
+                    file.seek(begin)
+                    tail = file.read()
+                    end = tail.rfind(b"\n")
+                    # Whole once a line break comes before it in what was read, or the read reached the
+                    # file's start.
+                    if begin == 0 or (end >= 0 and tail.rfind(b"\n", 0, end) >= 0):
+                        break
+                    span *= 2
         except OSError:
             return None
-        end = tail.rfind(b"\n")
         if end < 0:
             return None
         start = tail.rfind(b"\n", 0, end) + 1

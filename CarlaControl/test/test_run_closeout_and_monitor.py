@@ -309,6 +309,16 @@ def test_the_closing_record_gate_is_met_exactly_when_the_manifest_ends_with_its_
     assert RunCloseoutReport.last_manifest_row(manifest) == "manifest_closed"
     assert RunCloseoutReport.last_manifest_row(tmp_path / "missing.jsonl") is None
 
+    # A terminal row longer than the first read of the file's end -- it lists the intervals still
+    # open, and grows with the plan -- is still read whole.
+    long_open = ", ".join(f'{{"instance_id": "Plan/instance-{index:05d}", "participant": "v{index}", '
+                          f'"phase": "dwell"}}' for index in range(2000))
+    manifest.write_text('{"row": "manifest_opened", "run": null}\n'
+                        f'{{"row": "manifest_closed", "open_intervals": [{long_open}]}}\n',
+                        encoding="utf-8")
+    assert manifest.stat().st_size > 2 * 65536
+    assert RunCloseoutReport.last_manifest_row(manifest) == "manifest_closed"
+
 
 def test_the_solar_gate_is_skipped_when_no_sun_is_bound(layout):
     report, session, _ = closeout(layout, ["solar.policy=ignore"], policy="ignore")
