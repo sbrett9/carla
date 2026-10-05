@@ -21,8 +21,16 @@ scenario file is written. Checks are identified by the stable ids of `ScenarioCh
 
 **The stages run in the plan's order** (§5.4): the specification's shape; the world binding; resolution
 of the epoch, the instants, the places and the vehicles; routes; supervision; the epoch and illumination
-group; emission and its self-checks. Checks inside a stage all run, so one compile reports every
-failure a stage can see; a stage that refused stops the compile, because what follows depends on it.
+group; emission and its self-checks; a SUMO-only run of what is about to be written; and the writing.
+Checks inside a stage all run, so one compile reports every failure a stage can see; a stage that
+refused stops the compile, because what follows depends on it.
+
+**A scenario whose planned vehicles do not all get in is refused** (check 59). SUMO inserts a vehicle
+only when its entrance has room and discards one that has waited `max-depart-delay`, both
+deterministically, so the compiler runs the compiled files in SUMO alone over the whole span before
+writing them, refuses a vehicle the supervision plan names that never enters, and reports every planned
+vehicle's wait, the other vehicles discarded and every collision (`SumoDryRun`). The lock records that it
+ran and what it counted, or that the author skipped it.
 
 **Reproducible traffic is the point of the lock.** Everything that decides how the traffic is placed
 and moves -- the routed routes, the network, the SUMO seed, the step length, the processing options,
@@ -74,6 +82,7 @@ from carlacontrol.RouteValidator import RouteRequest, RouteValidator
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioSchema import SPEC_VERSION, ScenarioSchema
 from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix, VehicleClassSpec, VehicleMixSpec
+from carlacontrol.SumoDryRun import PlannedVehicle, SumoDryRun
 from carlacontrol.SumoInstallation import SumoInstallation
 from carlacontrol.SumoVehicleTypeWriter import (
     CATALOGUE_DIGEST_PARAM,
@@ -114,6 +123,10 @@ ALLOWED_PARAMS = frozenset({BLUEPRINT_PARAM, CLASS_PARAM, CATALOGUE_DIGEST_PARAM
 DEFAULT_DEPART_LANE = "best"
 DEFAULT_DEPART_SPEED = "max"
 
+# What the lock says of a compile whose SUMO-only run was skipped (check 59).
+SKIPPED_DRY_RUN = ("skipped at the author's request: nothing established that every vehicle the plan "
+                   "names enters the run")
+
 # SUMO's schema for an additional file, beside its route schema in the installation's data directory.
 ADDITIONAL_SCHEMA_RELATIVE_PATH = Path("xsd") / "additional_file.xsd"
 
@@ -133,11 +146,14 @@ class ScenarioCompiler:
     """Compiles one specification into one scenario package."""
 
     def __init__(self, installation: SumoInstallation,
-                 allow_sumo_version_mismatch: bool = False) -> None:
+                 allow_sumo_version_mismatch: bool = False, skip_dry_run: bool = False) -> None:
         self.installation = installation
         # Accepting a routing SUMO other than the world's converter is the operator's explicit
         # decision, and the lock says it was taken (check 6).
         self.allow_sumo_version_mismatch = bool(allow_sumo_version_mismatch)
+        # Skipping the SUMO-only run is for quick iteration on a draft, and the lock says it was
+        # skipped (check 59).
+        self.skip_dry_run = bool(skip_dry_run)
 
     # =============================================================================================
     def compile(self, spec_path: str | Path, out_dir: str | Path) -> CompileResult:
@@ -151,7 +167,7 @@ class ScenarioCompiler:
         self.spec: dict = {}
         stages = (self._stage_specification, self._stage_world_binding, self._stage_resolution,
                   self._stage_routes, self._stage_supervision, self._stage_epoch_and_illumination,
-                  self._stage_emission)
+                  self._stage_emission, self._stage_dry_run, self._stage_write)
         for stage in stages:
             stage()
             if self.findings.refused:
@@ -950,14 +966,76 @@ class ScenarioCompiler:
                                       paths["additional"].name if additional_xml else None)
         self._self_check(routes_xml, config_xml, additional_xml)
         self._check_bodies(routes_xml)
-        if self.findings.refused:
+        self.emitted = {"paths": paths, "routes": routes_xml, "config": config_xml,
+                        "additional": additional_xml}
+
+    def _write_traffic_files(self, directory: Path) -> dict[str, Path]:
+        """The network, routes, configuration and closures, as the configuration names them, into
+        `directory`: the scenario's own directory, or the dry run's scratch."""
+        names = {role: path.name for role, path in self.emitted["paths"].items()}
+        written = {role: directory / names[role] for role in ("network", "routes", "config")}
+        written["network"].write_text(self.network_text, encoding="utf-8", newline="")
+        written["routes"].write_text(self.emitted["routes"], encoding="utf-8", newline="\n")
+        written["config"].write_text(self.emitted["config"], encoding="utf-8", newline="\n")
+        if self.emitted["additional"] is not None:
+            written["additional"] = directory / names["additional"]
+            written["additional"].write_text(self.emitted["additional"], encoding="utf-8",
+                                             newline="\n")
+        return written
+
+    # -- stage: dry run -------------------------------------------------------------------------------
+    def _stage_dry_run(self) -> None:
+        """Check 59: run the compiled scenario in SUMO alone, before anything is written, and refuse
+        a planned vehicle that never enters it (`SumoDryRun`).
+
+        The files are written to a scratch directory beside the output and removed after, so a refused
+        compile leaves an earlier compile's package as it was. `skip_dry_run` skips it for quick
+        iteration, and the lock says it was skipped.
+        """
+        if self.skip_dry_run:
+            self.dry_run = {"ran": False, "reason": SKIPPED_DRY_RUN}
+            self.report.set("dry_run", self.dry_run)
             return
-        paths["network"].write_text(self.network_text, encoding="utf-8", newline="")
-        paths["routes"].write_text(routes_xml, encoding="utf-8", newline="\n")
-        paths["config"].write_text(config_xml, encoding="utf-8", newline="\n")
+        scratch = self.out_dir / f".{self.scenario_id}.dry-run"
+        SumoDryRun.remove(scratch)
+        scratch.mkdir(parents=True)
+        try:
+            written = self._write_traffic_files(scratch)
+            run = SumoDryRun(self.installation, self.findings).run(
+                written["config"], scratch, self._planned_vehicles(), self.end.seconds,
+                float(PROCESSING_OPTIONS["max-depart-delay"]), self.epoch.civil_instant_at)
+        finally:
+            SumoDryRun.remove(scratch)
+        if run is None:
+            return
+        self.dry_run = run.lock_record()
+        self.report.set("dry_run", run.report())
+
+    def _planned_vehicles(self) -> list[PlannedVehicle]:
+        """Every vehicle the plan names: each instance's participants, annotated or nominal, and every
+        realised slot of every series, whose count is an absence's counter-evidence. A flow's members
+        are unknown until the run, so no cohort names one."""
+        refs: dict[str, list[str]] = {}
+        for row in self.plan_rows["instances"]:
+            for participant in row["participants"]:
+                refs.setdefault(participant["entity_id"], []).append(row["instance_id"])
+        for series in self.plan_rows["series"]:
+            for slot in series["slots"]:
+                if slot["realised_by"] is not None:
+                    refs.setdefault(slot["realised_by"], []).append(f"series {series['series_id']}")
+        actors = {actor["id"]: actor for actor in self.actors}
+        planned = [PlannedVehicle(vehicle_id, actors[vehicle_id]["where"],
+                                  actors[vehicle_id]["depart"],
+                                  (actors[vehicle_id]["route"] or [""])[0], tuple(names))
+                   for vehicle_id, names in refs.items() if vehicle_id in actors]
+        return sorted(planned, key=lambda vehicle: (vehicle.depart.seconds, vehicle.vehicle_id))
+
+    # -- stage: write ---------------------------------------------------------------------------------
+    def _stage_write(self) -> None:
+        paths = self.emitted["paths"]
+        self._write_traffic_files(self.out_dir)
         roles = ("routes", "config", "network")
-        if additional_xml is not None:
-            paths["additional"].write_text(additional_xml, encoding="utf-8", newline="\n")
+        if self.emitted["additional"] is not None:
             roles += ("additional",)
         digests = {role: self._sha256(paths[role]) for role in roles}
         plan = {
@@ -1234,6 +1312,8 @@ class ScenarioCompiler:
                                       "release_agreement": self.release_agreement,
                                       "mismatch_accepted": self.release_agreement
                                       == str(SumoReleaseAgreement.MismatchAccepted)}},
+            # Whether a SUMO-only run of these files inserted every planned vehicle (check 59).
+            "dry_run": self.dry_run,
             "epoch": self.epoch.declaration,
             "epoch_block_sha256": self.epoch.digest,
             "illumination": self.spec.get("illumination"),

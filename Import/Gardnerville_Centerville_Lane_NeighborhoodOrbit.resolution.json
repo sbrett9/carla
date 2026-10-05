@@ -2656,6 +2656,30 @@
     ],
     "series": []
   },
+  "dry_run": {
+    "ran": true,
+    "sumo_release": "1.27.0",
+    "begin_s": 0.0,
+    "end_s": 2220.0,
+    "vehicles": {
+      "loaded": 775,
+      "inserted": 775,
+      "discarded": 0,
+      "waiting_at_end": 0
+    },
+    "planned_vehicles": {
+      "total": 0,
+      "inserted": 0
+    },
+    "collisions": 0,
+    "teleports": 0,
+    "emergency_stops": 0,
+    "emergency_braking": 1,
+    "other_vehicles_discarded": 0,
+    "other_vehicles_waiting_at_end": 0,
+    "planned": [],
+    "collision_list": []
+  },
   "lock": {
     "lock_version": 1,
     "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
@@ -2759,6 +2783,23 @@
         "release_agreement": "SameRelease",
         "mismatch_accepted": false
       }
+    },
+    "dry_run": {
+      "ran": true,
+      "sumo_release": "1.27.0",
+      "begin_s": 0.0,
+      "end_s": 2220.0,
+      "vehicles": {
+        "loaded": 775,
+        "inserted": 775,
+        "discarded": 0,
+        "waiting_at_end": 0
+      },
+      "planned_vehicles": {
+        "total": 0,
+        "inserted": 0
+      },
+      "collisions": 0
     },
     "epoch": {
       "calendar_advances": false,

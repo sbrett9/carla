@@ -870,6 +870,378 @@ Remedies:
 - cohort **ferry_out_d7_h6**: annotated, labels bahonar:cleared_gate_transit
 - series **tower_relief**: 336 slots, members nominal; a hard negative for bahonar:standoff_dwell_at_access_point, bahonar:arrival_without_departure
 
+## Dry run (check 59)
+
+SUMO 1.27.0 alone over 604800 s: 69245 vehicles loaded, 69245 inserted, 0 discarded after waiting max-depart-delay, 0 still waiting at the end; 0 collisions, 0 teleports, 0 emergency stops, 0 emergency braking. 365 of the 365 vehicles the plan names entered; of the others, 0 were discarded and 0 were still waiting at the end.
+
+| Planned vehicle | Named by | Declared departure | Entered | Waited (s) |
+|---|---|---|---|---|
+| guard_d0_h7_t0 | series tower_relief | 2026-09-29T07:00:00+03:30 | 0.0 | 0 |
+| guard_d0_h7_t1 | series tower_relief | 2026-09-29T07:00:00+03:30 | 2.0 | 2 |
+| guard_d0_h7_t10 | series tower_relief | 2026-09-29T07:00:00+03:30 | 25.0 | 25 |
+| guard_d0_h7_t11 | series tower_relief | 2026-09-29T07:00:00+03:30 | 28.0 | 28 |
+| guard_d0_h7_t12 | series tower_relief | 2026-09-29T07:00:00+03:30 | 31.0 | 31 |
+| guard_d0_h7_t13 | series tower_relief | 2026-09-29T07:00:00+03:30 | 33.0 | 33 |
+| guard_d0_h7_t14 | series tower_relief | 2026-09-29T07:00:00+03:30 | 37.0 | 37 |
+| guard_d0_h7_t15 | series tower_relief | 2026-09-29T07:00:00+03:30 | 39.0 | 39 |
+| guard_d0_h7_t2 | series tower_relief | 2026-09-29T07:00:00+03:30 | 4.0 | 4 |
+| guard_d0_h7_t3 | series tower_relief | 2026-09-29T07:00:00+03:30 | 7.0 | 7 |
+| guard_d0_h7_t4 | series tower_relief | 2026-09-29T07:00:00+03:30 | 10.0 | 10 |
+| guard_d0_h7_t5 | series tower_relief | 2026-09-29T07:00:00+03:30 | 13.0 | 13 |
+| guard_d0_h7_t6 | series tower_relief | 2026-09-29T07:00:00+03:30 | 15.0 | 15 |
+| guard_d0_h7_t7 | series tower_relief | 2026-09-29T07:00:00+03:30 | 18.0 | 18 |
+| guard_d0_h7_t8 | series tower_relief | 2026-09-29T07:00:00+03:30 | 20.0 | 20 |
+| guard_d0_h7_t9 | series tower_relief | 2026-09-29T07:00:00+03:30 | 23.0 | 23 |
+| haul_d0_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d0_0 | 2026-09-29T09:00:00+03:30 | 7200.0 | 0 |
+| haul_d0_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d0_1 | 2026-09-29T13:00:00+03:30 | 21600.0 | 0 |
+| guard_d0_h15_t0 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28800.0 | 0 |
+| guard_d0_h15_t1 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28802.0 | 2 |
+| guard_d0_h15_t10 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28826.0 | 26 |
+| guard_d0_h15_t11 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28830.0 | 30 |
+| guard_d0_h15_t12 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28832.0 | 32 |
+| guard_d0_h15_t13 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28835.0 | 35 |
+| guard_d0_h15_t14 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28838.0 | 38 |
+| guard_d0_h15_t15 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28840.0 | 40 |
+| guard_d0_h15_t2 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28804.0 | 4 |
+| guard_d0_h15_t3 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28807.0 | 7 |
+| guard_d0_h15_t4 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28810.0 | 10 |
+| guard_d0_h15_t5 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28813.0 | 13 |
+| guard_d0_h15_t6 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28815.0 | 15 |
+| guard_d0_h15_t7 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28818.0 | 18 |
+| guard_d0_h15_t8 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28821.0 | 21 |
+| guard_d0_h15_t9 | series tower_relief | 2026-09-29T15:00:00+03:30 | 28824.0 | 24 |
+| haul_d0_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d0_2 | 2026-09-29T17:00:00+03:30 | 36000.0 | 0 |
+| guard_d0_h23_t0 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57600.0 | 0 |
+| guard_d0_h23_t1 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57602.0 | 2 |
+| guard_d0_h23_t10 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57625.0 | 25 |
+| guard_d0_h23_t11 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57628.0 | 28 |
+| guard_d0_h23_t12 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57631.0 | 31 |
+| guard_d0_h23_t13 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57634.0 | 34 |
+| guard_d0_h23_t14 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57637.0 | 37 |
+| guard_d0_h23_t15 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57639.0 | 39 |
+| guard_d0_h23_t2 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57604.0 | 4 |
+| guard_d0_h23_t3 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57607.0 | 7 |
+| guard_d0_h23_t4 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57610.0 | 10 |
+| guard_d0_h23_t5 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57612.0 | 12 |
+| guard_d0_h23_t6 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57615.0 | 15 |
+| guard_d0_h23_t7 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57617.0 | 17 |
+| guard_d0_h23_t8 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57620.0 | 20 |
+| guard_d0_h23_t9 | series tower_relief | 2026-09-29T23:00:00+03:30 | 57623.0 | 23 |
+| guard_d1_h7_t0 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86400.0 | 0 |
+| guard_d1_h7_t1 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86402.0 | 2 |
+| guard_d1_h7_t10 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86427.0 | 27 |
+| guard_d1_h7_t11 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86430.0 | 30 |
+| guard_d1_h7_t12 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86434.0 | 34 |
+| guard_d1_h7_t13 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86436.0 | 36 |
+| guard_d1_h7_t14 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86439.0 | 39 |
+| guard_d1_h7_t15 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86441.0 | 41 |
+| guard_d1_h7_t2 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86404.0 | 4 |
+| guard_d1_h7_t3 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86407.0 | 7 |
+| guard_d1_h7_t4 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86410.0 | 10 |
+| guard_d1_h7_t5 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86413.0 | 13 |
+| guard_d1_h7_t6 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86415.0 | 15 |
+| guard_d1_h7_t7 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86419.0 | 19 |
+| guard_d1_h7_t8 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86421.0 | 21 |
+| guard_d1_h7_t9 | series tower_relief | 2026-09-30T07:00:00+03:30 | 86424.0 | 24 |
+| staybehind | Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1 | 2026-09-30T08:00:00+03:30 | 90000.0 | 0 |
+| haul_d1_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d1_0 | 2026-09-30T09:00:00+03:30 | 93600.0 | 0 |
+| haul_d1_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d1_1 | 2026-09-30T13:00:00+03:30 | 108000.0 | 0 |
+| guard_d1_h15_t0 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115200.0 | 0 |
+| guard_d1_h15_t1 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115202.0 | 2 |
+| guard_d1_h15_t10 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115227.0 | 27 |
+| guard_d1_h15_t11 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115229.0 | 29 |
+| guard_d1_h15_t12 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115232.0 | 32 |
+| guard_d1_h15_t13 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115235.0 | 35 |
+| guard_d1_h15_t14 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115238.0 | 38 |
+| guard_d1_h15_t15 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115241.0 | 41 |
+| guard_d1_h15_t2 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115204.0 | 4 |
+| guard_d1_h15_t3 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115207.0 | 7 |
+| guard_d1_h15_t4 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115210.0 | 10 |
+| guard_d1_h15_t5 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115212.0 | 12 |
+| guard_d1_h15_t6 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115216.0 | 16 |
+| guard_d1_h15_t7 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115218.0 | 18 |
+| guard_d1_h15_t8 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115222.0 | 22 |
+| guard_d1_h15_t9 | series tower_relief | 2026-09-30T15:00:00+03:30 | 115224.0 | 24 |
+| haul_d1_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d1_2 | 2026-09-30T17:00:00+03:30 | 122400.0 | 0 |
+| guard_d1_h23_t0 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144000.0 | 0 |
+| guard_d1_h23_t1 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144002.0 | 2 |
+| guard_d1_h23_t10 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144026.0 | 26 |
+| guard_d1_h23_t11 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144028.0 | 28 |
+| guard_d1_h23_t12 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144031.0 | 31 |
+| guard_d1_h23_t13 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144034.0 | 34 |
+| guard_d1_h23_t14 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144036.0 | 36 |
+| guard_d1_h23_t15 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144040.0 | 40 |
+| guard_d1_h23_t2 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144004.0 | 4 |
+| guard_d1_h23_t3 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144007.0 | 7 |
+| guard_d1_h23_t4 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144010.0 | 10 |
+| guard_d1_h23_t5 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144012.0 | 12 |
+| guard_d1_h23_t6 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144015.0 | 15 |
+| guard_d1_h23_t7 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144018.0 | 18 |
+| guard_d1_h23_t8 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144020.0 | 20 |
+| guard_d1_h23_t9 | series tower_relief | 2026-09-30T23:00:00+03:30 | 144023.0 | 23 |
+| guard_d2_h7_t0 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172800.0 | 0 |
+| guard_d2_h7_t1 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172802.0 | 2 |
+| guard_d2_h7_t10 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172826.0 | 26 |
+| guard_d2_h7_t11 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172828.0 | 28 |
+| guard_d2_h7_t12 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172832.0 | 32 |
+| guard_d2_h7_t13 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172834.0 | 34 |
+| guard_d2_h7_t14 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172837.0 | 37 |
+| guard_d2_h7_t15 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172841.0 | 41 |
+| guard_d2_h7_t2 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172804.0 | 4 |
+| guard_d2_h7_t3 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172807.0 | 7 |
+| guard_d2_h7_t4 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172810.0 | 10 |
+| guard_d2_h7_t5 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172813.0 | 13 |
+| guard_d2_h7_t6 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172815.0 | 15 |
+| guard_d2_h7_t7 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172818.0 | 18 |
+| guard_d2_h7_t8 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172821.0 | 21 |
+| guard_d2_h7_t9 | series tower_relief | 2026-10-01T07:00:00+03:30 | 172823.0 | 23 |
+| haul_d2_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d2_0 | 2026-10-01T09:00:00+03:30 | 180000.0 | 0 |
+| probe_d2 | Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2 | 2026-10-01T11:04:34+03:30 | 187474.0 | 0 |
+| haul_d2_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d2_1 | 2026-10-01T13:00:00+03:30 | 194400.0 | 0 |
+| guard_d2_h15_t0 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201600.0 | 0 |
+| guard_d2_h15_t1 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201602.0 | 2 |
+| guard_d2_h15_t10 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201626.0 | 26 |
+| guard_d2_h15_t11 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201628.0 | 28 |
+| guard_d2_h15_t12 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201631.0 | 31 |
+| guard_d2_h15_t13 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201634.0 | 34 |
+| guard_d2_h15_t14 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201637.0 | 37 |
+| guard_d2_h15_t15 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201639.0 | 39 |
+| guard_d2_h15_t2 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201604.0 | 4 |
+| guard_d2_h15_t3 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201607.0 | 7 |
+| guard_d2_h15_t4 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201609.0 | 9 |
+| guard_d2_h15_t5 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201612.0 | 12 |
+| guard_d2_h15_t6 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201615.0 | 15 |
+| guard_d2_h15_t7 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201618.0 | 18 |
+| guard_d2_h15_t8 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201621.0 | 21 |
+| guard_d2_h15_t9 | series tower_relief | 2026-10-01T15:00:00+03:30 | 201623.0 | 23 |
+| haul_d2_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d2_2 | 2026-10-01T17:00:00+03:30 | 208800.0 | 0 |
+| guard_d2_h23_t0 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230400.0 | 0 |
+| guard_d2_h23_t1 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230402.0 | 2 |
+| guard_d2_h23_t10 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230426.0 | 26 |
+| guard_d2_h23_t11 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230430.0 | 30 |
+| guard_d2_h23_t12 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230432.0 | 32 |
+| guard_d2_h23_t13 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230435.0 | 35 |
+| guard_d2_h23_t14 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230437.0 | 37 |
+| guard_d2_h23_t15 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230439.0 | 39 |
+| guard_d2_h23_t2 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230404.0 | 4 |
+| guard_d2_h23_t3 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230407.0 | 7 |
+| guard_d2_h23_t4 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230410.0 | 10 |
+| guard_d2_h23_t5 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230413.0 | 13 |
+| guard_d2_h23_t6 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230415.0 | 15 |
+| guard_d2_h23_t7 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230418.0 | 18 |
+| guard_d2_h23_t8 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230420.0 | 20 |
+| guard_d2_h23_t9 | series tower_relief | 2026-10-01T23:00:00+03:30 | 230423.0 | 23 |
+| guard_d3_h7_t0 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259200.0 | 0 |
+| guard_d3_h7_t1 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259202.0 | 2 |
+| guard_d3_h7_t10 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259227.0 | 27 |
+| guard_d3_h7_t11 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259229.0 | 29 |
+| guard_d3_h7_t12 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259233.0 | 33 |
+| guard_d3_h7_t13 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259235.0 | 35 |
+| guard_d3_h7_t14 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259238.0 | 38 |
+| guard_d3_h7_t15 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259240.0 | 40 |
+| guard_d3_h7_t2 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259204.0 | 4 |
+| guard_d3_h7_t3 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259207.0 | 7 |
+| guard_d3_h7_t4 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259210.0 | 10 |
+| guard_d3_h7_t5 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259213.0 | 13 |
+| guard_d3_h7_t6 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259216.0 | 16 |
+| guard_d3_h7_t7 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259218.0 | 18 |
+| guard_d3_h7_t8 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259221.0 | 21 |
+| guard_d3_h7_t9 | series tower_relief | 2026-10-02T07:00:00+03:30 | 259224.0 | 24 |
+| haul_d3_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d3_0 | 2026-10-02T09:00:00+03:30 | 266400.0 | 0 |
+| escort_0 | Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3 | 2026-10-02T10:00:00+03:30 | 270000.0 | 0 |
+| escort_1 | Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3 | 2026-10-02T10:00:04+03:30 | 270004.0 | 0 |
+| escort_2 | Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3 | 2026-10-02T10:00:08+03:30 | 270008.0 | 0 |
+| escort_3 | Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3 | 2026-10-02T10:00:12+03:30 | 270012.0 | 0 |
+| escort_4 | Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3 | 2026-10-02T10:00:16+03:30 | 270016.0 | 0 |
+| haul_d3_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d3_1 | 2026-10-02T13:00:00+03:30 | 280800.0 | 0 |
+| guard_d3_h15_t0 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288000.0 | 0 |
+| guard_d3_h15_t1 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288002.0 | 2 |
+| guard_d3_h15_t10 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288026.0 | 26 |
+| guard_d3_h15_t11 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288028.0 | 28 |
+| guard_d3_h15_t12 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288031.0 | 31 |
+| guard_d3_h15_t13 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288034.0 | 34 |
+| guard_d3_h15_t14 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288036.0 | 36 |
+| guard_d3_h15_t15 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288038.0 | 38 |
+| guard_d3_h15_t2 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288005.0 | 5 |
+| guard_d3_h15_t3 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288007.0 | 7 |
+| guard_d3_h15_t4 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288010.0 | 10 |
+| guard_d3_h15_t5 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288013.0 | 13 |
+| guard_d3_h15_t6 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288015.0 | 15 |
+| guard_d3_h15_t7 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288018.0 | 18 |
+| guard_d3_h15_t8 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288020.0 | 20 |
+| guard_d3_h15_t9 | series tower_relief | 2026-10-02T15:00:00+03:30 | 288023.0 | 23 |
+| haul_d3_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d3_2 | 2026-10-02T17:00:00+03:30 | 295200.0 | 0 |
+| guard_d3_h23_t0 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316800.0 | 0 |
+| guard_d3_h23_t1 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316802.0 | 2 |
+| guard_d3_h23_t10 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316826.0 | 26 |
+| guard_d3_h23_t11 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316828.0 | 28 |
+| guard_d3_h23_t12 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316831.0 | 31 |
+| guard_d3_h23_t13 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316834.0 | 34 |
+| guard_d3_h23_t14 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316837.0 | 37 |
+| guard_d3_h23_t15 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316839.0 | 39 |
+| guard_d3_h23_t2 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316804.0 | 4 |
+| guard_d3_h23_t3 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316807.0 | 7 |
+| guard_d3_h23_t4 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316810.0 | 10 |
+| guard_d3_h23_t5 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316813.0 | 13 |
+| guard_d3_h23_t6 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316816.0 | 16 |
+| guard_d3_h23_t7 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316818.0 | 18 |
+| guard_d3_h23_t8 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316821.0 | 21 |
+| guard_d3_h23_t9 | series tower_relief | 2026-10-02T23:00:00+03:30 | 316823.0 | 23 |
+| guard_d4_h7_t0 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345600.0 | 0 |
+| guard_d4_h7_t1 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345602.0 | 2 |
+| guard_d4_h7_t10 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345624.0 | 24 |
+| guard_d4_h7_t11 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345627.0 | 27 |
+| guard_d4_h7_t12 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345629.0 | 29 |
+| guard_d4_h7_t13 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345633.0 | 33 |
+| guard_d4_h7_t14 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345635.0 | 35 |
+| guard_d4_h7_t15 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345638.0 | 38 |
+| guard_d4_h7_t2 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345604.0 | 4 |
+| guard_d4_h7_t4 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345607.0 | 7 |
+| guard_d4_h7_t5 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345610.0 | 10 |
+| guard_d4_h7_t6 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345612.0 | 12 |
+| guard_d4_h7_t7 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345616.0 | 16 |
+| guard_d4_h7_t8 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345618.0 | 18 |
+| guard_d4_h7_t9 | series tower_relief | 2026-10-03T07:00:00+03:30 | 345621.0 | 21 |
+| haul_d4_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d4_0 | 2026-10-03T09:00:00+03:30 | 352800.0 | 0 |
+| haul_d4_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d4_1 | 2026-10-03T13:00:00+03:30 | 367200.0 | 0 |
+| guard_d4_h15_t0 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374400.0 | 0 |
+| guard_d4_h15_t1 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374402.0 | 2 |
+| guard_d4_h15_t10 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374425.0 | 25 |
+| guard_d4_h15_t11 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374428.0 | 28 |
+| guard_d4_h15_t12 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374431.0 | 31 |
+| guard_d4_h15_t13 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374433.0 | 33 |
+| guard_d4_h15_t14 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374436.0 | 36 |
+| guard_d4_h15_t15 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374439.0 | 39 |
+| guard_d4_h15_t2 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374404.0 | 4 |
+| guard_d4_h15_t3 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374407.0 | 7 |
+| guard_d4_h15_t4 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374409.0 | 9 |
+| guard_d4_h15_t5 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374412.0 | 12 |
+| guard_d4_h15_t6 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374414.0 | 14 |
+| guard_d4_h15_t7 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374417.0 | 17 |
+| guard_d4_h15_t8 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374420.0 | 20 |
+| guard_d4_h15_t9 | series tower_relief | 2026-10-03T15:00:00+03:30 | 374423.0 | 23 |
+| haul_d4_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d4_2 | 2026-10-03T17:00:00+03:30 | 381600.0 | 0 |
+| guard_d4_h23_t0 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403200.0 | 0 |
+| guard_d4_h23_t1 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403202.0 | 2 |
+| guard_d4_h23_t10 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403226.0 | 26 |
+| guard_d4_h23_t11 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403229.0 | 29 |
+| guard_d4_h23_t12 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403231.0 | 31 |
+| guard_d4_h23_t13 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403234.0 | 34 |
+| guard_d4_h23_t14 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403237.0 | 37 |
+| guard_d4_h23_t15 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403239.0 | 39 |
+| guard_d4_h23_t2 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403204.0 | 4 |
+| guard_d4_h23_t3 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403207.0 | 7 |
+| guard_d4_h23_t4 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403210.0 | 10 |
+| guard_d4_h23_t5 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403213.0 | 13 |
+| guard_d4_h23_t6 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403215.0 | 15 |
+| guard_d4_h23_t7 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403218.0 | 18 |
+| guard_d4_h23_t8 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403221.0 | 21 |
+| guard_d4_h23_t9 | series tower_relief | 2026-10-03T23:00:00+03:30 | 403224.0 | 24 |
+| guard_d5_h7_t0 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432000.0 | 0 |
+| guard_d5_h7_t1 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432002.0 | 2 |
+| guard_d5_h7_t10 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432025.0 | 25 |
+| guard_d5_h7_t11 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432028.0 | 28 |
+| guard_d5_h7_t12 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432031.0 | 31 |
+| guard_d5_h7_t13 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432033.0 | 33 |
+| guard_d5_h7_t14 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432036.0 | 36 |
+| guard_d5_h7_t15 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432039.0 | 39 |
+| guard_d5_h7_t2 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432004.0 | 4 |
+| guard_d5_h7_t3 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432007.0 | 7 |
+| guard_d5_h7_t4 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432009.0 | 9 |
+| guard_d5_h7_t5 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432012.0 | 12 |
+| guard_d5_h7_t6 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432014.0 | 14 |
+| guard_d5_h7_t7 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432017.0 | 17 |
+| guard_d5_h7_t8 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432020.0 | 20 |
+| guard_d5_h7_t9 | series tower_relief | 2026-10-04T07:00:00+03:30 | 432023.0 | 23 |
+| haul_d5_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d5_0 | 2026-10-04T09:00:00+03:30 | 439200.0 | 0 |
+| probe_d5 | Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5 | 2026-10-04T11:11:25+03:30 | 447085.0 | 0 |
+| haul_d5_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d5_1 | 2026-10-04T13:00:00+03:30 | 453600.0 | 0 |
+| guard_d5_h15_t0 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460800.0 | 0 |
+| guard_d5_h15_t1 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460802.0 | 2 |
+| guard_d5_h15_t10 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460827.0 | 27 |
+| guard_d5_h15_t11 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460830.0 | 30 |
+| guard_d5_h15_t12 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460832.0 | 32 |
+| guard_d5_h15_t13 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460835.0 | 35 |
+| guard_d5_h15_t14 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460838.0 | 38 |
+| guard_d5_h15_t15 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460840.0 | 40 |
+| guard_d5_h15_t2 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460805.0 | 5 |
+| guard_d5_h15_t3 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460807.0 | 7 |
+| guard_d5_h15_t4 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460810.0 | 10 |
+| guard_d5_h15_t5 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460812.0 | 12 |
+| guard_d5_h15_t6 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460815.0 | 15 |
+| guard_d5_h15_t7 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460818.0 | 18 |
+| guard_d5_h15_t8 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460821.0 | 21 |
+| guard_d5_h15_t9 | series tower_relief | 2026-10-04T15:00:00+03:30 | 460824.0 | 24 |
+| haul_d5_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d5_2 | 2026-10-04T17:00:00+03:30 | 468000.0 | 0 |
+| guard_d5_h23_t0 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489600.0 | 0 |
+| guard_d5_h23_t1 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489602.0 | 2 |
+| guard_d5_h23_t10 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489626.0 | 26 |
+| guard_d5_h23_t11 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489629.0 | 29 |
+| guard_d5_h23_t12 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489631.0 | 31 |
+| guard_d5_h23_t13 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489634.0 | 34 |
+| guard_d5_h23_t14 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489637.0 | 37 |
+| guard_d5_h23_t15 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489639.0 | 39 |
+| guard_d5_h23_t2 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489604.0 | 4 |
+| guard_d5_h23_t3 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489607.0 | 7 |
+| guard_d5_h23_t4 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489610.0 | 10 |
+| guard_d5_h23_t5 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489613.0 | 13 |
+| guard_d5_h23_t6 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489615.0 | 15 |
+| guard_d5_h23_t7 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489618.0 | 18 |
+| guard_d5_h23_t8 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489621.0 | 21 |
+| guard_d5_h23_t9 | series tower_relief | 2026-10-04T23:00:00+03:30 | 489624.0 | 24 |
+| shadow | Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6 | 2026-10-05T02:30:00+03:30 | 502200.0 | 0 |
+| guard_d6_h7_t0 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518400.0 | 0 |
+| guard_d6_h7_t1 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518402.0 | 2 |
+| guard_d6_h7_t10 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518426.0 | 26 |
+| guard_d6_h7_t11 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518429.0 | 29 |
+| guard_d6_h7_t12 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518432.0 | 32 |
+| guard_d6_h7_t13 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518434.0 | 34 |
+| guard_d6_h7_t14 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518438.0 | 38 |
+| guard_d6_h7_t15 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518440.0 | 40 |
+| guard_d6_h7_t2 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518404.0 | 4 |
+| guard_d6_h7_t3 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518407.0 | 7 |
+| guard_d6_h7_t4 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518410.0 | 10 |
+| guard_d6_h7_t5 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518413.0 | 13 |
+| guard_d6_h7_t6 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518416.0 | 16 |
+| guard_d6_h7_t7 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518418.0 | 18 |
+| guard_d6_h7_t8 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518421.0 | 21 |
+| guard_d6_h7_t9 | series tower_relief | 2026-10-05T07:00:00+03:30 | 518424.0 | 24 |
+| haul_d6_0 | Shahid_Bahonar_Port_PatternOfLife/haul_d6_0 | 2026-10-05T09:00:00+03:30 | 525600.0 | 0 |
+| haul_d6_1 | Shahid_Bahonar_Port_PatternOfLife/haul_d6_1 | 2026-10-05T13:00:00+03:30 | 540000.0 | 0 |
+| guard_d6_h15_t0 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547200.0 | 0 |
+| guard_d6_h15_t1 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547202.0 | 2 |
+| guard_d6_h15_t10 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547226.0 | 26 |
+| guard_d6_h15_t11 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547229.0 | 29 |
+| guard_d6_h15_t12 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547231.0 | 31 |
+| guard_d6_h15_t13 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547234.0 | 34 |
+| guard_d6_h15_t14 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547236.0 | 36 |
+| guard_d6_h15_t15 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547240.0 | 40 |
+| guard_d6_h15_t2 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547204.0 | 4 |
+| guard_d6_h15_t3 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547207.0 | 7 |
+| guard_d6_h15_t4 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547210.0 | 10 |
+| guard_d6_h15_t5 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547213.0 | 13 |
+| guard_d6_h15_t6 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547215.0 | 15 |
+| guard_d6_h15_t7 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547218.0 | 18 |
+| guard_d6_h15_t8 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547221.0 | 21 |
+| guard_d6_h15_t9 | series tower_relief | 2026-10-05T15:00:00+03:30 | 547223.0 | 23 |
+| haul_d6_2 | Shahid_Bahonar_Port_PatternOfLife/haul_d6_2 | 2026-10-05T17:00:00+03:30 | 554400.0 | 0 |
+| guard_d6_h23_t0 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576000.0 | 0 |
+| guard_d6_h23_t1 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576002.0 | 2 |
+| guard_d6_h23_t10 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576027.0 | 27 |
+| guard_d6_h23_t11 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576030.0 | 30 |
+| guard_d6_h23_t12 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576032.0 | 32 |
+| guard_d6_h23_t13 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576035.0 | 35 |
+| guard_d6_h23_t14 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576038.0 | 38 |
+| guard_d6_h23_t15 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576041.0 | 41 |
+| guard_d6_h23_t2 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576004.0 | 4 |
+| guard_d6_h23_t3 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576007.0 | 7 |
+| guard_d6_h23_t4 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576010.0 | 10 |
+| guard_d6_h23_t5 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576013.0 | 13 |
+| guard_d6_h23_t6 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576016.0 | 16 |
+| guard_d6_h23_t7 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576019.0 | 19 |
+| guard_d6_h23_t8 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576022.0 | 22 |
+| guard_d6_h23_t9 | series tower_relief | 2026-10-05T23:00:00+03:30 | 576024.0 | 24 |
+
 ## Traffic
 
 SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into the configuration rather than left to SUMO's default:

@@ -374,6 +374,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
                         help="compile when that SUMO is not the release that converted the world; "
                              "the lock records the acceptance")
+    parser.add_argument("--skip-dry-run", action="store_true",
+                        help="skip the SUMO-only run that refuses a planned vehicle SUMO never "
+                             "inserts (check 59), for quick iteration; the lock records that it "
+                             "was skipped")
     parser.add_argument("--catalogue", default=CATALOGUE,
                         help="measured vehicle catalogue every vehicle type is sized from. A class "
                              "naming a body this catalogue does not hold is refused")
@@ -407,7 +411,8 @@ def main() -> int:
                  "at %d s)", spec_path, len(specification["places"]), len(AMBIENT_FLOWS),
                  len(ORBIT_ROUTE.approach), args.laps, len(ORBIT_ROUTE.loop),
                  len(ORBIT_ROUTE.exit), end_s)
-    result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch).compile(
+    result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch,
+                              args.skip_dry_run).compile(
         spec_path, out_dir)
     for finding in result.findings.findings:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)

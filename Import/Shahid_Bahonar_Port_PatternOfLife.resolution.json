@@ -30673,6 +30673,4776 @@
       }
     ]
   },
+  "dry_run": {
+    "ran": true,
+    "sumo_release": "1.27.0",
+    "begin_s": 0.0,
+    "end_s": 604800.0,
+    "vehicles": {
+      "loaded": 69245,
+      "inserted": 69245,
+      "discarded": 0,
+      "waiting_at_end": 0
+    },
+    "planned_vehicles": {
+      "total": 365,
+      "inserted": 365
+    },
+    "collisions": 0,
+    "teleports": 0,
+    "emergency_stops": 0,
+    "emergency_braking": 0,
+    "other_vehicles_discarded": 0,
+    "other_vehicles_waiting_at_end": 0,
+    "planned": [
+      {
+        "vehicle_id": "guard_d0_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 0.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 2.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 25.0,
+        "waited_s": 25.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 31.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 33.0,
+        "waited_s": 33.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 37.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 39.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 4.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 7.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 10.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 13.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 15.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 18.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 20.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d0_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 0.0,
+        "declared_depart_civil": "2026-09-29T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 23.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d0_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d0_0"
+        ],
+        "declared_depart_s": 7200.0,
+        "declared_depart_civil": "2026-09-29T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 7200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d0_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d0_1"
+        ],
+        "declared_depart_s": 21600.0,
+        "declared_depart_civil": "2026-09-29T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 21600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28802.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28826.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28830.0,
+        "waited_s": 30.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28832.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28835.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28838.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28840.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28804.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28807.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28810.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28813.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28815.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28818.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28821.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d0_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 28800.0,
+        "declared_depart_civil": "2026-09-29T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 28824.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "haul_d0_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d0_2"
+        ],
+        "declared_depart_s": 36000.0,
+        "declared_depart_civil": "2026-09-29T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 36000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57602.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57625.0,
+        "waited_s": 25.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57628.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57631.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57634.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57637.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57639.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57604.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57607.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57610.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57612.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57615.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57617.0,
+        "waited_s": 17.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57620.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d0_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 57600.0,
+        "declared_depart_civil": "2026-09-29T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 57623.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86402.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86427.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86430.0,
+        "waited_s": 30.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86434.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86436.0,
+        "waited_s": 36.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86439.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86441.0,
+        "waited_s": 41.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86404.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86407.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86410.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86413.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86415.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86419.0,
+        "waited_s": 19.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86421.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d1_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 86400.0,
+        "declared_depart_civil": "2026-09-30T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 86424.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "staybehind",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1"
+        ],
+        "declared_depart_s": 90000.0,
+        "declared_depart_civil": "2026-09-30T08:00:00+03:30",
+        "entrance": "26401342#0",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 90000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d1_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d1_0"
+        ],
+        "declared_depart_s": 93600.0,
+        "declared_depart_civil": "2026-09-30T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 93600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d1_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d1_1"
+        ],
+        "declared_depart_s": 108000.0,
+        "declared_depart_civil": "2026-09-30T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 108000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115202.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115227.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115229.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115232.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115235.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115238.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115241.0,
+        "waited_s": 41.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115204.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115207.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115210.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115212.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115216.0,
+        "waited_s": 16.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115218.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115222.0,
+        "waited_s": 22.0
+      },
+      {
+        "vehicle_id": "guard_d1_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 115200.0,
+        "declared_depart_civil": "2026-09-30T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 115224.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "haul_d1_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d1_2"
+        ],
+        "declared_depart_s": 122400.0,
+        "declared_depart_civil": "2026-09-30T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 122400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144002.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144026.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144028.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144031.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144034.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144036.0,
+        "waited_s": 36.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144040.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144004.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144007.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144010.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144012.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144015.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144018.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144020.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d1_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 144000.0,
+        "declared_depart_civil": "2026-09-30T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 144023.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172802.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172826.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172828.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172832.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172834.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172837.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172841.0,
+        "waited_s": 41.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172804.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172807.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172810.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172813.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172815.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172818.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172821.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d2_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 172800.0,
+        "declared_depart_civil": "2026-10-01T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 172823.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d2_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d2_0"
+        ],
+        "declared_depart_s": 180000.0,
+        "declared_depart_civil": "2026-10-01T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 180000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "probe_d2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2"
+        ],
+        "declared_depart_s": 187474.0,
+        "declared_depart_civil": "2026-10-01T11:04:34+03:30",
+        "entrance": "26417705#0",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 187474.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d2_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d2_1"
+        ],
+        "declared_depart_s": 194400.0,
+        "declared_depart_civil": "2026-10-01T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 194400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201602.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201626.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201628.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201631.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201634.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201637.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201639.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201604.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201607.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201609.0,
+        "waited_s": 9.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201612.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201615.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201618.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201621.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d2_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 201600.0,
+        "declared_depart_civil": "2026-10-01T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 201623.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d2_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d2_2"
+        ],
+        "declared_depart_s": 208800.0,
+        "declared_depart_civil": "2026-10-01T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 208800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230402.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230426.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230430.0,
+        "waited_s": 30.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230432.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230435.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230437.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230439.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230404.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230407.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230410.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230413.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230415.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230418.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230420.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d2_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 230400.0,
+        "declared_depart_civil": "2026-10-01T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 230423.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259202.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259227.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259229.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259233.0,
+        "waited_s": 33.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259235.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259238.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259240.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259204.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259207.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259210.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259213.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259216.0,
+        "waited_s": 16.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259218.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259221.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d3_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 259200.0,
+        "declared_depart_civil": "2026-10-02T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 259224.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "haul_d3_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d3_0"
+        ],
+        "declared_depart_s": 266400.0,
+        "declared_depart_civil": "2026-10-02T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 266400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "escort_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3"
+        ],
+        "declared_depart_s": 270000.0,
+        "declared_depart_civil": "2026-10-02T10:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 270000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "escort_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3"
+        ],
+        "declared_depart_s": 270004.0,
+        "declared_depart_civil": "2026-10-02T10:00:04+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 270004.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "escort_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3"
+        ],
+        "declared_depart_s": 270008.0,
+        "declared_depart_civil": "2026-10-02T10:00:08+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 270008.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "escort_3",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3"
+        ],
+        "declared_depart_s": 270012.0,
+        "declared_depart_civil": "2026-10-02T10:00:12+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 270012.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "escort_4",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3"
+        ],
+        "declared_depart_s": 270016.0,
+        "declared_depart_civil": "2026-10-02T10:00:16+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 270016.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d3_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d3_1"
+        ],
+        "declared_depart_s": 280800.0,
+        "declared_depart_civil": "2026-10-02T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 280800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288002.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288026.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288028.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288031.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288034.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288036.0,
+        "waited_s": 36.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288038.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288005.0,
+        "waited_s": 5.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288007.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288010.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288013.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288015.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288018.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288020.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d3_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 288000.0,
+        "declared_depart_civil": "2026-10-02T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 288023.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d3_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d3_2"
+        ],
+        "declared_depart_s": 295200.0,
+        "declared_depart_civil": "2026-10-02T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 295200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316802.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316826.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316828.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316831.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316834.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316837.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316839.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316804.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316807.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316810.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316813.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316816.0,
+        "waited_s": 16.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316818.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316821.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d3_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 316800.0,
+        "declared_depart_civil": "2026-10-02T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 316823.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345602.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345624.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345627.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345629.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345633.0,
+        "waited_s": 33.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345635.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345638.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345604.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345607.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345610.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345612.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345616.0,
+        "waited_s": 16.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345618.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345621.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "haul_d4_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d4_0"
+        ],
+        "declared_depart_s": 352800.0,
+        "declared_depart_civil": "2026-10-03T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 352800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d4_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d4_1"
+        ],
+        "declared_depart_s": 367200.0,
+        "declared_depart_civil": "2026-10-03T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 367200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374402.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374425.0,
+        "waited_s": 25.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374428.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374431.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374433.0,
+        "waited_s": 33.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374436.0,
+        "waited_s": 36.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374439.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374404.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374407.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374409.0,
+        "waited_s": 9.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374412.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374414.0,
+        "waited_s": 14.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374417.0,
+        "waited_s": 17.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374420.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d4_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 374400.0,
+        "declared_depart_civil": "2026-10-03T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 374423.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d4_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d4_2"
+        ],
+        "declared_depart_s": 381600.0,
+        "declared_depart_civil": "2026-10-03T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 381600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403202.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403226.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403229.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403231.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403234.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403237.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403239.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403204.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403207.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403210.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403213.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403215.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403218.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403221.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d4_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 403200.0,
+        "declared_depart_civil": "2026-10-03T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 403224.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432002.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432025.0,
+        "waited_s": 25.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432028.0,
+        "waited_s": 28.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432031.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432033.0,
+        "waited_s": 33.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432036.0,
+        "waited_s": 36.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432039.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432004.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432007.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432009.0,
+        "waited_s": 9.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432012.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432014.0,
+        "waited_s": 14.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432017.0,
+        "waited_s": 17.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432020.0,
+        "waited_s": 20.0
+      },
+      {
+        "vehicle_id": "guard_d5_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 432000.0,
+        "declared_depart_civil": "2026-10-04T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 432023.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d5_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d5_0"
+        ],
+        "declared_depart_s": 439200.0,
+        "declared_depart_civil": "2026-10-04T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 439200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "probe_d5",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5"
+        ],
+        "declared_depart_s": 447085.0,
+        "declared_depart_civil": "2026-10-04T11:11:25+03:30",
+        "entrance": "26417705#0",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 447085.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d5_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d5_1"
+        ],
+        "declared_depart_s": 453600.0,
+        "declared_depart_civil": "2026-10-04T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 453600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460800.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460802.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460827.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460830.0,
+        "waited_s": 30.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460832.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460835.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460838.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460840.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460805.0,
+        "waited_s": 5.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460807.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460810.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460812.0,
+        "waited_s": 12.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460815.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460818.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460821.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d5_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 460800.0,
+        "declared_depart_civil": "2026-10-04T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 460824.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "haul_d5_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d5_2"
+        ],
+        "declared_depart_s": 468000.0,
+        "declared_depart_civil": "2026-10-04T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 468000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489602.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489626.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489629.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489631.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489634.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489637.0,
+        "waited_s": 37.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489639.0,
+        "waited_s": 39.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489604.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489607.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489610.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489613.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489615.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489618.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489621.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d5_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 489600.0,
+        "declared_depart_civil": "2026-10-04T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 489624.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "shadow",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6"
+        ],
+        "declared_depart_s": 502200.0,
+        "declared_depart_civil": "2026-10-05T02:30:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 502200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518402.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518426.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518429.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518432.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518434.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518438.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518440.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518404.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518407.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518410.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518413.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518416.0,
+        "waited_s": 16.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518418.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518421.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d6_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 518400.0,
+        "declared_depart_civil": "2026-10-05T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 518424.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "haul_d6_0",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d6_0"
+        ],
+        "declared_depart_s": 525600.0,
+        "declared_depart_civil": "2026-10-05T09:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 525600.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "haul_d6_1",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d6_1"
+        ],
+        "declared_depart_s": 540000.0,
+        "declared_depart_civil": "2026-10-05T13:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 540000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547200.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547202.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547226.0,
+        "waited_s": 26.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547229.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547231.0,
+        "waited_s": 31.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547234.0,
+        "waited_s": 34.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547236.0,
+        "waited_s": 36.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547240.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547204.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547207.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547210.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547213.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547215.0,
+        "waited_s": 15.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547218.0,
+        "waited_s": 18.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547221.0,
+        "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d6_h15_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 547200.0,
+        "declared_depart_civil": "2026-10-05T15:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 547223.0,
+        "waited_s": 23.0
+      },
+      {
+        "vehicle_id": "haul_d6_2",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/haul_d6_2"
+        ],
+        "declared_depart_s": 554400.0,
+        "declared_depart_civil": "2026-10-05T17:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 554400.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t0",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576000.0,
+        "waited_s": 0.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t1",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576002.0,
+        "waited_s": 2.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576027.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576030.0,
+        "waited_s": 30.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576032.0,
+        "waited_s": 32.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576035.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576038.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576041.0,
+        "waited_s": 41.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t2",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576004.0,
+        "waited_s": 4.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t3",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576007.0,
+        "waited_s": 7.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t4",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576010.0,
+        "waited_s": 10.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t5",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576013.0,
+        "waited_s": 13.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t6",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576016.0,
+        "waited_s": 16.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t7",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576019.0,
+        "waited_s": 19.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t8",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576022.0,
+        "waited_s": 22.0
+      },
+      {
+        "vehicle_id": "guard_d6_h23_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 576000.0,
+        "declared_depart_civil": "2026-10-05T23:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 576024.0,
+        "waited_s": 24.0
+      }
+    ],
+    "collision_list": []
+  },
   "lock": {
     "lock_version": 1,
     "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
@@ -30779,6 +35549,23 @@
         "release_agreement": "SameRelease",
         "mismatch_accepted": false
       }
+    },
+    "dry_run": {
+      "ran": true,
+      "sumo_release": "1.27.0",
+      "begin_s": 0.0,
+      "end_s": 604800.0,
+      "vehicles": {
+        "loaded": 69245,
+        "inserted": 69245,
+        "discarded": 0,
+        "waiting_at_end": 0
+      },
+      "planned_vehicles": {
+        "total": 365,
+        "inserted": 365
+      },
+      "collisions": 0
     },
     "epoch": {
       "calendar_advances": true,

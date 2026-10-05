@@ -38,9 +38,11 @@ from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
 from carlacontrol.CompileFindings import CompileFindings  # noqa: E402
 from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator  # noqa: E402
-from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
+from carlacontrol.ResolutionReport import ResolutionReport  # noqa: E402
+from carlacontrol.ScenarioCompiler import SKIPPED_DRY_RUN, ScenarioCompiler  # noqa: E402
 from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
 from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
+from carlacontrol.SumoDryRun import SumoDryRun  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -1285,6 +1287,114 @@ def test_an_anchor_event_outside_the_grammar_is_refused_under_check_53(world, in
                                                                        tmp_path, event):
     result = compile_document(world, installation, tmp_path, anchored(world, {"start": event}))
     assert checks(result) == {53}
+
+
+# ---- the dry run: the compiled scenario in SUMO alone ---------------------------------------------
+
+def blocked_entrance(world) -> dict:
+    """The fixture with West Street's entrance blocked from 06:50 to the end of the run by a car
+    standing 20 m in, so nothing departing there after it gets in: the probe at 07:00 and the hauler
+    at 07:30 wait out max-depart-delay, and a nominal late arrival at 08:55 is still waiting when the
+    run ends. The patrol at 06:15 enters before the blocker does."""
+    spec = world.specification()
+    spec["places"]["west_gate_kerb"] = {"lane": "900_0", "offset_m": 20.0}
+    spec["actors"] += [
+        {"id": "blocker", "type": "saloon", "depart": "d0 06:50", "from": "west_gate",
+         "to": "east_end", "stops": [{"place": "west_gate_kerb", "until": "d0 09:00"}]},
+        {"id": "late", "type": "car", "depart": "d0 08:55", "from": "west_gate",
+         "to": "cross_south"}]
+    spec["supervision"]["instances"].append(
+        {"name": "late_nominal", "supervision": "nominal", "labels": [],
+         "participants": [{"actor": "late", "role": "subject"}]})
+    return spec
+
+
+def test_the_dry_run_finds_every_planned_vehicle_inserted_and_the_lock_records_it(
+        world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    assert result.lock["dry_run"] == {
+        "ran": True, "sumo_release": installation.version, "begin_s": 0.0, "end_s": 10800.0,
+        "vehicles": {"loaded": 603, "inserted": 603, "discarded": 0, "waiting_at_end": 0},
+        "planned_vehicles": {"total": 3, "inserted": 3}, "collisions": 0}
+    planned = {row["vehicle_id"]: row for row in result.report["dry_run"]["planned"]}
+    assert set(planned) == {"probe", "hauler", "patrol_d0_h6"}
+    assert planned["patrol_d0_h6"]["refs"] == ["series kerb_patrol"]
+    assert (planned["probe"]["declared_depart_s"], planned["probe"]["depart_s"],
+            planned["probe"]["waited_s"]) == (3600.0, 3600.0, 0.0)
+    report = result.files["resolution_md"].read_text(encoding="utf-8")
+    assert "## Dry run (check 59)" in report
+    assert ("| probe | street_layout_probe/probe_standoff | 2026-03-21T07:00:00-06:00 | 3600.0 | "
+            "0 |") in report
+    assert not (tmp_path / "out" / ".street_layout_probe.dry-run").exists()
+
+
+def test_a_planned_vehicle_sumo_never_inserts_is_refused_under_check_59(world, installation,
+                                                                      tmp_path):
+    result = compile_document(world, installation, tmp_path, blocked_entrance(world))
+    assert checks(result) == {59}
+    refusals = {f.subject: f.message for f in result.findings.by_check(59)}
+    assert set(refusals) == {"actor probe", "actor hauler", "actor late"}
+    assert ("'probe', named by street_layout_probe/probe_standoff, is declared to depart at "
+            "2026-03-21T07:00:00-06:00 (3600 s) and never enters the run: it waited 900 s to enter "
+            "at edge 900, and SUMO discarded it (max-depart-delay 900 s)") in refusals["actor probe"]
+    assert ("it was still waiting to enter at edge 900 when the run ended, 300 s after its "
+            "departure") in refusals["actor late"]
+    run = result.report["dry_run"]
+    outcomes = {row["vehicle_id"]: (row["outcome"], row["waited_s"]) for row in run["planned"]}
+    assert outcomes == {"patrol_d0_h6": ("inserted", 0.0), "probe": ("discarded", 900.0),
+                        "hauler": ("discarded", 900.0), "late": ("waiting_at_end", 300.0)}
+    assert run["other_vehicles_discarded"] == run["vehicles"]["discarded"] - 2 > 0
+    assert run["other_vehicles_waiting_at_end"] == run["vehicles"]["waiting_at_end"] - 1
+    # Refused: only the report is written, and the dry run's scratch is gone.
+    assert not result.lock and "lock" not in result.files
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == [
+        "street_layout_probe.resolution.json", "street_layout_probe.resolution.md"]
+
+
+def test_a_refused_dry_run_leaves_an_earlier_package_as_it_was(world, installation, tmp_path):
+    """The run reads its own copy of the files, so a refusal after it changes nothing on disk."""
+    first = compile_document(world, installation, tmp_path, world.specification())
+    assert not first.refused
+    before = {path.name: path.read_bytes() for path in (tmp_path / "out").iterdir()
+              if "resolution" not in path.name}
+    second = compile_document(world, installation, tmp_path, blocked_entrance(world))
+    assert 59 in checks(second)
+    after = {path.name: path.read_bytes() for path in (tmp_path / "out").iterdir()
+             if "resolution" not in path.name}
+    assert after == before
+
+
+def test_the_dry_run_skipped_for_a_draft_is_recorded_in_the_lock(world, installation, tmp_path):
+    spec = world.write(blocked_entrance(world), f"skip.{tmp_path.name}.scenario.json")
+    result = ScenarioCompiler(installation, skip_dry_run=True).compile(spec, tmp_path / "out")
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    assert result.lock["dry_run"] == {"ran": False, "reason": SKIPPED_DRY_RUN}
+    assert f"## Dry run\n\nNot run: {SKIPPED_DRY_RUN}." in \
+        result.files["resolution_md"].read_text(encoding="utf-8")
+
+
+def test_every_collision_sumo_registers_is_read_and_reported(tmp_path):
+    """Collisions are as deterministic as insertions and never refuse; each is read from SUMO's
+    collision output and listed in the report with its civil time."""
+    written = tmp_path / "collisions.xml"
+    written.write_text(
+        '<collisions><collision time="1234.50" type="collision" lane="900_0" pos="42.10" '
+        'collider="ambient.7" victim="probe" colliderType="car" victimType="saloon" '
+        'colliderSpeed="9.1" victimSpeed="0.0"/></collisions>', encoding="utf-8")
+    (collision,) = SumoDryRun._read_collisions(written, lambda seconds: f"civil {seconds:g}")
+    assert collision == {"time_s": 1234.5, "civil": "civil 1234.5", "type": "collision",
+                         "collider": "ambient.7", "victim": "probe", "lane": "900_0",
+                         "pos_m": 42.1}
+    report = ResolutionReport()
+    report.set("dry_run", {
+        "ran": True, "sumo_release": "1.27.0", "begin_s": 0.0, "end_s": 3600.0,
+        "vehicles": {"loaded": 2, "inserted": 2, "discarded": 0, "waiting_at_end": 0},
+        "planned_vehicles": {"total": 0, "inserted": 0}, "collisions": 1, "teleports": 0,
+        "emergency_stops": 0, "emergency_braking": 0, "other_vehicles_discarded": 0,
+        "other_vehicles_waiting_at_end": 0, "planned": [], "collision_list": [collision]})
+    assert "| civil 1234.5 (1234.5 s) | collision | ambient.7 | probe | 900_0 |" in \
+        report.to_markdown()
 
 
 # ---- capture windows and the sun --------------------------------------------------------------------

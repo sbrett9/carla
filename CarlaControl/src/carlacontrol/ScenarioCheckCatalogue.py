@@ -212,6 +212,13 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "A behaviour truncated by the run ending"),
     ScenarioCheck(32, "emission", "Every flow's window lies inside the run", "the specification", _W,
                   COMPILER, "A flow that never fires"),
+    # -- dry run -----------------------------------------------------------------------------------
+    ScenarioCheck(59, "dry_run", "Every vehicle the supervision plan names enters a SUMO-only run of "
+                  "the compiled scenario: none is discarded after waiting max-depart-delay at its "
+                  "entrance, and none is still waiting when the run ends",
+                  "a SUMO-only run of the compiled configuration over its whole span", _R, COMPILER,
+                  "A planned subject a drive never draws -- an interval with no vehicle -- found "
+                  "after a capture was spent"),
 )
 
 class ScenarioCheckCatalogue:

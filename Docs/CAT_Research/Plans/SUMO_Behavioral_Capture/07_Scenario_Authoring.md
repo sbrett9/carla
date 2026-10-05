@@ -80,6 +80,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-02 | The supervision plan says nothing its terms do not define (§3.6, §5.2). A row's `parameters` — on an instance, an absence, a series or a cohort — are keys its labels' terms declare, of the declared types (check 56); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and may not vary (check 57); a term's exemplars and a counterfactual naming a subject resolve against the plan (check 8). An absence's `expected` names its site, and the plan carries the additional file's digest (§5.1). All three shipped scenarios are recompiled; their route files, configurations and lane closures are unchanged, and so is every network fingerprint. |
 | 2026-10-05 | An interval may be declared by an `anchor` instead of civil bounds, naming the events of its participant that commit its start and end — `depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>` over the actor's `phases[]` — resolved against its stops and compiled route and refused where the vehicle has no such event, where the end does not follow the start, beside civil bounds, or on a cohort (§3.5, §3.6, check 58). The plan carries each interval's anchor, null when unanchored, and an interval over a `duration` stop declares a length and no start; check 38 compares only declared bounds. Bahonar's anomaly intervals are anchored and the scenario recompiled; Arapahoe's and Gardnerville's plans, which carry no interval, are unchanged. |
 | 2026-10-05 | The vocabulary's closed core is generated from the enumerations in `CarlaNet.Types` and published at core version 2, with `beyond_draw_distance` among the observability outcomes and the interval anchor, render state and render reason families added (§8.3, D7.25; [`06`](06_Truth_And_Annotation.md) §3.7). The compiler reads it through `carlanet`, so nothing restates it by hand. All three shipped scenarios are recompiled: every plan's vocabulary digest, and the lock's, changes; their traffic files do not. |
+| 2026-10-05 | A scenario is run in SUMO alone before it is written, as the owner ruled, and refused when a vehicle the supervision plan names is discarded after waiting `max-depart-delay` or is still waiting at the end (§5.1, §5.2 check 59, §5.4). The report states every planned vehicle's wait, the other vehicles discarded and every collision; the lock records the run, or that `--skip-dry-run` skipped it. Measured, the run adds 130 to 160 s to Bahonar's week, 176 to 219 s to the Arapahoe dwell and 6 s to the Gardnerville orbit; all three shipped scenarios are recompiled, every planned vehicle enters, and none had a discard or a collision. |
 
 ---
 
@@ -1623,7 +1624,25 @@ place index, area table and solar frame — and the vehicle catalogue. Nothing e
 | `<MapName>.net.xml` | the world package's own network, **byte for byte**, so the network SUMO runs is the world's; nothing about it is scenario-specific |
 | `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, each row's parameters and each nominal row's `hard_negative_for`, each absence's expected route and site, the vocabulary resolved with its digest, and the digests of the route file, network, configuration and additional file it was compiled against — `additional_digest` the same SHA-256 the lock records for the additional file, null where there is none |
 | `<scenario_id>.resolution.json`, `.resolution.md` | **what it resolved** — §5.3 |
-| `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — and the lane closures' additional file where there is one, each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, the `duarouter` release that routed it, the world's converter, how the two stand by release number and whether a mismatch was accepted (check 6); **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
+| `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — and the lane closures' additional file where there is one, each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, the `duarouter` release that routed it, the world's converter, how the two stand by release number and whether a mismatch was accepted (check 6); the dry run — whether it ran, the SUMO release, the vehicles loaded, inserted, discarded and still waiting, the planned vehicles inserted, the collisions (check 59); **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
+
+**Before anything is written, the compiler runs the compiled scenario in SUMO alone** (check 59,
+`carlacontrol.SumoDryRun`). SUMO inserts a vehicle at its departure only when its entrance has room,
+holds it there otherwise, and discards it once it has waited `max-depart-delay`; with the same
+configuration and seed it does so identically in every run, so a run of the files a drive will load
+shows exactly which vehicles that drive will draw. The staged SUMO runs the files from a scratch
+directory over the whole span with their own seed and step, writing its trip information (unfinished
+trips included), its statistics and its collisions — no TraCI, so it runs at SUMO's own pace — and the
+compile is refused for any vehicle the supervision plan names that never entered. The report states
+every planned vehicle's declared departure and how long it waited, how many other vehicles were
+discarded or still waiting at the end, and every collision with its time, collider, victim and lane; the
+lock records that the run happened, with the SUMO release and its counts (`dry_run`). *Measured* with
+SUMO 1.27.0 on this machine, over two runs each, the run adds 130 to 160 s to a compile of Bahonar's
+week (604 800 one-second steps), 176 to 219 s to the Arapahoe dwell (54 000 steps of 0.05 s with up to
+450 vehicles) and 5 to 6 s to the Gardnerville orbit, against 2 to 3 s for the rest of each compile. A
+compile of the test fixture gains about 2 s. `--skip-dry-run` (on `compile_scenario.py` and each
+generator) skips it for quick iteration on a draft, and the lock then says `"ran": false` with the
+reason.
 
 **A refused compile writes only its resolution report**, marked refused, so every refusal can be read;
 no scenario file is written. **The same specification, seed and world give byte-identical scenario
@@ -1713,6 +1732,8 @@ the same ids and outcomes.
 | 52 | The route file carries no parameter but the vehicle-type binding's | the file, before it is written | **refuse** | Supervision reaching the channel it must never use (§3.6) |
 | 31 | The run ends after every declared interval and every stop | the resolved instants | **warn** | A behaviour truncated by the run ending, recorded as if it completed (doc 20 §6.1 `closed_by`) |
 | 32 | Every flow's window lies inside the run | the specification | **warn** | Flows that never fire |
+| **Dry run** ||||
+| 59 | Every vehicle the supervision plan names — each instance's participants, annotated or nominal, and every realised slot of every series — enters a SUMO-only run of the compiled scenario over its whole span: none is discarded after waiting `max-depart-delay` at its entrance, and none is still waiting when the run ends | the staged SUMO running the compiled configuration with its own seed and step, before anything is written (`SumoDryRun`) | **refuse**, naming the vehicle, what names it, its declared departure, its entrance edge and how long it waited | A planned subject a drive never draws — an interval with no vehicle, or a series' realised count that the run does not realise — found after a capture was spent. SUMO inserts a vehicle only when its entrance has room and discards one that has waited 900 s, both deterministically, so the run shows exactly what a drive will ([`06`](06_Truth_And_Annotation.md) D6.12). Every planned vehicle's wait, the other vehicles discarded and every collision SUMO registered are reported and refuse nothing |
 
 **Two notes on the table.**
 
@@ -1761,6 +1782,9 @@ states:
   normalised probabilities;
 - **every supervision instance**, its participants and roles, its labels, and its intervals in seconds
   and civil time; every annotated cohort; every series;
+- **what the dry run found** (check 59): every planned vehicle's declared departure, when SUMO inserted
+  it and how long it waited, how many other vehicles were discarded or still waiting at the end, and
+  every collision SUMO registered;
 - **the world** it bound to and the SUMO that routed it; **the lock**.
 
 Not stated, because not built: each place's latitude, longitude and bare-earth height, and each edge's
@@ -1825,12 +1849,20 @@ flowchart TD
 
   subgraph EMIT["6 · Emit"]
     P13["build the routed .rou.xml and the .sumocfg<br/>in memory, then read them back:<br/>sorted · 29, no -- in comments · 30,<br/>no clock attribute · 44, schema-valid · 51,<br/>only the binding's params · 52,<br/>every type its measured body · 15"] -->|fails| R6(["REFUSE — nothing written"])
-    P13 --> P14["write the network, routes, configuration,<br/>supervision plan and lock"]
   end
 
+  P13 --> P15
+
+  subgraph DRY["7 · Dry run"]
+    P15["the files in a scratch directory, run by the staged SUMO alone<br/>over the whole span, its own seed and step:<br/>every planned vehicle enters · 59"] -->|"one discarded,<br/>or still waiting at the end"| R7(["REFUSE — nothing written"])
+    P15 --> W8[/"REPORT: each planned vehicle's wait,<br/>the others discarded, every collision"/]
+  end
+
+  P15 --> P14["write the network, routes, configuration,<br/>supervision plan and lock,<br/>the lock recording the dry run"]
   P14 --> OUT[("Scenario package")]
 
-  R0 & R1 & R2 & R3 & R4 & R5 & R6 -.-> REP
+  R0 & R1 & R2 & R3 & R4 & R5 & R6 & R7 -.-> REP
+  W8 -.-> REP
   W1 & W4 & W6 & W7 -.-> REP
   P14 -.-> REP
   REP[/"resolution report:<br/>everything resolved, every finding"/]

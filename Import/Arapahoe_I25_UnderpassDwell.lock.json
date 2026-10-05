@@ -110,6 +110,23 @@
       "mismatch_accepted": false
     }
   },
+  "dry_run": {
+    "ran": true,
+    "sumo_release": "1.27.0",
+    "begin_s": 0.0,
+    "end_s": 2700.0,
+    "vehicles": {
+      "loaded": 7433,
+      "inserted": 7433,
+      "discarded": 0,
+      "waiting_at_end": 0
+    },
+    "planned_vehicles": {
+      "total": 0,
+      "inserted": 0
+    },
+    "collisions": 0
+  },
   "epoch": {
     "calendar_advances": true,
     "civil_datetime": "2026-09-29T07:00:00-06:00",

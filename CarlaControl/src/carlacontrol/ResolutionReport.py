@@ -8,7 +8,8 @@ with its second and its civil time, every rota and every skip with its reason, e
 `duarouter` produced it, every lane closure and its window, every vehicle type and the body it binds,
 every supervision instance with its intervals in seconds and civil time, every capture window with its
 civil date and the sun the session will declare, the illumination-label association in full, every
-warning in full, the SUMO options the compiler fixed, and the lock.
+warning in full, what a SUMO-only run of the compiled files showed, the SUMO options the compiler fixed,
+and the lock.
 
 `<scenario>.resolution.json` is the record; `<scenario>.resolution.md` renders it for reading. A
 refused compile writes the report too, marked refused, with every refusal.
@@ -23,7 +24,7 @@ RESOLUTION_VERSION = 1
 SECTIONS = ("resolution_version", "outcome", "scenario", "findings", "epoch", "zone",
             "illumination_default", "capture_windows", "illumination_label_association", "world",
             "instants", "places", "rotas", "routes", "lane_closures", "vehicle_types",
-            "supervision", "lock")
+            "supervision", "dry_run", "lock")
 
 
 class ResolutionReport:
@@ -74,6 +75,7 @@ class ResolutionReport:
         lines += self._routes(d.get("routes"))
         lines += self._lane_closures(d.get("lane_closures"))
         lines += self._supervision(d.get("supervision"))
+        lines += self._dry_run(d.get("dry_run"))
         if "lock" in d:
             lines += self._traffic(d["lock"].get("traffic"))
             lines += ["## Lock", "", "```json", json.dumps(d["lock"].get("files", {}), indent=2),
@@ -229,6 +231,39 @@ class ResolutionReport:
             lines.append(f"- series **{series['series_id']}**: {series['slots']} slots, members "
                          f"{series['supervision']}" + ResolutionReport._declared(series))
         return [*lines, ""]
+
+    @staticmethod
+    def _dry_run(run) -> list[str]:
+        """What a SUMO-only run of the compiled files showed (check 59): every planned vehicle's wait
+        at its entrance, the other vehicles that never got in, and every collision."""
+        if not run:
+            return []
+        if not run["ran"]:
+            return ["## Dry run", "", f"Not run: {run['reason']}.", ""]
+        vehicles, planned = run["vehicles"], run["planned_vehicles"]
+        lines = ["## Dry run (check 59)", "",
+                 f"SUMO {run['sumo_release']} alone over {run['end_s']:g} s: {vehicles['loaded']} "
+                 f"vehicles loaded, {vehicles['inserted']} inserted, {vehicles['discarded']} discarded "
+                 f"after waiting max-depart-delay, {vehicles['waiting_at_end']} still waiting at the "
+                 f"end; {run['collisions']} collisions, {run['teleports']} teleports, "
+                 f"{run['emergency_stops']} emergency stops, {run['emergency_braking']} emergency "
+                 f"braking. {planned['inserted']} of the {planned['total']} vehicles the plan names "
+                 f"entered; of the others, {run['other_vehicles_discarded']} were discarded and "
+                 f"{run['other_vehicles_waiting_at_end']} were still waiting at the end.", ""]
+        if run["planned"]:
+            lines += ["| Planned vehicle | Named by | Declared departure | Entered | Waited (s) |",
+                      "|---|---|---|---|---|"]
+            for row in run["planned"]:
+                entered = row["depart_s"] if row["inserted"] else row["outcome"].replace("_", " ")
+                lines.append(f"| {row['vehicle_id']} | {', '.join(row['refs'])} | "
+                             f"{row['declared_depart_civil']} | {entered} | {row['waited_s']:g} |")
+            lines.append("")
+        if run["collision_list"]:
+            lines += ["| Collision at | Type | Collider | Victim | Lane |", "|---|---|---|---|---|"]
+            lines += [f"| {c['civil']} ({c['time_s']:g} s) | {c['type']} | {c['collider']} | "
+                      f"{c['victim']} | {c['lane']} |" for c in run["collision_list"]]
+            lines.append("")
+        return lines
 
     @staticmethod
     def _bounds(interval: dict) -> str:
