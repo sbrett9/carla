@@ -62,6 +62,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §9.7, §11.4, §11.5, §11.6, D3.33: `collision.action none` and `ignore-accidents` refused as the owner ruled, so a run that starts always has the record of collisions. The collision list is asked for only where it can hold something: SUMO's colliding-vehicles count arrives with each step's own answer, and the list is fetched on the first frame and on a step a collision began or one is still going on. Measured, the list is about 50 µs a round trip on Gardnerville at 35 vehicles, between 0.04 and 0.085 ms of a step, and a run with no collision now asks for it once. The report keeps every collision and every collision warning SUMO wrote; how much is printed is a switch, off by default, that changes nothing recorded. |
 | 2026-10-05 | §2.7, §9.7, D3.29: the compile-lock check binds the lane closures' additional file and the supervision plan. The plan is refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not those of the route file, configuration, additional file and network the run loads; once bound it is handed to the session on the run report. A lock that names no plan runs without one. |
 | 2026-10-05 | §8.9, D3.43: the supervision in force is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The binder states it per SUMO vehicle (`SumoDriveSession.Supervision`); the session puts each change for the body drawing the vehicle in one `update_supervision` after the render set's and before the tick cue; the server holds a body's on its record while it is lent and the plan and absences on the episode; the world observer carries it on every snapshot inside the render set block, where a reader built before it skips it. An unlabelled vehicle costs nothing. Written; the plugin awaits a build. |
+| 2026-10-05 | §8.9, §9.7, D3.43: the interval binder is built. The session builds one from the plan its compile lock binds and tells it of every SUMO frame and every rendered frame after the caller's observers; it opens and closes the plan's intervals on SUMO's events at TraCI's clock, states each vehicle's supervision and each absence on the session's table from the frame at its instant and never before the window, reads back once the plan subjects SUMO already has when the session opens, and refuses the advance that shows SUMO dropped a plan subject. Each rendered frame now carries the pose written to each body it drew, from which the binder takes a stopping body's speed; an observer that writes intervals is handed them as they open and close. |
 
 ---
 
@@ -2747,8 +2748,26 @@ the recorder beside the session: every reader takes it from the snapshot.
   binder writes it between ticks, from a step observer, stating a vehicle once when its supervision
   changes; it knows SUMO vehicles and nothing of the pool. Binding starts afresh. The table refuses a
   state no vehicle can be in and checks nothing against the plan: the binder copies rows and mints none
-  ([`06`](06_Truth_And_Annotation.md) D6.8). The binder itself is not built, and until it is no plan is
-  bound and nothing is put.
+  ([`06`](06_Truth_And_Annotation.md) D6.8).
+- **The binder (2026-10-05).** `SupervisionBinder` decides it ([`06`](06_Truth_And_Annotation.md) §3.3
+  gives its rules). The session builds one where its compile lock binds a plan
+  (`ScenarioLockCheck.Plan`) -- `SumoDriveSession.SupervisionBinder`, null for a scenario that binds
+  none -- and tells it of every SUMO frame and every rendered frame after the world truth track and the
+  caller's observers, so a step it refuses has been told to all of them. It binds the plan on the table as
+  it is built, so the session's first change, before the first tick's cue, names the plan. It sees SUMO
+  from the fast-forward's frame: there it reads back once what each plan subject SUMO already has did
+  before -- its departure, its completed stops and the one under way, its route index -- and from then on
+  takes every event from the step's lists, asking SUMO only a vehicle's completed stops when it starts or
+  ends one and its route index when it changes edge, and only for a plan subject whose anchor waits on
+  it (`SumoVehicleQueries.RouteIndex` is new). A change is put in force once the next tick to be rendered
+  has reached its instant -- one SUMO step after the binder learns of it, since the session reads SUMO a
+  step ahead of the frames it renders -- and nothing before the window opens. A stop's observed onset is
+  the first frame whose applied speed holds at or below 0.15 m/s: each `RenderedFrameRecord` carries the
+  pose written to each body the frame drew (`AppliedPoses`, lent for the call), empty where no world
+  renders. A step observer that is also an `ISupervisionIntervalSink` -- the run manifest's writer -- is
+  handed to the binder at start and told every interval it opens and closes. A plan subject SUMO gives up
+  inserting makes the advance that showed it refuse, naming the vehicle, at the stage of the tick being
+  rendered (the window, once it has opened), with the run's stop recorded as any refusal's is.
 - **What the session puts, and when.** `SumoDriveSession.NameTheSupervision`, after
   `NameTheRenderSet` in the same drain: for every body the server holds lent, the vehicle's supervision
   where it differs from what the server holds for that body, and every absence opened, changed or
@@ -2807,6 +2826,13 @@ refused with the actors and the set still read; an unknown state refused), `Snap
 as it arrives, a change the server would refuse refused before it is sent, two clients reading the same
 supervision for each frame, a withdrawal read by both). Seen failing against a session that did not
 forget a body's supervision when the body was handed on: the second vehicle's body carried nothing.
+The binder is exercised by `SupervisionBinderTests` (each anchor, each closing reason, the read-back, the
+window, cohorts, series and absences, a render-set gap, a dropped subject, and no solar type held, on
+streams a test writes) and `SupervisionBinderSessionTests` (against SUMO with no CARLA: each interval at
+the step SUMO listed its event, every frame's supervision at its instant, three runs binding the same
+rows, a window opening mid-dwell, a dropped subject refused at the window stage; and under a recording
+world, the entry observed on its committed frame, the stop on its standstill and the dweller's annotation
+put to the server).
 
 ---
 
@@ -3317,6 +3343,7 @@ session.start():
     if <stem>.lock.json beside the sumocfg:               # §2.7; else recorded as uncompiled
         assert sha256(config, routes, network, additional, plan) == the lock's; catalogue and epoch too
         plan = read <stem>.supervision.json               # where the lock names one; immutable rows
+        binder = SupervisionBinder(plan)                  # told every frame after the caller's observers
         assert plan's digests == the files run, the network by fingerprint; its vocabulary's == the lock's
     assert sumocfg time-to-teleport <= 0                  # absent is 300; unless accepted, §11.6
     assert no other teleport trigger on                   # .highways, .disconnected, .bidi, a type's own;
@@ -4440,7 +4467,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.40** | **A body's heading is the heading of its own path, and its velocity the path's.** The rear axle, 0.75 of the measured body's length behind the bumper, trails the bumper along the path the interpolation put it on, taken exactly per tick; only forward travel turns it, a move no vehicle drives holds it, and SUMO's angle starts it. The bumper stays where SUMO put it, the truth's heading is the body's, its course and speed the path's, and SUMO's reported angle is recorded beside them for audit (§5.4, §6.4). |
 | **D3.41** | **A draw distance is an optional performance control, off by default, and rendering only.** Where one is set, each pooled body is given it once -- the maximum draw distance of every mesh and lamp of the body and of what is attached to it, by `set_actors_max_draw_distance` before the cue of the tick it is first drawn in -- so no camera draws a body beyond it, while every vehicle keeps its body, its pose, its naming and its truth. Each frame's render set records the distance it was drawn under, and the recorder marks, in each camera's sidecar, every vehicle wholly or partly beyond it. A server without the call refuses it once; the run goes on drawing every body at any range and says so (§8.3.3). It is recommended for no scenario. |
 | **D3.42** | **A limit on which vehicles get a body is an optional performance control, off by default.** The default policy draws every vehicle SUMO has (D3.38's rule); a circle, the registered cameras' footprints and a capacity under any policy may be chosen in its place. A vehicle outside the chosen limit is simulated by SUMO and has no body, no frame, no render set entry and no truth record; the report states the policy and counts what it left out, and its releases say why each track ended. Every vehicle stays subscribed, so one inside the limit is drawn exactly where and as it would be with none, inserted vehicles from SUMO's first frame. No limit is a default, a recommendation or a sizing rule (§8.3.2). |
-| **D3.43** | **The supervision in force is held on the server, beside the render set, for every reader** (owner's ruling, 2026-10-05) — the session puts each change (per body drawing a supervised vehicle, its state and instances in force; absences opened and closed; one bound plan with its vocabulary version and digest) in one `update_supervision` after the render set's and before the tick cue of the frame it is drawn in; the server holds a body's on its record only while it is lent and drops it when the body is given back or handed on, and holds the plan and absences on the episode; the world observer carries all of it on every snapshot inside the render set block. An unlabelled vehicle has no row; no reader takes supervision from an in-process source; a world no session supervises is unchanged; a server that refuses is recorded and told nothing more (§8.9). |
+| **D3.43** | **The supervision in force is held on the server, beside the render set, for every reader** (owner's ruling, 2026-10-05) — the session puts each change (per body drawing a supervised vehicle, its state and instances in force; absences opened and closed; one bound plan with its vocabulary version and digest) in one `update_supervision` after the render set's and before the tick cue of the frame it is drawn in; the server holds a body's on its record only while it is lent and drops it when the body is given back or handed on, and holds the plan and absences on the episode; the world observer carries all of it on every snapshot inside the render set block. An unlabelled vehicle has no row; no reader takes supervision from an in-process source; a world no session supervises is unchanged; a server that refuses is recorded and told nothing more (§8.9). **The binder is built (2026-10-05):** the session builds it from the plan its lock binds and tells it every frame after the caller's observers; what it states is put in force from the frame at its instant and never before the window, and a plan subject SUMO drops makes the advance refuse |
 
 ---
 

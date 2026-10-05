@@ -1,5 +1,6 @@
 // Ported from Eclipse SUMO's reference TraCI client, tools/traci/_vehicle.py -- getIDList,
-// getIDCount, the scalar getters, getDeparture and getDepartDelay (:333-345), getStops (:785-804)
+// getIDCount, the scalar getters, getDeparture and getDepartDelay (:333-345), getRouteIndex (:389-395),
+// getStops (:785-804)
 // with its reader _readStopData (:103-127), remove (_vehicle.py:1479-1482) and moveToXY (:1485-1499).
 //
 //   Upstream:      https://github.com/eclipse-sumo/sumo
@@ -98,6 +99,17 @@ public sealed class SumoVehicleDomain
     /// a run captures. A question asked once per vehicle, not per step.
     /// </remarks>
     public double DepartDelay(string vehicleId) => Read(vehicleId, TraCIConstants.VAR_DEPART_DELAY).AsDouble;
+
+    /// <summary>
+    /// Where the vehicle is along its route: the index, counted from 0, of the route's edge it is on or
+    /// last left, which is how SUMO reports its progress (<c>getRouteIndex</c>, <c>_vehicle.py:389</c>);
+    /// -1 for one not yet departed.
+    /// </summary>
+    /// <remarks>
+    /// A question asked when the vehicle's edge changes, for a vehicle whose progress something waits on,
+    /// not on every step. Inside a junction it is the index of the edge the vehicle came from.
+    /// </remarks>
+    public int RouteIndex(string vehicleId) => Read(vehicleId, TraCIConstants.VAR_ROUTE_INDEX).AsInt;
 
     /// <summary>
     /// A vehicle's stops: those still ahead of it, or those it has made.

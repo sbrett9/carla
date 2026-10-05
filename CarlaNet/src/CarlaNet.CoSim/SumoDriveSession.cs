@@ -109,6 +109,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly List<string> _absencesClosedSinceNamed = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
+    private readonly List<VehiclePose> _appliedPoses = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _next = [];
     private readonly Stopwatch _bridgeClock = new();
@@ -255,7 +256,27 @@ public sealed class SumoDriveSession : IDisposable
         // Read once, as the pace is: an observer added to the options after the start is told nothing,
         // rather than part of a run.
         ISumoStepObserver[] given = options.StepObservers is { } observers ? [.. observers] : [];
-        _observers = _track is { } track ? [track, .. given] : given;
+
+        // A compiled scenario's plan is bound by a binder the session builds itself, told after every
+        // other observer, so a step it refuses for a dropped plan subject has been told to all of them.
+        // Every observer that writes intervals is handed it as a sink, from the first frame.
+        SupervisionBinder = compiled.Plan is { } plan
+            ? new SupervisionBinder(plan, Supervision, clock, () => WindowOpensAtSeconds,
+                                    given.OfType<ISupervisionIntervalSink>())
+            : null;
+        List<ISumoStepObserver> told = [];
+        if (_track is { } track)
+        {
+            told.Add(track);
+        }
+
+        told.AddRange(given);
+        if (SupervisionBinder is { } binder)
+        {
+            told.Add(binder);
+        }
+
+        _observers = [.. told];
     }
 
     /// <summary>The three rates the session resolved and validated.</summary>
@@ -335,6 +356,18 @@ public sealed class SumoDriveSession : IDisposable
     /// withdraws what it put as it ends.</para>
     /// </remarks>
     public DriveSupervision Supervision { get; } = new();
+
+    /// <summary>
+    /// The binder of the plan the scenario's compile lock binds (<see cref="ScenarioLockCheck.Plan"/>):
+    /// it opens and closes the plan's intervals on SUMO's events and states what is in force on
+    /// <see cref="Supervision"/>. Null for a scenario that binds no plan.
+    /// </summary>
+    /// <remarks>
+    /// Built by the session and told of every frame after the caller's observers. A step observer given
+    /// to the session that is also an <see cref="ISupervisionIntervalSink"/> is told every interval it
+    /// opens and closes. A plan subject SUMO never inserts makes the advance that showed it refuse.
+    /// </remarks>
+    public SupervisionBinder? SupervisionBinder { get; }
 
     /// <summary>
     /// The world truth track the session writes -- where, at what rate, and how much it holds so far --
@@ -1665,6 +1698,7 @@ public sealed class SumoDriveSession : IDisposable
         {
             SunElevationDegrees = _sunReadThisTick?.ElevationDegrees,
             SunCorrectedElevationDegrees = _sunReadThisTick?.CorrectedElevationDegrees,
+            AppliedPoses = _appliedPoses,
         };
         foreach (ISumoStepObserver observer in _observers)
         {
@@ -1925,6 +1959,7 @@ public sealed class SumoDriveSession : IDisposable
         // vehicle's pose and velocity once the batch has been applied.
         _batch.Begin();
         _commanded.Clear();
+        _appliedPoses.Clear();
         _sumoAngles.Clear();
         VehicleLightStateFlags headlights = HeadlightsForThisTick();
 
@@ -2019,6 +2054,7 @@ public sealed class SumoDriveSession : IDisposable
 
                 _batch.Pose(actor, applied);
                 _commanded.Add((vehicleId, actor, applied));
+                _appliedPoses.Add(applied);
                 lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
             }
 
