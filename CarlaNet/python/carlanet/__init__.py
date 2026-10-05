@@ -2215,6 +2215,7 @@ class World:
                          render_admit_lead_s=3.0, render_release_lag_s=5.0,
                          render_max_speed_mps=40.0,
                          world_truth_track=None, world_truth_track_interval_s=None,
+                         collision_detail=False,
                          on_pose=None, on_release=None, on_divergence=None,
                          on_admission_pass=None, on_collision=None,
                          on_vehicle_not_inserted=None):
@@ -2393,7 +2394,7 @@ class World:
         a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
         as the scenario compiler writes. `allow_teleporting` runs anyway, and
         `session.Report.Teleporting` records that it was accepted. SUMO's other teleport triggers are
-        refused and accepted the same way; a `collision.action` other than `warn` or `none`, a positive
+        refused and accepted the same way; a `collision.action` other than `warn`, a positive
         `random-depart-offset` and `random` are refused with no override; and
         `session.Report.DistributionEdits` names each as the run ran it, with the demand scale and the
         insertion limits. It refuses, with no override, a
@@ -2450,11 +2451,18 @@ class World:
         `on_collision` is handed each collision SUMO registered once it is over (`CollisionSpan`: the
         collider, the victim, SUMO's `Kind`, lane and position, `BeganAtSeconds`, `EndedAtSeconds` and
         the bodies that rendered both). A collision does not stop the run; it is a fact about the
-        corpus to filter on. `session.Report.CollisionHandling` says what SUMO did about it -- `warn` is
-        what the compiler writes; SUMO's default `teleport` moves the collider, and `none` registers
-        nothing to record. `on_vehicle_not_inserted` is handed each vehicle SUMO gave up inserting --
-        it drops one past `max-depart-delay` without a word, so this is the only account of it.
-        `session.Report.SumoWarnings` counts SUMO's console warnings and keeps the first few.
+        corpus to filter on. The session runs only under `warn`, which the compiler writes: SUMO
+        registers each collision and changes nothing about the traffic. `session.Report.CollisionSpans`
+        keeps every one, `Collisions` counts them, `SumoCollisionWarnings` keeps every collision warning
+        SUMO wrote, and `CollisionListReads` counts the round trips spent asking SUMO for its collision
+        list -- only on the first frame and the steps a collision began or went on, since whether one
+        began arrives with each step's own answer. `collision_detail` decides only what the printed
+        report shows: off (the default), the counts; on, every collision and every SUMO collision
+        warning. Nothing recorded and nothing about the traffic depends on it.
+        `on_vehicle_not_inserted` is handed each vehicle SUMO gave up inserting -- it drops one past
+        `max-depart-delay` without a word, so this is the only account of it.
+        `session.Report.SumoWarnings` counts SUMO's console warnings, its collision warnings included,
+        and keeps the first few of the others.
 
         The render set's admission pass is published as it is made, once per SUMO step:
         `session.Report.LastAdmissionPass` holds the latest, replaced whole -- `Population` (every
@@ -2552,6 +2560,7 @@ class World:
             options.WorldTruthTrackPath = str(world_truth_track)
         if world_truth_track_interval_s is not None:
             options.WorldTruthTrackIntervalSeconds = float(world_truth_track_interval_s)
+        options.CollisionDetail = bool(collision_detail)
         options.RenderSet = policy
         # Both are read by the C# side, which is the one validator: a declaration checked twice is
         # a declaration two implementations will eventually disagree about.

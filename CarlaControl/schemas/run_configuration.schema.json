@@ -107,6 +107,17 @@
       "x-mutability": "run_mutable",
       "x-supplied-by": "tool"
     },
+    "collision_detail": {
+      "type": "string",
+      "enum": [
+        "on",
+        "off"
+      ],
+      "description": "What the run prints about collisions. off: their count, in the session's report. on: every collision as it ends, and every collision and every collision warning SUMO wrote in the session's report. Printing only: the record of collisions is kept in full either way, and nothing about the traffic or the truth depends on it.",
+      "default": "off",
+      "x-mutability": "session_fixed",
+      "x-supplied-by": "tool"
+    },
     "on_warning": {
       "type": "object",
       "additionalProperties": {

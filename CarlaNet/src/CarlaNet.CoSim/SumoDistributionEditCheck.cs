@@ -23,14 +23,16 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>What is refused, read from SUMO 1.27.0 and measured on the fixture network.</b></para>
 /// <list type="bullet">
-/// <item>A <c>collision.action</c> other than <c>warn</c> or <c>none</c>
-/// (<see cref="PermittedCollisionActions"/>), SUMO's default of <c>teleport</c> included
-/// (<c>MSFrame.cpp:399</c>): <c>teleport</c> moves the collider to the next edge of its route, and
-/// <c>remove</c> takes both vehicles out. Read case-sensitively, as <c>MSLane::initCollisionAction</c>
-/// reads it; measured, an action it does not name, <c>Warn</c> among them, is an error on SUMO's console
-/// and the run goes on under <c>teleport</c> (<c>MSLane.cpp:107</c>), so it is refused as <c>teleport</c>
-/// is. <c>ignore-accidents</c> set true registers no collision whatever the action, so the action in force
-/// is then <c>none</c>.</item>
+/// <item>A <c>collision.action</c> other than <c>warn</c> (<see cref="PermittedCollisionActions"/>),
+/// SUMO's default of <c>teleport</c> included (<c>MSFrame.cpp:399</c>). Under <c>warn</c> SUMO changes
+/// nothing about the traffic and only registers the collision, so the record of collisions exists;
+/// <c>teleport</c> moves the collider to the next edge of its route, <c>remove</c> takes both vehicles
+/// out, and <c>none</c> skips the check (<c>MSLane::detectCollisions</c>), so the run could not say whether
+/// any collision happened. Read case-sensitively, as <c>MSLane::initCollisionAction</c> reads it;
+/// measured, an action it does not name, <c>Warn</c> among them, is an error on SUMO's console and the run
+/// goes on under <c>teleport</c> (<c>MSLane.cpp:107</c>), so it is refused as <c>teleport</c> is.
+/// <c>ignore-accidents</c> set true skips the check whatever the action, so the action in force is then
+/// <c>none</c>, and it is refused as <c>none</c> is.</item>
 /// <item>Every teleport trigger besides <c>time-to-teleport</c>, unless the run accepted teleporting
 /// explicitly. <c>time-to-teleport.highways</c>, default 0 (<c>MSFrame.cpp:441</c>), teleports a vehicle
 /// waiting on a lane that does not continue its route, on a road faster than 69 km/h, only where it is
@@ -104,11 +106,12 @@ public sealed class SumoDistributionEditCheck
     public const string MaxDepartDelayOption = "max-depart-delay";
 
     /// <summary>
-    /// The collision actions a run may carry: SUMO registers a collision and both vehicles carry on
-    /// (<c>warn</c>), or it registers none (<c>none</c>). Every other action is refused, and so, were
-    /// <c>none</c> taken out of this list, would be <c>ignore-accidents</c>, which has the same effect.
+    /// The collision actions a run may carry: only <c>warn</c>, under which SUMO registers each collision
+    /// and both vehicles carry on as SUMO moves them. Every other action is refused, <c>none</c> and
+    /// <c>ignore-accidents</c> among them, because the record of collisions must exist and under either
+    /// SUMO skips the check that makes it.
     /// </summary>
-    public static IReadOnlyList<string> PermittedCollisionActions { get; } = ["warn", "none"];
+    public static IReadOnlyList<string> PermittedCollisionActions { get; } = ["warn"];
 
     /// <summary>
     /// Each teleport option besides <c>time-to-teleport</c>: SUMO's default, whether zero already enables
@@ -458,7 +461,7 @@ public sealed class SumoDistributionEditCheck
             string source = CollisionActionDeclared is null
                 ? $"{SumoCollisionHandling.ActionOption} not set, so SUMO's default '{SumoCollisionHandling.SumoDefaultAction}'"
                 : $"{SumoCollisionHandling.ActionOption} '{CollisionActionDeclared}'";
-            string permitted = $"a run may carry {string.Join(" or ", PermittedCollisionActions)}";
+            string permitted = $"a run may carry only {string.Join(" or ", PermittedCollisionActions)}";
             return AccidentsIgnored
                 ? $"'none': {SumoCollisionHandling.IgnoreOption} is set, so SUMO registers no collision whatever "
                   + $"the action ({source}); {permitted}"
@@ -555,12 +558,14 @@ public sealed class SumoDistributionEditCheck
     /// <summary>Why a collision action is refused, as a clause naming where it came from.</summary>
     private static string RefusedCollision(string? declared, string action, string? ignoredBy)
     {
-        string permitted = $"; a run may carry {string.Join(" or ", PermittedCollisionActions)}, and the scenario "
-                           + "compiler writes warn";
+        string permitted = $"; a run may carry only {string.Join(" or ", PermittedCollisionActions)}, under which "
+                           + "SUMO registers each collision and changes nothing about the traffic, as the scenario "
+                           + "compiler writes";
         if (ignoredBy is not null)
         {
-            return $"{SumoCollisionHandling.IgnoreOption} is '{ignoredBy}', so SUMO registers no collision at all, "
-                   + "and none can be recorded" + permitted;
+            return $"{SumoCollisionHandling.IgnoreOption} is '{ignoredBy}', under which SUMO skips the collision "
+                   + "check whatever the action, so the run could not say whether any collision happened"
+                   + permitted;
         }
 
         string source = declared is null
@@ -572,7 +577,8 @@ public sealed class SumoDistributionEditCheck
                           + "interpolation cannot connect",
             "remove" => ", under which SUMO takes both vehicles out, and they leave the population as though "
                         + "they had arrived",
-            "none" => ", under which SUMO registers no collision at all, and none can be recorded",
+            "none" => ", under which SUMO skips the collision check, so the run could not say whether any "
+                      + "collision happened",
             "warn" => string.Empty,
             _ => ", which is not one of SUMO's four actions -- none, warn, teleport, remove -- and under which "
                  + "SUMO writes an error and runs on, moving every collider as teleport does",

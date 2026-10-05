@@ -7,9 +7,9 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>Read and recorded, not judged here.</b> The session records every collision SUMO registers
 /// and goes on (<see cref="CollisionSpan"/>); which actions a run may carry is
-/// <see cref="SumoDistributionEditCheck"/>'s to refuse, and it refuses <c>teleport</c> and
-/// <c>remove</c>. This says which action governed the run, because the same collision renders
-/// differently under each, read from SUMO 1.27.0:</para>
+/// <see cref="SumoDistributionEditCheck"/>'s to refuse, and it refuses every action but <c>warn</c>,
+/// <c>ignore-accidents</c> included. This says which action governed the run, because the same
+/// collision renders differently under each, read from SUMO 1.27.0:</para>
 /// <list type="bullet">
 /// <item><c>warn</c> -- SUMO registers it, writes a warning, and both vehicles carry on as SUMO moves
 /// them. What the scenario compiler writes.</item>

@@ -303,6 +303,25 @@ def test_no_draw_distance_is_handed_to_the_session_unless_one_is_given(drive, mo
     assert world.drive_arguments["draw_distance_m"] == 400.0
 
 
+def test_collision_detail_is_off_unless_asked_for_and_only_binds_a_printer(drive, monkeypatch, tmp_path):
+    # Off by default: the report prints the count, and nothing is called per collision.
+    world = _run_main(drive, monkeypatch, tmp_path)
+    assert world.drive_arguments["collision_detail"] is False
+    assert world.drive_arguments["on_collision"] is None
+    # On: the report lists every collision, and each is printed as it ends -- by a printer, which keeps
+    # nothing the session does not already keep.
+    world = _run_main(drive, monkeypatch, tmp_path, "--collision-detail")
+    assert world.drive_arguments["collision_detail"] is True
+    assert world.drive_arguments["on_collision"] is drive.print_collision
+
+
+def test_a_collision_printed_as_it_ends_is_the_span_s_own_words(drive, caplog):
+    with caplog.at_level("INFO", logger="run_sumo_drive"):
+        drive.print_collision("'goer' into 'turner' (collision) on approach_0 at 50.91 m, t=2.15 to 4.4 s")
+    assert "collision: 'goer' into 'turner' (collision) on approach_0 at 50.91 m, t=2.15 to 4.4 s" \
+        in caplog.text
+
+
 def test_a_world_truth_track_reaches_the_session_only_when_asked_for(drive, monkeypatch, tmp_path):
     # Off unless asked for: a drive is not a capture run, which always writes one.
     world = _run_main(drive, monkeypatch, tmp_path)

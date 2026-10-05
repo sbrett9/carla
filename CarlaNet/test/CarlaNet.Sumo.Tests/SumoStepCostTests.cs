@@ -52,6 +52,77 @@ public class SumoStepCostTests(ITestOutputHelper output)
         Assert.True(bare.Population > 0, "The scenario had no vehicles at the warm-up step.");
     }
 
+    /// <summary>
+    /// What asking SUMO for its collision list costs: a step that reads only the colliding-vehicles count
+    /// its own answer carries, against a step that also asks for the list, and the list asked for again
+    /// and again with no step between, which is the round trip alone.
+    /// </summary>
+    [NamedScenarioFact]
+    public void TheCostOfAskingForTheCollisionListIsMeasured()
+    {
+        string scenario = NamedScenarioFactAttribute.Scenario!;
+        double warmup = NamedScenarioFactAttribute.Warmup;
+        int steps = NamedScenarioFactAttribute.Steps;
+
+        double counted = MeasureCollisionReads(scenario, warmup, steps, askForTheList: false, out _, out _);
+        double asked = MeasureCollisionReads(scenario, warmup, steps, askForTheList: true, out double roundTrip,
+                                             out int population);
+
+        output.WriteLine($"scenario   {Path.GetFileName(scenario)}");
+        output.WriteLine($"warm-up    t = {warmup.ToString("0.###", CultureInfo.InvariantCulture)} s, {population} vehicles");
+        output.WriteLine($"measured   {steps} steps, and the list {steps} times with no step between");
+        output.WriteLine(string.Empty);
+        output.WriteLine($"step, count read from its answer     {counted:0.0000} ms/step");
+        output.WriteLine($"step, and the list asked for         {asked:0.0000} ms/step");
+        output.WriteLine($"the list alone, no step between      {roundTrip * 1000.0:0.0} us/get");
+    }
+
+    /// <summary>
+    /// Steps measured with the simulation domain subscribed as a bridge subscribes it, reading the count
+    /// each step and, where asked, the list too; then the list alone, back to back. Milliseconds per step,
+    /// and per get of the list alone.
+    /// </summary>
+    private static double MeasureCollisionReads(string scenario, double warmup, int steps, bool askForTheList,
+                                                out double millisecondsPerGet, out int population)
+    {
+        using SumoConnection sumo = SumoConnection.Start(
+            SumoInstallation.LocateOrThrow(), scenario,
+            new SumoLaunchOptions { Output = _ => { } });
+        if (warmup > 0)
+        {
+            sumo.Step(warmup);
+        }
+
+        population = sumo.Vehicles.Ids.Count;
+        SumoSimulationSubscription subscription = sumo.Simulation.Subscription;
+        subscription.Subscribe();
+        long collisions = 0;
+        Stopwatch clock = Stopwatch.StartNew();
+        for (int step = 0; step < steps; step++)
+        {
+            sumo.Step();
+            collisions += subscription.CollidingVehicleCount;
+            if (askForTheList)
+            {
+                collisions += sumo.Simulation.Collisions.Count;
+            }
+        }
+
+        clock.Stop();
+        double perStep = clock.Elapsed.TotalMilliseconds / steps;
+
+        Stopwatch gets = Stopwatch.StartNew();
+        for (int get = 0; get < steps; get++)
+        {
+            collisions += sumo.Simulation.Collisions.Count;
+        }
+
+        gets.Stop();
+        millisecondsPerGet = gets.Elapsed.TotalMilliseconds / steps;
+        GC.KeepAlive(collisions);
+        return perStep;
+    }
+
     private enum Subscribe
     {
         Nothing,

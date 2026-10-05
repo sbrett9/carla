@@ -585,11 +585,18 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         Assert.NotEqual(0u, span.VictimActor);
         Assert.NotEqual(span.ColliderActor, span.VictimActor);
         Assert.Equal(1, session.Report.Collisions);
+        Assert.Equal(span, Assert.Single(session.Report.CollisionSpans));
         Assert.Null(session.Report.Stopped);
 
-        // SUMO said it too, in its own words, and the report kept them.
-        Assert.True(SpinUntil(() => session.Report.SumoWarnings > 0), "no warning was counted");
-        Assert.Contains(session.Report.SumoWarningSamples, line => line.Contains("collision with vehicle 'turner'"));
+        // SUMO's list was asked for on the first frame, then on every step from the one the collision
+        // began on to the one it was first found over, and on no other.
+        long lasted = (long)Math.Round((span.EndedAtSeconds - span.BeganAtSeconds) / session.Clock.SumoStepSeconds);
+        Assert.Equal(1 + lasted + 1, session.Report.CollisionListReads);
+
+        // SUMO said it too, in its own words, and the report kept them apart from its other warnings.
+        Assert.True(SpinUntil(() => session.Report.SumoCollisionWarnings.Count > 0), "no collision warning was kept");
+        Assert.Contains("collision with vehicle 'turner'", Assert.Single(session.Report.SumoCollisionWarnings));
+        Assert.DoesNotContain(session.Report.SumoWarningSamples, line => line.Contains("collision with"));
     }
 
     [RequiresSumoFact]
@@ -608,9 +615,116 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         Assert.Empty(spans);
         Assert.Equal(0, session.Report.Collisions);
 
+        // Asked for once, on the first frame: on no step after it did a collision begin.
+        Assert.Equal(1, session.Report.CollisionListReads);
+        Assert.True(session.Report.SumoSteps > 300);
+
         // The fixture names warn, which governs, and the report says so.
-        Assert.Contains("collisions         registered, warned and carried on (collision.action 'warn')",
-                        session.Report.ToString());
+        string report = session.Report.ToString();
+        Assert.Contains("collisions         registered, warned and carried on (collision.action 'warn')", report);
+        Assert.Contains("collided           0 collision(s) registered, 0 collision warning(s) from SUMO; SUMO's "
+                        + "list asked for on 1 step(s)", report);
+    }
+
+    [RequiresSumoFact]
+    public void TheCollisionDetailSwitchChangesWhatIsPrintedAndNothingElse()
+    {
+        CollisionDrive quiet = DriveTheCollision(collisionDetail: false);
+        CollisionDrive detailed = DriveTheCollision(collisionDetail: true);
+
+        // The traffic SUMO simulated, the truth read from it and the poses written: identical.
+        Assert.NotEmpty(quiet.Steps);
+        Assert.Equal(quiet.Steps, detailed.Steps);
+        Assert.Equal(quiet.Poses, detailed.Poses);
+
+        // The record: the same collision, counted and kept whole, with SUMO's words, either way.
+        CollisionSpan span = Assert.Single(quiet.Spans);
+        Assert.Equal(quiet.Spans, detailed.Spans);
+        Assert.Equal(quiet.Report.CollisionSpans, detailed.Report.CollisionSpans);
+        Assert.Equal(quiet.Report.Collisions, detailed.Report.Collisions);
+        Assert.Equal(quiet.Report.CollisionListReads, detailed.Report.CollisionListReads);
+        Assert.Equal(quiet.Report.SumoCollisionWarnings, detailed.Report.SumoCollisionWarnings);
+        Assert.Single(quiet.Report.SumoCollisionWarnings);
+
+        // What is printed: the counts alone, or every collision and every warning SUMO wrote about one.
+        Assert.False(quiet.Report.CollisionDetail);
+        Assert.True(detailed.Report.CollisionDetail);
+        string counted = quiet.Report.ToString();
+        string listed = detailed.Report.ToString();
+        _output.WriteLine(listed);
+        Assert.Contains("collided           1 collision(s) registered, 1 collision warning(s) from SUMO, each "
+                        + "recorded and none listed (collision detail off); SUMO's list asked for on "
+                        + $"{quiet.Report.CollisionListReads} step(s)", counted);
+        Assert.DoesNotContain("  collision        ", counted);
+        Assert.DoesNotContain("  sumo said        ", counted);
+        Assert.DoesNotContain("collision with vehicle", counted);
+        Assert.Contains($"  collision        {span}", listed);
+        Assert.Contains("  sumo said        Warning: Vehicle 'goer'; collision with vehicle 'turner'", listed);
+    }
+
+    /// <summary>What one run of the fixture's collision produced, for two runs to be compared.</summary>
+    private sealed record CollisionDrive(CoSimRunReport Report,
+                                         List<CollisionSpan> Spans,
+                                         List<string> Steps,
+                                         List<string> Poses);
+
+    /// <summary>
+    /// The fixture driven into the world, with 'goer' moved two metres into the rear of 'turner' once
+    /// 'turner' holds a body, and driven on until the collision has been over for a while: every step's
+    /// frame, collisions and vehicle states as an observer is told them, every pose written to the world,
+    /// every collision handed out, and the report.
+    /// </summary>
+    private CollisionDrive DriveTheCollision(bool collisionDetail)
+    {
+        using SyntheticWorld world = Fixture();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        List<CollisionSpan> spans = [];
+        var observer = new StepCopier();
+        SumoDriveSessionOptions options = Driving(world, carla);
+        options.OnCollision = spans.Add;
+        options.CollisionDetail = collisionDetail;
+        options.StepObservers.Add(observer);
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 200 && session.Advance(); step++)
+        {
+            if (session.RenderedVehicleIds.Contains("turner") && session.Sumo.Time >= 2.1)
+            {
+                break;
+            }
+        }
+
+        (double x, double y) = session.Sumo.Vehicles.Position("turner");
+        session.Sumo.Vehicles.MoveToXY("goer", "approach", 0, x, y - 5.0);
+        for (int step = 0; step < 100; step++)
+        {
+            Assert.True(session.Advance(), "the run did not go on after the collision");
+        }
+
+        Assert.True(SpinUntil(() => session.Report.SumoCollisionWarnings.Count > 0), "no collision warning was kept");
+        List<string> poses = [.. carla.PoseBatches.Select(batch => string.Join(" | ", batch))];
+        return new CollisionDrive(session.Report, spans, observer.Steps, poses);
+    }
+
+    /// <summary>Each SUMO frame an observer is told, as text: its clock, its collisions and every vehicle's state.</summary>
+    private sealed class StepCopier : ISumoStepObserver
+    {
+        public List<string> Steps { get; } = [];
+
+        public void OnSumoStep(SumoStepRecord step) =>
+            Steps.Add($"{step.FrameSeconds}: "
+                      + string.Join(", ", step.Collisions.Select(collision => $"{collision.ColliderId}>{collision.VictimId}"))
+                      + "; "
+                      + string.Join(", ", step.Frames.OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                                        .Select(entry => $"{entry.Key} {entry.Value}")));
+
+        public void OnFrameRendered(RenderedFrameRecord frame)
+        {
+        }
+
+        public void OnSessionEnded(SessionEndRecord end)
+        {
+        }
     }
 
     // -- A world with no sun ----------------------------------------------------------------------

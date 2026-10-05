@@ -82,7 +82,6 @@ public sealed class SumoDriveSession : IDisposable
     private readonly ISumoStepObserver[] _observers;
     private readonly WorldTruthTrackWriter? _track;
     private readonly SumoConsoleTail _console;
-    private readonly SumoCollisionHandling _collisionHandling;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
     private readonly VehicleTypeBinder _binder;
@@ -133,6 +132,7 @@ public sealed class SumoDriveSession : IDisposable
     private double _frameSeconds;
     private SumoStepEvents _events = SumoStepEvents.None(0.0);
     private IReadOnlyList<SumoCollision> _collisionsThisFrame = [];
+    private bool _collisionListRead;
     private bool _scenarioFinished;
     private double? _lastCompleteSeconds;
     private ulong? _lastCompleteFrame;
@@ -180,7 +180,6 @@ public sealed class SumoDriveSession : IDisposable
         _sumo = sumo;
         _simulation = sumo.Simulation.Subscription;
         _console = console;
-        _collisionHandling = collisionHandling;
         _headlights = headlights;
         _network = network;
         _lease = lease;
@@ -218,6 +217,7 @@ public sealed class SumoDriveSession : IDisposable
             RouteErrors = routeErrors,
             DistributionEdits = distributionEdits,
             CollisionHandling = collisionHandling,
+            CollisionDetail = options.CollisionDetail,
             LaneChanges = laneChanges,
             VehicleLampsDriven = options.VehicleLampsDriven,
             Console = console,
@@ -619,8 +619,7 @@ public sealed class SumoDriveSession : IDisposable
         SumoDistributionEditCheck distributionEdits = SumoDistributionEditCheck.Require(
             options.ScenarioPath, options.AllowTeleporting);
 
-        // What SUMO will do about a collision, which the report carries and which decides whether
-        // there is anything to ask SUMO for on each step.
+        // What SUMO will do about a collision, which the report carries.
         SumoCollisionHandling collisionHandling = SumoCollisionHandling.Read(options.ScenarioPath);
 
         // How long SUMO takes over a lane change, which the report carries: spread over time, the
@@ -1369,8 +1368,9 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     /// <remarks>
     /// The event lists and the clock come from the step's own answer, through the simulation domain's
-    /// subscription, so they cost nothing here; the collisions are one round trip where SUMO registers
-    /// any, because SUMO writes them as a compound only a decoder of their own reads.
+    /// subscription, so they cost nothing here, and so does whether a collision began. The collision list
+    /// is one round trip, because SUMO writes it as a compound only a decoder of its own reads, and it is
+    /// asked for only on a step where a collision began or one is still going on.
     /// </remarks>
     private IReadOnlyList<string> ReconcileAndRead()
     {
@@ -1537,17 +1537,26 @@ public sealed class SumoDriveSession : IDisposable
     /// SUMO reports a collision again on each step its two vehicles stay in contact, keeping the roles
     /// it first gave them, so a pair seen before is the same collision still going on.</para>
     ///
-    /// <para>Nothing is asked where SUMO registers no collisions at all -- <c>collision.action none</c>,
-    /// or <c>ignore-accidents</c> -- which the report states, so an empty record is not mistaken for
-    /// a run in which nothing collided.</para>
+    /// <para><b>The list is asked for only where it can hold something.</b> SUMO's list is one round trip;
+    /// whether a collision began arrives with the step's own answer, as SUMO's count of the vehicles one
+    /// began for. SUMO keeps a collision in its list on every later step its vehicles stay in contact
+    /// without counting them again, and drops it at the end of the first step they are not, so on a step
+    /// where none began and none the session holds is still open the list is empty, and it is not asked
+    /// for. It is asked for on the first frame read whatever the count, since a collision that began in
+    /// the fast-forward may still be going on. The session refuses a configuration under which SUMO skips
+    /// the check, so a run that has started always has the record (<see cref="SumoDistributionEditCheck"/>).</para>
     /// </remarks>
     private void RecordCollisions()
     {
-        if (!_collisionHandling.Registered)
+        bool mayHoldOne = !_collisionListRead || _simulation.CollidingVehicleCount > 0 || _collisions.Count > 0;
+        if (!mayHoldOne)
         {
+            _collisionsThisFrame = [];
             return;
         }
 
+        _collisionListRead = true;
+        Report.CollisionListReads++;
         _collisionsReported.Clear();
         _collisionsThisFrame = _sumo.Simulation.Collisions;
         foreach (SumoCollision collision in _collisionsThisFrame)
@@ -1608,7 +1617,7 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         CollisionSpan closed = open with { EndedAtSeconds = endedAtSeconds };
-        Report.SampleCollision(closed);
+        Report.AddCollision(closed);
         _options.OnCollision?.Invoke(closed);
     }
 

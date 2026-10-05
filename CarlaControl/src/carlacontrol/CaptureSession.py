@@ -466,6 +466,7 @@ class CaptureSession:
         if any(effective.channel_description(index).aims_at_rendered_traffic()
                for index in range(effective.channel_count)):
             self.traffic = RenderedTrafficCentre()
+        collision_detail = effective.value("collision_detail") == "on"
         world = self.client.get_world()
         session = world.start_sumo_drive(
             str(effective.scenario.config_path), str(effective.value("world_package")),
@@ -490,7 +491,11 @@ class CaptureSession:
             # Bound only where a channel aims at the traffic: the session reads its callbacks once
             # and hands this a record per rendered vehicle per tick for the whole run.
             on_pose=None if self.traffic is None else self.traffic.collect,
-            on_admission_pass=self.admissions.observe)
+            on_admission_pass=self.admissions.observe,
+            # What is printed about collisions, and nothing else: the session keeps every one either
+            # way, and the line per collision is bound only where every collision is to be printed.
+            collision_detail=collision_detail,
+            on_collision=self._print_collision if collision_detail else None)
         if session is None:
             raise _RefusedError("refused_server", "the co-simulation assemblies are not loaded "
                            "(CarlaNet.CoSim)")
@@ -516,6 +521,11 @@ class CaptureSession:
         """Where the session writes the world truth track: under the capture directory, beside the
         channels' directories."""
         return self.capture_directory / WORLD_TRUTH_TRACK
+
+    def _print_collision(self, span) -> None:
+        """One collision as it ends, under collision_detail on. Called from the session's tick thread;
+        a log line does not block it."""
+        self.logger.info("collision: %s", span)
 
     @staticmethod
     def _render_set_arguments(effective: EffectiveRunConfiguration) -> dict:

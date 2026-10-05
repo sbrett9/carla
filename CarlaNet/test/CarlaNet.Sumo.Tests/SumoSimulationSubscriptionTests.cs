@@ -63,6 +63,49 @@ public class SumoSimulationSubscriptionTests
         Assert.Equal(0, sumo.Simulation.ExpectedVehicleCount);
     }
 
+    /// <summary>
+    /// The colliding-vehicles count a step delivers is the direct get's, and it is not zero only on the
+    /// step a collision begins: on every later step of it the collision list still holds it and the
+    /// count is zero, and once it is over both are. A reader that asks for the list only where the count
+    /// is not zero, or a collision it already holds is still open, misses nothing.
+    /// </summary>
+    [RequiresSumoFact]
+    public void TheCollidingCountIsNotZeroOnlyOnTheStepACollisionBegins()
+    {
+        // Under SUMO's default the collider would be moved on and the collision not carry on.
+        using SumoConnection sumo = SumoFixtures.Open(
+            SumoFixtures.TwoVehicles,
+            new SumoLaunchOptions { Output = _ => { }, ExtraArguments = ["--collision.action", "warn"] });
+        SumoSimulationSubscription subscription = sumo.Simulation.Subscription;
+        subscription.Subscribe();
+        while (subscription.Time < 3.0)
+        {
+            sumo.Step();
+            Assert.Equal(0, subscription.CollidingVehicleCount);
+        }
+
+        // 'second' put two metres into the rear of 'first', as a client moving a vehicle would.
+        (double x, double y) = sumo.Vehicles.Position("first");
+        sumo.Vehicles.MoveToXY("second", "west_to_east", 0, x - 2.0, y);
+        List<(int Count, int Collisions)> steps = [];
+        for (int step = 0; step < 100; step++)
+        {
+            sumo.Step();
+            int subscribed = subscription.CollidingVehicleCount;
+            Assert.Equal(sumo.Simulation.Read(TraCIConstants.VAR_COLLIDING_VEHICLES_NUMBER).AsInt, subscribed);
+            steps.Add((subscribed, sumo.Simulation.Collisions.Count));
+        }
+
+        // Begun on the step after the move, both vehicles counted, and the collision listed.
+        Assert.Equal((2, 1), steps[0]);
+
+        // Carried on for more than one step, listed and not counted; then over, neither.
+        int lasted = steps.Skip(1).TakeWhile(each => each.Collisions == 1).Count();
+        Assert.True(lasted > 0, "the collision lasted one step, so a continuation was never read");
+        Assert.All(steps.Skip(1).Take(lasted), each => Assert.Equal(0, each.Count));
+        Assert.All(steps.Skip(1 + lasted), each => Assert.Equal((0, 0), each));
+    }
+
     [RequiresSumoFact]
     public void ASubscribeIsAnsweredWithTheCurrentValuesBeforeAnyStep()
     {

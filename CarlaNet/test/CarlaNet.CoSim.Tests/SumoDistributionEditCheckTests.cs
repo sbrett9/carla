@@ -35,16 +35,19 @@ public sealed class SumoDistributionEditCheckTests : IDisposable
                             + "interpolation cannot connect")]
     [InlineData("remove", "under which SUMO takes both vehicles out, and they leave the population as though "
                           + "they had arrived")]
+    [InlineData("none", "under which SUMO skips the collision check, so the run could not say whether any "
+                        + "collision happened")]
     [InlineData("Warn", "which is not one of SUMO's four actions -- none, warn, teleport, remove -- and under "
                         + "which SUMO writes an error and runs on, moving every collider as teleport does")]
-    public void ACollisionActionThatMovesOrRemovesVehiclesIsRefusedNamingIt(string action, string why)
+    public void ACollisionActionOtherThanWarnIsRefusedNamingIt(string action, string why)
     {
         CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
             () => SumoDistributionEditCheck.Require(Configuration(string.Empty, collision: action),
                                                     allowTeleporting: false));
 
-        Assert.Contains($"(1) collision.action is '{action}', {why}; a run may carry warn or none, and the "
-                        + "scenario compiler writes warn", refused.Message);
+        Assert.Contains($"(1) collision.action is '{action}', {why}; a run may carry only warn, under which SUMO "
+                        + "registers each collision and changes nothing about the traffic, as the scenario "
+                        + "compiler writes", refused.Message);
         Assert.Contains("SUMO has not been started", refused.Message);
         Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
     }
@@ -72,39 +75,47 @@ public sealed class SumoDistributionEditCheckTests : IDisposable
     }
 
     [Theory]
-    [InlineData("<collision.action value=\"warn\"/>", "warn")]
-    [InlineData("<collision.action v=\"none\"/>", "none")]
-    [InlineData("<collision.action>warn</collision.action>", "warn")]
-    public void WarnAndNoneRunAndTheActionInForceIsRecorded(string option, string action)
+    [InlineData("<collision.action value=\"warn\"/>")]
+    [InlineData("<collision.action v=\"warn\"/>")]
+    [InlineData("<collision.action>warn</collision.action>")]
+    public void WarnRunsAndTheActionInForceIsRecorded(string option)
     {
         SumoDistributionEditCheck check = SumoDistributionEditCheck.Require(
             Configuration(option, collision: null), allowTeleporting: false);
 
-        Assert.Equal(action, check.CollisionActionDeclared);
-        Assert.Equal(action, check.CollisionActionInForce);
-        Assert.Equal($"'{action}' (collision.action '{action}'); a run may carry warn or none", check.CollisionText);
-        Assert.StartsWith($"collision.action '{action}'; ", check.ToString());
+        Assert.Equal("warn", check.CollisionActionDeclared);
+        Assert.Equal("warn", check.CollisionActionInForce);
+        Assert.Equal("'warn' (collision.action 'warn'); a run may carry only warn", check.CollisionText);
+        Assert.StartsWith("collision.action 'warn'; ", check.ToString());
     }
 
     [Fact]
-    public void TheActionsARunMayCarryAreWarnAndNone()
+    public void TheOnlyActionARunMayCarryIsWarn()
     {
-        // Refusing none too is taking it out of this list, which refuses ignore-accidents with it.
-        Assert.Equal(new[] { "warn", "none" }, SumoDistributionEditCheck.PermittedCollisionActions);
+        Assert.Equal(new[] { "warn" }, SumoDistributionEditCheck.PermittedCollisionActions);
+    }
+
+    [Theory]
+    [InlineData("<ignore-accidents value=\"true\"/>", "true")]
+    [InlineData("<collision.action value=\"warn\"/><ignore-accidents value=\"1\"/>", "1")]
+    public void IgnoringAccidentsIsRefusedAsNoneIsWhateverTheAction(string options, string value)
+    {
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDistributionEditCheck.Require(Configuration(options, collision: null), allowTeleporting: false));
+
+        Assert.Contains($"(1) ignore-accidents is '{value}', under which SUMO skips the collision check whatever "
+                        + "the action, so the run could not say whether any collision happened; a run may carry "
+                        + "only warn", refused.Message);
     }
 
     [Fact]
-    public void IgnoringAccidentsRunsUnderNoneWhateverTheAction()
+    public void IgnoringNoAccidentsRunsUnderTheAction()
     {
         SumoDistributionEditCheck check = SumoDistributionEditCheck.Require(
-            Configuration("<ignore-accidents value=\"true\"/>", collision: null), allowTeleporting: false);
+            Configuration("<ignore-accidents value=\"false\"/>"), allowTeleporting: false);
 
-        Assert.True(check.AccidentsIgnored);
-        Assert.Equal("teleport", check.CollisionAction);
-        Assert.Equal("none", check.CollisionActionInForce);
-        Assert.Equal("'none': ignore-accidents is set, so SUMO registers no collision whatever the action "
-                     + "(collision.action not set, so SUMO's default 'teleport'); a run may carry warn or none",
-                     check.CollisionText);
+        Assert.False(check.AccidentsIgnored);
+        Assert.Equal("warn", check.CollisionActionInForce);
     }
 
     // -- The teleport triggers time-to-teleport leaves open -------------------------------------------

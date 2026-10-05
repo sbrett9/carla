@@ -34,8 +34,8 @@ public sealed class SumoSimulationSubscription
 {
     /// <summary>
     /// What a co-simulation bridge reads every step: the clock, how much is left, who departed and
-    /// arrived, who is still waiting to be inserted, and every event list a vehicle's interval is
-    /// opened or closed by.
+    /// arrived, who is still waiting to be inserted, every event list a vehicle's interval is opened or
+    /// closed by, and how many vehicles a collision began for.
     /// </summary>
     /// <remarks>
     /// Every one is a whole-population value a step delivers once, so adding one costs bytes in the
@@ -54,6 +54,7 @@ public sealed class SumoSimulationSubscription
         TraCIConstants.VAR_PARKING_ENDING_VEHICLES_IDS,
         TraCIConstants.VAR_TELEPORT_STARTING_VEHICLES_IDS,
         TraCIConstants.VAR_EMERGENCYSTOPPING_VEHICLES_IDS,
+        TraCIConstants.VAR_COLLIDING_VEHICLES_NUMBER,
     ];
 
     private readonly TraCIConnection _connection;
@@ -113,6 +114,24 @@ public sealed class SumoSimulationSubscription
     /// <see cref="SumoSimulationDomain.PendingVehicleIds"/>.
     /// </summary>
     public IReadOnlyList<string> PendingVehicleIds => Require(TraCIConstants.VAR_PENDING_VEHICLES).AsStringList;
+
+    /// <summary>
+    /// How many vehicles a collision began for in the last step, each counted for every collision that
+    /// began for it: zero on a step in which none began, including every later step of one still going
+    /// on.
+    /// </summary>
+    /// <remarks>
+    /// <para>SUMO counts a vehicle here only when it registers a collision for the first time; one it
+    /// registers again on a later step because its vehicles are still in contact is kept in
+    /// <see cref="SumoSimulationDomain.Collisions"/> and not counted (<c>MSNet::registerCollision</c>, which
+    /// answers whether the collision is new, and <c>MSLane::handleCollisionBetween</c>, which counts only a
+    /// new one). And SUMO drops a collision its vehicles were not in contact for at the end of the step
+    /// (<c>MSNet::removeOutdatedCollisions</c>). So the collision list is empty on a step where this is
+    /// zero, unless the list was not empty on the step before.</para>
+    ///
+    /// <para>A vehicle in a collision with a person is counted, the person is not.</para>
+    /// </remarks>
+    public int CollidingVehicleCount => Require(TraCIConstants.VAR_COLLIDING_VEHICLES_NUMBER).AsInt;
 
     /// <summary>
     /// The last step's event lists with the clock they go with, each read from the step's answer.
