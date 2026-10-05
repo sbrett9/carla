@@ -734,19 +734,19 @@ Remedies:
 ## Supervision
 
 - **Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3**: annotated, present, labels bahonar:coordinated_group_transit, bahonar:destination_off_pattern; escort_0 (bahonar:lead), escort_1 (bahonar:follower), escort_2 (bahonar:follower), escort_3 (bahonar:follower), escort_4 (bahonar:follower); parameters group_size = 5, departure_spread_s = 16
-  - transit: 2026-10-02T10:00:00+03:30 to open
-  - transit: 2026-10-02T10:00:04+03:30 to open
-  - transit: 2026-10-02T10:00:08+03:30 to open
-  - transit: 2026-10-02T10:00:12+03:30 to open
-  - transit: 2026-10-02T10:00:16+03:30 to open
+  - transit: from depart (2026-10-02T10:00:00+03:30) to open
+  - transit: from depart (2026-10-02T10:00:04+03:30) to open
+  - transit: from depart (2026-10-02T10:00:08+03:30) to open
+  - transit: from depart (2026-10-02T10:00:12+03:30) to open
+  - transit: from depart (2026-10-02T10:00:16+03:30) to open
 - **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d2 (subject); parameters dwell_s = 300
-  - standoff: 2026-10-01T11:04:34+03:30 to open
+  - standoff: from stop:0 to stop_end:0, 300 s declared
 - **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d5 (subject); parameters dwell_s = 300
-  - standoff: 2026-10-04T11:11:25+03:30 to open
+  - standoff: from stop:0 to stop_end:0, 300 s declared
 - **Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6**: annotated, present, labels bahonar:perimeter_transit_off_cadence; shadow (subject); parameters speed_factor = 0.45, circuit_edges = 7
-  - transit: 2026-10-05T02:30:00+03:30 to open
+  - transit: from depart (2026-10-05T02:30:00+03:30) to open
 - **Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1**: annotated, present, labels bahonar:arrival_without_departure; staybehind (subject)
-  - dwell: 2026-09-30T08:00:00+03:30 to open
+  - dwell: from stop:0 to stop_end:0 (2026-10-06T07:00:00+03:30)
 - **Shahid_Bahonar_Port_PatternOfLife/haul_d0_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
 - **Shahid_Bahonar_Port_PatternOfLife/haul_d0_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
 - **Shahid_Bahonar_Port_PatternOfLife/haul_d0_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
@@ -899,7 +899,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "6d3f22824e1c6b849e44c4f9201695b9a7af49c5e04761c0d3c838ca0de618be"
+    "sha256": "4a2db81ba9271220fed310d03ac2a82e5d216d59807566969973b919d8559d1f"
   }
 }
 ```

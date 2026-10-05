@@ -315,6 +315,17 @@
       "prevents": "Sweep members that cannot be joined"
     },
     {
+      "id": 58,
+      "group": "annotation",
+      "title": "Every interval is declared by a begin or by an anchor, not both; an anchor names its participant's departure, one of its stops or one of its phases, and its end comes after its start; only an entity's interval is anchored",
+      "against": "the participant's resolved stops and route",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "An interval bound to an event its vehicle never has, so it never opens"
+    },
+    {
       "id": 22,
       "group": "annotation",
       "title": "No annotated interval begins before its participant departs",

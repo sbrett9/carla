@@ -231,8 +231,14 @@ carries none, and the compiler refuses a route file carrying anything but the ve
 - **Three states:** `annotated` (executing the named pattern), `nominal` (executing no target pattern —
   a hard negative), `unlabelled` (no assertion; everything not declared). A flow may be `annotated`
   whole-life or `unlabelled`, **never `nominal`** and never with intervals.
-- `instances[]` carry participants (`actor`, `role`), `intervals` in civil time, `aoi_refs`, `labels`.
-  A one-participant instance names its participant `subject`. Never author the phase `vacancy`.
+- `instances[]` carry participants (`actor`, `role`), `intervals`, `aoi_refs`, `labels`. A
+  one-participant instance names its participant `subject`. Never author the phase `vacancy`.
+- **An interval is declared in civil time** (`begin` with `end` or `duration`) **or by an `anchor`**,
+  never both (check 58). An anchor names the events of the participant that commit the interval:
+  `{"start": "stop:0", "end": "stop_end:0"}` for a dwell at its first stop, `{"start": "depart"}` for
+  a transit from its insertion, `phase:<i>` for entering the i-th of its `phases[]`; indices count from
+  0. Prefer an anchor where the pattern is a stop or a phase: SUMO decides when a vehicle arrives, so a
+  civil begin there is a guess, and a `duration` stop declares only its length.
 - `series[]` reads a rota as a recurring series; `absences[]` annotate a skipped occasion — an anomaly
   with no vehicle.
 - **Terms are the author's**, declared in `vocabulary.namespaces[]` as `<namespace>:<name>` with a

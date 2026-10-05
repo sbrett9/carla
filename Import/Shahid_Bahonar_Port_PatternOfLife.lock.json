@@ -4,7 +4,7 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "54493ba7cffff9ce105328f17b3a9015839383d6d01def4468b3a2f386b51524",
+  "specification_sha256": "ebfe6a198bf4e8324ab752cbd686230135be3f357d5ad99c590b3947ebb30b29",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "1.0.0"
@@ -24,7 +24,7 @@
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-      "sha256": "6d3f22824e1c6b849e44c4f9201695b9a7af49c5e04761c0d3c838ca0de618be"
+      "sha256": "4a2db81ba9271220fed310d03ac2a82e5d216d59807566969973b919d8559d1f"
     }
   },
   "world": {

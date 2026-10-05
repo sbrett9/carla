@@ -6,7 +6,7 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard no-show, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "54493ba7cffff9ce105328f17b3a9015839383d6d01def4468b3a2f386b51524",
+    "specification_sha256": "ebfe6a198bf4e8324ab752cbd686230135be3f357d5ad99c590b3947ebb30b29",
     "spec_version": 1
   },
   "findings": [
@@ -28134,6 +28134,12 @@
           {
             "entity_id": "escort_0",
             "phase": "transit",
+            "anchor": {
+              "start": {
+                "event": "depart"
+              },
+              "end": null
+            },
             "declared_start_s": 270000.0,
             "declared_start_civil": "2026-10-02T10:00:00+03:30",
             "declared_end_s": null,
@@ -28143,6 +28149,12 @@
           {
             "entity_id": "escort_1",
             "phase": "transit",
+            "anchor": {
+              "start": {
+                "event": "depart"
+              },
+              "end": null
+            },
             "declared_start_s": 270004.0,
             "declared_start_civil": "2026-10-02T10:00:04+03:30",
             "declared_end_s": null,
@@ -28152,6 +28164,12 @@
           {
             "entity_id": "escort_2",
             "phase": "transit",
+            "anchor": {
+              "start": {
+                "event": "depart"
+              },
+              "end": null
+            },
             "declared_start_s": 270008.0,
             "declared_start_civil": "2026-10-02T10:00:08+03:30",
             "declared_end_s": null,
@@ -28161,6 +28179,12 @@
           {
             "entity_id": "escort_3",
             "phase": "transit",
+            "anchor": {
+              "start": {
+                "event": "depart"
+              },
+              "end": null
+            },
             "declared_start_s": 270012.0,
             "declared_start_civil": "2026-10-02T10:00:12+03:30",
             "declared_end_s": null,
@@ -28170,6 +28194,12 @@
           {
             "entity_id": "escort_4",
             "phase": "transit",
+            "anchor": {
+              "start": {
+                "event": "depart"
+              },
+              "end": null
+            },
             "declared_start_s": 270016.0,
             "declared_start_civil": "2026-10-02T10:00:16+03:30",
             "declared_end_s": null,
@@ -28206,11 +28236,23 @@
           {
             "entity_id": "probe_d2",
             "phase": "standoff",
-            "declared_start_s": 187474.0,
-            "declared_start_civil": "2026-10-01T11:04:34+03:30",
+            "anchor": {
+              "start": {
+                "event": "stop:0",
+                "lane": "-431672573#2_0",
+                "end_pos_m": 30.0
+              },
+              "end": {
+                "event": "stop_end:0",
+                "lane": "-431672573#2_0",
+                "end_pos_m": 30.0
+              }
+            },
+            "declared_start_s": null,
+            "declared_start_civil": null,
             "declared_end_s": null,
             "declared_end_civil": null,
-            "declared_duration_s": null
+            "declared_duration_s": 300.0
           }
         ]
       },
@@ -28242,11 +28284,23 @@
           {
             "entity_id": "probe_d5",
             "phase": "standoff",
-            "declared_start_s": 447085.0,
-            "declared_start_civil": "2026-10-04T11:11:25+03:30",
+            "anchor": {
+              "start": {
+                "event": "stop:0",
+                "lane": "-431672573#2_0",
+                "end_pos_m": 30.0
+              },
+              "end": {
+                "event": "stop_end:0",
+                "lane": "-431672573#2_0",
+                "end_pos_m": 30.0
+              }
+            },
+            "declared_start_s": null,
+            "declared_start_civil": null,
             "declared_end_s": null,
             "declared_end_civil": null,
-            "declared_duration_s": null
+            "declared_duration_s": 300.0
           }
         ]
       },
@@ -28277,6 +28331,12 @@
           {
             "entity_id": "shadow",
             "phase": "transit",
+            "anchor": {
+              "start": {
+                "event": "depart"
+              },
+              "end": null
+            },
             "declared_start_s": 502200.0,
             "declared_start_civil": "2026-10-05T02:30:00+03:30",
             "declared_end_s": null,
@@ -28311,10 +28371,22 @@
           {
             "entity_id": "staybehind",
             "phase": "dwell",
-            "declared_start_s": 90000.0,
-            "declared_start_civil": "2026-09-30T08:00:00+03:30",
-            "declared_end_s": null,
-            "declared_end_civil": null,
+            "anchor": {
+              "start": {
+                "event": "stop:0",
+                "lane": "900954912#2_0",
+                "end_pos_m": 20.0
+              },
+              "end": {
+                "event": "stop_end:0",
+                "lane": "900954912#2_0",
+                "end_pos_m": 20.0
+              }
+            },
+            "declared_start_s": null,
+            "declared_start_civil": null,
+            "declared_end_s": 604800.0,
+            "declared_end_civil": "2026-10-06T07:00:00+03:30",
             "declared_duration_s": null
           }
         ]
@@ -28882,6 +28954,7 @@
           {
             "entity_id": null,
             "phase": "vacancy",
+            "anchor": null,
             "declared_start_s": 345600.0,
             "declared_start_civil": "2026-10-03T07:00:00+03:30",
             "declared_end_s": 374400.0,
@@ -30606,7 +30679,7 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "spec_version": 1,
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "54493ba7cffff9ce105328f17b3a9015839383d6d01def4468b3a2f386b51524",
+    "specification_sha256": "ebfe6a198bf4e8324ab752cbd686230135be3f357d5ad99c590b3947ebb30b29",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -30626,7 +30699,7 @@
       },
       "supervision": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-        "sha256": "6d3f22824e1c6b849e44c4f9201695b9a7af49c5e04761c0d3c838ca0de618be"
+        "sha256": "4a2db81ba9271220fed310d03ac2a82e5d216d59807566969973b919d8559d1f"
       }
     },
     "world": {

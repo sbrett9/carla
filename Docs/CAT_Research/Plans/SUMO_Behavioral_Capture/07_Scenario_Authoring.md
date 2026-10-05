@@ -78,6 +78,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-02 | The compiler gives SUMO each body's width without its mirrors and refuses a class whose body has none measured (§7.1; [`04`](04_Contracts.md) D4.43); all three shipped scenarios are recompiled with it and with 3 s lane changes, Bahonar included, which runs as before (§3.4.1, §3.4.2). |
 | 2026-10-02 | Ramp meters are a world-build decision (§6 gotcha 13, D7.38): the world build keeps every OSM `traffic_signals=ramp_meter` out of junction joining and gives it a one-vehicle-per-green cycle, so Arapahoe's freeway is no longer signalised by the loop ramp's meter. The Arapahoe incident is notified on the stretch the loop ramp joins as well (§3.4.2, gotcha 14, D7.39), measured offline on the metered network; the shipped files await the world's rebuild and a recompile. |
 | 2026-10-02 | The supervision plan says nothing its terms do not define (§3.6, §5.2). A row's `parameters` — on an instance, an absence, a series or a cohort — are keys its labels' terms declare, of the declared types (check 56); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and may not vary (check 57); a term's exemplars and a counterfactual naming a subject resolve against the plan (check 8). An absence's `expected` names its site, and the plan carries the additional file's digest (§5.1). All three shipped scenarios are recompiled; their route files, configurations and lane closures are unchanged, and so is every network fingerprint. |
+| 2026-10-05 | An interval may be declared by an `anchor` instead of civil bounds, naming the events of its participant that commit its start and end — `depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>` over the actor's `phases[]` — resolved against its stops and compiled route and refused where the vehicle has no such event, where the end does not follow the start, beside civil bounds, or on a cohort (§3.5, §3.6, check 58). The plan carries each interval's anchor, null when unanchored, and an interval over a `duration` stop declares a length and no start; check 38 compares only declared bounds. Bahonar's anomaly intervals are anchored and the scenario recompiled; Arapahoe's and Gardnerville's plans, which carry no interval, are unchanged. |
 
 ---
 
@@ -979,6 +980,7 @@ rotas[]            days x civil clocks x subjects, with a skip list        §3.5
 lane_closures[]    id, place, lanes[], notify[], begin, end                D7.37, check 55
 vocabulary         { import[], namespaces[] }                              06 §3.8, checks 18, 45, 46
 supervision        instances[], cohorts[], series[], absences[]            §3.6
+                   an interval: a civil begin with end or duration, or an anchor   check 58
 capture_windows[]  CANDIDATE windows, in civil time                        §3.5.2
 ```
 
@@ -1181,7 +1183,7 @@ An author writes supervision in the specification's `supervision` block, and the
 
 | Declared | Compiles to |
 |---|---|
-| `instances[]` — `annotated` or `nominal`, with `labels`, `participants` (actor and role), `intervals` (participant, phase, begin, end or duration, in civil time), `aoi_refs`, `parameters`, `hard_negative_for`, `counterfactual` | a pattern instance, id `<scenario_id>/<name>`, with its participants and its intervals in seconds and civil time, its parameters as written, and — when nominal — its terms' `hard_negative_for` |
+| `instances[]` — `annotated` or `nominal`, with `labels`, `participants` (actor and role), `intervals` (participant, phase, and either a civil begin with an end or a duration, or an `anchor`), `aoi_refs`, `parameters`, `hard_negative_for`, `counterfactual` | a pattern instance, id `<scenario_id>/<name>`, with its participants and its intervals — each with its resolved anchor or null, and its declared seconds and civil time — its parameters as written, and — when nominal — its terms' `hard_negative_for` |
 | `cohorts[]` — a flow, `annotated` whole-life or `unlabelled`, with `parameters` | a cohort row with its parameters; `nominal` (check 49) and intervals (check 23) refuse |
 | `series[]` — a rota read as a recurring series, with the members' role, the slot length, each subject's area, the members' state, `parameters` and `hard_negative_for` | a series with one slot per occasion, realised by the rota's entry or unrealised where the rota skips; each realised member is an entity in the declared state. The row carries its parameters and, when nominal, its terms' `hard_negative_for` |
 | `absences[]` — a skipped rota occasion, annotated, with `parameters` | an instance with `realisation: absent`, no participant, one `vacancy` interval over the slot, its `expected` route in edges and its site — the lane and position of the subject's place, null where that place names no one lane position — and the series' realised count as counter-evidence |
@@ -1195,6 +1197,24 @@ the subject, which means unspecified rather than a negative for nothing ([`06`](
 §3.9(d), D6.32). A term's `exemplar_instances` and its `counterfactual` name subjects of this scenario —
 an exemplar by an instance's authored name, as an instance's counterfactual names one — and each must
 resolve (check 8).
+
+**An interval is declared in civil time or by an anchor, never both** (check 58). An anchor names the
+events of the participant that commit the interval's start and, where given, its end
+([`06`](06_Truth_And_Annotation.md) §3.3):
+
+```jsonc
+{"participant": "probe_d2", "phase": "standoff", "anchor": {"start": "stop:0", "end": "stop_end:0"}}
+```
+
+`depart` is the vehicle's insertion; `stop:<i>` and `stop_end:<i>` are arriving at and leaving its i-th
+stop; `phase:<i>` is entering the i-th of its `phases[]`, at its first edge's first pass in the compiled
+route. Indices count from 0. The compiler refuses an index the actor does not have, an end that does
+not come after the start, and an anchor on a cohort; it writes the anchor into the plan resolved — a
+stop's lane and position, a phase's route index and edge — and declares only what the events
+themselves declare: a departure's instant, an `until` stop's end, a `duration` stop's length with no
+start. An unanchored interval keeps its civil bounds and closes on its declared end. Only declared
+bounds are compared with a capture window (check 38), so an interval with no declared start is not;
+where it falls is the run's to record.
 
 Every actor not in an instance or a series, and every flow not in `cohorts`, is written explicitly as
 `unlabelled`: absence of an element must not stand for an asserted negative (06 §3.1). The set of rows is
@@ -1659,6 +1679,7 @@ the same ids and outcomes.
 | 19 | Every participant names a declared actor | the specification | **refuse** | An instance with a participant that never exists |
 | 20 | Every `aoi_ref`, and every slot's area, names an area in the world's area table | `areas.resolved.json` | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
 | 21 | Instance ids are `<scenario_id>/<name>`, deterministic and unique | the specification | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
+| 58 | Every interval is declared by a civil `begin` or by an `anchor`, not both; an anchor names its participant's departure, one of its stops or one of its `phases[]`, by an index the actor has, and its end comes after its start; only an entity's interval is anchored | the participant's resolved stops and compiled route | **refuse**, naming the event, the participant and how many stops or phases it has | An interval bound to an event its vehicle never has, so it never opens; a bound declared twice; a phase asserted over a flow's members ([`06`](06_Truth_And_Annotation.md) §3.2, §3.3) |
 | 22 | No annotated interval begins before its participant departs | the resolved departures | **warn** | An interval no vehicle could have been in. Its end is not checked: only the run knows when a vehicle arrives |
 | 23 | A **cohort** carries only a whole-life annotation, never an interval | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A phase asserted over a generator, whose member count is not known until the run |
 | 49 | No cohort is `nominal` | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A negative asserted of vehicles nobody authored one by one |
@@ -1677,7 +1698,7 @@ the same ids and outcomes.
 | 48 | Every rota expands to entries, and every skip matches exactly one occasion and says why | the rota | **refuse** | An absence that was never planted |
 | 37 | Every resolved departure, stop `until` and interval begin lies in `[0, end]` | §4.5 | **refuse**, stating the epoch instant and the civil time | An instant that silently falls outside the run. *Measured,* the margin on the sizing scenario is 45 minutes: latest departure 602 100 s against `<end value="604800"/>` |
 | 36 | A capture window's civil date and the date its sun is written with | the epoch's `calendar_advances` and the policy, through `DeclaredSun` | **warn** when they differ, naming both | A window rendered under another date's seasonal sun without notice. The session writes the date (§2.9 item 4), so a difference is a declared choice — a held calendar, or a freeze holding the date — and the warning makes it visible |
-| 38 | Every capture window lies inside the run and cuts no declared supervision interval | the specification and the supervision plan | **refuse**, naming the instance | The delegation doc 10 makes to this section: "at authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance" (`10_Scale_And_Performance.md:504`). A partially observed positive teaches a truncated pattern |
+| 38 | Every capture window lies inside the run and cuts no declared supervision interval | the specification and the supervision plan | **refuse**, naming the instance | The delegation doc 10 makes to this section: "at authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance" (`10_Scale_And_Performance.md:504`). A partially observed positive teaches a truncated pattern. Only declared bounds are compared: an interval anchored to a stop's arrival or a later phase declares no start ([`06`](06_Truth_And_Annotation.md) D6.4), and where it falls is recorded by the run |
 | 39 | The illumination default is present and accepted by `CarlaNet.CoSim.IlluminationPolicy`; under `advance`, each window's arc is named | the specification | **refuse** when absent or malformed; **warn** per window under `advance`, with the elevation at its open and close | A window authored as a controlled constant that is not one, and a `rate` silently ignored because the policy is a freeze. The units are sun-clock seconds per **simulated** second (§2.9 item 5) |
 | 40 | The declared offset is within an hour of the zone the world's georeference configures | `epoch.utc_offset_hours` vs `solar.json` `engine_time_zone_hours` (§2.10) | **warn** past 1.0 h, naming both ([`04`](04_Contracts.md) V9.13); the difference is reported for every scenario | A declared offset that is not this place's. *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — at the equinox the difference between a sun above the horizon at 06:00 (**+1.74°**) and one below it (**−1.53°**). The session writes the declared offset as the sun's zone ([`04`](04_Contracts.md) D4.19), so a difference of that size moves no sun at run time |
 | 42 | A window whose sun reaches below −6° is named as not corpus-eligible | [`11`](11_Time_And_Illumination.md) D11.7, through `WindowSun` | **warn, never refuse**, naming the elevation and the verdict. An author may capture any regime deliberately; the warning exists so nobody captures one *accidentally* | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date |
@@ -1786,7 +1807,7 @@ flowchart TD
   P6 --> P7
 
   subgraph ANN["4 · Supervision"]
-    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>parameters and hard negatives fit their terms · 56, 57<br/>participants, areas, ids · 19, 20, 21<br/>cohorts, reserved words · 23, 49, 50<br/>series, absences, counterfactuals, exemplars · 8, 20"] -->|refused| R4(["REFUSE"])
+    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>parameters and hard negatives fit their terms · 56, 57<br/>participants, areas, ids · 19, 20, 21<br/>intervals declared once, anchors their vehicles have · 58<br/>cohorts, reserved words · 23, 49, 50<br/>series, absences, counterfactuals, exemplars · 8, 20"] -->|refused| R4(["REFUSE"])
     P7 --> P8["intervals vs departures · 22<br/>interval past the run · 31<br/>hard negatives present · 24<br/>referenced areas' warnings · 27, 28"] --> W4[/"WARN"/]
   end
 

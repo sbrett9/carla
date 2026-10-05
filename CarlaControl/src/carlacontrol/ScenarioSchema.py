@@ -9,7 +9,8 @@ reads is one its author will later believe was honoured.
 The schema fixes the **shape**. What a value means is checked where it is resolved: a time's form by
 `CivilTimeResolver` (check 47), a place by `PlaceResolver` (check 7), the epoch and the illumination
 default by the session's own readers (checks 33, 34, 39), a label by the vocabulary (checks 18, 45,
-46), and a subject's `parameters` and `hard_negative_for` against its labels' terms (checks 56, 57).
+46), a subject's `parameters` and `hard_negative_for` against its labels' terms (checks 56, 57), and
+an interval's `anchor` against its participant's stops and route (check 58).
 The epoch and illumination objects are typed only as objects here for that reason: their rules
 are `CarlaNet.CoSim.SolarEpoch`'s and `IlluminationPolicy`'s, and restating them here would be a second
 copy that can drift.
@@ -30,6 +31,7 @@ SCHEMA_CHECK = 53
 
 _IDENTIFIER = "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
 _TERM = "^[a-z0-9_]+:[a-z0-9_]+$"
+_ANCHOR_EVENT = "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
 
 _TIME = {"description": "A time: seconds, 'dN HH:MM[:SS]', 'HH:MM[:SS]', an ISO-8601 instant with "
                         "its offset, or {instant|at, plus}. Resolved by CivilTimeResolver",
@@ -341,11 +343,23 @@ SCHEMA: dict = {
                            "ref": {"type": "string", "minLength": 1}},
         },
         "interval": {
+            "description": "Declared by a civil begin, with an end or a duration, or by an anchor; "
+                           "never both (check 58)",
             "type": "object", "additionalProperties": False,
-            "required": ["participant", "phase", "begin"],
+            "required": ["participant", "phase"],
             "properties": {"participant": {"type": "string", "minLength": 1},
                            "phase": {"type": "string", "minLength": 1},
-                           "begin": _TIME, "end": _TIME, "duration": _DURATION},
+                           "begin": _TIME, "end": _TIME, "duration": _DURATION,
+                           "anchor": {"$ref": "#/$defs/anchor"}},
+        },
+        "anchor": {
+            "description": "The events of the participant that commit the interval's start and, "
+                           "where given, its end: 'depart', its insertion; 'stop:<i>' and "
+                           "'stop_end:<i>', arriving at and leaving its i-th stop; 'phase:<i>', "
+                           "entering its i-th declared phase. Counted from 0",
+            "type": "object", "additionalProperties": False, "required": ["start"],
+            "properties": {"start": {"type": "string", "pattern": _ANCHOR_EVENT},
+                           "end": {"type": "string", "pattern": _ANCHOR_EVENT}},
         },
         "supervision": {
             "type": "object", "additionalProperties": False,

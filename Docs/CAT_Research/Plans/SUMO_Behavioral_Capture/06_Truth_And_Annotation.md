@@ -28,6 +28,7 @@ the real scenario artifacts. No code changed, no build run.
 | 20 · 2026-10-02 | The world truth track is built inside the capture window: the capture session writes every vehicle SUMO has at every SUMO frame of the window, drawn or not, one CSV row per vehicle at TraCI's clock, with `SumoCotBridge`'s columns less `marked` and the vehicle's id, entity, frame, render state and reason, body, window flag and the sun the world reported; appended a row at a time under [04](04_Contracts.md) C10's W2, with a summary saying the rate and why it ended. `run_capture` always writes it; outside every window nothing is written yet, and `illumination_band` waits for the band function (§8.3). |
 | 21 · 2026-10-02 | The world truth track carries the illumination band. Each row gains the refraction-corrected elevation the world reported on its frame's tick, beside the geometric one, and `illumination_band` with `illumination_band_elevation`, cut by the rule and the table a capture's band is cut by: from the corrected elevation, and from the geometric one only from a server that carries no other. So the base rate's denominator is stratified by the same band as the sidecars' numerator (§8.3, D6.23). |
 | 22 · 2026-10-05 | `base_type` comes from the vehicle catalogue, as the owner ruled, by the rule `special_type` follows: a vehicle whose body's blueprint a catalogue class draws carries that class's `cot_base_type`, whatever the blueprint declares, and so does the callsign built from it; a blueprint no class draws keeps the base type it declares, from its wheel count where it declares none. It holds in the capture sidecar and the live pull of the process that runs the drive, in the world truth track, and in the standalone producer's XML and CSV when it is given the catalogue; the world truth track and the standalone producer read a type's SUMO vehicle class only for a type naming none of the catalogue's blueprints. So an ambulance is a `van`, a fire appliance a `truck`, and a police car and an army jeep `car`s, where their SUMO classes read `car`, `car`, `authority` and `army` (D6.18, §2.4, §4.2, §8.2, §8.3). |
+| 23 · 2026-10-05 | An interval may be anchored to the events of its participant that commit it, as ruled: `depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>`, a phase being one of the actor's declared `phases[]` (§3.3). The compiler resolves each against the vehicle's stops and compiled route ([07](07_Scenario_Authoring.md) check 58) and the plan carries it on every interval, null when unanchored; an interval over a `duration` stop declares its length and no start (D6.4). Bahonar's anomaly intervals are anchored and the scenario recompiled (§8.1). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -575,6 +576,39 @@ lines up with doc 20's exactly.
 
 **Decision 5 therefore survives, with the onsets renamed and one of them made optional.** Recording
 all three is more valuable here than in doc 20, not less.
+
+**Which SUMO event commits an interval is the author's declaration: the anchor** (ruled 2026-10-05).
+An interval in the specification is declared either by its civil `begin`, with an `end` or a
+`duration`, or by an `anchor` naming the events of its participant that commit its start and, where
+given, its end — never both ([07](07_Scenario_Authoring.md) check 58). Four events, a stop or a phase
+named by its index counted from 0:
+
+| Event | Commits | Declares |
+|---|---|---|
+| `depart` | the vehicle's insertion, `vehicle.getDeparture` | the authored departure |
+| `stop:<i>` | arriving at its i-th stop, the step it appears in `getStopStartingVehiclesIDList` | nothing: SUMO is not told when to arrive |
+| `stop_end:<i>` | leaving its i-th stop, `getStopEndingVehiclesIDList` | the stop's `until`, where it has one |
+| `phase:<i>` | entering its i-th declared phase | the departure for `phase:0`, which is entered where the vehicle is inserted; nothing for a later one |
+
+A **phase** is one of the actor's own `phases[]`, the explicit route in parts that a circuit is already
+written as ([07](07_Scenario_Authoring.md) §3.5): it is entered at its first edge's first pass, whose
+index in the compiled route is fixed at compile time and is what SUMO reports a vehicle's progress by
+(`vehicle.getRouteIndex`). A `via` was considered and not chosen: it is a point the routed path passes,
+possibly more than once, not a part of the route with a start, and the edges between two vias are
+`duarouter`'s choice rather than the author's.
+
+The compiler resolves every anchor against the participant's own stops and compiled route and refuses
+an index it does not have, an end that does not come after the start in the vehicle's life (depart,
+then each stop and its end in order, or each phase in order), and an anchor on a cohort, whose members
+are unknown until the run (§3.2). The plan carries each anchor resolved: a stop with its lane and
+position, a phase with its route index and first edge, so the runtime recognises the event without
+recomputing either. **The declared seconds are only what the anchoring events declare**, so an interval
+over a `duration` stop carries `declared_start_s` null and `declared_duration_s` — consequence 1 above
+made concrete — and one over an `until` stop carries `declared_end_s` and no start. **An unanchored
+interval has no committing event**: its committed onset stays null, it keeps its declared seconds, and
+it closes on its declared end. At Bahonar each transit is anchored to `depart`, and each probe's
+standoff and the stay-behind's dwell to `stop:0` and `stop_end:0`, so a standoff declares its five
+minutes wherever the queue lets the probe arrive.
 
 The mechanics: the component that fills these in is the SUMO bridge, because it is the only component
 holding both the plan and the per-step TraCI events. It writes into `WorldSupervisionState`
@@ -2012,6 +2046,7 @@ erDiagram
         string instance_id PK, FK
         string entity_id PK, FK
         string phase PK
+        string anchor "the events committing start and end, see 3.3; null when unanchored"
         int declared_start_tick "null for a duration stop"
         int declared_end_tick
         float declared_duration_s "when the declaration is a length"
@@ -2101,6 +2136,13 @@ The properties the plan must have, each for a reason already established:
   the declared type (§3.8); a nominal row carries its terms' `hard_negative_for` (§3.9(d)); a term's
   `exemplar_instances` and a counterfactual naming a series, cohort or instance resolve against the plan
   ([07](07_Scenario_Authoring.md) checks 56, 57 and 8).
+- **Every interval says what commits it.** Each carries `anchor`: null for an interval declared in civil
+  time, which closes on its declared end, or the resolved events that commit its start and end (§3.3).
+  The declared fields are the anchoring events' own declarations, so `declared_start_s` is null where
+  the start declares no instant, and the runtime fills the committed and observed onsets beside them.
+  As built, the plan's declared fields are seconds and civil instants (`declared_start_s`,
+  `declared_start_civil`, `declared_end_s`, `declared_end_civil`, `declared_duration_s`); the ticks
+  above are the binder's, filled at run time.
 - **The plan has no solar field, and its absence is the code boundary of §3.6.** The scenario's epoch
   is compiled into a separate civil-time map (§4.2's diagram) that the capture session consumes and the
   supervision binder does not see. This is deliberate and is worth stating in the plan's own section,

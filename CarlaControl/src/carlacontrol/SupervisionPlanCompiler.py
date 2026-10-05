@@ -28,6 +28,14 @@ and never vary (check 57): the term is the authority and the row a projection of
 `counterfactual` name subjects of this plan, by the authored names an instance's own counterfactual
 uses, and each must resolve (check 8).
 
+**An interval is declared by a civil begin or by an anchor** (06 §3.3, check 58). An anchor names the
+events of its participant that commit the interval's start and, where given, its end -- `depart`,
+`stop:<i>`, `stop_end:<i>`, `phase:<i>` -- each resolved here against the vehicle's own stops and
+compiled route, and written into the plan with what the runtime needs to recognise it. Its declared
+seconds are only what those events declare, so an interval over a `duration` stop carries a length
+and no declared start (06 D6.4). An unanchored interval has no committing event: it keeps its
+declared seconds and closes on its declared end.
+
 The plan carries no solar field and no epoch (06 §8.1): intervals carry their declared seconds and the
 civil instant the epoch names them, which is a statement of *when*, not of what the light was.
 """
@@ -42,26 +50,52 @@ from carlacontrol.RotaExpander import RotaEntry, RotaSkip
 
 SUPERVISION_PLAN_VERSION = 1
 
+ANCHOR_CHECK = 58
+
+# The events an interval may be anchored to (06 §3.3): the vehicle's insertion, arriving at and
+# leaving one of its stops, and entering one of its declared phases. A stop or a phase is named by
+# its index, counted from 0: `stop:0`, `stop_end:0`, `phase:2`. The schema admits no other spelling.
+DEPART_EVENT = "depart"
+STOP_EVENT = "stop"
+STOP_END_EVENT = "stop_end"
+
 
 @dataclass
 class PlannedInterval:
-    """One declared interval, as a capture window check and the association statistic read it."""
+    """One declared interval, as a capture window check reads it. `begin` is None where the
+    interval's start declares no instant: an anchor to a stop's arrival or to a later phase."""
 
     instance_id: str
     entity_id: str | None
     phase: str
     supervision: str
-    begin: ResolvedInstant
+    begin: ResolvedInstant | None
     end: ResolvedInstant | None
 
 
 @dataclass
+class AnchorEvent:
+    """One end of an anchor, resolved: its spelling, its order in the vehicle's life, the instant it
+    declares where it declares one, what the plan records, and the stop it names, if any."""
+
+    spelled: str
+    rank: int
+    declared: ResolvedInstant | None
+    record: dict
+    stop: dict | None = None
+
+
+@dataclass
 class SupervisionInputs:
-    """What the rest of the compile resolved, which supervision references."""
+    """What the rest of the compile resolved, which supervision references. A stop is the record the
+    compiler emits it from -- lane, end position, and its `duration` or `until`; a phase is the
+    index in the compiled route at which it is entered and that edge."""
 
     scenario_id: str
     actor_departures: dict[str, ResolvedInstant]
     flow_ids: list[str]
+    actor_stops: dict[str, list[dict]] = field(default_factory=dict)
+    actor_phases: dict[str, list[dict]] = field(default_factory=dict)
     rota_entries: dict[str, list[RotaEntry]] = field(default_factory=dict)
     rota_skips: dict[str, list[RotaSkip]] = field(default_factory=dict)
     rota_templates: dict[str, dict] = field(default_factory=dict)
@@ -179,6 +213,13 @@ class SupervisionPlanCompiler:
             self.findings.refuse(50, where, f"authors the phase '{VACANCY_PHASE}', which the absence "
                                  "writer emits and no author writes")
         self.vocabulary.check_namespaced(phase, "phase", where)
+        if "anchor" in entry:
+            return self._anchored_interval(entry, instance_id, supervision, where)
+        if "begin" not in entry:
+            self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} gives neither a begin nor "
+                                 "an anchor. An interval is declared by its civil begin, or by the "
+                                 "events of its participant that commit it (06 §3.3)")
+            return None
         begin = self.resolver.instant(entry["begin"], f"{where} {phase} begin")
         end = None
         if "end" in entry and "duration" in entry:
@@ -212,12 +253,105 @@ class SupervisionPlanCompiler:
         return {
             "entity_id": participant,
             "phase": phase,
+            "anchor": None,
             "declared_start_s": begin.seconds,
             "declared_start_civil": begin.civil,
             "declared_end_s": None if end is None else end.seconds,
             "declared_end_civil": None if end is None else end.civil,
             "declared_duration_s": None if end is None else end.seconds - begin.seconds,
         }
+
+    def _anchored_interval(self, entry: dict, instance_id: str | None, supervision: str,
+                           where: str) -> dict | None:
+        """Check 58: an interval whose start, and end where given, are events of its participant.
+
+        The anchor says which SUMO event commits each bound (06 §3.3), and the declared seconds are
+        what those events themselves declare: a departure its instant, a stop's end its `until`, and a
+        `duration` stop only its length, so an interval over one carries `declared_start_s` null and
+        `declared_duration_s` (06 D6.4). An anchored interval writes no begin, end or duration of
+        its own, which would be a second declaration of the same bound.
+        """
+        participant, phase, anchor = entry["participant"], entry["phase"], entry["anchor"]
+        given = [key for key in ("begin", "end", "duration") if key in entry]
+        if given:
+            self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} gives an anchor and "
+                                 f"{', '.join(given)}. An anchored interval takes its bounds from "
+                                 "its participant's events and its declared seconds from what "
+                                 "those events declare (06 D6.4); give one or the other")
+        if participant not in self._inputs.actor_departures:
+            return None
+        start = self._anchor_event(anchor["start"], participant, phase, where)
+        end = self._anchor_event(anchor["end"], participant, phase, where) if "end" in anchor \
+            else None
+        if start is None or ("end" in anchor and end is None):
+            return None
+        if end is not None and end.rank <= start.rank:
+            self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} is anchored from "
+                                 f"'{start.spelled}' to '{end.spelled}', and '{end.spelled}' does not "
+                                 f"come after '{start.spelled}' in the life of '{participant}': "
+                                 "depart, then each stop and its end in order, or each phase in order")
+            return None
+        begin = start.declared
+        finish = None if end is None else end.declared
+        duration = None
+        if begin is not None and finish is not None:
+            duration = finish.seconds - begin.seconds
+        elif end is not None and start.stop is not None and start.stop is end.stop:
+            duration = start.stop.get("duration")
+        if instance_id is not None:
+            self.intervals.append(PlannedInterval(instance_id, participant, phase, supervision,
+                                                  begin, finish))
+        return {
+            "entity_id": participant,
+            "phase": phase,
+            "anchor": {"start": start.record, "end": None if end is None else end.record},
+            "declared_start_s": None if begin is None else begin.seconds,
+            "declared_start_civil": None if begin is None else begin.civil,
+            "declared_end_s": None if finish is None else finish.seconds,
+            "declared_end_civil": None if finish is None else finish.civil,
+            "declared_duration_s": duration,
+        }
+
+    def _anchor_event(self, spelled: str, participant: str, phase: str,
+                      where: str) -> AnchorEvent | None:
+        """One anchor event resolved against the participant: what it is, where it falls in the
+        vehicle's life, and the instant it declares, if it declares one."""
+        kind, _, number = spelled.partition(":")
+        if kind == DEPART_EVENT:
+            return AnchorEvent(spelled, 0, self._inputs.actor_departures[participant],
+                               {"event": spelled})
+        index = int(number)
+        if kind in (STOP_EVENT, STOP_END_EVENT):
+            stops = self._inputs.actor_stops.get(participant, [])
+            if index >= len(stops):
+                self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} is anchored to "
+                                     f"'{spelled}', and '{participant}' makes "
+                                     f"{self._count(len(stops), 'stop')}"
+                                     + (f", numbered 0 to {len(stops) - 1}" if stops else ""))
+                return None
+            stop = stops[index]
+            record = {"event": spelled, "lane": stop["lane"], "end_pos_m": stop["end_pos"]}
+            if kind == STOP_EVENT:
+                return AnchorEvent(spelled, 2 * index + 1, None, record, stop)
+            return AnchorEvent(spelled, 2 * index + 2, stop.get("until"), record, stop)
+        phases = self._inputs.actor_phases.get(participant, [])
+        if index >= len(phases):
+            self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} is anchored to "
+                                 f"'{spelled}', and '{participant}' declares "
+                                 f"{self._count(len(phases), 'phase')}"
+                                 + (f", numbered 0 to {len(phases) - 1}" if phases else
+                                    ": a phase anchor names one of an actor's phases[], whose "
+                                    "first edge has a fixed place in the compiled route"))
+            return None
+        entered = phases[index]
+        record = {"event": spelled, "route_index": entered["route_index"], "edge": entered["edge"]}
+        # The first phase is entered where the vehicle is inserted, so it declares the departure.
+        declared = self._inputs.actor_departures[participant] if index == 0 else None
+        return AnchorEvent(spelled, index, declared, record)
+
+    @staticmethod
+    def _count(number: int, noun: str) -> str:
+        return f"{number} {noun}{'' if number == 1 else 's'}"
 
     # -- series and absences ----------------------------------------------------------------------
 
@@ -331,7 +465,7 @@ class SupervisionPlanCompiler:
                 "declared_end_s": slot["declared_end_s"],
             },
             "intervals": [{
-                "entity_id": None, "phase": VACANCY_PHASE,
+                "entity_id": None, "phase": VACANCY_PHASE, "anchor": None,
                 "declared_start_s": slot["declared_start_s"],
                 "declared_start_civil": slot["declared_start_civil"],
                 "declared_end_s": slot["declared_end_s"],
@@ -367,6 +501,10 @@ class SupervisionPlanCompiler:
                 self.findings.refuse(23, where, "carries intervals. A cohort's members are unknown "
                                      "until the run, so it carries only a whole-life annotation "
                                      "(06 D6.2)")
+            if any(isinstance(i, dict) and "anchor" in i for i in entry.get("intervals", [])):
+                self.findings.refuse(ANCHOR_CHECK, where, "anchors an interval. An anchor names an "
+                                     "event of one vehicle, and a flow's members are generated, "
+                                     "not authored one by one (06 §3.2)")
             labels = list(entry.get("labels", []))
             if supervision == "annotated":
                 if not labels:

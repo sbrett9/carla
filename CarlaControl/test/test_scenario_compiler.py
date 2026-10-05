@@ -1075,6 +1075,173 @@ def test_an_absence_whose_subject_names_no_lane_position_is_sited_at_its_area_al
     assert plan_rows(result.plan)["visit_missed"]["aoi_refs"] == ["kerb"]
 
 
+# ---- intervals anchored to the events of their participant ------------------------------------------
+
+KERB_STOP = {"lane": "901#0_0", "end_pos_m": 51.5}
+
+
+def anchored(world, anchor: dict, **probe_changes) -> dict:
+    """The fixture specification with the probe's standoff interval anchored, and the probe changed."""
+    spec = world.specification()
+    spec["actors"][0].update(probe_changes)
+    spec["supervision"]["instances"][0]["intervals"] = [
+        {"participant": "probe", "phase": "wait", "anchor": anchor}]
+    return spec
+
+
+def compile_document(world, installation, tmp_path, spec: dict):
+    path = world.write(spec, f"anchor.{tmp_path.name}.scenario.json")
+    return ScenarioCompiler(installation).compile(path, tmp_path / "out")
+
+
+def standoff_interval(result) -> dict:
+    return plan_rows(result.plan)["probe_standoff"]["intervals"][0]
+
+
+def test_an_interval_over_a_duration_stop_declares_its_length_and_no_start(world, installation,
+                                                                          tmp_path):
+    """06 D6.4: a duration stop declares a length, not a time, so the plan writes no declared
+    start or end, the stop's length, and the events that will commit both."""
+    result = compile_document(world, installation, tmp_path, anchored(
+        world, {"start": "stop:0", "end": "stop_end:0"}))
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    assert standoff_interval(result) == {
+        "entity_id": "probe", "phase": "wait",
+        "anchor": {"start": {"event": "stop:0", **KERB_STOP},
+                   "end": {"event": "stop_end:0", **KERB_STOP}},
+        "declared_start_s": None, "declared_start_civil": None,
+        "declared_end_s": None, "declared_end_civil": None,
+        "declared_duration_s": 300.0}
+    assert "  - wait: from stop:0 to stop_end:0, 300 s declared" in \
+        result.files["resolution_md"].read_text(encoding="utf-8")
+
+
+def test_an_interval_from_the_departure_declares_the_departure(world, installation, tmp_path):
+    result = compile_document(world, installation, tmp_path, anchored(world, {"start": "depart"}))
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    interval = standoff_interval(result)
+    assert interval["anchor"] == {"start": {"event": "depart"}, "end": None}
+    assert (interval["declared_start_s"], interval["declared_start_civil"]) == (
+        3600.0, "2026-03-21T07:00:00-06:00")
+    assert (interval["declared_end_s"], interval["declared_duration_s"]) == (None, None)
+
+
+def test_a_stop_held_until_an_instant_declares_its_end(world, installation, tmp_path):
+    """An `until` stop declares when the vehicle leaves and not when it arrives: an interval over
+    the stop has a declared end and no start; one from the departure to the stop's end has both."""
+    until = [{"place": "kerb", "until": "d0 07:20"}]
+    over_stop = compile_document(world, installation, tmp_path / "a", anchored(
+        world, {"start": "stop:0", "end": "stop_end:0"}, stops=until))
+    assert not over_stop.refused, [str(f) for f in over_stop.findings.refusals]
+    interval = standoff_interval(over_stop)
+    assert (interval["declared_start_s"], interval["declared_end_s"],
+            interval["declared_end_civil"], interval["declared_duration_s"]) == (
+        None, 4800.0, "2026-03-21T07:20:00-06:00", None)
+    spec = anchored(world, {"start": "depart", "end": "stop_end:0"}, stops=until)
+    # The fixture's window would cut the declared 07:00 to 07:20 (check 38); capture later.
+    spec["capture_windows"] = [{"id": "later", "begin": "d0 08:30", "length": "10m"}]
+    whole = compile_document(world, installation, tmp_path / "b", spec)
+    assert not whole.refused, [str(f) for f in whole.findings.refusals]
+    interval = standoff_interval(whole)
+    assert (interval["declared_start_s"], interval["declared_end_s"],
+            interval["declared_duration_s"]) == (3600.0, 4800.0, 1200.0)
+
+
+def test_an_interval_anchored_to_phases_carries_where_each_is_entered_in_the_route(
+        world, installation, tmp_path):
+    """A phase is one of the actor's declared phases[], entered at its first edge's first pass: the
+    plan names that index in the compiled route, which is what SUMO reports a vehicle's progress by."""
+    spec = orbit_specification(world)
+    spec["vocabulary"] = vocabulary_with(world, {"fixture:circuit": {
+        "definition": "A vehicle drives the same closed loop again and again.",
+        "applies_to": ["entity"], "realisation": ["present"], "since": 1, "status": "active"}})
+    spec["supervision"]["instances"].append({
+        "name": "orbiter_circuit", "supervision": "annotated", "labels": ["fixture:circuit"],
+        "participants": [{"actor": "orbiter", "role": "subject"}],
+        "intervals": [{"participant": "orbiter", "phase": "approach",
+                       "anchor": {"start": "phase:0", "end": "phase:1"}},
+                      {"participant": "orbiter", "phase": "laps",
+                       "anchor": {"start": "phase:1", "end": "phase:2"}}]})
+    result = compile_document(world, installation, tmp_path, spec)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    approach, laps = plan_rows(result.plan)["orbiter_circuit"]["intervals"]
+    assert laps["anchor"] == {"start": {"event": "phase:1", "route_index": 1, "edge": "901#0"},
+                              "end": {"event": "phase:2", "route_index": 19, "edge": "901#0"}}
+    assert (laps["declared_start_s"], laps["declared_end_s"], laps["declared_duration_s"]) == (
+        None, None, None)
+    # The first phase is entered where the vehicle is inserted, so it declares the departure.
+    assert approach["anchor"]["start"] == {"event": "phase:0", "route_index": 0, "edge": "900"}
+    assert approach["declared_start_s"] == 4200.0
+    route = orbiter_entry(result).find("route").get("edges").split()
+    for end in (*approach["anchor"].values(), *laps["anchor"].values()):
+        assert route[end["route_index"]] == end["edge"]
+
+
+def test_an_unanchored_interval_and_a_vacancy_carry_no_anchor(world, installation, tmp_path):
+    rows = plan_rows(compile_spec(world, installation, tmp_path).plan)
+    assert rows["probe_standoff"]["intervals"][0]["anchor"] is None
+    assert rows["probe_standoff"]["intervals"][0]["declared_start_s"] == 3600.0
+    assert rows["patrol_missed_d0_h8"]["intervals"][0]["anchor"] is None
+
+
+@pytest.mark.parametrize(("anchor", "says"), [
+    ({"start": "stop:1"}, "interval wait is anchored to 'stop:1', and 'probe' makes 1 stop, "
+                          "numbered 0 to 0"),
+    ({"start": "phase:0"}, "interval wait is anchored to 'phase:0', and 'probe' declares 0 phases: "
+                           "a phase anchor names one of an actor's phases[]"),
+    ({"start": "stop_end:0", "end": "stop:0"}, "is anchored from 'stop_end:0' to 'stop:0', and "
+                                               "'stop:0' does not come after 'stop_end:0'"),
+    ({"start": "depart", "end": "depart"}, "'depart' does not come after 'depart'"),
+])
+def test_an_anchor_its_participant_cannot_have_is_refused_under_check_58(world, installation,
+                                                                         tmp_path, anchor, says):
+    result = compile_document(world, installation, tmp_path, anchored(world, anchor))
+    assert checks(result) == {58}
+    assert says in messages(result, 58)
+
+
+def test_an_actor_without_stops_has_no_stop_to_anchor_to_under_check_58(world, installation,
+                                                                       tmp_path):
+    block = supervision_with(world)
+    block["instances"][1]["intervals"] = [{"participant": "hauler", "phase": "haul",
+                                           "anchor": {"start": "stop:0"}}]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert checks(result) == {58}
+    assert "'hauler' makes 0 stops" in messages(result, 58)
+
+
+@pytest.mark.parametrize(("interval", "says"), [
+    ({"participant": "probe", "phase": "wait", "begin": "d0 07:00",
+      "anchor": {"start": "stop:0", "end": "stop_end:0"}},
+     "interval wait gives an anchor and begin. An anchored interval takes its bounds from its "
+     "participant's events"),
+    ({"participant": "probe", "phase": "wait"},
+     "interval wait gives neither a begin nor an anchor"),
+])
+def test_an_interval_declared_twice_or_not_at_all_is_refused_under_check_58(
+        world, installation, tmp_path, interval, says):
+    block = supervision_with(world)
+    block["instances"][0]["intervals"] = [interval]
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert checks(result) == {58}
+    assert says in messages(result, 58)
+
+
+def test_an_anchor_on_a_cohort_is_refused_under_check_58(world, installation, tmp_path):
+    block = supervision_with(world, cohorts=[{"flow": "ambient", "supervision": "unlabelled",
+                                              "intervals": [{"anchor": {"start": "depart"}}]}])
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert {23, 58} <= checks(result)
+    assert "anchors an interval. An anchor names an event of one vehicle" in messages(result, 58)
+
+
+@pytest.mark.parametrize("event", ["arrive", "stop:-1", "stop:01", "phase", "stop_end"])
+def test_an_anchor_event_outside_the_grammar_is_refused_under_check_53(world, installation,
+                                                                       tmp_path, event):
+    result = compile_document(world, installation, tmp_path, anchored(world, {"start": event}))
+    assert checks(result) == {53}
+
+
 # ---- capture windows and the sun --------------------------------------------------------------------
 
 def test_a_window_cutting_an_interval_is_refused_under_check_38(world, installation, tmp_path):

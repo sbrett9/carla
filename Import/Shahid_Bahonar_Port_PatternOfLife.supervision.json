@@ -335,6 +335,12 @@
         {
           "entity_id": "escort_0",
           "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
           "declared_start_s": 270000.0,
           "declared_start_civil": "2026-10-02T10:00:00+03:30",
           "declared_end_s": null,
@@ -344,6 +350,12 @@
         {
           "entity_id": "escort_1",
           "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
           "declared_start_s": 270004.0,
           "declared_start_civil": "2026-10-02T10:00:04+03:30",
           "declared_end_s": null,
@@ -353,6 +365,12 @@
         {
           "entity_id": "escort_2",
           "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
           "declared_start_s": 270008.0,
           "declared_start_civil": "2026-10-02T10:00:08+03:30",
           "declared_end_s": null,
@@ -362,6 +380,12 @@
         {
           "entity_id": "escort_3",
           "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
           "declared_start_s": 270012.0,
           "declared_start_civil": "2026-10-02T10:00:12+03:30",
           "declared_end_s": null,
@@ -371,6 +395,12 @@
         {
           "entity_id": "escort_4",
           "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
           "declared_start_s": 270016.0,
           "declared_start_civil": "2026-10-02T10:00:16+03:30",
           "declared_end_s": null,
@@ -407,11 +437,23 @@
         {
           "entity_id": "probe_d2",
           "phase": "standoff",
-          "declared_start_s": 187474.0,
-          "declared_start_civil": "2026-10-01T11:04:34+03:30",
+          "anchor": {
+            "start": {
+              "event": "stop:0",
+              "lane": "-431672573#2_0",
+              "end_pos_m": 30.0
+            },
+            "end": {
+              "event": "stop_end:0",
+              "lane": "-431672573#2_0",
+              "end_pos_m": 30.0
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
           "declared_end_s": null,
           "declared_end_civil": null,
-          "declared_duration_s": null
+          "declared_duration_s": 300.0
         }
       ]
     },
@@ -443,11 +485,23 @@
         {
           "entity_id": "probe_d5",
           "phase": "standoff",
-          "declared_start_s": 447085.0,
-          "declared_start_civil": "2026-10-04T11:11:25+03:30",
+          "anchor": {
+            "start": {
+              "event": "stop:0",
+              "lane": "-431672573#2_0",
+              "end_pos_m": 30.0
+            },
+            "end": {
+              "event": "stop_end:0",
+              "lane": "-431672573#2_0",
+              "end_pos_m": 30.0
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
           "declared_end_s": null,
           "declared_end_civil": null,
-          "declared_duration_s": null
+          "declared_duration_s": 300.0
         }
       ]
     },
@@ -478,6 +532,12 @@
         {
           "entity_id": "shadow",
           "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
           "declared_start_s": 502200.0,
           "declared_start_civil": "2026-10-05T02:30:00+03:30",
           "declared_end_s": null,
@@ -512,10 +572,22 @@
         {
           "entity_id": "staybehind",
           "phase": "dwell",
-          "declared_start_s": 90000.0,
-          "declared_start_civil": "2026-09-30T08:00:00+03:30",
-          "declared_end_s": null,
-          "declared_end_civil": null,
+          "anchor": {
+            "start": {
+              "event": "stop:0",
+              "lane": "900954912#2_0",
+              "end_pos_m": 20.0
+            },
+            "end": {
+              "event": "stop_end:0",
+              "lane": "900954912#2_0",
+              "end_pos_m": 20.0
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
+          "declared_end_s": 604800.0,
+          "declared_end_civil": "2026-10-06T07:00:00+03:30",
           "declared_duration_s": null
         }
       ]
@@ -1083,6 +1155,7 @@
         {
           "entity_id": null,
           "phase": "vacancy",
+          "anchor": null,
           "declared_start_s": 345600.0,
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
