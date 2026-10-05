@@ -244,6 +244,38 @@ def test_an_unmeasured_gate_is_skipped_with_its_reason_never_passed(layout):
         assert record["status"] == "skipped" and record["met"] is None and record["skip_reason"]
 
 
+def test_the_closing_record_gate_is_met_exactly_when_the_manifest_ends_with_its_terminal_row(
+        layout, tmp_path):
+    report, session, _ = closeout(layout)
+    session.Advance()
+    manifest = tmp_path / "truth" / "manifest.jsonl"
+    report.attach_manifest(manifest)
+
+    def closing() -> dict:
+        return gate(report.gates(report.snapshot(), 0), "supervision.manifest_closing_record")
+
+    # No manifest on disk at all: nothing was written, and the gate says so rather than passing.
+    assert (closing()["status"], closing()["met"]) == ("evaluated", False)
+
+    manifest.parent.mkdir(parents=True)
+    rows = ['{"row": "manifest_opened", "run": null}', '{"row": "render_admitted", "sumo_id": "a"}']
+    manifest.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    record = closing()
+    assert (record["observed"], record["threshold"], record["met"]) == (False, True, False)
+    assert record["owner"] == "04 §12.7"
+
+    # The terminal row, then a kill part-way through a row that should never follow it: the last
+    # complete row is what is read, and the cut line is left off.
+    with manifest.open("a", encoding="utf-8") as file:
+        file.write('{"row": "manifest_closed", "ended": "caller_stopped"}\n')
+    assert closing()["met"] is True
+    with manifest.open("a", encoding="utf-8") as file:
+        file.write('{"row": "render_adm')
+    assert closing()["met"] is True
+    assert RunCloseoutReport.last_manifest_row(manifest) == "manifest_closed"
+    assert RunCloseoutReport.last_manifest_row(tmp_path / "missing.jsonl") is None
+
+
 def test_the_solar_gate_is_skipped_when_no_sun_is_bound(layout):
     report, session, _ = closeout(layout, ["solar.policy=ignore"], policy="ignore")
     session.Advance()

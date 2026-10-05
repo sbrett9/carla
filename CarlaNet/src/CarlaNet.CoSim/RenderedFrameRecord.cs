@@ -38,16 +38,20 @@ public sealed record RenderedFrameRecord(
     IlluminationDeclaration? Illumination)
 {
     /// <summary>
-    /// The geometric elevation of the sun the world reported on the frame's tick, degrees: the
-    /// achieved sun, read from the same snapshot as the <c>_solar</c> block a recorder writes beside
-    /// the frame's capture, rather than the one declared for it. Null where the session audits no sun.
+    /// The sun the world reported on the frame's tick: the achieved sun, read from the same snapshot as
+    /// the <c>_solar</c> block a recorder writes beside the frame's capture, rather than the one declared
+    /// for it -- its clock, date and zone, where it is, and whether it is advancing. Null where the
+    /// session audits no sun.
     /// </summary>
-    public double? SunElevationDegrees { get; init; }
+    public SolarReading? Sun { get; init; }
+
+    /// <summary>The geometric elevation of that sun, degrees; null where there is none.</summary>
+    public double? SunElevationDegrees => Sun?.ElevationDegrees;
 
     /// <summary>
-    /// The refraction-corrected elevation the world reported on the same tick, degrees: the elevation
-    /// the sun's light is rotated by, which the illumination bands are cut from. Null where the session
-    /// audits no sun, or the world's reading carries only the geometric one.
+    /// Its refraction-corrected elevation, degrees: the elevation the sun's light is rotated by, which
+    /// the illumination bands are cut from. Null where the session audits no sun, or the world's reading
+    /// carries only the geometric one.
     /// </summary>
-    public double? SunCorrectedElevationDegrees { get; init; }
+    public double? SunCorrectedElevationDegrees => Sun?.CorrectedElevationDegrees;
 }

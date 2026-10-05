@@ -2215,6 +2215,7 @@ class World:
                          render_admit_lead_s=3.0, render_release_lag_s=5.0,
                          render_max_speed_mps=40.0,
                          world_truth_track=None, world_truth_track_interval_s=None,
+                         run_manifest=None, run_manifest_header=None,
                          collision_detail=False,
                          on_pose=None, on_release=None, on_divergence=None,
                          on_admission_pass=None, on_collision=None,
@@ -2304,6 +2305,21 @@ class World:
         `world_truth_track_interval_s` samples every so many simulated seconds from the window's
         opening, a whole number of SUMO steps, where None samples every SUMO frame.
         `session.WorldTruthTrack` says where it is going and how many rows it holds.
+
+        `run_manifest` is where the session writes the run manifest, None (the default) writing none:
+        one JSON object per line, each appended and flushed as it is written -- `manifest_opened` with
+        what the run is (`run_manifest_header`, a dict or its JSON text, carried verbatim beside what the
+        session established: the compile lock's digests, the supervision plan and its vocabulary, the
+        SUMO settings it runs under, the epoch and illumination), `sensor_placed` for each camera named
+        with `session.RunManifest.PlaceSensor(name, camera.id)`, `render_admitted` and
+        `render_released` for every vehicle entering and leaving the render set, the events that change
+        the population (`collision_began`, `collision_ended`, `vehicle_not_inserted`,
+        `emergency_stop`, `teleport`) at TraCI's clock, the sun at the window's first and last capture
+        tick (`solar_window_open`, `solar_window_end`), and last `manifest_closed` saying why the run
+        ended (04_Contracts §12.7, 06_Truth_And_Annotation §8.4). A manifest without that row is one whose
+        run was interrupted. `session.RunManifest.Close(reason)` writes it now -- for a caller that
+        reads its closing gates before disposing the session -- and the session's end writes it
+        otherwise. A path that already holds a manifest is refused before anything starts.
 
         `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
         because the imagery this mode produces is of the photogrammetry: the generated road mesh is
@@ -2560,6 +2576,11 @@ class World:
             options.WorldTruthTrackPath = str(world_truth_track)
         if world_truth_track_interval_s is not None:
             options.WorldTruthTrackIntervalSeconds = float(world_truth_track_interval_s)
+        if run_manifest is not None:
+            options.RunManifestPath = str(run_manifest)
+        if run_manifest_header is not None:
+            options.RunManifestHeader = (run_manifest_header if isinstance(run_manifest_header, str)
+                                         else _json.dumps(run_manifest_header))
         options.CollisionDetail = bool(collision_detail)
         options.RenderSet = policy
         # Both are read by the C# side, which is the one validator: a declaration checked twice is

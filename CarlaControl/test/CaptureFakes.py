@@ -37,6 +37,7 @@ that; `get_actors` gives each vehicle the box `FakeServer.vehicle_extent` descri
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -436,6 +437,34 @@ class _RenderedIds:
     Count = 7
 
 
+class FakeRunManifest:
+    """A RunManifestWriter: the rows a session appends to its manifest, one JSON object per line, opened
+    with the header it was handed and closed by its terminal row -- by its caller, or by the session's end."""
+
+    def __init__(self, path: str, header: dict | None) -> None:
+        self.Path = path
+        self.Closed = False
+        self.Rows = 0
+        self.reasons: list = []
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._write({"row": "manifest_opened", "run": header})
+
+    def _write(self, row: dict) -> None:
+        with open(self.Path, "a", encoding="utf-8") as file:
+            file.write(json.dumps(row) + "\n")
+        self.Rows += 1
+
+    def PlaceSensor(self, sensor_id: str, camera: int) -> None:  # noqa: N802 -- the .NET member name
+        if not self.Closed:
+            self._write({"row": "sensor_placed", "sensor_id": sensor_id, "camera_actor_id": int(camera)})
+
+    def Close(self, reason) -> None:  # noqa: N802 -- the .NET member name
+        self.reasons.append(reason)
+        if not self.Closed:
+            self._write({"row": "manifest_closed", "caller_reason": reason})
+            self.Closed = True
+
+
 class FakeSession:
     """A SumoDriveSession: advances one SUMO step per Advance, and every recorder with it."""
 
@@ -477,6 +506,9 @@ class FakeSession:
         self.ticks = 0
         self.on_pose = kwargs.get("on_pose")
         self.on_admission_pass = kwargs.get("on_admission_pass")
+        manifest = kwargs.get("run_manifest")
+        self.RunManifest = None if manifest is None else FakeRunManifest(manifest,
+                                                                         kwargs.get("run_manifest_header"))
         self._population = 0
         # The two passes the session makes while starting: the fast-forward's frame, and the step of
         # lookahead after it.

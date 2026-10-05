@@ -31,7 +31,7 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `launch.warnings_adjudicated` | warnings raised with no adjudication, threshold 0 | measured |
 | `capture.captured_minus_written` | -- | skipped: the recorder counts no capture accepted into its queue |
 | `radiometry.profile_digest_present` | -- | skipped: nothing reads back the profile a camera loaded |
-| `supervision.manifest_closing_record` | -- | skipped: no run manifest is written |
+| `supervision.manifest_closing_record` | whether the run manifest's last complete row is its terminal row, `manifest_closed` (04 §12.7, D4.36) | measured where the run writes a manifest |
 
 **One loud condition interrupts every run** (D12.15): a recorder's `Dropped` becoming non-zero; a live
 run adds the achieved factor falling below its floor. With no render-set limit -- the default -- a
@@ -41,6 +41,7 @@ out, and nothing interrupts for it, since the operator chose it.
 """
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -57,9 +58,11 @@ SKIPPED = {
                                        "queue, only captures written and dropped"),
     "radiometry.profile_digest_present": ("the loaded post-process profile is digested",
                                           "nothing reads back which profile a camera loaded"),
-    "supervision.manifest_closing_record": ("the run manifest's closing record",
-                                            "no run manifest is written"),
 }
+MANIFEST_CLOSING_RECORD = "supervision.manifest_closing_record"
+MANIFEST_CLOSED_ROW = "manifest_closed"
+# Enough of a manifest's end to hold its last complete row, which is short.
+MANIFEST_TAIL_BYTES = 65536
 LOUD_RECORDER_DROPPED = "recorder_dropped"
 LOUD_PACE_BELOW_FLOOR = "pace_below_floor"
 
@@ -86,6 +89,7 @@ class RunCloseoutReport:
         self.channels: list[ChannelCapture] = []
         self.started_at: float | None = None
         self.readiness: Any = None
+        self.manifest: Path | None = None
 
     def attach(self, session: Any, admissions: WindowAdmissions | None = None) -> None:
         """Read from `session` from now on, and from the window's admission passes where given.
@@ -116,6 +120,33 @@ class RunCloseoutReport:
                             else str(teleporting.Declared),
                             "statement": str(teleporting)},
         }
+
+    def attach_manifest(self, path: str | Path) -> None:
+        """Read the run manifest's closing record from `path`, the manifest the session writes."""
+        self.manifest = Path(path)
+
+    @staticmethod
+    def last_manifest_row(path: Path) -> str | None:
+        """The `row` of a manifest's last complete line -- one that ends in a line break -- or None
+        where the file holds no complete line or does not exist. Read from the file's end, so a long
+        manifest costs no more than a short one."""
+        try:
+            with open(path, "rb") as file:
+                file.seek(0, 2)
+                size = file.tell()
+                file.seek(max(0, size - MANIFEST_TAIL_BYTES))
+                tail = file.read()
+        except OSError:
+            return None
+        end = tail.rfind(b"\n")
+        if end < 0:
+            return None
+        start = tail.rfind(b"\n", 0, end) + 1
+        try:
+            row = json.loads(tail[start:end].decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+        return row.get("row") if isinstance(row, dict) else None
 
     def add_channel(self, channel: ChannelCapture) -> None:
         self.channels.append(channel)
@@ -326,6 +357,16 @@ class RunCloseoutReport:
                                     audit["worst_angle_deg"], audit["tolerance_deg"], "at_most"))
         gates.append(self._gate("launch.warnings_adjudicated", "warnings raised with no "
                                 "adjudication", "12 §6.4", unadjudicated_warnings, 0, "equals"))
+        closing_name = "the run manifest ends with its terminal row"
+        if self.manifest is None:
+            gates.append(self._skipped(MANIFEST_CLOSING_RECORD, closing_name,
+                                       "the run writes no run manifest"))
+        else:
+            # A manifest whose run reached its end, and was closed, ends with manifest_closed; one without
+            # it is a run that was interrupted, and every row before the cut is still valid.
+            gates.append(self._gate(MANIFEST_CLOSING_RECORD, closing_name, "04 §12.7",
+                                    self.last_manifest_row(self.manifest) == MANIFEST_CLOSED_ROW, True,
+                                    "equals"))
         for gate_id, (name, reason) in SKIPPED.items():
             gates.append(self._skipped(gate_id, name, reason))
         return gates

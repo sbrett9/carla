@@ -468,4 +468,33 @@ public sealed record SumoDriveSessionOptions(
     /// <see cref="WorldTruthTrackPath"/>: a rate with no track to write is a setting that does nothing.
     /// </remarks>
     public double? WorldTruthTrackIntervalSeconds { get; set; }
+
+    /// <summary>
+    /// Where the session writes the run manifest: one JSON object per line, opened with what the run is,
+    /// then every admission to and release from the render set, every event that changes the population
+    /// SUMO simulates, the sun at the window's opening and end, and a closing row saying why the run
+    /// ended (<see cref="RunManifestWriter"/>). Null, the default, writes none.
+    /// </summary>
+    /// <remarks>
+    /// <para>A capture run writes one, beside its world truth track; a session driven for any other
+    /// purpose writes one only when asked. Each row is appended and flushed before the next is composed,
+    /// so a manifest cut off is the rows written before the cut, and one with no closing row is one whose
+    /// run was interrupted.</para>
+    ///
+    /// <para>A file already there is refused rather than written over, before anything is started, and
+    /// so is the world truth track's own path. The directory is made if it does not exist.</para>
+    /// </remarks>
+    public string? RunManifestPath { get; set; }
+
+    /// <summary>
+    /// What the caller knows of the run and the session does not, as a JSON object -- the run's and the
+    /// session's identity, the channels it will capture -- written verbatim into the manifest's opening
+    /// row; null for none.
+    /// </summary>
+    /// <remarks>
+    /// Carried, never interpreted: the session states what it established itself beside it. Anything but
+    /// a JSON object is refused before anything is started, and so is a header with no
+    /// <see cref="RunManifestPath"/> to write it to.
+    /// </remarks>
+    public string? RunManifestHeader { get; set; }
 }

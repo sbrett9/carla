@@ -454,8 +454,8 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
                     (ulong)(index * clock.WorldTicksPerSumoStep) + 1, index * clock.WorldTicksPerSumoStep, index,
                     true, true, null, null)
                 {
-                    SunElevationDegrees = suns[index].Geometric,
-                    SunCorrectedElevationDegrees = suns[index].Corrected,
+                    Sun = new SolarReading(7.0, 2026, 3, 21, 3.5, 0.0, 0.0, suns[index].Geometric, 90.0, false, 0.0,
+                                           suns[index].Corrected),
                 });
                 writer.OnSumoStep(OneVehicleAt(index + 2.0));
             }

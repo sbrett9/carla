@@ -54,8 +54,8 @@ namespace CarlaNet.CoSim;
 /// track, a manifest, an interval binder -- is told of every SUMO frame read, with what SUMO did to its
 /// vehicles in that step at TraCI's clock, of every frame rendered, and of the session's end
 /// (<see cref="SumoDriveSessionOptions.StepObservers"/>), rather than being written into the loop. The
-/// world truth track is one, built by the session itself where it is asked for one
-/// (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>).</para>
+/// world truth track and the run manifest are two, built by the session itself where it is asked for them
+/// (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>, <see cref="SumoDriveSessionOptions.RunManifestPath"/>).</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -82,6 +82,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly SumoVehicleQueries _vehicleQueries;
     private readonly ISumoStepObserver[] _observers;
     private readonly WorldTruthTrackWriter? _track;
+    private readonly RunManifestWriter? _manifest;
     private readonly SumoConsoleTail _console;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
@@ -120,6 +121,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly HashSet<string> _awaitingInsertion = [];
     private readonly HashSet<string> _stillAwaiting = [];
     private readonly List<VehicleNotInserted> _notInsertedThisFrame = [];
+    private readonly List<RenderedVehicleInterval> _releasedThisFrame = [];
     private readonly HeadlightRule? _headlights;
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
     private readonly PathHeading _headings = new();
@@ -244,18 +246,40 @@ public sealed class SumoDriveSession : IDisposable
         };
         _vehicleQueries = new SumoVehicleQueries(sumo.Vehicles, Report);
 
-        // Last, so nothing after it can leave the files it creates behind a constructor that threw. The
-        // track is told ahead of the caller's observers, so none of theirs that fails can starve it.
+        // Last, so nothing after them can leave the files they create behind a constructor that threw.
+        // Both are told ahead of the caller's observers, so none of theirs that fails can starve them.
         _track = options.WorldTruthTrackPath is { } trackPath
             ? WorldTruthTrackWriter.Open(trackPath, trackSumoStepsPerSample, clock,
                                          typeId => WorldTruthVehicleType.Read(sumo.TraCI, _binder, catalogue, typeId),
                                          ground, origin, options.Epoch)
             : null;
+        try
+        {
+            _manifest = options.RunManifestPath is { } manifestPath
+                ? RunManifestWriter.Open(manifestPath, options, Report, () => _scenarioFinished)
+                : null;
+        }
+        catch
+        {
+            _track?.Discard();
+            throw;
+        }
 
         // Read once, as the pace is: an observer added to the options after the start is told nothing,
         // rather than part of a run.
-        ISumoStepObserver[] given = options.StepObservers is { } observers ? [.. observers] : [];
-        _observers = _track is { } track ? [track, .. given] : given;
+        List<ISumoStepObserver> told = [];
+        if (_track is { } track)
+        {
+            told.Add(track);
+        }
+
+        if (_manifest is { } manifest)
+        {
+            told.Add(manifest);
+        }
+
+        told.AddRange(options.StepObservers ?? []);
+        _observers = [.. told];
     }
 
     /// <summary>The three rates the session resolved and validated.</summary>
@@ -341,6 +365,19 @@ public sealed class SumoDriveSession : IDisposable
     /// or null where none was asked for (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>).
     /// </summary>
     public WorldTruthTrackWriter? WorldTruthTrack => _track;
+
+    /// <summary>
+    /// The run manifest the session writes -- where, and how many rows it holds so far -- or null where
+    /// none was asked for (<see cref="SumoDriveSessionOptions.RunManifestPath"/>). Its caller names each
+    /// camera on it as the camera is placed, and closes it, saying why the run ended, before it reads
+    /// the run's closing gates (<see cref="RunManifestWriter.Close"/>).
+    /// </summary>
+    public RunManifestWriter? RunManifest => _manifest;
+
+    /// <summary>
+    /// Whether SUMO had nothing left to simulate at the last advance, which then answered false.
+    /// </summary>
+    public bool ScenarioFinished => _scenarioFinished;
 
     /// <summary>The cameras registered with the session, in actor order.</summary>
     public IReadOnlyCollection<ActorId> Cameras => _cameras.Keys;
@@ -569,6 +606,7 @@ public sealed class SumoDriveSession : IDisposable
         RequireAUsableDrawDistance(options);
         RequireARenderSetPolicy(options);
         RequireAUsableWorldTruthTrack(options);
+        RequireAUsableRunManifest(options);
         HeadlightRule? headlights = options.VehicleLampsDriven
             ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
             : null;
@@ -743,6 +781,7 @@ public sealed class SumoDriveSession : IDisposable
                 // -- this process's own -- from being given back. A start refused writes no track: it
                 // rendered nothing, and a track begun for it would read as a run cut off.
                 Attempt(giveBack, "delete the world truth track", () => session?._track?.Discard());
+                Attempt(giveBack, "delete the run manifest", () => session?._manifest?.Discard());
                 Attempt(giveBack, "give back the world's sun", () => session?._sun?.Dispose());
                 Attempt(giveBack, "destroy the bodies the session spawned", () => pool?.DestroyAll());
                 Attempt(giveBack, "give back the population lease", lease.Dispose);
@@ -974,6 +1013,7 @@ public sealed class SumoDriveSession : IDisposable
 
         // Closed already where it was told the end; closed here where telling it failed.
         Attempt(failures, "close the world truth track", () => _track?.Dispose());
+        Attempt(failures, "close the run manifest", () => _manifest?.Dispose());
         Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
         // Before the bodies go, though they take their own supervision with them: the plan and the
         // absences are held for the world, and outlive every body.
@@ -1588,6 +1628,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private IReadOnlyList<string> ReconcileAndRead()
     {
+        _releasedThisFrame.Clear();
         _events = _simulation.ReadEvents();
         IReadOnlyList<string> departed = _events.Departed;
         _population.Reconcile(departed, _events.Arrived);
@@ -1636,7 +1677,10 @@ public sealed class SumoDriveSession : IDisposable
 
         var step = new SumoStepRecord(_tickIndex, _frameSeconds, afterFastForward, _events, _collisionsThisFrame,
                                       [.. _notInsertedThisFrame], _population.LastVanished, _next,
-                                      _renderSet.RenderedVehicleIds, Report.LastAdmissionPass!, _vehicleQueries);
+                                      _renderSet.RenderedVehicleIds, Report.LastAdmissionPass!, _vehicleQueries)
+        {
+            Released = [.. _releasedThisFrame],
+        };
         foreach (ISumoStepObserver observer in _observers)
         {
             observer.OnSumoStep(step);
@@ -1663,8 +1707,7 @@ public sealed class SumoDriveSession : IDisposable
             _renderSets.TryGetRenderSet(frame, out RenderSet set) ? set : null,
             _illumination.TryGetDeclaration(frame, out IlluminationDeclaration declared) ? declared : null)
         {
-            SunElevationDegrees = _sunReadThisTick?.ElevationDegrees,
-            SunCorrectedElevationDegrees = _sunReadThisTick?.CorrectedElevationDegrees,
+            Sun = _sunReadThisTick,
         };
         foreach (ISumoStepObserver observer in _observers)
         {
@@ -2111,7 +2154,9 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         Report.CountRelease(interval.ReleaseReason);
-        _options.OnRelease?.Invoke(interval with { Actor = actor });
+        RenderedVehicleInterval released = interval with { Actor = actor };
+        _releasedThisFrame.Add(released);
+        _options.OnRelease?.Invoke(released);
     }
 
     /// <summary>
@@ -2392,6 +2437,47 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         WorldTruthTrackWriter.RefuseAnExistingTrack(path);
+    }
+
+    /// <summary>
+    /// Refuse a run manifest with no usable path, a header that is not a JSON object, or a path that
+    /// already holds a manifest or is the world truth track's.
+    /// </summary>
+    /// <remarks>
+    /// Settled before anything is started, as the track's are. A header given with no path is a header
+    /// nobody writes; a manifest already on disk belongs to another run.
+    /// </remarks>
+    private static void RequireAUsableRunManifest(SumoDriveSessionOptions options)
+    {
+        if (options.RunManifestPath is not { } path)
+        {
+            if (options.RunManifestHeader is not null)
+            {
+                throw new CoSimSessionRefusedException(
+                    "The run manifest was given a header and no path to write it to. Give the manifest a path, "
+                    + "or leave the header unset.");
+            }
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new CoSimSessionRefusedException(
+                "The run manifest was given a blank path. Give the file it is to be written to, or leave it "
+                + "unset to write none.");
+        }
+
+        if (options.WorldTruthTrackPath is { } track
+            && string.Equals(Path.GetFullPath(track), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CoSimSessionRefusedException(
+                $"The run manifest and the world truth track are both to be written to {path}. Each is a file of "
+                + "its own.");
+        }
+
+        RunManifestWriter.RequireAHeaderObject(options.RunManifestHeader);
+        RunManifestWriter.RefuseAnExistingManifest(path);
     }
 
     /// <summary>
