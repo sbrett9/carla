@@ -435,7 +435,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "729c382dcb9ac3f08fbde95340335d392e21aeff1d383a213ecf1475741b5f8e"
+        "sha256": "e9c39c9484cf345bb2b7f1f6eb3e49ece6d105bce51d4b7c7d825bdd27eaaabb"
       }
     },
     "world": {
@@ -491,9 +491,9 @@
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {
-      "core_version": 1,
+      "core_version": 2,
       "namespaces": [],
-      "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+      "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
     },
     "traffic": {
       "sumo_seed": 42,

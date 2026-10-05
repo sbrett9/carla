@@ -448,7 +448,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_half_hour.supervision.json",
-        "sha256": "e9ef0ca63bd41afca8aa69e5d9b469293a85c497d2fff25540df3c4b19d090fd"
+        "sha256": "d3ad18bb15b553b4d7cea23b2f00ca70a27d94adb310d5b1aae14ec64e4239d3"
       }
     },
     "world": {
@@ -504,9 +504,9 @@
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {
-      "core_version": 1,
+      "core_version": 2,
       "namespaces": [],
-      "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+      "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
     },
     "traffic": {
       "sumo_seed": 42,

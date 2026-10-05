@@ -4,6 +4,7 @@ using System.Text.Json;
 using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Supervision;
 
 namespace CarlaNet.CoSim;
 
@@ -81,20 +82,23 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     /// <summary>The format of the track and its summary, written in the summary.</summary>
     public const int FormatVersion = 2;
 
+    // A render state and its reasons are core vocabulary terms (06 §3.7): the track writes them by the
+    // names the published vocabulary gives them, from the one table.
+
     /// <summary>A body drew the vehicle on the frame.</summary>
-    public const string RenderedState = "rendered";
+    public static readonly string RenderedState = CoreVocabulary.Name(RenderState.Rendered);
 
     /// <summary>No body drew it: SUMO simulated it, and no frame shows it.</summary>
-    public const string SimulatedOnlyState = "simulated_only";
+    public static readonly string SimulatedOnlyState = CoreVocabulary.Name(RenderState.SimulatedOnly);
 
-    private const string NoWorld = "no_world";
-    private const string LeftTheSimulation = "left_the_simulation";
-    private const string Vanished = "vanished";
-    private const string OutsideLimit = "outside_limit";
-    private const string NoBlueprint = "no_blueprint";
-    private const string UnknownExtent = "unknown_extent";
-    private const string NoGround = "no_ground";
-    private const string NotDrawn = "not_drawn";
+    private static readonly string NoWorld = CoreVocabulary.Name(RenderReason.NoWorld);
+    private static readonly string LeftTheSimulation = CoreVocabulary.Name(RenderReason.LeftTheSimulation);
+    private static readonly string Vanished = CoreVocabulary.Name(RenderReason.Vanished);
+    private static readonly string OutsideLimit = CoreVocabulary.Name(RenderReason.OutsideLimit);
+    private static readonly string NoBlueprint = CoreVocabulary.Name(RenderReason.NoBlueprint);
+    private static readonly string UnknownExtent = CoreVocabulary.Name(RenderReason.UnknownExtent);
+    private static readonly string NoGround = CoreVocabulary.Name(RenderReason.NoGround);
+    private static readonly string NotDrawn = CoreVocabulary.Name(RenderReason.NotDrawn);
 
     /// <summary>
     /// A sun elevation to a millionth of a degree, the solar block's precision, so a band read back from

@@ -7,11 +7,11 @@
   "network_digest": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
   "config_digest": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f",
   "additional_digest": null,
-  "vocabulary_version": 1,
-  "vocabulary_digest": "8a7b088c401f5e7722dbfc7a6ff5d9a8e04610e28dd38837800718d4dbf0c4c4",
+  "vocabulary_version": 2,
+  "vocabulary_digest": "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad",
   "vocabulary": {
     "core": {
-      "vocabulary_version": 1,
+      "vocabulary_version": 2,
       "source": "06_Truth_And_Annotation.md §3.7",
       "terms": {
         "supervision_state": [
@@ -49,7 +49,8 @@
           "out_of_frame",
           "occluded",
           "not_rendered",
-          "site_unobserved"
+          "site_unobserved",
+          "beyond_draw_distance"
         ],
         "illumination_band": [
           "day",
@@ -68,6 +69,26 @@
         ],
         "reserved_phase": [
           "vacancy"
+        ],
+        "interval_anchor": [
+          "depart",
+          "stop",
+          "stop_end",
+          "phase"
+        ],
+        "render_state": [
+          "rendered",
+          "simulated_only"
+        ],
+        "render_reason": [
+          "no_world",
+          "left_the_simulation",
+          "vanished",
+          "outside_limit",
+          "no_blueprint",
+          "unknown_extent",
+          "no_ground",
+          "not_drawn"
         ]
       }
     },
