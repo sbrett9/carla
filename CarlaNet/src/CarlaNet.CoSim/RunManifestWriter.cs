@@ -1,10 +1,12 @@
 using System.Buffers;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
 using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Supervision;
 
 namespace CarlaNet.CoSim;
 
@@ -31,6 +33,21 @@ namespace CarlaNet.CoSim;
 /// beside what the session established itself: the scenario's files and digests from its compile lock,
 /// the supervision plan and its vocabulary, the SUMO settings the session checked and runs under, the
 /// clock, the render set, and the epoch and illumination declared (doc 04 C9 §11.8).</description></item>
+/// <item><term><c>instance</c>, <c>series</c>, <c>cohort</c></term><description>Next, where the compile
+/// lock binds a supervision plan: each of its pattern instances, recurring series and cohorts as declared
+/// -- identity, supervision state, labels and parameters, an instance's participants with their roles and
+/// the intervals it declares with their anchors, a series' slots.</description></item>
+/// <item><term><c>interval_opened</c>, <c>interval_closed</c></term><description>One of the plan's
+/// intervals as the supervision binder opens and closes it, named by its <c>(instance_id, participant,
+/// phase)</c> triple: the declared onsets, the committed onset by TraCI's clock, the rendered frame that
+/// showed it where one did, and whether it began before the window; on closing, why
+/// (<c>closed_by</c>, in the core vocabulary's words), when SUMO committed its end, and the spans its
+/// participant was not drawn. An interval SUMO never inserted a participant for closes without having
+/// opened.</description></item>
+/// <item><term><c>supervision_defect</c></term><description>A seam defect the binder found -- what it
+/// found wrong with the seam rather than the scenario (<see cref="SupervisionBinder.Defects"/>) -- in its
+/// own words, written as the binder next opens or closes an interval, at the next frame, or at the
+/// close, whichever comes first.</description></item>
 /// <item><term><c>sensor_placed</c></term><description>A camera the caller placed and named
 /// (<see cref="PlaceSensor"/>).</description></item>
 /// <item><term><c>render_admitted</c>, <c>render_released</c></term><description>A vehicle taking up a
@@ -48,18 +65,27 @@ namespace CarlaNet.CoSim;
 /// whether the run is eligible for a corpus (doc 04 C9 §11.8.1, §11.8.2).</description></item>
 /// <item><term><c>manifest_closed</c></term><description>Last: why the run ended --
 /// <c>scenario_finished</c>, <c>caller_stopped</c> or <c>run_stopped</c> with its stage and cause -- with
-/// the caller's own reason where it gave one, and what the manifest holds.</description></item>
+/// the caller's own reason where it gave one, what the manifest holds, the intervals still open
+/// (<c>open_intervals</c>) and the word the binder closes them with after this row
+/// (<c>open_intervals_close_as</c>), and the plan's intervals nothing in the run opened or closed
+/// (<c>never_opened</c>).</description></item>
 /// </list>
 ///
 /// <para><b>Closed by its caller, or by the session's end.</b> A caller that reads the run's closing gates
 /// before it disposes the session closes the manifest first (<see cref="Close"/>), so the gate reads the
-/// terminal row; a manifest still open when the session ends is closed then. Supervision rows join the
-/// manifest once the interval binder writes them.</para>
+/// terminal row; a manifest still open when the session ends is closed then.</para>
+///
+/// <para><b>Every planned interval, once, in either case.</b> The terminal row comes before the binder
+/// closes the intervals the session's end leaves open, so those are listed on it rather than written as
+/// closed; with the opened and closed rows and <c>never_opened</c>, a closed manifest names every
+/// <c>(instance_id, participant, phase)</c> triple the plan declares, which two runs of one scenario share
+/// (06 D6.8). A manifest with no terminal row writes no <c>open_at_interruption</c>: a reader infers it,
+/// for each triple opened and never closed in the rows already written.</para>
 ///
 /// <para>Built and registered by the session (<see cref="SumoDriveSessionOptions.RunManifestPath"/>).
 /// Every call comes from the thread that advances the session.</para>
 /// </remarks>
-public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
+public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalSink, IDisposable
 {
     /// <summary>The manifest's format, written on its opening row.</summary>
     public const int FormatVersion = 1;
@@ -80,6 +106,12 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
     private const string TeleportRow = "teleport";
     private const string WindowOpenRow = "solar_window_open";
     private const string WindowEndRow = "solar_window_end";
+    private const string InstanceRow = "instance";
+    private const string SeriesRow = "series";
+    private const string CohortRow = "cohort";
+    private const string IntervalOpenedRow = "interval_opened";
+    private const string IntervalClosedRow = "interval_closed";
+    private const string DefectRow = "supervision_defect";
 
     private static readonly JsonWriterOptions JsonOptions = new()
     {
@@ -99,6 +131,10 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
     private readonly Dictionary<string, RenderedVehicle> _drawn = new(StringComparer.Ordinal);
     private readonly HashSet<(string Collider, string Victim)> _collisionsOpen = [];
     private readonly List<string> _admittedAtThisPass = [];
+    private readonly Dictionary<(string Instance, string? Participant, string Phase), SupervisionIntervalRecord> _openIntervals = [];
+    private readonly HashSet<(string Instance, string? Participant, string Phase)> _bound = [];
+    private SupervisionBinder? _binder;
+    private int _defectsWritten;
     private int _collisionSpansWritten;
     private double? _lastSumoFrameSeconds;
     private RenderedFrameRecord? _lastFrame;
@@ -139,6 +175,15 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
 
     /// <summary>Rows for the events that change the population: collisions, vehicles not inserted, emergency stops, teleports.</summary>
     public long Events { get; private set; }
+
+    /// <summary>Interval openings written.</summary>
+    public long IntervalsOpened { get; private set; }
+
+    /// <summary>Interval closings written.</summary>
+    public long IntervalsClosed { get; private set; }
+
+    /// <summary>Seam defects written, as the supervision binder found them.</summary>
+    public long SupervisionDefects { get; private set; }
 
     /// <summary>
     /// Refuse a header that is not a JSON object: the opening row carries it verbatim, and anything else
@@ -208,6 +253,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
             file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
             var writer = new RunManifestWriter(path, file, options, report, scenarioFinished);
             writer.WriteOpened();
+            writer.WritePlan();
             return writer;
         }
         catch (Exception failed) when (failed is IOException or UnauthorizedAccessException)
@@ -267,6 +313,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
         Guard(() =>
         {
             _lastSumoFrameSeconds = step.FrameSeconds;
+            WriteDefects();
 
             // Released before admitted, as the pass releases before it admits.
             foreach (RenderedVehicleInterval released in step.Released)
@@ -337,6 +384,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
         Guard(() =>
         {
             _lastFrame = frame;
+            WriteDefects();
             if (frame.InWindow && frame.IsCaptureTick)
             {
                 _windowCaptureTicks++;
@@ -384,6 +432,89 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
 
             _pending.RemoveRange(kept, _pending.Count - kept);
         });
+    }
+
+    /// <summary>
+    /// Write an interval as the supervision binder opens it: its row's identity, its declared onsets and
+    /// what the run committed of it so far.
+    /// </summary>
+    /// <exception cref="CoSimSessionRefusedException">The manifest could not be written.</exception>
+    public void OnIntervalOpened(SupervisionIntervalRecord interval)
+    {
+        ArgumentNullException.ThrowIfNull(interval);
+        if (_manifestClosed)
+        {
+            return;
+        }
+
+        Guard(() =>
+        {
+            WriteDefects();
+            (string, string?, string) key = KeyOf(interval);
+            _openIntervals[key] = interval;
+            _bound.Add(key);
+            WriteRow(IntervalOpenedRow, json =>
+            {
+                // The instant it opened: committed by an event, or failing that declared; none where neither
+                // is known, as for a phase entered before the window, whose instant cannot be recovered.
+                WriteNumberOrNull(json, "sim_time_s", interval.CommittedStartSeconds ?? interval.DeclaredStartSeconds);
+                WriteIntervalRow(json, interval);
+                json.WriteString("role", interval.Role);
+                WriteOnsets(json, interval);
+            });
+            IntervalsOpened++;
+        });
+    }
+
+    /// <summary>
+    /// Write an interval as the supervision binder closes it: why, when, its onsets as the run bound them,
+    /// and the spans its participant was not drawn.
+    /// </summary>
+    /// <exception cref="CoSimSessionRefusedException">The manifest could not be written.</exception>
+    public void OnIntervalClosed(SupervisionIntervalRecord interval)
+    {
+        ArgumentNullException.ThrowIfNull(interval);
+        if (_manifestClosed)
+        {
+            return;
+        }
+
+        Guard(() =>
+        {
+            WriteDefects();
+            (string, string?, string) key = KeyOf(interval);
+            _openIntervals.Remove(key);
+            _bound.Add(key);
+            WriteRow(IntervalClosedRow, json =>
+            {
+                WriteNumberOrNull(json, "sim_time_s", interval.ClosedAtSeconds);
+                WriteIntervalRow(json, interval);
+                json.WriteString("closed_by", interval.ClosedBy is { } closedBy ? CoreVocabulary.Name(closedBy) : null);
+                WriteOnsets(json, interval);
+                WriteNumberOrNull(json, "committed_end_s", interval.CommittedEndSeconds);
+                json.WriteStartArray("not_drawn");
+                foreach (NotDrawnSpan span in interval.NotDrawn)
+                {
+                    json.WriteStartObject();
+                    json.WriteNumber("from_s", span.FromSeconds);
+                    json.WriteNumber("to_s", span.ToSeconds);
+                    json.WriteEndObject();
+                }
+
+                json.WriteEndArray();
+            });
+            IntervalsClosed++;
+        });
+    }
+
+    /// <summary>
+    /// Write the seam defects the session's supervision binder finds, as it finds them: told once the
+    /// session has built it, after the manifest.
+    /// </summary>
+    internal void Supervise(SupervisionBinder binder)
+    {
+        ArgumentNullException.ThrowIfNull(binder);
+        _binder = binder;
     }
 
     /// <summary>
@@ -823,7 +954,6 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
         }
     }
 
-
     private void WriteClosing(string ended, CoSimRunStop? stopped, string? reason, double? lastSumoFrameSeconds,
                               double? lastRenderedSeconds, ulong? lastRenderedFrame)
     {
@@ -836,6 +966,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
             }
 
             _pending.Clear();
+            WriteDefects();
             WriteWindowEnd();
             WriteRow(ClosedRow, json =>
             {
@@ -850,12 +981,259 @@ public sealed class RunManifestWriter : ISumoStepObserver, IDisposable
                 json.WriteNumber("render_released", Releases);
                 json.WriteNumber("still_in_render_set", _held.Count);
                 json.WriteNumber("events", Events);
+                WriteSupervisionAtClose(json, ended);
                 json.WriteNumber("rows_before", Rows);
                 json.WriteString("closed_wall_utc",
                                  DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
             });
             _manifestClosed = true;
         });
+    }
+
+    /// <summary>
+    /// What the terminal row says of the plan's intervals: how many opened and closed, the defects, every
+    /// interval still open as the run ended and how the binder closes it once the session ends, and every
+    /// one nothing in the run opened or closed.
+    /// </summary>
+    /// <remarks>
+    /// The binder closes the intervals still open when the session ends -- <c>scenario_end</c> where SUMO had
+    /// nothing left, <c>capture_window_end</c> otherwise -- after this row, which is the manifest's last, so
+    /// they are listed here as open rather than written as closed. A manifest with no terminal row is a run
+    /// that was interrupted, and an interval opened in it and never closed was open at the interruption.
+    /// </remarks>
+    private void WriteSupervisionAtClose(Utf8JsonWriter json, string ended)
+    {
+        json.WriteNumber("intervals_opened", IntervalsOpened);
+        json.WriteNumber("intervals_closed", IntervalsClosed);
+        json.WriteNumber("supervision_defects", SupervisionDefects);
+        json.WriteStartArray("open_intervals");
+        foreach (SupervisionIntervalRecord open in _openIntervals.Values)
+        {
+            json.WriteStartObject();
+            WriteIntervalRow(json, open);
+            WriteNumberOrNull(json, "opened_s", open.CommittedStartSeconds ?? open.DeclaredStartSeconds);
+            json.WriteBoolean("begun_before_window", open.BegunBeforeWindow);
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
+        json.WriteString("open_intervals_close_as", CoreVocabulary.Name(
+            ended == "scenario_finished" ? ClosedBy.ScenarioEnd : ClosedBy.CaptureWindowEnd));
+        json.WriteStartArray("never_opened");
+        if (_report.CompileLock.Plan is { } plan)
+        {
+            foreach (PatternInstance instance in plan.Instances)
+            {
+                foreach (PlannedInterval planned in instance.Intervals)
+                {
+                    if (!_bound.Contains((instance.InstanceId, planned.EntityId, planned.Phase)))
+                    {
+                        json.WriteStartObject();
+                        json.WriteString("instance_id", instance.InstanceId);
+                        json.WriteString("participant", planned.EntityId);
+                        json.WriteString("phase", planned.Phase);
+                        json.WriteEndObject();
+                    }
+                }
+            }
+        }
+
+        json.WriteEndArray();
+    }
+
+    /// <summary>The row an interval is: its instance, its participant and its phase (06 D6.8).</summary>
+    private static (string Instance, string? Participant, string Phase) KeyOf(SupervisionIntervalRecord interval) =>
+        (interval.InstanceId, interval.EntityId, interval.Phase);
+
+    private static void WriteIntervalRow(Utf8JsonWriter json, SupervisionIntervalRecord interval)
+    {
+        json.WriteString("instance_id", interval.InstanceId);
+        json.WriteString("participant", interval.EntityId);
+        json.WriteString("phase", interval.Phase);
+    }
+
+    /// <summary>
+    /// An interval's onsets: what its author declared, what SUMO committed by the bridge's clock, and the
+    /// rendered frame that showed it, each null where it did not happen.
+    /// </summary>
+    private static void WriteOnsets(Utf8JsonWriter json, SupervisionIntervalRecord interval)
+    {
+        WriteNumberOrNull(json, "declared_start_s", interval.DeclaredStartSeconds);
+        WriteNumberOrNull(json, "declared_end_s", interval.DeclaredEndSeconds);
+        WriteNumberOrNull(json, "declared_duration_s", interval.DeclaredDurationSeconds);
+        WriteNumberOrNull(json, "committed_start_s", interval.CommittedStartSeconds);
+        WriteNumberOrNull(json, "observed_start_s", interval.ObservedStartSeconds is { } observed ? Rendered(observed) : null);
+        WriteNumberOrNull(json, "observed_start_frame", interval.ObservedStartFrame);
+        json.WriteBoolean("begun_before_window", interval.BegunBeforeWindow);
+    }
+
+    /// <summary>The supervision binder's seam defects found since the last were written.</summary>
+    private void WriteDefects()
+    {
+        if (_binder is not { } binder)
+        {
+            return;
+        }
+
+        IReadOnlyList<string> defects = binder.Defects;
+        for (; _defectsWritten < defects.Count; _defectsWritten++)
+        {
+            string defect = defects[_defectsWritten];
+            WriteRow(DefectRow, json =>
+            {
+                // Found at or before the SUMO frame last read; the defect names its own instants.
+                WriteNumberOrNull(json, "found_by_s", _lastSumoFrameSeconds);
+                json.WriteString("defect", defect);
+            });
+            SupervisionDefects++;
+        }
+    }
+
+    /// <summary>
+    /// The supervision plan the compile lock bound, row by row: every instance with its participants and
+    /// the intervals it declares, every recurring series with its slots, and every cohort, each as declared.
+    /// </summary>
+    private void WritePlan()
+    {
+        if (_report.CompileLock.Plan is not { } plan)
+        {
+            return;
+        }
+
+        foreach (PatternInstance instance in plan.Instances)
+        {
+            WriteRow(InstanceRow, json =>
+            {
+                json.WriteString("instance_id", instance.InstanceId);
+                json.WriteString("supervision", CoreVocabulary.Name(instance.Supervision));
+                json.WriteString("realisation", CoreVocabulary.Name(instance.Realisation));
+                WriteStrings(json, "labels", instance.Labels);
+                WriteParameters(json, instance.Parameters);
+                WriteStringsOrNull(json, "hard_negative_for", instance.HardNegativeFor);
+                json.WriteString("series_ref", instance.SeriesRef);
+                json.WriteString("slot_ref", instance.SlotRef);
+                WriteStrings(json, "aoi_refs", instance.AoiRefs);
+                json.WriteStartArray("participants");
+                foreach (InstanceParticipant participant in instance.Participants)
+                {
+                    json.WriteStartObject();
+                    json.WriteString("participant", participant.EntityId);
+                    json.WriteString("sumo_id", participant.SumoId);
+                    json.WriteString("role", participant.Role);
+                    json.WriteEndObject();
+                }
+
+                json.WriteEndArray();
+                json.WriteStartArray("intervals");
+                foreach (PlannedInterval planned in instance.Intervals)
+                {
+                    json.WriteStartObject();
+                    json.WriteString("participant", planned.EntityId);
+                    json.WriteString("phase", planned.Phase);
+                    json.WriteString("anchor_start", planned.Anchor?.Start.Spelled);
+                    json.WriteString("anchor_end", planned.Anchor?.End?.Spelled);
+                    WriteNumberOrNull(json, "declared_start_s", planned.DeclaredStartSeconds);
+                    json.WriteString("declared_start_civil", planned.DeclaredStartCivil);
+                    WriteNumberOrNull(json, "declared_end_s", planned.DeclaredEndSeconds);
+                    json.WriteString("declared_end_civil", planned.DeclaredEndCivil);
+                    WriteNumberOrNull(json, "declared_duration_s", planned.DeclaredDurationSeconds);
+                    json.WriteEndObject();
+                }
+
+                json.WriteEndArray();
+                json.WritePropertyName("expected");
+                if (instance.Expected is { } expected)
+                {
+                    json.WriteStartObject();
+                    json.WriteString("role", expected.Role);
+                    json.WriteString("expected_entity_id", expected.ExpectedEntityId);
+                    json.WriteString("site_lane", expected.SiteLane);
+                    WriteNumberOrNull(json, "site_pos_m", expected.SitePositionMetres);
+                    json.WriteNumber("declared_start_s", expected.DeclaredStartSeconds);
+                    WriteNumberOrNull(json, "declared_end_s", expected.DeclaredEndSeconds);
+                    json.WriteEndObject();
+                }
+                else
+                {
+                    json.WriteNullValue();
+                }
+            });
+        }
+
+        foreach (RecurringSeries series in plan.Series)
+        {
+            WriteRow(SeriesRow, json =>
+            {
+                json.WriteString("series_id", series.SeriesId);
+                json.WriteString("rota_ref", series.RotaRef);
+                json.WriteString("cadence", CoreVocabulary.Name(series.Cadence));
+                json.WriteString("member_role", series.MemberRole);
+                json.WriteString("supervision", CoreVocabulary.Name(series.Supervision));
+                WriteStrings(json, "labels", series.Labels);
+                WriteParameters(json, series.Parameters);
+                WriteStringsOrNull(json, "hard_negative_for", series.HardNegativeFor);
+                json.WriteStartArray("slots");
+                foreach (SeriesSlot slot in series.Slots)
+                {
+                    json.WriteStartObject();
+                    json.WriteString("slot_key", slot.SlotKey);
+                    json.WriteString("aoi_ref", slot.AoiRef);
+                    json.WriteNumber("declared_start_s", slot.DeclaredStartSeconds);
+                    WriteNumberOrNull(json, "declared_end_s", slot.DeclaredEndSeconds);
+                    json.WriteString("expected_entity_id", slot.ExpectedEntityId);
+                    json.WriteString("realised_by", slot.RealisedBy);
+                    json.WriteEndObject();
+                }
+
+                json.WriteEndArray();
+            });
+        }
+
+        foreach (CohortSupervision cohort in plan.Cohorts)
+        {
+            WriteRow(CohortRow, json =>
+            {
+                json.WriteString("flow_id", cohort.FlowId);
+                json.WriteString("supervision", CoreVocabulary.Name(cohort.Supervision));
+                WriteStrings(json, "labels", cohort.Labels);
+                WriteParameters(json, cohort.Parameters);
+            });
+        }
+    }
+
+    private static void WriteStrings(Utf8JsonWriter json, string name, IEnumerable<string> values)
+    {
+        json.WriteStartArray(name);
+        foreach (string value in values)
+        {
+            json.WriteStringValue(value);
+        }
+
+        json.WriteEndArray();
+    }
+
+    private static void WriteStringsOrNull(Utf8JsonWriter json, string name, ImmutableArray<string>? values)
+    {
+        if (values is { } present)
+        {
+            WriteStrings(json, name, present);
+        }
+        else
+        {
+            json.WriteNull(name);
+        }
+    }
+
+    private static void WriteParameters(Utf8JsonWriter json, IReadOnlyDictionary<string, JsonElement> parameters)
+    {
+        json.WriteStartObject("parameters");
+        foreach ((string key, JsonElement value) in parameters)
+        {
+            json.WritePropertyName(key);
+            value.WriteTo(json);
+        }
+
+        json.WriteEndObject();
     }
 
     private void WriteWindowEnd()
