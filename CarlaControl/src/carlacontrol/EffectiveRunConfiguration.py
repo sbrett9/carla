@@ -157,15 +157,17 @@ class EffectiveRunConfiguration:
     def channel_resolutions(self, index: int) -> dict[str, FieldResolution]:
         return dict(self._channels[index])
 
-    def channel_description(self, index: int) -> ChannelDescription:
-        """The channel as a `ChannelDescription`.
+    def channel_description(self, index: int, unnamed: bool = False) -> ChannelDescription:
+        """The channel as a `ChannelDescription`; under `unnamed`, without its `sensor_id`, for a
+        check that has refused the name on its own and wants every other problem of the channel.
 
         Raises:
             ValueError: when the description is refused, naming every problem.
         """
         values = self.channel_values(index)
         names = ChannelDescription.field_names()
-        return ChannelDescription(**{name: values[name] for name in names})
+        return ChannelDescription(**{name: None if unnamed and name == "sensor_id" else values[name]
+                                     for name in names})
 
     def channel_sensor_label(self, index: int) -> str:
         """The channel's `sensor_id`, or `channel-<n>` where it has none (a single channel): what a

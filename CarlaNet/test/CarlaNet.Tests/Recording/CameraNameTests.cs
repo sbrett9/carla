@@ -1,7 +1,9 @@
 // Every camera's recordings are named after it, and the name is its platform track's callsign: see
 // CameraName, and FrameRecorderCameraNameTests for the same rule through a real recorder. The cases
 // here are the ones CarlaControl's mirror of the rule (carlacontrol.CameraName, which run_capture's
-// offline checks use) is tested against, so the two are held to the same answers.
+// offline checks use) is tested against, so the two are held to the same answers. A name is 1 to 63
+// ASCII letters, digits, underscores and hyphens -- Overwatch_1, Southeast_1700m_orbit -- and every
+// refusal says so.
 using CarlaNet.Recording;
 
 namespace CarlaNet.Tests.Recording;
@@ -17,57 +19,65 @@ public class CameraNameTests
 
     [Theory]
     [InlineData("OVERWATCH")]
+    [InlineData("Overwatch_1")]
+    [InlineData("Southeast_1700m_orbit")]
+    [InlineData("NapOfEarth_2")]
     [InlineData("DECK-I25")]
-    [InlineData("Deck Cam #1 (I-25)")]
     [InlineData("a")]
-    [InlineData("cam.v2")]
     [InlineData("-lead")]
     [InlineData("CONSOLE")]
     [InlineData("COM10")]
     [InlineData("CON_1")]
+    [InlineData("Front_1")]
+    [InlineData("frontier")]
     [InlineData("CARLA-SENSOR-")]
     [InlineData("CARLA-SENSOR-12a")]
     [InlineData("123456789012345678901234567890123456789012345678901234567890123")]
-    public void A_Name_Every_File_System_And_Record_Keeps_As_Given_Is_Accepted(string name)
+    public void A_Short_Plain_Name_Is_Accepted(string name)
     {
         Assert.Null(CameraName.Problem(name));
     }
 
     [Theory]
     [InlineData("", "cannot be empty")]
-    [InlineData("1234567890123456789012345678901234567890123456789012345678901234", "at most 63")]
-    [InlineData("DECK:I25", "Windows file name")]
-    [InlineData("a/b", "Windows file name")]
-    [InlineData("a\\b", "Windows file name")]
-    [InlineData("a<b", "Windows file name")]
-    [InlineData("a>b", "Windows file name")]
-    [InlineData("a\"b", "Windows file name")]
-    [InlineData("a|b", "Windows file name")]
-    [InlineData("a?b", "Windows file name")]
-    [InlineData("a*b", "Windows file name")]
-    [InlineData(" lead", "drops from a file name")]
-    [InlineData("trail ", "drops from a file name")]
-    [InlineData("dot.", "drops from a file name")]
-    [InlineData(".", "drops from a file name")]
-    [InlineData("..", "drops from a file name")]
+    [InlineData("1234567890123456789012345678901234567890123456789012345678901234", "is 64 characters long")]
+    [InlineData("Deck Cam 1", "holds a space")]
+    [InlineData(" lead", "holds a space")]
+    [InlineData("cam.v2", "holds '.'")]
+    [InlineData("dot.", "holds '.'")]
+    [InlineData(".", "holds '.'")]
+    [InlineData("Aux.cam", "holds '.'")]
+    [InlineData("DECK:I25", "holds ':'")]
+    [InlineData("a/b", "holds '/'")]
+    [InlineData("a\\b", "holds '\\'")]
+    [InlineData("a<b", "holds '<'")]
+    [InlineData("a>b", "holds '>'")]
+    [InlineData("a\"b", "holds '\"'")]
+    [InlineData("a|b", "holds '|'")]
+    [InlineData("a?b", "holds '?'")]
+    [InlineData("a*b", "holds '*'")]
+    [InlineData("Deck#1", "holds '#'")]
+    [InlineData("Deck(1)", "holds '('")]
+    [InlineData("tab\there", "control character U+0009")]
+    [InlineData("caf\u00e9", "U+00E9), which is not ASCII")]
     [InlineData("CON", "keeps for a device")]
     [InlineData("con", "keeps for a device")]
-    [InlineData("Aux.cam", "keeps for a device")]
-    [InlineData("nul .x", "keeps for a device")]
+    [InlineData("Nul", "keeps for a device")]
     [InlineData("COM0", "keeps for a device")]
     [InlineData("COM1", "keeps for a device")]
     [InlineData("LPT9", "keeps for a device")]
-    [InlineData("tab\there", "control character U+0009")]
-    [InlineData("café", "printable ASCII")]
+    [InlineData("front", "role name the server gives sensors")]
+    [InlineData("Back_Left", "role name the server gives sensors")]
     [InlineData("CARLA-SENSOR-12", "another camera's name")]
     [InlineData("carla-sensor-12", "another camera's name")]
-    public void A_Name_That_Would_Not_Reach_Every_File_And_Record_Unchanged_Is_Refused_With_The_Reason(
-        string name, string reason)
+    public void A_Name_Outside_The_Rule_Is_Refused_Saying_What_Is_Allowed(string name, string reason)
     {
         string? problem = CameraName.Problem(name);
 
         Assert.NotNull(problem);
         Assert.Contains(reason, problem);
+        // Every refusal points at what would be accepted.
+        Assert.Contains("Overwatch_1", problem);
     }
 
     [Fact]

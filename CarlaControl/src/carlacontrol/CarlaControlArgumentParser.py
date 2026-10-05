@@ -582,15 +582,16 @@ class CarlaControlArgumentParser:
             type=CameraName.argument,
             default=None,
             metavar="NAME",
-            help="the camera's name. Every capture is named after it, "
-            "<NAME>_<local capture time>.png and .xml, and it is the callsign of the camera's "
-            "platform track, so cameras sharing a world are told apart in their files and their "
-            "telemetry. Default: CARLA-SENSOR-<camera id>, which no other camera on the server "
-            "holds. A name is used as given or refused, never rewritten: 1 to 63 printable ASCII "
-            "characters, none of < > : \" / \\ | ? *, no space at either end and no dot at the end, "
-            "not a Windows device name (CON, NUL, COM1, ...) and not of the form "
-            "CARLA-SENSOR-<number>. A name another camera in the world holds, in any case, is "
-            "refused when the camera is spawned. --platform-callsign is the older spelling.",
+            help="the camera's name, given as it is created, such as Overwatch_1, "
+            "Southeast_1700m_orbit or NapOfEarth_2: 1 to 63 characters, each an ASCII letter, "
+            "digit, underscore or hyphen, and not a Windows device name (CON, NUL, COM1, ...), a "
+            "stock sensor role name (front, back, left, right, ...) or CARLA-SENSOR-<number>. "
+            "Every capture is named after it, <NAME>_<local capture time>.png and .xml, and it is "
+            "the callsign of the camera's platform track, so cameras sharing a world are told "
+            "apart in their files and their telemetry. A name is used as given or refused, never "
+            "rewritten, and one another camera in the world holds, in any case, is refused when "
+            "the camera is spawned. Default: CARLA-SENSOR-<camera id>, which no other camera on "
+            "the server holds. --platform-callsign is the older spelling.",
         )
         rec.add_argument(
             "--platform-uid",

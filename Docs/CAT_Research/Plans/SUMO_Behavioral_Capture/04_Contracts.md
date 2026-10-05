@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 27 | 2026-10-05. `C4`: a camera name is short and plain, as the owner asked — `Overwatch_1`, `Southeast_1700m_orbit`, `NapOfEarth_2`: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and no other character (§6.3). A Windows device name, a role name the server gives sensors (`front`, `back`, …) and another camera's `CARLA-SENSOR-<digits>` default stay refused, and every refusal says what is allowed. `run_free_move_camera.py` names its camera too (§6.1) |
 | 26 | 2026-10-02. `C10`: the world truth track ([`06`](06_Truth_And_Annotation.md) §8.3) joins §12.7's artifacts. It is written under W2, the header first and every row flushed as one line, so a track cut off anywhere is the rows before the cut; its summary is written under W1, and its `ended`, written as the session ends, is the closing statement. A capture run always writes it, under its capture directory's `truth/` |
 | 25 | 2026-10-02. `C9`: every capture's `<_solar>` and `carla:solar` carry `illumination_band`, from the achieved sun and never the declared time, and `illumination_band_elevation`, the elevation it was cut from — refraction-corrected wherever the block carries it (§11.8.3). The manifest's `captures_missing_solar_block` is stated, zero in a healthy run; until the manifest exists each recorder counts it and the closeout gates it at zero. `C8`: the observation writer strips both band fields and V8.7 refuses them, so the frozen field set is unchanged (§10.4a) |
 | 24 | 2026-10-02. `C3`: the supervision plan carries `additional_digest`, the lane closures' additional file's SHA-256 as the lock's `files` records it, null where a scenario closes no lane, beside the routes', configuration's and network's (§5.2, §5.3). The lock's `files` table names `additional` where there is one. The plan's other completions — checked parameters, projected `hard_negative_for`, resolved exemplars, an absence's site — are [`06`](06_Truth_And_Annotation.md) §8.1's |
@@ -1845,7 +1846,11 @@ and a check. `C4` requires it: a capture session with more than one sensor **mus
 rather than as `platform_uid`: `run_capture` refuses a session of several channels without one per
 channel (check 11, case aside), and every recording entry point takes one — a channel's `sensor_id`,
 `--camera-name` on `run_SCTMV.py`, `run_sumo_drive.py` and `orbiting_drone.py`, and `camera_name` on
-the shim's `start_recording` and `spawn_camera`. Every capture is written as
+the shim's `start_recording` and `spawn_camera`. Since 2026-10-05 `run_free_move_camera.py`, which
+records nothing, takes `--camera-name` for its camera as well, so a viewer flown beside a capture is
+named as the capture's cameras are; its depth camera takes no name. A name is short and plain — 1 to
+63 ASCII letters, digits, underscores and hyphens (§6.3) — and every entry point refuses one outside
+the rule before it starts. Every capture is written as
 `<sensor_id>_<local capture time>` (`CameraName.StillStem`), which was `SCTMV_<local capture time>`
 whatever camera took it, and the platform event's callsign is the `sensor_id`, which defaulted to
 `OVERWATCH` for every camera given none, so two cameras' telemetry collided on it. A camera given no
@@ -1916,7 +1921,7 @@ encode anything about a particular object, which is the structural fact `C8` §1
 | `sumo_vehicle_id` | `[A-Za-z0-9_-]+(\.[0-9]+)?` | SUMO appends `.N` to a flow id to name the vehicles it generates (measured: `<flow id="corridor_d0_p0_h0">` yields `corridor_d0_p0_h0.0`). A flow or trip id containing `.` therefore makes the suffix ambiguous, and the existing bridge already splits on the last `.` to recover the flow (`CarlaControl/src/carlacontrol/SumoCotBridge.py:329`). **A flow, trip or vehicle id must not contain `.`** |
 | `entity_id` | `[a-z][a-z0-9_]{0,63}` | Referenced by annotations and by name-convention shorthand |
 | `instance_id` | `[a-z][a-z0-9_]{0,63}` | Derived deterministically, so no counter and no timestamp |
-| `sensor_id` | `[A-Za-z0-9_.-]{1,63}`, not a Windows device name (CON, PRN, AUX, NUL, COM0–9, LPT0–9, alone or before a dot), not ending in `.`, and not `CARLA-SENSOR-<digits>` | Authored; freer because it may follow an external naming scheme. It is the camera's name, so it begins every capture's file name and names the channel's directory: `:` was dropped from the grammar on 2026-10-02 because no Windows file name holds it, and the rest is the rule every camera name meets (`CameraName`), whose default form is reserved for cameras given no name. Unique within a session without regard to case |
+| `sensor_id` | `[A-Za-z0-9_-]{1,63}`, not a Windows device name (CON, PRN, AUX, NUL, COM0–9, LPT0–9), not a role name the server gives sensors (`front`, `back`, `left`, `right`, `front_left`, `front_right`, `back_left`, `back_right`), and not `CARLA-SENSOR-<digits>`, all in any case | It is the camera's name, so it begins every capture's file name, names the channel's directory and is the platform track's callsign. Short and plain, as the owner asked on 2026-10-05 — `Overwatch_1`, `Southeast_1700m_orbit`, `NapOfEarth_2` — which is the same file name on Windows and Linux, the same PNG text and the same callsign, so a name is used as given or refused, never rewritten. A device name would name a directory Windows will not make; every sensor spawned without a name carries `front`; the default form is reserved for cameras given no name. The rule every camera name meets (`CameraName`); the run configuration's schema states the characters. Unique within a session without regard to case |
 
 ### 6.4 Spawn attributes, and the verification of doc 20 §4.5
 

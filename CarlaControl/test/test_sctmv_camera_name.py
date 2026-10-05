@@ -36,17 +36,22 @@ def test_the_camera_has_no_name_unless_the_operator_gives_one():
 
 def test_the_older_spelling_names_the_camera_too():
     assert _parse("--camera-name", "DECK-I25").camera_name == "DECK-I25"
-    assert _parse("--platform-callsign", "Deck Cam #1").camera_name == "Deck Cam #1"
+    assert _parse("--platform-callsign", "Southeast_1700m_orbit").camera_name == \
+        "Southeast_1700m_orbit"
 
 
 @pytest.mark.parametrize(("name", "reason"), [("DECK:I25", "holds ':'"),
+                                              ("Overwatch 1", "holds a space"),
+                                              ("Overwatch.1", "holds '.'"),
                                               ("CON", "keeps for a device"),
+                                              ("front", "role name the server gives sensors"),
                                               ("CARLA-SENSOR-12", "another camera's name")])
 def test_a_name_the_rule_refuses_is_refused_at_the_command_line(capsys, name, reason):
     with pytest.raises(SystemExit) as exited:
         _parse("--camera-name", name)
     assert exited.value.code == 2
-    assert reason in capsys.readouterr().err
+    said = capsys.readouterr().err
+    assert reason in said and "such as Overwatch_1" in said
 
 
 class _RecordingWorld:

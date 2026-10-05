@@ -726,9 +726,11 @@ def default_camera_name(camera_id) -> str:
 
 def camera_name_problem(name, camera_id=None):
     """Why `name` cannot be a camera's name, or None when it can, by CarlaNet.Recording.CameraName's
-    rule: 1 to 63 printable ASCII characters, none of < > : " / \\ | ? *, no space at either end and no
-    dot at the end, not a name Windows keeps for a device, and not the default form unless it is
-    `camera_id`'s own default. A name is used as given or refused, never rewritten."""
+    rule: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as Overwatch_1
+    or Southeast_1700m_orbit; not a name Windows keeps for a device, not a role name the server gives
+    sensors (front, back, left, right, ...), and not the default form unless it is `camera_id`'s own
+    default. A name is used as given or refused, never rewritten, and every refusal says what is
+    allowed."""
     if not _CARLANET_RECORDING_AVAILABLE:
         raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
                            "(rebuild the wheel/DLLs)")

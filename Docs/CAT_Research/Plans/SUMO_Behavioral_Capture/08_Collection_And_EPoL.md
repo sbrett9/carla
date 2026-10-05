@@ -30,6 +30,7 @@ Findings set. Every external claim is cited.
 | 2026-10-01 | §5.7: a vehicle SUMO inserts in view appears on the frame SUMO first reports it in, already moving, never on a frame before; measured live on Bahonar, it had appeared a step early, standing at its insertion point. |
 | 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
 | 2026-10-02 | §2.4, §3.5: every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none. A client names each camera as it chooses, used as given or refused, never rewritten; one it does not name is `CARLA-SENSOR-<camera id>`. A name is unique within a process and, set as the camera's `role_name`, visible to every client, so one another camera in the world holds is refused. The uid is unchanged. |
+| 2026-10-05 | §2.4, §3.5: a camera name is short and plain -- 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or `Southeast_1700m_orbit` -- and no other character; the free-move camera can be named too. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -310,7 +311,8 @@ fps" (`run_SCTMV.py:215-219`). Two streams is today's rig. Multi-camera multipli
 
 Per capture, two files sharing a filename stem: the camera's name and local wall-clock time to the
 millisecond, `<camera name>_<yyyy.MM.dd_HH.mm.ss.fff>` (`CameraName.StillStem`). The name is the one
-the client gave the camera, used as given or refused, or `CARLA-SENSOR-<camera id>` where it gave none;
+the client gave the camera, used as given or refused, or `CARLA-SENSOR-<camera id>` where it gave none.
+A name is 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` (2026-10-05);
 captures written before 2026-10-02 carry `SCTMV` where the name is, whatever camera took them:
 
 - a lossless PNG with `carla:solar`, `carla:sensor` and `carla:capture` tEXt chunks
@@ -846,7 +848,10 @@ Three identity defects, one already half-solved:
   track's callsign, which had defaulted to `OVERWATCH` for every camera given none. It is unique
   within the session without regard to case, since a Windows file system holds `Deck` and `deck` as
   one name, and the camera is spawned under it as its `role_name`, so a name another client's camera
-  in the same world holds refuses the run at pre-roll. A single channel given none is
+  in the same world holds refuses the run at pre-roll. Since 2026-10-05 it is short and plain:
+  1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or
+  `Southeast_1700m_orbit`, and not a Windows device name, a sensor's stock role name or another
+  camera's default. A single channel given none is
   `CARLA-SENSOR-<camera id>`, unstable across runs as before.
 - **`scenario_id` is still never supplied** (§2.8). Under SUMO drive the analogous identity is the
   scenario configuration, and it must reach `CaptureIdentity` (`CaptureMetadata.cs:24-29`) or the
