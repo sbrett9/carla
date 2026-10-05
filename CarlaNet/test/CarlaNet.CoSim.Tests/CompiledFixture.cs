@@ -1,17 +1,19 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CarlaNet.Map;
 
 namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
 /// The fixture scenario copied into a temporary directory with a compile lock beside it, in the shape
-/// the scenario compiler writes one, binding the copies as they stand.
+/// the scenario compiler writes one, binding the copies as they stand -- and, where asked, a lane
+/// closures' additional file and a supervision plan compiled against them.
 /// </summary>
 /// <remarks>
-/// A test that changes one of the copies, the lock, or what the session is handed, and watches the
-/// check answer, needs files it is free to change; the shipped scenario in <c>Import/</c> is the
-/// check's real case and is not written to.
+/// A test that changes one of the copies, the lock, the plan, or what the session is handed, and
+/// watches the check answer, needs files it is free to change; the shipped scenarios in <c>Import/</c>
+/// are the check's real case and are not written to.
 /// </remarks>
 internal sealed class CompiledFixture : IDisposable
 {
@@ -37,6 +39,12 @@ internal sealed class CompiledFixture : IDisposable
     /// <summary>The copied network.</summary>
     public string Network => Path.Combine(Directory, "RightAngleTurn.net.xml");
 
+    /// <summary>The lane closures' additional file, where the fixture was written with one.</summary>
+    public string Additional => Path.Combine(Directory, "RightAngleTurn.add.xml");
+
+    /// <summary>The supervision plan, where the fixture was written with one.</summary>
+    public string Plan => Path.Combine(Directory, "RightAngleTurn.supervision.json");
+
     /// <summary>The lock beside the configuration.</summary>
     public string Lock => Path.Combine(Directory, "RightAngleTurn.lock.json");
 
@@ -48,7 +56,12 @@ internal sealed class CompiledFixture : IDisposable
     /// <param name="configuration">
     /// The configuration to write instead of the fixture's own, for a test about what it sets.
     /// </param>
-    public static CompiledFixture Write(SolarEpoch? epoch = null, string? configuration = null)
+    /// <param name="additional">
+    /// Whether the scenario closes lanes: an additional file beside it, named by the configuration.
+    /// </param>
+    /// <param name="plan">Whether to write a supervision plan compiled against the copies, and bind it.</param>
+    public static CompiledFixture Write(SolarEpoch? epoch = null, string? configuration = null,
+                                        bool additional = false, bool plan = false)
     {
         string directory = Path.Combine(Path.GetTempPath(), "carlanet-lock-" + Guid.NewGuid().ToString("n"));
         System.IO.Directory.CreateDirectory(directory);
@@ -61,53 +74,164 @@ internal sealed class CompiledFixture : IDisposable
             File.WriteAllText(fixture.Scenario, configuration);
         }
 
+        if (additional)
+        {
+            File.WriteAllText(fixture.Additional, "<additional>\n</additional>\n");
+            File.WriteAllText(fixture.Scenario, File.ReadAllText(fixture.Scenario).Replace(
+                "<route-files value=\"RightAngleTurn.rou.xml\"/>",
+                "<route-files value=\"RightAngleTurn.rou.xml\"/>\n"
+                + "        <additional-files value=\"RightAngleTurn.add.xml\"/>",
+                StringComparison.Ordinal));
+        }
+
+        if (plan)
+        {
+            fixture.WritePlan(fixture.PlanDocument());
+        }
+
         fixture.WriteLock(epoch ?? SolarLeaseTests.PortEpoch());
         return fixture;
     }
 
-    /// <summary>The lock document binding the copies as they stand now.</summary>
-    public JsonObject LockDocument(SolarEpoch epoch) => new()
+    /// <summary>The lock document binding the copies, and the plan where there is one, as they stand now.</summary>
+    public JsonObject LockDocument(SolarEpoch epoch)
     {
-        ["lock_version"] = 1,
-        ["scenario_id"] = ScenarioId,
-        ["specification"] = "RightAngleTurn.scenario.json",
-        ["specification_sha256"] = new string('0', 64),
-        ["compiler"] = new JsonObject { ["name"] = "carlacontrol.ScenarioCompiler", ["version"] = "1.0.0" },
-        ["files"] = new JsonObject
+        var files = new JsonObject
         {
             ["routes"] = Bound("RightAngleTurn.rou.xml", Routes),
             ["config"] = Bound("RightAngleTurn.sumocfg", Scenario),
             ["network"] = Bound("RightAngleTurn.net.xml", Network),
-        },
-        ["world"] = new JsonObject
+        };
+        if (File.Exists(Additional))
         {
-            ["package"] = "SyntheticSurface.cwp",
-            ["map_name"] = "SyntheticSurface",
-            ["network_fingerprint"] = WorldFingerprint,
-            ["netconvert_version"] = WorldConverter,
-            ["opendrive_sha256"] = new string('1', 64),
-        },
-        ["catalogue"] = new JsonObject
+            files["additional"] = Bound("RightAngleTurn.add.xml", Additional);
+        }
+
+        var document = new JsonObject
         {
-            ["catalogue_id"] = Catalogue.CatalogueId,
-            ["catalogue_digest"] = Catalogue.CatalogueDigest,
-        },
-        ["traffic"] = new JsonObject
-        {
-            ["sumo_seed"] = 42,
-            ["processing"] = new JsonObject { ["time-to-teleport"] = "-1" },
-            ["routed_by"] = new JsonObject
+            ["lock_version"] = 1,
+            ["scenario_id"] = ScenarioId,
+            ["specification"] = "RightAngleTurn.scenario.json",
+            ["specification_sha256"] = new string('0', 64),
+            ["compiler"] = new JsonObject { ["name"] = "carlacontrol.ScenarioCompiler", ["version"] = "1.0.0" },
+            ["files"] = files,
+            ["world"] = new JsonObject
             {
-                ["tool"] = "duarouter",
-                ["version"] = RoutedBy,
-                ["world_converter"] = WorldConverter,
-                ["release_agreement"] = "SameRelease",
-                ["mismatch_accepted"] = false,
+                ["package"] = "SyntheticSurface.cwp",
+                ["map_name"] = "SyntheticSurface",
+                ["network_fingerprint"] = WorldFingerprint,
+                ["netconvert_version"] = WorldConverter,
+                ["opendrive_sha256"] = new string('1', 64),
             },
-        },
-        ["epoch"] = JsonNode.Parse(epoch.CanonicalJson),
-        ["epoch_block_sha256"] = epoch.Digest,
-    };
+            ["catalogue"] = new JsonObject
+            {
+                ["catalogue_id"] = Catalogue.CatalogueId,
+                ["catalogue_digest"] = Catalogue.CatalogueDigest,
+            },
+            ["traffic"] = new JsonObject
+            {
+                ["sumo_seed"] = 42,
+                ["processing"] = new JsonObject { ["time-to-teleport"] = "-1" },
+                ["routed_by"] = new JsonObject
+                {
+                    ["tool"] = "duarouter",
+                    ["version"] = RoutedBy,
+                    ["world_converter"] = WorldConverter,
+                    ["release_agreement"] = "SameRelease",
+                    ["mismatch_accepted"] = false,
+                },
+            },
+            ["epoch"] = JsonNode.Parse(epoch.CanonicalJson),
+            ["epoch_block_sha256"] = epoch.Digest,
+        };
+
+        if (File.Exists(Plan))
+        {
+            files["supervision"] = Bound("RightAngleTurn.supervision.json", Plan);
+            JsonNode plan = JsonNode.Parse(File.ReadAllText(Plan))!;
+            document["vocabulary"] = new JsonObject
+            {
+                ["core_version"] = plan["vocabulary_version"]?.DeepClone(),
+                ["namespaces"] = new JsonArray(),
+                ["vocabulary_digest"] = plan["vocabulary_digest"]?.DeepClone(),
+            };
+        }
+
+        return document;
+    }
+
+    /// <summary>
+    /// A supervision plan compiled against the copies as they stand now: one nominal instance over
+    /// <c>turner</c>, anchored to its departure, and every vehicle explicit. Its vocabulary, and that
+    /// vocabulary's digest, are the shipped Gardnerville plan's, which declares no author namespace --
+    /// digested by the compiler, so a reader that digested the vocabulary wrongly would refuse it.
+    /// </summary>
+    public JsonObject PlanDocument()
+    {
+        JsonNode shipped = JsonNode.Parse(File.ReadAllText(SupervisionPlanTests.ShippedPlan(
+            "Gardnerville_Centerville_Lane_NeighborhoodOrbit")))!;
+        return new JsonObject
+        {
+            ["supervision_plan_version"] = 1,
+            ["plan_id"] = ScenarioId,
+            ["spec_version"] = 1,
+            ["scenario_id"] = ScenarioId,
+            ["routes_digest"] = Sha256(Routes),
+            ["network_digest"] = NetworkFingerprint.ComputeFile(Network),
+            ["config_digest"] = Sha256(Scenario),
+            ["additional_digest"] = File.Exists(Additional) ? Sha256(Additional) : null,
+            ["vocabulary_version"] = shipped["vocabulary_version"]!.DeepClone(),
+            ["vocabulary_digest"] = shipped["vocabulary_digest"]!.DeepClone(),
+            ["vocabulary"] = shipped["vocabulary"]!.DeepClone(),
+            ["instances"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["instance_id"] = $"{ScenarioId}/turn_nominal",
+                    ["supervision"] = "nominal",
+                    ["realisation"] = "present",
+                    ["labels"] = new JsonArray(),
+                    ["parameters"] = new JsonObject(),
+                    ["hard_negative_for"] = null,
+                    ["counterfactual"] = null,
+                    ["series_ref"] = null,
+                    ["slot_ref"] = null,
+                    ["aoi_refs"] = new JsonArray(),
+                    ["participants"] = new JsonArray
+                    {
+                        new JsonObject { ["entity_id"] = "turner", ["role"] = "subject", ["sumo_id"] = "turner" },
+                    },
+                    ["intervals"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["entity_id"] = "turner",
+                            ["phase"] = "turn",
+                            ["anchor"] = new JsonObject
+                            {
+                                ["start"] = new JsonObject { ["event"] = "depart" },
+                                ["end"] = null,
+                            },
+                            ["declared_start_s"] = 0.0,
+                            ["declared_start_civil"] = "2026-09-29T07:00:00+03:30",
+                            ["declared_end_s"] = null,
+                            ["declared_end_civil"] = null,
+                            ["declared_duration_s"] = null,
+                        },
+                    },
+                },
+            },
+            ["series"] = new JsonArray(),
+            ["cohorts"] = new JsonArray(),
+            ["entities"] = new JsonArray
+            {
+                Entity("changer", "unlabelled"),
+                Entity("goer", "unlabelled"),
+                Entity("turner", "nominal", $"{ScenarioId}/turn_nominal"),
+                Entity("unrenderable", "unlabelled"),
+            },
+        };
+    }
 
     /// <summary>The fixture catalogue, as the session loads it.</summary>
     public static VehicleCatalogue Catalogue => VehicleCatalogue.Load(CoSimFixtures.VehicleCatalogue);
@@ -116,8 +240,10 @@ internal sealed class CompiledFixture : IDisposable
     public void WriteLock(SolarEpoch epoch) => WriteLock(LockDocument(epoch));
 
     /// <summary>Write a lock document as given.</summary>
-    public void WriteLock(JsonNode document) =>
-        File.WriteAllText(Lock, document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    public void WriteLock(JsonNode document) => File.WriteAllText(Lock, Indented(document));
+
+    /// <summary>Write a plan document as given; the lock is not rewritten.</summary>
+    public void WritePlan(JsonNode document) => File.WriteAllText(Plan, Indented(document));
 
     /// <inheritdoc/>
     public void Dispose()
@@ -135,6 +261,18 @@ internal sealed class CompiledFixture : IDisposable
 
     // Digested here rather than by the check's own digest, so a check that digested the wrong thing
     // would disagree with the lock rather than agree with itself.
-    private static JsonObject Bound(string name, string path) =>
-        new() { ["path"] = name, ["sha256"] = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) };
+    /// <summary>Lowercase hex SHA-256 of a file's bytes.</summary>
+    public static string Sha256(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+
+    private static JsonObject Bound(string name, string path) => new() { ["path"] = name, ["sha256"] = Sha256(path) };
+
+    private static JsonObject Entity(string id, string state, params string[] refs) => new()
+    {
+        ["entity_id"] = id,
+        ["supervision"] = new JsonArray(state),
+        ["refs"] = new JsonArray(refs.Select(reference => (JsonNode?)JsonValue.Create(reference)).ToArray()),
+    };
+
+    private static string Indented(JsonNode document) =>
+        document.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 }

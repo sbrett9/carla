@@ -59,6 +59,7 @@ advancement policy, the headlight predicate),
 | 2026-10-02 | §8.3, §8.3.1, §8.3.2, §8.3.3, §8.8, §8.9, D3.10, D3.31, D3.38, D3.41, D3.42: two optional performance controls, off by default and recommended for no scenario. A draw distance, set once on each pooled body by the new `set_actors_max_draw_distance`, so no camera draws a body beyond it while every vehicle keeps its body, pose and truth; each frame's render set records the distance and the recorder marks every vehicle a camera did not draw. And the circle, the cameras' footprints and a capacity, restored from history as limits a caller chooses: a vehicle outside one is simulated by SUMO and in no frame and no truth record, and is counted; every vehicle stays subscribed, so the subscription tiers are not restored. D3.38 stays withdrawn as a default. Written and tested offline; the plugin awaits a build. |
 | 2026-10-02 | §3.4: a ramp meter reaches the imagery through the vehicles it holds, one leaving per green, with no meter head drawn. |
 | 2026-10-02 | §9.7, §11.5, §11.6, §11.10, D3.14, D3.33: SUMO's own distribution edits checked before SUMO is started and stated on the run report. A collision action other than `warn` or `none` is refused, SUMO's default and an action SUMO does not name included; every other teleport trigger, a vehicle type's own included, is refused under the acceptance `time-to-teleport` has; a positive `random-depart-offset` and `random` are refused; the scale, the cap on vehicles running and `max-depart-delay` are recorded. Measured: `time-to-teleport.highways` is off at its default and `.disconnected` on from zero. The test fixtures now set `collision.action warn`. |
+| 2026-10-05 | §2.7, §9.7, D3.29: the compile-lock check binds the lane closures' additional file and the supervision plan. The plan is refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not those of the route file, configuration, additional file and network the run loads; once bound it is handed to the session on the run report. A lock that names no plan runs without one. |
 
 ---
 
@@ -485,7 +486,8 @@ than run unpinned.
 
 The scenario compiler (`CarlaControl/src/carlacontrol/ScenarioCompiler.py`) writes
 `<scenario_id>.lock.json` beside the `.sumocfg` it compiles: the SHA-256 of the configuration, route
-file and network it wrote, the catalogue digest its vehicle types were bound against, the digest of
+file, network, lane closures' additional file where there is one, and supervision plan it wrote, the
+catalogue digest its vehicle types were bound against, the digest of
 the epoch every civil instant was resolved against (`epoch_block_sha256`, computed by
 `SolarEpoch.Digest` through `carlanet`), the SUMO release that routed the demand, and the world it
 compiled for. Its output is byte-reproducible and the repository stores these files exactly as written
@@ -502,13 +504,41 @@ the lock and its resolution report describe.
 | `files.config` | the configuration the session was given | the lock names another configuration, or its bytes digest differently |
 | `files.routes` | the route files the configuration names, read as SUMO reads them (`route-files`, `routes`, `r`; a comma-separated list; relative to the configuration) | the configuration runs any route file other than exactly the one the lock names, or its bytes digest differently |
 | `files.network` | the network the configuration names (the reading of §7.2) | another network, or its bytes digest differently |
+| `files.additional` | the additional files the configuration names, read as SUMO reads them (`additional-files`, `additional`, `a`) | the configuration runs any other than exactly the one the lock names, or runs one where the lock names none, or its bytes digest differently |
+| `files.supervision` | `<stem>.supervision.json` beside the configuration | the lock names another path, the plan is not there, or its bytes digest differently |
 | `catalogue.catalogue_digest` | the digest the catalogue the session loads declares | different |
 | `epoch_block_sha256` | `SolarEpoch.Digest` of the session's epoch | different, where the session declares an epoch |
 
 Every disagreement is named in one `CoSimSessionRefusedException`, and SUMO is not started. A lock
 that is not JSON, declares a `lock_version` other than 1, or does not record one of the compared fields
-is refused whole, naming each missing field. A session that declares no epoch binds no sun and derives
-no civil instant, so it is not compared on one and the report says so.
+is refused whole, naming each missing field; `files.additional` and `files.supervision` are none where
+absent and refused where named without both path and digest. A session that declares no epoch binds no
+sun and derives no civil instant, so it is not compared on one and the report says so.
+
+**The supervision plan is bound both ways (2026-10-05).** Once the files agree with the lock, the
+session reads the plan (`SupervisionPlan.Read`, [`06`](06_Truth_And_Annotation.md) §8.1), which refuses
+one it cannot read into its record types — another shape version, a missing field, a core value outside
+`CarlaNet.Types.Supervision`'s enumerations, a vocabulary that is not this core or does not digest as it
+says — naming every problem. It then compares what the plan says it was compiled against with what the
+run loads:
+
+| Plan field | Compared with | Refused when |
+|---|---|---|
+| the bytes read | the lock's `files.supervision.sha256` | different: a plan changed between the two reads |
+| `scenario_id` | the lock's `scenario_id` | different |
+| `config_digest`, `routes_digest` | SHA-256 of the configuration and the route file | different |
+| `network_digest` | `NetworkFingerprint` of the network the configuration names | different |
+| `additional_digest` | SHA-256 of the additional file the configuration names | different; or null while the configuration runs one; or a digest while it runs none |
+| `vocabulary_digest` | the lock's `vocabulary.vocabulary_digest` | different |
+
+Every disagreement is named in one refusal, before SUMO is started: a plan compiled against another
+generation of the files would resolve some of its ids and not others, and nothing in the run would show
+it. The bound plan is `ScenarioLockCheck.Plan`, on `CoSimRunReport.CompileLock`, for the session's
+interval binder to take (not built), and the report's `supervision plan` line says what it holds:
+`Shahid_Bahonar_Port_PatternOfLife: 27 instances (5 annotated, 21 nominal, 1 absent), 1 series of 336
+slots (1 unrealised), 248 cohorts (98 annotated), 365 entities; vocabulary core 2, bahonar 1, digest
+e3571085…`. A lock that names no plan binds no supervision, and the line says so; every lock the compiler
+writes names one, since every compile writes a plan.
 
 **On every run** the report carries the outcome (`CoSimRunReport.CompileLock`, the `compile lock`
 line): for a compiled scenario its id and compiler, the routing tool and release against the world
@@ -519,29 +549,39 @@ package (§7.2) and the loaded world (§7.2, D3.26). `run_sumo_drive.py` logs th
 for an uncompiled scenario.
 
 **No lock is not a refusal.** A scenario a generator writes directly as SUMO files has none, and it
-runs; the report records it as uncompiled, so its run cannot be mistaken for a compiled scenario's.
+runs; the report records it as uncompiled, so its run cannot be mistaken for a compiled scenario's. Its
+supervision is not read: a `.supervision.json` beside an uncompiled scenario is nothing a lock binds, and
+may be a legacy sidecar of the same name.
 
 | Scenario, `Import/` | Lock | Outcome |
 |---|---|---|
-| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg` | present; configuration, route file and network digests equal the files in the tree; catalogue `771fa431…` is `CarlaControl/catalogue/vehicles.catalogue.json`'s; epoch `3cb60fce…` is the digest `SolarEpoch` computes from the scenario's own epoch | **admitted**, compiled; routed by `duarouter 1.27.0` against `Eclipse SUMO netconvert 1.27.0` (`SameRelease`); compiled for `Gardnerville_Centerville_Lane.cwp`, network `a50ac545…` |
-| `Arapahoe_I25_UnderpassDwell.sumocfg` | none: `SumoScenarioBuilder` writes it directly | **admitted**, recorded as uncompiled |
+| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg` | present; configuration, route file, network and plan digests equal the files in the tree; catalogue `6037e3bb…` is `CarlaControl/catalogue/vehicles.catalogue.json`'s; epoch `3cb60fce…` is the digest `SolarEpoch` computes from the scenario's own epoch | **admitted**, compiled; routed by `duarouter 1.27.0` against `Eclipse SUMO netconvert 1.27.0` (`SameRelease`); compiled for `Gardnerville_Centerville_Lane.cwp`, network `a50ac545…`; its plan bound, asserting nothing: 30 cohorts and one vehicle, all unlabelled |
+| `Arapahoe_I25_UnderpassDwell.sumocfg` | present, with the lane closures' additional file; epoch `ef1458ad…` | **admitted**, compiled; network `ffe490b1…`; its plan bound, compiled against the additional file it runs, asserting nothing: 51 cohorts and one vehicle, all unlabelled |
+| `Shahid_Bahonar_Port_PatternOfLife.sumocfg` | present; epoch `f1ba0dda…` | **admitted**, compiled; network `3966113a…`; its plan bound: 27 instances, one series of 336 slots with one unrealised, 248 cohorts, 365 vehicles |
 
 **What it cannot see.** The catalogue's declared digest is compared, not recomputed, so a catalogue
-edited without re-digesting passes. Additional files and the supervision plan are not digested. The
-files are checked once, just before SUMO reads them. And a lock rewritten to match edited files passes:
-the check establishes that the files are the ones the lock describes, not who wrote the lock.
+edited without re-digesting passes. The files are checked once, just before SUMO reads them. And a lock
+rewritten to match edited files passes: the check establishes that the files are the ones the lock
+describes, not who wrote the lock. So does a plan edited with its vocabulary's digest recomputed and the
+lock rewritten to match.
 
 **Exercised by** `ScenarioLockCheckTests` (a compiled copy of the fixture scenario with each file, the
-catalogue, the epoch and the lock varied; the shipped Gardnerville scenario against its lock, the tree's
-catalogue and its own epoch; Arapahoe as uncompiled) and `SumoDriveSessionLockTests` (a compiled
-scenario run and its lock on the report, an uncompiled one run and said to be, and a disagreement
-refused with SUMO never launched and the world untouched). Each was seen failing against a wrong
-implementation: one that never refuses; one that looks for the lock under another name; one that
-refuses a scenario with no lock; one that compares the epoch when none is declared; one that names only
-the first disagreement; one that skips each of the three file digests in turn; one that reads route
-files under one name only; one that accepts a lock binding another configuration; one that skips the
-catalogue; one that digests the path rather than the bytes; one that tolerates a lock missing a compared
-field; a session that never makes the check; and a check made after SUMO has started.
+catalogue, the epoch, the lock and the plan varied, and with a lane closures' file; the three shipped
+scenarios against their locks, the tree's catalogue and their own epochs, each plan bound),
+`SupervisionPlanTests` (the reader, [`06`](06_Truth_And_Annotation.md) §8.1) and
+`SumoDriveSessionLockTests` (a compiled scenario run and its lock on the report, with and without a
+plan, an uncompiled one run and said to be, and a disagreement with the lock or the plan refused with
+SUMO never launched and the world untouched). Each was seen failing against a wrong implementation: one
+that never refuses; one that looks for the lock under another name; one that refuses a scenario with no
+lock; one that compares the epoch when none is declared; one that names only the first disagreement;
+one that skips each of the three file digests in turn; one that reads route files under one name only;
+one that accepts a lock binding another configuration; one that skips the catalogue; one that digests
+the path rather than the bytes; one that tolerates a lock missing a compared field; a session that never
+makes the check; and a check made after SUMO has started. Since 2026-10-05, also: one that never reads
+the plan; one that looks for it under another name; one that refuses a lock naming no plan; one that
+accepts a missing plan the lock names; one that skips the plan's digest against the lock; one that skips
+each of the plan's route, configuration, network and additional digests in turn; one that skips the
+lock's vocabulary digest; and one that skips the lock's additional file.
 
 ---
 
@@ -3189,7 +3229,9 @@ session.start():
     assert fingerprint(sumocfg's network) == fingerprint(package's map.net.xml)
                                                           # and == the one it records; before SUMO starts, §7.2
     if <stem>.lock.json beside the sumocfg:               # §2.7; else recorded as uncompiled
-        assert sha256(config, routes, network) == the lock's; catalogue digest and epoch digest too
+        assert sha256(config, routes, network, additional, plan) == the lock's; catalogue and epoch too
+        plan = read <stem>.supervision.json               # where the lock names one; immutable rows
+        assert plan's digests == the files run, the network by fingerprint; its vocabulary's == the lock's
     assert sumocfg time-to-teleport <= 0                  # absent is 300; unless accepted, §11.6
     assert no other teleport trigger on                   # .highways, .disconnected, .bidi, a type's own;
                                                           # unless accepted, §11.6
@@ -4240,7 +4282,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's — the grids by the SHA-1 the server computes when the record is set (`get_bare_earth_digest`), never by fetching them — the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). An admitted package's grids are handed to the session's client for its truth telemetry, which takes them only where the server's digests match. |
 | **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |
 | **D3.28** | **A session refuses a scenario whose network is not the one the world package carries**, compared by canonical fingerprint (`NetworkFingerprint`, the parsed graph rather than the bytes) and settled before SUMO is started, naming both networks and both fingerprints. It also refuses a package whose carried network does not fingerprint as the `NetworkFingerprint` its manifest records. The scenario's network is read the way SUMO reads the configuration. There is no override: a scenario for another network is compiled against this world's package, and the compiler writes the package's own network beside the configuration (§7.2). |
-| **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). |
+| **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). **Since 2026-10-05** the lane closures' additional file is compared with the lock too, and the supervision plan the lock names is read beside the configuration, refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not the files the run loads, and handed to the session on the run report; a lock that names no plan runs without one, and one that names a missing plan is refused |
 | **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message. A SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console; so is a failure of the connection to the CARLA server — a socket closed or reset, or a call left unanswered past the client's timeout — at the stage it happens in, with the connection's failure as its inner exception. A failure of one side also names the side (`Cause`), and a refusal from `Advance` stops the run for good and is recorded on the report with the last complete frame. Every other exception passes through unwrapped (§11.10). |
 | **D3.31** | **Each admission pass is published as it is made**, once per SUMO step: the population SUMO has, the vehicles rendered after the pass, those admitted and released at it, and the running total of admissions, and under an optional limit the eligible, the drawn and the shed, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` (§8.8). |
 | **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |

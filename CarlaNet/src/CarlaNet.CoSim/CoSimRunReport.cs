@@ -55,12 +55,15 @@ public sealed class CoSimRunReport
 
     /// <summary>
     /// The scenario's compile lock: whether one sat beside the configuration, and where it did, the
-    /// scenario it binds, the SUMO release that routed its demand and the world it was compiled for.
+    /// scenario it binds, the SUMO release that routed its demand, the world it was compiled for, and
+    /// the supervision plan it binds (<see cref="ScenarioLockCheck.Plan"/>), which the run's supervision
+    /// is bound from.
     /// </summary>
     /// <remarks>
     /// Checked before SUMO was started, so a run that has a report ran the files, the catalogue and
-    /// the epoch its lock binds. A scenario with no lock ran as an uncompiled one, and this says so:
-    /// its traffic is described by nothing but its own files.
+    /// the epoch its lock binds, with a plan compiled against those files. A scenario with no lock ran
+    /// as an uncompiled one, and this says so: its traffic is described by nothing but its own files,
+    /// and it binds no plan.
     /// </remarks>
     public required ScenarioLockCheck CompileLock { get; init; }
 
@@ -963,6 +966,7 @@ public sealed class CoSimRunReport
             text.AppendLine($"  routed by        {CompileLock.RoutedByText}");
             text.AppendLine($"  compiled for     {CompileLock.WorldText}");
             text.AppendLine($"  processing       {CompileLock.ProcessingText}");
+            text.AppendLine($"  supervision plan {CompileLock.PlanText}");
         }
 
         text.AppendLine($"teleporting        {Teleporting}");

@@ -42,6 +42,58 @@ public sealed class SumoDriveSessionLockTests
         Assert.Contains("  processing       time-to-teleport '-1', lanechange.duration '(not recorded)'", report);
         Assert.Contains("lane changes       INSTANTANEOUS: a lane width crossed inside one 0.05 s step "
                         + "(lanechange.duration not set, so SUMO's default of 0 s)", report);
+
+        // Its lock names no plan, and the run binds none and says so.
+        Assert.Null(session.Report.CompileLock.Plan);
+        Assert.Contains("  supervision plan none: the lock names no supervision plan, so the run binds no "
+                        + "supervision", report);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionOnACompiledScenarioHoldsThePlanItsLockBindsOnItsReport()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write(plan: true);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        using SumoDriveSession session = SumoDriveSession.Start(Options(compiled.Scenario, world));
+        Assert.True(session.Advance());
+
+        string report = session.Report.ToString();
+        _output.WriteLine(report);
+        SupervisionPlan plan = Assert.IsType<SupervisionPlan>(session.Report.CompileLock.Plan);
+        Assert.Equal("RightAngleTurn/turn_nominal", Assert.Single(plan.Instances).InstanceId);
+        Assert.Contains("  supervision plan RightAngleTurn: 1 instance (0 annotated, 1 nominal, 0 absent), ", report);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionWhosePlanWasCompiledAgainstOtherFilesIsRefusedBeforeSumoStartsAndTouchesNothing()
+    {
+        // Verbose, so a SUMO that was launched would have written to the console (the control in the
+        // lock refusal's test above).
+        using CompiledFixture compiled = CompiledFixture.Write(configuration: VerboseConfiguration(), plan: true);
+        JsonObject plan = compiled.PlanDocument();
+        plan["routes_digest"] = new string('e', 64);
+        compiled.WritePlan(plan);
+        compiled.WriteLock(SolarLeaseTests.PortEpoch());
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        List<string> console = [];
+        SumoDriveSessionOptions options = Options(compiled.Scenario, world);
+        options.TickWorld = null;
+        options.World = carla;
+        options.SumoOutput = console.Add;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        _output.WriteLine(refused.Message);
+        Assert.Contains("was not compiled against the files the scenario", refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+        Assert.Empty(console);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.LayerWrites);
+        Assert.Empty(carla.SolarWrites);
     }
 
     [RequiresSumoFact]

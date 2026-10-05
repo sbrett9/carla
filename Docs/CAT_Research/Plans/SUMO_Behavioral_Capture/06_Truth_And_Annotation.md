@@ -30,6 +30,7 @@ the real scenario artifacts. No code changed, no build run.
 | 22 · 2026-10-05 | `base_type` comes from the vehicle catalogue, as the owner ruled, by the rule `special_type` follows: a vehicle whose body's blueprint a catalogue class draws carries that class's `cot_base_type`, whatever the blueprint declares, and so does the callsign built from it; a blueprint no class draws keeps the base type it declares, from its wheel count where it declares none. It holds in the capture sidecar and the live pull of the process that runs the drive, in the world truth track, and in the standalone producer's XML and CSV when it is given the catalogue; the world truth track and the standalone producer read a type's SUMO vehicle class only for a type naming none of the catalogue's blueprints. So an ambulance is a `van`, a fire appliance a `truck`, and a police car and an army jeep `car`s, where their SUMO classes read `car`, `car`, `authority` and `army` (D6.18, §2.4, §4.2, §8.2, §8.3). |
 | 23 · 2026-10-05 | An interval may be anchored to the events of its participant that commit it, as ruled: `depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>`, a phase being one of the actor's declared `phases[]` (§3.3). The compiler resolves each against the vehicle's stops and compiled route ([07](07_Scenario_Authoring.md) check 58) and the plan carries it on every interval, null when unanchored; an interval over a `duration` stop declares its length and no start (D6.4). Bahonar's anomaly intervals are anchored and the scenario recompiled (§8.1). |
 | 24 · 2026-10-05 | The closed core is generated from `CarlaNet.Types` and is at version 2 (§3.7, D6.27, D6.30 as built). Its enumerations are `CarlaNet.Types.Supervision`, published by `CoreVocabulary`; the scenario compiler reads them through `carlanet` and the world truth track writes its render state and reasons from them. Version 2 adds `beyond_draw_distance` to the observability outcomes, as ruled, and three families: the interval anchor events, `render_state` and `render_reason`, which this pipeline writes and accounts by, so are core by D6.27's test. Every shipped plan's vocabulary digest changes. |
+| 25 · 2026-10-05 | The supervision plan is read at session start and bound to the files the run loads (§8.1, D6.8 and D6.30 as built). `CarlaNet.CoSim.SupervisionPlan` reads a compiled plan into sealed records made only by reading the plan, with private constructors, no setter and no collection that can be changed, so nothing in a run can make, change or add a row; a test walks every type the plan reaches and holds it to that. Core values are read through `CarlaNet.Types.Supervision`'s enumerations and a spelling outside them is refused, as is a plan whose vocabulary is not this core or does not digest as it says. The session's compile-lock check reads the plan the lock binds, refuses it where its digest is not the lock's or its own digests are not the files the run loads, and hands it to the session on the run report; a lock that names no plan runs without one, and one that names a plan that is not there is refused. The interval binder is not built. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2152,7 +2153,8 @@ The properties the plan must have, each for a reason already established:
   generation must fail loudly rather than resolve half its ids. As built, the plan carries
   `routes_digest`, `network_digest` (the network's canonical fingerprint), `config_digest` and
   `additional_digest` — the lane closures' additional file, the same SHA-256 the lock records for it,
-  and null where a scenario closes no lane — and the lock binds the plan's own digest.
+  and null where a scenario closes no lane — and the lock binds the plan's own digest. A session
+  compares both before SUMO starts (below).
 - **What a row says, its terms define.** A row's `parameters` are keys its labels' terms declare, each of
   the declared type (§3.8); a nominal row carries its terms' `hard_negative_for` (§3.9(d)); a term's
   `exemplar_instances` and a counterfactual naming a series, cohort or instance resolve against the plan
@@ -2169,6 +2171,77 @@ The properties the plan must have, each for a reason already established:
   supervision binder does not see. This is deliberate and is worth stating in the plan's own section,
   because the epoch *is* a compile-time scenario property and putting it on `SupervisionPlan` would be
   the natural place for it — and would put illumination one field away from every supervision row.
+
+**As built (2026-10-05): the plan is read once, at session start, into records nothing can write.**
+`SupervisionPlan.Read` (`CarlaNet/src/CarlaNet.CoSim/SupervisionPlan.cs`) reads a compiled plan into
+the rows of the diagram above: `PatternInstance`, with its `InstanceParticipant`s and
+`PlannedInterval`s, each interval's `IntervalAnchor` and the `AnchorPoint` at either end, and an
+absence's `AbsenceExpectation`, `ExpectedRoute` and `AbsenceCounterEvidence`; `RecurringSeries` and
+`SeriesSlot`; `CohortSupervision`; `EntitySupervision`; and the vocabulary as `PlanVocabulary`, its
+`AuthorNamespace`s, `AuthorTerm`s with their `TermParameter`s and `Counterfactual`, and the namespaces'
+`AuthorRole`s and `AuthorAreaKind`s (`SupervisionPlanRows.cs`, `SupervisionPlanVocabulary.cs`). The
+plan's identity and digests are on the root: `plan_id`, `scenario_id`, `spec_version`, the routes',
+configuration's and additional file's SHA-256, the network fingerprint, the vocabulary's digest, and the
+SHA-256 of the bytes read, which is what the lock binds.
+
+- **§3.6 point 3 is the type graph.** Every type the plan reaches is a sealed record made only by
+  reading the plan — its constructors are private, the one that reads its row and the record's copy —
+  with no setter or `init` of any visibility, and every collection an `ImmutableArray` or `ImmutableSortedDictionary` — never a list
+  behind a read-only interface. So nothing in a run can make an instance, a participant, a label or an
+  interval, change one, or add one to the plan; the binder will record what it binds in records of its
+  own, beside these. `SupervisionPlanTests.EveryTypeAPlanReachesIsARecordNothingCanWriteOrMake` walks
+  every type reachable from the plan, so a type added later is held to it without being listed, and
+  fails against a setter added to one property, a constructor made internal, and a collection exposed as
+  `IReadOnlyList`.
+- **Core values are read through the core's enumerations** (D6.30): `supervision` as
+  `SupervisionState`, `realisation` as `Realisation`, a term's `applies_to` as `SubjectKind`, a series'
+  `cadence` as `CadenceForm`, and an anchor's event as `AnchorEvent` with its index — each the member
+  whose published name the plan spells, a spelling outside them refused, naming every value the family
+  has. The vocabulary the plan carries must publish exactly this core: another version, or this version
+  with a term added, moved or spelled otherwise, is refused, since a run would write a value its
+  vocabulary does not define. Author terms are carried with every declaration — definition,
+  `applies_to`, `realisation`, `since`, `status`, `superseded_by`, `broader`, `parameters{}` with each
+  key's type, unit and definition, `counterfactual`, `contrast_with`, `hard_negative_for`,
+  `exemplar_instances` — and interpreted nowhere (D6.27).
+- **An anchor is an `AnchorPoint`**: the event as the plan spells it, its `AnchorEvent`, its index, and
+  what the run recognises it by — a stop's lane and end position, a phase's index in the compiled route
+  and its edge; a departure carries neither. Bahonar's, as read: the escort's five and the shadow's are
+  anchored to their departures, with declared starts; each gate probe's standoff from `stop:0` to
+  `stop_end:0` on lane `-431672573#2_0` at 30 m, with a declared length of 300 s and no declared start
+  (D6.4); the stay-behind's dwell the same over its own stop, declaring its end at 604 800 s.
+- **An absence is a `PatternInstance` with `Realisation.Absent`** (D6.6): annotated, no participant, its
+  series and slot, one `vacancy` interval of no vehicle over the slot's span, and `Expected` — the role,
+  the entity that would have realised the slot, its route in edges, its site as a lane and position or
+  both null, and the slot's declared span — with the series' realised count as counter-evidence. The
+  Bahonar no-show reads as `guard_d4_h7_t3`, sited at `26413459_0`, 58.9 m, from 345 600 s to 374 400 s,
+  335 of its series' 336 slots realised.
+- **What reading refuses**, every problem named in one refusal: a shape version other than 1; a field
+  the compiler always writes that is missing or of another kind (a key written null stays null, distinct
+  from absent); a core value outside the core; an anchor that is none of the four spellings; an absence
+  that is not annotated, names a participant, names no series and slot, or has an interval other than its
+  vacancy; an instance a vehicle realised with no participant or with an interval of a vehicle that is not
+  one; an unlabelled instance; a nominal cohort (D6.2); and a vocabulary that does not digest as the plan
+  says, computed by the compiler's own canonical form ([04](04_Contracts.md) C3 V3.15). Whether a label
+  is a term, a participant a vehicle of the route file or a slot its series' is the compiler's to refuse
+  ([07](07_Scenario_Authoring.md) checks 8, 18, 19, 20), and the lock's digest of the plan carries that
+  to the run.
+- **The session binds it to the files it runs.** `ScenarioLockCheck` reads `<stem>.supervision.json`
+  beside the configuration where the lock names a plan, refuses one whose digest is not the lock's,
+  then compares the plan's own digests with the files about to run — route file, configuration and
+  additional file by SHA-256, or no additional file where it was compiled against none, the network by
+  canonical fingerprint — its vocabulary digest with the lock's and its scenario with the lock's
+  ([03](03_CoSimulation_Runtime.md) §2.7). The plan is then `ScenarioLockCheck.Plan`, on
+  `CoSimRunReport.CompileLock`, for the binder to take, and the report's `supervision plan` line counts
+  what it holds. A lock that names no plan binds no supervision and says so; every lock the compiler
+  writes names one. A lock that names a plan that is not there is refused (D6.1). An uncompiled
+  scenario's `.supervision.json`, which may be a legacy sidecar of that name, is not read.
+- **It lives in `CarlaNet.CoSim`, beside the lock it is bound by**, not in `CarlaNet.Types`. It is a file
+  of the scenario package, read once by the session and refused with the session's own refusal, and the
+  binder that takes it runs in the session's process. The per-frame state published to the server, which
+  §3.6 places in `CarlaNet.Types`, is another type; keeping the plan out of `CarlaNet.Types` keeps it out of
+  every assembly that reads that state.
+- **Not built:** the interval binder, D6.8's two-run manifest diff, and supervision for Arapahoe and
+  Gardnerville, whose plans assert nothing: every flow and their one authored vehicle are unlabelled.
 
 ### 8.2 The capture truth sidecar
 
@@ -3581,7 +3654,7 @@ owner acts on it rather than rediscovers it.
 | **D6.5** | **`RecurringSeries` and `SeriesSlot` are added above `PatternInstance`.** A cadence is a first-class record, its realisations are its members, and the 335 realised guard postings are the evidence that makes the 336th slot's vacancy meaningful (§3.4) |
 | **D6.6** | **An absence is a pattern instance with `realisation: absent`, no participants, an `expected` block, and a `slot_ref`.** It is anchored to an area of interest and a window rather than to a track. It is **world-scoped**: it appears in the manifest and as a child of the sidecar's `<events>` container, and **never as a CoT `<event>`**, because emitting an event for a vehicle that does not exist is fabricating a detection (§3.5) |
 | **D6.7** | **An area of interest is a hard prerequisite for an absence**, not a later tier as in [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). An absence with no area cannot be expressed, and its observability is computed over the site, including the vehicles that *were* observed there (§3.5, §5.2) |
-| **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of [20 decision 3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and is a regression test (§3.6) |
+| **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of [20 decision 3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and is a regression test (§3.6). **As built (2026-10-05):** the plan's types expose no writer — sealed records made only by reading the plan, with private constructors, no setter and only immutable collections, held to that by a test over every type the plan reaches — and a session binds the plan the lock names to the files it runs (§8.1). The binder and the two-run diff are not built |
 | **D6.9** | **Truth authority is settled field by field, not producer by producer.** CARLA is authoritative for pose, height, bounding box and everything camera-relative; SUMO is authoritative for kinematics, existence in the simulation and network state. Neither producer is discarded and the reconciled record can recover both (§4.2) |
 | **D6.10** | **The SUMO-to-CARLA disagreement is recorded, never absorbed.** `pose_separation_m`, `heading_separation_deg`, `speed_separation_mps` and `dimension_separation_m` per vehicle per captured tick, summarised in the manifest. It is the only mechanism that catches a pose-convention error, which otherwise produces plausible imagery and bounding boxes wrong by half a car length (§4.3) |
 | **D6.11** | **Observability has five outcomes, and `not_rendered` is not one of the corpus's contents.** `out_of_frame` and `occluded` are collection-geometry facts and are honest content, reported as coverage; `not_rendered` is a corpus-construction artifact, is **reported as an exclusion** and is not counted among the intervals the corpus holds, because it is a row in the plan with no pixels behind it. The boundary between them is the **rendered span**, bounded by the recorded admission and release instants of D6.19, never by opacity or an arrival latch (§5.1) |
@@ -3603,7 +3676,7 @@ owner acts on it rather than rediscovers it.
 | **D6.27** | **The vocabulary is layered, and one test decides where a term sits: does the pipeline's own code branch on it?** If yes, the term is core — closed, versioned and testable, because a value outside the set is a defect the machinery cannot detect. If no, it is author space and is carried opaquely. The core is supervision state, subject kind, realisation, the three interval onsets, `closed_by`, the five observability outcomes, the illumination band, the cadence form, and two reserved words. Everything else — labels, role and phase values, `parameters` keys, area kinds — is the author's. **Labelling is a contract between the scenario author and the model trainer**, and neither party is this pipeline; carrying a term we do not understand is a property of the design rather than a gap in it (§3.7). **As built at core version 2 (2026-10-05)**, the outcomes are six with `beyond_draw_distance` (D6.39), and the core also holds the interval anchor events, the render state and its reasons, by the same test (§3.7) |
 | **D6.28** | **An author term is self-describing or it is not published.** Required: a namespaced identifier, a natural-language definition, `applies_to` naming the subject kinds it may be asserted of, `realisation`, `since`, and `status` with `superseded_by` when deprecated. Optional: `broader`, `parameters`, `counterfactual`, `contrast_with`, `hard_negative_for`, `exemplar_instances`. `applies_to` is what makes D6.2 enforceable for a term the compiler cannot interpret. A term may **not** declare itself anomalous, nor carry a severity or a confidence — that would invite a consumer to read every subject without such a term as a negative, which is the `unlabelled`-to-negative collapse [08 D8.20](08_Collection_And_EPoL.md) names (§3.8) |
 | **D6.29** | **Core terms are unprefixed and reserved; every author term carries a namespace; a namespace is first-come and free-form.** `vocabulary_version` covers the core alone; each author namespace versions independently as `{namespace, version}` and a term's identity is the pair `(namespace, name)`. **There is no rename operation** — the only sanctioned retirement is `status: deprecated` plus `superseded_by`, which is what joins a corpus captured under the old spelling to one captured under the new. No registry governs namespaces: a collision is made **visible** by the release attestation recording every namespace present, not prevented by us (§3.8) |
-| **D6.30** | **The vocabulary is resolved into the supervision plan and is not a fifth truth artifact.** D6.17's four stand. The plan carries the import-flattened term set with a `vocabulary_digest`; `<events>`, every `<_supervision>` element and the `carla:supervision` PNG chunk carry the version **and** the digest; the manifest carries both plus every author namespace and its version; the release step republishes the whole document. **The core half is generated from the enumerations in `CarlaNet.Types`**, so a new `closed_by` value or D6.22's `unlit` outcome reaches every shipped vocabulary without anyone remembering — [07 §8.5](07_Scenario_Authoring.md)'s mechanism applied where a stale copy would misdescribe a corpus already handed over. Three enforcement points: the compiler refuses an undeclared term, the runtime cannot mint one (D6.8), and the release validator refuses a corpus containing a term the published vocabulary does not define (§8.7). **As built (2026-10-05):** the enumerations are `CarlaNet.Types.Supervision`, published by its `CoreVocabulary` at version 2, which the scenario compiler reads through `carlanet` into every plan and the world truth track writes its render state and reasons from; nothing in the tree restates the core by hand (§3.7) |
+| **D6.30** | **The vocabulary is resolved into the supervision plan and is not a fifth truth artifact.** D6.17's four stand. The plan carries the import-flattened term set with a `vocabulary_digest`; `<events>`, every `<_supervision>` element and the `carla:supervision` PNG chunk carry the version **and** the digest; the manifest carries both plus every author namespace and its version; the release step republishes the whole document. **The core half is generated from the enumerations in `CarlaNet.Types`**, so a new `closed_by` value or D6.22's `unlit` outcome reaches every shipped vocabulary without anyone remembering — [07 §8.5](07_Scenario_Authoring.md)'s mechanism applied where a stale copy would misdescribe a corpus already handed over. Three enforcement points: the compiler refuses an undeclared term, the runtime cannot mint one (D6.8), and the release validator refuses a corpus containing a term the published vocabulary does not define (§8.7). **As built (2026-10-05):** the enumerations are `CarlaNet.Types.Supervision`, published by its `CoreVocabulary` at version 2, which the scenario compiler reads through `carlanet` into every plan and the world truth track writes its render state and reasons from; nothing in the tree restates the core by hand (§3.7). The session's reader of the plan reads every core value through the same enumerations and refuses a plan whose vocabulary publishes any other core, or does not digest as it says (§8.1) |
 | **D6.31** | **`nominal` may carry labels, and the assertion lives in `state` alone.** A `nominal` instance may carry `<annotation>` children in the sidecar exactly as an `annotated` one does, and labels in the plan and the manifest; a `nominal` element with children and one without assert precisely the same thing. An anonymous hard negative is worth little: a sidecar-only consumer that can read `bahonar:tower_posting` can build the matched negative set, while one reading a bare `state="nominal"` has 356 indistinguishable vehicles and is one bit away from §3.1's binary collapse (§8.2) |
 | **D6.32** | **A `nominal` term may declare `hard_negative_for`, and the field narrows and never widens.** `nominal` as defined in §3.1 is untargeted — not executing *any* target pattern — and cannot say which negative a subject is a negative *for*. The 335 guard postings are matched negatives for the dwell-shaped terms and the 21 hauls for the escort terms, and without the field a trainer samples 356 negatives at random instead of building the matched set [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) calls this system's unique product. **The published vocabulary states in these words that the field narrows, never widens, and that its absence means unspecified rather than none** (§3.9) |
 | **D6.33** | **A term may declare one `broader` parent and a resolved `counterfactual`, and a counterfactual is a pointer rather than a supervision write.** `broader` is one parent, acyclic, resolving inside the published document, never branched on — it lets a consumer roll an unknown term up to a known ancestor and makes adding a term cheap. `counterfactual` is `{kind: series \| cohort \| instance \| term, ref}`, resolved by the compiler and a compile error when it dangles; free text is refused because it joins to nothing. **A counterfactual reference asserts nothing about the referenced subjects beyond what they already carry**: naming `tower_relief` as the no-show's counterfactual annotates none of the 335 postings and adds no triple, which §3.6 point 2's row-set invariant enforces (§3.9) |
