@@ -29,6 +29,12 @@ internal static class CoSimFixtures
     /// </summary>
     public static string JamScenario => Fixture("Jam.sumocfg");
 
+    /// <summary>Every kind of supervised subject on the cross: a stop, a parking stay, a turn and a flow.</summary>
+    public static string SupervisedRoutes => Fixture("Supervised.rou.xml");
+
+    /// <summary>A vehicle SUMO can never insert behind one standing at the lane's start.</summary>
+    public static string UndepartedRoutes => Fixture("Undeparted.rou.xml");
+
     /// <summary>The same network on its own, for reading lane geometry with no simulation running.</summary>
     public static string RightAngleTurnNetwork => Fixture("RightAngleTurn.net.xml");
 

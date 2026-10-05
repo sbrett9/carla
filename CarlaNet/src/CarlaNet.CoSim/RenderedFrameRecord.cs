@@ -54,4 +54,12 @@ public sealed record RenderedFrameRecord(
     /// carries only the geometric one.
     /// </summary>
     public double? SunCorrectedElevationDegrees => Sun?.CorrectedElevationDegrees;
+
+    /// <summary>
+    /// The pose, velocity included, written to each body the frame drew, by the vehicle it drew: what the
+    /// body was given to apply on this tick, from which a reader takes the rendered body's speed. Empty
+    /// where the session renders no world. Lent from the session: valid during the call, and refilled by
+    /// the next tick, so copy what is kept.
+    /// </summary>
+    public IReadOnlyList<VehiclePose> AppliedPoses { get; init; } = [];
 }

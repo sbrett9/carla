@@ -64,6 +64,12 @@ public sealed class SumoVehicleQueries
     public IReadOnlyList<SumoStop>? UpcomingStops(string vehicleId) =>
         Ask(vehicleId, () => _vehicles.Stops(vehicleId));
 
+    /// <summary>
+    /// The index, counted from 0, of the route edge the vehicle is on or last left, or null for one SUMO
+    /// does not know: asked when the vehicle's edge changes and something waits on its progress.
+    /// </summary>
+    public int? RouteIndex(string vehicleId) => Ask(vehicleId, () => (int?)_vehicles.RouteIndex(vehicleId));
+
     private T? Ask<T>(string vehicleId, Func<T?> question)
     {
         ArgumentException.ThrowIfNullOrEmpty(vehicleId);

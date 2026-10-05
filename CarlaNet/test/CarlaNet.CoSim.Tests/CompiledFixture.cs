@@ -60,14 +60,17 @@ internal sealed class CompiledFixture : IDisposable
     /// Whether the scenario closes lanes: an additional file beside it, named by the configuration.
     /// </param>
     /// <param name="plan">Whether to write a supervision plan compiled against the copies, and bind it.</param>
+    /// <param name="routes">
+    /// Another fixture's route file to run in place of the fixture's own, on the same network.
+    /// </param>
     public static CompiledFixture Write(SolarEpoch? epoch = null, string? configuration = null,
-                                        bool additional = false, bool plan = false)
+                                        bool additional = false, bool plan = false, string? routes = null)
     {
         string directory = Path.Combine(Path.GetTempPath(), "carlanet-lock-" + Guid.NewGuid().ToString("n"));
         System.IO.Directory.CreateDirectory(directory);
         var fixture = new CompiledFixture(directory);
         File.Copy(CoSimFixtures.RightAngleTurnScenario, fixture.Scenario);
-        File.Copy(Path.ChangeExtension(CoSimFixtures.RightAngleTurnScenario, ".rou.xml"), fixture.Routes);
+        File.Copy(routes ?? Path.ChangeExtension(CoSimFixtures.RightAngleTurnScenario, ".rou.xml"), fixture.Routes);
         File.Copy(CoSimFixtures.RightAngleTurnNetwork, fixture.Network);
         if (configuration is not null)
         {
