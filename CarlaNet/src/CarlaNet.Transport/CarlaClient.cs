@@ -1414,6 +1414,33 @@ public sealed class CarlaClient : IAsyncDisposable
         _catalogueSpecialTypes = specialTypes.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
+    // The vehicle catalogue's base types, by blueprint id, held as the kinds are.
+    private volatile IReadOnlyDictionary<string, string> _catalogueBaseTypes =
+        FrozenDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// The truth record's <c>base_type</c> for every blueprint a vehicle catalogue curates one for, by
+    /// blueprint id, as last adopted on this connection (<see cref="AdoptCatalogueBaseTypes"/>); empty
+    /// where none was. The truth telemetry reports a vehicle of a blueprint held here with this base
+    /// type, and a vehicle of any other blueprint with the one its own blueprint declares.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CatalogueBaseTypes => _catalogueBaseTypes;
+
+    /// <summary>
+    /// Adopt a vehicle catalogue's <c>base_type</c> for each blueprint it curates, in place of whatever
+    /// was adopted before. A SUMO drive session adopts its own catalogue's when it starts, beside the
+    /// kinds (<see cref="AdoptCatalogueSpecialTypes"/>), so the truth this connection reports -- and the
+    /// callsign built from it -- names each body's base type as the catalogue curates it.
+    /// </summary>
+    /// <remarks>
+    /// Held exactly as the kinds are: client-side only, for the life of the connection, and copied.
+    /// </remarks>
+    public void AdoptCatalogueBaseTypes(IReadOnlyDictionary<string, string> baseTypes)
+    {
+        ArgumentNullException.ThrowIfNull(baseTypes);
+        _catalogueBaseTypes = baseTypes.ToFrozenDictionary(StringComparer.Ordinal);
+    }
+
     /// <summary>
     /// Write the world just built to <paramref name="directory"/> as a world package: the elevated
     /// OpenDRIVE, the per-cell surface reconciliation grids, and a manifest describing the datum,

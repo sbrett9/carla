@@ -487,7 +487,10 @@ comparable. The XML and CSV are the truth sidecar: they say which vehicles were 
 (`1`/`0`, a `_carla` attribute in the XML and a column in the CSV, not a contract field), and
 `special_type` is the vehicle's kind and nothing else: the kind the measured vehicle catalogue
 (`--catalogue`, this repository's by default) curates for the CARLA blueprint a compiled vehicle
-type names, and empty for a type that names none (06 D6.18). The UDP feed carries neither. A compiled scenario's ground truth is its `.supervision.json` (instances,
+type names, and empty for a type that names none (06 D6.18). The UDP feed carries neither.
+`base_type`, in every sink and in the callsign, is the catalogue's for the same blueprint, and the
+vehicle class's (`passenger` a car, `delivery` a van) only for a type that names none of its
+blueprints. A compiled scenario's ground truth is its `.supervision.json` (instances,
 series, absences, cohorts), which this tool does not read and which joins to the sidecar by vehicle
 id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
 

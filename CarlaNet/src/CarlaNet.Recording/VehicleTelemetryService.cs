@@ -21,11 +21,12 @@ namespace CarlaNet.Recording;
 /// recorder beside the session -- leaves out a body parked on the frame it describes and names a lent
 /// one by its SUMO vehicle. An actor no session named is reported as it always was.
 ///
-/// `special_type` is the vehicle catalogue's kind for the vehicle's blueprint wherever this
-/// connection adopted a catalogue that curates one (<see cref="CarlaClient.CatalogueSpecialTypes"/>),
-/// which a SUMO drive session does when it starts: an empty kind where the blueprint's class curates
-/// none, whatever the blueprint declares. A blueprint no adopted catalogue curates keeps the kind it
-/// declares itself (doc 06 D6.18).
+/// `base_type` and `special_type` are the vehicle catalogue's for the vehicle's blueprint wherever
+/// this connection adopted a catalogue that curates them (<see cref="CarlaClient.CatalogueBaseTypes"/>,
+/// <see cref="CarlaClient.CatalogueSpecialTypes"/>), which a SUMO drive session does when it starts:
+/// the class's base type, and its kind, an empty one where the class curates none, whatever the
+/// blueprint declares. A blueprint no adopted catalogue curates keeps what it declares itself, with
+/// the base type taken from its wheel count where it declares none (doc 06 D6.18).
 /// </summary>
 public sealed class VehicleTelemetryService
 {
@@ -106,7 +107,8 @@ public sealed class VehicleTelemetryService
         if (drape) EnsureDrapeGrids();
         var dtmSamples = _client.LastGroundDtmSamples;
 
-        // Read once, so every record of this frame takes its kind from the same table.
+        // Read once, so every record of this frame takes its kinds from the same tables.
+        IReadOnlyDictionary<string, string> curatedBaseTypes = _client.CatalogueBaseTypes;
         IReadOnlyDictionary<string, string> curatedKinds = _client.CatalogueSpecialTypes;
 
         var outp = new List<VehicleTelemetry>(ids.Count);
@@ -151,9 +153,14 @@ public sealed class VehicleTelemetryService
                 : heading;                                             // ~stopped: fall back to heading
 
             var attrs = meta.Description.Attributes;
-            string baseType = Attr(attrs, "base_type", "");
-            if (baseType.Length == 0)
-                baseType = Attr(attrs, "number_of_wheels", "4") == "2" ? "motorcycle" : "car";
+            // The base type the catalogue curates for this blueprint, and only for a blueprint it does
+            // not curate the one the blueprint declares, or failing that its wheel count's.
+            if (!curatedBaseTypes.TryGetValue(typeId, out string? baseType))
+            {
+                baseType = Attr(attrs, "base_type", "");
+                if (baseType.Length == 0)
+                    baseType = Attr(attrs, "number_of_wheels", "4") == "2" ? "motorcycle" : "car";
+            }
             // The kind the catalogue curates for this blueprint, an empty one included, and only for
             // a blueprint it does not curate the kind the blueprint declares.
             string specialType = curatedKinds.TryGetValue(typeId, out string? curated)

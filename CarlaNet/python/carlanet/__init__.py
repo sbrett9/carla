@@ -1914,11 +1914,12 @@ class World:
         for that vehicle) -- the same names the recorded truth sidecar gives it. Outside a drive no
         body is named and every vehicle is reported, without those three keys.
 
-        `special_type` is the vehicle's kind as the measured vehicle catalogue curates it for the
-        vehicle's blueprint, once a SUMO drive started on this client has handed this client its
-        catalogue (06_Truth_And_Annotation D6.18): empty where the blueprint's catalogue class curates
-        none, whatever the blueprint declares. A blueprint no catalogue handed over curates, and every
-        vehicle on a client no drive was started on, carries the kind its blueprint declares.
+        `base_type` and `special_type` are the vehicle's base type and kind as the measured vehicle
+        catalogue curates them for the vehicle's blueprint, once a SUMO drive started on this client
+        has handed this client its catalogue (06_Truth_And_Annotation D6.18): the class's base type,
+        and its kind, empty where it curates none, whatever the blueprint declares. A blueprint no
+        catalogue handed over curates, and every vehicle on a client no drive was started on, carries
+        what its blueprint declares, its base type from its wheel count where it declares none.
 
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
         speed_mps, course_deg, heading_deg, vx, vy, vz, length_m, width_m, height_m, and sumo_id,
@@ -2230,10 +2231,11 @@ class World:
         `catalogue` the measured vehicle catalogue. A vType that names no blueprint the catalogue
         holds a measurement for is simulated and never rendered — no body of another shape stands in
         for it. The catalogue also says what kind of vehicle each body is: the session hands this
-        client its table of curated special types as it starts, so every truth reader on this
-        client -- the recorder and `get_vehicle_telemetry` alike -- reports each body's
-        `special_type` as its catalogue class curates it (06_Truth_And_Annotation D6.18). A reader on
-        another client is not handed it and reports the kind each blueprint declares.
+        client its tables of curated base types and special types as it starts, so every truth
+        reader on this client -- the recorder and `get_vehicle_telemetry` alike -- reports each body's
+        `base_type` (and the callsign built from it) and `special_type` as its catalogue class
+        curates them (06_Truth_And_Annotation D6.18). A reader on another client is not handed them
+        and reports what each blueprint declares.
 
         By default every vehicle SUMO has is rendered: the scenario is the only arbiter of
         population. A vehicle holds a body from the frame SUMO first reports it in until SUMO removes

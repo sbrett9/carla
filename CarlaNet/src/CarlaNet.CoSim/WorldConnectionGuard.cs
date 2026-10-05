@@ -47,6 +47,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(AdoptCatalogueSpecialTypes), () => _world.AdoptCatalogueSpecialTypes(specialTypes));
 
     /// <inheritdoc/>
+    public void AdoptCatalogueBaseTypes(IReadOnlyDictionary<string, string> baseTypes) =>
+        Guard(nameof(AdoptCatalogueBaseTypes), () => _world.AdoptCatalogueBaseTypes(baseTypes));
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() => Guard(nameof(ReadSettings), _world.ReadSettings);
 
     /// <inheritdoc/>

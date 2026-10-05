@@ -570,9 +570,10 @@ public sealed class SumoDriveSession : IDisposable
             loaded.AdoptBareEarthGrids(options.WorldPackagePath);
 
             // And what kind of vehicle each body is: every body the pool lends is one of the
-            // catalogue's blueprints, and its truth carries the special type its catalogue class
-            // curates rather than the one the blueprint declares (doc 06 D6.18). Client-side, like
-            // the grids.
+            // catalogue's blueprints, and its truth carries the base type and the special type its
+            // catalogue class curates rather than the ones the blueprint declares (doc 06 D6.18).
+            // Client-side, like the grids.
+            loaded.AdoptCatalogueBaseTypes(catalogue.BaseTypes);
             loaded.AdoptCatalogueSpecialTypes(catalogue.SpecialTypes);
         }
 

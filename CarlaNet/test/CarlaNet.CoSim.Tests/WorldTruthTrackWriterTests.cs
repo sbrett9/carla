@@ -117,13 +117,17 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
             Assert.Equal(state.Y / 110_574.0, double.Parse(row["lat"], CultureInfo.InvariantCulture), 1e-6);
             Assert.Equal(state.X / 111_320.0, double.Parse(row["lon"], CultureInfo.InvariantCulture), 1e-6);
 
-            // Identity follows the SUMO vehicle; its kind and dimensions are its type's as declared.
+            // Identity follows the SUMO vehicle; its dimensions are its type's as declared, and its base
+            // type and kind the catalogue's for the blueprint the type names: the Fuso is a bus, where the
+            // type's truck class would read as a truck, and the callsign carries it.
             Assert.Equal(row["sumo_id"], row["entity_id"]);
             Assert.Equal("CARLA-TRUTH-SUMO-" + row["sumo_id"], row["uid"]);
-            Assert.Equal("truck-" + row["sumo_id"], row["callsign"]);
+            Assert.Equal("bus-" + row["sumo_id"], row["callsign"]);
             Assert.Equal(row["sumo_id"], row["role_name"]);
-            Assert.Equal(("truck", "measured_truck", "7.02", "2.51"),
+            Assert.Equal(("bus", "measured_truck", "7.02", "2.51"),
                          (row["base_type"], row["type_id"], row["length_m"], row["width_m"]));
+            Assert.Equal(catalogue.BaseTypes["vehicle.fuso.mitsubishi"], row["base_type"]);
+            Assert.NotEqual(WorldTruthVehicleType.BaseTypeOf("truck"), row["base_type"]);
             Assert.Equal(catalogue.SpecialTypes["vehicle.fuso.mitsubishi"], row["special_type"]);
             Assert.Matches(@"^\d+,\d+,\d+$", row["color"]);
 
@@ -370,8 +374,12 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
         Assert.NotEmpty(unmeasured);
         Assert.All(unmeasured[..^1], row => Assert.Equal(("simulated_only", "no_blueprint"),
                                                           (row["render_state"], row["render_reason"])));
+        // Its type names no blueprint, so its base type is its passenger class's, and it has no kind.
         Assert.Equal("car", unmeasured[0]["base_type"]);
+        Assert.Equal("car-unrenderable", unmeasured[0]["callsign"]);
         Assert.Equal(string.Empty, unmeasured[0]["special_type"]);
+        Assert.All(rows.Where(row => row["sumo_id"] != "unrenderable"),
+                   row => Assert.Equal("bus", row["base_type"]));
 
         // The body the first vehicle gave back drew the second.
         Assert.Equal(rows.First(row => row["sumo_id"] == "first")["actor_id"],

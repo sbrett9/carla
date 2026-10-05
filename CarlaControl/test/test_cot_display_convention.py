@@ -29,12 +29,15 @@ as a run display convention, and deletes the half that gave every anomaly type `
   planted vehicle apart only when `--marked-affiliation` asks, which never reaches a file. A
   compiled scenario marks none, and its planted vehicles are the supervision plan's, found in the
   sidecar by vehicle id.
-* **A vehicle's kind is the catalogue's for the blueprint its type names** (06 D6.18). A bridge
-  given the catalogue writes, into the XML and CSV, the kind the catalogue curates for the blueprint
-  a compiled type names in `carla:blueprint`, and an empty one for a type that names none or names a
-  blueprint the catalogue does not curate; each type is asked once. Over the compiled Bahonar
-  traffic no kind is carried by the planted vehicles alone. A type written from another catalogue is
-  warned about once. `sumo_cot_telemetry.py` reads the catalogue it is given, or this repository's.
+* **A vehicle's base type and kind are the catalogue's for the blueprint its type names** (06
+  D6.18). A bridge given the catalogue writes, into the XML and CSV, the base type and the kind the
+  catalogue curates for the blueprint a compiled type names in `carla:blueprint` -- an ambulance a
+  van, a fire appliance a truck, a police car and an army jeep cars -- and for a type that names none,
+  or names a blueprint the catalogue does not curate, its vehicle class's base type and no kind; each
+  type is asked once. Without a catalogue every base type is the vehicle class's. Over the compiled
+  Bahonar traffic no base type and no kind is carried by the planted vehicles alone. A type written
+  from another catalogue is warned about once. `sumo_cot_telemetry.py` reads the catalogue it is
+  given, or this repository's.
 """
 from __future__ import annotations
 
@@ -715,23 +718,26 @@ def test_a_compiled_scenario_marks_nothing_and_its_plan_names_the_planted_by_id(
     assert annotated <= {row["uid"].removeprefix(f"{UID_PREFIX}-") for row in rows}
 
 
-# ---- the kind, from the catalogue ----------------------------------------------------------------
+# ---- the kinds, from the catalogue ---------------------------------------------------------------
 
-def _kinds(records: list[dict]) -> dict[str, str]:
-    """Each vehicle's `special_type`, by its id."""
-    return {record["uid"].removeprefix(f"{UID_PREFIX}-"): record["special_type"]
+def _kinds(records: list[dict]) -> dict[str, tuple[str, str]]:
+    """Each vehicle's `base_type` and `special_type`, by its id."""
+    return {record["uid"].removeprefix(f"{UID_PREFIX}-"): (record["base_type"], record["special_type"])
             for record in records}
 
 
-def test_a_compiled_vehicle_s_kind_is_the_catalogue_s_for_its_blueprint(tmp_path, caplog,
-                                                                       specification, compiled):
-    """Bahonar compiled, the bridge given the catalogue: each vehicle carries its blueprint's kind.
+def test_a_compiled_vehicle_s_kinds_are_the_catalogue_s_for_its_blueprint(tmp_path, caplog,
+                                                                         specification, compiled):
+    """Bahonar compiled, the bridge given the catalogue: each vehicle carries its blueprint's kinds.
 
-    In the XML and the CSV every vehicle's `special_type` is the kind the catalogue curates for the
-    blueprint its type names -- `taxi` for the cabs and empty for every other body Bahonar draws --
-    and no kind is carried by the planted vehicles alone. The datagrams still carry none, nothing is
-    marked, each type's blueprint is asked for once, and types written from this catalogue draw no
-    warning.
+    In the XML and the CSV every vehicle's `base_type` and `special_type` are the ones the catalogue
+    curates for the blueprint its type names -- `taxi` for the cabs and no kind for every other body
+    Bahonar draws -- so the army's and the port authority's classes, which SUMO's vehicle classes
+    would report as `army` and `authority`, are the cars and lorries their bodies are. No base type,
+    no kind and no pairing of the base type with the CoT type is carried by the planted vehicles
+    alone. The callsign is built from the catalogue's base type, the datagrams carry no kind,
+    nothing is marked, each type's blueprint is asked for once, and types written from this
+    catalogue draw no warning.
     """
     roster, table = compiled
     catalogue = VehicleCatalogue.load(CATALOGUE)
@@ -741,36 +747,43 @@ def test_a_compiled_vehicle_s_kind_is_the_catalogue_s_for_its_blueprint(tmp_path
 
     blueprint_of = {type_id: entry["params"].get(BLUEPRINT_PARAM, "")
                     for type_id, entry in table.types.items()}
-    expected = {vehicle_id: catalogue.special_type_of(blueprint_of[type_id]) or ""
+    expected = {vehicle_id: (catalogue.base_type_of(blueprint_of[type_id]),
+                             catalogue.special_type_of(blueprint_of[type_id]) or "")
                 for vehicle_id, type_id in roster}
-    assert set(expected.values()) == {"", "taxi"}
+    assert {kind for _, kind in expected.values()} == {"", "taxi"}
+    assert {base for base, _ in expected.values()} == {"car", "truck", "bus"}
+    # An escort's army jeep and a convoy's army lorry, and the planted shadow's army saloon.
+    assert (expected["escort_0"], expected["haul_d0_0"], expected["shadow"]) == \
+        (("car", ""), ("truck", ""), ("car", ""))
+    planted = _planted(specification)
     for name, records in {"csv": rows, "xml": _xml_records(xml_path)}.items():
         assert len(records) == report.events, name
         assert _kinds(records) == expected, name
-        findings = _identifying(_planted(specification), records, "special_type")
-        assert findings == [], f"{name}: {CorpusLeakValidator.describe(findings)}"
+        for field in ("base_type", "special_type", KIND_AND_TYPE):
+            findings = _identifying(planted, _with_kind(records), field)
+            assert findings == [], f"{name}: {CorpusLeakValidator.describe(findings)}"
         assert _values(records, "marked") == {"0"}, name
+    assert all(row["callsign"] == f"{row['base_type']}-{row['uid'].removeprefix(f'{UID_PREFIX}-')}"
+               for row in rows)
     assert _values(_datagram_records(tmp_path, datagrams), "special_type") == {"<absent>"}
     assert sorted(read for read in playback.parameter_reads if read[1] == BLUEPRINT_PARAM) == \
         sorted((type_id, BLUEPRINT_PARAM) for type_id in set(dict(roster).values()))
     assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING] == []
 
 
-def test_only_a_blueprint_the_catalogue_curates_has_a_kind_and_another_catalogue_is_named(tmp_path,
-                                                                                       caplog):
-    """The catalogue decides the kind, and a type written from another catalogue is warned about.
-
-    The ambulance's type names a curated blueprint and carries `emergency`. A type naming a
-    blueprint no class draws, and a hand-written type naming none, carry the empty kind. A cab type
-    written from an older catalogue that drew the Crown as a taxi carries the kind this catalogue
-    gives the Crown, which is none; the two types from that catalogue draw one warning naming both
-    digests, and the type from this one draws none.
-    """
-    digest = VehicleCatalogue.load(CATALOGUE).catalogue_digest
-    table = _TypeTable(f"""
+def _hand_written_types(digest: str) -> _TypeTable:
+    """The emergency and authority bodies SUMO's classes misname, an army jeep, cabs, a blueprint no
+    class draws, and types naming none."""
+    return _TypeTable(f"""
         <vType id="ambulance.vehicle.ambulance.ford" vClass="emergency">
             <param key="{BLUEPRINT_PARAM}" value="vehicle.ambulance.ford"/>
             <param key="{CATALOGUE_DIGEST_PARAM}" value="{digest}"/></vType>
+        <vType id="fire.vehicle.firetruck.actors" vClass="emergency">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.firetruck.actors"/></vType>
+        <vType id="police.vehicle.dodgecop.charger" vClass="authority">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.dodgecop.charger"/></vType>
+        <vType id="mil_jeep.vehicle.jeep.wrangler_rubicon" vClass="army">
+            <param key="{BLUEPRINT_PARAM}" value="vehicle.jeep.wrangler_rubicon"/></vType>
         <vType id="cab.vehicle.taxi.ford" vClass="taxi">
             <param key="{BLUEPRINT_PARAM}" value="vehicle.taxi.ford"/>
             <param key="{CATALOGUE_DIGEST_PARAM}" value="0ldcatalogue"/></vType>
@@ -779,20 +792,61 @@ def test_only_a_blueprint_the_catalogue_curates_has_a_kind_and_another_catalogue
             <param key="{CATALOGUE_DIGEST_PARAM}" value="0ldcatalogue"/></vType>
         <vType id="microcar.vehicle.bmw.isetta" vClass="passenger">
             <param key="{BLUEPRINT_PARAM}" value="vehicle.bmw.isetta"/></vType>
+        <vType id="convoy" vClass="army"/>
         <vType id="civ_car" vClass="passenger"/>""")
-    roster = [("ambulance", "ambulance.vehicle.ambulance.ford"),
-              ("cab_a", "cab.vehicle.taxi.ford"), ("cab_b", "cab.vehicle.ue4.ford.crown"),
-              ("isetta", "microcar.vehicle.bmw.isetta"), ("saloon", "civ_car")]
 
+
+HAND_WRITTEN_ROSTER = [
+    ("ambulance", "ambulance.vehicle.ambulance.ford"), ("fire", "fire.vehicle.firetruck.actors"),
+    ("police", "police.vehicle.dodgecop.charger"), ("jeep", "mil_jeep.vehicle.jeep.wrangler_rubicon"),
+    ("cab_a", "cab.vehicle.taxi.ford"), ("cab_b", "cab.vehicle.ue4.ford.crown"),
+    ("isetta", "microcar.vehicle.bmw.isetta"), ("convoy", "convoy"), ("saloon", "civ_car")]
+
+
+def test_only_a_blueprint_the_catalogue_curates_takes_its_kinds_and_another_catalogue_is_named(
+        tmp_path, caplog):
+    """The catalogue decides the base type and the kind; a type from another catalogue is named.
+
+    The ambulance is a van and the fire appliance a truck, where their `emergency` class reads as a
+    car; the police car a car, where its `authority` class reads as nothing the contract knows; the
+    army jeep a car, where `army` reads as itself; and the three emergency bodies carry the
+    emergency kind. A cab type written from an older catalogue that drew the Crown as a taxi carries
+    what this catalogue gives the Crown, a car of no kind. A type naming a blueprint no class draws,
+    and hand-written types naming none, take their vehicle class's base type -- `army` included,
+    which nothing maps -- and no kind. The two types from the older catalogue draw one warning naming
+    both digests, and the type from this one draws none.
+    """
+    digest = VehicleCatalogue.load(CATALOGUE).catalogue_digest
     with caplog.at_level(logging.WARNING):
-        _, rows, xml_path, _, _ = _run(tmp_path, roster, table, {},
-                                       catalogue=VehicleCatalogue.load(CATALOGUE))
+        _, rows, xml_path, _, _ = _run(tmp_path, HAND_WRITTEN_ROSTER, _hand_written_types(digest),
+                                       {}, catalogue=VehicleCatalogue.load(CATALOGUE))
 
-    expected = {"ambulance": "emergency", "cab_a": "taxi", "cab_b": "", "isetta": "", "saloon": ""}
+    expected = {
+        "ambulance": ("van", "emergency"), "fire": ("truck", "emergency"),
+        "police": ("car", "emergency"), "jeep": ("car", ""),
+        "cab_a": ("car", "taxi"), "cab_b": ("car", ""),
+        "isetta": ("car", ""), "convoy": ("army", ""), "saloon": ("car", "")}
     assert _kinds(rows) == _kinds(_xml_records(xml_path)) == expected
+    assert {row["callsign"] for row in rows if row["uid"].endswith("-ambulance")} == \
+        {"van-ambulance"}
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
     assert "0ldcatalogue" in warnings[0] and digest in warnings[0]
+
+
+def test_a_bridge_given_no_catalogue_reads_every_base_type_from_the_vehicle_class(tmp_path):
+    """The control: without a catalogue the same types are what their SUMO classes say, and no kind.
+
+    This is what the catalogue corrects -- the ambulance and the fire appliance read as cars, the
+    police car as `authority` and the army jeep as `army` -- and no type is asked for a parameter.
+    """
+    _, rows, _, _, playback = _run(tmp_path, HAND_WRITTEN_ROSTER, _hand_written_types(""), {})
+
+    assert _kinds(rows) == {
+        "ambulance": ("car", ""), "fire": ("car", ""), "police": ("authority", ""),
+        "jeep": ("army", ""), "cab_a": ("car", ""), "cab_b": ("car", ""),
+        "isetta": ("car", ""), "convoy": ("army", ""), "saloon": ("car", "")}
+    assert playback.parameter_reads == []
 
 
 def test_the_script_reads_kinds_from_the_catalogue_it_is_given_or_else_this_repository_s(tmp_path,

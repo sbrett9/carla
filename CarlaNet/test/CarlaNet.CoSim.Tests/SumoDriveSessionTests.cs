@@ -1046,9 +1046,10 @@ public sealed class SumoDriveSessionTests
         Assert.Empty(carla.Spawned);
 
         // And its grids are not handed to the world's truth telemetry: they are not the world's. Nor
-        // is the catalogue's table of kinds, from a session that never started.
+        // are the catalogue's tables of kinds, from a session that never started.
         Assert.Empty(carla.Adoptions);
         Assert.Empty(carla.SpecialTypeAdoptions);
+        Assert.Empty(carla.BaseTypeAdoptions);
     }
 
     [RequiresSumoFact]
@@ -1088,23 +1089,33 @@ public sealed class SumoDriveSessionTests
 
         using SumoDriveSession session = SumoDriveSession.Start(options);
 
-        // Once, the session's own catalogue's whole table, and only after the world had described
-        // itself: a body's truth then carries the kind its catalogue class curates (doc 06 D6.18).
+        // Once each, the session's own catalogue's whole tables, and only after the world had described
+        // itself: a body's truth then carries the base type and the kind its catalogue class curates
+        // (doc 06 D6.18).
         (IReadOnlyDictionary<string, string> kinds, int afterDescriptions) =
             Assert.Single(carla.SpecialTypeAdoptions);
         Assert.Equal(1, afterDescriptions);
+        (IReadOnlyDictionary<string, string> baseTypes, int baseTypesAfterDescriptions) =
+            Assert.Single(carla.BaseTypeAdoptions);
+        Assert.Equal(1, baseTypesAfterDescriptions);
         VehicleCatalogue catalogue = VehicleCatalogue.Load(CoSimFixtures.VehicleCatalogue);
         Assert.Equal(catalogue.SpecialTypes.OrderBy(pair => pair.Key, StringComparer.Ordinal),
                      kinds.OrderBy(pair => pair.Key, StringComparer.Ordinal));
-        // The body the fixture scenario draws is the Fuso, whose bus class curates no kind.
+        Assert.Equal(catalogue.BaseTypes.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+                     baseTypes.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        // The body the fixture scenario draws is the Fuso, whose bus class curates no kind, and makes
+        // it a bus where its type's truck class would read as a truck.
         Assert.Equal(string.Empty, kinds["vehicle.fuso.mitsubishi"]);
+        Assert.Equal("bus", baseTypes["vehicle.fuso.mitsubishi"]);
         Assert.Equal("emergency", kinds["vehicle.ambulance.ford"]);
+        Assert.Equal("van", baseTypes["vehicle.ambulance.ford"]);
 
         for (int step = 0; step < 10 && session.Advance(); step++)
         {
         }
 
         Assert.Single(carla.SpecialTypeAdoptions);
+        Assert.Single(carla.BaseTypeAdoptions);
     }
 
     [Fact]
@@ -1125,6 +1136,7 @@ public sealed class SumoDriveSessionTests
         Assert.Empty(carla.SettingsWrites);
         Assert.Empty(carla.Adoptions);
         Assert.Empty(carla.SpecialTypeAdoptions);
+        Assert.Empty(carla.BaseTypeAdoptions);
     }
 
     private static SumoDriveSessionOptions Options(SyntheticWorld world,

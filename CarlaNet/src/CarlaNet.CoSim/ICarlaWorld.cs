@@ -10,9 +10,9 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Nineteen operations. The bridge asks which world is loaded, hands the world's truth
-/// telemetry the package's ground and the catalogue's vehicle kinds once the package is established
-/// as that world's, places bodies,
+/// <para>Twenty operations. The bridge asks which world is loaded, hands the world's truth
+/// telemetry the package's ground and the catalogue's base types and vehicle kinds once the package
+/// is established as that world's, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
 /// which parked, sets how far from a camera the bodies are drawn, reads back where the world says
 /// they went and how
@@ -76,6 +76,20 @@ public interface ICarlaWorld
     /// connection still reports each vehicle with the kind its blueprint declares.</para>
     /// </remarks>
     void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes);
+
+    /// <summary>
+    /// Give the world's truth telemetry the vehicle catalogue's <c>base_type</c> for every blueprint a
+    /// class of it draws, by blueprint id, so that a vehicle of such a blueprint -- its record and the
+    /// callsign built from it -- is reported with the catalogue's base type rather than the one its
+    /// blueprint declares.
+    /// </summary>
+    /// <remarks>
+    /// Given once, beside the kinds (<see cref="AdoptCatalogueSpecialTypes"/>), and for the same
+    /// reason: the base type is the catalogue's by ruling (doc 06 D6.18), because the content build's own
+    /// was wrong or absent for seven of seventeen blueprints when first swept. Nothing is written to the
+    /// server, so nothing is given back.
+    /// </remarks>
+    void AdoptCatalogueBaseTypes(IReadOnlyDictionary<string, string> baseTypes);
 
     /// <summary>The episode settings as the server currently holds them.</summary>
     EpisodeSettings ReadSettings();
