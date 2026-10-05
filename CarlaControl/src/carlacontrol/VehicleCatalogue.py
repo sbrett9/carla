@@ -178,8 +178,14 @@ class VehicleCatalogue:
                 body_width_m=(float(entry["body_width_m"]) if "body_width_m" in entry else None),
             )
         self.classes: dict[str, dict] = {c["class_id"]: c for c in document.get("classes", [])}
-        # What kind of vehicle each blueprint is: the kind its class curates, or the empty kind
-        # where the class curates none.
+        # What kind of vehicle each blueprint is: the base type its class curates, and the kind, or
+        # the empty kind where the class curates none. `cot_base_type` is required, so a class without
+        # one is a malformed catalogue, and its members are left to what their blueprints declare
+        # rather than given an empty base type.
+        self._base_types: dict[str, str] = {
+            member["blueprint_id"]: entry["cot_base_type"]
+            for entry in self.classes.values() if entry.get("cot_base_type")
+            for member in entry.get("members", [])}
         self._special_types: dict[str, str] = {
             member["blueprint_id"]: entry.get("cot_special_type", "")
             for entry in self.classes.values() for member in entry.get("members", [])}
@@ -210,6 +216,16 @@ class VehicleCatalogue:
     def blueprint_ids(self) -> list[str]:
         """Every blueprint the catalogue measured successfully, in document order."""
         return list(self._extents)
+
+    def base_type_of(self, blueprint_id: str) -> str | None:
+        """The truth record's `base_type` for a blueprint, or None where no class draws it.
+
+        The base type is the curated `cot_base_type` of the class whose members include the
+        blueprint. Truth takes a vehicle's base type from here rather than from what its blueprint
+        declares, or from a SUMO vehicle class (`06_Truth_And_Annotation.md` D6.18). None is the
+        catalogue saying nothing about the blueprint, and the caller falls back to what it holds.
+        """
+        return self._base_types.get(blueprint_id)
 
     def special_type_of(self, blueprint_id: str) -> str | None:
         """The truth record's `special_type` for a blueprint, or None where no class draws it.

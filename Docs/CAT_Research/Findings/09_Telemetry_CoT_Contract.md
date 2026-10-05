@@ -29,6 +29,16 @@
 > live or recorded, exactly as any vehicle the session did not draw (§5.2). With neither, nothing
 > changes.
 
+> **Revision (2026-10-05):** A vehicle's `base_type` and `special_type` come from the measured vehicle
+> catalogue (`CarlaControl/catalogue/vehicles.catalogue.json`) wherever its blueprint is one a
+> catalogue class draws: the class's `cot_base_type` and `cot_special_type`, an empty kind included,
+> whatever the blueprint declares, and the callsign `<base_type>-<id>` with them (§4). This holds in
+> the recorded sidecar and the live pull of the process running a SUMO drive, which hands the client it
+> drives through its catalogue's tables, and in the SUMO-side producers given the catalogue. Any other
+> blueprint, and every vehicle a client no drive handed a catalogue reports, keeps what its blueprint
+> declares. Owner's rulings of 2026-10-02 (`special_type`) and 2026-10-05 (`base_type`), recorded as
+> [06 D6.18](../Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md).
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -106,8 +116,13 @@ CoT atom type format: `a-{affiliation}-G-E-V[-subtype]` — atom / standard-iden
 | `bus` | `a-{aff}-G-E-V-U-B` | bus (verify SIDC) |
 | `special_type=emergency` (fire/ambulance/police) | emergency-management symbol | distinct hierarchy; refine |
 
-Vehicle class source: CARLA blueprint attributes `base_type` (car/truck/van/motorcycle/bicycle) and
-`special_type` (emergency/taxi/electric) when present; else infer from `number_of_wheels` / `type_id`.
+Vehicle class source: the measured vehicle catalogue's class for the vehicle's blueprint —
+`cot_base_type` (car/truck/van/bus/motorcycle/bicycle) and `cot_special_type` (emergency/taxi/electric,
+empty for none) — wherever the producer holds the catalogue and a class draws the blueprint
+(2026-10-05; the content build's own attributes are hand-edited, and when first swept `base_type` was
+wrong or absent on 7 of 17 blueprints and `special_type` empty on all). Otherwise the CARLA blueprint
+attributes `base_type` and `special_type` when present; else infer from `number_of_wheels` / `type_id`.
+A SUMO-side producer with no blueprint in the catalogue takes the base type from the SUMO vehicle class.
 
 ## 5. The `_carla` truth-extras block (custom `<detail>` child)
 

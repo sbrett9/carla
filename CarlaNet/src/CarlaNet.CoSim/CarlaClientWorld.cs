@@ -122,6 +122,10 @@ public sealed class CarlaClientWorld : ICarlaWorld
         _client.AdoptCatalogueSpecialTypes(specialTypes);
 
     /// <inheritdoc/>
+    public void AdoptCatalogueBaseTypes(IReadOnlyDictionary<string, string> baseTypes) =>
+        _client.AdoptCatalogueBaseTypes(baseTypes);
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() =>
         _client.GetEpisodeSettingsAsync().GetAwaiter().GetResult();
 

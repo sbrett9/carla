@@ -34,10 +34,11 @@ datagram feed is a moving-map display and is given what a display needs, which l
 named in `AUTHORED_TRUTH_FIELDS`. A field means one thing in every sink: `special_type` is the
 vehicle's kind as the contract spells it and never the author's marking, which the sidecar carries
 in `marked`, a field of its own and not of the contract (`06_Truth_And_Annotation.md` D6.18). SUMO
-reports no kind, so the kind is the measured vehicle catalogue's for the CARLA blueprint a vehicle's
-type names, where the bridge is given the catalogue, exactly as the capture path's truth takes it. A
-compiled scenario marks nothing here; its labels are its `*.supervision.json`, joined to the
-sidecar by vehicle id.
+reports no kind, and its vehicle class is no base type, so both are the measured vehicle catalogue's
+for the CARLA blueprint a vehicle's type names, where the bridge is given the catalogue, exactly as
+the capture path's truth takes them; only a type that names none of the catalogue's blueprints has
+its base type read from its vehicle class. A compiled scenario marks nothing here; its labels are its
+`*.supervision.json`, joined to the sidecar by vehicle id.
 """
 from __future__ import annotations
 
@@ -63,8 +64,10 @@ from carlacontrol.VehicleCatalogue import (
     VehicleCatalogue,
 )
 
-# SUMO's own vehicle classes carry enough to fill the contract's base_type without a per-scenario
-# lookup table. Anything unlisted is reported as it comes.
+# SUMO's own vehicle classes as the contract's base_type, for a vehicle whose type names no blueprint
+# the catalogue curates: a type that names one takes the catalogue's base type, because a class says
+# how SUMO drives a vehicle and not what it is -- an ambulance's `emergency` reads as a car here, a
+# police car's `authority` as nothing at all. Anything unlisted is reported as it comes.
 BASE_TYPE_BY_VEHICLE_CLASS = {
     "passenger": "car",
     "delivery": "van",
@@ -269,14 +272,15 @@ class SumoCotBridge:
         self.bare_earth = bare_earth
         self.constant_hae = constant_hae
         self.use_gui = use_gui
-        # The measured vehicle catalogue each vehicle's kind is read from, by the blueprint its type
-        # names. None reports every vehicle's kind empty, which is all SUMO alone can say.
+        # The measured vehicle catalogue each vehicle's base type and kind are read from, by the
+        # blueprint its type names. None reports every vehicle's kind empty and its base type its
+        # vehicle class's, which is all SUMO alone can say.
         self.catalogue = catalogue
         self.off_grid_heights = 0
         # The population each vehicle type belongs to, read once per type per run.
         self._population_of: dict[str, str] = {}
-        # The kind each vehicle type's blueprint has, read once per type per run.
-        self._special_type_of: dict[str, str] = {}
+        # The base type and kind each vehicle type's blueprint has, read once per type per run.
+        self._kinds_of: dict[str, tuple[str, str]] = {}
         # Catalogue digests vehicle types were written from that are not the catalogue's own,
         # each warned about once.
         self._foreign_catalogues: set[str] = set()
@@ -297,7 +301,7 @@ class SumoCotBridge:
         report = RunReport()
         self.off_grid_heights = 0
         self._population_of = {}
-        self._special_type_of = {}
+        self._kinds_of = {}
         self._foreign_catalogues = set()
         epoch = settings.epoch or datetime.now(UTC)
         report.epoch = epoch
@@ -432,7 +436,7 @@ class SumoCotBridge:
         course = traci.vehicle.getAngle(vehicle_id) % 360.0
         heading = math.radians(course)
         red, green, blue, _alpha = traci.vehicletype.getColor(type_id)
-        vehicle_class = traci.vehicletype.getVehicleClass(type_id)
+        base_type, special_type = self._kinds(traci, type_id)
         marked = vehicle_id == settings.marked_vehicle or vehicle_id in settings.marked_ids
         return {
             "id": vehicle_id,
@@ -446,12 +450,14 @@ class SumoCotBridge:
             "vx": speed * math.sin(heading),
             "vy": -speed * math.cos(heading),
             "vz": 0.0,
-            "base_type": BASE_TYPE_BY_VEHICLE_CLASS.get(vehicle_class, vehicle_class),
+            # The catalogue's for the blueprint the type names, and the vehicle class's only for a
+            # type that names none of its blueprints (06 D6.18).
+            "base_type": base_type,
             "type_id": type_id,
             # The contract's vehicle kind, which SUMO does not report: the catalogue's for the
             # blueprint the type names. Whether the author planted this one is `marked`, never
             # this (06 D6.18).
-            "special_type": self._special_type(traci, type_id),
+            "special_type": special_type,
             "marked": marked,
             "length_m": traci.vehicle.getLength(vehicle_id),
             "width_m": traci.vehicle.getWidth(vehicle_id),
@@ -466,27 +472,33 @@ class SumoCotBridge:
             "y": y,
         }
 
-    def _special_type(self, traci, type_id: str) -> str:
-        """The vehicle's kind: the catalogue's for the blueprint its type names, or empty.
+    def _kinds(self, traci, type_id: str) -> tuple[str, str]:
+        """The vehicle's base type and kind: the catalogue's for the blueprint its type names.
 
-        SUMO reports no kind. A compiled scenario's vType names the CARLA blueprint it was measured
-        from in its `carla:blueprint` parameter, and the catalogue curates a kind for every blueprint
-        its classes draw, so a bridge given the catalogue reports the kind the capture path reports
-        for the same body (`06_Truth_And_Annotation.md` D6.18). A type that names no blueprint, one
-        that names a blueprint the catalogue does not curate, and every type on a bridge given no
-        catalogue have no kind to report and are written empty. Whether the author planted the
-        vehicle never enters into it. A type's parameters do not change during a run, so each type
-        is asked once.
+        SUMO reports no kind, and its vehicle class says how SUMO drives a vehicle rather than what
+        it is. A compiled scenario's vType names the CARLA blueprint it was measured from in its
+        `carla:blueprint` parameter, and the catalogue curates a base type and a kind for every
+        blueprint its classes draw, so a bridge given the catalogue reports what the capture path
+        reports for the same body (`06_Truth_And_Annotation.md` D6.18). A type that names no
+        blueprint, one that names a blueprint the catalogue does not curate, and every type on a
+        bridge given no catalogue have their base type read from their vehicle class
+        (`BASE_TYPE_BY_VEHICLE_CLASS`) and no kind. Whether the author planted the vehicle never
+        enters into it. A type does not change during a run, so each type is asked once.
         """
-        if self.catalogue is None:
-            return ""
-        kind = self._special_type_of.get(type_id)
-        if kind is None:
+        kinds = self._kinds_of.get(type_id)
+        if kinds is not None:
+            return kinds
+        vehicle_class = traci.vehicletype.getVehicleClass(type_id)
+        base_type = BASE_TYPE_BY_VEHICLE_CLASS.get(vehicle_class, vehicle_class)
+        kind = ""
+        if self.catalogue is not None:
             blueprint = traci.vehicletype.getParameter(type_id, BLUEPRINT_PARAM)
-            kind = (self.catalogue.special_type_of(blueprint) or "") if blueprint else ""
-            self._special_type_of[type_id] = kind
+            if blueprint:
+                base_type = self.catalogue.base_type_of(blueprint) or base_type
+                kind = self.catalogue.special_type_of(blueprint) or ""
             self._check_catalogue(traci, type_id)
-        return kind
+        kinds = self._kinds_of[type_id] = (base_type, kind)
+        return kinds
 
     def _check_catalogue(self, traci, type_id: str) -> None:
         """Say so, once per catalogue, when a type was written from a catalogue other than this one.

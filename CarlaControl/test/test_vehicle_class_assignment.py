@@ -130,6 +130,21 @@ def test_the_published_catalogue_answers_each_blueprint_s_kind_as_the_curation_a
     assert catalogue.special_type_of("vehicle.bmw.isetta") is None
 
 
+def test_the_published_catalogue_answers_each_blueprint_s_base_type_as_the_curation_assigns_it(
+        records):
+    """Truth reads a vehicle's base type from the published catalogue too (06 D6.18).
+
+    The reader answers every swept blueprint with the base type its class curates, which is the base
+    type the curation assigns the blueprint -- the light bus a bus, the patrol a car -- and answers
+    nothing for a blueprint no class draws.
+    """
+    catalogue = VehicleCatalogue.load(CATALOGUE_PATH)
+    assert {blueprint_id: catalogue.base_type_of(blueprint_id) for blueprint_id in MEASURED} == \
+        {blueprint_id: record.base_type for blueprint_id, record in records.items()}
+    assert catalogue.base_type_of("vehicle.fuso.mitsubishi") == "bus"
+    assert catalogue.base_type_of("vehicle.bmw.isetta") is None
+
+
 def test_a_sport_utility_is_curated_back_out_of_the_van_band(records):
     record = records["vehicle.nissan.patrol"]
     assert record.derived_base_type == "van"

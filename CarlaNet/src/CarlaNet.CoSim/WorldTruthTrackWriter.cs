@@ -17,14 +17,16 @@ namespace CarlaNet.CoSim;
 /// over the drawn ones only, leaving out every vehicle with no body (doc 06 §8.3, D6.17). This is the
 /// record of what the world contained, so the denominator is taken from here.</para>
 ///
-/// <para><b>Every value is SUMO's, read from the state the session already holds.</b> Each vehicle's
-/// row is its state at the frame (<see cref="SumoStepRecord.Frames"/>), with no question put to SUMO
-/// per vehicle; what a vehicle type declares -- its class, dimensions and colour -- is asked once per
-/// type (<see cref="WorldTruthVehicleType"/>). Position is converted on the world's own georeference,
-/// height is the bare-earth grid's under the vehicle, and course and speed are SUMO's: the reconciled
-/// record of a vehicle drawn, with the body's pose and box, is the capture sidecar's, joined to these
-/// rows by <c>sumo_id</c> and <c>frame</c>. Every instant is TraCI's clock for the SUMO frame the row
-/// describes, never SUMO's own stamps, which are one step earlier.</para>
+/// <para><b>Every value but a type's kinds is SUMO's, read from the state the session already
+/// holds.</b> Each vehicle's row is its state at the frame (<see cref="SumoStepRecord.Frames"/>), with
+/// no question put to SUMO per vehicle; what a vehicle type declares -- its class, dimensions and
+/// colour -- is asked once per type (<see cref="WorldTruthVehicleType"/>), and its <c>base_type</c> and
+/// <c>special_type</c> are the catalogue's for the blueprint it names (doc 06 D6.18). Position is
+/// converted on the world's own georeference, height is the bare-earth grid's under the vehicle, and
+/// course and speed are SUMO's: the reconciled record of a vehicle drawn, with the body's pose and box,
+/// is the capture sidecar's, joined to these rows by <c>sumo_id</c> and <c>frame</c>. Every instant is
+/// TraCI's clock for the SUMO frame the row describes, never SUMO's own stamps, which are one step
+/// earlier.</para>
 ///
 /// <para><b>Each sample waits for the frame that renders it.</b> A SUMO frame is told to observers a
 /// step ahead of the frame that renders it, so its rows are written when that frame completes: the one

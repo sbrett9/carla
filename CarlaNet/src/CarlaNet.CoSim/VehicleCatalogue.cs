@@ -16,9 +16,10 @@ namespace CarlaNet.CoSim;
 /// built at load rather than a scan of the document. This is the read side of the same artifact the
 /// catalogue's Python reader reads, and it makes the same refusals for the same reasons.</para>
 ///
-/// <para>It also says what kind of vehicle each body is. The truth record's <c>special_type</c> comes
-/// from the catalogue (doc 06 D6.18): each class curates one for its members, because the content
-/// build's own is hand-edited and was empty for every blueprint when first swept.</para>
+/// <para>It also says what kind of vehicle each body is. The truth record's <c>base_type</c> and
+/// <c>special_type</c> come from the catalogue (doc 06 D6.18): each class curates both for its
+/// members, because the content build's own are hand-edited -- when first swept, the base type was
+/// wrong or absent for seven of seventeen blueprints and the special type empty for all of them.</para>
 /// </remarks>
 public sealed class VehicleCatalogue
 {
@@ -37,6 +38,7 @@ public sealed class VehicleCatalogue
 
     private readonly Dictionary<string, VehicleExtent> _measured = [];
     private readonly Dictionary<string, string> _failed = [];
+    private readonly Dictionary<string, string> _baseTypes = [];
     private readonly Dictionary<string, string> _specialTypes = [];
 
     private VehicleCatalogue(JsonElement document)
@@ -77,12 +79,15 @@ public sealed class VehicleCatalogue
             }
         }
 
-        // A class's kind belongs to every body it draws. `cot_special_type` is optional, and a class
+        // A class's kinds belong to every body it draws. `cot_special_type` is optional, and a class
         // without one curates the empty kind for its members rather than leaving them undecided.
+        // `cot_base_type` is required, so a class without one is a malformed catalogue, and its members
+        // are left to the base type their blueprints declare rather than given an empty one.
         if (document.TryGetProperty("classes", out JsonElement classes))
         {
             foreach (JsonElement entry in classes.EnumerateArray())
             {
+                string baseType = Text(entry, "cot_base_type");
                 string specialType = Text(entry, "cot_special_type");
                 if (!entry.TryGetProperty("members", out JsonElement members))
                 {
@@ -91,7 +96,12 @@ public sealed class VehicleCatalogue
 
                 foreach (JsonElement member in members.EnumerateArray())
                 {
-                    _specialTypes[Text(member, "blueprint_id")] = specialType;
+                    string blueprintId = Text(member, "blueprint_id");
+                    _specialTypes[blueprintId] = specialType;
+                    if (baseType.Length > 0)
+                    {
+                        _baseTypes[blueprintId] = baseType;
+                    }
                 }
             }
         }
@@ -111,6 +121,13 @@ public sealed class VehicleCatalogue
 
     /// <summary>Every blueprint the catalogue holds a successful measurement for.</summary>
     public IReadOnlyCollection<string> MeasuredBlueprintIds => _measured.Keys;
+
+    /// <summary>
+    /// The truth record's <c>base_type</c> for every blueprint a class of the catalogue draws, by
+    /// blueprint id: the class's curated <c>cot_base_type</c>. A blueprint no class draws is absent, and
+    /// its truth keeps the base type its own blueprint declares.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> BaseTypes => _baseTypes;
 
     /// <summary>
     /// The truth record's <c>special_type</c> for every blueprint a class of the catalogue draws, by

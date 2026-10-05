@@ -17,8 +17,9 @@ The XML and CSV are the truth sidecar and carry the whole record: the author's o
 vehicle types and flows, and which vehicles it planted, in a `marked` field of their own. A
 vehicle's `special_type` is its kind and nothing else, planted or not: the kind the measured vehicle
 catalogue (`--catalogue`) curates for the CARLA blueprint the vehicle's type names, as the capture
-path's truth reports it, and empty for a type that names none. The UDP feed is a moving-map
-display and carries what a display needs. A compiled scenario's labels are its
+path's truth reports it, and empty for a type that names none. Its `base_type` is the catalogue's
+for the same blueprint, and its vehicle class's only for a type that names none of the catalogue's.
+The UDP feed is a moving-map display and carries what a display needs. A compiled scenario's labels are its
 `*.supervision.json`, joined to the sidecar by vehicle id; a legacy scenario names its planted
 vehicles in the `*.labels.json` given to `--labels`.
 
@@ -156,10 +157,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-bare-earth", action="store_true",
                         help="ignore the grid and use --hae for every vehicle")
     parser.add_argument("--catalogue", type=Path,
-                        help="the measured vehicle catalogue: each vehicle's special_type is the "
-                             "kind it curates for the CARLA blueprint the vehicle's type names, as "
-                             "in the capture path's truth. Default: this repository's catalogue "
-                             "when present; without one every special_type is empty")
+                        help="the measured vehicle catalogue: each vehicle's base_type and "
+                             "special_type are the ones it curates for the CARLA blueprint the "
+                             "vehicle's type names, as in the capture path's truth. Default: this "
+                             "repository's catalogue when present; without one every special_type "
+                             "is empty and every base_type its SUMO vehicle class's")
     parser.add_argument("--gui", action="store_true",
                         help="run sumo-gui so the traffic can be watched while it emits")
     parser.add_argument("--sumo-home",
@@ -256,17 +258,19 @@ def main() -> int:
 
 
 def vehicle_catalogue(args: argparse.Namespace) -> VehicleCatalogue | None:
-    """The vehicle catalogue each vehicle's kind is read from, and which one it is, said in the log.
+    """The vehicle catalogue each vehicle's kinds are read from, and which one it is, said in the log.
 
     `--catalogue` names one, and one that does not read stops the run. Without it this repository's
     catalogue is used when it is present, the one its scenario generators compile against. With
-    neither, every vehicle's `special_type` is empty, because SUMO reports no kind.
+    neither, every vehicle's `special_type` is empty, because SUMO reports no kind, and its
+    `base_type` is its vehicle class's.
     """
     path = args.catalogue
     if path is None and DEFAULT_CATALOGUE.is_file():
         path = DEFAULT_CATALOGUE
     if path is None:
-        logging.info("no vehicle catalogue: every vehicle's special_type is empty")
+        logging.info("no vehicle catalogue: every vehicle's special_type is empty and its base_type "
+                     "its vehicle class's")
         return None
     try:
         catalogue = VehicleCatalogue.load(path)
