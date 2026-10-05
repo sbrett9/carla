@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — How much a run prints about collisions is a switch, off by default: `collision_detail` (`--collision-detail on`) in `run_capture`, and `run_sumo_drive.py --collision-detail`. Off, the session's report prints the count; on, each collision is printed as it ends and the report lists every collision and every collision warning SUMO wrote. Printing only: every collision is recorded either way (§5.2, §9.6).
 `2026-10-05` — A camera name is short and plain: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as `Overwatch_1`, `Southeast_1700m_orbit` or `NapOfEarth_2`; a Windows device name, a sensor's stock role name (`front`, …) and another camera's default stay refused, and every refusal says what is allowed (§5.2, §6.2). The schema states a `sensor_id`'s characters (check 1), and check 11 refuses what the characters allow and the rule does not. `run_free_move_camera.py --camera-name` names the free-move camera as it is created (§9.6).
 `2026-10-02` — §7.2: the closeout gates `capture.solar_block_missing[<sensor>]`, a channel's captures written without a solar block, at zero; the channel's closeout line states the count.
 `2026-10-02` — Every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none (§5.2, §6.2, §9.6). A channel's `sensor_id` is its camera's name: it loses `:` from its grammar, check 11 compares it without regard to case, and a single channel without one is `CARLA-SENSOR-<camera id>`. The camera is spawned under the name as its `role_name`, so one another camera in the world holds refuses at pre-roll. `run_SCTMV.py --camera-name` (`--platform-callsign` its older spelling, no longer defaulting to `OVERWATCH`) and `run_sumo_drive.py --camera-name` name the camera; a free view's span folder is `<camera name>-<UTC>`.
@@ -1362,6 +1363,7 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 | `write_headroom_floor_s` | `600` | Session-fixed — the one bound the tool imposes on itself, in captured seconds (check 46) | §6.2 check 46, D12.35 |
 | `diagnostics` | *not offered*: `run_capture` has no diagnostics output of its own | — | today's `]` hotkey; `:439-449` |
 | `monitor` | `on` | **Run-mutable**; line-oriented rather than a panel when standard output is not a terminal | §7.1, §3.10.1 M1 |
+| `collision_detail` | `off` | Session-fixed; printing only. `off` prints the count of collisions in the session's report; `on` (`--collision-detail on`) prints each collision as it ends and lists every collision and every collision warning SUMO wrote in the report. The record of collisions is kept in full either way, and nothing about the traffic or the truth depends on it | [`03`](03_CoSimulation_Runtime.md) §11.5 |
 | `run_configuration_version` | `1` | — | the schema version a document is written against |
 
 **No run-level seed exists.** The only seed a run consumes is SUMO's, and it is the scenario's: the
@@ -2556,6 +2558,13 @@ bodies it was written to, or the server's refusal, after which every body is dra
 | `--render-min-pixels`, `--render-admit-lead`, `--render-release-lag` | `2`, `3`, `5` | under `cameras`: the range cap, the seconds of travel ahead of a footprint a vehicle is admitted at, the seconds it is held after |
 | `--capacity` | none: no limit | how many vehicles may hold a body at once, under any render set |
 | `--draw-distance` | none: every body drawn at any range | metres from a camera beyond which a body is not drawn |
+
+**What the drive prints about collisions (2026-10-05).** By default the report prints how many
+collisions SUMO registered and how many collision warnings it wrote, and nothing per collision.
+`--collision-detail` prints each collision as it ends and lists every collision and every collision
+warning in the report. It changes what is printed and nothing else: the session records every collision
+either way, and asks SUMO for the same things on the same steps ([`03`](03_CoSimulation_Runtime.md)
+§11.5).
 
 **Exercised by** `test_span_recorder.py` (the wait, the first answer not trusted, the ceiling, a
 failed tile, cancelling, the capture window, a server with no answer, the folders and their suffix,

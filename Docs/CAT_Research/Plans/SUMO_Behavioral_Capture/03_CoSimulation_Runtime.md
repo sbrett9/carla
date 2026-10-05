@@ -59,6 +59,7 @@ advancement policy, the headlight predicate),
 | 2026-10-02 | §8.3, §8.3.1, §8.3.2, §8.3.3, §8.8, §8.9, D3.10, D3.31, D3.38, D3.41, D3.42: two optional performance controls, off by default and recommended for no scenario. A draw distance, set once on each pooled body by the new `set_actors_max_draw_distance`, so no camera draws a body beyond it while every vehicle keeps its body, pose and truth; each frame's render set records the distance and the recorder marks every vehicle a camera did not draw. And the circle, the cameras' footprints and a capacity, restored from history as limits a caller chooses: a vehicle outside one is simulated by SUMO and in no frame and no truth record, and is counted; every vehicle stays subscribed, so the subscription tiers are not restored. D3.38 stays withdrawn as a default. Written and tested offline; the plugin awaits a build. |
 | 2026-10-02 | §3.4: a ramp meter reaches the imagery through the vehicles it holds, one leaving per green, with no meter head drawn. |
 | 2026-10-02 | §9.7, §11.5, §11.6, §11.10, D3.14, D3.33: SUMO's own distribution edits checked before SUMO is started and stated on the run report. A collision action other than `warn` or `none` is refused, SUMO's default and an action SUMO does not name included; every other teleport trigger, a vehicle type's own included, is refused under the acceptance `time-to-teleport` has; a positive `random-depart-offset` and `random` are refused; the scale, the cap on vehicles running and `max-depart-delay` are recorded. Measured: `time-to-teleport.highways` is off at its default and `.disconnected` on from zero. The test fixtures now set `collision.action warn`. |
+| 2026-10-05 | §9.7, §11.4, §11.5, §11.6, D3.33: `collision.action none` and `ignore-accidents` refused as the owner ruled, so a run that starts always has the record of collisions. The collision list is asked for only where it can hold something: SUMO's colliding-vehicles count arrives with each step's own answer, and the list is fetched on the first frame and on a step a collision began or one is still going on. Measured, the list is about 50 µs a round trip on Gardnerville at 35 vehicles, between 0.04 and 0.085 ms of a step, and a run with no collision now asks for it once. The report keeps every collision and every collision warning SUMO wrote; how much is printed is a switch, off by default, that changes nothing recorded. |
 
 ---
 
@@ -3193,7 +3194,7 @@ session.start():
     assert sumocfg time-to-teleport <= 0                  # absent is 300; unless accepted, §11.6
     assert no other teleport trigger on                   # .highways, .disconnected, .bidi, a type's own;
                                                           # unless accepted, §11.6
-    assert collision.action in (warn, none)               # absent is teleport; never accepted, §11.5
+    assert collision.action == warn                       # absent is teleport; never accepted, §11.5
     assert random-depart-offset <= 0 and not random       # report the scale and insertion limits, §11.6
     assert world.settings.synchronous_mode and world.settings.fixed_delta_seconds == Δw
     Δs = Simulation.getDeltaT();  R = Δs / Δw;  assert R is a positive integer
@@ -3705,17 +3706,19 @@ on the first step after it is recorded and one during it is not — that vehicle
 frame. **What it cannot see:** a vehicle refused on its very first attempt for a start lane it may not use
 is dropped before it is ever listed as pending; the compiler's route validation is what catches that.
 
-**What the two reads cost.** The pending list and the collisions are one getter each per SUMO step (the
-collisions are not asked for where SUMO registers none, and a subscription cannot carry them, §11.5):
-measured with the managed client on the compiled Gardnerville scenario from t = 300 s at 41 vehicles,
-0.097 ms per step for both against 0.355 ms for the step and the three getters it already made. The
-session reads SUMO's clock once per step where it read it twice, which is one round trip of the same kind
-back.
+**What the two reads cost.** Measured when each was a getter on every SUMO step, with the managed client on
+the compiled Gardnerville scenario from t = 300 s at 41 vehicles: 0.097 ms per step for both against
+0.355 ms for the step and the three getters it already made. Neither is now: the pending list arrives with
+the step's own answer, in the simulation domain's subscription, and the collision list, which a
+subscription cannot carry, is asked for only on a step where a collision began or one is still going on
+(§11.5). The session reads SUMO's clock once per step where it read it twice, which is one round trip of
+the same kind back.
 
 **SUMO's warnings are kept in its own words.** A reroute that finds no path, a teleport, a collision and an
 emergency stop are each a `Warning:` line on SUMO's console and nowhere a client can ask for them, so the
 report counts every warning line and keeps the first ten verbatim (`SumoWarnings`, `SumoWarningSamples`),
-without reading meaning into them.
+without reading meaning into them. Since 2026-10-05 a collision warning is kept apart, every one of them,
+and does not take one of the ten places (`SumoCollisionWarnings`, §11.5).
 
 **Exercised by** `SumoDriveSessionFailureTests` (the option refused with SUMO never started; the same route
 under the default stopping the run quoting SUMO; the blocked vehicle recorded at 4.05 and 4.10, including
@@ -3755,8 +3758,31 @@ span on the first frame that no longer reports it, handing the closed span out o
 (`CollisionSpan`, `OnCollision`, `on_collision`): the collision as first reported, the simulated seconds
 it began and ended at, and the body that rendered each vehicle while it lasted — a vehicle admitted on the
 step its collision began takes up its body on the next tick, so a body not yet named is named then. The
-report counts collisions once each, keeps the first ten, and says what SUMO does about them. Nothing is
-asked of SUMO where it registers none.
+report counts collisions once each, keeps every one (`CollisionSpans`; `CollisionSamples` the first ten),
+and says what SUMO does about them.
+
+**What it costs: nothing on a step without a collision (2026-10-05).** The collision list is one round trip,
+and it was asked for on every step. SUMO's count of colliding vehicles (`VAR_COLLIDING_VEHICLES_NUMBER`) is
+a plain integer, so it rides in the simulation domain's subscription with the step's own answer
+(`SumoSimulationSubscription.CollidingVehicleCount`). SUMO counts a vehicle there only when it registers a
+collision for the first time: one still going on is kept in the list and not counted again
+(`MSNet::registerCollision` answers whether a collision is new, and `MSLane::handleCollisionBetween` counts
+only a new one), and one whose vehicles are no longer in contact is dropped at the end of the step, before
+the client is answered (`MSNet::removeOutdatedCollisions`, from `MSNet::postMoveStep`). Measured on SUMO
+1.27.0 with one vehicle moved two metres into the rear of another: on the step after the move the count is 2
+and the list holds the collision; on each later step it lasts the list holds it and the count is 0; once it
+is over both are 0. So the list is empty on a step where nothing began and no collision the session holds is
+open, and the session asks for it only on a step where the count is not zero or a collision it holds is still
+open — and on the first frame it reads whatever the count, since a collision begun in the fast-forward may
+still be going on. Nothing is asked of SUMO on any other step. The report counts the round trips
+(`CollisionListReads`): one for a run with no collision; on the fixture, 47 for one collision lasting from
+2.15 to 4.4 s — the first frame, the 45 steps it lasted and the step it was found over.
+
+What the round trip removed costs, measured with the managed client (`SumoStepCostTests`, opt-in, 3000 and
+5000 steps): on the fixture network, 40 µs a get of the list alone and 0.043 ms of a step (0.106 ms against
+0.063 ms a step that reads only the count); on the compiled Gardnerville scenario from t = 300 s at 35
+vehicles, 51 to 54 µs a get and between 0.044 and 0.085 ms of a step across three runs (0.261 to 0.316 ms
+against 0.194 to 0.231 ms).
 
 **Whether the compiled scenario sets the action: it does.** The compiler writes `collision.action warn`
 into every configuration and records it in the lock (`PROCESSING_OPTIONS`, `ScenarioCompiler.py`), and all
@@ -3770,16 +3796,38 @@ renders differently under each:
 | `warn` | registers it, writes a warning, both vehicles carry on | the span, both bodies |
 | `teleport` | registers it and moves the collider to the next edge of its route | the span; the collider's jump is a discontinuity (§6.4) |
 | `remove` | registers it and takes both vehicles out | the span; both leave the render set as arrivals |
-| `none`, or `ignore-accidents` set | the lane's check returns before registering anything (`MSLane::detectCollisions`) | nothing — and the report says none can be |
+| `none`, or `ignore-accidents` set | the lane's check returns before registering anything (`MSLane::detectCollisions`) | nothing, so refused (below) |
 
-**Which actions a run may carry: `warn` and `none`** ([`06`](06_Truth_And_Annotation.md) D6.12). Since
-2026-10-02 the session refuses `teleport` and `remove` at `Validation`, before SUMO is started, SUMO's
-default included and whatever `AllowTeleporting` says (`SumoDistributionEditCheck`, §11.6). It refuses an
-action SUMO does not name as well: SUMO compares the word case-sensitively (`MSLane::initCollisionAction`),
-and measured, `Warn` is an `Error:` line on its console and the run goes on under `teleport`, the static
-default (`MSLane.cpp:107`). `ignore-accidents` set true runs as `none`. The report's `distribution edits`
-block names the action in force. `none` is permitted until the owner rules on it; refusing it is one entry
-taken out of `PermittedCollisionActions`, which refuses `ignore-accidents` with it.
+**Which action a run may carry: `warn` alone** ([`06`](06_Truth_And_Annotation.md) D6.12, amended by the
+owner's ruling of 2026-10-05). The session refuses every other at `Validation`, before SUMO is started,
+SUMO's default included and whatever `AllowTeleporting` says (`SumoDistributionEditCheck`, §11.6):
+`teleport` and `remove` since 2026-10-02, and since 2026-10-05 `none` and `ignore-accidents`, under which
+SUMO skips the check, so the run could not say whether any collision happened. The record of collisions
+must always exist, and under `warn` SUMO changes nothing about the traffic and only registers the event. It
+refuses an action SUMO does not name as well: SUMO compares the word case-sensitively
+(`MSLane::initCollisionAction`), and measured, `Warn` is an `Error:` line on its console and the run goes on
+under `teleport`, the static default (`MSLane.cpp:107`). The report's `distribution edits` block names the
+action in force.
+
+**What is printed is a switch; what is recorded is not (2026-10-05).** The record is always kept: the
+count, every collision span on the report and handed to `OnCollision`, and every collision warning SUMO
+wrote, kept apart from its other warnings (`SumoConsoleTail` tells one by "collision with vehicle '" or
+"collision with person '", the words `MSLane::handleCollisionBetween` writes under `warn`).
+`SumoDriveSessionOptions.CollisionDetail` decides only what is printed: off, the default, the report's
+`collided` line gives the counts and the round trips and lists nothing; on, it lists every collision and
+every collision warning beneath it. `run_sumo_drive.py --collision-detail` and `run_capture`'s
+`collision_detail` (`--collision-detail on`, [`12`](12_Operator_Control_Surface.md) §5.2) set it, and on also
+bind a printer to `on_collision` that logs each collision as it ends; off, nothing is called per collision.
+Only `CoSimRunReport.ToString` reads it, so the session asks SUMO for the same things on the same steps
+either way.
+
+```
+collided           1 collision(s) registered, 1 collision warning(s) from SUMO; SUMO's list asked for on 47 step(s)
+  collision        'goer' into 'turner' (collision) on approach_0 at 50.91 m, t=2.15 to 4.4 s
+  sumo said        Warning: Vehicle 'goer'; collision with vehicle 'turner', lane='approach_0', gap=-3.56, time=2.10, stage=remoteControl.
+```
+
+and, off, the first line alone, ending `each recorded and none listed (collision detail off)`.
 
 **Exercised by** `SumoDriveSessionFailureTests` (on the fixture under `warn`, a vehicle moved over the rear
 of another, as a client moving it would: one span, collider and victim as SUMO registered them, the lane,
@@ -3790,7 +3838,18 @@ scenario) and `SumoCollisionDecodingTests` (the layout SUMO's server writes, non
 stopping part-way, a value that is not a compound, a field of the wrong kind). Each was seen failing
 against a wrong implementation: a new span on every step; a span closed on the step it began; a body not
 held when it began never named; the collisions decoded as the compound they declare; the count field
-skipped; any field kind accepted; SUMO's default taken as `warn`; and `ignore-accidents` not read.
+skipped; any field kind accepted; SUMO's default taken as `warn`; and `ignore-accidents` not read. Since
+2026-10-05 also `SumoSimulationSubscriptionTests` (the count the step delivers is the direct get's, 2 on the
+step a collision begins, 0 on each later step the list still holds it, 0 with the list once it is over),
+`SumoDriveSessionFailureTests` (the list asked for on the first frame and every step the collision lasted
+and on no other, once for a run with none; SUMO's collision warning kept apart; and the fixture's collision
+driven with the switch off and on: the same steps, collisions and vehicle states, the same poses written,
+the same spans, counts, round trips and SUMO words, and only the printed lines different),
+`SumoDistributionEditCheckTests` (`none` and `ignore-accidents` refused) and, in `CarlaControl`,
+`test_capture_session.py` and `test_run_sumo_drive_free_view.py` (off by default with nothing bound per
+collision; on reaching the session with a printer bound). Each was seen failing against a wrong
+implementation: the list asked for only where the count is not zero, which leaves a collision open after it
+is over; and the report keeping the spans only under the switch.
 
 ### 11.6 `time-to-teleport`
 
@@ -3856,7 +3915,7 @@ with the staged `sumo`:
 | `time-to-teleport.disconnected` | default -1; on from 0 up (`MSLane.cpp:2406`, `>= 0`) | a vehicle routed `ahead` to `approach` under `ignore-route-errors`: absent and -1 never; 0 after 0.05 s; 5 after 5.05 s | refuses 0 and above unless accepted |
 | `time-to-teleport.bidi`, `.railsignal-deadlock` | default -1; on where positive (`:2418`, `:2420`) | not measured: no fixture has a bidirectional edge or a rail signal | refuses a positive value unless accepted |
 | a type's `timeToTeleport`, `timeToTeleportBidi` | stand in for `time-to-teleport` and `.bidi` for its vehicles (`SUMOVTypeParameter::getTimeToTeleport`) | `timeToTeleport` 5 under `time-to-teleport` -1: the follower blocked behind a stopped vehicle teleported after 5.05 s | refuses a positive value unless accepted, naming the type and its file |
-| `collision.action` | default `teleport`; compared case-sensitively | `Warn`: an `Error:` line, and the run went on | refuses all but `warn` and `none`, never accepted (§11.5) |
+| `collision.action` | default `teleport`; compared case-sensitively | `Warn`: an `Error:` line, and the run went on | refuses all but `warn` (`none` and `ignore-accidents` since 2026-10-05), never accepted (§11.5) |
 | `random-depart-offset` | default 0; on where positive (`MSInsertionControl.cpp:422`) | 5 moved the fixture's four departures from 0, 2, 6 and 10 s to 0.85, 5.75, 6.45 and 13.45 s; -5 moved none | refuses a positive value |
 | `random`, or its old name `abs-rand` | false; true seeds from the wall clock (`RandHelper.cpp:79`) | | refuses true |
 | `scale`, a type's own `scale` | 1; discards or duplicates vehicles (`MSInsertionControl.cpp:229`) | | records |
@@ -3879,7 +3938,7 @@ fixture with `.highways` 5 accepted and `max-depart-delay` 900:
 
 ```
 distribution edits collision.action 'warn'; a teleport trigger ENABLED, accepted explicitly; departures as declared, from the seed; demand as written; no vehicle limit; a vehicle not inserted within 900 s discarded
-  collision action 'warn' (collision.action 'warn'); a run may carry warn or none
+  collision action 'warn' (collision.action 'warn'); a run may carry only warn
   teleport paths   ENABLED, accepted explicitly: time-to-teleport.highways '5', ENABLED after 5 s; time-to-teleport.disconnected not set, so SUMO's default of -1 s; time-to-teleport.bidi not set, so SUMO's default of -1 s; time-to-teleport.railsignal-deadlock not set, so SUMO's default of -1 s; no vehicle type sets its own
   depart offset    none: no departure moved by a random offset (random-depart-offset not set, so SUMO's default of 0 s)
   seeding          from the seed, so the traffic can be run again (random not set)
@@ -4244,7 +4303,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message. A SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console; so is a failure of the connection to the CARLA server — a socket closed or reset, or a call left unanswered past the client's timeout — at the stage it happens in, with the connection's failure as its inner exception. A failure of one side also names the side (`Cause`), and a refusal from `Advance` stops the run for good and is recorded on the report with the last complete frame. Every other exception passes through unwrapped (§11.10). |
 | **D3.31** | **Each admission pass is published as it is made**, once per SUMO step: the population SUMO has, the vehicles rendered after the pass, those admitted and released at it, and the running total of admissions, and under an optional limit the eligible, the drawn and the shed, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` (§8.8). |
 | **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |
-| **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5): `warn` and `none` ([`06`](06_Truth_And_Annotation.md) D6.12), and since 2026-10-02 the session refuses every other before SUMO is started, SUMO's default `teleport` included. |
+| **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5): `warn` alone ([`06`](06_Truth_And_Annotation.md) D6.12, as the owner ruled on 2026-10-05), and the session refuses every other before SUMO is started, SUMO's default `teleport`, `none` and `ignore-accidents` included, so the record of collisions always exists. The collision list is asked for only on the first frame and on a step a collision began or is still going on, and what is printed of the record is a switch that changes nothing recorded (§11.5). |
 | **D3.34** | **A route SUMO cannot follow stops the run, and a vehicle SUMO cannot insert is recorded.** A scenario setting `ignore-route-errors` is refused before SUMO starts, because SUMO then keeps an unroutable vehicle standing at the end of an edge and says nothing (measured); a vehicle that leaves SUMO's insertion queue without departing is recorded with the frame it was last waiting and the first it was gone, because SUMO drops it without a word; SUMO's console warnings are counted and kept verbatim (§11.4). |
 | **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release the lookahead cannot place, so it has its own reason (§11.3). |
 | **D3.36** | **A session can launch `sumo-gui` in place of `sumo`** (`SumoGui`; `run_sumo_drive.py --sumo-gui`), from the installation it resolved and no other, with `sumo`'s arguments followed by `--start --quit-on-end --delay 0 --message-log stdout --error-log stderr`, so the one SUMO process the session steps is on screen, follows the session with nobody at the window, exits when the session closes it, never sets the pace and keeps the console the session reads. The release pin holds for the binary that runs: the release compared with the world's converter is `sumo-gui`'s own. An installation without `sumo-gui` is refused before anything starts, naming the file and the setup script that stages it. The report records the binary that ran on every run (§2.6). |

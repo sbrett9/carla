@@ -7,8 +7,8 @@ namespace CarlaNet.CoSim;
 /// where a compile lock sits beside it, the files it runs must be the ones the lock binds
 /// (<see cref="ScenarioLockCheck"/>); it must not let SUMO teleport a waiting vehicle unless
 /// <see cref="AllowTeleporting"/> (<see cref="TeleportingCheck"/>, <see cref="SumoDistributionEditCheck"/>);
-/// and it must not let SUMO move or remove a vehicle at a collision, offset its departures at random or
-/// seed itself from the wall clock (<see cref="SumoDistributionEditCheck"/>).
+/// and it must not let SUMO move or remove a vehicle at a collision, skip the collision check, offset its
+/// departures at random or seed itself from the wall clock (<see cref="SumoDistributionEditCheck"/>).
 /// </param>
 /// <param name="WorldPackagePath">
 /// The world package: the ground surface the poses are seated on, and the road network they are
@@ -141,8 +141,7 @@ public sealed record SumoDriveSessionOptions(
     /// than interpolating across the gap, whether or not this is set. Not silent: the report records
     /// the wait SUMO teleports after and that it was accepted (<see cref="TeleportingCheck"/>), and every
     /// other trigger with the value it ran under (<see cref="SumoDistributionEditCheck"/>). It accepts no
-    /// collision action that teleports: a collision is constrained to <c>warn</c> or <c>none</c> whatever
-    /// this says.
+    /// collision action that teleports: a collision is constrained to <c>warn</c> whatever this says.
     /// </remarks>
     public bool AllowTeleporting { get; set; }
 
@@ -401,6 +400,19 @@ public sealed record SumoDriveSessionOptions(
     /// is the record it filters on. From the tick thread, once per collision; it must not block.
     /// </remarks>
     public Action<CollisionSpan>? OnCollision { get; set; }
+
+    /// <summary>
+    /// Whether the printed run report lists every collision and every collision warning SUMO wrote, or
+    /// counts them. Off by default: the report prints the counts only.
+    /// </summary>
+    /// <remarks>
+    /// Printing only. The record is kept in full either way -- the counts, every collision span on the
+    /// report and handed to <see cref="OnCollision"/>, every collision warning SUMO wrote -- and nothing
+    /// about the traffic or the truth depends on it: the session asks SUMO for the same things on the
+    /// same steps, and only <see cref="CoSimRunReport.ToString"/> reads it. A run that registers many
+    /// collisions would otherwise print a line for each, burying everything else the report says.
+    /// </remarks>
+    public bool CollisionDetail { get; set; }
 
     /// <summary>
     /// Where each vehicle SUMO gave up trying to insert goes, as the session notices it.

@@ -198,6 +198,12 @@ _FIELDS: tuple[RunField, ...] = (
             "closed_by write_headroom. The one bound the tool imposes on a run."),
     _F("monitor", {"type": "string", "enum": ["on", "off"]}, "on", RUN_MUTABLE,
        help="The live monitor: a panel on a terminal, a log line every few seconds otherwise."),
+    _F("collision_detail", {"type": "string", "enum": ["on", "off"]}, "off", SESSION_FIXED,
+       alias="--collision-detail",
+       help="What the run prints about collisions. off: their count, in the session's report. on: "
+            "every collision as it ends, and every collision and every collision warning SUMO wrote in "
+            "the session's report. Printing only: the record of collisions is kept in full either way, "
+            "and nothing about the traffic or the truth depends on it."),
     _F("on_warning", {"type": "object",
                       "additionalProperties": {"type": "string", "enum": ["proceed", "refuse"]}},
        {}, SESSION_FIXED,

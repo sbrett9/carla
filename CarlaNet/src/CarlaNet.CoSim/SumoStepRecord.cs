@@ -25,8 +25,9 @@ namespace CarlaNet.CoSim;
 /// </param>
 /// <param name="Collisions">
 /// The collisions SUMO reported at the frame, each one again on every step its two vehicles stay in
-/// contact; none where the scenario has SUMO register none (<see cref="CoSimRunReport.CollisionHandling"/>).
-/// Each is handed out once more, as a span, when it is over (<see cref="SumoDriveSessionOptions.OnCollision"/>).
+/// contact. SUMO is asked for them only on a frame where one began or one is still going on; on any other
+/// the list is empty, and so is this (<see cref="CoSimRunReport.CollisionListReads"/>). Each is handed out
+/// once more, as a span, when it is over (<see cref="SumoDriveSessionOptions.OnCollision"/>).
 /// </param>
 /// <param name="NotInserted">
 /// The vehicles SUMO gave up trying to insert between the frame before and this one, which it does

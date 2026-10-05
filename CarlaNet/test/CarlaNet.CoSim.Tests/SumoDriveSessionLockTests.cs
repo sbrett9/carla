@@ -201,7 +201,7 @@ public sealed class SumoDriveSessionLockTests
         Assert.Contains("distribution edits collision.action 'warn'; a teleport trigger ENABLED, accepted "
                         + "explicitly; departures as declared, from the seed; demand as written; no vehicle "
                         + "limit; a vehicle not inserted within 900 s discarded", report);
-        Assert.Contains("  collision action 'warn' (collision.action 'warn'); a run may carry warn or none", report);
+        Assert.Contains("  collision action 'warn' (collision.action 'warn'); a run may carry only warn", report);
         Assert.Contains("  teleport paths   ENABLED, accepted explicitly: time-to-teleport.highways '5', ENABLED "
                         + "after 5 s; time-to-teleport.disconnected not set, so SUMO's default of -1 s; ", report);
         Assert.Contains("  depart offset    none: no departure moved by a random offset (random-depart-offset "

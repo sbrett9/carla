@@ -188,8 +188,36 @@ public sealed class CoSimRunReport
     /// </summary>
     public long Collisions { get; internal set; }
 
-    /// <summary>The first few collisions, as closed spans.</summary>
-    public IReadOnlyList<CollisionSpan> CollisionSamples => _collisions;
+    /// <summary>Every collision, as a closed span, in the order each was over.</summary>
+    /// <remarks>
+    /// Kept whole whatever <see cref="CollisionDetail"/> says, which decides only whether the printed
+    /// report lists them. A collision still going on is closed when the session ends.
+    /// </remarks>
+    public IReadOnlyList<CollisionSpan> CollisionSpans => _collisions;
+
+    /// <summary>The first few of <see cref="CollisionSpans"/>.</summary>
+    public IReadOnlyList<CollisionSpan> CollisionSamples => _collisions.Count <= CollisionSampleLimit
+        ? _collisions
+        : _collisions.GetRange(0, CollisionSampleLimit);
+
+    /// <summary>
+    /// Round trips spent asking SUMO for its collision list: one on the first frame the session read,
+    /// and one on each step a collision began or one the session already held was still going on; none
+    /// on any other.
+    /// </summary>
+    /// <remarks>
+    /// Whether one began arrives with every step's own answer (SUMO's colliding-vehicles count, in the
+    /// simulation domain's subscription), and on a step where none began and none was going on the list
+    /// is empty, so asking would only confirm it. Read against <see cref="SumoSteps"/>: in a run with no
+    /// collision it is one.
+    /// </remarks>
+    public long CollisionListReads { get; internal set; }
+
+    /// <summary>
+    /// Whether the printed report lists every collision and every collision warning SUMO wrote, or only
+    /// counts them; see <see cref="SumoDriveSessionOptions.CollisionDetail"/>. Printing only.
+    /// </summary>
+    public bool CollisionDetail { get; init; }
 
     /// <summary>
     /// Vehicles SUMO was trying to insert and gave up on, which it does without a word.
@@ -320,8 +348,15 @@ public sealed class CoSimRunReport
     /// </remarks>
     public long SumoWarnings => Console?.WarningCount ?? 0;
 
-    /// <summary>The first few warnings SUMO wrote, as it wrote them.</summary>
+    /// <summary>The first few warnings SUMO wrote other than its collision warnings, as it wrote them.</summary>
     public IReadOnlyList<string> SumoWarningSamples => Console?.WarningSamples ?? [];
+
+    /// <summary>
+    /// Every collision warning SUMO wrote, as it wrote it: one for each collision it registered, naming
+    /// both vehicles. Counted in <see cref="SumoWarnings"/>; kept whole whatever
+    /// <see cref="CollisionDetail"/> says, which decides only whether the printed report lists them.
+    /// </summary>
+    public IReadOnlyList<string> SumoCollisionWarnings => Console?.CollisionWarnings ?? [];
 
     /// <summary>SUMO's console, which the warnings are read from.</summary>
     internal SumoConsoleTail? Console { get; init; }
@@ -699,13 +734,7 @@ public sealed class CoSimRunReport
 
     internal void RecordFootprint(CameraFootprint footprint) => _footprints[footprint.Actor] = footprint;
 
-    internal void SampleCollision(in CollisionSpan span)
-    {
-        if (_collisions.Count < CollisionSampleLimit)
-        {
-            _collisions.Add(span);
-        }
-    }
+    internal void AddCollision(in CollisionSpan span) => _collisions.Add(span);
 
     internal void AddNotInserted(in VehicleNotInserted vehicle)
     {
@@ -906,6 +935,34 @@ public sealed class CoSimRunReport
         }
     }
 
+    /// <summary>
+    /// The collision lines: the counts and the round trips spent on them, then, under collision detail,
+    /// every collision and every collision warning SUMO wrote.
+    /// </summary>
+    private void AppendCollisions(StringBuilder text)
+    {
+        IReadOnlyList<string> warnings = SumoCollisionWarnings;
+        bool unlisted = !CollisionDetail && (Collisions > 0 || warnings.Count > 0);
+        text.AppendLine($"collided           {Collisions} collision(s) registered, {warnings.Count} collision "
+                        + "warning(s) from SUMO"
+                        + (unlisted ? ", each recorded and none listed (collision detail off)" : string.Empty)
+                        + $"; SUMO's list asked for on {CollisionListReads} step(s)");
+        if (!CollisionDetail)
+        {
+            return;
+        }
+
+        foreach (CollisionSpan collision in _collisions)
+        {
+            text.AppendLine($"  collision        {collision}");
+        }
+
+        foreach (string warning in warnings)
+        {
+            text.AppendLine($"  sumo said        {warning}");
+        }
+    }
+
     /// <summary>The draw distance line: none, the distance and what it means, or its refusal.</summary>
     private string DescribeDrawDistance()
     {
@@ -1020,11 +1077,7 @@ public sealed class CoSimRunReport
                                 .Select(entry => $"{entry.Key} {entry.Value}")));
         }
 
-        text.AppendLine($"collided           {Collisions} collision(s) registered");
-        foreach (CollisionSpan collision in _collisions)
-        {
-            text.AppendLine($"  collision        {collision}");
-        }
+        AppendCollisions(text);
 
         text.AppendLine($"not inserted       {VehiclesNotInserted} vehicle(s) SUMO gave up inserting; "
                         + $"{VehiclesAwaitingInsertion} still waiting at the last frame read");
@@ -1050,7 +1103,11 @@ public sealed class CoSimRunReport
             text.AppendLine($"vehicle queries    {VehicleQueries} asked of SUMO on demand, one round trip each");
         }
 
-        text.AppendLine($"sumo warnings      {SumoWarnings}");
+        int collisionWarnings = SumoCollisionWarnings.Count;
+        text.AppendLine($"sumo warnings      {SumoWarnings}"
+                        + (collisionWarnings > 0
+                            ? $", {collisionWarnings} of them collision warnings, under collided"
+                            : string.Empty));
         foreach (string warning in SumoWarningSamples)
         {
             text.AppendLine($"  warning          {warning}");

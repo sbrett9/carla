@@ -228,6 +228,23 @@ def test_a_body_ceiling_from_before_is_refused_by_name_and_an_unusable_limit_off
     assert server.events.of("start_sumo_drive") == []
 
 
+def test_collision_detail_is_off_unless_set_and_only_binds_a_printer(layout, server):
+    # Off by default: the session's report prints the count, and nothing is called per collision.
+    _, result = capture(layout, server)
+    assert result.outcome == "run_finished"
+    started = started_with(server)
+    assert started["collision_detail"] is False
+    assert started["on_collision"] is None
+
+
+def test_collision_detail_on_reaches_the_session_and_prints_each_collision(layout, server):
+    session, result = capture(layout, server, overrides=["collision_detail=on"])
+    assert result.outcome == "run_finished"
+    started = started_with(server)
+    assert started["collision_detail"] is True
+    assert started["on_collision"] == session._print_collision
+
+
 def test_no_draw_distance_is_handed_to_the_session_unless_one_is_set(layout, server):
     # An optional performance control, off by default: every body drawn at any range.
     _, result = capture(layout, server)

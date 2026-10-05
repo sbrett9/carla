@@ -15,15 +15,24 @@ namespace CarlaNet.CoSim;
 /// meaning into them. A line is a warning where SUMO began it with <c>Warning:</c>, which is how its
 /// message handler writes every one. Lines arrive on SUMO's output thread, a moment after the step that
 /// produced them, so a count read mid-run can lag by a step.</para>
+///
+/// <para><b>A collision warning is kept apart, and every one is kept.</b> Under <c>warn</c> SUMO writes
+/// one for each collision it registers for the first time, naming both vehicles
+/// (<c>MSLane::handleCollisionBetween</c>: "Vehicle '...'; collision with vehicle '...'", or a frontal,
+/// side or junction collision, or a collision with a person). They are one per collision the session
+/// records, so they are kept whole for the report to print or only count, and they do not take the
+/// places of the other warnings among the first few kept.</para>
 /// </remarks>
 internal sealed class SumoConsoleTail
 {
     private const int Lines = 8;
     private const int WarningSampleLimit = 10;
     private const string WarningPrefix = "Warning:";
+    private static readonly string[] CollisionMarks = ["collision with vehicle '", "collision with person '"];
 
     private readonly Queue<string> _lines = new();
     private readonly List<string> _warnings = [];
+    private readonly List<string> _collisionWarnings = [];
     private readonly Action<string>? _forward;
     private long _warningCount;
 
@@ -32,10 +41,10 @@ internal sealed class SumoConsoleTail
         _forward = forward;
     }
 
-    /// <summary>How many warnings SUMO has written.</summary>
+    /// <summary>How many warnings SUMO has written, its collision warnings included.</summary>
     public long WarningCount => Interlocked.Read(ref _warningCount);
 
-    /// <summary>The first few warnings SUMO wrote, as it wrote them.</summary>
+    /// <summary>The first few warnings SUMO wrote other than its collision warnings, as it wrote them.</summary>
     public IReadOnlyList<string> WarningSamples
     {
         get
@@ -46,6 +55,23 @@ internal sealed class SumoConsoleTail
             }
         }
     }
+
+    /// <summary>Every collision warning SUMO wrote, as it wrote it, in order.</summary>
+    public IReadOnlyList<string> CollisionWarnings
+    {
+        get
+        {
+            lock (_lines)
+            {
+                return [.. _collisionWarnings];
+            }
+        }
+    }
+
+    /// <summary>Whether a line of SUMO's is one of its collision warnings.</summary>
+    internal static bool IsCollisionWarning(string line) =>
+        line.StartsWith(WarningPrefix, StringComparison.Ordinal)
+        && CollisionMarks.Any(mark => line.Contains(mark, StringComparison.Ordinal));
 
     /// <summary>Take one line of SUMO's output.</summary>
     public void Add(string line)
@@ -61,7 +87,11 @@ internal sealed class SumoConsoleTail
             if (line.StartsWith(WarningPrefix, StringComparison.Ordinal))
             {
                 Interlocked.Increment(ref _warningCount);
-                if (_warnings.Count < WarningSampleLimit)
+                if (IsCollisionWarning(line))
+                {
+                    _collisionWarnings.Add(line);
+                }
+                else if (_warnings.Count < WarningSampleLimit)
                 {
                     _warnings.Add(line);
                 }

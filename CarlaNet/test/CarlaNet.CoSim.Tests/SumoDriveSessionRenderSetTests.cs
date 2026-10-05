@@ -364,7 +364,7 @@ public sealed class SumoDriveSessionRenderSetTests
                     <processing>
                         <seed value="42"/>
                         <time-to-teleport value="-1"/>
-                        <collision.action value="none"/>
+                        <collision.action value="warn"/>
                     </processing>
                     <report>
                         <no-step-log value="true"/>

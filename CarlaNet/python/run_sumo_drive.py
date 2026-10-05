@@ -91,16 +91,19 @@ scenario with no lock runs and is logged as uncompiled. A scenario whose configu
 teleport a waiting vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s, or any
 of SUMO's other teleport triggers -- is refused unless `--allow-teleporting` is given. One that sets
 `ignore-route-errors` is refused outright, because SUMO then keeps a vehicle it cannot route standing at
-the end of an edge and says nothing; so is one whose `collision.action` is not `warn` or `none` (SUMO's
-default is `teleport`), one with a positive `random-depart-offset`, and one that sets `random`. The
-report names the demand scale, the cap on vehicles running and `max-depart-delay` the run ran under.
+the end of an edge and says nothing; so is one whose `collision.action` is not `warn` (SUMO's default
+is `teleport`, and `none` or `ignore-accidents` would leave no record of collisions), one with a
+positive `random-depart-offset`, and one that sets `random`. The report names the demand scale, the cap
+on vehicles running and `max-depart-delay` the run ran under.
 
 If either side fails part-way -- SUMO dies, closes the connection or does not answer within
 `--sumo-answer-timeout`, the server drops the connection or leaves a tick unanswered, or the sun
 disagrees with its declaration or goes away -- both stop together: the script logs the stage and the
 cause, prints the report with the last frame whose truth holds, gives back everything it can reach and
 exits 1. A collision does not stop the run; the report counts them, with the vehicles SUMO gave up
-inserting and SUMO's own warnings.
+inserting and SUMO's own warnings. `--collision-detail` prints every collision as it ends, and lists
+every collision and every collision warning SUMO wrote in the report; by default only their count is
+printed. It changes what is printed and nothing else: the session records every collision either way.
 
 One thing happens between the session starting and the recorder starting: the camera is aimed at the
 vehicles rather than at the middle of the world, because a corridor scenario puts its traffic nowhere
@@ -242,7 +245,11 @@ def parse_args() -> argparse.Namespace:
                              "(a positive time-to-teleport, or none, which SUMO takes as 300 s; or "
                              "another teleport trigger, such as time-to-teleport.highways or a vehicle "
                              "type's own timeToTeleport) instead of refusing it. The run report records "
-                             "that it was accepted. It accepts no collision.action but warn or none")
+                             "that it was accepted. It accepts no collision.action but warn")
+    parser.add_argument("--collision-detail", action="store_true",
+                        help="print every collision as it ends, and list every collision and every "
+                             "collision warning SUMO wrote in the report. Off by default, which prints "
+                             "only their count. Printing only: every collision is recorded either way")
     parser.add_argument("--no-vehicle-lamps", action="store_true",
                         help="write no lamp to any body: no brake lights or indicators from SUMO and no "
                              "headlights from the sun. A control condition; lamps are driven by default")
@@ -676,6 +683,12 @@ def describe_draw_distance(metres: float | None) -> str:
             "each capture's sidecar marks it")
 
 
+def print_collision(span) -> None:
+    """One collision as it ends, under --collision-detail. Called from the session's tick thread; a log
+    line does not block it."""
+    logger.info("collision: %s", span)
+
+
 def describe_world_truth_track(track) -> str:
     """The world truth track as the launch states it: none, or where it goes and how often."""
     if track is None:
@@ -1029,6 +1042,10 @@ def main() -> int:
             render_release_lag_s=args.render_release_lag,
             world_truth_track=args.world_truth_track,
             world_truth_track_interval_s=args.world_truth_track_interval,
+            # What is printed about collisions, and nothing else: the session keeps every one either
+            # way, and a line per collision is bound only where every collision is to be printed.
+            collision_detail=args.collision_detail,
+            on_collision=print_collision if args.collision_detail else None,
             # Bound only where the aim needs it: the session hands out a pose per rendered
             # vehicle per tick, and a callback that spends the whole run declining them is a
             # crossing into Python per vehicle per tick for nothing. No divergence callback for
