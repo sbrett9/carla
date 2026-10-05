@@ -1,0 +1,400 @@
+{
+  "supervision_plan_version": 1,
+  "plan_id": "Arapahoe_I25_SupervisionCheck",
+  "spec_version": 1,
+  "scenario_id": "Arapahoe_I25_SupervisionCheck",
+  "routes_digest": "08d1ad4acbc21105bc7f407394325206262c4ae9fdbf693aaf20ca11dc1058c0",
+  "network_digest": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
+  "config_digest": "79a64f258e881cdb5d81638b6c4a95b467d036551ccdefc74f823bd9b1a856ff",
+  "additional_digest": null,
+  "vocabulary_version": 2,
+  "vocabulary_digest": "f4ee7b480df7209dfa2404bced4ff6d0504692e5e4cbc03d9781326c14a604ff",
+  "vocabulary": {
+    "core": {
+      "vocabulary_version": 2,
+      "source": "06_Truth_And_Annotation.md §3.7",
+      "terms": {
+        "supervision_state": [
+          "annotated",
+          "nominal",
+          "unlabelled"
+        ],
+        "subject_kind": [
+          "entity",
+          "cohort",
+          "slot"
+        ],
+        "realisation": [
+          "present",
+          "absent"
+        ],
+        "interval_onset": [
+          "declared",
+          "committed",
+          "observed"
+        ],
+        "closed_by": [
+          "trigger",
+          "entity_arrived",
+          "sumo_removed",
+          "never_inserted",
+          "slot_unrealised",
+          "physical_predicate_never_held",
+          "render_released",
+          "capture_window_end",
+          "scenario_end"
+        ],
+        "observability_outcome": [
+          "observed",
+          "out_of_frame",
+          "occluded",
+          "not_rendered",
+          "site_unobserved",
+          "beyond_draw_distance"
+        ],
+        "illumination_band": [
+          "day",
+          "golden",
+          "civil_twilight",
+          "nautical_twilight",
+          "astronomical_twilight",
+          "night"
+        ],
+        "cadence": [
+          "enumerated",
+          "period_s + offsets_s[] + span"
+        ],
+        "reserved_role": [
+          "subject"
+        ],
+        "reserved_phase": [
+          "vacancy"
+        ],
+        "interval_anchor": [
+          "depart",
+          "stop",
+          "stop_end",
+          "phase"
+        ],
+        "render_state": [
+          "rendered",
+          "simulated_only"
+        ],
+        "render_reason": [
+          "no_world",
+          "left_the_simulation",
+          "vanished",
+          "outside_limit",
+          "no_blueprint",
+          "unknown_extent",
+          "no_ground",
+          "not_drawn"
+        ]
+      }
+    },
+    "namespaces": [
+      {
+        "namespace": "check",
+        "version": 1,
+        "authority": "The supervision check on Arapahoe; CarlaControl/scripts/make_supervision_check_scenario.py",
+        "terms": [
+          {
+            "term": "check:kerbside_dwell",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A car pulls to the kerb and waits there for minutes, with nothing to deliver or collect, then drives on.",
+            "parameters": {
+              "dwell_s": {
+                "type": "number",
+                "unit": "s",
+                "definition": "the authored length of the wait at the kerb"
+              }
+            },
+            "contrast_with": [
+              "check:brief_kerb_stop"
+            ],
+            "counterfactual": {
+              "kind": "term",
+              "ref": "check:brief_kerb_stop"
+            },
+            "exemplar_instances": [
+              "kerbside_dwell"
+            ]
+          },
+          {
+            "term": "check:through_transit",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A car drives through the scene without stopping: in from East Arapahoe Road and out to the north along South Yosemite Street."
+          },
+          {
+            "term": "check:brief_kerb_stop",
+            "since": 1,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "realisation": [
+              "present"
+            ],
+            "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
+            "hard_negative_for": [
+              "check:kerbside_dwell"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "instances": [
+    {
+      "instance_id": "Arapahoe_I25_SupervisionCheck/kerbside_dwell",
+      "supervision": "annotated",
+      "realisation": "present",
+      "labels": [
+        "check:kerbside_dwell"
+      ],
+      "parameters": {
+        "dwell_s": 120
+      },
+      "hard_negative_for": null,
+      "counterfactual": null,
+      "series_ref": null,
+      "slot_ref": null,
+      "aoi_refs": [],
+      "participants": [
+        {
+          "entity_id": "dweller",
+          "role": "subject",
+          "sumo_id": "dweller"
+        }
+      ],
+      "intervals": [
+        {
+          "entity_id": "dweller",
+          "phase": "dwell",
+          "anchor": {
+            "start": {
+              "event": "stop:0",
+              "lane": "427819553#0_0",
+              "end_pos_m": 70.0
+            },
+            "end": {
+              "event": "stop_end:0",
+              "lane": "427819553#0_0",
+              "end_pos_m": 70.0
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
+          "declared_end_s": null,
+          "declared_end_civil": null,
+          "declared_duration_s": 120.0
+        }
+      ]
+    },
+    {
+      "instance_id": "Arapahoe_I25_SupervisionCheck/through_transit",
+      "supervision": "annotated",
+      "realisation": "present",
+      "labels": [
+        "check:through_transit"
+      ],
+      "parameters": {},
+      "hard_negative_for": null,
+      "counterfactual": null,
+      "series_ref": null,
+      "slot_ref": null,
+      "aoi_refs": [],
+      "participants": [
+        {
+          "entity_id": "transit",
+          "role": "subject",
+          "sumo_id": "transit"
+        }
+      ],
+      "intervals": [
+        {
+          "entity_id": "transit",
+          "phase": "transit",
+          "anchor": {
+            "start": {
+              "event": "depart"
+            },
+            "end": null
+          },
+          "declared_start_s": 90.0,
+          "declared_start_civil": "2026-09-29T07:27:30-06:00",
+          "declared_end_s": null,
+          "declared_end_civil": null,
+          "declared_duration_s": null
+        },
+        {
+          "entity_id": "transit",
+          "phase": "past_the_kerb",
+          "anchor": {
+            "start": {
+              "event": "phase:1",
+              "route_index": 2,
+              "edge": "1026993839#0"
+            },
+            "end": {
+              "event": "phase:2",
+              "route_index": 4,
+              "edge": "427819555#0"
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
+          "declared_end_s": null,
+          "declared_end_civil": null,
+          "declared_duration_s": null
+        }
+      ]
+    },
+    {
+      "instance_id": "Arapahoe_I25_SupervisionCheck/brief_stop",
+      "supervision": "nominal",
+      "realisation": "present",
+      "labels": [
+        "check:brief_kerb_stop"
+      ],
+      "parameters": {},
+      "hard_negative_for": [
+        "check:kerbside_dwell"
+      ],
+      "counterfactual": null,
+      "series_ref": null,
+      "slot_ref": null,
+      "aoi_refs": [],
+      "participants": [
+        {
+          "entity_id": "brief_stopper",
+          "role": "subject",
+          "sumo_id": "brief_stopper"
+        }
+      ],
+      "intervals": [
+        {
+          "entity_id": "brief_stopper",
+          "phase": "stop",
+          "anchor": {
+            "start": {
+              "event": "stop:0",
+              "lane": "427819553#0_0",
+              "end_pos_m": 40.0
+            },
+            "end": {
+              "event": "stop_end:0",
+              "lane": "427819553#0_0",
+              "end_pos_m": 40.0
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
+          "declared_end_s": null,
+          "declared_end_civil": null,
+          "declared_duration_s": 20.0
+        }
+      ]
+    }
+  ],
+  "series": [],
+  "cohorts": [
+    {
+      "flow_id": "arapahoe_east_to_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_west_to_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "yosemite_north_to_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "yosemite_south_to_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "yosemite_north_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_yosemite_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "clinton_to_arapahoe_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_west_to_clinton",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "wabash_to_arapahoe_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    }
+  ],
+  "entities": [
+    {
+      "entity_id": "brief_stopper",
+      "supervision": [
+        "nominal"
+      ],
+      "refs": [
+        "Arapahoe_I25_SupervisionCheck/brief_stop"
+      ]
+    },
+    {
+      "entity_id": "dweller",
+      "supervision": [
+        "annotated"
+      ],
+      "refs": [
+        "Arapahoe_I25_SupervisionCheck/kerbside_dwell"
+      ]
+    },
+    {
+      "entity_id": "transit",
+      "supervision": [
+        "annotated"
+      ],
+      "refs": [
+        "Arapahoe_I25_SupervisionCheck/through_transit"
+      ]
+    }
+  ]
+}
