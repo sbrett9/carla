@@ -703,6 +703,10 @@ class PygameInterface:
             status += f"  set {paired} paired"
             if recorder.render_set_unpaired:
                 status += f" -{recorder.render_set_unpaired} unpaired"
+        # A capture whose own frame's supervision was not to be had carries none: shown as it happens.
+        unknown = getattr(recorder, "supervision_unpaired", None)
+        if unknown:
+            status += f"  supervision -{unknown} unknown"
         tiles = getattr(recorder, "tiles", None)
         if tiles:
             status += f"  tiles {tiles}"

@@ -59,7 +59,7 @@ public sealed class EpisodeStateHeader
 
     /// The supervision the snapshot carried: the plan in force, what the author asserts of the vehicle
     /// each lent body drew, and the absences in force for the world. ObservedSupervision.None where the
-    /// snapshot carried none.
+    /// snapshot carried none, and ObservedSupervision.Unreadable where its block could not be read.
     public ObservedSupervision Supervision { get; init; } = ObservedSupervision.None;
 }
 
@@ -160,7 +160,8 @@ public sealed class EpisodeStateSensorData
         }
     }
 
-    // Likewise a supervision block: read as none, with the actors and the render set read all the same.
+    // Likewise a supervision block, read as unreadable -- a plan in force, what it asserted unknown --
+    // with the actors and the render set read all the same.
     private static ObservedSupervision ReadSupervision(ReadOnlySpan<byte> payload)
     {
         try
@@ -169,7 +170,7 @@ public sealed class EpisodeStateSensorData
         }
         catch (InvalidDataException)
         {
-            return ObservedSupervision.None;
+            return ObservedSupervision.Unreadable;
         }
     }
 }

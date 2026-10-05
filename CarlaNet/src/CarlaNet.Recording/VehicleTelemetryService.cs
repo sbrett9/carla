@@ -73,14 +73,33 @@ public sealed class VehicleTelemetryService
     /// </remarks>
     public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame,
                                                    out ObservedRenderSet renderSet)
+        => Compute(origin, frame, out telemetryFrame, out renderSet, out _, out _);
+
+    /// <summary>
+    /// Truth as <see cref="Compute(GeoLocation, ulong?, out ulong, out ObservedRenderSet)"/> answers it,
+    /// and the supervision the records' own frame carried, read in the same read as its actors and its
+    /// render set, so a body's supervision is always the one it carried for the vehicle it drew on that
+    /// frame.
+    /// </summary>
+    /// <param name="fromSnapshot">
+    /// Whether the records were read from a held snapshot -- the one <paramref name="telemetryFrame"/>
+    /// names -- rather than the actor cache, which a client holding no snapshot yet answers from and
+    /// which carries no supervision.
+    /// </param>
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame,
+                                                   out ObservedRenderSet renderSet,
+                                                   out ObservedSupervision supervision, out bool fromSnapshot)
     {
         IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
         telemetryFrame = 0;
         renderSet = ObservedRenderSet.None;
+        supervision = ObservedSupervision.None;
         if (frame.HasValue)
-            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame, out renderSet);
+            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame, out renderSet, out supervision);
         else if (!_client.GetCachedRenderSet().IsEmpty)
-            atFrame = _client.GetSnapshotFrame(_client.LatestObservedFrame, out telemetryFrame, out renderSet);
+            atFrame = _client.GetSnapshotFrame(_client.LatestObservedFrame, out telemetryFrame, out renderSet,
+                                               out supervision);
+        fromSnapshot = atFrame is not null;
         if (atFrame is null)
             telemetryFrame = _client.LatestObservedFrame;
         IReadOnlyList<ActorId> ids = atFrame is not null ? atFrame.Keys.ToArray() : _client.GetCachedActorIds();

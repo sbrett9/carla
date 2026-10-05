@@ -71,6 +71,16 @@ public sealed class ObservedSupervision
     /// <summary>The supervision of a snapshot that carried none: no plan was in force.</summary>
     public static ObservedSupervision None { get; } = new(null, [], [], []);
 
+    /// <summary>
+    /// The supervision of a snapshot that said it carried a block this reader could not read: a plan
+    /// was in force, and what it asserted on the frame is unknown. Never read as <see cref="None"/>,
+    /// which would say no plan was in force.
+    /// </summary>
+    public static ObservedSupervision Unreadable { get; } = new(null, [], [], []);
+
+    /// <summary>Whether the snapshot said it carried supervision and its block could not be read.</summary>
+    public bool IsUnreadable => ReferenceEquals(this, Unreadable);
+
     /// <summary>The plan the supervision is bound from, or <see langword="null"/> where none was in force.</summary>
     public SupervisionPlanIdentity? Plan { get; }
 

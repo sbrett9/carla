@@ -10,6 +10,12 @@ what it holds, not by its name -- `<camera name>_<capture time>.xml`, or `SCTMV_
 from before cameras were named -- so a directory holding either, or several cameras' stills, is read
 whole.
 
+Where the run had a supervision plan -- a sidecar names one, or says its supervision was unknown --
+every SUMO vehicle record must carry a `<_supervision>` in one of the three states, consistent with
+the instances it names, and every sidecar naming the plan its world-scoped element; a sidecar saying
+nothing of supervision in such a run is a defect too. Sidecars whose supervision was unknown are
+counted, not faulted: the run's closeout gates them.
+
 Any of those is a defect and the exit status is 1. A capture of traffic-manager traffic carries no
 SUMO id by design: pass `--traffic-manager` and only the ground band and the uid checks apply.
 
@@ -70,6 +76,7 @@ def main() -> int:
     if defects:
         return 1
     logging.info("every vehicle record stands on the ground and names one SUMO vehicle under one uid"
+                 + (", and carries its supervision" if result.had_plan else "")
                  if not args.traffic_manager else "every vehicle record stands on the ground")
     return 0
 

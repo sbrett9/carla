@@ -48,7 +48,8 @@ public sealed class FrameRecorder : IDisposable
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
                               ReadOnlyMemory<byte> Bgra, IReadOnlyList<VehicleTelemetry> Telemetry,
                               IReadOnlyList<double> Solar, SensorPose? Sensor,
-                              CaptureIdentity Capture, SidecarVehicles Vehicles, double? DrawDistance);
+                              CaptureIdentity Capture, SidecarVehicles Vehicles, double? DrawDistance,
+                              CaptureSupervision Supervision);
 
     private readonly CarlaClient _client;
     private readonly string _dir;
@@ -85,6 +86,7 @@ public sealed class FrameRecorder : IDisposable
     private long _illuminationPaired, _illuminationUnpaired;
     private long _solarBlockMissing;
     private long _drawDistanceCaptures, _beyondDrawDistance, _partlyBeyondDrawDistance;
+    private long _supervisionPaired, _supervisionUnpaired;
 
     /// <summary>
     /// How long a capture waits for the declaration of its own frame when it arrives before the
@@ -147,6 +149,21 @@ public sealed class FrameRecorder : IDisposable
     /// <summary>Bodies a paired capture's render set held that no truth record described, summed
     /// over the captures.</summary>
     public long RenderSetBodiesMissing => _renderSet?.BodiesMissing ?? 0;
+
+    /// <summary>
+    /// Captures written with the supervision in force on their own frame, as the server carried it on
+    /// that frame's snapshot: the plan, the absences, and every drawn SUMO vehicle's state. Zero where no
+    /// plan was in force, which a capture of such a frame says nothing about.
+    /// </summary>
+    public long SupervisionPaired => Interlocked.Read(ref _supervisionPaired);
+
+    /// <summary>
+    /// Captures written with their supervision unknown, although a plan was in force: the client no
+    /// longer held the snapshot of the image's own frame, or could not read its supervision. Each such
+    /// sidecar says <c>supervision="unknown"</c> and carries none, never a neighbouring frame's, so a
+    /// run's closeout holds it at zero.
+    /// </summary>
+    public long SupervisionUnpaired => Interlocked.Read(ref _supervisionUnpaired);
 
     /// <summary>
     /// Captures whose image was rendered under a draw distance, and whose sidecar therefore states it
@@ -259,6 +276,11 @@ public sealed class FrameRecorder : IDisposable
     /// <paramref name="cameraActorId"/>, <c>CARLA-SENSOR-&lt;id&gt;</c>; a recorder given none of the
     /// three is refused. A name the rule refuses is refused here, and so is one another recorder in
     /// this process holds: the recorder holds its name until it is disposed.</param>
+    /// <remarks>
+    /// The supervision in force is given by no parameter: it is held on the server and carried on every
+    /// world-observer snapshot, and each capture takes its own frame's from the snapshot its vehicles are
+    /// read from (<see cref="CaptureSupervision"/>), so a recorder in any process writes the same.
+    /// </remarks>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
                          SensorPlatformOptions? platform = null, int workers = 0,
@@ -406,6 +428,8 @@ public sealed class FrameRecorder : IDisposable
         IReadOnlyList<VehicleTelemetry> recs = Array.Empty<VehicleTelemetry>();
         ulong? telemetryTick = null;
         ObservedRenderSet servedRenderSet = ObservedRenderSet.None;
+        ObservedSupervision servedSupervision = ObservedSupervision.None;
+        ulong? supervisionFrame = null;
         if (_haveOrigin)
         {
             // The truth is read as of the frame named in this image's header, not as of whatever the
@@ -415,8 +439,11 @@ public sealed class FrameRecorder : IDisposable
             // so this is fast once every actor has been seen.
             try
             {
-                recs = _telemetry.Compute(_origin, arrival.Frame, out ulong served, out servedRenderSet);
+                recs = _telemetry.Compute(_origin, arrival.Frame, out ulong served, out servedRenderSet,
+                                          out servedSupervision, out bool fromSnapshot);
                 telemetryTick = served;
+                if (fromSnapshot)
+                    supervisionFrame = served;
                 if (served == arrival.Frame)
                     Interlocked.Increment(ref _telemetryExact);
                 else
@@ -454,6 +481,25 @@ public sealed class FrameRecorder : IDisposable
             // named by its vehicle, so the sidecar says so rather than claiming every vehicle actor.
             vehicles = SidecarVehicles.Rendered;
         }
+
+        // The supervision in force on the image's own frame, as the server carried it, from the same
+        // read as the vehicles above, so a body's is the one it carried for the vehicle it drew then. A
+        // capture with no vehicle truth reads the frame's snapshot for it alone. Where the image's frame
+        // was not held, it is unknown, never a neighbour's (CaptureSupervision.For).
+        if (supervisionFrame is null
+            && _client.GetSnapshotFrame(arrival.Frame, out ulong held, out _, out ObservedSupervision heldSupervision)
+               is not null)
+        {
+            supervisionFrame = held;
+            servedSupervision = heldSupervision;
+        }
+
+        CaptureSupervision supervision = CaptureSupervision.For(arrival.Frame, supervisionFrame, servedSupervision,
+                                                                _client.GetCachedSupervision());
+        if (supervision.State == SidecarSupervision.InForce)
+            Interlocked.Increment(ref _supervisionPaired);
+        else if (supervision.State == SidecarSupervision.Unknown)
+            Interlocked.Increment(ref _supervisionUnpaired);
 
         // The pose these pixels were taken from: the camera in the snapshot of the image's own frame,
         // with the header checked against it rather than trusted, because a header stamped after the
@@ -505,7 +551,7 @@ public sealed class FrameRecorder : IDisposable
         var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed,
                                           telemetryTick);
         return new Job(arrival.CapturedUtc, arrival.Width, arrival.Height, arrival.Bgra, recs, arrival.Solar,
-                       sensor, capture, vehicles, drawDistance);
+                       sensor, capture, vehicles, drawDistance, supervision);
     }
 
     private IReadOnlyList<VehicleTelemetry> MeasureOcclusion(
@@ -551,6 +597,8 @@ public sealed class FrameRecorder : IDisposable
                     IlluminationDeclaration? illumination = await DeclarationForAsync(job.Capture.Tick)
                         .ConfigureAwait(false);
                     string stem = CameraName.StillStem(_name, job.CapturedUtc);
+                    // The still carries its sun, its declaration, its pose and its identity, and never
+                    // any supervision: truth stays out of the observation artifact (doc 04 D4.20).
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
                                                Path.Combine(_dir, stem + ".png"),
                                                SolarMetadata.PngTextChunks(job.Solar)
@@ -560,7 +608,7 @@ public sealed class FrameRecorder : IDisposable
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
                                           job.CapturedUtc, job.Telemetry, _affiliation, _stale,
                                           job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles,
-                                          job.DrawDistance);
+                                          job.DrawDistance, job.Supervision);
                     // Both writers leave the sun out of a capture whose block holds none, which is
                     // right for the frame and wrong for the run: counted, so it is never silent.
                     if (!SolarMetadata.HasData(job.Solar))

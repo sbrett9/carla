@@ -312,7 +312,10 @@ public class EpisodeStateSupervisionTests
         EpisodeStateSensorData data = EpisodeStateSensorData.Deserialize(payload);
         Assert.Equal([21u, 22u], data.Actors.Select(actor => actor.Id));
         Assert.Equal(1, data.Header.RenderSet.Count);
-        Assert.Same(ObservedSupervision.None, data.Header.Supervision);
+        // Read as unreadable, not as none: a plan was in force, and what it asserted is unknown.
+        Assert.Same(ObservedSupervision.Unreadable, data.Header.Supervision);
+        Assert.True(data.Header.Supervision.IsUnreadable);
+        Assert.False(data.Header.Supervision.IsCarried);
     }
 
     [Fact]

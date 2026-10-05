@@ -24,6 +24,15 @@ namespace CarlaNet.Recording;
 /// the world and in the truth, a vehicle wholly beyond the distance is not in this image at all, and
 /// one partly beyond it may be drawn without the parts beyond (<see cref="DrawDistanceReach"/>). A
 /// capture with no draw distance carries neither.</para>
+///
+/// <para>A capture of a frame a supervision plan was in force on carries that frame's supervision, as
+/// the server held it (<see cref="CaptureSupervision"/>): the plan and the vocabulary's version and
+/// digest on the container, a world-scoped <c>&lt;_supervision scope="world"&gt;</c> with an
+/// <c>&lt;absence&gt;</c> per absence in force, and on every drawn SUMO vehicle a
+/// <c>&lt;_supervision&gt;</c> whose <c>state</c> is always written, <c>unlabelled</c> included, with an
+/// <c>&lt;annotation&gt;</c> per pattern instance in force. One whose frame's supervision is not to be had
+/// says <c>supervision="unknown"</c> on its container and writes none. A capture of a frame no plan was
+/// in force on is written exactly as before.</para>
 /// </remarks>
 public static class CotWriter
 {
@@ -31,8 +40,10 @@ public static class CotWriter
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
         IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
         CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null,
-        SidecarVehicles vehicles = SidecarVehicles.World, double? drawDistanceMetres = null)
+        SidecarVehicles vehicles = SidecarVehicles.World, double? drawDistanceMetres = null,
+        CaptureSupervision? supervision = null)
     {
+        supervision ??= CaptureSupervision.NotInForce;
         var settings = new XmlWriterSettings
         {
             Indent = true,
@@ -80,6 +91,15 @@ public static class CotWriter
         // the image drew every vehicle at any range.
         if (drawDistanceMetres is { } drawDistance)
             w.WriteAttributeString("draw_distance_m", F(drawDistance, "0.###"));
+
+        // The supervision plan in force on the frame, with the vocabulary version and digest that pin
+        // what its labels mean; or that a plan was in force and this frame's supervision is unknown.
+        // Absent, no plan was in force.
+        supervision.WriteContainerAttributes(w);
+
+        // World-scoped supervision: facts about the world, not about any one track, so a sibling of
+        // _solar rather than an event. An absence has no vehicle, and an event would fabricate one.
+        supervision.WriteWorld(w);
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame. A
@@ -283,6 +303,13 @@ public static class CotWriter
                 }
             }
             w.WriteEndElement(); // _carla
+
+            // What the author asserts of the vehicle this body drew on this frame, where it drew one:
+            // asserted, never derived, and written for every drawn vehicle, unlabelled included.
+            if (r.Rendered is not null)
+            {
+                supervision.WriteVehicle(w, r.Id);
+            }
 
             w.WriteEndElement(); // detail
             w.WriteEndElement(); // event

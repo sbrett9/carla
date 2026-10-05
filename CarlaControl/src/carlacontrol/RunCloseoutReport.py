@@ -6,8 +6,8 @@ newest frame's illumination declaration, its latest admission pass, and the comp
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
 the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
 recorder (`FrameRecorder`: captures written, captures dropped, illumination
-pairing, captures written without a solar block, render-set pairing, occlusion pairing, where each
-capture's pose came from, and the vehicles it marked beyond the draw distance) -- never at
+pairing, captures written without a solar block, render-set pairing, supervision pairing, occlusion
+pairing, where each capture's pose came from, and the vehicles it marked beyond the draw distance) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
 the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
 the run result carries the last one taken. Nothing here measures anything of its own.
@@ -23,6 +23,7 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `capture.illumination_unpaired` | captures written without their frame's illumination declaration, threshold 0 | measured |
 | `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 (11 §8.4) | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
+| `capture.supervision_unpaired` | captures written with `supervision="unknown"` -- a plan was in force and the supervision of the capture's own frame was not to be had -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
 | `capture.sensor_pose_header_disagreed` | captures whose image header placed the camera elsewhere than their own frame's snapshot, threshold 0 | measured |
 | `capture.depth_pose_header_disagreed` | the same for the depth captures occlusion is measured against, threshold 0 | measured where the channel has a depth camera |
 | `clock.ratio_recorded` | whether the session's achieved real-time factor exists | measured |
@@ -246,6 +247,7 @@ class RunCloseoutReport:
                  "captured": None, "written": None, "recorder_dropped": None,
                  "illumination_paired": None, "illumination_unpaired": None,
                  "solar_block_missing": None, "render_set_paired": None, "render_set_unpaired": None,
+                 "supervision_paired": None, "supervision_unpaired": None,
                  "occlusion_measured": None, "occlusion_unmatched": None,
                  "sensor_pose_from_snapshot": None, "sensor_pose_header_disagreed": None,
                  "sensor_pose_from_header": None,
@@ -266,6 +268,11 @@ class RunCloseoutReport:
                       "vehicles_beyond_draw_distance": int(recorder.VehiclesBeyondDrawDistance),
                       "vehicles_partly_beyond_draw_distance":
                           int(recorder.VehiclesPartlyBeyondDrawDistance)})
+        # Counted by a recorder built with the sidecar's supervision; one built before it carries none,
+        # and its gate is skipped rather than read as met.
+        if hasattr(recorder, "SupervisionUnpaired"):
+            entry.update({"supervision_paired": int(recorder.SupervisionPaired),
+                          "supervision_unpaired": int(recorder.SupervisionUnpaired)})
         if recorder.ChecksSensorPose:
             entry.update({"sensor_pose_from_snapshot": int(recorder.SensorPoseFromSnapshot),
                           "sensor_pose_header_disagreed": int(recorder.SensorPoseHeaderDisagreed),
@@ -321,6 +328,18 @@ class RunCloseoutReport:
                                     "captures written with no vehicle list because their frame's "
                                     "render set was no longer held", "06 §8.2",
                                     channel["render_set_unpaired"], 0, "equals"))
+            # A capture whose frame a plan was in force on, written with its supervision unknown because
+            # the snapshot of its own frame was not to be had: a still whose vehicles' labels are missing,
+            # never a neighbour's, which a corpus has to know about.
+            supervision_gate = f"capture.supervision_unpaired[{channel['sensor_id']}]"
+            supervision_name = ("captures written with their supervision unknown because their own "
+                                "frame's was not to be had")
+            if channel["supervision_unpaired"] is None:
+                gates.append(self._skipped(supervision_gate, supervision_name,
+                                           "the recorder was built before it counted supervision"))
+            else:
+                gates.append(self._gate(supervision_gate, supervision_name, "06 §8.2",
+                                        channel["supervision_unpaired"], 0, "equals"))
             # A capture whose image header placed the camera somewhere the snapshot of its own frame
             # did not. The snapshot's pose is the one written, so the still is placed right, but the
             # server stamped the header after the frame, and a corpus has to know it was.
@@ -451,7 +470,11 @@ class RunCloseoutReport:
                          f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
                          f"{channel['illumination_unpaired']}, solar block missing "
                          f"{channel['solar_block_missing']}, render set unpaired "
-                         f"{channel['render_set_unpaired']}  -> {channel['directory']}")
+                         f"{channel['render_set_unpaired']}"
+                         + (f", supervision {channel['supervision_paired']} paired "
+                            f"{channel['supervision_unpaired']} unknown"
+                            if channel.get("supervision_unpaired") is not None else "")
+                         + f"  -> {channel['directory']}")
             if channel.get("draw_distance_captures"):
                 lines.append(f"    under the draw distance {channel['draw_distance_captures']} "
                              f"captures: {channel['vehicles_beyond_draw_distance']} vehicle records "

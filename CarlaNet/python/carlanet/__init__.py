@@ -2099,6 +2099,16 @@ class World:
         record described. Without it every vehicle actor is listed, which is right wherever each
         actor is its own vehicle.
 
+        Where a SUMO drive's supervision plan is in force, each capture carries the supervision the
+        server held on its own frame -- nothing is passed for it, and a recorder in any process writes
+        the same: `plan_id`, `vocabulary` and `vocabulary_digest` on the sidecar's container, a
+        world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on
+        every drawn SUMO vehicle a `<_supervision state="annotated|nominal|unlabelled">` with an
+        `<annotation>` (instance, labels, phase, role) per pattern instance in force. A capture whose
+        own frame the client no longer held, or whose supervision it could not read, says
+        `supervision="unknown"` and carries none. `SupervisionPaired` and `SupervisionUnpaired`
+        count the two. The PNG carries no supervision.
+
         A SUMO drive run with a draw distance (`start_sumo_drive(draw_distance_m=...)`, off by
         default) draws no body farther than that from a camera, while every vehicle stays in the
         world and in the truth. Each capture then states the distance on its container

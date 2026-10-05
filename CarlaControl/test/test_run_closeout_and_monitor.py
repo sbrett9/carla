@@ -185,6 +185,40 @@ def test_a_capture_listed_without_its_frame_s_render_set_is_a_gate_not_met(layou
     assert "render set unpaired 3" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
 
 
+def test_a_capture_written_with_its_supervision_unknown_is_a_gate_not_met(layout):
+    # Doc 06 §8.2: a capture of a frame a plan was in force on, whose own frame's supervision was not to
+    # be had, is written with supervision="unknown" and none in its place; the gate is that there are none.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    met = gate(report.gates(report.snapshot(), 0), "capture.supervision_unpaired[OVERWATCH-1]")
+    assert (met["status"], met["observed"], met["threshold"], met["met"]) == ("evaluated", 0, 0, True)
+
+    recorder.SupervisionUnpaired = 2
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["supervision_paired"] == recorder.SupervisionPaired > 0
+    assert snapshot["channels"][0]["supervision_unpaired"] == 2
+    unknown = gate(report.gates(snapshot, 0), "capture.supervision_unpaired[OVERWATCH-1]")
+    assert (unknown["observed"], unknown["threshold"], unknown["met"]) == (2, 0, False)
+    assert unknown["owner"] == "06 §8.2"
+    assert f"supervision {recorder.SupervisionPaired} paired 2 unknown" in RunCloseoutReport.render(
+        snapshot, report.gates(snapshot, 0))
+
+
+def test_a_recorder_built_before_it_counted_supervision_skips_the_gate_rather_than_meeting_it(layout):
+    # A wheel built before the sidecar carried supervision has no such counter: not measured is never
+    # passed.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    del recorder.SupervisionPaired
+    del recorder.SupervisionUnpaired
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["supervision_unpaired"] is None
+    skipped = gate(report.gates(snapshot, 0), "capture.supervision_unpaired[OVERWATCH-1]")
+    assert skipped["status"] == "skipped"
+    assert "supervision" not in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0)).split(
+        "render set unpaired")[1].split("->")[0]
+
+
 def test_a_capture_written_without_a_solar_block_is_a_gate_not_met(layout):
     # Doc 11 §8.4: a capture with no recorded sun can be neither stratified by band nor replayed, and
     # the gate is that there are none.

@@ -16,6 +16,16 @@ This reads the sidecars back and counts both, from the files alone, so a capture
 recorder listed only the rendered set is shown to carry the defect and one made after is shown not
 to (`06_Truth_And_Annotation.md` §8.2).
 
+**And the supervision, where the run had a plan.** A sidecar of a frame a supervision plan was in force
+on names the plan on its container and carries a world-scoped `<_supervision scope="world">`, and every
+SUMO vehicle record in it carries a `<_supervision>` whose `state` is `annotated`, `nominal` or
+`unlabelled` -- always written, because a missing state is a bug and not a negative. A sidecar whose
+frame's supervision was not to be had says `supervision="unknown"` and carries none, which is counted
+and not faulted here: the run's closeout gates it. The run had a plan when any of its sidecars names one
+or says its supervision is unknown; then a SUMO vehicle record without the element, a state outside the
+three, an annotated vehicle naming no instance, an unlabelled one naming any, a sidecar naming a plan
+with no world element, and a sidecar saying nothing of supervision at all are each a defect.
+
 **A uid that changes vehicle is seen even where no record names one.** With SUMO ids on the records,
 a uid carrying two of them over the capture is counted directly. Without them, a uid seen on the
 road, then below the ground band, then on the road again is a body that was given back and lent again
@@ -49,6 +59,9 @@ MOVING_MPS = 0.5
 # spread of bare-earth heights along the roads a camera frames, with room for a bridge deck.
 DEFAULT_MARGIN_M = 50.0
 
+# The three states a vehicle's supervision is written in: the annotation vocabulary's core spellings.
+SUPERVISION_STATES = ("annotated", "nominal", "unlabelled")
+
 
 @dataclass(frozen=True)
 class VehicleRecord:
@@ -61,6 +74,11 @@ class VehicleRecord:
     sumo_id: str | None
     hae: float
     speed_mps: float
+    # The vehicle's <_supervision> state, None where it carries none, and how many instances it names.
+    supervision_state: str | None = None
+    annotations: int = 0
+    # Whether its sidecar named a supervision plan, so the record ought to carry a state.
+    in_supervised_sidecar: bool = False
 
 
 @dataclass
@@ -81,6 +99,21 @@ class SidecarAuditResult:
     sumo_ids_with_several_uids: dict[str, set[str]] = field(default_factory=dict)
     actors_with_several_sumo_ids: dict[str, set[str]] = field(default_factory=dict)
     uids_lent_again_after_parking: list[str] = field(default_factory=list)
+    sidecars_with_plan: int = 0
+    sidecars_supervision_unknown: int = 0
+    plans: set[str] = field(default_factory=set)
+    sidecars_with_plan_without_world: list[str] = field(default_factory=list)
+    sidecars_saying_nothing_of_supervision: list[str] = field(default_factory=list)
+    records_without_supervision: list[VehicleRecord] = field(default_factory=list)
+    records_with_unknown_state: list[VehicleRecord] = field(default_factory=list)
+    records_annotated_naming_nothing: list[VehicleRecord] = field(default_factory=list)
+    records_unlabelled_naming_something: list[VehicleRecord] = field(default_factory=list)
+
+    @property
+    def had_plan(self) -> bool:
+        """Whether the run had a supervision plan: a sidecar names one, or says its supervision was
+        unknown, which only a capture of a frame a plan was in force on does."""
+        return self.sidecars_with_plan > 0 or self.sidecars_supervision_unknown > 0
 
     @property
     def carries_sumo_ids(self) -> bool:
@@ -110,6 +143,25 @@ class SidecarAuditResult:
         if self.sumo_ids_with_several_uids:
             found.append(f"{len(self.sumo_ids_with_several_uids)} SUMO vehicle(s) appear under more "
                          "than one uid over the capture")
+        if self.records_without_supervision:
+            found.append(f"{len(self.records_without_supervision)} SUMO vehicle record(s) in sidecars "
+                         "naming a supervision plan carry no <_supervision>: a missing state is a bug, "
+                         "not a negative")
+        if self.records_with_unknown_state:
+            found.append(f"{len(self.records_with_unknown_state)} vehicle record(s) carry a supervision "
+                         f"state other than {', '.join(SUPERVISION_STATES)}")
+        if self.records_annotated_naming_nothing:
+            found.append(f"{len(self.records_annotated_naming_nothing)} annotated vehicle record(s) name "
+                         "no instance they execute")
+        if self.records_unlabelled_naming_something:
+            found.append(f"{len(self.records_unlabelled_naming_something)} unlabelled vehicle record(s) "
+                         "name an instance")
+        if self.sidecars_with_plan_without_world:
+            found.append(f"{len(self.sidecars_with_plan_without_world)} sidecar(s) name a supervision "
+                         "plan and carry no world-scoped <_supervision>")
+        if self.had_plan and self.sidecars_saying_nothing_of_supervision:
+            found.append(f"{len(self.sidecars_saying_nothing_of_supervision)} sidecar(s) of a run with a "
+                         "supervision plan neither name it nor say their supervision was unknown")
         return found
 
 
@@ -155,7 +207,9 @@ class TruthSidecarAudit:
                 result.sidecars_listing_rendered += 1
             elif vehicles == "unknown":
                 result.sidecars_listing_unknown += 1
-            result.records.extend(self._records(path, root, None if tick is None else int(tick)))
+            supervised = self._supervision(path, root, result)
+            result.records.extend(self._records(path, root, None if tick is None else int(tick),
+                                                supervised))
 
         self._band(result)
         uid_to_sumo: dict[str, set[str]] = defaultdict(set)
@@ -164,6 +218,7 @@ class TruthSidecarAudit:
         for record in result.records:
             if result.floor_hae is not None and record.hae < result.floor_hae:
                 result.below_band.append(record)
+            self._check_supervision(record, result)
             if record.sumo_id is None:
                 result.without_sumo_id.append(record)
                 continue
@@ -175,6 +230,37 @@ class TruthSidecarAudit:
         result.actors_with_several_sumo_ids = {k: v for k, v in actor_to_sumo.items() if len(v) > 1}
         result.uids_lent_again_after_parking = self._lent_again_after_parking(result)
         return result
+
+    @staticmethod
+    def _supervision(path: Path, root: ET.Element, result: SidecarAuditResult) -> bool:
+        """Count what one sidecar says of supervision; answer whether it names a plan, so its SUMO
+        vehicle records ought to carry a state."""
+        plan = root.get("plan_id")
+        if root.get("supervision") == "unknown":
+            result.sidecars_supervision_unknown += 1
+            return False
+        if plan is None:
+            result.sidecars_saying_nothing_of_supervision.append(path.name)
+            return False
+        result.sidecars_with_plan += 1
+        result.plans.add(plan)
+        if not any(child.get("scope") == "world" for child in root.findall("_supervision")):
+            result.sidecars_with_plan_without_world.append(path.name)
+        return True
+
+    @staticmethod
+    def _check_supervision(record: VehicleRecord, result: SidecarAuditResult) -> None:
+        """Hold one record's supervision to the three states, where its sidecar names a plan."""
+        if record.supervision_state is None:
+            if record.in_supervised_sidecar and record.sumo_id is not None:
+                result.records_without_supervision.append(record)
+            return
+        if record.supervision_state not in SUPERVISION_STATES:
+            result.records_with_unknown_state.append(record)
+        elif record.supervision_state == "annotated" and record.annotations == 0:
+            result.records_annotated_naming_nothing.append(record)
+        elif record.supervision_state == "unlabelled" and record.annotations > 0:
+            result.records_unlabelled_naming_something.append(record)
 
     @staticmethod
     def _lent_again_after_parking(result: SidecarAuditResult) -> list[str]:
@@ -200,7 +286,8 @@ class TruthSidecarAudit:
             result.floor_hae = min(moving) - self.margin_m
 
     @staticmethod
-    def _records(path: Path, root: ET.Element, tick: int | None) -> Iterable[VehicleRecord]:
+    def _records(path: Path, root: ET.Element, tick: int | None,
+                 supervised: bool = False) -> Iterable[VehicleRecord]:
         """The vehicle events of one sidecar: those carrying the `_carla` truth extras, which the
         collection platform's event does not."""
         for event in root.iter("event"):
@@ -209,11 +296,15 @@ class TruthSidecarAudit:
             track = event.find("detail/track")
             if extras is None or point is None:
                 continue
+            supervision = event.find("detail/_supervision")
             yield VehicleRecord(
                 sidecar=path.name, tick=tick, uid=event.get("uid", ""),
                 actor_id=extras.get("actor_id", ""), sumo_id=extras.get("sumo_id"),
                 hae=float(point.get("hae", "nan")),
-                speed_mps=0.0 if track is None else float(track.get("speed", "0")))
+                speed_mps=0.0 if track is None else float(track.get("speed", "0")),
+                supervision_state=None if supervision is None else supervision.get("state", ""),
+                annotations=0 if supervision is None else len(supervision.findall("annotation")),
+                in_supervised_sidecar=supervised)
 
     @staticmethod
     def describe(result: SidecarAuditResult) -> list[str]:
@@ -241,6 +332,18 @@ class TruthSidecarAudit:
                              f"{len({record.actor_id for record in result.below_band})} actor(s)")
         lines.append(f"  without a SUMO id: {len(result.without_sumo_id)} of {total} "
                      f"({_percent(len(result.without_sumo_id), total)})")
+        if result.had_plan:
+            states = defaultdict(int)
+            for record in result.records:
+                if record.supervision_state is not None:
+                    states[record.supervision_state] += 1
+            lines.append(f"  supervision: {result.sidecars_with_plan} sidecar(s) under plan "
+                         f"{', '.join(sorted(result.plans)) or '-'}, {result.sidecars_supervision_unknown} "
+                         f"with it unknown; vehicle states "
+                         + (", ".join(f"{state} {states[state]}" for state in sorted(states)) or "none")
+                         + f"; SUMO vehicle records with none: {len(result.records_without_supervision)}")
+        else:
+            lines.append("  supervision: no sidecar names a plan, so none is expected")
         if result.carries_sumo_ids:
             lines.append(f"  uids naming more than one SUMO vehicle: "
                          f"{len(result.uids_with_several_sumo_ids)}")
