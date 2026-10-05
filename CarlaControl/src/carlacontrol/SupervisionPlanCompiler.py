@@ -43,6 +43,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
+from CarlaNet.Types.Supervision import AnchorEvent, CoreVocabulary
+
 from carlacontrol.AnnotationVocabulary import SUBJECT_ROLE, VACANCY_PHASE, AnnotationVocabulary
 from carlacontrol.CivilTimeResolver import CivilTimeResolver, ResolvedInstant
 from carlacontrol.CompileFindings import CompileFindings
@@ -53,11 +56,12 @@ SUPERVISION_PLAN_VERSION = 1
 ANCHOR_CHECK = 58
 
 # The events an interval may be anchored to (06 §3.3): the vehicle's insertion, arriving at and
-# leaving one of its stops, and entering one of its declared phases. A stop or a phase is named by
-# its index, counted from 0: `stop:0`, `stop_end:0`, `phase:2`. The schema admits no other spelling.
-DEPART_EVENT = "depart"
-STOP_EVENT = "stop"
-STOP_END_EVENT = "stop_end"
+# leaving one of its stops, and entering one of its declared phases -- core vocabulary terms, spelled
+# from the core's table. A stop or a phase is named by its index, counted from 0: `stop:0`,
+# `stop_end:0`, `phase:2`. The schema admits no other spelling.
+DEPART_EVENT = str(CoreVocabulary.Name(AnchorEvent.Depart))
+STOP_EVENT = str(CoreVocabulary.Name(AnchorEvent.Stop))
+STOP_END_EVENT = str(CoreVocabulary.Name(AnchorEvent.StopEnd))
 
 
 @dataclass

@@ -30699,7 +30699,7 @@
       },
       "supervision": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-        "sha256": "4a2db81ba9271220fed310d03ac2a82e5d216d59807566969973b919d8559d1f"
+        "sha256": "4c68a019547c2d5638b02ad59d4e47d6f668717ed67e37a2f5b1985d53791442"
       }
     },
     "world": {
@@ -30753,14 +30753,14 @@
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {
-      "core_version": 1,
+      "core_version": 2,
       "namespaces": [
         {
           "namespace": "bahonar",
           "version": 1
         }
       ],
-      "vocabulary_digest": "8a7b088c401f5e7722dbfc7a6ff5d9a8e04610e28dd38837800718d4dbf0c4c4"
+      "vocabulary_digest": "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad"
     },
     "traffic": {
       "sumo_seed": 42,

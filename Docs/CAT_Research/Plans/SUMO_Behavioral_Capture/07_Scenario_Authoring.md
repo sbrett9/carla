@@ -79,6 +79,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-02 | Ramp meters are a world-build decision (§6 gotcha 13, D7.38): the world build keeps every OSM `traffic_signals=ramp_meter` out of junction joining and gives it a one-vehicle-per-green cycle, so Arapahoe's freeway is no longer signalised by the loop ramp's meter. The Arapahoe incident is notified on the stretch the loop ramp joins as well (§3.4.2, gotcha 14, D7.39), measured offline on the metered network; the shipped files await the world's rebuild and a recompile. |
 | 2026-10-02 | The supervision plan says nothing its terms do not define (§3.6, §5.2). A row's `parameters` — on an instance, an absence, a series or a cohort — are keys its labels' terms declare, of the declared types (check 56); a nominal instance or series carries its terms' `hard_negative_for`, which an author may restate and may not vary (check 57); a term's exemplars and a counterfactual naming a subject resolve against the plan (check 8). An absence's `expected` names its site, and the plan carries the additional file's digest (§5.1). All three shipped scenarios are recompiled; their route files, configurations and lane closures are unchanged, and so is every network fingerprint. |
 | 2026-10-05 | An interval may be declared by an `anchor` instead of civil bounds, naming the events of its participant that commit its start and end — `depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>` over the actor's `phases[]` — resolved against its stops and compiled route and refused where the vehicle has no such event, where the end does not follow the start, beside civil bounds, or on a cohort (§3.5, §3.6, check 58). The plan carries each interval's anchor, null when unanchored, and an interval over a `duration` stop declares a length and no start; check 38 compares only declared bounds. Bahonar's anomaly intervals are anchored and the scenario recompiled; Arapahoe's and Gardnerville's plans, which carry no interval, are unchanged. |
+| 2026-10-05 | The vocabulary's closed core is generated from the enumerations in `CarlaNet.Types` and published at core version 2, with `beyond_draw_distance` among the observability outcomes and the interval anchor, render state and render reason families added (§8.3, D7.25; [`06`](06_Truth_And_Annotation.md) §3.7). The compiler reads it through `carlanet`, so nothing restates it by hand. All three shipped scenarios are recompiled: every plan's vocabulary digest, and the lock's, changes; their traffic files do not. |
 
 ---
 
@@ -2397,7 +2398,7 @@ shipped beside the skill, versioned with it:
 | `schemas/scenario.schema.json` | JSON Schema for the scenario specification | the compiler's own schema (`ScenarioSchema`), written by `compile_scenario.py --write-schema` | **yes** |
 | `schemas/sweep.schema.json` | JSON Schema for a sweep | `ScenarioSweep`, written by `--write-sweep-schema` | **yes** |
 | `checks.json` | every check of §5.2 with its id, what it compares, its outcomes and where it is carried out | `ScenarioCheckCatalogue`, written by `--write-checks` | **yes** |
-| `vocabulary.json` | the term document a label resolves against: the closed core and every author namespace the scenario declares or imports | generated per compiled scenario and carried in its supervision plan with its digest. The core is written from [`06`](06_Truth_And_Annotation.md) §3.7 (`AnnotationVocabulary`), because `CarlaNet.Types` does not yet enumerate it | per scenario, in the plan; not beside the skill |
+| `vocabulary.json` | the term document a label resolves against: the closed core and every author namespace the scenario declares or imports | generated per compiled scenario and carried in its supervision plan with its digest. The core is generated from the enumerations in `CarlaNet.Types.Supervision`, read through `carlanet` by `AnnotationVocabulary` at core version 2 ([`06`](06_Truth_And_Annotation.md) §3.7) | per scenario, in the plan; not beside the skill |
 | `examples/` | one minimal specification, one with every kind of supervision and a sweep pairing its annotated actor `nominal`, `absent` and `displaced` — each with its recorded resolution report or sweep index — on the compiler's fixture world; the one generated from a program is the Gardnerville orbit in `Import/`, written and compiled by `make_sumo_scenario.py` | written for the fixture world, and the generator | **yes** |
 | `references/gotchas.md`, `resolution.md`, `time.md`, `illumination.md` | the gotchas with their enforcement sites; the place and instant forms; the epoch and civil-time conventions; the illumination guidance, with doc 11's six bands | §6, §4, §3.5.1, §5.6 | **yes** |
 | `examples/epoch/` | one whole-hour, one daylight-saving and one **+03:30** offset, each with its recorded resolution report | §3.5.1 | **yes**; the +03:30 one declared on the Colorado fixture world, where checks 40 and 42 warn |
@@ -2798,9 +2799,11 @@ has neither its areas nor its type map; that is stage D's to close.
     [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) names them and cites doc 11 wherever it
     lists bands (§3.7, §5.1, the manifest of §8.4), and the built core takes its `illumination_band`
     terms from `IlluminationBand.names()`, the function the statistic buckets by
-    (`test_illumination_label_association.py`, `test_scenario_compiler.py`). The core stays at
-    vocabulary version 1: no package outside the test suite was compiled with the five-band list. The
-    statistic still states its band source beside every table, as provenance.
+    (`test_illumination_label_association.py`, `test_scenario_compiler.py`). The core stayed at
+    vocabulary version 1 then: no package outside the test suite was compiled with the five-band list.
+    It is at version 2 since 2026-10-05, generated from `CarlaNet.Types` with the bands among its
+    families ([`06`](06_Truth_And_Annotation.md) §3.7). The statistic still states its band source
+    beside every table, as provenance.
 14. **Where does the fence live? — settled: in the world build.** A scenario runs on the world's own
     network (D7.32), so what a road admits is decided by the netconvert run that writes the world's
     network and its OpenDRIVE (D7.9), through the world's type map: `<extract>.typ.xml` beside the

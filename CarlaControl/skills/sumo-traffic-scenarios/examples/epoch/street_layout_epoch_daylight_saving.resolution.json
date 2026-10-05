@@ -436,7 +436,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_daylight_saving.supervision.json",
-        "sha256": "39b597dbb1b1882ed6d48e4faba7e6c99bd23b3afd491abcabc6e92a80a37f43"
+        "sha256": "684ec0d646db432b23f235196f7b2dde434655cc2b186eead72f6bc73733930f"
       }
     },
     "world": {
@@ -492,9 +492,9 @@
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {
-      "core_version": 1,
+      "core_version": 2,
       "namespaces": [],
-      "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+      "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
     },
     "traffic": {
       "sumo_seed": 42,

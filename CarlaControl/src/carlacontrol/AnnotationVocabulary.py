@@ -25,12 +25,13 @@ It also projects a term's `hard_negative_for` onto the subjects that carry it (0
 the authority, and the record carries a copy so neither the plan nor a sidecar has to be read against
 the vocabulary to be usable.
 
-The core is written here from 06 §3.7, which names `CarlaNet.Types` as its eventual source; nothing in
-that assembly enumerates it yet but one family, and that one is not written here: `illumination_band`'s
-terms are `11_Time_And_Illumination.md` §4.4's six bands, taken from `IlluminationBand`, the function
-that assigns them, which reads them from `CarlaNet.Types`. So the vocabulary, the statistic that buckets
-by band and the band in every capture's truth read one table. The published document is
-resolved and import-flattened, and `digest` is over exactly what is published, so a consumer can bind it
+**The core is not written here.** D6.30 generates it from the enumerations the pipeline's code
+switches on, and this module reads them through `carlanet` from `CarlaNet.Types.Supervision`'s
+`CoreVocabulary`, as `IlluminationBand` reads the bands: every family, its terms in their published
+order, the core's version and the reserved role and phase. So a term the code gains reaches every plan
+compiled after it, and the vocabulary, the band in every capture's truth and the render state the world
+truth track writes are spelled from one table. The published document is resolved and
+import-flattened, and `digest` is over exactly what is published, so a consumer can bind it
 (`04_Contracts.md` C3 V3.15).
 """
 from __future__ import annotations
@@ -39,38 +40,26 @@ import hashlib
 import json
 from pathlib import Path
 
+import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
+from CarlaNet.Types.Supervision import CoreVocabulary
+
 from carlacontrol.CompileFindings import CompileFindings
-from carlacontrol.IlluminationBand import IlluminationBand
 from carlacontrol.ScenarioSchema import ScenarioSchema
 
-CORE_VOCABULARY_VERSION = 1
+CORE_VOCABULARY_VERSION = int(CoreVocabulary.Version)
+CORE_SOURCE = str(CoreVocabulary.Source)
 
 TERM_CHECK = 18
 APPLIES_CHECK = 45
 NAMESPACE_CHECK = 46
 PARAMETER_CHECK = 56
 
-SUBJECT_ROLE = "subject"
-VACANCY_PHASE = "vacancy"
+SUBJECT_ROLE = str(CoreVocabulary.SubjectRole)
+VACANCY_PHASE = str(CoreVocabulary.VacancyPhase)
 
-# 06 §3.7, the closed core: the terms the pipeline's own code branches on.
-CORE_TERMS: dict[str, list[str]] = {
-    "supervision_state": ["annotated", "nominal", "unlabelled"],
-    "subject_kind": ["entity", "cohort", "slot"],
-    "realisation": ["present", "absent"],
-    "interval_onset": ["declared", "committed", "observed"],
-    "closed_by": ["trigger", "entity_arrived", "sumo_removed", "never_inserted",
-                  "slot_unrealised", "physical_predicate_never_held", "render_released",
-                  "capture_window_end", "scenario_end"],
-    "observability_outcome": ["observed", "out_of_frame", "occluded", "not_rendered",
-                              "site_unobserved"],
-    # Doc 11 §4.4's bands, from the function that assigns them (IlluminationBand).
-    "illumination_band": IlluminationBand.names(),
-    "cadence": ["enumerated", "period_s + offsets_s[] + span"],
-    "reserved_role": [SUBJECT_ROLE],
-    "reserved_phase": [VACANCY_PHASE],
-}
-CORE_SOURCE = "06_Truth_And_Annotation.md §3.7"
+# 06 §3.7, the closed core: the terms the pipeline's own code branches on, family by family.
+CORE_TERMS: dict[str, list[str]] = {str(family.Family): [str(term) for term in family.Terms]
+                                    for family in CoreVocabulary.Families}
 
 
 class AnnotationVocabulary:

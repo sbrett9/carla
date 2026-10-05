@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -30,11 +31,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ScenarioWorldFixture import EPOCH, NETWORK, ScenarioWorldFixture  # noqa: E402
 
+import carlanet  # noqa: E402, F401  -- loads the CarlaNet assemblies the next import names
+from CarlaNet.Types.Supervision import CoreVocabulary  # noqa: E402
+
+from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
 from carlacontrol.CompileFindings import CompileFindings  # noqa: E402
 from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator  # noqa: E402
 from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
 from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
+from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -201,6 +207,45 @@ def test_the_plan_s_vocabulary_names_doc_11_s_six_illumination_bands(world, inst
         "day", "golden", "civil_twilight", "nautical_twilight", "astronomical_twilight", "night"]
     bands = result.lock["illumination_label_association"]["bands"]
     assert bands and set(bands) <= set(result.plan["vocabulary"]["core"]["terms"]["illumination_band"])
+
+
+def test_the_plan_s_core_is_version_2_generated_from_the_enumerations_in_carlanet_types(
+        world, installation, tmp_path):
+    """06 D6.30: the core half is generated from the code that branches on it, so the plan publishes
+    CarlaNet.Types' table family by family, and the lock records its version."""
+    result = compile_spec(world, installation, tmp_path)
+    core = result.plan["vocabulary"]["core"]
+    assert core["vocabulary_version"] == result.plan["vocabulary_version"] == 2
+    assert result.lock["vocabulary"]["core_version"] == 2
+    assert core["source"] == "06_Truth_And_Annotation.md §3.7"
+    assert core["terms"] == {str(family.Family): [str(term) for term in family.Terms]
+                             for family in CoreVocabulary.Families}
+    assert core["terms"]["observability_outcome"] == [
+        "observed", "out_of_frame", "occluded", "not_rendered", "site_unobserved",
+        "beyond_draw_distance"]
+    assert core["terms"]["interval_anchor"] == ["depart", "stop", "stop_end", "phase"]
+    assert core["terms"]["render_state"] == ["rendered", "simulated_only"]
+    assert "outside_limit" in core["terms"]["render_reason"]
+
+
+def test_the_schema_spells_the_core_s_terms_as_the_core_does():
+    """The specification schema restates a few core families as its enums and its anchor pattern;
+    each must be the core's own spelling, or an author could write a term the core does not have."""
+    definitions = SCHEMA["$defs"]
+    supervision = definitions["supervision"]["properties"]
+    states = set(CORE_TERMS["supervision_state"])
+    assert set(supervision["instances"]["items"]["properties"]["supervision"]["enum"]) <= states
+    assert set(supervision["cohorts"]["items"]["properties"]["supervision"]["enum"]) == states
+    assert set(supervision["series"]["items"]["properties"]["supervision"]["enum"]) == states
+    assert definitions["term"]["properties"]["applies_to"]["items"]["enum"] == \
+        CORE_TERMS["subject_kind"]
+    assert definitions["term"]["properties"]["realisation"]["items"]["enum"] == \
+        CORE_TERMS["realisation"]
+    pattern = re.compile(definitions["anchor"]["properties"]["start"]["pattern"])
+    depart, *indexed = CORE_TERMS["interval_anchor"]
+    assert pattern.match(depart) and not pattern.match(f"{depart}:0")
+    assert all(pattern.match(f"{kind}:3") and not pattern.match(kind) for kind in indexed)
+    assert not pattern.match("arrive:0")
 
 
 def test_the_report_states_every_time_in_seconds_and_civil(world, installation, tmp_path):

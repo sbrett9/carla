@@ -28,7 +28,7 @@
     },
     "supervision": {
       "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-      "sha256": "17a8eb6e037ecd7fc1badc8fa3247079500dde33501e1281dd9684c5e0487265"
+      "sha256": "82482b0ed312e9d85f81bae8a7be2ea10f9ff255c4f2348b3c5942a1f9023555"
     }
   },
   "world": {
@@ -88,9 +88,9 @@
     "content_build_id": "carla-0.10.0-windows"
   },
   "vocabulary": {
-    "core_version": 1,
+    "core_version": 2,
     "namespaces": [],
-    "vocabulary_digest": "f55740d1198fafffbee1a2d030dfaf57444434b083a44cc1fe87106503435edf"
+    "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
   },
   "traffic": {
     "sumo_seed": 42,
