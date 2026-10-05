@@ -174,27 +174,35 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
     }
 
     [RequiresSumoFact]
-    public void EveryRowIsOnDiskAsItIsWrittenAndATrackCutOffAnywhereIsTheRowsBeforeTheCut()
+    public void EachFrameSRowsAreOnDiskOnceItIsWrittenAndATrackCutOffAnywhereIsTheRowsBeforeTheCut()
     {
         using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
         string track = Path.Combine(_directory, "track.csv");
+        var disk = new DiskReader(track);
         SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        options.StepObservers.Add(disk);
         options.WorldTruthTrackPath = track;
 
         using (SumoDriveSession session = SumoDriveSession.Start(options))
         {
-            // Read while the session holds the file open: every row it has written is there, whole, and
-            // its summary does not yet say the track ended.
+            disk.Track = session.WorldTruthTrack;
             for (int step = 0; step < 12 && session.Advance(); step++)
             {
-                string onDisk = ReadWhileOpen(track);
-                Assert.EndsWith("\n", onDisk);
-                Assert.Equal(session.WorldTruthTrack!.Rows, onDisk.Count(character => character == '\n') - 1);
-                using JsonDocument written = ReadSummary(track);
-                Assert.Equal(JsonValueKind.Null, written.RootElement.GetProperty("ended").ValueKind);
             }
 
             Assert.True(session.WorldTruthTrack!.Rows > 10, "too few rows to cut");
+        }
+
+        // Read as each frame left it while the session held the file open: every row written is there,
+        // whole, the frame that renders a SUMO frame finds that frame's every row on disk after the
+        // rows of the frames before it, and the summary does not yet say the track ended.
+        Assert.Contains(disk.Frames, frame => frame.Vehicles > 0);
+        foreach (FrameOnDisk frame in disk.Frames)
+        {
+            Assert.True(frame.EndsInALineBreak, $"frame {frame.Frame} found a line cut short");
+            Assert.Equal(frame.RowsWritten, frame.RowsOnDisk);
+            Assert.Equal(frame.Vehicles ?? 0, frame.RowsOfTheFrame);
+            Assert.Equal(JsonValueKind.Null, frame.Ended);
         }
 
         // Stopped by its caller before SUMO had finished.
@@ -698,6 +706,55 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
     /// <summary>A rendered frame as an observer beside the track was told of it.</summary>
     private sealed record FrameSeen(string Frame, double SimulatedTimeSeconds, Dictionary<string, uint> Bodies,
                                     double? SunElevationDegrees, double? SunCorrectedElevationDegrees);
+
+    /// <summary>
+    /// The track on disk as a rendered frame left it: the vehicles SUMO had at the SUMO frame it renders,
+    /// or null where it renders none, the rows the track says it has written, whether the file ends in a
+    /// line break, the rows on disk and how many of them are the frame's own, and the summary's
+    /// <c>ended</c>.
+    /// </summary>
+    private sealed record FrameOnDisk(string Frame, int? Vehicles, long RowsWritten, bool EndsInALineBreak,
+                                      int RowsOnDisk, int RowsOfTheFrame, JsonValueKind Ended);
+
+    /// <summary>
+    /// An observer registered after the track, which the session tells first, reading the track off the
+    /// disk as each rendered frame left it, as a reader watching the run would, and keeping each SUMO
+    /// frame's vehicle count to say how many rows the frame that renders it should have put there.
+    /// </summary>
+    private sealed class DiskReader(string track) : ISumoStepObserver
+    {
+        private readonly List<(double FrameSeconds, int Vehicles)> _sumoFrames = [];
+
+        public WorldTruthTrackWriter? Track { get; set; }
+
+        public List<FrameOnDisk> Frames { get; } = [];
+
+        public void OnSumoStep(SumoStepRecord step) => _sumoFrames.Add((step.FrameSeconds, step.Frames.Count));
+
+        public void OnFrameRendered(RenderedFrameRecord frame)
+        {
+            string number = frame.Frame.ToString(CultureInfo.InvariantCulture);
+            string onDisk = ReadWhileOpen(track);
+            List<Row> rows = ReadRows(onDisk, out _);
+            using JsonDocument summary = ReadSummary(track);
+            int? vehicles = null;
+            foreach ((double frameSeconds, int count) in _sumoFrames)
+            {
+                if (Math.Abs(frameSeconds - frame.SimulatedTimeSeconds) < 1e-6)
+                {
+                    vehicles = count;
+                }
+            }
+
+            Frames.Add(new FrameOnDisk(number, vehicles, Track!.Rows, onDisk.EndsWith('\n'), rows.Count,
+                                       rows.Count(row => row["frame"] == number),
+                                       summary.RootElement.GetProperty("ended").ValueKind));
+        }
+
+        public void OnSessionEnded(SessionEndRecord end)
+        {
+        }
+    }
 
     /// <summary>
     /// An observer registered beside the track, keeping what the session told it: each SUMO frame's

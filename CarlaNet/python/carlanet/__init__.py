@@ -2308,10 +2308,11 @@ class World:
         rate is taken over (06_Truth_And_Annotation §8.3). Every value is SUMO's, at TraCI's clock for
         the frame; each row says whether a body drew the vehicle on the frame stamped with that instant
         (`render_state` 'rendered', with its `actor_id`) or why none did ('simulated_only', with a
-        `render_reason`), and carries the sun the world reported for the frame. Rows are appended and
-        flushed one at a time, so a run cut off leaves the rows written before the cut, and a summary
-        beside it (`<name>.summary.json`) states the rate and, once the session ends, what the track
-        holds and why it ended. A path that already holds a track is refused before anything starts.
+        `render_reason`), and carries the sun the world reported for the frame. Rows are appended whole
+        and flushed together once each SUMO frame's are written, so a run cut off loses at most the
+        rows of the frame it was writing, and a summary beside it (`<name>.summary.json`) states the
+        rate and, once the session ends, what the track holds and why it ended. A path that already
+        holds a track is refused before anything starts.
         `world_truth_track_interval_s` samples every so many simulated seconds from the window's
         opening, a whole number of SUMO steps, where None samples every SUMO frame.
         `session.WorldTruthTrack` says where it is going and how many rows it holds.

@@ -66,13 +66,16 @@ namespace CarlaNet.CoSim;
 /// reason the track cannot name.</description></item>
 /// </list>
 ///
-/// <para><b>Written to survive a kill</b> (doc 04 C10 §12.7, W2). The header is the first line, and each
-/// row is appended and flushed as one line before the next is composed, so a file cut off at any
-/// instant is the rows already written and at most one line without its line break, which a reader
-/// leaves off. The summary beside it (<see cref="SummaryPath"/>) is written whole under a temporary
-/// name and renamed into place (W1): at the start with the rate and the columns, and again when the
-/// session ends with what the track holds and why it ended. A summary whose <c>ended</c> is null is a
-/// track still being written, or one whose run was killed.</para>
+/// <para><b>Written to survive a kill</b> (doc 04 C10 §12.7, W2). The header is the first line, flushed as
+/// the track opens. Each row is appended as one whole line before the next is composed, and the rows are
+/// flushed once for each SUMO frame, when its every row is written, as the owner ruled: measured at four
+/// hundred vehicles, a flush per row cost about 1.5 ms more per SUMO step. Closing the track, however
+/// the session ends, flushes whatever it still holds. So a file cut off at any instant is the rows
+/// already written and at most one line without its line break, which a reader leaves off, and a kill
+/// loses at most the rows of the frame being written. The summary beside it (<see cref="SummaryPath"/>)
+/// is written whole under a temporary name and renamed into place (W1): at the start with the rate and
+/// the columns, and again when the session ends with what the track holds and why it ended. A summary
+/// whose <c>ended</c> is null is a track still being written, or one whose run was killed.</para>
 ///
 /// <para>Built and registered by the session (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>),
 /// ahead of every observer the caller registered. Every call comes from the tick thread.</para>
@@ -408,6 +411,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         }
 
         _closed = true;
+        // Flushes first: every frame's rows are on disk already but those of one a failure cut short.
         _writer.Dispose();
     }
 
@@ -420,6 +424,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         }
 
         WriteRow();
+        _writer.Flush();
     }
 
     private void Write(Sample sample, Sample? next, RenderedFrameRecord frame)
@@ -448,6 +453,8 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
             WriteVehicle(vehicle, next, instant);
         }
 
+        // Once for the frame, its every row written.
+        _writer.Flush();
         Samples++;
         FirstSampleSeconds ??= sample.FrameSeconds;
         LastSampleSeconds = sample.FrameSeconds;
@@ -559,12 +566,11 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         _row.Append('"').Append(value.Replace("\"", "\"\"", StringComparison.Ordinal)).Append('"');
     }
 
-    /// <summary>Append the row as one line and flush it, before anything else is composed.</summary>
+    /// <summary>Append the row as one line, whole, before the next is composed.</summary>
     private void WriteRow()
     {
         _row.Append('\n');
         _writer.Write(_row);
-        _writer.Flush();
     }
 
     /// <summary>

@@ -157,11 +157,12 @@ carried the call refuses it, and the drive goes on drawing every body at any ran
 at each SUMO frame inside the capture window, one CSV row per vehicle at TraCI's clock, saying whether
 a body drew it on the frame stamped with that instant and, where none did, why. It is the record of
 what the world contained -- a camera's sidecars list only what was drawn -- and it is off unless asked
-for here; `run_capture` always writes one. Rows are flushed one at a time, so a drive cut off leaves
-every row written before the cut, and `<name>.summary.json` beside it states the rate and, once the
-drive ends, what the track holds and why it ended. `--world-truth-track-interval SECONDS` samples
-every so many simulated seconds instead of every SUMO frame, a whole number of SUMO steps. A path that
-already holds a track is refused before anything starts.
+for here; `run_capture` always writes one. Each SUMO frame's rows are flushed together once they are
+written, so a drive cut off loses at most the rows of the frame it was writing, and
+`<name>.summary.json` beside it states the rate and, once the drive ends, what the track holds and
+why it ended. `--world-truth-track-interval SECONDS` samples every so many simulated seconds instead
+of every SUMO frame, a whole number of SUMO steps. A path that already holds a track is refused before
+anything starts.
 
 `--run-manifest PATH` writes the run manifest there: one JSON object per line, opened with what the
 run is, then every vehicle entering and leaving the render set, the events that change the population

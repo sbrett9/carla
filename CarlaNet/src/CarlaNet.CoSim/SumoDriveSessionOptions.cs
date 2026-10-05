@@ -449,10 +449,10 @@ public sealed record SumoDriveSessionOptions(
     /// taken over the capture sidecars alone is taken over the vehicles that were drawn. A capture run
     /// writes one; a session driven for any other purpose writes one only when asked.</para>
     ///
-    /// <para>A CSV, appended a row at a time and flushed with each, with a summary beside it
-    /// (<see cref="WorldTruthTrackWriter.SummaryPathFor"/>). A file already there is refused rather
-    /// than written over, before anything is started: a run writes a track of its own and never over
-    /// another run's. The directory is made if it does not exist.</para>
+    /// <para>A CSV, appended a row at a time and flushed once each SUMO frame's rows are written, with a
+    /// summary beside it (<see cref="WorldTruthTrackWriter.SummaryPathFor"/>). A file already there is
+    /// refused rather than written over, before anything is started: a run writes a track of its own and
+    /// never over another run's. The directory is made if it does not exist.</para>
     /// </remarks>
     public string? WorldTruthTrackPath { get; set; }
 

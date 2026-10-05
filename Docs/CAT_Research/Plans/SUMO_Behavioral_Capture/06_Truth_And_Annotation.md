@@ -38,6 +38,7 @@ the real scenario artifacts. No code changed, no build run.
 | 30 · 2026-10-05 | D6.12's hard failure for a discarded plan subject is enforced at compile time, as the owner ruled: SUMO's insertion and its `max-depart-delay` discards are deterministic for one configuration and seed, so the scenario compiler runs the compiled files in SUMO alone over the whole span and refuses a scenario in which a vehicle the plan names never enters ([07](07_Scenario_Authoring.md) check 59). Every planned vehicle's wait, the other vehicles discarded and every collision are reported, and the lock records the run (§6.2, D6.12). |
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
 | 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
+| 33 · 2026-10-05 | The world truth track's rows are flushed once for each SUMO frame, when the frame's every row is written, and not after each row, as the owner ruled: the track is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. Every row is still a whole line, so a track cut off is still the rows before the cut, and a kill loses at most the frame being written (§8.3, [04](04_Contracts.md) C10 §12.7 W2). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2805,11 +2806,17 @@ the ticks after it have nothing to carry it towards, so the frame stamped with i
 `no_ground` marks a vehicle off the world's ground grid, and `no_world` a session that renders no world.
 `not_drawn` is a frame that drew no body for it for a reason the track cannot name.
 
-The track is written under [04](04_Contracts.md) C10's W2: the header first, then every row appended and flushed as one
-line before the next is composed. A reader keeps every line that ends in a line break, so a track cut
-off at any byte is the rows before the cut; that is tested, and so is every row being on disk while the
-session still holds the file. A summary beside it, `world_truth_track.summary.json`, is written whole
-under a temporary name and renamed into place (W1). From the start it gives the columns, the SUMO step
+The track is written under [04](04_Contracts.md) C10's W2: the header first, then every row appended
+as one whole line before the next is composed, and the rows flushed once for each SUMO frame, when the
+frame has a row for every vehicle; closing the track, however the session ends, flushes whatever it
+still holds. Per frame rather than per row, as the owner ruled (2026-10-05): the track is written on the
+tick thread, and measured at 400 vehicles the writer's share of a SUMO step was 3.9-4.6 ms flushed per
+row against 2.5-2.9 ms flushed per frame, so a flush per row was about 1.5 ms of every step. A reader
+keeps every line that ends in a line break, so a track cut off at any byte is the rows before the cut,
+and a kill loses at most the rows of the frame being written; that is tested, and so is each frame's
+every row being on disk once the frame has written them, while the session still holds the file. A
+summary beside it, `world_truth_track.summary.json`, is written whole under a temporary name and
+renamed into place (W1). From the start it gives the columns, the SUMO step
 and the interval. When the session ends it is rewritten with the samples, the rows, the first and last
 instants and `ended`: `scenario_finished`, `caller_stopped` (the window the caller wanted closed, or it
 stopped the run), or `run_stopped` with the stage and cause. `ended: null` is a track whose run was killed. A path that
