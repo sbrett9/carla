@@ -16,19 +16,19 @@ namespace CarlaNet.Recording;
 /// other camera on the server can hold, because the server never gives two actors one id. The platform
 /// track's uid takes the same form, whatever the camera is named.</para>
 ///
-/// <para><b>A chosen name is used as given or refused, never rewritten.</b> The name is a file name on
-/// Windows and on Linux, text in the image's PNG chunks and a CoT callsign, and a name altered on the
-/// way to any of them would no longer be the name the client chose. So <see cref="Problem"/> refuses,
-/// and says why, a name that would not reach all of them unchanged:</para>
+/// <para><b>A name is short and plain.</b> It is 1 to <see cref="MaxLength"/> characters, each an ASCII
+/// letter, digit, underscore or hyphen -- <c>Overwatch_1</c>, <c>Southeast_1700m_orbit</c>,
+/// <c>NapOfEarth_2</c> -- and nothing else: no space, no dot, no other punctuation. Such a name is the
+/// same file name on Windows and on Linux, the same text in the image's PNG chunks and the same CoT
+/// callsign, so a chosen name is used as given or refused, never rewritten. <see cref="Problem"/>
+/// refuses, and says what is allowed, a name with any other character, and three names the characters
+/// allow:</para>
 /// <list type="bullet">
-/// <item>anything but 1 to <see cref="MaxLength"/> printable ASCII characters -- the PNG text chunk
-/// holds Latin-1 only and the encoder writes '?' for whatever it cannot hold;</item>
-/// <item>any of <c>&lt; &gt; : " / \ | ?</c> and <c>*</c>, which Windows refuses in a file name (Linux
-/// refuses '/' as well);</item>
-/// <item>a space at either end, or a dot at the end, which Windows drops from a file name, so the file
-/// would not carry the name given (this takes in <c>.</c> and <c>..</c>);</item>
-/// <item>a name Windows keeps for a device -- CON, PRN, AUX, NUL, COM0 to COM9, LPT0 to LPT9 -- alone
-/// or before a dot, in any case: a channel's directory is named by its camera; and</item>
+/// <item>a name Windows keeps for a device -- CON, PRN, AUX, NUL, COM0 to COM9, LPT0 to LPT9 -- in
+/// any case, because a channel's directory is named by its camera;</item>
+/// <item>a role name the server gives sensors -- front, back, left, right, front_left, front_right,
+/// back_left, back_right -- in any case, because every sensor spawned without a name carries the
+/// first, so other cameras already hold it; and</item>
 /// <item>the default form, <c>CARLA-SENSOR-&lt;digits&gt;</c>, for any camera but the one it is the
 /// default of, because it would be that other camera's name.</item>
 /// </list>
@@ -58,13 +58,20 @@ public static class CameraName
     /// <summary>The capture time in a still's file name: local wall-clock time to the millisecond.</summary>
     public const string StillTimeFormat = "yyyy.MM.dd_HH.mm.ss.fff";
 
-    // Refused by Windows in a file name; '/' by Linux too.
-    private const string NotInFileNames = "<>:\"/\\|?*";
+    /// <summary>What a camera name may be, as every refusal says it.</summary>
+    public const string Allowed =
+        "a camera name is 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such "
+        + "as Overwatch_1 or Southeast_1700m_orbit";
 
     private static readonly HashSet<string> WindowsDevices = new(
         new[] { "CON", "PRN", "AUX", "NUL" }
             .Concat(Enumerable.Range(0, 10).Select(n => "COM" + n))
             .Concat(Enumerable.Range(0, 10).Select(n => "LPT" + n)),
+        StringComparer.OrdinalIgnoreCase);
+
+    // The role names the server offers every sensor blueprint, the first of them its default.
+    private static readonly HashSet<string> SensorRoleNames = new(
+        ["front", "back", "left", "right", "front_left", "front_right", "back_left", "back_right"],
         StringComparer.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, Holding> Held = new(StringComparer.OrdinalIgnoreCase);
@@ -87,7 +94,8 @@ public static class CameraName
         string.Equals(first, second, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Why <paramref name="name"/> cannot be a camera's name, or null when it can.
+    /// Why <paramref name="name"/> cannot be a camera's name, or null when it can. Every refusal says
+    /// what is allowed (<see cref="Allowed"/>).
     /// </summary>
     /// <param name="name">The name.</param>
     /// <param name="camera">The camera it is to name, where known: a name of the default form is
@@ -96,42 +104,34 @@ public static class CameraName
     {
         if (string.IsNullOrEmpty(name))
         {
-            return "a camera name cannot be empty";
+            return "a camera name cannot be empty: " + Allowed;
         }
 
         foreach (char c in name)
         {
-            if (c < ' ' || c > '~')
+            if (!IsAllowed(c))
             {
-                return $"camera name '{Shown(name)}' holds {Described(c)}: a camera name is printable ASCII, "
-                       + "because it is written into the image's PNG text, which holds Latin-1 only, and into "
-                       + "a CoT callsign";
-            }
-
-            if (NotInFileNames.Contains(c))
-            {
-                return $"camera name '{name}' holds '{c}', which a Windows file name cannot hold (none of "
-                       + "< > : \" / \\ | ? *): every still's file name begins with the camera's name";
+                return $"camera name '{Shown(name)}' holds {Described(c)}, which a camera name cannot: "
+                       + Allowed;
             }
         }
 
         if (name.Length > MaxLength)
         {
-            return $"camera name '{name}' is {name.Length} characters long; a camera name is at most "
-                   + $"{MaxLength}";
+            return $"camera name '{name}' is {name.Length} characters long: " + Allowed;
         }
 
-        if (name[0] == ' ' || name[^1] == ' ' || name[^1] == '.')
+        if (WindowsDevices.Contains(name))
         {
-            return $"camera name '{name}' begins or ends with a space, or ends with a dot, which Windows "
-                   + "drops from a file name, so the files would not carry the name given";
+            return $"camera name '{name}' is a name Windows keeps for a device, and a channel's directory "
+                   + "is named by its camera; choose another, such as Overwatch_1";
         }
 
-        string device = name.Split('.')[0].TrimEnd(' ');
-        if (WindowsDevices.Contains(device))
+        if (SensorRoleNames.Contains(name))
         {
-            return $"camera name '{name}' is {device.ToUpperInvariant()}, a name Windows keeps for a "
-                   + "device, and a channel's directory is named by its camera";
+            return $"camera name '{name}' is a role name the server gives sensors, and every sensor "
+                   + "spawned without a name carries one, so other cameras already hold it; choose "
+                   + "another, such as Overwatch_1";
         }
 
         if (IsDefaultForm(name) && !(camera is { } own && Same(name, Default(own))))
@@ -139,7 +139,7 @@ public static class CameraName
             return $"camera name '{name}' has the form every unnamed camera's name takes, "
                    + $"{DefaultPrefix}<actor id>, and "
                    + (camera is { } other ? $"is not camera {other}'s own" : "names no camera of its own")
-                   + ": it would be another camera's name";
+                   + ": it would be another camera's name; choose another, such as Overwatch_1";
         }
 
         return null;
@@ -234,6 +234,9 @@ public static class CameraName
     public static string DescribeHolder(Actor holder) =>
         $"camera {holder.Id.ToString(CultureInfo.InvariantCulture)} ({holder.Description.Id})";
 
+    private static bool IsAllowed(char c) =>
+        c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '-';
+
     private static string Shown(string name)
     {
         var shown = new StringBuilder(name.Length);
@@ -252,10 +255,13 @@ public static class CameraName
         return shown.ToString();
     }
 
-    private static string Described(char c) =>
-        c < ' ' || c == '\u007F'
-            ? $"the control character U+{(int)c:X4}"
-            : $"'{c}' (U+{(int)c:X4})";
+    private static string Described(char c) => c switch
+    {
+        ' ' => "a space",
+        < ' ' or '\u007F' => $"the control character U+{(int)c:X4}",
+        > '~' => $"'{c}' (U+{(int)c:X4}), which is not ASCII",
+        _ => $"'{c}'",
+    };
 
     /// <summary>A name held by one recorder, given back when the recorder is disposed.</summary>
     private sealed class Holding(string name, ActorId? camera, string directory) : IDisposable

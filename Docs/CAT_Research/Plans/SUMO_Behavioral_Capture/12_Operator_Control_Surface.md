@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — A camera name is short and plain: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as `Overwatch_1`, `Southeast_1700m_orbit` or `NapOfEarth_2`; a Windows device name, a sensor's stock role name (`front`, …) and another camera's default stay refused, and every refusal says what is allowed (§5.2, §6.2). The schema states a `sensor_id`'s characters (check 1), and check 11 refuses what the characters allow and the rule does not. `run_free_move_camera.py --camera-name` names the free-move camera as it is created (§9.6).
 `2026-10-02` — §7.2: the closeout gates `capture.solar_block_missing[<sensor>]`, a channel's captures written without a solar block, at zero; the channel's closeout line states the count.
 `2026-10-02` — Every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none (§5.2, §6.2, §9.6). A channel's `sensor_id` is its camera's name: it loses `:` from its grammar, check 11 compares it without regard to case, and a single channel without one is `CARLA-SENSOR-<camera id>`. The camera is spawned under the name as its `role_name`, so one another camera in the world holds refuses at pre-roll. `run_SCTMV.py --camera-name` (`--platform-callsign` its older spelling, no longer defaulting to `OVERWATCH`) and `run_sumo_drive.py --camera-name` name the camera; a free view's span folder is `<camera name>-<UTC>`.
 `2026-10-02` — Two optional performance controls, off by default and recommended for no scenario (§5.2, D12.39). `capture.render_set` is offered again with `all` -- every vehicle SUMO has -- as its default, beside `circle` and `cameras` and the settings `capture.render_region`, `capture.render_hysteresis_m`, `capture.render_cap` (no limit by default), `capture.render_min_pixels`, `capture.render_admit_lead_s` and `capture.render_release_lag_s`; `capture.draw_distance_m` (no limit by default) is new. Checks 52 and 53 are new numbers; 20, 21 and 33 stay retired. The echo, the closeout and `population / rendered` say what a chosen limit left out (§7.1); `run_sumo_drive.py` takes `--render-set`, its region and settings, `--capacity` and `--draw-distance` (§9.6).
@@ -1232,7 +1233,7 @@ other field.
 | Toggle | Default | Class | Source |
 |---|---|---|---|
 | `capture.channels` | **—**: one object per channel, at least one | Session-fixed; every channel is recorded | the rows below are each object's fields |
-| `sensor_id` | **—** when more than one channel; a single channel without one is `CARLA-SENSOR-<camera id>` | Session-fixed. The camera's name: the channel's directory, the first part of every capture's file name and the platform track's callsign, spawned as the camera's `role_name` | [`08`](08_Collection_And_EPoL.md) D8.4; [`04`](04_Contracts.md) §6.3 for the grammar |
+| `sensor_id` | **—** when more than one channel; a single channel without one is `CARLA-SENSOR-<camera id>` | Session-fixed. The camera's name, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens. The channel's directory, the first part of every capture's file name and the platform track's callsign, spawned as the camera's `role_name` | [`08`](08_Collection_And_EPoL.md) D8.4; [`04`](04_Contracts.md) §6.3 for the grammar |
 | `pattern` | `stare` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
 | `capture_rgb` | `true` | Bound — a channel without it is not a channel | [`08`](08_Collection_And_EPoL.md) D8.2 |
@@ -1439,7 +1440,7 @@ the later phases.
 | 8 | `window.begin_s − prewarm_s ≥ 0` | warn | `prewarm 300 s clipped to 180 s: the window begins at t=180.` |
 | 9 | `sumo_step_s`, `world_delta_s` and `capture_hz` are in integer ratio | refuse | `clock ratio: sumo_step 1.0 s / world_delta 0.03 s is not an integer (33.33). Choose a world_delta that divides the SUMO step.` — [`01`](01_Architecture.md) D1.13 |
 | 10 | `sensor_tick` is consistent with `capture_hz` | warn | `sensor_tick 0.0 renders every channel at world rate while the recorder keeps 1 frame in 10.` |
-| 11 | `sensor_id` present and unique, case aside, when channels > 1 | refuse | `two channels both name sensor_id 'OVERWATCH-1'.` |
+| 11 | `sensor_id` a camera name; present and unique, case aside, when channels > 1 | refuse | `two channels both name sensor_id 'OVERWATCH-1'.`, `sensor_id: camera name 'CON' is a name Windows keeps for a device, and a channel's directory is named by its camera; choose another, such as Overwatch_1` |
 | 12 | The scenario declares a solar epoch | refuse | `scenario bahonar@a91c3f declares no epoch. A capture cannot set a sun from simulated seconds without one (12 §4.3).` |
 | 13 | The window's civil span is computable from the epoch | refuse | `epoch time zone '+3:3' is not a valid offset.` |
 | 14 | If the window's sun elevation falls below −6°, `solar.vehicle_lights` is stated | refuse | `window night_shift is dark (sun elevation −37.2° to −41.8°). 'solar.vehicle_lights' has no default in a dark window: state 'from_sumo' or 'off'.` |
@@ -2355,6 +2356,10 @@ that writes the flown camera's captures with the session's render set and illumi
 fixed camera's are written. It is `carlacontrol.FreeView` for the window and
 `carlacontrol.SpanRecorder` for the key. `run_free_move_camera.py` stays the separate viewer that
 records nothing, and `run_capture` offers no flown camera: a capture run's camera track is declared.
+The viewer's camera is still a camera in the world, so `run_free_move_camera.py --camera-name`
+(2026-10-05) names it as it is created, under the rule every camera name meets, and refuses a name
+another camera in the world holds; unnamed, it is `CARLA-SENSOR-<camera id>`. Its depth camera takes
+no name.
 
 **What another process reads during a drive (2026-10-01).** The drive's render set is carried on every
 world-observer snapshot ([`03`](03_CoSimulation_Runtime.md) §8.9, D3.39), so the truth any other
@@ -2372,7 +2377,7 @@ processes list every vehicle actor as they did before and the drive's own captur
 | `--flight-speed` | `60.0` | the free camera's starting speed, m/s; the mouse wheel changes it |
 | `--width`, `--height`, `--fov` | fixed `1920`, `1080`, `60`; free `1280`, `720`, `90` | the camera's image, which is also the window's size; a value given applies to either view |
 | `--record-dir` | `Build/captures` | a free view writes each span to a folder of its own under it |
-| `--camera-name` | none: `CARLA-SENSOR-<camera id>` | the camera's name, fixed or free: every capture is `<name>_<local capture time>`, a span's folder `<name>-<UTC>`, and the platform track's callsign is it. Refused before the drive starts where the rule refuses it, and at the spawn where another camera in the world holds it |
+| `--camera-name` | none: `CARLA-SENSOR-<camera id>` | the camera's name, fixed or free, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens. Every capture is `<name>_<local capture time>`, a span's folder `<name>-<UTC>`, and the platform track's callsign is it. Refused before the drive starts where the rule refuses it, and at the spawn where another camera in the world holds it |
 | `--no-record` | off | a free view opens and flies, and F records nothing |
 
 `--camera-standoff`, `--camera-yaw` and `--camera-aim` are the fixed camera's and do nothing in a

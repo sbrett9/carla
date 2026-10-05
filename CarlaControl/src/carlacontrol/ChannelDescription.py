@@ -10,7 +10,6 @@ document's section 1.5 measured three that already had).
 from __future__ import annotations
 
 import math
-import re
 from dataclasses import MISSING, dataclass, fields
 from typing import Any, ClassVar
 
@@ -76,12 +75,6 @@ class ChannelDescription:
 
     RENDERED_TRAFFIC: ClassVar[str] = "rendered_traffic"
     STARE_LOOK_AT_TARGETS: ClassVar[tuple[str, ...]] = (RENDERED_TRAFFIC,)
-
-    # The grammar 04_Contracts.md section 6.3 gives an authored sensor_id. It is the channel's camera
-    # name, so it begins every still's file name and names the channel's directory, and ':' -- which
-    # no Windows file name can hold -- is not in it; a name it allows is also held to the rule every
-    # camera name meets (`CameraName`).
-    SENSOR_ID_GRAMMAR: ClassVar[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_.-]{1,63}")
 
     sensor_id: str | None = None
     pattern: str = STARE
@@ -169,13 +162,11 @@ class ChannelDescription:
             # Range and shape checks on a value of the wrong type would only add noise.
             return problems
 
-        if self.sensor_id is not None:
-            if not self.SENSOR_ID_GRAMMAR.fullmatch(self.sensor_id):
-                problems.append(
-                    f"sensor_id {self.sensor_id!r} must be 1 to 63 characters from A-Z a-z 0-9 _ . -")
-            elif (refused := CameraName.problem(self.sensor_id)) is not None:
-                problems.append(f"sensor_id {self.sensor_id!r} cannot name the channel's camera: "
-                                f"{refused}")
+        # A sensor_id is its channel's camera name (04_Contracts.md section 6.3): it begins every
+        # still's file name and names the channel's directory, so it meets the rule every camera
+        # name meets.
+        if self.sensor_id is not None and (refused := CameraName.problem(self.sensor_id)):
+            problems.append(f"sensor_id: {refused}")
         if self.pattern not in self.PATTERNS:
             if self.pattern == "transit":
                 problems.append("pattern 'transit' is not built; use 'stare' or 'orbit'")

@@ -68,13 +68,13 @@ rec.add_argument("--record-hz", type=float, default=2.0,
                  help="capture rate in Hz (captures per second; may be fractional, e.g. 0.5). "
                       "Default 2.0.")
 rec.add_argument("--camera-name", default=None, metavar="NAME",
-                 help="the drone camera's name: every capture is written as "
-                      "<NAME>_<local capture time>.png and .xml, and it is the callsign of the "
-                      "camera's platform track. Default: CARLA-SENSOR-<camera id>. Used as given or "
-                      "refused, never rewritten (1 to 63 printable ASCII characters, none of "
-                      "< > : \" / \\ | ? *, no space at either end or dot at the end, not a Windows "
-                      "device name, not CARLA-SENSOR-<number>, and not a name another camera in the "
-                      "world holds).")
+                 help="the drone camera's name, given as it is created, such as Overwatch_1 or "
+                      "Southeast_1700m_orbit: 1 to 63 characters, each an ASCII letter, digit, "
+                      "underscore or hyphen, and not a Windows device name, a stock sensor role "
+                      "name (front, back, ...), CARLA-SENSOR-<number> or a name another camera in "
+                      "the world holds. Every capture is written as <NAME>_<local capture "
+                      "time>.png and .xml, and it is the callsign of the camera's platform track. "
+                      "Default: CARLA-SENSOR-<camera id>.")
 
 args = ap.parse_args()
 

@@ -37,7 +37,7 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
     private static readonly Transform Looking = new(new Location(120f, -340f, 450f), new Rotation(-60f, 30f, 0f));
 
     // Names no other test class records under: a recorder holds its name for the whole process.
-    private const string Deck = "DECK-I25 (naming)";
+    private const string Deck = "DECK-I25_naming";
     private static readonly Regex StillStem = new(@"^(?<name>.+)_\d{4}\.\d{2}\.\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}$");
 
     private readonly string _dir =
@@ -98,9 +98,9 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
 
         var refused = Assert.Throws<ArgumentException>(
             () => new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, platform: platform,
-                                    cameraName: "MISMATCH (naming)"));
+                                    cameraName: "MISMATCH_naming"));
 
-        Assert.Contains("'OVERWATCH' is not 'MISMATCH (naming)'", refused.Message);
+        Assert.Contains("'OVERWATCH' is not 'MISMATCH_naming'", refused.Message);
         Assert.False(Directory.Exists(_dir));
     }
 
@@ -117,16 +117,16 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
     public void A_Name_The_Rule_Refuses_Is_Refused_Before_Anything_Is_Written()
     {
         var refused = Assert.Throws<ArgumentException>(
-            () => new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, cameraName: "DECK:I25"));
+            () => new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, cameraName: "Deck Cam 1"));
 
-        Assert.Contains("Windows file name", refused.Message);
+        Assert.Contains("holds a space, which a camera name cannot", refused.Message);
         Assert.False(Directory.Exists(_dir));
     }
 
     [Fact]
     public void Two_Recorders_In_One_Process_Cannot_Record_Under_One_Name()
     {
-        const string twin = "TWIN (naming)";
+        const string twin = "TWIN_naming";
         FrameRecorder first = new(_client!, _streams.Token(CameraStream), Path.Combine(_dir, "a"), 2.0,
                                   cameraName: twin, cameraActorId: Camera);
         try

@@ -42,6 +42,7 @@ from typing import Any
 import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
 from CarlaNet.CoSim import CoSimClock, CoSimSessionRefusedException, IlluminationPolicy
 
+from carlacontrol.CameraName import CameraName
 from carlacontrol.ChannelDescription import ChannelDescription
 from carlacontrol.EffectiveRunConfiguration import (
     EffectiveRunConfiguration,
@@ -280,8 +281,16 @@ class RunConfigurationValidator:
         seen: dict[str, tuple[int, str]] = {}
         for index in range(count):
             subject = f"capture.channels[{index}]"
+            # A sensor_id is a camera name. The schema already holds it to a camera name's
+            # characters (check 1); what those allow and the rule still refuses -- a device name, a
+            # stock sensor role name, another camera's default -- is refused here, and the channel
+            # is then described without it, so check 47 names its other problems and not this one.
+            given = effective.channel_values(index).get("sensor_id")
+            refused = CameraName.problem(given) if isinstance(given, str) else None
+            if refused is not None:
+                findings.refuse(11, subject, f"sensor_id: {refused}")
             try:
-                description = effective.channel_description(index)
+                description = effective.channel_description(index, unnamed=refused is not None)
             except ValueError as refusal:
                 findings.refuse(47, subject, str(refusal))
                 continue
@@ -295,7 +304,7 @@ class RunConfigurationValidator:
             if description.aims_at_rendered_traffic():
                 RunConfigurationValidator._traffic_prewarm(effective, subject, findings)
             sensor_id = description.sensor_id
-            if count > 1:
+            if count > 1 and refused is None:
                 # Compared without regard to case: the sensor_id is the camera's name, which names
                 # the channel's directory and begins every still's file name, and a Windows file
                 # system holds "Deck" and "deck" as one name.

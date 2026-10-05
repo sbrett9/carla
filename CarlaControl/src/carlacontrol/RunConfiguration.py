@@ -37,6 +37,7 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, ClassVar
 
+from carlacontrol.CameraName import CameraName
 from carlacontrol.ChannelDescription import ChannelDescription
 from carlacontrol.RunConfigurationFindings import (
     RunConfigurationFindings,
@@ -377,13 +378,15 @@ _FIELDS: tuple[RunField, ...] = (
 )
 
 _CHANNEL_HELP = {
-    "sensor_id": "The channel's camera's name, required when there is more than one channel and "
-                 "unique among them, case aside: it names the channel's capture directory, begins "
-                 "every still's file name (<sensor_id>_<local capture time>) and is the platform "
-                 "track's callsign. 1 to 63 of A-Z a-z 0-9 _ . -, not a Windows device name, not "
-                 "ending in a dot and not of the form CARLA-SENSOR-<number>; refused at pre-roll "
-                 "where a camera in the world already holds it. A single channel without one is "
-                 "named CARLA-SENSOR-<camera actor id>.",
+    "sensor_id": "The channel's camera's name, such as Overwatch_1 or Southeast_1700m_orbit: 1 to "
+                 "63 characters, each an ASCII letter, digit, underscore or hyphen, and not a "
+                 "Windows device name (CON, NUL, COM1, ...), a stock sensor role name (front, back, "
+                 "left, right, ...) or CARLA-SENSOR-<number>. Required when there is more than one "
+                 "channel, and unique among them, case aside. It names the channel's capture "
+                 "directory, begins every still's file name (<sensor_id>_<local capture time>) and "
+                 "is the platform track's callsign; refused at pre-roll where a camera in the world "
+                 "already holds it. A single channel without one is named "
+                 "CARLA-SENSOR-<camera actor id>.",
     "pattern": "stare holds one pose; orbit circles a centre with the view held on it.",
     "fov": "Horizontal field of view, degrees.",
     "width": "Picture width, pixels.",
@@ -420,6 +423,11 @@ _CHANNEL_HELP = {
                             "exposure: Default, GoPro, Town10HD_Opt or Town_C. Named with the "
                             "file's own case, so it resolves on a case-sensitive file system.",
 }
+
+# The characters a ChannelDescription text field may hold, where the schema can state them: a
+# sensor_id is a camera name. What the characters allow and the rule still refuses -- a device name,
+# a stock sensor role name, another camera's default -- is check 11's.
+_CHANNEL_PATTERNS = {"sensor_id": CameraName.PATTERN}
 
 # Channel fields this schema adds to ChannelDescription's, until the description carries them
 # (12 §9.2). Each is defined here and nowhere else.
@@ -563,7 +571,12 @@ class RunConfiguration:
         if spec is None:
             cls._refuse_unknown(path, findings, source)
             return
-        for problem in ScenarioSchema.validate_against(value, spec.schema):
+        problems = ScenarioSchema.validate_against(value, spec.schema)
+        if problems and key == "sensor_id" and isinstance(value, str):
+            # The pattern is a camera name's characters; the refusal says what they are, with an
+            # example, rather than quoting the pattern.
+            problems = [f"$: {CameraName.problem(value)}"]
+        for problem in problems:
             findings.refuse(1, path, f"{source}: {problem.replace('$', path, 1)}")
 
     # -- overrides ----------------------------------------------------------------------------------
@@ -639,7 +652,9 @@ class RunConfiguration:
         hints = typing.get_type_hints(ChannelDescription)
         for item in fields(ChannelDescription):
             default = ChannelDescription.default_of(item.name)
-            table[item.name] = RunField(item.name, cls._schema_for(hints[item.name]),
+            table[item.name] = RunField(item.name,
+                                        cls._schema_for(hints[item.name],
+                                                        _CHANNEL_PATTERNS.get(item.name)),
                                         default, SESSION_FIXED,
                                         help=_CHANNEL_HELP.get(item.name, ""))
         for extra in _CHANNEL_CAPTURE_FIELDS:
@@ -647,13 +662,15 @@ class RunConfiguration:
         return table
 
     @staticmethod
-    def _schema_for(hint: Any) -> dict:
-        """The schema fragment for one of ChannelDescription's annotated types."""
+    def _schema_for(hint: Any, pattern: str | None = None) -> dict:
+        """The schema fragment for one of ChannelDescription's annotated types, with the pattern
+        a text field's value must match, where it has one."""
         arguments = typing.get_args(hint)
         nullable = type(None) in arguments
         base = next((a for a in arguments if a is not type(None)), hint) if arguments else hint
         if base is str:
-            fragment = {"type": "string"}
+            fragment = {"type": "string"} if pattern is None else {"type": "string",
+                                                                   "pattern": pattern}
         elif base is int:
             fragment = {"type": "integer"}
         else:

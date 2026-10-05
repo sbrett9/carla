@@ -145,15 +145,19 @@ REFUSED = {
     "not a number": ({**AN_ORBIT, "orbit_radius_m": math.nan}, "orbit_radius_m"),
     "transit is not built": ({**A_STARE, "pattern": "transit"}, "not built"),
     "an unknown pattern": ({**A_STARE, "pattern": "hover"}, "pattern"),
-    "an unnameable sensor": ({**A_STARE, "sensor_id": "overwatch 1"}, "sensor_id"),
-    "an empty sensor name": ({**A_STARE, "sensor_id": ""}, "sensor_id"),
-    # The sensor_id is the camera's name, which begins every still's file name.
-    "a sensor name no Windows file name holds": ({**A_STARE, "sensor_id": "DECK:I25"},
-                                                 "A-Z a-z 0-9 _ . -"),
+    "an unnameable sensor": ({**A_STARE, "sensor_id": "overwatch 1"}, "sensor_id: camera name "
+                                                                       "'overwatch 1' holds a space"),
+    "an empty sensor name": ({**A_STARE, "sensor_id": ""}, "sensor_id: a camera name cannot be "
+                                                           "empty"),
+    # The sensor_id is the camera's name, which begins every still's file name: letters, digits,
+    # underscores and hyphens, and nothing else.
+    "a sensor name with a colon": ({**A_STARE, "sensor_id": "DECK:I25"}, "holds ':'"),
+    "a sensor name with a dot": ({**A_STARE, "sensor_id": "deck.2"},
+                                 "each an ASCII letter, digit, underscore or hyphen"),
     "a sensor name Windows keeps for a device": ({**A_STARE, "sensor_id": "CON"},
                                                  "a name Windows keeps for a device"),
-    "a sensor name Windows would cut short": ({**A_STARE, "sensor_id": "deck."},
-                                              "drops from a file name"),
+    "a sensor's stock role name": ({**A_STARE, "sensor_id": "front"},
+                                   "a role name the server gives sensors"),
     "another camera's default name": ({**A_STARE, "sensor_id": "CARLA-SENSOR-12"},
                                       "it would be another camera's name"),
     "a stare with nowhere to look": ({}, "stare_look_at_target 'rendered_traffic'"),

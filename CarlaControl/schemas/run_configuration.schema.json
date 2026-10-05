@@ -293,13 +293,14 @@
               "sensor_id": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,63}$"
                   },
                   {
                     "type": "null"
                   }
                 ],
-                "description": "The channel's camera's name, required when there is more than one channel and unique among them, case aside: it names the channel's capture directory, begins every still's file name (<sensor_id>_<local capture time>) and is the platform track's callsign. 1 to 63 of A-Z a-z 0-9 _ . -, not a Windows device name, not ending in a dot and not of the form CARLA-SENSOR-<number>; refused at pre-roll where a camera in the world already holds it. A single channel without one is named CARLA-SENSOR-<camera actor id>.",
+                "description": "The channel's camera's name, such as Overwatch_1 or Southeast_1700m_orbit: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and not a Windows device name (CON, NUL, COM1, ...), a stock sensor role name (front, back, left, right, ...) or CARLA-SENSOR-<number>. Required when there is more than one channel, and unique among them, case aside. It names the channel's capture directory, begins every still's file name (<sensor_id>_<local capture time>) and is the platform track's callsign; refused at pre-roll where a camera in the world already holds it. A single channel without one is named CARLA-SENSOR-<camera actor id>.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"

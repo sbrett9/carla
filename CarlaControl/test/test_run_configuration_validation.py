@@ -210,6 +210,31 @@ def test_two_channels_must_name_distinct_sensors(layout):
     assert "no sensor_id" in only(findings, 11).message
 
 
+@pytest.mark.parametrize("name", ["Overwatch 1", "deck.2", "DECK:I25", ""])
+def test_a_sensor_id_with_characters_a_camera_name_cannot_hold_is_refused_as_it_is_read(name):
+    # The schema states a camera name's characters, and the refusal says them, with an example.
+    document = run_document()
+    document["capture"]["channels"] = [dict(document["capture"]["channels"][0], sensor_id=name)]
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document(document, "test.run.json")
+    [finding] = raised.value.findings.refusals
+    assert (finding.check_id, finding.subject) == (1, "capture.channels[0].sensor_id")
+    assert "each an ASCII letter, digit, underscore or hyphen, such as Overwatch_1" in \
+        finding.message
+
+
+@pytest.mark.parametrize(("name", "reason"), [("CON", "a name Windows keeps for a device"),
+                                              ("front", "a role name the server gives sensors"),
+                                              ("CARLA-SENSOR-7", "another camera's name")])
+def test_a_sensor_id_the_camera_name_rule_refuses_is_check_11_s_and_said_once(layout, name, reason):
+    document = run_document()
+    document["capture"]["channels"] = [dict(document["capture"]["channels"][0], sensor_id=name)]
+    *_, findings, _, _ = offline(layout, document)
+    assert reason in only(findings, 11).message
+    # The channel is otherwise sound, so check 47 has nothing to repeat.
+    assert 47 not in checks(findings)
+
+
 def test_two_sensor_names_that_differ_only_in_case_are_one_name(layout):
     # A sensor_id names its channel's directory and begins every still's file name, and a Windows
     # file system holds the two as one.

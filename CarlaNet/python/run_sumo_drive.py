@@ -164,11 +164,12 @@ Every still is named after its camera, `<camera name>_<local capture time>.png` 
 camera's platform track carries the name as its callsign. `--camera-name` names the camera, fixed or
 free, so that cameras sharing a world -- this drive's and another client's -- are told apart in their
 files and their telemetry; without it the camera is `CARLA-SENSOR-<camera id>`, which no other camera
-on the server holds. The name is used as given or refused before the drive starts, never rewritten:
-1 to 63 printable ASCII characters, none of `< > : " / \\ | ? *`, no space at either end and no dot
-at the end, not a Windows device name and not of the form `CARLA-SENSOR-<number>`. It is set as the
-camera's `role_name` when the camera is spawned, so a name another camera in the world already holds,
-in any case, is refused then.
+on the server holds. A name is short and plain -- `Overwatch_1`, `Southeast_1700m_orbit`,
+`NapOfEarth_2`: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and not a
+Windows device name, a stock sensor role name (`front`, `back`, ...) or `CARLA-SENSOR-<number>`. It
+is used as given or refused before the drive starts, never rewritten. It is set as the camera's
+`role_name` when the camera is spawned, so a name another camera in the world already holds, in any
+case, is refused then.
 
 Flying: hold the right mouse button and move the mouse to look; W/S A/D E/Q to fly; the wheel sets
 the speed, Shift triples it; Ctrl+click measures a point; B/M draw the perimeter and margin; Space
@@ -376,14 +377,14 @@ def parse_args() -> argparse.Namespace:
                              "of its own under it")
     parser.add_argument("--record-hz", type=float, default=2.0)
     parser.add_argument("--camera-name", default=None, metavar="NAME",
-                        help="the camera's name, fixed or free: every still is written as "
+                        help="the camera's name, fixed or free, given as it is created, such as "
+                             "Overwatch_1 or NapOfEarth_2: 1 to 63 characters, each an ASCII letter, "
+                             "digit, underscore or hyphen, and not a Windows device name, a stock "
+                             "sensor role name (front, back, ...), CARLA-SENSOR-<number> or a name "
+                             "another camera in the world holds. Every still is written as "
                              "<NAME>_<local capture time>.png and .xml, a free view's span folders as "
                              "<NAME>-<UTC>, and it is the callsign of the camera's platform track. "
-                             "Default: CARLA-SENSOR-<camera id>. Used as given or refused, never "
-                             "rewritten: 1 to 63 printable ASCII characters, none of < > : \" / \\ | ? "
-                             "*, no space at either end or dot at the end, not a Windows device name, "
-                             "not CARLA-SENSOR-<number>, and not a name another camera in the world "
-                             "holds")
+                             "Default: CARLA-SENSOR-<camera id>")
     parser.add_argument("--camera-z", type=float, default=300.0,
                         help="camera height, metres; a free view starts there over the centre of the "
                              "world's staging bounds, looking straight down")

@@ -158,13 +158,13 @@ def test_a_capture_with_no_moving_vehicle_draws_no_band_unless_a_floor_is_stated
 def test_sidecars_named_after_their_camera_and_those_from_before_cameras_had_names_are_all_read(
         tmp_path):
     # One directory, as a record directory used before and after cameras were named holds: the
-    # old stem, and two cameras' stills under the new one, a name with spaces among them.
+    # old stem, and two cameras' stills under the new one.
     sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a")],
             stem="SCTMV_2026.09.16_14.44.31.487")
     sidecar(tmp_path, 110, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD + 1, 9.0, "a")],
             stem="DECK-I25_2026.10.02_14.07.22.481")
     sidecar(tmp_path, 110, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD + 1, 9.0, "a")],
-            stem="Deck Cam #2_2026.10.02_14.07.22.493")
+            stem="NapOfEarth_2_2026.10.02_14.07.22.493")
     (tmp_path / "DECK-I25_2026.10.02_14.07.22.481.png").write_bytes(b"not a sidecar")
 
     auditor = TruthSidecarAudit()
@@ -172,7 +172,7 @@ def test_sidecars_named_after_their_camera_and_those_from_before_cameras_had_nam
     result = auditor.audit(found)
 
     assert sorted(path.name for path in found) == ["DECK-I25_2026.10.02_14.07.22.481.xml",
-                                                   "Deck Cam #2_2026.10.02_14.07.22.493.xml",
+                                                   "NapOfEarth_2_2026.10.02_14.07.22.493.xml",
                                                    "SCTMV_2026.09.16_14.44.31.487.xml"]
     assert result.sidecars == 3 and len(result.records) == 3
     assert result.defects() == []
