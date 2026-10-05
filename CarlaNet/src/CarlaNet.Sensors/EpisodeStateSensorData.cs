@@ -3,7 +3,8 @@
 // The EpisodeState header is the original 36 bytes plus the solar block at offset 36: 11 doubles,
 // or 12 where the server also carries the refraction-corrected elevation (EpisodeStateLayout).
 // A render set block sits between the header and the actors where the server carries one
-// (SimulationState.RenderSetCarried; EpisodeStateLayout.ActorsOffset).
+// (SimulationState.RenderSetCarried; EpisodeStateLayout.ActorsOffset), and a supervision block inside
+// it, after the render set's entries, where the server carries that (SimulationState.SupervisionCarried).
 // static_assert(sizeof(ActorDynamicState) == 119) — verified in source (§13.6).
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Enums;
@@ -28,7 +29,12 @@ public enum SimulationState : byte
     /// A render set block follows the header, before the first actor: the bodies a co-simulation
     /// session's pool has lent and parked. Set only on a snapshot that carries one, and, like the
     /// flag above, it says where the actors start.
-    RenderSetCarried = 0x10
+    RenderSetCarried = 0x10,
+    /// A supervision block follows the render set's entries, inside the render set block: the plan a
+    /// co-simulation session has bound, what the author asserts of the vehicle each lent body draws,
+    /// and the absences in force. Set only on a snapshot that carries one, and always with the flag
+    /// above, whose block size counts it.
+    SupervisionCarried = 0x20
 }
 
 public sealed class EpisodeStateHeader
@@ -50,6 +56,11 @@ public sealed class EpisodeStateHeader
     /// with the vehicle it was drawn for, and those it had parked. ObservedRenderSet.None where the
     /// snapshot carried none.
     public ObservedRenderSet RenderSet { get; init; } = ObservedRenderSet.None;
+
+    /// The supervision the snapshot carried: the plan in force, what the author asserts of the vehicle
+    /// each lent body drew, and the absences in force for the world. ObservedSupervision.None where the
+    /// snapshot carried none.
+    public ObservedSupervision Supervision { get; init; } = ObservedSupervision.None;
 }
 
 public sealed class ActorDynamicState
@@ -89,7 +100,8 @@ public sealed class EpisodeStateSensorData
             EpisodeId = episodeId, PlatformTimestamp = platformTs,
             DeltaSeconds = deltaSeconds, MapOrigin = new Vector3DInt(mx, my, mz),
             SimulationState = simState, Solar = solar,
-            RenderSet = ReadRenderSet(payload)
+            RenderSet = ReadRenderSet(payload),
+            Supervision = ReadSupervision(payload)
         };
 
         int actorsOffset = EpisodeStateLayout.ActorsOffset(payload);
@@ -145,6 +157,19 @@ public sealed class EpisodeStateSensorData
         catch (InvalidDataException)
         {
             return ObservedRenderSet.None;
+        }
+    }
+
+    // Likewise a supervision block: read as none, with the actors and the render set read all the same.
+    private static ObservedSupervision ReadSupervision(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return EpisodeStateLayout.ReadSupervision(payload);
+        }
+        catch (InvalidDataException)
+        {
+            return ObservedSupervision.None;
         }
     }
 }

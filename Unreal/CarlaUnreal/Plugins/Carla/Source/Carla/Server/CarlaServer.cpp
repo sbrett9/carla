@@ -24,8 +24,10 @@
 #include "Carla/Vehicle/MovementComponents/ChronoMovementComponent.h"
 #include "Carla/Lights/CarlaLightSubsystem.h"
 #include "Carla/Actor/ActorData.h"
+#include "Carla/Actor/ActorSupervision.h"
 #include "Carla/Actor/CarlaActor.h"
 #include "Carla/Actor/RenderSetMembership.h"
+#include "Carla/Game/WorldSupervisionState.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
 #include "Components/LightComponent.h"
@@ -56,6 +58,7 @@
 #include <carla/rpc/Response.h>
 #include <carla/rpc/Server.h>
 #include <carla/rpc/String.h>
+#include <carla/rpc/SupervisionUpdate.h>
 #include <carla/rpc/Transform.h>
 #include <carla/rpc/Vector2D.h>
 #include <carla/rpc/Vector3D.h>
@@ -88,12 +91,14 @@
 #include <util/ue-header-guard-end.h>
 
 #include <vector>
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <map>
 #include <string>
 #include <tuple>
 #include <limits>
+#include <utility>
 
 template <typename T>
 using R = carla::rpc::Response<T>;
@@ -1548,7 +1553,10 @@ void FCarlaServer::FPimpl::BindActions()
   // record, so it ends with the actor: a session that destroys its bodies leaves nothing behind,
   // and one that stops without doing so leaves its parked bodies named parked, which is what they
   // are. Bodies given back are applied before bodies lent, so one given back and lent again in one
-  // change ends lent. Answers how many of the named actors were found.
+  // change ends lent. A body given back, or lent to a vehicle other than the one it drew, loses the
+  // supervision held for it (update_supervision), which was the author's assertion about that
+  // vehicle and not about whatever the body draws next. Answers how many of the named actors were
+  // found.
   BIND_SYNC(update_render_set) << [this](
       const std::vector<FCarlaActor::IdType> &lent_ids,
       const std::vector<std::string> &vehicle_ids,
@@ -1576,6 +1584,7 @@ void FCarlaServer::FPimpl::BindActions()
       FRenderSetMembership Parked;
       Parked.State = FRenderSetMembership::EState::Parked;
       View->SetRenderSetMembership(Parked);
+      View->SetSupervision(FActorSupervision());
       ++Found;
     }
 
@@ -1596,10 +1605,188 @@ void FCarlaServer::FPimpl::BindActions()
       Lent.VehicleTypeId = vehicle_type_ids[Index];
       Lent.AdmittedFrame = bSameVehicle ? Held.AdmittedFrame : NextFrame;
       View->SetRenderSetMembership(Lent);
+      if (!bSameVehicle)
+      {
+        View->SetSupervision(FActorSupervision());
+      }
       ++Found;
     }
 
     return Found;
+  };
+
+  // Hold the supervision a co-simulation session has put in force: what the scenario's author
+  // asserts of the vehicle each of its lent bodies draws -- annotated, nominal or unlabelled, with
+  // the pattern instances in force -- and the absences declared for the world as a whole, with the
+  // plan they are all bound from and the vocabulary version and digest that pin what its terms mean.
+  // The world observer carries what is held on every snapshot from the next frame on, after the
+  // render set's entries, so every client of the world reads the same truth for the same frame;
+  // nothing about it is kept in one client's process. Sent by the session only when the supervision
+  // changes, after its render set and before the tick cue of the frame the change is drawn in.
+  //
+  // A change replaces each named body's supervision whole, opens and closes absences by instance, and
+  // is bound to one plan: a change naming another plan than the one held must start afresh, which
+  // drops every row and absence held before it, and a change naming no plan withdraws everything, so
+  // the snapshot carries no supervision block again. A body's supervision is held on its own record
+  // and only while the render set names it lent; a body given back or handed to another vehicle loses
+  // it (update_render_set), and a body not lent is not given one. Everything is checked before
+  // anything is changed, so a refused change leaves what was held. Answers how many of the named
+  // bodies were found lent and took their supervision.
+  BIND_SYNC(update_supervision) << [this](const cr::SupervisionUpdate &update) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+
+    std::vector<FActorSupervision::EState> States;
+    States.reserve(update.actors.size());
+    for (const cr::SupervisionUpdateActor &Row : update.actors)
+    {
+      // The core vocabulary's three spellings, and no other: the server branches on which.
+      FActorSupervision::EState State = FActorSupervision::EState::Unlabelled;
+      if (Row.state == "annotated")
+      {
+        State = FActorSupervision::EState::Annotated;
+      }
+      else if (Row.state == "nominal")
+      {
+        State = FActorSupervision::EState::Nominal;
+      }
+      else if (Row.state != "unlabelled")
+      {
+        RESPOND_ERROR("update_supervision: a vehicle's state is annotated, nominal or unlabelled");
+      }
+
+      if (State == FActorSupervision::EState::Unlabelled && !Row.annotations.empty())
+      {
+        RESPOND_ERROR("update_supervision: an unlabelled vehicle carries no annotation");
+      }
+      if (State == FActorSupervision::EState::Annotated && Row.annotations.empty())
+      {
+        RESPOND_ERROR("update_supervision: an annotated vehicle names the instance it executes");
+      }
+      for (const cr::SupervisionUpdateAnnotation &Annotation : Row.annotations)
+      {
+        if (Annotation.instance_id.empty())
+        {
+          RESPOND_ERROR("update_supervision: every annotation names its instance");
+        }
+      }
+      States.push_back(State);
+    }
+    for (const cr::SupervisionUpdateAbsence &Absence : update.absences_opened)
+    {
+      if (Absence.instance_id.empty())
+      {
+        RESPOND_ERROR("update_supervision: every absence names its instance");
+      }
+    }
+
+    FWorldSupervisionState &WorldSupervision = Episode->GetWorldSupervision();
+    // Every body's supervision dropped, wherever it is held.
+    auto ClearEveryBody = [this]()
+    {
+      for (auto& Named : Episode->GetActorRegistry())
+      {
+        FCarlaActor* View = Named.Value.Get();
+        if (View != nullptr)
+        {
+          View->SetSupervision(FActorSupervision());
+        }
+      }
+    };
+
+    if (update.plan_id.empty())
+    {
+      if (!update.actors.empty() || !update.absences_opened.empty() || !update.absences_closed.empty())
+      {
+        RESPOND_ERROR("update_supervision: a change naming no plan withdraws all supervision and carries nothing else");
+      }
+      ClearEveryBody();
+      WorldSupervision = FWorldSupervisionState();
+      return 0u;
+    }
+
+    const bool bSamePlan =
+        WorldSupervision.PlanId == update.plan_id &&
+        WorldSupervision.VocabularyVersion == update.vocabulary_version &&
+        WorldSupervision.VocabularyDigest == update.vocabulary_digest;
+    if (WorldSupervision.IsHeld() && !bSamePlan && !update.fresh)
+    {
+      const FString Refusal = FString::Printf(
+          TEXT("update_supervision: plan %s is in force, and a change naming plan %s starts afresh"),
+          *cr::ToFString(WorldSupervision.PlanId),
+          *cr::ToFString(update.plan_id));
+      RESPOND_ERROR_FSTRING(Refusal);
+    }
+
+    if (update.fresh || !WorldSupervision.IsHeld())
+    {
+      ClearEveryBody();
+      WorldSupervision = FWorldSupervisionState();
+    }
+    WorldSupervision.PlanId = update.plan_id;
+    WorldSupervision.VocabularyVersion = update.vocabulary_version;
+    WorldSupervision.VocabularyDigest = update.vocabulary_digest;
+
+    uint32_t Applied = 0u;
+    for (size_t Index = 0u; Index < update.actors.size(); ++Index)
+    {
+      const cr::SupervisionUpdateActor &Row = update.actors[Index];
+      FCarlaActor* View = Episode->FindCarlaActor(Row.actor_id);
+      if (View == nullptr ||
+          View->GetRenderSetMembership().State != FRenderSetMembership::EState::Lent)
+      {
+        continue;
+      }
+
+      FActorSupervision Supervision;
+      Supervision.State = States[Index];
+      Supervision.Annotations.reserve(Row.annotations.size());
+      for (const cr::SupervisionUpdateAnnotation &Annotation : Row.annotations)
+      {
+        FSupervisionAnnotation Held;
+        Held.InstanceId = Annotation.instance_id;
+        Held.Labels = Annotation.labels;
+        Held.Phase = Annotation.phase;
+        Held.Role = Annotation.role;
+        Supervision.Annotations.push_back(std::move(Held));
+      }
+      View->SetSupervision(Supervision);
+      ++Applied;
+    }
+
+    for (const std::string &Closed : update.absences_closed)
+    {
+      WorldSupervision.Absences.erase(
+          std::remove_if(
+              WorldSupervision.Absences.begin(),
+              WorldSupervision.Absences.end(),
+              [&Closed](const FSupervisionAbsence &Held) { return Held.InstanceId == Closed; }),
+          WorldSupervision.Absences.end());
+    }
+
+    for (const cr::SupervisionUpdateAbsence &Opened : update.absences_opened)
+    {
+      FSupervisionAbsence Absence;
+      Absence.InstanceId = Opened.instance_id;
+      Absence.Labels = Opened.labels;
+      Absence.Areas = Opened.areas;
+      Absence.Phase = Opened.phase;
+      // An instance opened again replaces itself where it stands.
+      auto Held = std::find_if(
+          WorldSupervision.Absences.begin(),
+          WorldSupervision.Absences.end(),
+          [&Absence](const FSupervisionAbsence &Each) { return Each.InstanceId == Absence.InstanceId; });
+      if (Held != WorldSupervision.Absences.end())
+      {
+        *Held = std::move(Absence);
+      }
+      else
+      {
+        WorldSupervision.Absences.push_back(std::move(Absence));
+      }
+    }
+
+    return Applied;
   };
 
   // Set how far from a camera the actors named are drawn: the max draw distance of every primitive

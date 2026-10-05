@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 31 | 2026-10-05. `C6`: the supervision in force is held on the CARLA server and carried on every world-observer snapshot, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." (§8.3b, `D4.46`). The session puts each change with `update_supervision`, whose message, refusals and answer §8.3b tables; the server holds a body's supervision only while the body is lent and the plan and absences for the world; the snapshot's render set block carries a supervision block after its entries, flagged `SupervisionCarried`, with a row only for a vehicle that is annotated or nominal, so a reader built before it skips it and an unlabelled vehicle costs nothing. G6 is met by it, and holding supervision in a client process is forbidden (§8.4). No supervision PNG chunk is specified anywhere in this contract, so the owner's withdrawal of `carla:supervision` from [`06`](06_Truth_And_Annotation.md) §8.2 changes nothing here: the observation root carries no supervision (`D4.20`) |
 | 30 | 2026-10-05. `C3`: the vocabulary the supervision plan carries is at core version 2, its closed core generated from `CarlaNet.Types` rather than written beside the compiler, with `beyond_draw_distance` among the observability outcomes and the interval anchor, render state and render reason families added ([`06`](06_Truth_And_Annotation.md) §3.7, D6.30). The lock's `vocabulary.core_version` is 2 and every shipped scenario's `vocabulary_digest` changes; V3.15 binds the new digest as it bound the old (§5.3) |
 | 29 | 2026-10-05. `C3`: every interval in the supervision plan carries `anchor` — the events of its participant that commit its start and end, resolved against the route file the package carries, or null when the interval is declared in civil time — and an interval over a `duration` stop declares its length and no start (§5.2; [`06`](06_Truth_And_Annotation.md) §3.3, D6.4). The route index a phase anchor names is the package's own, so a plan and the route file it was compiled with stay bound by `routes_digest` |
 | 28 | 2026-10-05. `C1`: the truth record's `base_type` is the catalogue's `cot_base_type`, as the owner ruled ([`06`](06_Truth_And_Annotation.md) D6.18), by the rule `special_type` follows (rev 22): a vehicle whose body's blueprint a class draws carries that class's base type, and so does the callsign built from it, whatever the blueprint declares; a blueprint no class draws keeps its own. The capture sidecar and the live pull of the process running the drive report it, and so do the world truth track and the standalone producer given the catalogue, which read a type's `vClass` only for a type naming no member blueprint (§3.4.2, §3.4.3) |
@@ -2435,7 +2436,7 @@ After the driver returns from one advance, all of the following hold:
 | G3 | The truth record for tick `n` describes the world **after** every write for tick `n`, never a mixture |
 | G4 | No sensor frame for tick `n` is delivered to a recorder before the driver has applied tick `n`'s poses |
 | G5 | The admissions and releases of a SUMO step (`C2` §4.2, §4.3) are applied before the first world sub-step of that SUMO step |
-| G6 | The annotation state a capture is stamped with is the snapshot for **that capture's tick**, not "current" — the recorder's workers encode asynchronously while the world keeps ticking (`CarlaNet.Recording/FrameRecorder.cs` worker path), so a registry read at write time would annotate a frame with a later state |
+| G6 | The annotation state a capture is stamped with is the snapshot for **that capture's tick**, not "current" — the recorder's workers encode asynchronously while the world keeps ticking (`CarlaNet.Recording/FrameRecorder.cs` worker path), so a registry read at write time would annotate a frame with a later state. The state is held on the server and carried on the tick's own world-observer snapshot (§8.3b) |
 | G7 | A given `(scenario package, sumo_seed, appearance_seed)` produces the same sequence of `(tick, sumo_vehicle_id, pose)` triples on every run, provided the world is in synchronous mode |
 | G8 | **Civil time.** Every tick has exactly one civil instant, `civil(n) = epoch.civil_datetime + t_render(n)` seconds, computed in the epoch's declared offset. It is the same for every participant, every sensor and every artifact of that tick; it is a pure function of the epoch and the tick index; and it is independent of wall-clock time, host time zone, host locale and the order in which components ask for it (`D4.25`) |
 | G9 | **The sun agrees with it.** The solar state observed at tick `n` corresponds to the sun declared for `civil(n)` within the tolerances of §8.3a. This is the residual that makes the silent failure loud |
@@ -2522,6 +2523,81 @@ the co-simulation run report carries them (`CoSimRunReport`). A run that never e
 still records its maximum, because "the residual was 0.4 s" and "the residual was never measured" must
 not look alike.
 
+### 8.3b The supervision in force at a tick: the RPC and the snapshot block
+
+G6 asks that a capture be stamped with the annotation state of its own tick. The owner ruled on
+2026-10-05 where that state lives: "They have to be on the server. I do not want two clients ever having
+different truth state." So the supervision in force is put on the CARLA server as it changes and carried
+on every world-observer snapshot, and every reader -- a recorder beside the session, one in another
+process, the live CoT feed -- takes the tick's from the tick's snapshot. It follows the render set's
+contract ([`03`](03_CoSimulation_Runtime.md) D3.39) field for field, and is [`03`](03_CoSimulation_Runtime.md)
+D3.43 and [`06`](06_Truth_And_Annotation.md) D6.41.
+
+> **D4.46 — the supervision in force is held on the server and carried on every world-observer snapshot
+> after the render set's entries; no client holds it. A change is put by one writer, the session, in one
+> `update_supervision` call after the render set's and before the tick cue of the frame it is drawn in.
+> A body's supervision is held only while the render set names it lent; an unlabelled vehicle has no
+> row; a world no session supervises is laid out as before.**
+
+**The call.** `update_supervision(SupervisionUpdate) -> uint32`, a synchronous RPC
+(`CarlaServer.cpp`); the message is `carla::rpc::SupervisionUpdate` (`LibCarla/source/carla/rpc/SupervisionUpdate.h`),
+each part a msgpack array in this field order:
+
+| Message | Field | Type | Meaning |
+|---|---|---|---|
+| `SupervisionUpdate` | `fresh` | bool | Drop every row and absence held before applying the change: the first change after a plan is bound |
+| | `plan_id` | string | The plan everything is bound from. **Empty withdraws all supervision**, and the change then carries nothing else |
+| | `vocabulary_version` | uint32 | The core version the plan's terms were resolved against ([`06`](06_Truth_And_Annotation.md) D6.30) |
+| | `vocabulary_digest` | string | The plan's digest over its resolved terms |
+| | `actors` | `SupervisionUpdateActor[]` | The bodies whose supervision changes, each replaced whole |
+| | `absences_opened` | `SupervisionUpdateAbsence[]` | Absences that open; one opened again replaces itself |
+| | `absences_closed` | string[] | The instances of absences that close |
+| `SupervisionUpdateActor` | `actor_id` | uint32 | A body; taken only where the render set names it lent |
+| | `state` | string | `annotated`, `nominal` or `unlabelled`, spelled as the core spells it; `unlabelled` clears the body |
+| | `annotations` | `SupervisionUpdateAnnotation[]` | At least one when annotated; none when unlabelled |
+| `SupervisionUpdateAnnotation` | `instance_id`, `labels`, `phase`, `role` | string, string[], string, string | The instance in force, its terms, the phase of its interval and the vehicle's role in it |
+| `SupervisionUpdateAbsence` | `instance_id`, `labels`, `areas`, `phase` | string, string[], string[], string | The absence, its terms, the areas it is sited at, and `vacancy` |
+
+The answer is how many of the named bodies were found lent and took their supervision. **Refused, with
+nothing changed**: a state outside the three spellings, an unlabelled body with annotations, an annotated
+body with none, an instance unnamed, a withdrawal carrying rows or absences, and a change naming another
+plan, version or digest than the one held unless it is `fresh`. `update_render_set` drops a body's
+supervision when it parks the body or lends it to another vehicle; a body destroyed takes its own with
+it; a map load starts an episode with none. A server built before the call refuses it, and the session
+records the refusal and puts nothing more.
+
+**The block.** While a plan is held, the snapshot's render set block -- written whenever either a body is
+named or a plan is held, with no entries where none is lent yet -- carries a supervision block after its
+last entry, flagged `SupervisionCarried` (`0x20`) beside `RenderSetCarried` (`0x10`), little-endian and
+unpadded (`EpisodeStateSerializer.h`):
+
+| Field | Size | Meaning |
+|---|---|---|
+| `size` | uint32 | Bytes after this field to the end of the supervision block |
+| plan id | uint16 n + n bytes | UTF-8 |
+| `vocabulary_version` | uint32 | |
+| vocabulary digest | uint16 n + n bytes | UTF-8 |
+| row count | uint32 | One row per lent body whose vehicle is annotated or nominal |
+| each row | uint32 actor id, uint8 state (`1` annotated, `2` nominal), uint16 annotation count | |
+| each annotation | instance, phase, role (each uint16 n + n bytes), uint16 label count, each label uint16 n + n bytes | |
+| absence count | uint32 | |
+| each absence | instance, phase (each uint16 n + n bytes), uint16 label count and labels, uint16 area count and areas | |
+
+**Three properties of the layout, each deliberate.** *Whole state, every snapshot*, as the render set: a
+reader may join at any frame and pairs an image with its own frame's snapshot ticks later, so a frame's
+truth never depends on the frames before it. *No row for an unlabelled vehicle*: a body the frame's render
+set names lent with no row draws a vehicle that is unlabelled, so the block's size follows the assertions
+in force and not the population -- 7 bytes a row plus its annotations' strings, nothing for three hundred
+unlabelled vehicles -- and an actor the render set does not name lent is no subject of the plan.
+*Inside the render set block's size*: a reader built with the render set and before supervision finds the
+actors and the set exactly as before and skips the supervision unread, and every reader of a world no
+session supervises reads it as it always did.
+
+**Where it is read.** `EpisodeStateLayout.ReadSupervision` into an `ObservedSupervision`: the plan, the
+rows by actor, the absences, and `ForVehicles(renderSet)` for every drawn vehicle's state by SUMO id,
+unlabelled included. `CarlaClient` keeps it with the frame's actors and render set in `SnapshotHistory`;
+a recorder takes all three at once with `GetSnapshotFrame(frame, out served, out renderSet, out supervision)`.
+
 ### 8.4 What every participant must not do
 
 | Forbidden | Why |
@@ -2534,6 +2610,7 @@ not look alike.
 | Emit telemetry synchronously from the tick thread | Same |
 | Destroy an actor outside the render-set controller | The fourth destroyer ([issue #18](https://github.com/sbrett9/carla/issues/18)) |
 | Read "current" annotation or render state at capture-write time | Violates G6 |
+| Hold supervision in a client process for a recorder to read, or put it from anything but the session | Two clients could then hold different truth for one tick, which `D4.46` exists to make impossible |
 | Call `set_solar_time`, `set_solar_date`, `set_solar_epoch` or `set_time_advance` while a session is live, unless you are the clock owner | A second writer of the sun is a second owner of time (`D4.25`). The RPCs exist and are reachable from any client (`CarlaServer.cpp:614`, `:625`, `:644`, `:661`), so this is a rule a reviewer enforces, not one the transport can; the per-tick audit catches a write that lights a frame |
 | Read the host clock, host time zone or host locale to decide what time the scene is | Violates G8. Measured as the present behaviour: the scene date defaults to `datetime.now()` (`WorldBuilder.py:229-230`), which makes a capture's seasonal sun angle depend on the day it was run |
 | Assume `set_solar_time`'s argument is civil time | It is sun-clock time in a zone derived from longitude (`CesiumSunSky.cpp:571`), and `C9` §11.4 measures the difference as 14.7 minutes on the sizing scenario |
@@ -4971,6 +5048,7 @@ Stated as properties needed, not as requests.
 | **D4.43** | **SUMO is given each body's width without its mirrors; the truth box and seating keep the full extent.** Measured from each blueprint's mesh in the editor, carried in the catalogue as `body_width_m` with its method; no model rescaled; a body without one is refused (§3.2b) |
 | **D4.44** | **A limit on which vehicles get a body is an optional performance control, off by default and recommended for no scenario.** With none every vehicle SUMO has in a window is drawn. A run may choose a circle, the registered cameras' footprints, or a capacity under any of them (`in_limit`, §4.2); a vehicle the limit leaves out is simulated, has no body and no imagery-side truth, and carries `outside_limit` in `render_states[]`; E5 and E6 release for it under new numbers, and the participant guarantee D4.6 holds only with no limit (§4.4). The limit is named in the run's configuration, said at launch and counted in its record |
 | **D4.45** | **A draw distance is an optional performance control, off by default, and changes no admission.** Every vehicle keeps its body, its pose and its truth; a camera does not draw a body farther than the distance from it, and that camera's sidecar marks such a vehicle `beyond_draw_distance` (`wholly` or `partly`), so it is never counted as observed by that camera (§4.2, §4.5; [`06`](06_Truth_And_Annotation.md) §8.2) |
+| **D4.46** | **The supervision in force is held on the server and carried on every world-observer snapshot after the render set's entries; no client holds it** (owner's ruling, 2026-10-05). One writer, the session, puts each change in one `update_supervision` after the render set's and before the tick cue; a body's supervision is held only while it is lent, an unlabelled vehicle has no row, and the block rides inside the render set block's size, so a reader built before it skips it and a world no session supervises is laid out as before (§8.3b) |
 
 ---
 

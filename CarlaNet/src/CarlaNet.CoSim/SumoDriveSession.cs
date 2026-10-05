@@ -6,6 +6,7 @@ using CarlaNet.Sumo;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Lighting;
+using CarlaNet.Types.Supervision;
 
 using ActorId = uint;
 
@@ -101,6 +102,12 @@ public sealed class SumoDriveSession : IDisposable
     private readonly HashSet<ActorId> _heldNow = [];
     private readonly List<LentBody> _lentSinceNamed = [];
     private readonly List<ActorId> _parkedSinceNamed = [];
+    private readonly Dictionary<ActorId, (string VehicleId, SupervisionInForce Supervision)> _supervisionNamed = [];
+    private readonly Dictionary<string, AbsenceInForce> _absencesNamed = new(StringComparer.Ordinal);
+    private readonly List<ActorId> _supervisionDropped = [];
+    private readonly List<BodySupervision> _supervisionSinceNamed = [];
+    private readonly List<AbsenceInForce> _absencesOpenedSinceNamed = [];
+    private readonly List<string> _absencesClosedSinceNamed = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly Dictionary<string, CoSimVehicleFrame> _previous = [];
@@ -128,6 +135,8 @@ public sealed class SumoDriveSession : IDisposable
 
     private readonly (double Latitude, double Longitude) _origin;
     private SolarLease? _sun;
+    private SupervisionPlanIdentity? _supervisionPlanNamed;
+    private long _supervisionRevisionNamed = -1;
     private SolarAudit? _sunAudit;
     private long _tickIndex;
     private double _frameSeconds;
@@ -310,6 +319,22 @@ public sealed class SumoDriveSession : IDisposable
     /// frames are held.
     /// </remarks>
     public IRenderSetSource RenderSet => _renderSets;
+
+    /// <summary>
+    /// The supervision in force for the drive, which the interval binder states per SUMO vehicle and the
+    /// session puts on the server for the bodies that draw them, before the cue of each tick it changes on.
+    /// </summary>
+    /// <remarks>
+    /// <para>What the binder hands over, and nothing a recorder reads: the server carries it on every
+    /// world-observer snapshot, and every reader -- a recorder beside the session included -- takes it
+    /// from there (<c>CarlaClient.GetSnapshotFrame(frame, out served, out renderSet, out supervision)</c>),
+    /// so no two clients of the world hold different truth for one frame.</para>
+    ///
+    /// <para>Nothing is put to the server until a plan is bound, nothing at all where the session renders
+    /// no world, and nothing more once the server refuses a change or the render set. The session
+    /// withdraws what it put as it ends.</para>
+    /// </remarks>
+    public DriveSupervision Supervision { get; } = new();
 
     /// <summary>
     /// The world truth track the session writes -- where, at what rate, and how much it holds so far --
@@ -863,6 +888,7 @@ public sealed class SumoDriveSession : IDisposable
             WriteTheBatch();
             ApplyTheDrawDistance();
             NameTheRenderSet();
+            NameTheSupervision();
             WriteTheSun();
             _bridgeClock.Stop();
 
@@ -950,6 +976,9 @@ public sealed class SumoDriveSession : IDisposable
         // Closed already where it was told the end; closed here where telling it failed.
         Attempt(failures, "close the world truth track", () => _track?.Dispose());
         Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
+        // Before the bodies go, though they take their own supervision with them: the plan and the
+        // absences are held for the world, and outlive every body.
+        Attempt(failures, "withdraw the supervision put to the server", WithdrawTheSupervisionAtTheEnd);
         Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
         Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
         Attempt(failures, "give back the world's settings", () => _settings?.Dispose());
@@ -1199,6 +1228,191 @@ public sealed class SumoDriveSession : IDisposable
 
         Report.RenderSetUpdates++;
         Report.RenderSetBodiesNotFound += Math.Max(0, _lentSinceNamed.Count + _parkedSinceNamed.Count - written.BodiesFound);
+    }
+
+    /// <summary>
+    /// Put to the server every change to the supervision in force since the last it was told of, onto
+    /// the bodies drawing the vehicles it is about, so the snapshot of the frame this tick produces
+    /// carries the supervision in force on that frame.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the server, and only the server.</b> Supervision held in this process would be one
+    /// client's truth; every other reader of the world -- a recorder in another process, the live CoT
+    /// feed -- would have none, or its own. Put to the server, it rides on every world-observer snapshot
+    /// beside the render set, and every reader, a recorder beside the session included, reads the same
+    /// truth for the same frame.</para>
+    ///
+    /// <para><b>Onto the bodies, after the render set.</b> The binder states supervision per SUMO vehicle
+    /// (<see cref="Supervision"/>); the server holds it per body, and drops a body's when the body is given
+    /// back or handed to another vehicle. So this runs after <see cref="NameTheRenderSet"/> in the same
+    /// drain: the bodies whose supervision the render set change dropped are forgotten here, and a
+    /// supervised vehicle lent a body anew has its supervision named for the new body. A vehicle no body
+    /// draws, or whose body the server was not told of, is named nothing, because no frame shows it.</para>
+    ///
+    /// <para><b>Only on a change.</b> Nothing is sent on a tick whose lending did not change and whose
+    /// supervision did not either -- nearly every tick, since an interval opens or closes a handful of
+    /// times in a run -- and an unlabelled vehicle is named only to clear a body that carried something.
+    /// The first change after a plan is bound starts the server afresh. A server that refuses a change, or
+    /// refused the render set, is told nothing more, and the report says why.</para>
+    /// </remarks>
+    private void NameTheSupervision()
+    {
+        if (_world is not { } world || _pool is not { } pool
+            || Report.SupervisionRefused is not null || Report.RenderSetRefused is not null)
+        {
+            return;
+        }
+
+        SupervisionPlanIdentity? plan = Supervision.Plan;
+        if (plan is null)
+        {
+            if (_supervisionPlanNamed is not null)
+            {
+                WithdrawTheSupervision(world);
+            }
+
+            return;
+        }
+
+        bool lendingChanged = _renderSetNow is null;
+        bool fresh = !plan.Equals(_supervisionPlanNamed);
+        if (!fresh && !lendingChanged && Supervision.Revision == _supervisionRevisionNamed)
+        {
+            return;
+        }
+
+        if (fresh)
+        {
+            _supervisionNamed.Clear();
+            _absencesNamed.Clear();
+        }
+        else if (lendingChanged)
+        {
+            // The server dropped the supervision of every body given back or handed to another vehicle
+            // when it was told so, a moment ago in this drain.
+            _supervisionDropped.Clear();
+            foreach ((ActorId actor, (string vehicleId, _)) in _supervisionNamed)
+            {
+                if (!_namedToServer.TryGetValue(actor, out string? drawing) || drawing != vehicleId)
+                {
+                    _supervisionDropped.Add(actor);
+                }
+            }
+
+            foreach (ActorId actor in _supervisionDropped)
+            {
+                _supervisionNamed.Remove(actor);
+            }
+        }
+
+        _supervisionSinceNamed.Clear();
+        foreach ((string vehicleId, PooledBody body) in pool.Held)
+        {
+            if (!_namedToServer.TryGetValue(body.Actor, out string? named) || named != vehicleId)
+            {
+                continue;
+            }
+
+            SupervisionInForce wanted = Supervision.Of(vehicleId);
+            SupervisionInForce held = _supervisionNamed.TryGetValue(body.Actor, out var carried)
+                ? carried.Supervision
+                : SupervisionInForce.Unlabelled;
+            if (!wanted.Equals(held))
+            {
+                _supervisionSinceNamed.Add(new BodySupervision(body.Actor, wanted));
+            }
+        }
+
+        _absencesOpenedSinceNamed.Clear();
+        _absencesClosedSinceNamed.Clear();
+        foreach (AbsenceInForce absence in Supervision.Absences)
+        {
+            if (!_absencesNamed.TryGetValue(absence.InstanceId, out AbsenceInForce? named) || !named.Equals(absence))
+            {
+                _absencesOpenedSinceNamed.Add(absence);
+            }
+        }
+
+        foreach (string instanceId in _absencesNamed.Keys)
+        {
+            if (!Supervision.IsOpen(instanceId))
+            {
+                _absencesClosedSinceNamed.Add(instanceId);
+            }
+        }
+
+        if (!fresh && _supervisionSinceNamed.Count == 0 && _absencesOpenedSinceNamed.Count == 0
+            && _absencesClosedSinceNamed.Count == 0)
+        {
+            _supervisionRevisionNamed = Supervision.Revision;
+            return;
+        }
+
+        SupervisionWrite written = world.WriteSupervision(new SupervisionChange(
+            fresh, plan, _supervisionSinceNamed, _absencesOpenedSinceNamed, _absencesClosedSinceNamed));
+        if (!written.Taken)
+        {
+            Report.SupervisionRefused = written.Refusal;
+            return;
+        }
+
+        _supervisionPlanNamed = plan;
+        foreach (BodySupervision body in _supervisionSinceNamed)
+        {
+            if (body.Supervision.State == SupervisionState.Unlabelled)
+            {
+                _supervisionNamed.Remove(body.Actor);
+            }
+            else
+            {
+                _supervisionNamed[body.Actor] = (_namedToServer[body.Actor], body.Supervision);
+            }
+        }
+
+        foreach (string instanceId in _absencesClosedSinceNamed)
+        {
+            _absencesNamed.Remove(instanceId);
+        }
+
+        foreach (AbsenceInForce absence in _absencesOpenedSinceNamed)
+        {
+            _absencesNamed[absence.InstanceId] = absence;
+        }
+
+        _supervisionRevisionNamed = Supervision.Revision;
+        Report.SupervisionUpdates++;
+        Report.SupervisionBodiesNotApplied += Math.Max(0, _supervisionSinceNamed.Count - written.BodiesApplied);
+    }
+
+    /// <summary>
+    /// Withdraw everything put to the server, so the world carries no supervision from the next frame on.
+    /// </summary>
+    private void WithdrawTheSupervision(ICarlaWorld world)
+    {
+        SupervisionWrite written = world.WriteSupervision(SupervisionChange.Withdrawal);
+        if (!written.Taken)
+        {
+            Report.SupervisionRefused = written.Refusal;
+            return;
+        }
+
+        _supervisionPlanNamed = null;
+        _supervisionNamed.Clear();
+        _absencesNamed.Clear();
+        _supervisionRevisionNamed = -1;
+        Report.SupervisionUpdates++;
+    }
+
+    /// <summary>
+    /// Withdraw what the session put to the server, as it ends: the bodies take their own supervision
+    /// with them when they are destroyed, but the plan and the absences are the world's.
+    /// </summary>
+    private void WithdrawTheSupervisionAtTheEnd()
+    {
+        if (_world is { } world && _supervisionPlanNamed is not null && Report.SupervisionRefused is null)
+        {
+            WithdrawTheSupervision(world);
+        }
     }
 
     /// <summary>

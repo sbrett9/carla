@@ -5,6 +5,7 @@ using CarlaNet.Transport.MsgPackRpc.Server;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Actors;
 using CarlaNet.Types.Rpc.Enums;
+using CarlaNet.Types.Supervision;
 using MessagePack;
 
 namespace CarlaNet.CoSim.Tests;
@@ -129,6 +130,88 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
         // Zero clears it, and goes as a double too.
         world.WriteDrawDistance([7u], 0.0);
         Assert.Equal(0.0, Assert.IsType<double>(sent[^1].Metres));
+    }
+
+    [Fact]
+    public void A_Change_To_The_Supervision_Reaches_The_Server_In_The_Arrays_The_Server_Unpacks()
+    {
+        // The server binds one carla::rpc::SupervisionUpdate, a MSGPACK_DEFINE_ARRAY of
+        // (fresh, plan_id, vocabulary_version, vocabulary_digest, actors, absences_opened, absences_closed),
+        // each actor (actor_id, state, annotations), each annotation (instance_id, labels, phase, role) and
+        // each absence (instance_id, labels, areas, phase). Read raw here, as nested arrays, so the order
+        // is checked against the server's and not against this client's own reading of it.
+        List<object?[]> sent = [];
+        _server!.RegisterHandler<object, SuccessResponse<uint>>("update_supervision", update =>
+        {
+            sent.Add((object?[])update);
+            return Ok(1u);
+        });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+        var plan = new SupervisionPlanIdentity("Shahid_Bahonar_Port_PatternOfLife", 2, "e357");
+        var lead = new AnnotationInForce("Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3",
+                                         ["bahonar:coordinated_group_transit"], "transit", "bahonar:lead");
+        var unmanned = new AbsenceInForce("Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned",
+                                          ["bahonar:post_unmanned"], ["tower_03"], "vacancy");
+
+        SupervisionWrite written = world.WriteSupervision(new SupervisionChange(
+            true, plan,
+            [new BodySupervision(7, new SupervisionInForce(SupervisionState.Annotated, [lead])),
+             new BodySupervision(9, SupervisionInForce.Unlabelled)],
+            [unmanned], ["Shahid_Bahonar_Port_PatternOfLife/pi_earlier"]));
+
+        Assert.True(written.Taken);
+        Assert.Equal(1, written.BodiesApplied);
+        object?[] update = Assert.Single(sent);
+        Assert.Equal(7, update.Length);
+        Assert.Equal(true, update[0]);
+        Assert.Equal("Shahid_Bahonar_Port_PatternOfLife", update[1]);
+        Assert.Equal(2u, Convert.ToUInt32(update[2]));
+        Assert.Equal("e357", update[3]);
+
+        object?[] actors = (object?[])update[4]!;
+        Assert.Equal(2, actors.Length);
+        object?[] annotated = (object?[])actors[0]!;
+        Assert.Equal(7u, Convert.ToUInt32(annotated[0]));
+        // The state as the vocabulary's core spells it.
+        Assert.Equal("annotated", annotated[1]);
+        object?[] annotation = (object?[])Assert.Single((object?[])annotated[2]!)!;
+        Assert.Equal(lead.InstanceId, annotation[0]);
+        Assert.Equal(["bahonar:coordinated_group_transit"], ((object?[])annotation[1]!).Cast<string>());
+        Assert.Equal("transit", annotation[2]);
+        Assert.Equal("bahonar:lead", annotation[3]);
+        object?[] cleared = (object?[])actors[1]!;
+        Assert.Equal(9u, Convert.ToUInt32(cleared[0]));
+        Assert.Equal("unlabelled", cleared[1]);
+        Assert.Empty((object?[])cleared[2]!);
+
+        object?[] absence = (object?[])Assert.Single((object?[])update[5]!)!;
+        Assert.Equal(unmanned.InstanceId, absence[0]);
+        Assert.Equal(["bahonar:post_unmanned"], ((object?[])absence[1]!).Cast<string>());
+        Assert.Equal(["tower_03"], ((object?[])absence[2]!).Cast<string>());
+        Assert.Equal("vacancy", absence[3]);
+        Assert.Equal(["Shahid_Bahonar_Port_PatternOfLife/pi_earlier"], ((object?[])update[6]!).Cast<string>());
+
+        // A withdrawal goes as a change naming no plan, and carrying nothing else.
+        world.WriteSupervision(SupervisionChange.Withdrawal);
+        object?[] withdrawal = sent[^1];
+        Assert.Equal(false, withdrawal[0]);
+        Assert.Equal(string.Empty, withdrawal[1]);
+        Assert.Empty((object?[])withdrawal[4]!);
+        Assert.Empty((object?[])withdrawal[5]!);
+        Assert.Empty((object?[])withdrawal[6]!);
+    }
+
+    [Fact]
+    public void A_Server_Without_The_Supervision_Call_Is_A_Refusal_Carrying_Its_Words()
+    {
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        SupervisionWrite written = world.WriteSupervision(new SupervisionChange(
+            true, new SupervisionPlanIdentity("plan", 2, "digest"), [], [], []));
+
+        Assert.False(written.Taken);
+        Assert.Equal(0, written.BodiesApplied);
+        Assert.Contains("update_supervision", written.Refusal);
     }
 
     [Fact]

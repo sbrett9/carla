@@ -3,6 +3,7 @@
 // was routinely a tick or more ahead of the pixels; these tests pin the lookup that replaces it.
 using CarlaNet.Transport;
 using CarlaNet.Types.Streaming;
+using CarlaNet.Types.Supervision;
 
 namespace CarlaNet.Tests.Transport;
 
@@ -147,6 +148,54 @@ public class SnapshotHistoryTests
         var unnamed = new SnapshotHistory();
         unnamed.Retain(9, Frame(1));
         Assert.Same(ObservedRenderSet.None, unnamed.RenderSetOf(9));
+    }
+
+    // The supervision travels with each snapshot too, and names bodies as the render set does, so a
+    // frame's actors, set and supervision are only ever read together, from one frame.
+    private static ObservedSupervision Annotated(uint actor, string instance) =>
+        new(new SupervisionPlanIdentity("plan", 2, "digest"),
+            [KeyValuePair.Create(actor, new SupervisionInForce(SupervisionState.Annotated,
+                                                               [new AnnotationInForce(instance, ["ns:term"], "dwell", "subject")]))],
+            []);
+
+    [Fact]
+    public void A_Frame_s_Actors_Are_Served_With_The_Supervision_That_Frame_Carried()
+    {
+        var h = new SnapshotHistory();
+        ObservedSupervision first = Annotated(7, "plan/first"), second = Annotated(7, "plan/second");
+        h.Retain(100, Frame(7), Lent(7, "first"), first);
+        h.Retain(104, Frame(7), Lent(7, "second"), second);
+
+        Assert.NotNull(h.Nearest(100, out ulong exact, out ObservedRenderSet setAtExact,
+                                 out ObservedSupervision atExact));
+        Assert.Equal(100ul, exact);
+        Assert.Equal("first", setAtExact.Lent(7)!.VehicleId);
+        Assert.Same(first, atExact);
+
+        // A frame not held is served from the nearest one, with that frame's supervision and set together.
+        Assert.NotNull(h.Nearest(103, out ulong served, out ObservedRenderSet setAtServed,
+                                 out ObservedSupervision atServed));
+        Assert.Equal(104ul, served);
+        Assert.Equal("second", setAtServed.Lent(7)!.VehicleId);
+        Assert.Same(second, atServed);
+
+        Assert.Same(first, h.SupervisionOf(100));
+        Assert.Null(h.SupervisionOf(103));
+    }
+
+    [Fact]
+    public void A_Frame_Retained_Without_Supervision_Carries_None_And_Leaves_With_Its_Actors()
+    {
+        var h = new SnapshotHistory(capacity: 2);
+        h.Retain(1, Frame(1), Lent(1, "escort_0"), Annotated(1, "plan/a"));
+        h.Retain(2, Frame(1), Lent(1, "escort_0"));
+        h.Retain(3, Frame(1), Lent(1, "escort_0"), Annotated(1, "plan/b"));
+
+        Assert.Null(h.SupervisionOf(1));                              // dropped with frame 1
+        Assert.Same(ObservedSupervision.None, h.SupervisionOf(2));
+        Assert.Equal("plan/b", h.SupervisionOf(3)!.Of(1)!.Annotations[0].InstanceId);
+        Assert.Null(new SnapshotHistory().Nearest(5, out _, out _, out ObservedSupervision none));
+        Assert.Same(ObservedSupervision.None, none);
     }
 
     private static ulong ServedFor(SnapshotHistory h, ulong frame)

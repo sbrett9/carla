@@ -10,6 +10,7 @@ using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
+using CarlaNet.Types.Rpc.Supervision;
 using CarlaNet.Types.Streaming;
 using Microsoft.Extensions.Logging;
 
@@ -188,6 +189,15 @@ public sealed class CarlaClient : IAsyncDisposable
     // observer thread, and the same instance is kept while the block's bytes do not change.
     private volatile ObservedRenderSet _renderSet = ObservedRenderSet.None;
     private long _renderSetBlocksUnreadable;
+
+    // The supervision from the latest world-observer snapshot: the plan a co-simulation session has
+    // bound, what the author asserts of the vehicle each lent body drew, and the absences in force.
+    // None until a session binds a plan, and for as long as no snapshot carries one. Held on the
+    // server, never in this process, so every client of the world reads the same truth for a frame;
+    // replaced whole on the observer thread, the same instance kept while the block's bytes do not
+    // change.
+    private volatile ObservedSupervision _supervision = ObservedSupervision.None;
+    private long _supervisionBlocksUnreadable;
 
     // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
     // set_actor_fade writes straight to render state server-side and has no read-back, so the client
@@ -1785,6 +1795,82 @@ public sealed class CarlaClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Put a change to the supervision a co-simulation session holds on the server: the plan it is bound
+    /// from, what the author asserts from now on of the vehicle each named body draws, and the absences
+    /// that open and close. The world observer carries what the server holds on each snapshot from the
+    /// next frame on (<see cref="GetCachedSupervision"/>), so every client of the world, in any process,
+    /// reads the same truth for the same frame. Answers how many of the named bodies the server found
+    /// lent and gave their supervision.
+    /// </summary>
+    /// <remarks>
+    /// <para>Sent only when the supervision changes, after the render set and before the tick cue of
+    /// the frame the change is drawn in. A body's supervision is replaced whole; it is held on the
+    /// server's record of the actor only while the render set names it lent, and is lost when the body
+    /// is given back or handed to another vehicle.</para>
+    ///
+    /// <para>A change is bound to one plan: one naming another plan than the server holds is refused
+    /// unless it is <see cref="SupervisionUpdate.Fresh"/>, which drops everything held before it, and
+    /// one naming no plan withdraws all supervision and carries nothing else. A server built before it
+    /// carried supervision refuses the call, with an error naming it.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// The change is one the server refuses: a state other than the vocabulary core's three spellings,
+    /// an unlabelled body with annotations or an annotated one with none, an instance unnamed, or a
+    /// withdrawal carrying rows or absences. It is refused before it is sent.
+    /// </exception>
+    public Task<uint> UpdateSupervisionAsync(SupervisionUpdate update)
+    {
+        ArgumentNullException.ThrowIfNull(update.PlanId);
+        ArgumentNullException.ThrowIfNull(update.VocabularyDigest);
+        ArgumentNullException.ThrowIfNull(update.Actors);
+        ArgumentNullException.ThrowIfNull(update.AbsencesOpened);
+        ArgumentNullException.ThrowIfNull(update.AbsencesClosed);
+        if (SupervisionUpdateProblem(update) is { } problem)
+        {
+            throw new ArgumentException(problem, nameof(update));
+        }
+
+        return _rpc.CallAsync<uint>("update_supervision", update);
+    }
+
+    /// <summary>Why the server would refuse a supervision change, or null where it would take it.</summary>
+    private static string? SupervisionUpdateProblem(SupervisionUpdate update)
+    {
+        if (update.PlanId.Length == 0)
+        {
+            return update.Actors.Count > 0 || update.AbsencesOpened.Count > 0 || update.AbsencesClosed.Count > 0
+                ? "A change naming no plan withdraws all supervision and carries nothing else."
+                : null;
+        }
+
+        foreach (SupervisionUpdateActor actor in update.Actors)
+        {
+            IReadOnlyList<SupervisionUpdateAnnotation> annotations = actor.Annotations ?? [];
+            switch (actor.State)
+            {
+                case "annotated" when annotations.Count == 0:
+                    return $"Actor {actor.ActorId} is annotated and names no instance it executes.";
+                case "unlabelled" when annotations.Count > 0:
+                    return $"Actor {actor.ActorId} is unlabelled and carries annotations.";
+                case "annotated" or "nominal" or "unlabelled":
+                    break;
+                default:
+                    return $"Actor {actor.ActorId}'s state is '{actor.State}': a vehicle is annotated, nominal "
+                           + "or unlabelled.";
+            }
+
+            if (annotations.Any(annotation => string.IsNullOrEmpty(annotation.InstanceId)))
+            {
+                return $"An annotation of actor {actor.ActorId} names no instance.";
+            }
+        }
+
+        return update.AbsencesOpened.Any(absence => string.IsNullOrEmpty(absence.InstanceId))
+            ? "An absence names no instance."
+            : null;
+    }
+
+    /// <summary>
     /// Set how far from a camera the named actors are drawn, in metres: the max draw distance of
     /// every mesh and lamp of each actor and of whatever is attached to it, so that no camera draws
     /// any of it from farther away. Zero clears the limit, so they are drawn at any range. Answers
@@ -2157,12 +2243,12 @@ public sealed class CarlaClient : IAsyncDisposable
             double platformTs = 0;
             float deltaS = 0;
             ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS, out var frameActors,
-                              out var frameRenderSet);
+                              out var frameRenderSet, out var frameSupervision);
             // Retained before the gate is pulsed, so a tick-cue waiter woken by this frame can read
-            // the frame's own actors straight away -- and the render set the same snapshot carried
-            // beside them, so the two are never read from different frames.
+            // the frame's own actors straight away -- and the render set and the supervision the same
+            // snapshot carried beside them, so none is ever read from a different frame.
             if (frameActors is not null)
-                _history.Retain(frame.Header.Frame, frameActors, frameRenderSet);
+                _history.Retain(frame.Header.Frame, frameActors, frameRenderSet, frameSupervision);
             lock (_frameGate)
             {
                 _latestObservedFrame = frame.Header.Frame;
@@ -2190,12 +2276,14 @@ public sealed class CarlaClient : IAsyncDisposable
 
     private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds,
                                    out Dictionary<ActorId, ActorSnapshot>? frameActors,
-                                   out ObservedRenderSet frameRenderSet)
+                                   out ObservedRenderSet frameRenderSet,
+                                   out ObservedSupervision frameSupervision)
     {
         platformTimestamp = 0;
         deltaSeconds = 0;
         frameActors = null;
         frameRenderSet = ObservedRenderSet.None;
+        frameSupervision = ObservedSupervision.None;
         // Header layout: episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3),
         // then the solar block at offset 36 -- eleven doubles, or twelve from a server that carries
         // the refraction-corrected elevation, which the flags byte says (§10.14 extended header).
@@ -2227,6 +2315,20 @@ public sealed class CarlaClient : IAsyncDisposable
             frameRenderSet = ObservedRenderSet.None;
         }
         _renderSet = frameRenderSet;
+        // The supervision, where a co-simulation session has bound a plan: read the same way, a block
+        // that cannot be read counted and read as none rather than losing the frame. It is inside the
+        // render set block, whose size the actors are found by, so they are found either way.
+        try
+        {
+            frameSupervision = EpisodeStateLayout.ReadSupervision(payload, _supervision);
+        }
+        catch (InvalidDataException ex)
+        {
+            Interlocked.Increment(ref _supervisionBlocksUnreadable);
+            _log?.LogWarning(ex, "World observer supervision unreadable");
+            frameSupervision = ObservedSupervision.None;
+        }
+        _supervision = frameSupervision;
         const int ActorSize  = 119;
         var actors = payload[EpisodeStateLayout.ActorsOffset(payload)..];
         int count  = actors.Length / ActorSize;
@@ -2314,6 +2416,18 @@ public sealed class CarlaClient : IAsyncDisposable
     public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame,
                                                                         out ObservedRenderSet renderSet)
         => _history.Nearest(frame, out servedFrame, out renderSet);
+
+    /// <summary>
+    /// Every actor's snapshot as of <paramref name="frame"/>, or the nearest frame still held, together
+    /// with the render set and the supervision the same snapshot carried
+    /// (<see cref="ObservedSupervision.None"/> where it carried none). All three are read at once, which
+    /// is how a recorder takes a capture's truth: its vehicles, the SUMO vehicle each body drew, and what
+    /// the author asserted of each, from the one frame the pixels were rendered on.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame,
+                                                                        out ObservedRenderSet renderSet,
+                                                                        out ObservedSupervision supervision)
+        => _history.Nearest(frame, out servedFrame, out renderSet, out supervision);
 
     /// <summary>How many recent frames <see cref="GetSnapshotFrame"/> can answer for exactly.</summary>
     public int RetainedSnapshotFrames => _history.Count;
@@ -2423,6 +2537,35 @@ public sealed class CarlaClient : IAsyncDisposable
     /// none. Nonzero only where the server lays the block out differently from this client.
     /// </summary>
     public long RenderSetBlocksUnreadable => Interlocked.Read(ref _renderSetBlocksUnreadable);
+
+    /// <summary>
+    /// The supervision the latest world-observer snapshot carried: the plan a co-simulation session has
+    /// bound, what the scenario's author asserts of the vehicle each lent body drew, and the absences in
+    /// force for the world. <see cref="ObservedSupervision.None"/> before the first snapshot, and
+    /// whenever no session has bound a plan. Requires the world observer to be running
+    /// (StartWorldObserverAsync).
+    /// </summary>
+    /// <remarks>
+    /// The newest frame's, like the actor cache and the render set. A reader that pairs it with a
+    /// frame's vehicles takes all of them from that frame --
+    /// <see cref="GetSnapshotFrame(ulong, out ulong, out ObservedRenderSet, out ObservedSupervision)"/>
+    /// answers them at once -- because supervision names bodies, and a body is lent or given back
+    /// between two ticks.
+    /// </remarks>
+    public ObservedSupervision GetCachedSupervision() => _supervision;
+
+    /// <summary>
+    /// The supervision the snapshot of <paramref name="frame"/> carried, where the client still holds
+    /// that frame; null where it does not. <see cref="ObservedSupervision.None"/> for a held frame that
+    /// carried none.
+    /// </summary>
+    public ObservedSupervision? GetSupervisionFrame(ulong frame) => _history.SupervisionOf(frame);
+
+    /// <summary>
+    /// World-observer snapshots whose supervision block could not be read, and were read as carrying
+    /// none. Nonzero only where the server lays the block out differently from this client.
+    /// </summary>
+    public long SupervisionBlocksUnreadable => Interlocked.Read(ref _supervisionBlocksUnreadable);
 
     // Decode VehicleControl from the cached TypeDependentState union.
     // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)

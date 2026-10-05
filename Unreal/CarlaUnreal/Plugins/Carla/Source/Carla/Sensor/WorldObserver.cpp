@@ -8,9 +8,11 @@
 #include "Carla.h"
 #include "Carla/Actor/ActorData.h"
 #include "Carla/Actor/ActorRegistry.h"
+#include "Carla/Actor/ActorSupervision.h"
 #include "Carla/Actor/CarlaActor.h"
 #include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Game/CarlaEpisode.h"
+#include "Carla/Game/WorldSupervisionState.h"
 #include "Carla/Game/CarlaEngine.h"
 #include "Carla/Traffic/TrafficLightBase.h"
 #include "Carla/Traffic/TrafficLightComponent.h"
@@ -37,6 +39,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 static auto FWorldObserver_GetActorState(const FCarlaActor &View, const FActorRegistry &Registry)
 {
@@ -286,11 +289,37 @@ static carla::geom::Vector3D FWorldObserver_GetAcceleration(
   };
 }
 
-/// The bytes of a render set name that fit its 16-bit length prefix.
-static uint16_t FWorldObserver_RenderSetNameSize(const std::string &Name)
+/// The bytes of a name -- in the render set or the supervision block -- that fit its 16-bit length
+/// prefix.
+static uint16_t FWorldObserver_NameSize(const std::string &Name)
 {
   constexpr size_t MaxSize = (std::numeric_limits<uint16_t>::max)();
   return static_cast<uint16_t>((std::min)(Name.size(), MaxSize));
+}
+
+/// How many items of a list fit its 16-bit count.
+static uint16_t FWorldObserver_ListCount(size_t Count)
+{
+  constexpr size_t MaxCount = (std::numeric_limits<uint16_t>::max)();
+  return static_cast<uint16_t>((std::min)(Count, MaxCount));
+}
+
+/// A name's size as written: its 16-bit length, then its bytes.
+static size_t FWorldObserver_WrittenNameSize(const std::string &Name)
+{
+  return sizeof(uint16_t) + FWorldObserver_NameSize(Name);
+}
+
+/// A list of names' size as written: its 16-bit count, then each name that count covers.
+static size_t FWorldObserver_WrittenNamesSize(const std::vector<std::string> &Names)
+{
+  size_t Size = sizeof(uint16_t);
+  const uint16_t Count = FWorldObserver_ListCount(Names.size());
+  for (uint16_t Index = 0u; Index < Count; ++Index)
+  {
+    Size += FWorldObserver_WrittenNameSize(Names[Index]);
+  }
+  return Size;
 }
 
 /// One render set entry's size: actor id, state, admitted frame, and the vehicle and its type, each
@@ -300,8 +329,34 @@ static size_t FWorldObserver_RenderSetEntrySize(const FRenderSetMembership &Memb
 {
   const bool bLent = Membership.State == FRenderSetMembership::EState::Lent;
   return sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint64_t)
-      + sizeof(uint16_t) + (bLent ? FWorldObserver_RenderSetNameSize(Membership.VehicleId) : 0u)
-      + sizeof(uint16_t) + (bLent ? FWorldObserver_RenderSetNameSize(Membership.VehicleTypeId) : 0u);
+      + sizeof(uint16_t) + (bLent ? FWorldObserver_NameSize(Membership.VehicleId) : 0u)
+      + sizeof(uint16_t) + (bLent ? FWorldObserver_NameSize(Membership.VehicleTypeId) : 0u);
+}
+
+/// One supervision row's size: actor id, state, and each annotation's instance, phase, role and
+/// labels (EpisodeStateSerializer::SupervisionEntryState describes the layout).
+static size_t FWorldObserver_SupervisionRowSize(const FActorSupervision &Supervision)
+{
+  size_t Size = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint16_t);
+  const uint16_t Count = FWorldObserver_ListCount(Supervision.Annotations.size());
+  for (uint16_t Index = 0u; Index < Count; ++Index)
+  {
+    const FSupervisionAnnotation &Annotation = Supervision.Annotations[Index];
+    Size += FWorldObserver_WrittenNameSize(Annotation.InstanceId)
+        + FWorldObserver_WrittenNameSize(Annotation.Phase)
+        + FWorldObserver_WrittenNameSize(Annotation.Role)
+        + FWorldObserver_WrittenNamesSize(Annotation.Labels);
+  }
+  return Size;
+}
+
+/// One absence's size: its instance, phase, labels and areas.
+static size_t FWorldObserver_SupervisionAbsenceSize(const FSupervisionAbsence &Absence)
+{
+  return FWorldObserver_WrittenNameSize(Absence.InstanceId)
+      + FWorldObserver_WrittenNameSize(Absence.Phase)
+      + FWorldObserver_WrittenNamesSize(Absence.Labels)
+      + FWorldObserver_WrittenNamesSize(Absence.Areas);
 }
 
 static carla::Buffer FWorldObserver_Serialize(
@@ -315,31 +370,69 @@ static carla::Buffer FWorldObserver_Serialize(
   using Serializer = carla::sensor::s11n::EpisodeStateSerializer;
   using SimulationState = carla::sensor::s11n::EpisodeStateSerializer::SimulationState;
   using RenderSetEntryState = carla::sensor::s11n::EpisodeStateSerializer::RenderSetEntryState;
+  using SupervisionEntryState = carla::sensor::s11n::EpisodeStateSerializer::SupervisionEntryState;
   using ActorDynamicState = carla::sensor::data::ActorDynamicState;
 
 
   const FActorRegistry &Registry = Episode.GetActorRegistry();
 
-  // Every body a co-simulation session has named, gathered before anything is written: the render
-  // set block they make sits between the header and the first actor, so its size is part of the
-  // buffer's. A world in which no session has named a body carries no block and is laid out as it
-  // always was.
+  // Every body a co-simulation session has named, and the supervision of every lent body whose
+  // vehicle the author asserts something of, gathered before anything is written: the render set
+  // block they make sits between the header and the first actor, so its size is part of the
+  // buffer's. A world in which no session has named a body or bound a supervision plan carries no
+  // block and is laid out as it always was.
+  const FWorldSupervisionState &WorldSupervision = Episode.GetWorldSupervision();
+  const bool bSupervisionCarried = WorldSupervision.IsHeld();
   TArray<const FCarlaActor *> RenderSetBodies;
+  TArray<const FCarlaActor *> SupervisedBodies;
   size_t RenderSetEntriesSize = 0u;
+  size_t SupervisionRowsSize = 0u;
   for (auto& Named : Registry)
   {
     const FCarlaActor* Body = Named.Value.Get();
-    if (Body != nullptr &&
-        Body->GetRenderSetMembership().State != FRenderSetMembership::EState::None)
+    if (Body == nullptr)
+    {
+      continue;
+    }
+    const FRenderSetMembership &Membership = Body->GetRenderSetMembership();
+    if (Membership.State != FRenderSetMembership::EState::None)
     {
       RenderSetBodies.Add(Body);
-      RenderSetEntriesSize += FWorldObserver_RenderSetEntrySize(Body->GetRenderSetMembership());
+      RenderSetEntriesSize += FWorldObserver_RenderSetEntrySize(Membership);
+    }
+    // Only a lent body draws a vehicle the author can assert anything of, and one whose vehicle is
+    // unlabelled has no row: the absence of a row is what unlabelled is.
+    if (bSupervisionCarried &&
+        Membership.State == FRenderSetMembership::EState::Lent &&
+        Body->GetSupervision().State != FActorSupervision::EState::Unlabelled)
+    {
+      SupervisedBodies.Add(Body);
+      SupervisionRowsSize += FWorldObserver_SupervisionRowSize(Body->GetSupervision());
     }
   }
-  const bool bRenderSetCarried = RenderSetBodies.Num() > 0;
-  // The block's own size and its entry count, then the entries.
-  const size_t RenderSetBlockSize =
-      bRenderSetCarried ? sizeof(uint32_t) + sizeof(uint32_t) + RenderSetEntriesSize : 0u;
+  // The supervision block's own size, the plan, the vocabulary version and digest, the row count and
+  // rows, then the absence count and absences.
+  size_t SupervisionBlockSize = 0u;
+  if (bSupervisionCarried)
+  {
+    SupervisionBlockSize = sizeof(uint32_t)
+        + FWorldObserver_WrittenNameSize(WorldSupervision.PlanId)
+        + sizeof(uint32_t)
+        + FWorldObserver_WrittenNameSize(WorldSupervision.VocabularyDigest)
+        + sizeof(uint32_t) + SupervisionRowsSize
+        + sizeof(uint32_t);
+    for (const FSupervisionAbsence &Absence : WorldSupervision.Absences)
+    {
+      SupervisionBlockSize += FWorldObserver_SupervisionAbsenceSize(Absence);
+    }
+  }
+  // Written whenever either is carried: the supervision rides inside the render set block, whose
+  // size counts it, so a reader that knows only the render set skips it unread.
+  const bool bRenderSetCarried = RenderSetBodies.Num() > 0 || bSupervisionCarried;
+  // The block's own size and its entry count, then the entries, then the supervision block.
+  const size_t RenderSetBlockSize = bRenderSetCarried
+      ? sizeof(uint32_t) + sizeof(uint32_t) + RenderSetEntriesSize + SupervisionBlockSize
+      : 0u;
 
   auto total_size = sizeof(Serializer::Header) + RenderSetBlockSize +
       sizeof(ActorDynamicState) * Registry.Num();
@@ -354,12 +447,21 @@ static carla::Buffer FWorldObserver_Serialize(
   };
   auto write_name = [&current_size, &buffer, &write_data](const std::string &Name)
   {
-    const uint16_t Size = FWorldObserver_RenderSetNameSize(Name);
+    const uint16_t Size = FWorldObserver_NameSize(Name);
     write_data(Size);
     if (Size > 0u)
     {
       std::memcpy(buffer.begin() + current_size, Name.data(), Size);
       current_size += Size;
+    }
+  };
+  auto write_names = [&write_data, &write_name](const std::vector<std::string> &Names)
+  {
+    const uint16_t Count = FWorldObserver_ListCount(Names.size());
+    write_data(Count);
+    for (uint16_t Index = 0u; Index < Count; ++Index)
+    {
+      write_name(Names[Index]);
     }
   };
 
@@ -414,6 +516,11 @@ static carla::Buffer FWorldObserver_Serialize(
   {
     simulation_state |= SimulationState::RenderSetCarried;
   }
+  // And only with it, because the supervision block lies inside it.
+  if (bSupervisionCarried)
+  {
+    simulation_state |= SimulationState::SupervisionCarried;
+  }
 
   header.simulation_state = static_cast<SimulationState>(simulation_state);
 
@@ -441,6 +548,51 @@ static carla::Buffer FWorldObserver_Serialize(
       write_data(EntryAdmittedFrame);
       write_name(bLent ? Membership.VehicleId : std::string());
       write_name(bLent ? Membership.VehicleTypeId : std::string());
+    }
+
+    // The supervision in force: the plan, each lent body whose vehicle is annotated or nominal with
+    // the instances in force for it, and the absences held for the world as a whole. What the session
+    // last put in force is what holds on this frame, because the session names a change before the
+    // tick cue of the frame it is drawn in.
+    if (bSupervisionCarried)
+    {
+      const uint32_t SupervisionSize = static_cast<uint32_t>(SupervisionBlockSize - sizeof(uint32_t));
+      write_data(SupervisionSize);
+      write_name(WorldSupervision.PlanId);
+      write_data(WorldSupervision.VocabularyVersion);
+      write_name(WorldSupervision.VocabularyDigest);
+      const uint32_t RowCount = static_cast<uint32_t>(SupervisedBodies.Num());
+      write_data(RowCount);
+      for (const FCarlaActor* Body : SupervisedBodies)
+      {
+        const FActorSupervision &Supervision = Body->GetSupervision();
+        const uint32_t RowActorId = static_cast<uint32_t>(Body->GetActorId());
+        const uint8_t RowState = static_cast<uint8_t>(
+            Supervision.State == FActorSupervision::EState::Annotated
+                ? SupervisionEntryState::Annotated
+                : SupervisionEntryState::Nominal);
+        const uint16_t AnnotationCount = FWorldObserver_ListCount(Supervision.Annotations.size());
+        write_data(RowActorId);
+        write_data(RowState);
+        write_data(AnnotationCount);
+        for (uint16_t Index = 0u; Index < AnnotationCount; ++Index)
+        {
+          const FSupervisionAnnotation &Annotation = Supervision.Annotations[Index];
+          write_name(Annotation.InstanceId);
+          write_name(Annotation.Phase);
+          write_name(Annotation.Role);
+          write_names(Annotation.Labels);
+        }
+      }
+      const uint32_t AbsenceCount = static_cast<uint32_t>(WorldSupervision.Absences.size());
+      write_data(AbsenceCount);
+      for (const FSupervisionAbsence &Absence : WorldSupervision.Absences)
+      {
+        write_name(Absence.InstanceId);
+        write_name(Absence.Phase);
+        write_names(Absence.Labels);
+        write_names(Absence.Areas);
+      }
     }
   }
 

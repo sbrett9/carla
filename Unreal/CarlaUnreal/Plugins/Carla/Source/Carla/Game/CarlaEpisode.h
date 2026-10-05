@@ -14,6 +14,7 @@
 #include "Carla/Util/ActorAttacher.h"
 #include "Carla/Weather/Weather.h"
 #include "Carla/Game/FrameData.h"
+#include "Carla/Game/WorldSupervisionState.h"
 #include "Carla/Sensor/SensorManager.h"
 
 #include <util/disable-ue4-macros.h>
@@ -329,6 +330,13 @@ public:
 
   FFrameData& GetFrameData() { return FrameData; }
 
+  /// The supervision a co-simulation session holds for this world as a whole -- the plan it is bound
+  /// from and the absences in force -- which the world observer carries on every snapshot while a
+  /// plan is held (update_supervision). Ends with the episode.
+  const FWorldSupervisionState &GetWorldSupervision() const { return WorldSupervision; }
+
+  FWorldSupervisionState &GetWorldSupervision() { return WorldSupervision; }
+
   FSensorManager& GetSensorManager() { return SensorManager; }
 
   bool bIsPrimaryServer = true;
@@ -406,6 +414,8 @@ private:
   FFrameData FrameData;
 
   FSensorManager SensorManager;
+
+  FWorldSupervisionState WorldSupervision;
 };
 
 FString CarlaGetRelevantTagAsString(

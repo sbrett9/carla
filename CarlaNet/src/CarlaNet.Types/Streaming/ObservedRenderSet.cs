@@ -112,7 +112,10 @@ public sealed class ObservedRenderSet
     /// same bytes as the one it was read from: the set changes only when a body is lent or given
     /// back, so most frames carry the block the frame before did.
     /// </summary>
-    /// <param name="block">The block's entries: its count, then each entry, as the server lays them out.</param>
+    /// <param name="block">
+    /// The block's entries: its count, then each entry, as the server lays them out, and nothing after
+    /// them (<see cref="Measure"/>).
+    /// </param>
     /// <param name="previous">The set read from the frame before, if any.</param>
     /// <exception cref="InvalidDataException">The block ends part-way through an entry.</exception>
     internal static ObservedRenderSet Read(ReadOnlySpan<byte> block, ObservedRenderSet? previous)
@@ -122,7 +125,7 @@ public sealed class ObservedRenderSet
             return previous;
         }
 
-        var reader = new BlockReader(block);
+        var reader = new SnapshotBlockReader(block, "render set");
         uint count = reader.UInt32();
         var bodies = new List<ObservedBody>((int)Math.Min(count, 65536u));
         for (uint index = 0; index < count; index++)
@@ -141,42 +144,25 @@ public sealed class ObservedRenderSet
         return new ObservedRenderSet(bodies, block.ToArray());
     }
 
-    /// <summary>Little-endian reads over the block, refusing one that ends part-way through.</summary>
-    private ref struct BlockReader
+    /// <summary>
+    /// How many bytes of the render set block its count and entries take, walked without decoding a
+    /// name: what follows them inside the block -- the supervision block, where the snapshot carries
+    /// one -- is not the set's.
+    /// </summary>
+    /// <param name="block">The render set block after its size field.</param>
+    /// <exception cref="InvalidDataException">The block ends part-way through an entry.</exception>
+    internal static int Measure(ReadOnlySpan<byte> block)
     {
-        private readonly ReadOnlySpan<byte> _block;
-        private int _at;
-
-        public BlockReader(ReadOnlySpan<byte> block)
+        var reader = new SnapshotBlockReader(block, "render set");
+        uint count = reader.UInt32();
+        for (uint index = 0; index < count; index++)
         {
-            _block = block;
-            _at = 0;
+            // Actor id, state and admitted frame, then the vehicle and its type.
+            reader.Skip(4 + 1 + 8);
+            reader.SkipName();
+            reader.SkipName();
         }
 
-        public byte Byte() => Take(1)[0];
-
-        public uint UInt32() => System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(Take(4));
-
-        public ulong UInt64() => System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(Take(8));
-
-        public string Name()
-        {
-            ushort size = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(Take(2));
-            return size == 0 ? string.Empty : System.Text.Encoding.UTF8.GetString(Take(size));
-        }
-
-        private ReadOnlySpan<byte> Take(int size)
-        {
-            if (_at + size > _block.Length)
-            {
-                throw new InvalidDataException(
-                    $"The render set block ends at byte {_block.Length}, part-way through an entry that "
-                    + $"needs {_at + size}.");
-            }
-
-            ReadOnlySpan<byte> taken = _block.Slice(_at, size);
-            _at += size;
-            return taken;
-        }
+        return reader.Position;
     }
 }

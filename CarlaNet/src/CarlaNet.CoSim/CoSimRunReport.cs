@@ -452,6 +452,33 @@ public sealed class CoSimRunReport
     public string? RenderSetRefused { get; internal set; }
 
     /// <summary>
+    /// Changes to the supervision put to the server: one round trip on each tick whose supervision
+    /// changed -- a plan bound, an interval opened or closed, a supervised vehicle lent a body anew -- and
+    /// one withdrawing it as the session ends, and none on any other tick.
+    /// </summary>
+    /// <remarks>
+    /// The server carries what it holds on every world-observer snapshot, so every process reads the
+    /// same supervision for the same frame and none holds its own. Zero where nothing bound a plan.
+    /// </remarks>
+    public long SupervisionUpdates { get; internal set; }
+
+    /// <summary>
+    /// Bodies whose supervision was put to the server and not applied, summed over the changes: a body
+    /// the server no longer had, or no longer held lent, whose vehicle's supervision therefore reached no
+    /// snapshot. Zero in a healthy run.
+    /// </summary>
+    public long SupervisionBodiesNotApplied { get; internal set; }
+
+    /// <summary>
+    /// Why the server refused the supervision, in its words, or <see langword="null"/> where it took
+    /// every change or none was sent. A server built before it carried supervision refuses the first
+    /// change, and the session puts nothing more: no reader is told any supervision. A server that
+    /// refused the render set is told no supervision either, because supervision is carried per lent
+    /// body.
+    /// </summary>
+    public string? SupervisionRefused { get; internal set; }
+
+    /// <summary>
     /// How far from a camera, in metres, the run asked for its bodies to be drawn -- the optional
     /// performance control, as it stands now -- or null for no limit, which is the default: every body
     /// drawn at any range.
@@ -1059,6 +1086,9 @@ public sealed class CoSimRunReport
         text.AppendLine($"render set         {RenderSetUpdates} change(s) named to the server"
                         + (RenderSetBodiesNotFound > 0 ? $", {RenderSetBodiesNotFound} body(ies) not found" : string.Empty)
                         + (RenderSetRefused is { } refused ? $"; refused, so other processes list every vehicle actor: {refused}" : string.Empty));
+        text.AppendLine($"supervision        {SupervisionUpdates} change(s) put to the server"
+                        + (SupervisionBodiesNotApplied > 0 ? $", {SupervisionBodiesNotApplied} body(ies) not applied" : string.Empty)
+                        + (SupervisionRefused is { } supervisionRefused ? $"; refused, so no reader is told any supervision: {supervisionRefused}" : string.Empty));
         text.AppendLine($"draw distance      {DescribeDrawDistance()}");
         text.AppendLine("lamps              "
                         + (!VehicleLampsDriven

@@ -10,11 +10,12 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Twenty operations. The bridge asks which world is loaded, hands the world's truth
+/// <para>Twenty-one operations. The bridge asks which world is loaded, hands the world's truth
 /// telemetry the package's ground and the catalogue's base types and vehicle kinds once the package
 /// is established as that world's, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
-/// which parked, sets how far from a camera the bodies are drawn, reads back where the world says
+/// which parked, puts the supervision in force on the server, sets how far from a camera the bodies
+/// are drawn, reads back where the world says
 /// they went and how
 /// fast it says they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
@@ -137,6 +138,30 @@ public interface ICarlaWorld
     /// either way, and only the truth other processes read goes back to every vehicle actor.</para>
     /// </remarks>
     RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked);
+
+    /// <summary>
+    /// Put a change to the supervision in force on the server: the plan it is bound from, what the
+    /// author asserts from now on of the vehicle each named body draws, and the absences that open and
+    /// close; answer what the server made of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The server carries what it holds on each world-observer snapshot from the next frame on,
+    /// after the render set's entries, so every client of the world -- a recorder beside the session,
+    /// one in another process, the live CoT feed -- reads the same truth for the same frame, and none
+    /// holds it in its own process. A body's supervision is held on the server's record of the actor
+    /// only while the render set names it lent: it is dropped when the body is given back or handed to
+    /// another vehicle, and a body not lent is not given one. Absences are held for the world.</para>
+    ///
+    /// <para>One round trip, made only on a tick whose supervision changed -- an interval opened or
+    /// closed, or a supervised vehicle lent a body anew -- after <see cref="WriteRenderSet"/> and before
+    /// that tick's cue, so the frame the change is drawn in is the first to carry it. A change naming
+    /// another plan than the one held must be fresh; a change naming no plan withdraws everything.</para>
+    ///
+    /// <para>A server built before it carried supervision refuses the call, and says why. The session
+    /// records the refusal and puts nothing more; the run goes on, and no reader is told any
+    /// supervision.</para>
+    /// </remarks>
+    SupervisionWrite WriteSupervision(SupervisionChange change);
 
     /// <summary>
     /// Set how far from a camera the named bodies are drawn, in metres, zero for no limit; answer what

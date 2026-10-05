@@ -51,7 +51,13 @@ namespace s11n {
       /// out exactly as before. Like the flag above it describes where the actors start, and a
       /// reader that does not know it reads the block as actors, so readers are rebuilt with the
       /// server that sets it.
-      RenderSetCarried = (0x1 << 4)
+      RenderSetCarried = (0x1 << 4),
+      /// A supervision block follows the render set's entries, inside the render set block (see
+      /// SupervisionEntryState). Set only on a snapshot that carries one -- once a co-simulation
+      /// session has bound a supervision plan -- and always with RenderSetCarried, whose block size
+      /// counts it, so a reader that knows the render set and not this flag finds the actors and the
+      /// render set as before and skips the supervision unread.
+      SupervisionCarried = (0x1 << 5)
     };
 
     /// How one body in the render set block is held.
@@ -67,6 +73,10 @@ namespace s11n {
     ///     uint64 admitted_frame   the first frame the body was drawn for its vehicle; 0 if parked
     ///     uint16 n, then n bytes  the vehicle the body is lent to, UTF-8; empty if parked
     ///     uint16 n, then n bytes  that vehicle's declared type, UTF-8; empty if parked
+    ///   the supervision block, where simulation_state carries SupervisionCarried
+    ///
+    /// The block is written whenever either part is carried, so a world whose session has bound a
+    /// supervision plan and lent no body yet carries it with no entries.
     ///
     /// A pooled body is an ordinary vehicle actor, and between loans it stands parked out of sight
     /// below the ground, so the actor array alone says neither which vehicles a frame drew nor who
@@ -78,6 +88,42 @@ namespace s11n {
       Lent   = 1u,
       /// Given back and parked out of sight: drawn for nobody on this frame.
       Parked = 2u
+    };
+
+    /// What the author asserts of the vehicle one lent body draws, in the supervision block.
+    ///
+    /// The block follows the render set's last entry when simulation_state carries
+    /// SupervisionCarried, inside the render set block's size, little-endian and unpadded:
+    ///
+    ///   uint32 size              bytes after this field, to the end of the supervision block
+    ///   uint16 n, then n bytes   the plan every row is bound from, UTF-8
+    ///   uint32 vocabulary_version
+    ///   uint16 n, then n bytes   the vocabulary digest, UTF-8
+    ///   uint32 count             rows that follow, one per body whose vehicle is annotated or nominal
+    ///   count rows, each:
+    ///     uint32 actor_id         a body the render set names lent
+    ///     uint8  state            a SupervisionEntryState
+    ///     uint16 count            annotations that follow
+    ///     count annotations, each:
+    ///       uint16 n, then n bytes  the pattern instance, UTF-8
+    ///       uint16 n, then n bytes  the phase of its interval in force, UTF-8
+    ///       uint16 n, then n bytes  the role the vehicle plays in it, UTF-8
+    ///       uint16 count, then count labels, each a uint16 n and n bytes of UTF-8
+    ///   uint32 count             absences that follow, each:
+    ///     uint16 n, then n bytes  the pattern instance, UTF-8
+    ///     uint16 n, then n bytes  the phase of its interval, UTF-8
+    ///     uint16 count, then count labels, each a uint16 n and n bytes of UTF-8
+    ///     uint16 count, then count areas, each a uint16 n and n bytes of UTF-8
+    ///
+    /// The supervision in force is held on the server, so every client of the world reads the same
+    /// truth paired to the same frame. A lent body with no row draws a vehicle the author asserts
+    /// nothing of -- unlabelled, which costs no bytes -- and an actor the render set does not name lent
+    /// is no subject of the plan at all. An absence has no body and is held for the world as a whole.
+    enum class SupervisionEntryState : uint8_t {
+      /// Executing the named pattern over the interval in force.
+      Annotated = 1u,
+      /// Executing no target pattern: an authored negative.
+      Nominal   = 2u
     };
 
 #pragma pack(push, 1)
@@ -119,7 +165,7 @@ namespace s11n {
     }
 
     /// Where the first actor starts: straight after the header, or after the render set block
-    /// where the snapshot carries one.
+    /// where the snapshot carries one, the supervision block inside it included.
     static size_t ActorsOffset(const RawData &message) {
       if (message.size() < header_offset + sizeof(uint32_t)) {
         return header_offset;

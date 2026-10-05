@@ -2,6 +2,7 @@ using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
 using CarlaNet.Types.Rpc.Lighting;
+using CarlaNet.Types.Supervision;
 
 using ActorId = uint;
 
@@ -11,10 +12,11 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is twenty operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is twenty-one operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the render set named to the server, the
-/// draw distance set on the bodies, the read-back, the tick, the settings restoration, the sun's
+/// supervision put to it, the draw distance set on the bodies, the read-back, the tick, the settings
+/// restoration, the sun's
 /// binding and audit, and the cameras an optional render set follows -- with no server,
 /// no engine and no render. What it
 /// cannot establish is what a body looks like once the pose is applied, which is the one thing only
@@ -50,6 +52,11 @@ internal class RecordedWorld : ICarlaWorld
     private readonly HashSet<ActorId> _namedParked = [];
     private readonly Dictionary<ulong, PublishedRenderSet> _published = [];
     private readonly List<(IReadOnlyList<LentBody> Lent, IReadOnlyList<ActorId> Parked, long AtTick)> _renderSetWrites = [];
+    private readonly Dictionary<ActorId, SupervisionInForce> _supervisionHeld = [];
+    private readonly List<AbsenceInForce> _absencesHeld = [];
+    private readonly Dictionary<ulong, PublishedSupervision> _publishedSupervision = [];
+    private readonly List<(SupervisionChange Change, long AtTick)> _supervisionWrites = [];
+    private SupervisionPlanIdentity? _planHeld;
     private readonly List<(IReadOnlyList<ActorId> Bodies, double Metres, long AtTick)> _drawDistanceWrites = [];
     private readonly Dictionary<ActorId, double> _drawDistances = [];
     private readonly Dictionary<ActorId, CameraOptics> _cameras = [];
@@ -224,6 +231,32 @@ internal class RecordedWorld : ICarlaWorld
     /// <summary>Bodies the world holds named lent or parked right now.</summary>
     public int NamedBodies => _namedLent.Count + _namedParked.Count;
 
+    /// <summary>
+    /// Set to have the world refuse every change to the supervision with this message, as a server built
+    /// before it carried supervision does: it has no such call.
+    /// </summary>
+    public string? RefusesSupervision { get; set; }
+
+    /// <summary>
+    /// Every change to the supervision put to the world, copied as it arrived, with the tick the world was
+    /// on -- the session's index of the tick it was put for.
+    /// </summary>
+    public IReadOnlyList<(SupervisionChange Change, long AtTick)> SupervisionWrites => _supervisionWrites;
+
+    /// <summary>
+    /// The supervision the world-observer snapshot of a frame carried, as the server publishes it: the
+    /// plan, every lent body whose vehicle is annotated or nominal, and the absences, as they stood when
+    /// the frame was produced. Null for a frame the world did not produce, or one produced while no plan
+    /// was held.
+    /// </summary>
+    public PublishedSupervision? PublishedSupervisionOf(ulong frame) => _publishedSupervision.GetValueOrDefault(frame);
+
+    /// <summary>The plan the world holds supervision under right now, or null where it holds none.</summary>
+    public SupervisionPlanIdentity? SupervisionPlanHeld => _planHeld;
+
+    /// <summary>Bodies the world holds a supervision row for right now.</summary>
+    public int SupervisedBodies => _supervisionHeld.Count;
+
     /// <inheritdoc/>
     public LoadedWorld DescribeLoadedWorld()
     {
@@ -361,9 +394,11 @@ internal class RecordedWorld : ICarlaWorld
                     _lamps.Remove(destroy.Actor);
                     _velocities.Remove(destroy.Actor);
                     _simulating.Remove(destroy.Actor);
-                    // The naming is held on the actor's own record, so it ends with the actor.
+                    // The naming is held on the actor's own record, so it ends with the actor, and so is
+                    // its supervision.
                     _namedLent.Remove(destroy.Actor);
                     _namedParked.Remove(destroy.Actor);
+                    _supervisionHeld.Remove(destroy.Actor);
                     _drawDistances.Remove(destroy.Actor);
                     responses.Add(CommandResponse.Success(destroy.Actor));
                     break;
@@ -403,6 +438,8 @@ internal class RecordedWorld : ICarlaWorld
 
             _namedLent.Remove(actor);
             _namedParked.Add(actor);
+            // A body given back loses the supervision of the vehicle it drew.
+            _supervisionHeld.Remove(actor);
             found++;
         }
 
@@ -414,15 +451,117 @@ internal class RecordedWorld : ICarlaWorld
                 continue;
             }
 
-            ulong admitted = _namedLent.TryGetValue(body.Actor, out var held) && held.VehicleId == body.VehicleId
-                ? held.AdmittedFrame
-                : next;
+            bool sameVehicle = _namedLent.TryGetValue(body.Actor, out var held) && held.VehicleId == body.VehicleId;
+            ulong admitted = sameVehicle ? held.AdmittedFrame : next;
+            if (!sameVehicle)
+            {
+                // Handed to another vehicle: what was asserted of the last one is not about this one.
+                _supervisionHeld.Remove(body.Actor);
+            }
+
             _namedParked.Remove(body.Actor);
             _namedLent[body.Actor] = (body.VehicleId, body.VehicleTypeId, admitted);
             found++;
         }
 
         return new RenderSetWrite(found, null);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Held as the server holds it: under one plan, which a change naming another must start afresh;
+    /// each body's supervision on its own record and only while the body is named lent, so a body the
+    /// world does not have, or holds parked, is not given one; absences for the world, opened and closed
+    /// by instance; and a change naming no plan withdrawing everything. A change the server would refuse
+    /// is refused here too, with its words.
+    /// </remarks>
+    public SupervisionWrite WriteSupervision(SupervisionChange change)
+    {
+        Connected(nameof(WriteSupervision));
+        // A copy, because the session reuses its lists from one change to the next.
+        _supervisionWrites.Add((change with
+        {
+            Bodies = [.. change.Bodies],
+            AbsencesOpened = [.. change.AbsencesOpened],
+            AbsencesClosed = [.. change.AbsencesClosed],
+        }, Ticks));
+        if (RefusesSupervision is { } refusal)
+        {
+            return new SupervisionWrite(0, refusal);
+        }
+
+        if (change.Bodies.Select(body => body.Supervision.Problem()).FirstOrDefault(problem => problem is not null)
+            is { } problem)
+        {
+            return new SupervisionWrite(0, $"update_supervision: {problem}");
+        }
+
+        if (change.Plan is not { } plan)
+        {
+            if (change.Bodies.Count > 0 || change.AbsencesOpened.Count > 0 || change.AbsencesClosed.Count > 0)
+            {
+                return new SupervisionWrite(
+                    0, "update_supervision: a change naming no plan withdraws all supervision and carries nothing else");
+            }
+
+            _planHeld = null;
+            _supervisionHeld.Clear();
+            _absencesHeld.Clear();
+            return new SupervisionWrite(0, null);
+        }
+
+        if (_planHeld is not null && !_planHeld.Equals(plan) && !change.Fresh)
+        {
+            return new SupervisionWrite(
+                0, $"update_supervision: plan {_planHeld.PlanId} is in force, and a change naming plan {plan.PlanId} starts afresh");
+        }
+
+        if (change.Fresh || _planHeld is null)
+        {
+            _supervisionHeld.Clear();
+            _absencesHeld.Clear();
+        }
+
+        _planHeld = plan;
+        int applied = 0;
+        foreach (BodySupervision body in change.Bodies)
+        {
+            if (!_actors.ContainsKey(body.Actor) || !_namedLent.ContainsKey(body.Actor))
+            {
+                continue;
+            }
+
+            if (body.Supervision.State == SupervisionState.Unlabelled)
+            {
+                _supervisionHeld.Remove(body.Actor);
+            }
+            else
+            {
+                _supervisionHeld[body.Actor] = body.Supervision;
+            }
+
+            applied++;
+        }
+
+        foreach (string closed in change.AbsencesClosed)
+        {
+            _absencesHeld.RemoveAll(absence => absence.InstanceId == closed);
+        }
+
+        foreach (AbsenceInForce opened in change.AbsencesOpened)
+        {
+            int held = _absencesHeld.FindIndex(absence => absence.InstanceId == opened.InstanceId);
+            if (held < 0)
+            {
+                _absencesHeld.Add(opened);
+            }
+            else
+            {
+                _absencesHeld[held] = opened;
+            }
+        }
+
+        return new SupervisionWrite(applied, null);
     }
 
     /// <inheritdoc/>
@@ -544,6 +683,16 @@ internal class RecordedWorld : ICarlaWorld
                     _namedLent.ToDictionary(pair => pair.Key, pair => pair.Value),
                     new HashSet<ActorId>(_namedParked));
             }
+
+            // And the supervision held, while a plan is: only lent bodies carry a row.
+            if (_planHeld is { } plan)
+            {
+                _publishedSupervision[(ulong)Ticks] = new PublishedSupervision(
+                    plan,
+                    _supervisionHeld.Where(pair => _namedLent.ContainsKey(pair.Key))
+                        .ToDictionary(pair => pair.Key, pair => pair.Value),
+                    [.. _absencesHeld]);
+            }
         }
 
         return ProducesFrames ? (ulong)Ticks : null;
@@ -624,3 +773,15 @@ internal class RecordedWorld : ICarlaWorld
 internal sealed record PublishedRenderSet(
     IReadOnlyDictionary<ActorId, (string VehicleId, string VehicleTypeId, ulong AdmittedFrame)> Lent,
     IReadOnlySet<ActorId> Parked);
+
+/// <summary>
+/// The supervision one frame's world-observer snapshot carried, as <see cref="RecordedWorld"/>
+/// publishes it.
+/// </summary>
+/// <param name="Plan">The plan held.</param>
+/// <param name="ByActor">Every lent body whose vehicle was annotated or nominal, with its supervision.</param>
+/// <param name="Absences">The absences in force, in the order they opened.</param>
+internal sealed record PublishedSupervision(
+    SupervisionPlanIdentity Plan,
+    IReadOnlyDictionary<ActorId, SupervisionInForce> ByActor,
+    IReadOnlyList<AbsenceInForce> Absences);
