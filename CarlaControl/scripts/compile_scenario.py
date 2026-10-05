@@ -50,6 +50,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
                         help="compile when that SUMO is not the release that converted the world; "
                              "the lock records the acceptance")
+    parser.add_argument("--skip-dry-run", action="store_true",
+                        help="skip the SUMO-only run that refuses a planned vehicle SUMO never "
+                             "inserts (check 59), for quick iteration on a draft; the lock records "
+                             "that it was skipped")
     parser.add_argument("--write-checks", type=Path, metavar="PATH",
                         help="write checks.json, generated from the compiler's check catalogue")
     parser.add_argument("--write-schema", type=Path, metavar="PATH",
@@ -77,7 +81,8 @@ def main() -> int:
         return 2
     installation = SumoInstallation.locate(args.sumo_home)
     if args.sweep is not None:
-        index = ScenarioSweep(installation, args.allow_sumo_version_mismatch).compile(
+        index = ScenarioSweep(installation, args.allow_sumo_version_mismatch,
+                              args.skip_dry_run).compile(
             args.sweep, args.out_dir)
         for finding in index["findings"]:
             (logging.error if finding["outcome"] == "refuse" else logging.warning)(
@@ -86,7 +91,8 @@ def main() -> int:
         logging.info("%d members; index %s; %s", len(index["members"]), index["path"],
                      index["outcome"])
         return 1 if index["outcome"] == "refused" else 0
-    result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch).compile(
+    result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch,
+                              args.skip_dry_run).compile(
         args.specification, args.out_dir)
     for finding in result.findings.findings:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)

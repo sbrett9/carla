@@ -140,6 +140,10 @@ Remedies:
 ## Supervision
 
 
+## Dry run (check 59)
+
+SUMO 1.27.0 alone over 2220 s: 775 vehicles loaded, 775 inserted, 0 discarded after waiting max-depart-delay, 0 still waiting at the end; 0 collisions, 0 teleports, 0 emergency stops, 1 emergency braking. 0 of the 0 vehicles the plan names entered; of the others, 0 were discarded and 0 were still waiting at the end.
+
 ## Traffic
 
 SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into the configuration rather than left to SUMO's default:

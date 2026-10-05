@@ -643,6 +643,17 @@
       ],
       "status": "compiler",
       "prevents": "A flow that never fires"
+    },
+    {
+      "id": 59,
+      "group": "dry_run",
+      "title": "Every vehicle the supervision plan names enters a SUMO-only run of the compiled scenario: none is discarded after waiting max-depart-delay at its entrance, and none is still waiting when the run ends",
+      "against": "a SUMO-only run of the compiled configuration over its whole span",
+      "outcomes": [
+        "refuse"
+      ],
+      "status": "compiler",
+      "prevents": "A planned subject a drive never draws -- an interval with no vehicle -- found after a capture was spent"
     }
   ]
 }

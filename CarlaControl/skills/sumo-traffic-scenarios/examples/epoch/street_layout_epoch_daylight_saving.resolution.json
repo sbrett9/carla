@@ -410,6 +410,30 @@
     ],
     "series": []
   },
+  "dry_run": {
+    "ran": true,
+    "sumo_release": "1.27.0",
+    "begin_s": 0.0,
+    "end_s": 7200.0,
+    "vehicles": {
+      "loaded": 401,
+      "inserted": 401,
+      "discarded": 0,
+      "waiting_at_end": 0
+    },
+    "planned_vehicles": {
+      "total": 0,
+      "inserted": 0
+    },
+    "collisions": 0,
+    "teleports": 0,
+    "emergency_stops": 0,
+    "emergency_braking": 0,
+    "other_vehicles_discarded": 0,
+    "other_vehicles_waiting_at_end": 0,
+    "planned": [],
+    "collision_list": []
+  },
   "lock": {
     "lock_version": 1,
     "scenario_id": "street_layout_epoch_daylight_saving",
@@ -513,6 +537,23 @@
         "release_agreement": "SameRelease",
         "mismatch_accepted": false
       }
+    },
+    "dry_run": {
+      "ran": true,
+      "sumo_release": "1.27.0",
+      "begin_s": 0.0,
+      "end_s": 7200.0,
+      "vehicles": {
+        "loaded": 401,
+        "inserted": 401,
+        "discarded": 0,
+        "waiting_at_end": 0
+      },
+      "planned_vehicles": {
+        "total": 0,
+        "inserted": 0
+      },
+      "collisions": 0
     },
     "epoch": {
       "calendar_advances": true,
