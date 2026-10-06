@@ -99,13 +99,13 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "declared role; an annotation carries a label; the declarations resolve inside "
                   "the published vocabulary", "the vocabulary block", _R, COMPILER,
                   "A label spelled three ways in one corpus, or one no consumer can read"),
-    ScenarioCheck(45, "annotation", "Every label's applies_to includes the subject kind, and its "
-                  "realisation the instance's realisation", "the vocabulary block", _R, COMPILER,
-                  "A per-member term on a flow, or an absence term on a vehicle"),
+    ScenarioCheck(45, "annotation", "Every label's applies_to includes the subject kind: a vehicle, "
+                  "or every vehicle of a flow", "the vocabulary block", _R, COMPILER,
+                  "A per-member term on a flow, or a whole-flow term on one vehicle"),
     ScenarioCheck(46, "annotation", "Every namespace in a label, role, phase or area kind was "
                   "declared or imported", "the vocabulary block", _R, COMPILER,
                   "A term no published vocabulary defines"),
-    ScenarioCheck(56, "annotation", "Every parameter an instance, absence, series or cohort carries "
+    ScenarioCheck(56, "annotation", "Every parameter an instance, series or cohort carries "
                   "is declared by one of its labels' terms and is of the declared type; labels "
                   "declaring one key agree on its type and unit", "the vocabulary block", _R,
                   COMPILER, "A magnitude no consumer can read: a key nobody defined, or a value "
@@ -113,8 +113,10 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(57, "annotation", "A nominal subject's hard_negative_for is the set its labels' "
                   "terms declare, and no other subject declares one", "the vocabulary block", _R,
                   COMPILER, "A matched negative the record and its term disagree about"),
-    ScenarioCheck(19, "annotation", "Every participant names a declared actor",
-                  "the specification", _R, COMPILER, "An instance whose participant never exists"),
+    ScenarioCheck(19, "annotation", "Every participant names a declared actor, and every instance "
+                  "has a participant",
+                  "the specification", _R, COMPILER, "An instance whose participant never exists, or "
+                  "a label with no vehicle to follow"),
     ScenarioCheck(20, "annotation", "Every aoi_ref names an area in the world's area table",
                   "areas.resolved.json", _R, COMPILER, "An annotation naming a place only its author "
                   "can see"),
@@ -134,8 +136,8 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "A phase asserted over a generator whose members are unknown until the run"),
     ScenarioCheck(49, "annotation", "No cohort is nominal", "06 D6.2", _R, COMPILER,
                   "A negative asserted of vehicles nobody authored one by one"),
-    ScenarioCheck(50, "annotation", "A one-participant instance names its participant subject; "
-                  "the phase vacancy is never authored", "06 §3.7 reserved words", _R, COMPILER,
+    ScenarioCheck(50, "annotation", "A one-participant instance names its participant subject",
+                  "06 §3.7 reserved words", _R, COMPILER,
                   "A consumer guessing which track an instance is about"),
     ScenarioCheck(24, "annotation", "Some subject is nominal when any is annotated",
                   "the specification", _W, COMPILER, "A corpus with no hard negatives"),
@@ -166,7 +168,8 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "A clock-shaped literal that is really an offset"),
     ScenarioCheck(48, "epoch_and_illumination", "Every rota expands to entries, and every skip "
                   "matches an entry it would have produced", "the rota", _R, COMPILER,
-                  "An absence that was never planted"),
+                  "A skip that removes nothing, so the schedule runs complete where its author meant "
+                  "a gap"),
     ScenarioCheck(37, "epoch_and_illumination", "Every resolved instant lies in [0, end]",
                   "the resolved instants", _R, COMPILER,
                   "An instant that silently falls outside the run"),
@@ -183,9 +186,10 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(40, "epoch_and_illumination", "The declared offset is within an hour of the zone "
                   "the world's georeference configures", "solar.json engine_time_zone_hours", _W,
                   COMPILER, "A declared offset that is not this place's"),
-    ScenarioCheck(42, "epoch_and_illumination", "A window whose sun is below -6 degrees is named as "
-                  "not corpus-eligible", "11 D11.7", _W, COMPILER,
-                  "A night window captured by accident"),
+    ScenarioCheck(42, "epoch_and_illumination", "Every window's lowest sun elevation and its band are "
+                  "stated in the resolution report; a fact with no pass mark, never a finding",
+                  "the declared sun, through WindowSun", (), COMPILER,
+                  "A window authored without its author knowing what light it is under"),
     ScenarioCheck(41, "epoch_and_illumination", "The illumination-label association over the "
                   "declared windows", "the resolved instants, the supervision plan and the sun",
                   _W, COMPILER, "Discovering after training that the light carried the label"),

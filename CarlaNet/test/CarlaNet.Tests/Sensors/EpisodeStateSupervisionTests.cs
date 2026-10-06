@@ -6,7 +6,8 @@
 // server, as the owner ruled on 2026-10-05, so no two clients of one world ever hold different truth.
 // The session puts it in force as it changes, and the server writes what it holds on every snapshot,
 // after the render set's entries and inside the render set block, so a reader that knows only the render
-// set skips it unread.
+// set skips it unread. Every row is a vehicle's: the block holds nothing for the world apart from the
+// plan (06 §3.5, the owner's ruling of 2026-10-05).
 using System.Buffers.Binary;
 using System.Text;
 using CarlaNet.Sensors;
@@ -29,17 +30,13 @@ public class EpisodeStateSupervisionTests
     /// One body's supervision row, as the server writes it.
     internal sealed record Row(uint Actor, byte State, params Annotation[] Annotations);
 
-    /// One absence in force, as the server writes it.
-    internal sealed record Absence(string Instance, string Phase, string[] Labels, string[] Areas);
-
     internal const string PlanId = "Shahid_Bahonar_Port_PatternOfLife";
-    internal const uint VocabularyVersion = 2;
+    internal const uint VocabularyVersion = 3;
     internal const string VocabularyDigest = "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad";
 
     /// The supervision block as the server writes it: its size, the plan, the vocabulary version and
-    /// digest, the rows, then the absences, little-endian and unpadded.
-    internal static byte[] SupervisionBlock(IReadOnlyList<Row> rows, IReadOnlyList<Absence> absences,
-                                       string plan = PlanId)
+    /// digest, then the rows, little-endian and unpadded.
+    internal static byte[] SupervisionBlock(IReadOnlyList<Row> rows, string plan = PlanId)
     {
         var body = new List<byte>();
         body.AddRange(Name(plan));
@@ -58,15 +55,6 @@ public class EpisodeStateSupervisionTests
                 body.AddRange(Name(annotation.Role));
                 body.AddRange(Names(annotation.Labels));
             }
-        }
-
-        body.AddRange(LittleEndian((uint)absences.Count));
-        foreach (Absence absence in absences)
-        {
-            body.AddRange(Name(absence.Instance));
-            body.AddRange(Name(absence.Phase));
-            body.AddRange(Names(absence.Labels));
-            body.AddRange(Names(absence.Areas));
         }
 
         return [.. LittleEndian((uint)body.Count), .. body];
@@ -129,12 +117,8 @@ public class EpisodeStateSupervisionTests
         new Annotation("Shahid_Bahonar_Port_PatternOfLife/pi_tower_posting_d4_h15_t3", "dwell", "bahonar:guard",
                        "bahonar:tower_posting"));
 
-    private static readonly Absence Unmanned = new(
-        "Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned", "vacancy",
-        ["bahonar:post_unmanned"], ["tower_03"]);
-
     private static byte[] Drive(params Row[] rows) => SupervisedSnapshot(
-        RenderSetWithSupervision([Escort, Guard, Ambient, Parked], SupervisionBlock(rows, [Unmanned])),
+        RenderSetWithSupervision([Escort, Guard, Ambient, Parked], SupervisionBlock(rows)),
         21, 22, 23, 24);
 
     [Fact]
@@ -165,7 +149,7 @@ public class EpisodeStateSupervisionTests
         Assert.Equal(4, data.Header.RenderSet.Count);
 
         ObservedSupervision supervision = data.Header.Supervision;
-        Assert.Equal(new SupervisionPlanIdentity(PlanId, 2, VocabularyDigest), supervision.Plan);
+        Assert.Equal(new SupervisionPlanIdentity(PlanId, 3, VocabularyDigest), supervision.Plan);
         Assert.Equal(2, supervision.ByActor.Count);
 
         SupervisionInForce escort = supervision.Of(21)!;
@@ -179,9 +163,6 @@ public class EpisodeStateSupervisionTests
         SupervisionInForce guard = supervision.Of(22)!;
         Assert.Equal(SupervisionState.Nominal, guard.State);
         Assert.Equal(["bahonar:tower_posting"], Assert.Single(guard.Annotations).Labels);
-
-        AbsenceInForce absence = Assert.Single(supervision.Absences);
-        Assert.Equal(new AbsenceInForce(Unmanned.Instance, Unmanned.Labels, Unmanned.Areas, "vacancy"), absence);
     }
 
     [Fact]
@@ -220,9 +201,9 @@ public class EpisodeStateSupervisionTests
     [Fact]
     public void A_World_Supervised_Before_A_Body_Is_Lent_Carries_A_Render_Set_With_No_Entries()
     {
-        // The plan is bound and an absence is open before SUMO has inserted anything: the render set
-        // block is written with no entries, and every render set reader reads it as no set at all.
-        byte[] payload = SupervisedSnapshot(RenderSetWithSupervision([], SupervisionBlock([], [Unmanned])), 5);
+        // The plan is bound before SUMO has inserted anything: the render set block is written with no
+        // entries, and every render set reader reads it as no set at all.
+        byte[] payload = SupervisedSnapshot(RenderSetWithSupervision([], SupervisionBlock([])), 5);
 
         ObservedRenderSet renderSet = EpisodeStateLayout.ReadRenderSet(payload);
         Assert.True(renderSet.IsEmpty);
@@ -232,7 +213,6 @@ public class EpisodeStateSupervisionTests
         ObservedSupervision supervision = EpisodeStateLayout.ReadSupervision(payload);
         Assert.True(supervision.IsCarried);
         Assert.Empty(supervision.ByActor);
-        Assert.Equal(Unmanned.Instance, Assert.Single(supervision.Absences).InstanceId);
         Assert.Equal([5u], EpisodeStateSensorData.Deserialize(payload).Actors.Select(actor => actor.Id));
 
         // And a reader that knows only the render set finds the actor, and names no body.
@@ -248,7 +228,7 @@ public class EpisodeStateSupervisionTests
         // with none lent, so the population adds the render set's entries and nothing to the supervision.
         Entry[] fleet = [.. Enumerable.Range(0, 300)
             .Select(index => new Entry((uint)(100 + index), ObservedBodyState.Lent, 7, $"parked_{index:000}", "car"))];
-        byte[] none = SupervisionBlock([], [Unmanned]);
+        byte[] none = SupervisionBlock([]);
         byte[] payload = SupervisedSnapshot(RenderSetWithSupervision(fleet, none), [.. fleet.Select(entry => entry.Actor)]);
 
         int renderSetEntries = Block(fleet).Length - 4;
@@ -263,7 +243,7 @@ public class EpisodeStateSupervisionTests
 
         // One annotated vehicle costs its row and nothing else: its actor, state and annotation count,
         // then each field of its one annotation behind its 16-bit length or count.
-        byte[] one = SupervisionBlock([EscortRow with { Actor = 100 }], [Unmanned]);
+        byte[] one = SupervisionBlock([EscortRow with { Actor = 100 }]);
         Annotation lead = EscortRow.Annotations[0];
         int row = 4 + 1 + 2
                   + 2 + lead.Instance.Length
@@ -302,7 +282,7 @@ public class EpisodeStateSupervisionTests
     {
         // The supervision says it holds two rows and carries one: the render set block's size is honest
         // about the bytes it has, so the actors are found after it, but no row is read as missing.
-        byte[] supervision = SupervisionBlock([EscortRow], [Unmanned]);
+        byte[] supervision = SupervisionBlock([EscortRow]);
         int rowCountAt = 4 + 2 + PlanId.Length + 4 + 2 + VocabularyDigest.Length;
         BinaryPrimitives.WriteUInt32LittleEndian(supervision.AsSpan(rowCountAt), 2u);
         byte[] payload = SupervisedSnapshot(RenderSetWithSupervision([Escort], supervision), 21, 22);
@@ -322,7 +302,7 @@ public class EpisodeStateSupervisionTests
     public void A_Row_In_A_State_This_Reader_Does_Not_Know_Is_Refused_Rather_Than_Read_As_Unlabelled()
     {
         byte[] payload = SupervisedSnapshot(
-            RenderSetWithSupervision([Escort], SupervisionBlock([EscortRow with { State = 3 }], [])), 21);
+            RenderSetWithSupervision([Escort], SupervisionBlock([EscortRow with { State = 3 }])), 21);
 
         Assert.Throws<InvalidDataException>(() => EpisodeStateLayout.ReadSupervision(payload));
     }

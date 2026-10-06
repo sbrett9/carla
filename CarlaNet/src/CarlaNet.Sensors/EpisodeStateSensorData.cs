@@ -31,9 +31,9 @@ public enum SimulationState : byte
     /// flag above, it says where the actors start.
     RenderSetCarried = 0x10,
     /// A supervision block follows the render set's entries, inside the render set block: the plan a
-    /// co-simulation session has bound, what the author asserts of the vehicle each lent body draws,
-    /// and the absences in force. Set only on a snapshot that carries one, and always with the flag
-    /// above, whose block size counts it.
+    /// co-simulation session has bound, and what the author asserts of the vehicle each lent body
+    /// draws. Set only on a snapshot that carries one, and always with the flag above, whose block
+    /// size counts it.
     SupervisionCarried = 0x20
 }
 
@@ -57,9 +57,9 @@ public sealed class EpisodeStateHeader
     /// snapshot carried none.
     public ObservedRenderSet RenderSet { get; init; } = ObservedRenderSet.None;
 
-    /// The supervision the snapshot carried: the plan in force, what the author asserts of the vehicle
-    /// each lent body drew, and the absences in force for the world. ObservedSupervision.None where the
-    /// snapshot carried none, and ObservedSupervision.Unreadable where its block could not be read.
+    /// The supervision the snapshot carried: the plan in force, and what the author asserts of the
+    /// vehicle each lent body drew. ObservedSupervision.None where the snapshot carried none, and
+    /// ObservedSupervision.Unreadable where its block could not be read.
     public ObservedSupervision Supervision { get; init; } = ObservedSupervision.None;
 }
 

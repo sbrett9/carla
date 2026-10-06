@@ -2535,7 +2535,7 @@ supervision, its pattern instances, participants, phases and interval bounds. **
 definition and version a reader cannot locate is an opaque string rather than a label**, and
 withholding the vocabulary would hand a trainer supervision they cannot read while withholding nothing
 they could not have inferred from it. It passes §9.3's test on its face: it says what
-`bahonar:post_unmanned` *means*, never which vehicle carries it, so it holds no row keyed by an actor,
+`bahonar:tower_posting` *means*, never which vehicle carries it, so it holds no row keyed by an actor,
 an entity or an instance.
 
 **Two optional term fields are the exception, and the export step resolves them out.**

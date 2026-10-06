@@ -20,7 +20,7 @@
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
-      "sha256": "dea811c20fd2b2e6965d0eb55d98c23f8132a7423a1f1fb749aa1780c75e2458"
+      "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
     },
     "additional": {
       "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -28,7 +28,7 @@
     },
     "supervision": {
       "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-      "sha256": "82482b0ed312e9d85f81bae8a7be2ea10f9ff255c4f2348b3c5942a1f9023555"
+      "sha256": "e55b9d5d3eb64e8caa121a3784b62e1845c9c96c2e0590069466795025096628"
     }
   },
   "world": {
@@ -88,9 +88,9 @@
     "content_build_id": "carla-0.10.0-windows"
   },
   "vocabulary": {
-    "core_version": 2,
+    "core_version": 3,
     "namespaces": [],
-    "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
+    "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63"
   },
   "traffic": {
     "sumo_seed": 42,

@@ -16,9 +16,9 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
     `<camera name>_<capture time>.xml`, and those written before cameras were named are
     `SCTMV_<capture time>.xml`, so a directory may hold both; and
   * where the run had a supervision plan, every SUMO vehicle record carries a `<_supervision>` in
-    one of the three states, consistent with what it names, every sidecar naming the plan carries the
-    world's element, a sidecar whose supervision was unknown says so and is counted, and a run with no
-    plan expects none; and
+    one of the three states, consistent with what it names, no `<_supervision>` stands outside a
+    vehicle's record (a label with no vehicle; 06 §3.5), a sidecar whose supervision was unknown says
+    so and is counted, and a run with no plan expects none; and
   * every vehicle record says where its box fell against the picture (`in_frame`) and, where its
     occlusion fields are absent, why (`occlusion_unmeasured`): a record saying neither, occlusion
     fields on a vehicle the picture has no view of, a reason beside a measurement, and a place or a
@@ -203,10 +203,12 @@ def test_sidecars_named_after_their_camera_and_those_from_before_cameras_had_nam
 
 
 # A supervised drive's sidecars, as `CotWriter` writes them from the supervision the server carried on
-# the frame (06 §8.2): the plan on the container, the world's absences, every SUMO vehicle's state.
+# the frame (06 §8.2): the plan on the container, every SUMO vehicle's state. STRAY is the world-scoped
+# element a recorder wrote before the owner's ruling of 2026-10-05 (06 §3.5): a label with no vehicle,
+# which the audit faults.
 PLAN = "Shahid_Bahonar_Port_PatternOfLife"
 DIGEST = "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad"
-WORLD = (f'  <_supervision scope="world" vocabulary="2" vocabulary_digest="{DIGEST}">\n'
+STRAY = (f'  <_supervision scope="world" vocabulary="3" vocabulary_digest="{DIGEST}">\n'
          f'    <absence instance="{PLAN}/pi_tower_relief_d4_h7_t3_unmanned" '
          'labels="bahonar:post_unmanned" areas="tower_03" phase="vacancy" />\n'
          '  </_supervision>\n')
@@ -218,22 +220,22 @@ def supervised_vehicle(uid: str, actor: int, sumo_id: str, state: str | None,
     record = vehicle(uid, actor, ROAD, 9.0, sumo_id)
     if state is None:
         return record
-    element = (f'      <_supervision state="{state}" vocabulary="2" vocabulary_digest="{DIGEST}"'
+    element = (f'      <_supervision state="{state}" vocabulary="3" vocabulary_digest="{DIGEST}"'
                + (" />\n" if not instances else ">\n" + "".join(
                    f'        <annotation instance="{PLAN}/{name}" labels="bahonar:term" />\n'
                    for name in instances) + "      </_supervision>\n"))
     return record.replace("    </detail>\n", element + "    </detail>\n")
 
 
-def supervised_sidecar(directory: Path, tick: int, events: list[str], world: bool = True,
+def supervised_sidecar(directory: Path, tick: int, events: list[str], stray: bool = False,
                        unknown: bool = False) -> None:
     attributes = (' supervision="unknown"' if unknown
-                  else f' plan_id="{PLAN}" vocabulary="2" vocabulary_digest="{DIGEST}"')
+                  else f' plan_id="{PLAN}" vocabulary="3" vocabulary_digest="{DIGEST}"')
     (directory / f"SUPERVISED_{tick}.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<events captured="t" count="{len(events)}" source="truth" tick="{tick}" '
         f'sim_time_s="{tick * 0.05:.3f}" vehicles="rendered"{attributes}>\n'
-        + (WORLD if world and not unknown else "") + SENSOR + "".join(events) + "</events>\n",
+        + (STRAY if stray and not unknown else "") + SENSOR + "".join(events) + "</events>\n",
         encoding="utf-8")
 
 
@@ -285,17 +287,19 @@ def test_a_state_outside_the_three_and_states_contradicting_their_annotations_ar
     assert any("unlabelled vehicle record(s) name an instance" in defect for defect in defects)
 
 
-def test_a_supervised_sidecar_with_no_world_element_and_one_saying_nothing_are_defects(tmp_path):
+def test_a_supervision_element_outside_a_vehicle_record_and_a_sidecar_saying_nothing_are_defects(tmp_path):
+    # A sidecar written before the ruling of 2026-10-05, carrying a world-scoped element: a label with
+    # no vehicle to follow, which no recorder writes now and the audit faults.
     supervised_sidecar(tmp_path, 100, [supervised_vehicle("CARLA-TRUTH-SUMO-a", 1, "a", "unlabelled")],
-                       world=False)
+                       stray=True)
     # A sidecar of the same run that names no plan and does not say its supervision was unknown.
     sidecar(tmp_path, 110, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a")], vehicles="rendered")
 
     result = audit(tmp_path)
 
-    assert result.sidecars_with_plan_without_world == ["SUPERVISED_100.xml"]
+    assert result.sidecars_with_world_supervision == ["SUPERVISED_100.xml"]
     assert result.sidecars_saying_nothing_of_supervision == ["SCTMV_110.xml"]
-    assert any("no world-scoped <_supervision>" in defect for defect in result.defects())
+    assert any("outside any vehicle record" in defect for defect in result.defects())
     assert any("neither name it nor say" in defect for defect in result.defects())
 
 

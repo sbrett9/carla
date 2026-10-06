@@ -2280,8 +2280,7 @@ class World:
 
         Where a SUMO drive's supervision plan is in force, each capture carries the supervision the
         server held on its own frame -- nothing is passed for it, and a recorder in any process writes
-        the same: `plan_id`, `vocabulary` and `vocabulary_digest` on the sidecar's container, a
-        world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on
+        the same: `plan_id`, `vocabulary` and `vocabulary_digest` on the sidecar's container, and on
         every drawn SUMO vehicle a `<_supervision state="annotated|nominal|unlabelled">` with an
         `<annotation>` (instance, labels, phase, role) per pattern instance in force. A capture whose
         own frame the client no longer held, or whose supervision it could not read, says

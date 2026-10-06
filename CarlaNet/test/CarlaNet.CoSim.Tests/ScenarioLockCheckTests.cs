@@ -164,8 +164,8 @@ public sealed class ScenarioLockCheckTests
         Assert.Equal(4, plan.Entities.Length);
         Assert.Contains("configuration, route file, network, supervision plan and catalogue agree with it; so does "
                         + "the epoch", check.ToString());
-        Assert.StartsWith("RightAngleTurn: 1 instance (0 annotated, 1 nominal, 0 absent), 0 series of 0 slots "
-                          + "(0 unrealised), 0 cohorts (0 annotated), 4 entities; vocabulary core 2, no author "
+        Assert.StartsWith("RightAngleTurn: 1 instance (0 annotated, 1 nominal), 0 series of 0 slots, "
+                          + "0 cohorts (0 annotated), 4 entities; vocabulary core 3, no author "
                           + "namespace, digest ", check.PlanText);
         Assert.EndsWith("; compiled against the files the run loads", check.PlanText);
     }
@@ -589,9 +589,9 @@ public sealed class ScenarioLockCheckTests
         Assert.True(check.EpochCompared);
         Assert.Contains("supervision plan and catalogue agree with it; so does the epoch", check.ToString());
         Assert.Equal(Path.ChangeExtension(Path.GetFullPath(scenario), ".supervision.json"), check.Plan!.Path);
-        Assert.Equal(27, check.Plan.Instances.Length);
+        Assert.Equal(26, check.Plan.Instances.Length);
         Assert.Equal(check.Lock!.VocabularyDigest, check.Plan.Vocabulary.Digest);
-        Assert.StartsWith("Shahid_Bahonar_Port_PatternOfLife: 27 instances (5 annotated, 21 nominal, 1 absent)",
+        Assert.StartsWith("Shahid_Bahonar_Port_PatternOfLife: 26 instances (5 annotated, 21 nominal), 1 series of 335 slots",
                           check.PlanText);
 
         // Every planned vehicle entered its compile's SUMO-only run, over the whole week.

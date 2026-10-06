@@ -173,7 +173,7 @@ public sealed class FrameRecorder : IDisposable
 
     /// <summary>
     /// Captures written with the supervision in force on their own frame, as the server carried it on
-    /// that frame's snapshot: the plan, the absences, and every drawn SUMO vehicle's state. Zero where no
+    /// that frame's snapshot: the plan and every drawn SUMO vehicle's state. Zero where no
     /// plan was in force, which a capture of such a frame says nothing about.
     /// </summary>
     public long SupervisionPaired => Interlocked.Read(ref _supervisionPaired);

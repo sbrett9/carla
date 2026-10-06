@@ -7,11 +7,11 @@
   "network_digest": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
   "config_digest": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f",
   "additional_digest": null,
-  "vocabulary_version": 2,
-  "vocabulary_digest": "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad",
+  "vocabulary_version": 3,
+  "vocabulary_digest": "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7",
   "vocabulary": {
     "core": {
-      "vocabulary_version": 2,
+      "vocabulary_version": 3,
       "source": "06_Truth_And_Annotation.md §3.7",
       "terms": {
         "supervision_state": [
@@ -21,12 +21,7 @@
         ],
         "subject_kind": [
           "entity",
-          "cohort",
-          "slot"
-        ],
-        "realisation": [
-          "present",
-          "absent"
+          "cohort"
         ],
         "interval_onset": [
           "declared",
@@ -38,19 +33,10 @@
           "entity_arrived",
           "sumo_removed",
           "never_inserted",
-          "slot_unrealised",
           "physical_predicate_never_held",
           "render_released",
           "capture_window_end",
           "scenario_end"
-        ],
-        "observability_outcome": [
-          "observed",
-          "out_of_frame",
-          "occluded",
-          "not_rendered",
-          "site_unobserved",
-          "beyond_draw_distance"
         ],
         "illumination_band": [
           "day",
@@ -66,9 +52,6 @@
         ],
         "reserved_role": [
           "subject"
-        ],
-        "reserved_phase": [
-          "vacancy"
         ],
         "interval_anchor": [
           "depart",
@@ -99,43 +82,11 @@
         "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
         "terms": [
           {
-            "term": "bahonar:expected_arrival_absent",
-            "since": 1,
-            "status": "active",
-            "applies_to": [
-              "slot"
-            ],
-            "realisation": [
-              "absent"
-            ],
-            "definition": "A recurring series enumerated an occasion and no vehicle realised it. The signal is the vacancy; the realised siblings of the same series are its evidence."
-          },
-          {
-            "term": "bahonar:post_unmanned",
-            "since": 1,
-            "status": "active",
-            "broader": "bahonar:expected_arrival_absent",
-            "applies_to": [
-              "slot"
-            ],
-            "realisation": [
-              "absent"
-            ],
-            "definition": "A guard tower that should have been manned at a shift change stands unmanned for the whole shift, while the other fifteen towers are relieved as usual.",
-            "counterfactual": {
-              "kind": "series",
-              "ref": "tower_relief"
-            }
-          },
-          {
             "term": "bahonar:coordinated_group_transit",
             "since": 1,
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "Several vehicles depart together and travel as one group in tight formation: a dense military escort around a shipment.",
             "parameters": {
@@ -161,9 +112,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A vehicle travels to a place the routine traffic of its kind never goes: an air-freight shipment taken to the drydock rather than to the port."
           },
           {
@@ -172,9 +120,6 @@
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "A vehicle approaches a controlled access point from the public side, halts short of it for several minutes, and departs without transiting.",
             "parameters": {
@@ -199,9 +144,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "During the pre-dawn dead hours one vehicle slowly follows the fence line past the guard posts without stopping at any of them.",
             "parameters": {
               "speed_factor": {
@@ -221,9 +163,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its dwell is still open when the scenario ends."
           },
           {
@@ -232,9 +171,6 @@
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
             "hard_negative_for": [
@@ -249,9 +185,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
             "hard_negative_for": [
               "bahonar:coordinated_group_transit",
@@ -264,9 +197,6 @@
             "status": "active",
             "applies_to": [
               "cohort"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "Port-cleared traffic that transits a checkpoint and enters: every member of a ferry sailing's pulse, for its whole life."
           }
@@ -306,7 +236,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "bahonar:coordinated_group_transit",
         "bahonar:destination_off_pattern"
@@ -320,8 +249,6 @@
         "kind": "term",
         "ref": "bahonar:routine_freight_haul"
       },
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [
         "drydock"
       ],
@@ -433,7 +360,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "bahonar:standoff_dwell_at_access_point"
       ],
@@ -442,8 +368,6 @@
       },
       "hard_negative_for": null,
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [
         "port_gate"
       ],
@@ -481,7 +405,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "bahonar:standoff_dwell_at_access_point"
       ],
@@ -490,8 +413,6 @@
       },
       "hard_negative_for": null,
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [
         "port_gate"
       ],
@@ -529,7 +450,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "bahonar:perimeter_transit_off_cadence"
       ],
@@ -539,8 +459,6 @@
       },
       "hard_negative_for": null,
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -570,15 +488,12 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "bahonar:arrival_without_departure"
       ],
       "parameters": {},
       "hard_negative_for": null,
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [
         "ferry_terminal"
       ],
@@ -616,7 +531,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d0_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -626,8 +540,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -641,7 +553,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d0_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -651,8 +562,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -666,7 +575,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d0_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -676,8 +584,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -691,7 +597,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d1_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -701,8 +606,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -716,7 +619,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d1_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -726,8 +628,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -741,7 +641,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d1_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -751,8 +650,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -766,7 +663,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d2_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -776,8 +672,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -791,7 +685,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d2_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -801,8 +694,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -816,7 +707,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d2_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -826,8 +716,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -841,7 +729,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d3_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -851,8 +738,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -866,7 +751,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d3_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -876,8 +760,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -891,7 +773,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d3_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -901,8 +782,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -916,7 +795,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d4_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -926,8 +804,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -941,7 +817,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d4_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -951,8 +826,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -966,7 +839,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d4_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -976,8 +848,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -991,7 +861,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d5_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -1001,8 +870,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -1016,7 +883,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d5_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -1026,8 +892,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -1041,7 +905,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d5_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -1051,8 +914,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -1066,7 +927,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d6_0",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -1076,8 +936,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -1091,7 +949,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d6_1",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -1101,8 +958,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -1116,7 +971,6 @@
     {
       "instance_id": "Shahid_Bahonar_Port_PatternOfLife/haul_d6_2",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "bahonar:routine_freight_haul"
       ],
@@ -1126,8 +980,6 @@
         "bahonar:destination_off_pattern"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -1137,57 +989,6 @@
         }
       ],
       "intervals": []
-    },
-    {
-      "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned",
-      "supervision": "annotated",
-      "realisation": "absent",
-      "labels": [
-        "bahonar:post_unmanned"
-      ],
-      "parameters": {},
-      "hard_negative_for": null,
-      "counterfactual": {
-        "kind": "series",
-        "ref": "tower_relief"
-      },
-      "series_ref": "tower_relief",
-      "slot_ref": "guard_d4_h7_t3",
-      "aoi_refs": [
-        "tower_03"
-      ],
-      "participants": [],
-      "expected": {
-        "role": "bahonar:guard",
-        "expected_entity_id": "guard_d4_h7_t3",
-        "route": {
-          "from": "26413425#5",
-          "to": "26413425#5",
-          "via": [
-            "26413459"
-          ]
-        },
-        "site_lane": "26413459_0",
-        "site_pos_m": 58.9,
-        "declared_start_s": 345600.0,
-        "declared_end_s": 374400.0
-      },
-      "intervals": [
-        {
-          "entity_id": null,
-          "phase": "vacancy",
-          "anchor": null,
-          "declared_start_s": 345600.0,
-          "declared_start_civil": "2026-10-03T07:00:00+03:30",
-          "declared_end_s": 374400.0,
-          "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "declared_duration_s": 28800.0
-        }
-      ],
-      "counter_evidence": {
-        "series_slots_total": 336,
-        "series_slots_realised": 335
-      }
     }
   ],
   "series": [
@@ -1213,8 +1014,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t0",
-          "realised_by": "guard_d0_h7_t0"
+          "entity_id": "guard_d0_h7_t0"
         },
         {
           "slot_key": "guard_d0_h7_t1",
@@ -1223,8 +1023,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t1",
-          "realised_by": "guard_d0_h7_t1"
+          "entity_id": "guard_d0_h7_t1"
         },
         {
           "slot_key": "guard_d0_h7_t10",
@@ -1233,8 +1032,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t10",
-          "realised_by": "guard_d0_h7_t10"
+          "entity_id": "guard_d0_h7_t10"
         },
         {
           "slot_key": "guard_d0_h7_t11",
@@ -1243,8 +1041,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t11",
-          "realised_by": "guard_d0_h7_t11"
+          "entity_id": "guard_d0_h7_t11"
         },
         {
           "slot_key": "guard_d0_h7_t12",
@@ -1253,8 +1050,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t12",
-          "realised_by": "guard_d0_h7_t12"
+          "entity_id": "guard_d0_h7_t12"
         },
         {
           "slot_key": "guard_d0_h7_t13",
@@ -1263,8 +1059,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t13",
-          "realised_by": "guard_d0_h7_t13"
+          "entity_id": "guard_d0_h7_t13"
         },
         {
           "slot_key": "guard_d0_h7_t14",
@@ -1273,8 +1068,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t14",
-          "realised_by": "guard_d0_h7_t14"
+          "entity_id": "guard_d0_h7_t14"
         },
         {
           "slot_key": "guard_d0_h7_t15",
@@ -1283,8 +1077,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t15",
-          "realised_by": "guard_d0_h7_t15"
+          "entity_id": "guard_d0_h7_t15"
         },
         {
           "slot_key": "guard_d0_h7_t2",
@@ -1293,8 +1086,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t2",
-          "realised_by": "guard_d0_h7_t2"
+          "entity_id": "guard_d0_h7_t2"
         },
         {
           "slot_key": "guard_d0_h7_t3",
@@ -1303,8 +1095,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t3",
-          "realised_by": "guard_d0_h7_t3"
+          "entity_id": "guard_d0_h7_t3"
         },
         {
           "slot_key": "guard_d0_h7_t4",
@@ -1313,8 +1104,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t4",
-          "realised_by": "guard_d0_h7_t4"
+          "entity_id": "guard_d0_h7_t4"
         },
         {
           "slot_key": "guard_d0_h7_t5",
@@ -1323,8 +1113,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t5",
-          "realised_by": "guard_d0_h7_t5"
+          "entity_id": "guard_d0_h7_t5"
         },
         {
           "slot_key": "guard_d0_h7_t6",
@@ -1333,8 +1122,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t6",
-          "realised_by": "guard_d0_h7_t6"
+          "entity_id": "guard_d0_h7_t6"
         },
         {
           "slot_key": "guard_d0_h7_t7",
@@ -1343,8 +1131,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t7",
-          "realised_by": "guard_d0_h7_t7"
+          "entity_id": "guard_d0_h7_t7"
         },
         {
           "slot_key": "guard_d0_h7_t8",
@@ -1353,8 +1140,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t8",
-          "realised_by": "guard_d0_h7_t8"
+          "entity_id": "guard_d0_h7_t8"
         },
         {
           "slot_key": "guard_d0_h7_t9",
@@ -1363,8 +1149,7 @@
           "declared_start_civil": "2026-09-29T07:00:00+03:30",
           "declared_end_s": 28800.0,
           "declared_end_civil": "2026-09-29T15:00:00+03:30",
-          "expected_entity_id": "guard_d0_h7_t9",
-          "realised_by": "guard_d0_h7_t9"
+          "entity_id": "guard_d0_h7_t9"
         },
         {
           "slot_key": "guard_d0_h15_t0",
@@ -1373,8 +1158,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t0",
-          "realised_by": "guard_d0_h15_t0"
+          "entity_id": "guard_d0_h15_t0"
         },
         {
           "slot_key": "guard_d0_h15_t1",
@@ -1383,8 +1167,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t1",
-          "realised_by": "guard_d0_h15_t1"
+          "entity_id": "guard_d0_h15_t1"
         },
         {
           "slot_key": "guard_d0_h15_t10",
@@ -1393,8 +1176,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t10",
-          "realised_by": "guard_d0_h15_t10"
+          "entity_id": "guard_d0_h15_t10"
         },
         {
           "slot_key": "guard_d0_h15_t11",
@@ -1403,8 +1185,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t11",
-          "realised_by": "guard_d0_h15_t11"
+          "entity_id": "guard_d0_h15_t11"
         },
         {
           "slot_key": "guard_d0_h15_t12",
@@ -1413,8 +1194,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t12",
-          "realised_by": "guard_d0_h15_t12"
+          "entity_id": "guard_d0_h15_t12"
         },
         {
           "slot_key": "guard_d0_h15_t13",
@@ -1423,8 +1203,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t13",
-          "realised_by": "guard_d0_h15_t13"
+          "entity_id": "guard_d0_h15_t13"
         },
         {
           "slot_key": "guard_d0_h15_t14",
@@ -1433,8 +1212,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t14",
-          "realised_by": "guard_d0_h15_t14"
+          "entity_id": "guard_d0_h15_t14"
         },
         {
           "slot_key": "guard_d0_h15_t15",
@@ -1443,8 +1221,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t15",
-          "realised_by": "guard_d0_h15_t15"
+          "entity_id": "guard_d0_h15_t15"
         },
         {
           "slot_key": "guard_d0_h15_t2",
@@ -1453,8 +1230,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t2",
-          "realised_by": "guard_d0_h15_t2"
+          "entity_id": "guard_d0_h15_t2"
         },
         {
           "slot_key": "guard_d0_h15_t3",
@@ -1463,8 +1239,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t3",
-          "realised_by": "guard_d0_h15_t3"
+          "entity_id": "guard_d0_h15_t3"
         },
         {
           "slot_key": "guard_d0_h15_t4",
@@ -1473,8 +1248,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t4",
-          "realised_by": "guard_d0_h15_t4"
+          "entity_id": "guard_d0_h15_t4"
         },
         {
           "slot_key": "guard_d0_h15_t5",
@@ -1483,8 +1257,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t5",
-          "realised_by": "guard_d0_h15_t5"
+          "entity_id": "guard_d0_h15_t5"
         },
         {
           "slot_key": "guard_d0_h15_t6",
@@ -1493,8 +1266,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t6",
-          "realised_by": "guard_d0_h15_t6"
+          "entity_id": "guard_d0_h15_t6"
         },
         {
           "slot_key": "guard_d0_h15_t7",
@@ -1503,8 +1275,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t7",
-          "realised_by": "guard_d0_h15_t7"
+          "entity_id": "guard_d0_h15_t7"
         },
         {
           "slot_key": "guard_d0_h15_t8",
@@ -1513,8 +1284,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t8",
-          "realised_by": "guard_d0_h15_t8"
+          "entity_id": "guard_d0_h15_t8"
         },
         {
           "slot_key": "guard_d0_h15_t9",
@@ -1523,8 +1293,7 @@
           "declared_start_civil": "2026-09-29T15:00:00+03:30",
           "declared_end_s": 57600.0,
           "declared_end_civil": "2026-09-29T23:00:00+03:30",
-          "expected_entity_id": "guard_d0_h15_t9",
-          "realised_by": "guard_d0_h15_t9"
+          "entity_id": "guard_d0_h15_t9"
         },
         {
           "slot_key": "guard_d0_h23_t0",
@@ -1533,8 +1302,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t0",
-          "realised_by": "guard_d0_h23_t0"
+          "entity_id": "guard_d0_h23_t0"
         },
         {
           "slot_key": "guard_d0_h23_t1",
@@ -1543,8 +1311,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t1",
-          "realised_by": "guard_d0_h23_t1"
+          "entity_id": "guard_d0_h23_t1"
         },
         {
           "slot_key": "guard_d0_h23_t10",
@@ -1553,8 +1320,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t10",
-          "realised_by": "guard_d0_h23_t10"
+          "entity_id": "guard_d0_h23_t10"
         },
         {
           "slot_key": "guard_d0_h23_t11",
@@ -1563,8 +1329,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t11",
-          "realised_by": "guard_d0_h23_t11"
+          "entity_id": "guard_d0_h23_t11"
         },
         {
           "slot_key": "guard_d0_h23_t12",
@@ -1573,8 +1338,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t12",
-          "realised_by": "guard_d0_h23_t12"
+          "entity_id": "guard_d0_h23_t12"
         },
         {
           "slot_key": "guard_d0_h23_t13",
@@ -1583,8 +1347,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t13",
-          "realised_by": "guard_d0_h23_t13"
+          "entity_id": "guard_d0_h23_t13"
         },
         {
           "slot_key": "guard_d0_h23_t14",
@@ -1593,8 +1356,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t14",
-          "realised_by": "guard_d0_h23_t14"
+          "entity_id": "guard_d0_h23_t14"
         },
         {
           "slot_key": "guard_d0_h23_t15",
@@ -1603,8 +1365,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t15",
-          "realised_by": "guard_d0_h23_t15"
+          "entity_id": "guard_d0_h23_t15"
         },
         {
           "slot_key": "guard_d0_h23_t2",
@@ -1613,8 +1374,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t2",
-          "realised_by": "guard_d0_h23_t2"
+          "entity_id": "guard_d0_h23_t2"
         },
         {
           "slot_key": "guard_d0_h23_t3",
@@ -1623,8 +1383,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t3",
-          "realised_by": "guard_d0_h23_t3"
+          "entity_id": "guard_d0_h23_t3"
         },
         {
           "slot_key": "guard_d0_h23_t4",
@@ -1633,8 +1392,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t4",
-          "realised_by": "guard_d0_h23_t4"
+          "entity_id": "guard_d0_h23_t4"
         },
         {
           "slot_key": "guard_d0_h23_t5",
@@ -1643,8 +1401,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t5",
-          "realised_by": "guard_d0_h23_t5"
+          "entity_id": "guard_d0_h23_t5"
         },
         {
           "slot_key": "guard_d0_h23_t6",
@@ -1653,8 +1410,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t6",
-          "realised_by": "guard_d0_h23_t6"
+          "entity_id": "guard_d0_h23_t6"
         },
         {
           "slot_key": "guard_d0_h23_t7",
@@ -1663,8 +1419,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t7",
-          "realised_by": "guard_d0_h23_t7"
+          "entity_id": "guard_d0_h23_t7"
         },
         {
           "slot_key": "guard_d0_h23_t8",
@@ -1673,8 +1428,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t8",
-          "realised_by": "guard_d0_h23_t8"
+          "entity_id": "guard_d0_h23_t8"
         },
         {
           "slot_key": "guard_d0_h23_t9",
@@ -1683,8 +1437,7 @@
           "declared_start_civil": "2026-09-29T23:00:00+03:30",
           "declared_end_s": 86400.0,
           "declared_end_civil": "2026-09-30T07:00:00+03:30",
-          "expected_entity_id": "guard_d0_h23_t9",
-          "realised_by": "guard_d0_h23_t9"
+          "entity_id": "guard_d0_h23_t9"
         },
         {
           "slot_key": "guard_d1_h7_t0",
@@ -1693,8 +1446,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t0",
-          "realised_by": "guard_d1_h7_t0"
+          "entity_id": "guard_d1_h7_t0"
         },
         {
           "slot_key": "guard_d1_h7_t1",
@@ -1703,8 +1455,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t1",
-          "realised_by": "guard_d1_h7_t1"
+          "entity_id": "guard_d1_h7_t1"
         },
         {
           "slot_key": "guard_d1_h7_t10",
@@ -1713,8 +1464,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t10",
-          "realised_by": "guard_d1_h7_t10"
+          "entity_id": "guard_d1_h7_t10"
         },
         {
           "slot_key": "guard_d1_h7_t11",
@@ -1723,8 +1473,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t11",
-          "realised_by": "guard_d1_h7_t11"
+          "entity_id": "guard_d1_h7_t11"
         },
         {
           "slot_key": "guard_d1_h7_t12",
@@ -1733,8 +1482,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t12",
-          "realised_by": "guard_d1_h7_t12"
+          "entity_id": "guard_d1_h7_t12"
         },
         {
           "slot_key": "guard_d1_h7_t13",
@@ -1743,8 +1491,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t13",
-          "realised_by": "guard_d1_h7_t13"
+          "entity_id": "guard_d1_h7_t13"
         },
         {
           "slot_key": "guard_d1_h7_t14",
@@ -1753,8 +1500,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t14",
-          "realised_by": "guard_d1_h7_t14"
+          "entity_id": "guard_d1_h7_t14"
         },
         {
           "slot_key": "guard_d1_h7_t15",
@@ -1763,8 +1509,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t15",
-          "realised_by": "guard_d1_h7_t15"
+          "entity_id": "guard_d1_h7_t15"
         },
         {
           "slot_key": "guard_d1_h7_t2",
@@ -1773,8 +1518,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t2",
-          "realised_by": "guard_d1_h7_t2"
+          "entity_id": "guard_d1_h7_t2"
         },
         {
           "slot_key": "guard_d1_h7_t3",
@@ -1783,8 +1527,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t3",
-          "realised_by": "guard_d1_h7_t3"
+          "entity_id": "guard_d1_h7_t3"
         },
         {
           "slot_key": "guard_d1_h7_t4",
@@ -1793,8 +1536,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t4",
-          "realised_by": "guard_d1_h7_t4"
+          "entity_id": "guard_d1_h7_t4"
         },
         {
           "slot_key": "guard_d1_h7_t5",
@@ -1803,8 +1545,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t5",
-          "realised_by": "guard_d1_h7_t5"
+          "entity_id": "guard_d1_h7_t5"
         },
         {
           "slot_key": "guard_d1_h7_t6",
@@ -1813,8 +1554,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t6",
-          "realised_by": "guard_d1_h7_t6"
+          "entity_id": "guard_d1_h7_t6"
         },
         {
           "slot_key": "guard_d1_h7_t7",
@@ -1823,8 +1563,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t7",
-          "realised_by": "guard_d1_h7_t7"
+          "entity_id": "guard_d1_h7_t7"
         },
         {
           "slot_key": "guard_d1_h7_t8",
@@ -1833,8 +1572,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t8",
-          "realised_by": "guard_d1_h7_t8"
+          "entity_id": "guard_d1_h7_t8"
         },
         {
           "slot_key": "guard_d1_h7_t9",
@@ -1843,8 +1581,7 @@
           "declared_start_civil": "2026-09-30T07:00:00+03:30",
           "declared_end_s": 115200.0,
           "declared_end_civil": "2026-09-30T15:00:00+03:30",
-          "expected_entity_id": "guard_d1_h7_t9",
-          "realised_by": "guard_d1_h7_t9"
+          "entity_id": "guard_d1_h7_t9"
         },
         {
           "slot_key": "guard_d1_h15_t0",
@@ -1853,8 +1590,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t0",
-          "realised_by": "guard_d1_h15_t0"
+          "entity_id": "guard_d1_h15_t0"
         },
         {
           "slot_key": "guard_d1_h15_t1",
@@ -1863,8 +1599,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t1",
-          "realised_by": "guard_d1_h15_t1"
+          "entity_id": "guard_d1_h15_t1"
         },
         {
           "slot_key": "guard_d1_h15_t10",
@@ -1873,8 +1608,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t10",
-          "realised_by": "guard_d1_h15_t10"
+          "entity_id": "guard_d1_h15_t10"
         },
         {
           "slot_key": "guard_d1_h15_t11",
@@ -1883,8 +1617,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t11",
-          "realised_by": "guard_d1_h15_t11"
+          "entity_id": "guard_d1_h15_t11"
         },
         {
           "slot_key": "guard_d1_h15_t12",
@@ -1893,8 +1626,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t12",
-          "realised_by": "guard_d1_h15_t12"
+          "entity_id": "guard_d1_h15_t12"
         },
         {
           "slot_key": "guard_d1_h15_t13",
@@ -1903,8 +1635,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t13",
-          "realised_by": "guard_d1_h15_t13"
+          "entity_id": "guard_d1_h15_t13"
         },
         {
           "slot_key": "guard_d1_h15_t14",
@@ -1913,8 +1644,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t14",
-          "realised_by": "guard_d1_h15_t14"
+          "entity_id": "guard_d1_h15_t14"
         },
         {
           "slot_key": "guard_d1_h15_t15",
@@ -1923,8 +1653,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t15",
-          "realised_by": "guard_d1_h15_t15"
+          "entity_id": "guard_d1_h15_t15"
         },
         {
           "slot_key": "guard_d1_h15_t2",
@@ -1933,8 +1662,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t2",
-          "realised_by": "guard_d1_h15_t2"
+          "entity_id": "guard_d1_h15_t2"
         },
         {
           "slot_key": "guard_d1_h15_t3",
@@ -1943,8 +1671,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t3",
-          "realised_by": "guard_d1_h15_t3"
+          "entity_id": "guard_d1_h15_t3"
         },
         {
           "slot_key": "guard_d1_h15_t4",
@@ -1953,8 +1680,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t4",
-          "realised_by": "guard_d1_h15_t4"
+          "entity_id": "guard_d1_h15_t4"
         },
         {
           "slot_key": "guard_d1_h15_t5",
@@ -1963,8 +1689,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t5",
-          "realised_by": "guard_d1_h15_t5"
+          "entity_id": "guard_d1_h15_t5"
         },
         {
           "slot_key": "guard_d1_h15_t6",
@@ -1973,8 +1698,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t6",
-          "realised_by": "guard_d1_h15_t6"
+          "entity_id": "guard_d1_h15_t6"
         },
         {
           "slot_key": "guard_d1_h15_t7",
@@ -1983,8 +1707,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t7",
-          "realised_by": "guard_d1_h15_t7"
+          "entity_id": "guard_d1_h15_t7"
         },
         {
           "slot_key": "guard_d1_h15_t8",
@@ -1993,8 +1716,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t8",
-          "realised_by": "guard_d1_h15_t8"
+          "entity_id": "guard_d1_h15_t8"
         },
         {
           "slot_key": "guard_d1_h15_t9",
@@ -2003,8 +1725,7 @@
           "declared_start_civil": "2026-09-30T15:00:00+03:30",
           "declared_end_s": 144000.0,
           "declared_end_civil": "2026-09-30T23:00:00+03:30",
-          "expected_entity_id": "guard_d1_h15_t9",
-          "realised_by": "guard_d1_h15_t9"
+          "entity_id": "guard_d1_h15_t9"
         },
         {
           "slot_key": "guard_d1_h23_t0",
@@ -2013,8 +1734,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t0",
-          "realised_by": "guard_d1_h23_t0"
+          "entity_id": "guard_d1_h23_t0"
         },
         {
           "slot_key": "guard_d1_h23_t1",
@@ -2023,8 +1743,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t1",
-          "realised_by": "guard_d1_h23_t1"
+          "entity_id": "guard_d1_h23_t1"
         },
         {
           "slot_key": "guard_d1_h23_t10",
@@ -2033,8 +1752,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t10",
-          "realised_by": "guard_d1_h23_t10"
+          "entity_id": "guard_d1_h23_t10"
         },
         {
           "slot_key": "guard_d1_h23_t11",
@@ -2043,8 +1761,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t11",
-          "realised_by": "guard_d1_h23_t11"
+          "entity_id": "guard_d1_h23_t11"
         },
         {
           "slot_key": "guard_d1_h23_t12",
@@ -2053,8 +1770,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t12",
-          "realised_by": "guard_d1_h23_t12"
+          "entity_id": "guard_d1_h23_t12"
         },
         {
           "slot_key": "guard_d1_h23_t13",
@@ -2063,8 +1779,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t13",
-          "realised_by": "guard_d1_h23_t13"
+          "entity_id": "guard_d1_h23_t13"
         },
         {
           "slot_key": "guard_d1_h23_t14",
@@ -2073,8 +1788,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t14",
-          "realised_by": "guard_d1_h23_t14"
+          "entity_id": "guard_d1_h23_t14"
         },
         {
           "slot_key": "guard_d1_h23_t15",
@@ -2083,8 +1797,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t15",
-          "realised_by": "guard_d1_h23_t15"
+          "entity_id": "guard_d1_h23_t15"
         },
         {
           "slot_key": "guard_d1_h23_t2",
@@ -2093,8 +1806,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t2",
-          "realised_by": "guard_d1_h23_t2"
+          "entity_id": "guard_d1_h23_t2"
         },
         {
           "slot_key": "guard_d1_h23_t3",
@@ -2103,8 +1815,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t3",
-          "realised_by": "guard_d1_h23_t3"
+          "entity_id": "guard_d1_h23_t3"
         },
         {
           "slot_key": "guard_d1_h23_t4",
@@ -2113,8 +1824,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t4",
-          "realised_by": "guard_d1_h23_t4"
+          "entity_id": "guard_d1_h23_t4"
         },
         {
           "slot_key": "guard_d1_h23_t5",
@@ -2123,8 +1833,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t5",
-          "realised_by": "guard_d1_h23_t5"
+          "entity_id": "guard_d1_h23_t5"
         },
         {
           "slot_key": "guard_d1_h23_t6",
@@ -2133,8 +1842,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t6",
-          "realised_by": "guard_d1_h23_t6"
+          "entity_id": "guard_d1_h23_t6"
         },
         {
           "slot_key": "guard_d1_h23_t7",
@@ -2143,8 +1851,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t7",
-          "realised_by": "guard_d1_h23_t7"
+          "entity_id": "guard_d1_h23_t7"
         },
         {
           "slot_key": "guard_d1_h23_t8",
@@ -2153,8 +1860,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t8",
-          "realised_by": "guard_d1_h23_t8"
+          "entity_id": "guard_d1_h23_t8"
         },
         {
           "slot_key": "guard_d1_h23_t9",
@@ -2163,8 +1869,7 @@
           "declared_start_civil": "2026-09-30T23:00:00+03:30",
           "declared_end_s": 172800.0,
           "declared_end_civil": "2026-10-01T07:00:00+03:30",
-          "expected_entity_id": "guard_d1_h23_t9",
-          "realised_by": "guard_d1_h23_t9"
+          "entity_id": "guard_d1_h23_t9"
         },
         {
           "slot_key": "guard_d2_h7_t0",
@@ -2173,8 +1878,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t0",
-          "realised_by": "guard_d2_h7_t0"
+          "entity_id": "guard_d2_h7_t0"
         },
         {
           "slot_key": "guard_d2_h7_t1",
@@ -2183,8 +1887,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t1",
-          "realised_by": "guard_d2_h7_t1"
+          "entity_id": "guard_d2_h7_t1"
         },
         {
           "slot_key": "guard_d2_h7_t10",
@@ -2193,8 +1896,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t10",
-          "realised_by": "guard_d2_h7_t10"
+          "entity_id": "guard_d2_h7_t10"
         },
         {
           "slot_key": "guard_d2_h7_t11",
@@ -2203,8 +1905,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t11",
-          "realised_by": "guard_d2_h7_t11"
+          "entity_id": "guard_d2_h7_t11"
         },
         {
           "slot_key": "guard_d2_h7_t12",
@@ -2213,8 +1914,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t12",
-          "realised_by": "guard_d2_h7_t12"
+          "entity_id": "guard_d2_h7_t12"
         },
         {
           "slot_key": "guard_d2_h7_t13",
@@ -2223,8 +1923,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t13",
-          "realised_by": "guard_d2_h7_t13"
+          "entity_id": "guard_d2_h7_t13"
         },
         {
           "slot_key": "guard_d2_h7_t14",
@@ -2233,8 +1932,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t14",
-          "realised_by": "guard_d2_h7_t14"
+          "entity_id": "guard_d2_h7_t14"
         },
         {
           "slot_key": "guard_d2_h7_t15",
@@ -2243,8 +1941,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t15",
-          "realised_by": "guard_d2_h7_t15"
+          "entity_id": "guard_d2_h7_t15"
         },
         {
           "slot_key": "guard_d2_h7_t2",
@@ -2253,8 +1950,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t2",
-          "realised_by": "guard_d2_h7_t2"
+          "entity_id": "guard_d2_h7_t2"
         },
         {
           "slot_key": "guard_d2_h7_t3",
@@ -2263,8 +1959,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t3",
-          "realised_by": "guard_d2_h7_t3"
+          "entity_id": "guard_d2_h7_t3"
         },
         {
           "slot_key": "guard_d2_h7_t4",
@@ -2273,8 +1968,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t4",
-          "realised_by": "guard_d2_h7_t4"
+          "entity_id": "guard_d2_h7_t4"
         },
         {
           "slot_key": "guard_d2_h7_t5",
@@ -2283,8 +1977,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t5",
-          "realised_by": "guard_d2_h7_t5"
+          "entity_id": "guard_d2_h7_t5"
         },
         {
           "slot_key": "guard_d2_h7_t6",
@@ -2293,8 +1986,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t6",
-          "realised_by": "guard_d2_h7_t6"
+          "entity_id": "guard_d2_h7_t6"
         },
         {
           "slot_key": "guard_d2_h7_t7",
@@ -2303,8 +1995,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t7",
-          "realised_by": "guard_d2_h7_t7"
+          "entity_id": "guard_d2_h7_t7"
         },
         {
           "slot_key": "guard_d2_h7_t8",
@@ -2313,8 +2004,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t8",
-          "realised_by": "guard_d2_h7_t8"
+          "entity_id": "guard_d2_h7_t8"
         },
         {
           "slot_key": "guard_d2_h7_t9",
@@ -2323,8 +2013,7 @@
           "declared_start_civil": "2026-10-01T07:00:00+03:30",
           "declared_end_s": 201600.0,
           "declared_end_civil": "2026-10-01T15:00:00+03:30",
-          "expected_entity_id": "guard_d2_h7_t9",
-          "realised_by": "guard_d2_h7_t9"
+          "entity_id": "guard_d2_h7_t9"
         },
         {
           "slot_key": "guard_d2_h15_t0",
@@ -2333,8 +2022,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t0",
-          "realised_by": "guard_d2_h15_t0"
+          "entity_id": "guard_d2_h15_t0"
         },
         {
           "slot_key": "guard_d2_h15_t1",
@@ -2343,8 +2031,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t1",
-          "realised_by": "guard_d2_h15_t1"
+          "entity_id": "guard_d2_h15_t1"
         },
         {
           "slot_key": "guard_d2_h15_t10",
@@ -2353,8 +2040,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t10",
-          "realised_by": "guard_d2_h15_t10"
+          "entity_id": "guard_d2_h15_t10"
         },
         {
           "slot_key": "guard_d2_h15_t11",
@@ -2363,8 +2049,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t11",
-          "realised_by": "guard_d2_h15_t11"
+          "entity_id": "guard_d2_h15_t11"
         },
         {
           "slot_key": "guard_d2_h15_t12",
@@ -2373,8 +2058,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t12",
-          "realised_by": "guard_d2_h15_t12"
+          "entity_id": "guard_d2_h15_t12"
         },
         {
           "slot_key": "guard_d2_h15_t13",
@@ -2383,8 +2067,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t13",
-          "realised_by": "guard_d2_h15_t13"
+          "entity_id": "guard_d2_h15_t13"
         },
         {
           "slot_key": "guard_d2_h15_t14",
@@ -2393,8 +2076,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t14",
-          "realised_by": "guard_d2_h15_t14"
+          "entity_id": "guard_d2_h15_t14"
         },
         {
           "slot_key": "guard_d2_h15_t15",
@@ -2403,8 +2085,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t15",
-          "realised_by": "guard_d2_h15_t15"
+          "entity_id": "guard_d2_h15_t15"
         },
         {
           "slot_key": "guard_d2_h15_t2",
@@ -2413,8 +2094,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t2",
-          "realised_by": "guard_d2_h15_t2"
+          "entity_id": "guard_d2_h15_t2"
         },
         {
           "slot_key": "guard_d2_h15_t3",
@@ -2423,8 +2103,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t3",
-          "realised_by": "guard_d2_h15_t3"
+          "entity_id": "guard_d2_h15_t3"
         },
         {
           "slot_key": "guard_d2_h15_t4",
@@ -2433,8 +2112,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t4",
-          "realised_by": "guard_d2_h15_t4"
+          "entity_id": "guard_d2_h15_t4"
         },
         {
           "slot_key": "guard_d2_h15_t5",
@@ -2443,8 +2121,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t5",
-          "realised_by": "guard_d2_h15_t5"
+          "entity_id": "guard_d2_h15_t5"
         },
         {
           "slot_key": "guard_d2_h15_t6",
@@ -2453,8 +2130,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t6",
-          "realised_by": "guard_d2_h15_t6"
+          "entity_id": "guard_d2_h15_t6"
         },
         {
           "slot_key": "guard_d2_h15_t7",
@@ -2463,8 +2139,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t7",
-          "realised_by": "guard_d2_h15_t7"
+          "entity_id": "guard_d2_h15_t7"
         },
         {
           "slot_key": "guard_d2_h15_t8",
@@ -2473,8 +2148,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t8",
-          "realised_by": "guard_d2_h15_t8"
+          "entity_id": "guard_d2_h15_t8"
         },
         {
           "slot_key": "guard_d2_h15_t9",
@@ -2483,8 +2157,7 @@
           "declared_start_civil": "2026-10-01T15:00:00+03:30",
           "declared_end_s": 230400.0,
           "declared_end_civil": "2026-10-01T23:00:00+03:30",
-          "expected_entity_id": "guard_d2_h15_t9",
-          "realised_by": "guard_d2_h15_t9"
+          "entity_id": "guard_d2_h15_t9"
         },
         {
           "slot_key": "guard_d2_h23_t0",
@@ -2493,8 +2166,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t0",
-          "realised_by": "guard_d2_h23_t0"
+          "entity_id": "guard_d2_h23_t0"
         },
         {
           "slot_key": "guard_d2_h23_t1",
@@ -2503,8 +2175,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t1",
-          "realised_by": "guard_d2_h23_t1"
+          "entity_id": "guard_d2_h23_t1"
         },
         {
           "slot_key": "guard_d2_h23_t10",
@@ -2513,8 +2184,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t10",
-          "realised_by": "guard_d2_h23_t10"
+          "entity_id": "guard_d2_h23_t10"
         },
         {
           "slot_key": "guard_d2_h23_t11",
@@ -2523,8 +2193,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t11",
-          "realised_by": "guard_d2_h23_t11"
+          "entity_id": "guard_d2_h23_t11"
         },
         {
           "slot_key": "guard_d2_h23_t12",
@@ -2533,8 +2202,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t12",
-          "realised_by": "guard_d2_h23_t12"
+          "entity_id": "guard_d2_h23_t12"
         },
         {
           "slot_key": "guard_d2_h23_t13",
@@ -2543,8 +2211,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t13",
-          "realised_by": "guard_d2_h23_t13"
+          "entity_id": "guard_d2_h23_t13"
         },
         {
           "slot_key": "guard_d2_h23_t14",
@@ -2553,8 +2220,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t14",
-          "realised_by": "guard_d2_h23_t14"
+          "entity_id": "guard_d2_h23_t14"
         },
         {
           "slot_key": "guard_d2_h23_t15",
@@ -2563,8 +2229,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t15",
-          "realised_by": "guard_d2_h23_t15"
+          "entity_id": "guard_d2_h23_t15"
         },
         {
           "slot_key": "guard_d2_h23_t2",
@@ -2573,8 +2238,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t2",
-          "realised_by": "guard_d2_h23_t2"
+          "entity_id": "guard_d2_h23_t2"
         },
         {
           "slot_key": "guard_d2_h23_t3",
@@ -2583,8 +2247,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t3",
-          "realised_by": "guard_d2_h23_t3"
+          "entity_id": "guard_d2_h23_t3"
         },
         {
           "slot_key": "guard_d2_h23_t4",
@@ -2593,8 +2256,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t4",
-          "realised_by": "guard_d2_h23_t4"
+          "entity_id": "guard_d2_h23_t4"
         },
         {
           "slot_key": "guard_d2_h23_t5",
@@ -2603,8 +2265,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t5",
-          "realised_by": "guard_d2_h23_t5"
+          "entity_id": "guard_d2_h23_t5"
         },
         {
           "slot_key": "guard_d2_h23_t6",
@@ -2613,8 +2274,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t6",
-          "realised_by": "guard_d2_h23_t6"
+          "entity_id": "guard_d2_h23_t6"
         },
         {
           "slot_key": "guard_d2_h23_t7",
@@ -2623,8 +2283,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t7",
-          "realised_by": "guard_d2_h23_t7"
+          "entity_id": "guard_d2_h23_t7"
         },
         {
           "slot_key": "guard_d2_h23_t8",
@@ -2633,8 +2292,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t8",
-          "realised_by": "guard_d2_h23_t8"
+          "entity_id": "guard_d2_h23_t8"
         },
         {
           "slot_key": "guard_d2_h23_t9",
@@ -2643,8 +2301,7 @@
           "declared_start_civil": "2026-10-01T23:00:00+03:30",
           "declared_end_s": 259200.0,
           "declared_end_civil": "2026-10-02T07:00:00+03:30",
-          "expected_entity_id": "guard_d2_h23_t9",
-          "realised_by": "guard_d2_h23_t9"
+          "entity_id": "guard_d2_h23_t9"
         },
         {
           "slot_key": "guard_d3_h7_t0",
@@ -2653,8 +2310,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t0",
-          "realised_by": "guard_d3_h7_t0"
+          "entity_id": "guard_d3_h7_t0"
         },
         {
           "slot_key": "guard_d3_h7_t1",
@@ -2663,8 +2319,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t1",
-          "realised_by": "guard_d3_h7_t1"
+          "entity_id": "guard_d3_h7_t1"
         },
         {
           "slot_key": "guard_d3_h7_t10",
@@ -2673,8 +2328,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t10",
-          "realised_by": "guard_d3_h7_t10"
+          "entity_id": "guard_d3_h7_t10"
         },
         {
           "slot_key": "guard_d3_h7_t11",
@@ -2683,8 +2337,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t11",
-          "realised_by": "guard_d3_h7_t11"
+          "entity_id": "guard_d3_h7_t11"
         },
         {
           "slot_key": "guard_d3_h7_t12",
@@ -2693,8 +2346,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t12",
-          "realised_by": "guard_d3_h7_t12"
+          "entity_id": "guard_d3_h7_t12"
         },
         {
           "slot_key": "guard_d3_h7_t13",
@@ -2703,8 +2355,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t13",
-          "realised_by": "guard_d3_h7_t13"
+          "entity_id": "guard_d3_h7_t13"
         },
         {
           "slot_key": "guard_d3_h7_t14",
@@ -2713,8 +2364,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t14",
-          "realised_by": "guard_d3_h7_t14"
+          "entity_id": "guard_d3_h7_t14"
         },
         {
           "slot_key": "guard_d3_h7_t15",
@@ -2723,8 +2373,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t15",
-          "realised_by": "guard_d3_h7_t15"
+          "entity_id": "guard_d3_h7_t15"
         },
         {
           "slot_key": "guard_d3_h7_t2",
@@ -2733,8 +2382,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t2",
-          "realised_by": "guard_d3_h7_t2"
+          "entity_id": "guard_d3_h7_t2"
         },
         {
           "slot_key": "guard_d3_h7_t3",
@@ -2743,8 +2391,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t3",
-          "realised_by": "guard_d3_h7_t3"
+          "entity_id": "guard_d3_h7_t3"
         },
         {
           "slot_key": "guard_d3_h7_t4",
@@ -2753,8 +2400,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t4",
-          "realised_by": "guard_d3_h7_t4"
+          "entity_id": "guard_d3_h7_t4"
         },
         {
           "slot_key": "guard_d3_h7_t5",
@@ -2763,8 +2409,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t5",
-          "realised_by": "guard_d3_h7_t5"
+          "entity_id": "guard_d3_h7_t5"
         },
         {
           "slot_key": "guard_d3_h7_t6",
@@ -2773,8 +2418,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t6",
-          "realised_by": "guard_d3_h7_t6"
+          "entity_id": "guard_d3_h7_t6"
         },
         {
           "slot_key": "guard_d3_h7_t7",
@@ -2783,8 +2427,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t7",
-          "realised_by": "guard_d3_h7_t7"
+          "entity_id": "guard_d3_h7_t7"
         },
         {
           "slot_key": "guard_d3_h7_t8",
@@ -2793,8 +2436,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t8",
-          "realised_by": "guard_d3_h7_t8"
+          "entity_id": "guard_d3_h7_t8"
         },
         {
           "slot_key": "guard_d3_h7_t9",
@@ -2803,8 +2445,7 @@
           "declared_start_civil": "2026-10-02T07:00:00+03:30",
           "declared_end_s": 288000.0,
           "declared_end_civil": "2026-10-02T15:00:00+03:30",
-          "expected_entity_id": "guard_d3_h7_t9",
-          "realised_by": "guard_d3_h7_t9"
+          "entity_id": "guard_d3_h7_t9"
         },
         {
           "slot_key": "guard_d3_h15_t0",
@@ -2813,8 +2454,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t0",
-          "realised_by": "guard_d3_h15_t0"
+          "entity_id": "guard_d3_h15_t0"
         },
         {
           "slot_key": "guard_d3_h15_t1",
@@ -2823,8 +2463,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t1",
-          "realised_by": "guard_d3_h15_t1"
+          "entity_id": "guard_d3_h15_t1"
         },
         {
           "slot_key": "guard_d3_h15_t10",
@@ -2833,8 +2472,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t10",
-          "realised_by": "guard_d3_h15_t10"
+          "entity_id": "guard_d3_h15_t10"
         },
         {
           "slot_key": "guard_d3_h15_t11",
@@ -2843,8 +2481,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t11",
-          "realised_by": "guard_d3_h15_t11"
+          "entity_id": "guard_d3_h15_t11"
         },
         {
           "slot_key": "guard_d3_h15_t12",
@@ -2853,8 +2490,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t12",
-          "realised_by": "guard_d3_h15_t12"
+          "entity_id": "guard_d3_h15_t12"
         },
         {
           "slot_key": "guard_d3_h15_t13",
@@ -2863,8 +2499,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t13",
-          "realised_by": "guard_d3_h15_t13"
+          "entity_id": "guard_d3_h15_t13"
         },
         {
           "slot_key": "guard_d3_h15_t14",
@@ -2873,8 +2508,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t14",
-          "realised_by": "guard_d3_h15_t14"
+          "entity_id": "guard_d3_h15_t14"
         },
         {
           "slot_key": "guard_d3_h15_t15",
@@ -2883,8 +2517,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t15",
-          "realised_by": "guard_d3_h15_t15"
+          "entity_id": "guard_d3_h15_t15"
         },
         {
           "slot_key": "guard_d3_h15_t2",
@@ -2893,8 +2526,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t2",
-          "realised_by": "guard_d3_h15_t2"
+          "entity_id": "guard_d3_h15_t2"
         },
         {
           "slot_key": "guard_d3_h15_t3",
@@ -2903,8 +2535,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t3",
-          "realised_by": "guard_d3_h15_t3"
+          "entity_id": "guard_d3_h15_t3"
         },
         {
           "slot_key": "guard_d3_h15_t4",
@@ -2913,8 +2544,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t4",
-          "realised_by": "guard_d3_h15_t4"
+          "entity_id": "guard_d3_h15_t4"
         },
         {
           "slot_key": "guard_d3_h15_t5",
@@ -2923,8 +2553,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t5",
-          "realised_by": "guard_d3_h15_t5"
+          "entity_id": "guard_d3_h15_t5"
         },
         {
           "slot_key": "guard_d3_h15_t6",
@@ -2933,8 +2562,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t6",
-          "realised_by": "guard_d3_h15_t6"
+          "entity_id": "guard_d3_h15_t6"
         },
         {
           "slot_key": "guard_d3_h15_t7",
@@ -2943,8 +2571,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t7",
-          "realised_by": "guard_d3_h15_t7"
+          "entity_id": "guard_d3_h15_t7"
         },
         {
           "slot_key": "guard_d3_h15_t8",
@@ -2953,8 +2580,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t8",
-          "realised_by": "guard_d3_h15_t8"
+          "entity_id": "guard_d3_h15_t8"
         },
         {
           "slot_key": "guard_d3_h15_t9",
@@ -2963,8 +2589,7 @@
           "declared_start_civil": "2026-10-02T15:00:00+03:30",
           "declared_end_s": 316800.0,
           "declared_end_civil": "2026-10-02T23:00:00+03:30",
-          "expected_entity_id": "guard_d3_h15_t9",
-          "realised_by": "guard_d3_h15_t9"
+          "entity_id": "guard_d3_h15_t9"
         },
         {
           "slot_key": "guard_d3_h23_t0",
@@ -2973,8 +2598,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t0",
-          "realised_by": "guard_d3_h23_t0"
+          "entity_id": "guard_d3_h23_t0"
         },
         {
           "slot_key": "guard_d3_h23_t1",
@@ -2983,8 +2607,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t1",
-          "realised_by": "guard_d3_h23_t1"
+          "entity_id": "guard_d3_h23_t1"
         },
         {
           "slot_key": "guard_d3_h23_t10",
@@ -2993,8 +2616,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t10",
-          "realised_by": "guard_d3_h23_t10"
+          "entity_id": "guard_d3_h23_t10"
         },
         {
           "slot_key": "guard_d3_h23_t11",
@@ -3003,8 +2625,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t11",
-          "realised_by": "guard_d3_h23_t11"
+          "entity_id": "guard_d3_h23_t11"
         },
         {
           "slot_key": "guard_d3_h23_t12",
@@ -3013,8 +2634,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t12",
-          "realised_by": "guard_d3_h23_t12"
+          "entity_id": "guard_d3_h23_t12"
         },
         {
           "slot_key": "guard_d3_h23_t13",
@@ -3023,8 +2643,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t13",
-          "realised_by": "guard_d3_h23_t13"
+          "entity_id": "guard_d3_h23_t13"
         },
         {
           "slot_key": "guard_d3_h23_t14",
@@ -3033,8 +2652,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t14",
-          "realised_by": "guard_d3_h23_t14"
+          "entity_id": "guard_d3_h23_t14"
         },
         {
           "slot_key": "guard_d3_h23_t15",
@@ -3043,8 +2661,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t15",
-          "realised_by": "guard_d3_h23_t15"
+          "entity_id": "guard_d3_h23_t15"
         },
         {
           "slot_key": "guard_d3_h23_t2",
@@ -3053,8 +2670,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t2",
-          "realised_by": "guard_d3_h23_t2"
+          "entity_id": "guard_d3_h23_t2"
         },
         {
           "slot_key": "guard_d3_h23_t3",
@@ -3063,8 +2679,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t3",
-          "realised_by": "guard_d3_h23_t3"
+          "entity_id": "guard_d3_h23_t3"
         },
         {
           "slot_key": "guard_d3_h23_t4",
@@ -3073,8 +2688,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t4",
-          "realised_by": "guard_d3_h23_t4"
+          "entity_id": "guard_d3_h23_t4"
         },
         {
           "slot_key": "guard_d3_h23_t5",
@@ -3083,8 +2697,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t5",
-          "realised_by": "guard_d3_h23_t5"
+          "entity_id": "guard_d3_h23_t5"
         },
         {
           "slot_key": "guard_d3_h23_t6",
@@ -3093,8 +2706,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t6",
-          "realised_by": "guard_d3_h23_t6"
+          "entity_id": "guard_d3_h23_t6"
         },
         {
           "slot_key": "guard_d3_h23_t7",
@@ -3103,8 +2715,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t7",
-          "realised_by": "guard_d3_h23_t7"
+          "entity_id": "guard_d3_h23_t7"
         },
         {
           "slot_key": "guard_d3_h23_t8",
@@ -3113,8 +2724,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t8",
-          "realised_by": "guard_d3_h23_t8"
+          "entity_id": "guard_d3_h23_t8"
         },
         {
           "slot_key": "guard_d3_h23_t9",
@@ -3123,8 +2733,7 @@
           "declared_start_civil": "2026-10-02T23:00:00+03:30",
           "declared_end_s": 345600.0,
           "declared_end_civil": "2026-10-03T07:00:00+03:30",
-          "expected_entity_id": "guard_d3_h23_t9",
-          "realised_by": "guard_d3_h23_t9"
+          "entity_id": "guard_d3_h23_t9"
         },
         {
           "slot_key": "guard_d4_h7_t0",
@@ -3133,8 +2742,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t0",
-          "realised_by": "guard_d4_h7_t0"
+          "entity_id": "guard_d4_h7_t0"
         },
         {
           "slot_key": "guard_d4_h7_t1",
@@ -3143,8 +2751,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t1",
-          "realised_by": "guard_d4_h7_t1"
+          "entity_id": "guard_d4_h7_t1"
         },
         {
           "slot_key": "guard_d4_h7_t10",
@@ -3153,8 +2760,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t10",
-          "realised_by": "guard_d4_h7_t10"
+          "entity_id": "guard_d4_h7_t10"
         },
         {
           "slot_key": "guard_d4_h7_t11",
@@ -3163,8 +2769,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t11",
-          "realised_by": "guard_d4_h7_t11"
+          "entity_id": "guard_d4_h7_t11"
         },
         {
           "slot_key": "guard_d4_h7_t12",
@@ -3173,8 +2778,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t12",
-          "realised_by": "guard_d4_h7_t12"
+          "entity_id": "guard_d4_h7_t12"
         },
         {
           "slot_key": "guard_d4_h7_t13",
@@ -3183,8 +2787,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t13",
-          "realised_by": "guard_d4_h7_t13"
+          "entity_id": "guard_d4_h7_t13"
         },
         {
           "slot_key": "guard_d4_h7_t14",
@@ -3193,8 +2796,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t14",
-          "realised_by": "guard_d4_h7_t14"
+          "entity_id": "guard_d4_h7_t14"
         },
         {
           "slot_key": "guard_d4_h7_t15",
@@ -3203,8 +2805,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t15",
-          "realised_by": "guard_d4_h7_t15"
+          "entity_id": "guard_d4_h7_t15"
         },
         {
           "slot_key": "guard_d4_h7_t2",
@@ -3213,18 +2814,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t2",
-          "realised_by": "guard_d4_h7_t2"
-        },
-        {
-          "slot_key": "guard_d4_h7_t3",
-          "aoi_ref": "tower_03",
-          "declared_start_s": 345600.0,
-          "declared_start_civil": "2026-10-03T07:00:00+03:30",
-          "declared_end_s": 374400.0,
-          "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t3",
-          "realised_by": null
+          "entity_id": "guard_d4_h7_t2"
         },
         {
           "slot_key": "guard_d4_h7_t4",
@@ -3233,8 +2823,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t4",
-          "realised_by": "guard_d4_h7_t4"
+          "entity_id": "guard_d4_h7_t4"
         },
         {
           "slot_key": "guard_d4_h7_t5",
@@ -3243,8 +2832,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t5",
-          "realised_by": "guard_d4_h7_t5"
+          "entity_id": "guard_d4_h7_t5"
         },
         {
           "slot_key": "guard_d4_h7_t6",
@@ -3253,8 +2841,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t6",
-          "realised_by": "guard_d4_h7_t6"
+          "entity_id": "guard_d4_h7_t6"
         },
         {
           "slot_key": "guard_d4_h7_t7",
@@ -3263,8 +2850,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t7",
-          "realised_by": "guard_d4_h7_t7"
+          "entity_id": "guard_d4_h7_t7"
         },
         {
           "slot_key": "guard_d4_h7_t8",
@@ -3273,8 +2859,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t8",
-          "realised_by": "guard_d4_h7_t8"
+          "entity_id": "guard_d4_h7_t8"
         },
         {
           "slot_key": "guard_d4_h7_t9",
@@ -3283,8 +2868,7 @@
           "declared_start_civil": "2026-10-03T07:00:00+03:30",
           "declared_end_s": 374400.0,
           "declared_end_civil": "2026-10-03T15:00:00+03:30",
-          "expected_entity_id": "guard_d4_h7_t9",
-          "realised_by": "guard_d4_h7_t9"
+          "entity_id": "guard_d4_h7_t9"
         },
         {
           "slot_key": "guard_d4_h15_t0",
@@ -3293,8 +2877,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t0",
-          "realised_by": "guard_d4_h15_t0"
+          "entity_id": "guard_d4_h15_t0"
         },
         {
           "slot_key": "guard_d4_h15_t1",
@@ -3303,8 +2886,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t1",
-          "realised_by": "guard_d4_h15_t1"
+          "entity_id": "guard_d4_h15_t1"
         },
         {
           "slot_key": "guard_d4_h15_t10",
@@ -3313,8 +2895,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t10",
-          "realised_by": "guard_d4_h15_t10"
+          "entity_id": "guard_d4_h15_t10"
         },
         {
           "slot_key": "guard_d4_h15_t11",
@@ -3323,8 +2904,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t11",
-          "realised_by": "guard_d4_h15_t11"
+          "entity_id": "guard_d4_h15_t11"
         },
         {
           "slot_key": "guard_d4_h15_t12",
@@ -3333,8 +2913,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t12",
-          "realised_by": "guard_d4_h15_t12"
+          "entity_id": "guard_d4_h15_t12"
         },
         {
           "slot_key": "guard_d4_h15_t13",
@@ -3343,8 +2922,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t13",
-          "realised_by": "guard_d4_h15_t13"
+          "entity_id": "guard_d4_h15_t13"
         },
         {
           "slot_key": "guard_d4_h15_t14",
@@ -3353,8 +2931,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t14",
-          "realised_by": "guard_d4_h15_t14"
+          "entity_id": "guard_d4_h15_t14"
         },
         {
           "slot_key": "guard_d4_h15_t15",
@@ -3363,8 +2940,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t15",
-          "realised_by": "guard_d4_h15_t15"
+          "entity_id": "guard_d4_h15_t15"
         },
         {
           "slot_key": "guard_d4_h15_t2",
@@ -3373,8 +2949,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t2",
-          "realised_by": "guard_d4_h15_t2"
+          "entity_id": "guard_d4_h15_t2"
         },
         {
           "slot_key": "guard_d4_h15_t3",
@@ -3383,8 +2958,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t3",
-          "realised_by": "guard_d4_h15_t3"
+          "entity_id": "guard_d4_h15_t3"
         },
         {
           "slot_key": "guard_d4_h15_t4",
@@ -3393,8 +2967,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t4",
-          "realised_by": "guard_d4_h15_t4"
+          "entity_id": "guard_d4_h15_t4"
         },
         {
           "slot_key": "guard_d4_h15_t5",
@@ -3403,8 +2976,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t5",
-          "realised_by": "guard_d4_h15_t5"
+          "entity_id": "guard_d4_h15_t5"
         },
         {
           "slot_key": "guard_d4_h15_t6",
@@ -3413,8 +2985,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t6",
-          "realised_by": "guard_d4_h15_t6"
+          "entity_id": "guard_d4_h15_t6"
         },
         {
           "slot_key": "guard_d4_h15_t7",
@@ -3423,8 +2994,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t7",
-          "realised_by": "guard_d4_h15_t7"
+          "entity_id": "guard_d4_h15_t7"
         },
         {
           "slot_key": "guard_d4_h15_t8",
@@ -3433,8 +3003,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t8",
-          "realised_by": "guard_d4_h15_t8"
+          "entity_id": "guard_d4_h15_t8"
         },
         {
           "slot_key": "guard_d4_h15_t9",
@@ -3443,8 +3012,7 @@
           "declared_start_civil": "2026-10-03T15:00:00+03:30",
           "declared_end_s": 403200.0,
           "declared_end_civil": "2026-10-03T23:00:00+03:30",
-          "expected_entity_id": "guard_d4_h15_t9",
-          "realised_by": "guard_d4_h15_t9"
+          "entity_id": "guard_d4_h15_t9"
         },
         {
           "slot_key": "guard_d4_h23_t0",
@@ -3453,8 +3021,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t0",
-          "realised_by": "guard_d4_h23_t0"
+          "entity_id": "guard_d4_h23_t0"
         },
         {
           "slot_key": "guard_d4_h23_t1",
@@ -3463,8 +3030,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t1",
-          "realised_by": "guard_d4_h23_t1"
+          "entity_id": "guard_d4_h23_t1"
         },
         {
           "slot_key": "guard_d4_h23_t10",
@@ -3473,8 +3039,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t10",
-          "realised_by": "guard_d4_h23_t10"
+          "entity_id": "guard_d4_h23_t10"
         },
         {
           "slot_key": "guard_d4_h23_t11",
@@ -3483,8 +3048,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t11",
-          "realised_by": "guard_d4_h23_t11"
+          "entity_id": "guard_d4_h23_t11"
         },
         {
           "slot_key": "guard_d4_h23_t12",
@@ -3493,8 +3057,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t12",
-          "realised_by": "guard_d4_h23_t12"
+          "entity_id": "guard_d4_h23_t12"
         },
         {
           "slot_key": "guard_d4_h23_t13",
@@ -3503,8 +3066,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t13",
-          "realised_by": "guard_d4_h23_t13"
+          "entity_id": "guard_d4_h23_t13"
         },
         {
           "slot_key": "guard_d4_h23_t14",
@@ -3513,8 +3075,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t14",
-          "realised_by": "guard_d4_h23_t14"
+          "entity_id": "guard_d4_h23_t14"
         },
         {
           "slot_key": "guard_d4_h23_t15",
@@ -3523,8 +3084,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t15",
-          "realised_by": "guard_d4_h23_t15"
+          "entity_id": "guard_d4_h23_t15"
         },
         {
           "slot_key": "guard_d4_h23_t2",
@@ -3533,8 +3093,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t2",
-          "realised_by": "guard_d4_h23_t2"
+          "entity_id": "guard_d4_h23_t2"
         },
         {
           "slot_key": "guard_d4_h23_t3",
@@ -3543,8 +3102,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t3",
-          "realised_by": "guard_d4_h23_t3"
+          "entity_id": "guard_d4_h23_t3"
         },
         {
           "slot_key": "guard_d4_h23_t4",
@@ -3553,8 +3111,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t4",
-          "realised_by": "guard_d4_h23_t4"
+          "entity_id": "guard_d4_h23_t4"
         },
         {
           "slot_key": "guard_d4_h23_t5",
@@ -3563,8 +3120,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t5",
-          "realised_by": "guard_d4_h23_t5"
+          "entity_id": "guard_d4_h23_t5"
         },
         {
           "slot_key": "guard_d4_h23_t6",
@@ -3573,8 +3129,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t6",
-          "realised_by": "guard_d4_h23_t6"
+          "entity_id": "guard_d4_h23_t6"
         },
         {
           "slot_key": "guard_d4_h23_t7",
@@ -3583,8 +3138,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t7",
-          "realised_by": "guard_d4_h23_t7"
+          "entity_id": "guard_d4_h23_t7"
         },
         {
           "slot_key": "guard_d4_h23_t8",
@@ -3593,8 +3147,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t8",
-          "realised_by": "guard_d4_h23_t8"
+          "entity_id": "guard_d4_h23_t8"
         },
         {
           "slot_key": "guard_d4_h23_t9",
@@ -3603,8 +3156,7 @@
           "declared_start_civil": "2026-10-03T23:00:00+03:30",
           "declared_end_s": 432000.0,
           "declared_end_civil": "2026-10-04T07:00:00+03:30",
-          "expected_entity_id": "guard_d4_h23_t9",
-          "realised_by": "guard_d4_h23_t9"
+          "entity_id": "guard_d4_h23_t9"
         },
         {
           "slot_key": "guard_d5_h7_t0",
@@ -3613,8 +3165,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t0",
-          "realised_by": "guard_d5_h7_t0"
+          "entity_id": "guard_d5_h7_t0"
         },
         {
           "slot_key": "guard_d5_h7_t1",
@@ -3623,8 +3174,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t1",
-          "realised_by": "guard_d5_h7_t1"
+          "entity_id": "guard_d5_h7_t1"
         },
         {
           "slot_key": "guard_d5_h7_t10",
@@ -3633,8 +3183,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t10",
-          "realised_by": "guard_d5_h7_t10"
+          "entity_id": "guard_d5_h7_t10"
         },
         {
           "slot_key": "guard_d5_h7_t11",
@@ -3643,8 +3192,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t11",
-          "realised_by": "guard_d5_h7_t11"
+          "entity_id": "guard_d5_h7_t11"
         },
         {
           "slot_key": "guard_d5_h7_t12",
@@ -3653,8 +3201,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t12",
-          "realised_by": "guard_d5_h7_t12"
+          "entity_id": "guard_d5_h7_t12"
         },
         {
           "slot_key": "guard_d5_h7_t13",
@@ -3663,8 +3210,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t13",
-          "realised_by": "guard_d5_h7_t13"
+          "entity_id": "guard_d5_h7_t13"
         },
         {
           "slot_key": "guard_d5_h7_t14",
@@ -3673,8 +3219,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t14",
-          "realised_by": "guard_d5_h7_t14"
+          "entity_id": "guard_d5_h7_t14"
         },
         {
           "slot_key": "guard_d5_h7_t15",
@@ -3683,8 +3228,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t15",
-          "realised_by": "guard_d5_h7_t15"
+          "entity_id": "guard_d5_h7_t15"
         },
         {
           "slot_key": "guard_d5_h7_t2",
@@ -3693,8 +3237,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t2",
-          "realised_by": "guard_d5_h7_t2"
+          "entity_id": "guard_d5_h7_t2"
         },
         {
           "slot_key": "guard_d5_h7_t3",
@@ -3703,8 +3246,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t3",
-          "realised_by": "guard_d5_h7_t3"
+          "entity_id": "guard_d5_h7_t3"
         },
         {
           "slot_key": "guard_d5_h7_t4",
@@ -3713,8 +3255,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t4",
-          "realised_by": "guard_d5_h7_t4"
+          "entity_id": "guard_d5_h7_t4"
         },
         {
           "slot_key": "guard_d5_h7_t5",
@@ -3723,8 +3264,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t5",
-          "realised_by": "guard_d5_h7_t5"
+          "entity_id": "guard_d5_h7_t5"
         },
         {
           "slot_key": "guard_d5_h7_t6",
@@ -3733,8 +3273,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t6",
-          "realised_by": "guard_d5_h7_t6"
+          "entity_id": "guard_d5_h7_t6"
         },
         {
           "slot_key": "guard_d5_h7_t7",
@@ -3743,8 +3282,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t7",
-          "realised_by": "guard_d5_h7_t7"
+          "entity_id": "guard_d5_h7_t7"
         },
         {
           "slot_key": "guard_d5_h7_t8",
@@ -3753,8 +3291,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t8",
-          "realised_by": "guard_d5_h7_t8"
+          "entity_id": "guard_d5_h7_t8"
         },
         {
           "slot_key": "guard_d5_h7_t9",
@@ -3763,8 +3300,7 @@
           "declared_start_civil": "2026-10-04T07:00:00+03:30",
           "declared_end_s": 460800.0,
           "declared_end_civil": "2026-10-04T15:00:00+03:30",
-          "expected_entity_id": "guard_d5_h7_t9",
-          "realised_by": "guard_d5_h7_t9"
+          "entity_id": "guard_d5_h7_t9"
         },
         {
           "slot_key": "guard_d5_h15_t0",
@@ -3773,8 +3309,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t0",
-          "realised_by": "guard_d5_h15_t0"
+          "entity_id": "guard_d5_h15_t0"
         },
         {
           "slot_key": "guard_d5_h15_t1",
@@ -3783,8 +3318,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t1",
-          "realised_by": "guard_d5_h15_t1"
+          "entity_id": "guard_d5_h15_t1"
         },
         {
           "slot_key": "guard_d5_h15_t10",
@@ -3793,8 +3327,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t10",
-          "realised_by": "guard_d5_h15_t10"
+          "entity_id": "guard_d5_h15_t10"
         },
         {
           "slot_key": "guard_d5_h15_t11",
@@ -3803,8 +3336,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t11",
-          "realised_by": "guard_d5_h15_t11"
+          "entity_id": "guard_d5_h15_t11"
         },
         {
           "slot_key": "guard_d5_h15_t12",
@@ -3813,8 +3345,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t12",
-          "realised_by": "guard_d5_h15_t12"
+          "entity_id": "guard_d5_h15_t12"
         },
         {
           "slot_key": "guard_d5_h15_t13",
@@ -3823,8 +3354,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t13",
-          "realised_by": "guard_d5_h15_t13"
+          "entity_id": "guard_d5_h15_t13"
         },
         {
           "slot_key": "guard_d5_h15_t14",
@@ -3833,8 +3363,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t14",
-          "realised_by": "guard_d5_h15_t14"
+          "entity_id": "guard_d5_h15_t14"
         },
         {
           "slot_key": "guard_d5_h15_t15",
@@ -3843,8 +3372,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t15",
-          "realised_by": "guard_d5_h15_t15"
+          "entity_id": "guard_d5_h15_t15"
         },
         {
           "slot_key": "guard_d5_h15_t2",
@@ -3853,8 +3381,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t2",
-          "realised_by": "guard_d5_h15_t2"
+          "entity_id": "guard_d5_h15_t2"
         },
         {
           "slot_key": "guard_d5_h15_t3",
@@ -3863,8 +3390,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t3",
-          "realised_by": "guard_d5_h15_t3"
+          "entity_id": "guard_d5_h15_t3"
         },
         {
           "slot_key": "guard_d5_h15_t4",
@@ -3873,8 +3399,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t4",
-          "realised_by": "guard_d5_h15_t4"
+          "entity_id": "guard_d5_h15_t4"
         },
         {
           "slot_key": "guard_d5_h15_t5",
@@ -3883,8 +3408,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t5",
-          "realised_by": "guard_d5_h15_t5"
+          "entity_id": "guard_d5_h15_t5"
         },
         {
           "slot_key": "guard_d5_h15_t6",
@@ -3893,8 +3417,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t6",
-          "realised_by": "guard_d5_h15_t6"
+          "entity_id": "guard_d5_h15_t6"
         },
         {
           "slot_key": "guard_d5_h15_t7",
@@ -3903,8 +3426,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t7",
-          "realised_by": "guard_d5_h15_t7"
+          "entity_id": "guard_d5_h15_t7"
         },
         {
           "slot_key": "guard_d5_h15_t8",
@@ -3913,8 +3435,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t8",
-          "realised_by": "guard_d5_h15_t8"
+          "entity_id": "guard_d5_h15_t8"
         },
         {
           "slot_key": "guard_d5_h15_t9",
@@ -3923,8 +3444,7 @@
           "declared_start_civil": "2026-10-04T15:00:00+03:30",
           "declared_end_s": 489600.0,
           "declared_end_civil": "2026-10-04T23:00:00+03:30",
-          "expected_entity_id": "guard_d5_h15_t9",
-          "realised_by": "guard_d5_h15_t9"
+          "entity_id": "guard_d5_h15_t9"
         },
         {
           "slot_key": "guard_d5_h23_t0",
@@ -3933,8 +3453,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t0",
-          "realised_by": "guard_d5_h23_t0"
+          "entity_id": "guard_d5_h23_t0"
         },
         {
           "slot_key": "guard_d5_h23_t1",
@@ -3943,8 +3462,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t1",
-          "realised_by": "guard_d5_h23_t1"
+          "entity_id": "guard_d5_h23_t1"
         },
         {
           "slot_key": "guard_d5_h23_t10",
@@ -3953,8 +3471,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t10",
-          "realised_by": "guard_d5_h23_t10"
+          "entity_id": "guard_d5_h23_t10"
         },
         {
           "slot_key": "guard_d5_h23_t11",
@@ -3963,8 +3480,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t11",
-          "realised_by": "guard_d5_h23_t11"
+          "entity_id": "guard_d5_h23_t11"
         },
         {
           "slot_key": "guard_d5_h23_t12",
@@ -3973,8 +3489,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t12",
-          "realised_by": "guard_d5_h23_t12"
+          "entity_id": "guard_d5_h23_t12"
         },
         {
           "slot_key": "guard_d5_h23_t13",
@@ -3983,8 +3498,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t13",
-          "realised_by": "guard_d5_h23_t13"
+          "entity_id": "guard_d5_h23_t13"
         },
         {
           "slot_key": "guard_d5_h23_t14",
@@ -3993,8 +3507,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t14",
-          "realised_by": "guard_d5_h23_t14"
+          "entity_id": "guard_d5_h23_t14"
         },
         {
           "slot_key": "guard_d5_h23_t15",
@@ -4003,8 +3516,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t15",
-          "realised_by": "guard_d5_h23_t15"
+          "entity_id": "guard_d5_h23_t15"
         },
         {
           "slot_key": "guard_d5_h23_t2",
@@ -4013,8 +3525,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t2",
-          "realised_by": "guard_d5_h23_t2"
+          "entity_id": "guard_d5_h23_t2"
         },
         {
           "slot_key": "guard_d5_h23_t3",
@@ -4023,8 +3534,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t3",
-          "realised_by": "guard_d5_h23_t3"
+          "entity_id": "guard_d5_h23_t3"
         },
         {
           "slot_key": "guard_d5_h23_t4",
@@ -4033,8 +3543,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t4",
-          "realised_by": "guard_d5_h23_t4"
+          "entity_id": "guard_d5_h23_t4"
         },
         {
           "slot_key": "guard_d5_h23_t5",
@@ -4043,8 +3552,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t5",
-          "realised_by": "guard_d5_h23_t5"
+          "entity_id": "guard_d5_h23_t5"
         },
         {
           "slot_key": "guard_d5_h23_t6",
@@ -4053,8 +3561,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t6",
-          "realised_by": "guard_d5_h23_t6"
+          "entity_id": "guard_d5_h23_t6"
         },
         {
           "slot_key": "guard_d5_h23_t7",
@@ -4063,8 +3570,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t7",
-          "realised_by": "guard_d5_h23_t7"
+          "entity_id": "guard_d5_h23_t7"
         },
         {
           "slot_key": "guard_d5_h23_t8",
@@ -4073,8 +3579,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t8",
-          "realised_by": "guard_d5_h23_t8"
+          "entity_id": "guard_d5_h23_t8"
         },
         {
           "slot_key": "guard_d5_h23_t9",
@@ -4083,8 +3588,7 @@
           "declared_start_civil": "2026-10-04T23:00:00+03:30",
           "declared_end_s": 518400.0,
           "declared_end_civil": "2026-10-05T07:00:00+03:30",
-          "expected_entity_id": "guard_d5_h23_t9",
-          "realised_by": "guard_d5_h23_t9"
+          "entity_id": "guard_d5_h23_t9"
         },
         {
           "slot_key": "guard_d6_h7_t0",
@@ -4093,8 +3597,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t0",
-          "realised_by": "guard_d6_h7_t0"
+          "entity_id": "guard_d6_h7_t0"
         },
         {
           "slot_key": "guard_d6_h7_t1",
@@ -4103,8 +3606,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t1",
-          "realised_by": "guard_d6_h7_t1"
+          "entity_id": "guard_d6_h7_t1"
         },
         {
           "slot_key": "guard_d6_h7_t10",
@@ -4113,8 +3615,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t10",
-          "realised_by": "guard_d6_h7_t10"
+          "entity_id": "guard_d6_h7_t10"
         },
         {
           "slot_key": "guard_d6_h7_t11",
@@ -4123,8 +3624,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t11",
-          "realised_by": "guard_d6_h7_t11"
+          "entity_id": "guard_d6_h7_t11"
         },
         {
           "slot_key": "guard_d6_h7_t12",
@@ -4133,8 +3633,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t12",
-          "realised_by": "guard_d6_h7_t12"
+          "entity_id": "guard_d6_h7_t12"
         },
         {
           "slot_key": "guard_d6_h7_t13",
@@ -4143,8 +3642,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t13",
-          "realised_by": "guard_d6_h7_t13"
+          "entity_id": "guard_d6_h7_t13"
         },
         {
           "slot_key": "guard_d6_h7_t14",
@@ -4153,8 +3651,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t14",
-          "realised_by": "guard_d6_h7_t14"
+          "entity_id": "guard_d6_h7_t14"
         },
         {
           "slot_key": "guard_d6_h7_t15",
@@ -4163,8 +3660,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t15",
-          "realised_by": "guard_d6_h7_t15"
+          "entity_id": "guard_d6_h7_t15"
         },
         {
           "slot_key": "guard_d6_h7_t2",
@@ -4173,8 +3669,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t2",
-          "realised_by": "guard_d6_h7_t2"
+          "entity_id": "guard_d6_h7_t2"
         },
         {
           "slot_key": "guard_d6_h7_t3",
@@ -4183,8 +3678,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t3",
-          "realised_by": "guard_d6_h7_t3"
+          "entity_id": "guard_d6_h7_t3"
         },
         {
           "slot_key": "guard_d6_h7_t4",
@@ -4193,8 +3687,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t4",
-          "realised_by": "guard_d6_h7_t4"
+          "entity_id": "guard_d6_h7_t4"
         },
         {
           "slot_key": "guard_d6_h7_t5",
@@ -4203,8 +3696,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t5",
-          "realised_by": "guard_d6_h7_t5"
+          "entity_id": "guard_d6_h7_t5"
         },
         {
           "slot_key": "guard_d6_h7_t6",
@@ -4213,8 +3705,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t6",
-          "realised_by": "guard_d6_h7_t6"
+          "entity_id": "guard_d6_h7_t6"
         },
         {
           "slot_key": "guard_d6_h7_t7",
@@ -4223,8 +3714,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t7",
-          "realised_by": "guard_d6_h7_t7"
+          "entity_id": "guard_d6_h7_t7"
         },
         {
           "slot_key": "guard_d6_h7_t8",
@@ -4233,8 +3723,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t8",
-          "realised_by": "guard_d6_h7_t8"
+          "entity_id": "guard_d6_h7_t8"
         },
         {
           "slot_key": "guard_d6_h7_t9",
@@ -4243,8 +3732,7 @@
           "declared_start_civil": "2026-10-05T07:00:00+03:30",
           "declared_end_s": 547200.0,
           "declared_end_civil": "2026-10-05T15:00:00+03:30",
-          "expected_entity_id": "guard_d6_h7_t9",
-          "realised_by": "guard_d6_h7_t9"
+          "entity_id": "guard_d6_h7_t9"
         },
         {
           "slot_key": "guard_d6_h15_t0",
@@ -4253,8 +3741,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t0",
-          "realised_by": "guard_d6_h15_t0"
+          "entity_id": "guard_d6_h15_t0"
         },
         {
           "slot_key": "guard_d6_h15_t1",
@@ -4263,8 +3750,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t1",
-          "realised_by": "guard_d6_h15_t1"
+          "entity_id": "guard_d6_h15_t1"
         },
         {
           "slot_key": "guard_d6_h15_t10",
@@ -4273,8 +3759,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t10",
-          "realised_by": "guard_d6_h15_t10"
+          "entity_id": "guard_d6_h15_t10"
         },
         {
           "slot_key": "guard_d6_h15_t11",
@@ -4283,8 +3768,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t11",
-          "realised_by": "guard_d6_h15_t11"
+          "entity_id": "guard_d6_h15_t11"
         },
         {
           "slot_key": "guard_d6_h15_t12",
@@ -4293,8 +3777,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t12",
-          "realised_by": "guard_d6_h15_t12"
+          "entity_id": "guard_d6_h15_t12"
         },
         {
           "slot_key": "guard_d6_h15_t13",
@@ -4303,8 +3786,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t13",
-          "realised_by": "guard_d6_h15_t13"
+          "entity_id": "guard_d6_h15_t13"
         },
         {
           "slot_key": "guard_d6_h15_t14",
@@ -4313,8 +3795,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t14",
-          "realised_by": "guard_d6_h15_t14"
+          "entity_id": "guard_d6_h15_t14"
         },
         {
           "slot_key": "guard_d6_h15_t15",
@@ -4323,8 +3804,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t15",
-          "realised_by": "guard_d6_h15_t15"
+          "entity_id": "guard_d6_h15_t15"
         },
         {
           "slot_key": "guard_d6_h15_t2",
@@ -4333,8 +3813,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t2",
-          "realised_by": "guard_d6_h15_t2"
+          "entity_id": "guard_d6_h15_t2"
         },
         {
           "slot_key": "guard_d6_h15_t3",
@@ -4343,8 +3822,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t3",
-          "realised_by": "guard_d6_h15_t3"
+          "entity_id": "guard_d6_h15_t3"
         },
         {
           "slot_key": "guard_d6_h15_t4",
@@ -4353,8 +3831,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t4",
-          "realised_by": "guard_d6_h15_t4"
+          "entity_id": "guard_d6_h15_t4"
         },
         {
           "slot_key": "guard_d6_h15_t5",
@@ -4363,8 +3840,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t5",
-          "realised_by": "guard_d6_h15_t5"
+          "entity_id": "guard_d6_h15_t5"
         },
         {
           "slot_key": "guard_d6_h15_t6",
@@ -4373,8 +3849,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t6",
-          "realised_by": "guard_d6_h15_t6"
+          "entity_id": "guard_d6_h15_t6"
         },
         {
           "slot_key": "guard_d6_h15_t7",
@@ -4383,8 +3858,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t7",
-          "realised_by": "guard_d6_h15_t7"
+          "entity_id": "guard_d6_h15_t7"
         },
         {
           "slot_key": "guard_d6_h15_t8",
@@ -4393,8 +3867,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t8",
-          "realised_by": "guard_d6_h15_t8"
+          "entity_id": "guard_d6_h15_t8"
         },
         {
           "slot_key": "guard_d6_h15_t9",
@@ -4403,8 +3876,7 @@
           "declared_start_civil": "2026-10-05T15:00:00+03:30",
           "declared_end_s": 576000.0,
           "declared_end_civil": "2026-10-05T23:00:00+03:30",
-          "expected_entity_id": "guard_d6_h15_t9",
-          "realised_by": "guard_d6_h15_t9"
+          "entity_id": "guard_d6_h15_t9"
         },
         {
           "slot_key": "guard_d6_h23_t0",
@@ -4413,8 +3885,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t0",
-          "realised_by": "guard_d6_h23_t0"
+          "entity_id": "guard_d6_h23_t0"
         },
         {
           "slot_key": "guard_d6_h23_t1",
@@ -4423,8 +3894,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t1",
-          "realised_by": "guard_d6_h23_t1"
+          "entity_id": "guard_d6_h23_t1"
         },
         {
           "slot_key": "guard_d6_h23_t10",
@@ -4433,8 +3903,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t10",
-          "realised_by": "guard_d6_h23_t10"
+          "entity_id": "guard_d6_h23_t10"
         },
         {
           "slot_key": "guard_d6_h23_t11",
@@ -4443,8 +3912,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t11",
-          "realised_by": "guard_d6_h23_t11"
+          "entity_id": "guard_d6_h23_t11"
         },
         {
           "slot_key": "guard_d6_h23_t12",
@@ -4453,8 +3921,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t12",
-          "realised_by": "guard_d6_h23_t12"
+          "entity_id": "guard_d6_h23_t12"
         },
         {
           "slot_key": "guard_d6_h23_t13",
@@ -4463,8 +3930,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t13",
-          "realised_by": "guard_d6_h23_t13"
+          "entity_id": "guard_d6_h23_t13"
         },
         {
           "slot_key": "guard_d6_h23_t14",
@@ -4473,8 +3939,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t14",
-          "realised_by": "guard_d6_h23_t14"
+          "entity_id": "guard_d6_h23_t14"
         },
         {
           "slot_key": "guard_d6_h23_t15",
@@ -4483,8 +3948,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t15",
-          "realised_by": "guard_d6_h23_t15"
+          "entity_id": "guard_d6_h23_t15"
         },
         {
           "slot_key": "guard_d6_h23_t2",
@@ -4493,8 +3957,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t2",
-          "realised_by": "guard_d6_h23_t2"
+          "entity_id": "guard_d6_h23_t2"
         },
         {
           "slot_key": "guard_d6_h23_t3",
@@ -4503,8 +3966,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t3",
-          "realised_by": "guard_d6_h23_t3"
+          "entity_id": "guard_d6_h23_t3"
         },
         {
           "slot_key": "guard_d6_h23_t4",
@@ -4513,8 +3975,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t4",
-          "realised_by": "guard_d6_h23_t4"
+          "entity_id": "guard_d6_h23_t4"
         },
         {
           "slot_key": "guard_d6_h23_t5",
@@ -4523,8 +3984,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t5",
-          "realised_by": "guard_d6_h23_t5"
+          "entity_id": "guard_d6_h23_t5"
         },
         {
           "slot_key": "guard_d6_h23_t6",
@@ -4533,8 +3993,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t6",
-          "realised_by": "guard_d6_h23_t6"
+          "entity_id": "guard_d6_h23_t6"
         },
         {
           "slot_key": "guard_d6_h23_t7",
@@ -4543,8 +4002,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t7",
-          "realised_by": "guard_d6_h23_t7"
+          "entity_id": "guard_d6_h23_t7"
         },
         {
           "slot_key": "guard_d6_h23_t8",
@@ -4553,8 +4011,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t8",
-          "realised_by": "guard_d6_h23_t8"
+          "entity_id": "guard_d6_h23_t8"
         },
         {
           "slot_key": "guard_d6_h23_t9",
@@ -4563,8 +4020,7 @@
           "declared_start_civil": "2026-10-05T23:00:00+03:30",
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
-          "expected_entity_id": "guard_d6_h23_t9",
-          "realised_by": "guard_d6_h23_t9"
+          "entity_id": "guard_d6_h23_t9"
         }
       ]
     }

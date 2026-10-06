@@ -36,6 +36,7 @@ from CarlaNet.Types.Supervision import CoreVocabulary  # noqa: E402
 
 from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
 from carlacontrol.CompileFindings import CompileFindings  # noqa: E402
+from carlacontrol.IlluminationBand import IlluminationBand  # noqa: E402
 from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator  # noqa: E402
 from carlacontrol.ResolutionReport import ResolutionReport  # noqa: E402
@@ -211,14 +212,16 @@ def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path)
         "hauler": ["nominal"], "patrol_d0_h6": ["nominal"], "probe": ["annotated"]}
     assert plan["cohorts"] == [{"flow_id": "ambient", "supervision": "unlabelled", "labels": [],
                                 "parameters": {}}]
-    absence = next(i for i in plan["instances"] if i["realisation"] == "absent")
-    assert absence["participants"] == [] and absence["slot_ref"] == "patrol_d0_h8"
-    assert absence["expected"]["route"] == {"from": "900", "to": "901#1", "via": []}
-    # Sited where the patrol would have stopped: the one lane of area kerb, at its end.
-    assert (absence["expected"]["site_lane"], absence["expected"]["site_pos_m"]) == ("901#0_0", 51.5)
-    assert absence["intervals"][0]["phase"] == "vacancy"
-    assert absence["intervals"][0]["declared_start_civil"] == "2026-03-21T08:15:00-06:00"
-    assert absence["counter_evidence"] == {"series_slots_total": 2, "series_slots_realised": 1}
+    # Every row is a vehicle's or a flow's: no instance without a participant, no interval without
+    # its vehicle, and no row of any kind for the patrol the rota skips (06 §3.5).
+    assert all(row["participants"] for row in plan["instances"])
+    assert all(interval["entity_id"] for row in plan["instances"] for interval in row["intervals"])
+    (series,) = plan["series"]
+    (slot,) = series["slots"]
+    assert (slot["slot_key"], slot["entity_id"], slot["aoi_ref"]) == ("patrol_d0_h6", "patrol_d0_h6", "kerb")
+    assert slot["declared_start_civil"] == "2026-03-21T06:15:00-06:00"
+    assert "patrol_d0_h8" not in json.dumps(plan)
+    assert "realisation" not in json.dumps(plan)
     assert plan["vocabulary"]["core"]["terms"]["supervision_state"] == ["annotated", "nominal",
                                                                        "unlabelled"]
     assert "solar" not in json.dumps(plan) and "epoch" not in plan
@@ -233,20 +236,23 @@ def test_the_plan_s_vocabulary_names_doc_11_s_six_illumination_bands(world, inst
     assert bands and set(bands) <= set(result.plan["vocabulary"]["core"]["terms"]["illumination_band"])
 
 
-def test_the_plan_s_core_is_version_2_generated_from_the_enumerations_in_carlanet_types(
+def test_the_plan_s_core_is_version_3_generated_from_the_enumerations_in_carlanet_types(
         world, installation, tmp_path):
     """06 D6.30: the core half is generated from the code that branches on it, so the plan publishes
-    CarlaNet.Types' table family by family, and the lock records its version."""
+    CarlaNet.Types' table family by family, and the lock records its version. Version 3 carries no
+    realisation, no observability outcome and no reserved phase (06 §3.5, the ruling of 2026-10-05)."""
     result = compile_spec(world, installation, tmp_path)
     core = result.plan["vocabulary"]["core"]
-    assert core["vocabulary_version"] == result.plan["vocabulary_version"] == 2
-    assert result.lock["vocabulary"]["core_version"] == 2
+    assert core["vocabulary_version"] == result.plan["vocabulary_version"] == 3
+    assert result.lock["vocabulary"]["core_version"] == 3
     assert core["source"] == "06_Truth_And_Annotation.md §3.7"
     assert core["terms"] == {str(family.Family): [str(term) for term in family.Terms]
                              for family in CoreVocabulary.Families}
-    assert core["terms"]["observability_outcome"] == [
-        "observed", "out_of_frame", "occluded", "not_rendered", "site_unobserved",
-        "beyond_draw_distance"]
+    assert set(core["terms"]) == {"supervision_state", "subject_kind", "interval_onset", "closed_by",
+                                  "illumination_band", "cadence", "reserved_role", "interval_anchor",
+                                  "render_state", "render_reason"}
+    assert core["terms"]["subject_kind"] == ["entity", "cohort"]
+    assert "slot_unrealised" not in core["terms"]["closed_by"]
     assert core["terms"]["interval_anchor"] == ["depart", "stop", "stop_end", "phase"]
     assert core["terms"]["render_state"] == ["rendered", "simulated_only"]
     assert "outside_limit" in core["terms"]["render_reason"]
@@ -262,9 +268,12 @@ def test_the_schema_spells_the_core_s_terms_as_the_core_does():
     assert set(supervision["cohorts"]["items"]["properties"]["supervision"]["enum"]) == states
     assert set(supervision["series"]["items"]["properties"]["supervision"]["enum"]) == states
     assert definitions["term"]["properties"]["applies_to"]["items"]["enum"] == \
-        CORE_TERMS["subject_kind"]
-    assert definitions["term"]["properties"]["realisation"]["items"]["enum"] == \
-        CORE_TERMS["realisation"]
+        CORE_TERMS["subject_kind"] == ["entity", "cohort"]
+    # The absence shape is gone from the schema with the ruling of 2026-10-05 (06 §3.5).
+    assert "realisation" not in definitions["term"]["properties"]
+    assert "absences" not in supervision
+    assert "realisation" not in CORE_TERMS and "observability_outcome" not in CORE_TERMS
+    assert "reserved_phase" not in CORE_TERMS
     pattern = re.compile(definitions["anchor"]["properties"]["start"]["pattern"])
     depart, *indexed = CORE_TERMS["interval_anchor"]
     assert pattern.match(depart) and not pattern.match(f"{depart}:0")
@@ -856,11 +865,12 @@ def test_an_undeclared_term_is_refused_under_check_18(world, installation, tmp_p
 
 def test_a_term_on_the_wrong_kind_of_subject_is_refused_under_check_45(world, installation,
                                                                       tmp_path):
+    vocabulary = vocabulary_with(world, {"fixture:through_traffic": COHORT_TERM})
     block = supervision_with(world)
-    block["instances"][0]["labels"] = ["fixture:patrol_missed"]
-    result = compile_spec(world, installation, tmp_path, supervision=block)
+    block["instances"][0]["labels"] = ["fixture:through_traffic"]
+    result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
     assert 45 in checks(result)
-    assert "applies to ['slot']" in messages(result, 45)
+    assert "applies to ['cohort'], and is attached to a entity" in messages(result, 45)
 
 
 def test_a_participant_that_is_not_an_actor_is_refused_under_check_19(world, installation, tmp_path):
@@ -901,13 +911,60 @@ def test_a_cohort_with_an_interval_or_nominal_is_refused_under_checks_23_and_49(
     assert {23, 49} <= checks(result)
 
 
-def test_reserved_words_are_enforced_under_check_50(world, installation, tmp_path):
+def test_the_reserved_role_is_enforced_under_check_50(world, installation, tmp_path):
     block = supervision_with(world)
     block["instances"][0]["participants"][0]["role"] = "fixture:patroller"
-    block["instances"][0]["intervals"][0]["phase"] = "vacancy"
     result = compile_spec(world, installation, tmp_path, supervision=block)
     assert 50 in checks(result)
-    assert "subject" in messages(result, 50) and "vacancy" in messages(result, 50)
+    assert "subject" in messages(result, 50)
+
+
+def test_an_instance_with_no_participant_is_refused_under_check_19(world, installation, tmp_path):
+    """A label follows a vehicle (06 §3.5): an instance about no vehicle is refused, and told how an
+    omission is conveyed instead."""
+    block = supervision_with(world)
+    block["instances"][0]["participants"] = []
+    block["instances"][0]["intervals"] = []
+    result = compile_spec(world, installation, tmp_path, supervision=block)
+    assert 19 in checks(result)
+    assert "has no participant" in messages(result, 19)
+    assert "labelling the vehicle that deviates, or as a scenario-level note" in messages(result, 19)
+
+
+def test_the_absence_shape_is_refused_by_the_schema_under_check_53(world, installation, tmp_path):
+    """A specification written to the shape before the ruling of 2026-10-05 -- an `absences` block, a
+    term that applies to a `slot`, a term declaring a `realisation` -- is refused at the schema, naming
+    each field, rather than read as a place's label."""
+    block = supervision_with(world, absences=[{"name": "patrol_missed_d0_h8", "series": "kerb_patrol",
+                                               "entry": "patrol_d0_h8",
+                                               "labels": ["fixture:routine_patrol"]}])
+    result = compile_spec(world, installation, tmp_path / "a", supervision=block)
+    assert checks(result) == {53} and "$.supervision: 'absences' is not a field here" in messages(result, 53)
+
+    vocabulary = vocabulary_with(world, {"fixture:patrol_missed": {
+        "definition": "A scheduled patrol that never came.", "applies_to": ["slot"],
+        "realisation": ["absent"], "since": 1, "status": "active"}})
+    result = compile_spec(world, installation, tmp_path / "b", vocabulary=vocabulary)
+    assert checks(result) == {53}
+    assert "applies_to" in messages(result, 53) and "realisation" in messages(result, 53)
+
+
+def test_a_skipped_occasion_writes_no_trip_and_no_row(world, installation, tmp_path):
+    """The rota's skip stands (check 48 still holds it to an occasion it removes), and what it removes
+    is gone from everything: the route file, the series' slots and the plan's entities. The report
+    states the skip with its reason, which is where the gap in the schedule is read from."""
+    result = compile_spec(world, installation, tmp_path)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    routes = result.files["routes"].read_text(encoding="utf-8")
+    assert 'id="patrol_d0_h6"' in routes and 'id="patrol_d0_h8"' not in routes
+    plan = result.plan
+    assert [slot["slot_key"] for slot in plan["series"][0]["slots"]] == ["patrol_d0_h6"]
+    assert "patrol_d0_h8" not in {entity["entity_id"] for entity in plan["entities"]}
+    (rota,) = result.report["rotas"]
+    assert rota["entries"] == 1
+    assert [(skip["entry"], skip["because"]) for skip in rota["skips"]] == \
+        [("patrol_d0_h8", "the second patrol does not come")]
+    assert "skipped `patrol_d0_h8`" in result.files["resolution_md"].read_text(encoding="utf-8")
 
 
 def test_annotating_without_any_nominal_subject_is_warned_under_check_24(world, installation,
@@ -925,7 +982,7 @@ def test_annotating_without_any_nominal_subject_is_warned_under_check_24(world, 
 STANDOFF_PARAMETERS = {"dwell_s": {"type": "number", "unit": "s", "definition": "the authored halt"},
                        "repeats": {"type": "integer", "definition": "halts at the kerb"}}
 COHORT_TERM = {"definition": "Traffic that passes the kerb without stopping.",
-               "applies_to": ["cohort"], "realisation": ["present"], "since": 1, "status": "active"}
+               "applies_to": ["cohort"], "since": 1, "status": "active"}
 
 
 def vocabulary_with(world, terms: dict[str, dict]) -> dict:
@@ -992,7 +1049,7 @@ def test_two_labels_declaring_one_key_differently_are_refused_under_check_56(wor
     vocabulary = vocabulary_with(world, {
         "fixture:standoff": {"parameters": STANDOFF_PARAMETERS},
         "fixture:loiter": {"definition": "A vehicle lingers at the kerb.", "applies_to": ["entity"],
-                           "realisation": ["present"], "since": 1, "status": "active",
+                           "since": 1, "status": "active",
                            "parameters": {"dwell_s": {"type": "number", "unit": "min",
                                                       "definition": "the lingering"}}}})
     block = supervision_with(world)
@@ -1004,37 +1061,31 @@ def test_two_labels_declaring_one_key_differently_are_refused_under_check_56(wor
             "number in s; 'fixture:loiter' as number in min") in messages(result, 56)
 
 
-def test_series_cohort_and_absence_rows_carry_the_parameters_their_labels_declare(world, installation,
-                                                                                tmp_path):
+def test_series_and_cohort_rows_carry_the_parameters_their_labels_declare(world, installation,
+                                                                         tmp_path):
     vocabulary = vocabulary_with(world, {
         "fixture:routine_patrol": {"parameters": {"halt_s": {
             "type": "number", "unit": "s", "definition": "the authored halt at the kerb"}}},
-        "fixture:patrol_missed": {"parameters": {"vacancy_s": {
-            "type": "number", "unit": "s", "definition": "how long the kerb goes unwatched"}}},
         "fixture:through_traffic": {**COHORT_TERM, "parameters": {"vehs_per_hour": {
             "type": "number", "unit": "1/h", "definition": "the authored rate"}}}})
     block = supervision_with(world, cohorts=[{"flow": "ambient", "supervision": "annotated",
                                               "labels": ["fixture:through_traffic"],
                                               "parameters": {"vehs_per_hour": 200}}])
     block["series"][0]["parameters"] = {"halt_s": 600}
-    block["absences"][0]["parameters"] = {"vacancy_s": 600}
     result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
     assert not result.refused, [str(f) for f in result.findings.refusals]
     assert result.plan["series"][0]["parameters"] == {"halt_s": 600}
     assert result.plan["cohorts"][0]["parameters"] == {"vehs_per_hour": 200}
-    assert plan_rows(result.plan)["patrol_missed_d0_h8"]["parameters"] == {"vacancy_s": 600}
 
 
-def test_a_series_cohort_or_absence_parameter_no_label_declares_is_refused_under_check_56(
+def test_a_series_or_cohort_parameter_no_label_declares_is_refused_under_check_56(
         world, installation, tmp_path):
     block = supervision_with(world, cohorts=[{"flow": "ambient", "supervision": "unlabelled",
                                               "parameters": {"vehs_per_hour": 200}}])
     block["series"][0]["parameters"] = {"halt_s": 600}
-    block["absences"][0]["parameters"] = {"vacancy_s": 600}
     result = compile_spec(world, installation, tmp_path, supervision=block)
     assert checks(result) == {56}
-    assert {f.subject for f in result.findings.by_check(56)} == {
-        "cohort ambient", "series kerb_patrol", "absence patrol_missed_d0_h8"}
+    assert {f.subject for f in result.findings.by_check(56)} == {"cohort ambient", "series kerb_patrol"}
     assert "'vehs_per_hour', which none of its labels declares, and it carries no label" in \
         messages(result, 56)
 
@@ -1047,7 +1098,6 @@ def test_a_nominal_subject_carries_its_terms_hard_negative_for_and_no_other_does
     # Nominal with no label to narrow it: unspecified, which is null and not an empty set.
     assert rows["hauler_nominal"]["hard_negative_for"] is None
     assert rows["probe_standoff"]["hard_negative_for"] is None
-    assert rows["patrol_missed_d0_h8"]["hard_negative_for"] is None
     block = supervision_with(world)
     block["instances"][1]["labels"] = ["fixture:routine_patrol"]
     labelled = compile_spec(world, installation, tmp_path / "b", supervision=block).plan
@@ -1084,18 +1134,17 @@ def test_a_hard_negative_for_other_than_the_terms_is_refused_under_check_57(
     assert finding.subject == subject and says in finding.message
 
 
-def test_a_term_s_exemplars_resolve_to_an_instance_and_an_absence_of_the_plan(world, installation,
-                                                                             tmp_path):
+def test_a_term_s_exemplars_resolve_to_an_instance_of_the_plan(world, installation, tmp_path):
     vocabulary = vocabulary_with(world, {
         "fixture:standoff": {"exemplar_instances": ["probe_standoff"]},
-        "fixture:patrol_missed": {"exemplar_instances": ["patrol_missed_d0_h8"]}})
+        "fixture:routine_patrol": {"exemplar_instances": ["hauler_nominal"]}})
     result = compile_spec(world, installation, tmp_path, vocabulary=vocabulary)
     assert not result.refused, [str(f) for f in result.findings.refusals]
 
 
 @pytest.mark.parametrize(("exemplar", "says"), [
     ("probe_standof", "'fixture:standoff' exemplar_instances names 'probe_standof', which is no "
-                      "instance or absence of this scenario. An exemplar resolves or it is prose"),
+                      "instance of this scenario. An exemplar resolves or it is prose"),
     ("street_layout_probe/probe_standoff", "an exemplar names the instance as the specification "
                                            "does, 'probe_standoff', not by its id in one plan"),
 ])
@@ -1109,39 +1158,15 @@ def test_a_dangling_exemplar_is_refused_under_check_8(world, installation, tmp_p
 
 def test_a_term_s_counterfactual_naming_a_subject_must_resolve_under_check_8(world, installation,
                                                                             tmp_path):
-    resolving = vocabulary_with(world, {"fixture:patrol_missed": {
+    resolving = vocabulary_with(world, {"fixture:standoff": {
         "counterfactual": {"kind": "series", "ref": "kerb_patrol"}}})
     assert not compile_spec(world, installation, tmp_path / "a", vocabulary=resolving).refused
-    dangling = vocabulary_with(world, {"fixture:patrol_missed": {
+    dangling = vocabulary_with(world, {"fixture:standoff": {
         "counterfactual": {"kind": "series", "ref": "kerb_patrols"}}})
     result = compile_spec(world, installation, tmp_path / "b", vocabulary=dangling)
     assert checks(result) == {8}
     assert "counterfactual series 'kerb_patrols' names nothing this scenario declares" in \
         messages(result, 8)
-
-
-def test_an_absence_whose_subject_names_no_lane_position_is_sited_at_its_area_alone(
-        world, installation, tmp_path):
-    """A rota whose subject is an edge -- driven to, never stopped at -- leaves no lane position to
-    site the vacancy at, so the absence's site is null and its area the only place it names."""
-    rota = {"id": "visit", "days": [0], "at": ["06:15", "08:15"], "subjects": ["east_end"],
-            "id_pattern": "visit_d{day}_h{hour}",
-            "template": {"type": "car", "from": "west_gate", "to": "$subject"},
-            "skip": [{"day": 0, "at": "08:15", "subject_index": 0,
-                      "because": "the second visit does not come"}]}
-    block = supervision_with(
-        world,
-        series=[{"series_id": "end_visit", "rota": "visit", "member_role": "fixture:patroller",
-                 "slot_length": "10m", "slot_aoi_refs": {"east_end": "kerb"},
-                 "supervision": "nominal", "labels": ["fixture:routine_patrol"]}],
-        absences=[{"name": "visit_missed", "series": "end_visit", "entry": "visit_d0_h8",
-                   "labels": ["fixture:patrol_missed"]}])
-    result = compile_spec(world, installation, tmp_path, rotas=[rota], supervision=block)
-    assert not result.refused, [str(f) for f in result.findings.refusals]
-    expected = plan_rows(result.plan)["visit_missed"]["expected"]
-    assert expected["route"] == {"from": "900", "to": "901#1", "via": []}
-    assert (expected["site_lane"], expected["site_pos_m"]) == (None, None)
-    assert plan_rows(result.plan)["visit_missed"]["aoi_refs"] == ["kerb"]
 
 
 # ---- intervals anchored to the events of their participant ------------------------------------------
@@ -1223,7 +1248,7 @@ def test_an_interval_anchored_to_phases_carries_where_each_is_entered_in_the_rou
     spec = orbit_specification(world)
     spec["vocabulary"] = vocabulary_with(world, {"fixture:circuit": {
         "definition": "A vehicle drives the same closed loop again and again.",
-        "applies_to": ["entity"], "realisation": ["present"], "since": 1, "status": "active"}})
+        "applies_to": ["entity"], "since": 1, "status": "active"}})
     spec["supervision"]["instances"].append({
         "name": "orbiter_circuit", "supervision": "annotated", "labels": ["fixture:circuit"],
         "participants": [{"actor": "orbiter", "role": "subject"}],
@@ -1246,11 +1271,10 @@ def test_an_interval_anchored_to_phases_carries_where_each_is_entered_in_the_rou
         assert route[end["route_index"]] == end["edge"]
 
 
-def test_an_unanchored_interval_and_a_vacancy_carry_no_anchor(world, installation, tmp_path):
+def test_an_unanchored_interval_carries_no_anchor(world, installation, tmp_path):
     rows = plan_rows(compile_spec(world, installation, tmp_path).plan)
     assert rows["probe_standoff"]["intervals"][0]["anchor"] is None
     assert rows["probe_standoff"]["intervals"][0]["declared_start_s"] == 3600.0
-    assert rows["patrol_missed_d0_h8"]["intervals"][0]["anchor"] is None
 
 
 @pytest.mark.parametrize(("anchor", "says"), [
@@ -1433,11 +1457,26 @@ def test_a_window_past_the_run_is_refused_under_check_38(world, installation, tm
     assert 38 in checks(result)
 
 
-def test_a_night_window_warns_under_check_42_and_never_refuses(world, installation, tmp_path):
+def test_a_window_s_lowest_sun_is_stated_under_check_42_and_nothing_is_concluded(world, installation,
+                                                                                  tmp_path):
+    """Check 42 states the lowest the sun reaches over a window and the band it falls in, and makes
+    no finding of it: a fact in the report, with no pass mark (the charter's §4b)."""
     result = compile_spec(world, installation, tmp_path,
-                          capture_windows=[{"id": "dark", "begin": "d0 06:00", "length": "5m"}])
-    assert not result.refused and 42 in checks(result, "warn")
-    assert "D11.7" in messages(result, 42)
+                          capture_windows=[{"id": "dark", "begin": "d0 06:00", "length": "5m"},
+                                           {"id": "bright", "begin": "d0 07:00", "length": "15m"}])
+    assert not result.refused
+    assert 42 not in checks(result) and 42 not in checks(result, "warn")
+    dark, bright = result.report["capture_windows"]
+    assert dark["sun_lowest"]["elevation_deg"] == min(dark["sun_open"]["elevation_deg"],
+                                                      dark["sun_close"]["elevation_deg"])
+    assert dark["sun_lowest"]["elevation_deg"] < -6.0
+    assert dark["sun_lowest"]["band"] in ("nautical_twilight", "astronomical_twilight", "night")
+    assert bright["sun_lowest"]["elevation_deg"] > dark["sun_lowest"]["elevation_deg"]
+    assert bright["sun_lowest"]["band"] in IlluminationBand.names()
+    assert dark["sun_lowest"]["elevation_kind"] == "refraction_corrected"
+    report = result.files["resolution_md"].read_text(encoding="utf-8")
+    for word in ("eligible", "usable", "night window"):
+        assert word not in report
 
 
 def test_an_advancing_default_names_the_arc_under_check_39(world, installation, tmp_path):
@@ -1530,14 +1569,6 @@ def test_a_street_narrowed_with_at_names_the_edge_arriving_at_the_cross_street(w
                                                                              tmp_path):
     report = compile_spec(world, installation, tmp_path).report
     assert report["places"]["east_before_cross"]["edges"] == ["901#0"]
-
-
-def test_an_absence_naming_a_realised_occasion_is_refused_under_check_8(world, installation,
-                                                                      tmp_path):
-    block = supervision_with(world)
-    block["absences"][0]["entry"] = "patrol_d0_h6"
-    result = compile_spec(world, installation, tmp_path, supervision=block)
-    assert 8 in checks(result) and "does not skip" in messages(result, 8)
 
 
 def test_an_actor_nobody_supervises_is_written_unlabelled(world, installation, tmp_path):

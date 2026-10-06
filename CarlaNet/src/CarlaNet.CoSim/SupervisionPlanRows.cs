@@ -10,8 +10,9 @@ namespace CarlaNet.CoSim;
 // fields and the record's copy, and it has no setter, so nothing in a run can make a row, change one or add one to a plan (06 D6.8).
 
 /// <summary>
-/// A pattern instance: an authored assertion about one or more vehicles over intervals, or an absence --
-/// an occasion of a recurring series that passed with no vehicle (06 §3.4, §3.5).
+/// A pattern instance: an authored assertion about one or more vehicles over intervals (06 §3.4). Every
+/// instance has a participant: SUMO reports vehicles, not places, and a label follows the vehicle it is
+/// about (06 §3.5).
 /// </summary>
 public sealed record PatternInstance
 {
@@ -20,15 +21,12 @@ public sealed record PatternInstance
         InstanceId = reading.Text(json, "instance_id", where);
         Supervision = reading.Core<SupervisionState>(json, "supervision", where, CoreVocabulary.Name,
                                                      "supervision_state");
-        Realisation = reading.Core<Realisation>(json, "realisation", where, CoreVocabulary.Name, "realisation");
         Labels = reading.Texts(json, "labels", where);
         Parameters = reading.Values(json, "parameters", where);
         HardNegativeFor = reading.NullableTexts(json, "hard_negative_for", where);
         Counterfactual = reading.NullableObject(json, "counterfactual", where, out JsonElement counterfactual)
             ? Counterfactual.Read(counterfactual, reading, $"{where}.counterfactual")
             : null;
-        SeriesRef = reading.NullableText(json, "series_ref", where);
-        SlotRef = reading.NullableText(json, "slot_ref", where);
         AoiRefs = reading.Texts(json, "aoi_refs", where);
         Participants = reading.Rows(json, "participants", where, InstanceParticipant.Read);
         Intervals = reading.Rows(json, "intervals", where, PlannedInterval.Read);
@@ -40,19 +38,21 @@ public sealed record PatternInstance
                                                     + "cohort's state, never as an instance (06 §3.1)");
         }
 
-        if (Realisation == Realisation.Absent)
+        if (Participants.Length == 0)
         {
-            Expected = reading.Object(json, "expected", where, out JsonElement expected)
-                ? AbsenceExpectation.Read(expected, reading, $"{where}.expected")
-                : null;
-            CounterEvidence = reading.Object(json, "counter_evidence", where, out JsonElement evidence)
-                ? AbsenceCounterEvidence.Read(evidence, reading, $"{where}.counter_evidence")
-                : null;
-            CheckAbsence(reading, where);
+            reading.Problem($"{where}.participants", "is empty. An instance is an assertion about one or more "
+                                                     + "vehicles, and a label follows its vehicle (06 §3.5)");
         }
-        else
+
+        HashSet<string> participants = [.. Participants.Select(participant => participant.EntityId)];
+        foreach ((PlannedInterval interval, int index) in Intervals.Select((interval, index) => (interval, index)))
         {
-            CheckPresence(reading, where);
+            if (!participants.Contains(interval.EntityId))
+            {
+                reading.Problem($"{where}.intervals[{index}].entity_id",
+                                $"is '{interval.EntityId}', which is no participant of the instance; an interval "
+                                + "is a participant's phase");
+            }
         }
     }
 
@@ -61,9 +61,6 @@ public sealed record PatternInstance
 
     /// <summary><see cref="SupervisionState.Annotated"/> or <see cref="SupervisionState.Nominal"/>.</summary>
     public SupervisionState Supervision { get; }
-
-    /// <summary>Whether a vehicle realised it, or it is a declared absence.</summary>
-    public Realisation Realisation { get; }
 
     /// <summary>The terms it asserts, which a nominal instance may carry too (06 D6.31).</summary>
     public ImmutableArray<string> Labels { get; }
@@ -80,83 +77,17 @@ public sealed record PatternInstance
     /// <summary>What it is to be read against; a pointer, never a supervision write.</summary>
     public Counterfactual? Counterfactual { get; }
 
-    /// <summary>The series an absence is the vacancy of; null for an instance outside a series.</summary>
-    public string? SeriesRef { get; }
-
-    /// <summary>The slot an absence is the vacancy of; null for an instance outside a series.</summary>
-    public string? SlotRef { get; }
-
     /// <summary>The areas of interest it is defined against.</summary>
     public ImmutableArray<string> AoiRefs { get; }
 
-    /// <summary>Its participants, with their roles; empty for an absence and only for one.</summary>
+    /// <summary>Its participants, with their roles; at least one.</summary>
     public ImmutableArray<InstanceParticipant> Participants { get; }
 
-    /// <summary>Its intervals: each participant's phases, or an absence's one vacancy.</summary>
+    /// <summary>Its intervals: each participant's phases.</summary>
     public ImmutableArray<PlannedInterval> Intervals { get; }
-
-    /// <summary>
-    /// For an absence, the vehicle that would have realised the slot, its route and its site; null for
-    /// an instance a vehicle realised.
-    /// </summary>
-    public AbsenceExpectation? Expected { get; }
-
-    /// <summary>For an absence, how many of its series' slots were realised; null otherwise.</summary>
-    public AbsenceCounterEvidence? CounterEvidence { get; }
 
     internal static PatternInstance Read(JsonElement json, SupervisionPlanReading reading, string where) =>
         new(json, reading, where);
-
-    private void CheckAbsence(SupervisionPlanReading reading, string where)
-    {
-        if (Supervision != SupervisionState.Annotated)
-        {
-            reading.Problem($"{where}.supervision", $"is {CoreVocabulary.Name(Supervision)} on an absence, "
-                                                    + "which is always annotated (06 D6.6)");
-        }
-
-        if (Participants.Length > 0)
-        {
-            reading.Problem($"{where}.participants", "names a participant on an absence, which has none: no "
-                                                     + "vehicle realised the occasion (06 D6.6)");
-        }
-
-        if (SeriesRef is null || SlotRef is null)
-        {
-            reading.Problem(where, "is an absence that names no series and slot, and an absence is the "
-                                   + "vacancy of one slot of one series (06 D6.6)");
-        }
-
-        foreach ((PlannedInterval interval, int index) in Intervals.Select((interval, index) => (interval, index)))
-        {
-            if (interval.EntityId is not null || interval.Phase != CoreVocabulary.VacancyPhase)
-            {
-                reading.Problem($"{where}.intervals[{index}]",
-                                $"is the phase '{interval.Phase}' of '{interval.EntityId}' on an absence, whose "
-                                + $"one interval is the '{CoreVocabulary.VacancyPhase}' of no vehicle (06 D6.6)");
-            }
-        }
-    }
-
-    private void CheckPresence(SupervisionPlanReading reading, string where)
-    {
-        if (Participants.Length == 0)
-        {
-            reading.Problem($"{where}.participants", "is empty on an instance a vehicle realised; only an "
-                                                     + "absence has no participant (06 D6.6)");
-        }
-
-        HashSet<string> participants = [.. Participants.Select(participant => participant.EntityId)];
-        foreach ((PlannedInterval interval, int index) in Intervals.Select((interval, index) => (interval, index)))
-        {
-            if (interval.EntityId is null || !participants.Contains(interval.EntityId))
-            {
-                reading.Problem($"{where}.intervals[{index}].entity_id",
-                                $"is {(interval.EntityId is null ? "null" : $"'{interval.EntityId}'")}, which "
-                                + "is no participant of the instance; an interval is a participant's phase");
-            }
-        }
-    }
 }
 
 /// <summary>One participant of a pattern instance: the vehicle and the role it plays.</summary>
@@ -186,8 +117,8 @@ public sealed record InstanceParticipant
 }
 
 /// <summary>
-/// One declared interval: a participant's phase, or an absence's vacancy, with what commits it and what
-/// its author declared of it (06 §3.3).
+/// One declared interval: a participant's phase, with what commits it and what its author declared of it
+/// (06 §3.3).
 /// </summary>
 /// <remarks>
 /// The declared fields are what the author's declaration, or the anchoring events, themselves declare:
@@ -200,7 +131,7 @@ public sealed record PlannedInterval
 {
     private PlannedInterval(JsonElement json, SupervisionPlanReading reading, string where)
     {
-        EntityId = reading.NullableText(json, "entity_id", where);
+        EntityId = reading.Text(json, "entity_id", where);
         Phase = reading.Text(json, "phase", where);
         Anchor = reading.NullableObject(json, "anchor", where, out JsonElement anchor)
             ? IntervalAnchor.Read(anchor, reading, $"{where}.anchor")
@@ -218,10 +149,10 @@ public sealed record PlannedInterval
         }
     }
 
-    /// <summary>The participant whose phase it is; null only for an absence's vacancy.</summary>
-    public string? EntityId { get; }
+    /// <summary>The participant whose phase it is.</summary>
+    public string EntityId { get; }
 
-    /// <summary>The phase: an author's term, or <see cref="CoreVocabulary.VacancyPhase"/> for an absence.</summary>
+    /// <summary>The phase, an author's term.</summary>
     public string Phase { get; }
 
     /// <summary>The events of its participant that commit it; null for an interval declared in civil time.</summary>
@@ -360,100 +291,9 @@ public sealed record AnchorPoint
 }
 
 /// <summary>
-/// What an absence expected: the vehicle that would have realised its slot, the route it would have
-/// driven and the site it would have stood at, and the slot's declared span (06 §3.5).
-/// </summary>
-public sealed record AbsenceExpectation
-{
-    private AbsenceExpectation(JsonElement json, SupervisionPlanReading reading, string where)
-    {
-        Role = reading.Text(json, "role", where);
-        ExpectedEntityId = reading.Text(json, "expected_entity_id", where);
-        Route = reading.Object(json, "route", where, out JsonElement route) && route.EnumerateObject().Any()
-            ? ExpectedRoute.Read(route, reading, $"{where}.route")
-            : null;
-        SiteLane = reading.NullableText(json, "site_lane", where);
-        SitePositionMetres = reading.NullableNumber(json, "site_pos_m", where);
-        DeclaredStartSeconds = reading.Number(json, "declared_start_s", where);
-        DeclaredEndSeconds = reading.NullableNumber(json, "declared_end_s", where);
-
-        if ((SiteLane is null) != (SitePositionMetres is null))
-        {
-            reading.Problem(where, "gives a site lane without a position, or a position without a lane; a "
-                                   + "site is a lane position, or both are null and the area alone sites it");
-        }
-    }
-
-    /// <summary>The role the series' members play.</summary>
-    public string Role { get; }
-
-    /// <summary>The entity that would have realised the slot.</summary>
-    public string ExpectedEntityId { get; }
-
-    /// <summary>The edges it would have driven; null where the plan carries none.</summary>
-    public ExpectedRoute? Route { get; }
-
-    /// <summary>The lane of the place it would have stood at; null where that place is no one lane position.</summary>
-    public string? SiteLane { get; }
-
-    /// <summary>The position on <see cref="SiteLane"/>, in metres; null with it.</summary>
-    public double? SitePositionMetres { get; }
-
-    /// <summary>The slot's declared start, in simulated seconds.</summary>
-    public double DeclaredStartSeconds { get; }
-
-    /// <summary>The slot's declared end, in simulated seconds; null where it has none.</summary>
-    public double? DeclaredEndSeconds { get; }
-
-    internal static AbsenceExpectation Read(JsonElement json, SupervisionPlanReading reading, string where) =>
-        new(json, reading, where);
-}
-
-/// <summary>The route an absent vehicle would have driven, in the world's edges.</summary>
-public sealed record ExpectedRoute
-{
-    private ExpectedRoute(JsonElement json, SupervisionPlanReading reading, string where)
-    {
-        From = reading.NullableText(json, "from", where, required: false);
-        To = reading.NullableText(json, "to", where, required: false);
-        Via = reading.Texts(json, "via", where, required: false);
-    }
-
-    /// <summary>The edge it would have departed from.</summary>
-    public string? From { get; }
-
-    /// <summary>The edge it would have arrived at.</summary>
-    public string? To { get; }
-
-    /// <summary>The edges it would have passed, in order.</summary>
-    public ImmutableArray<string> Via { get; }
-
-    internal static ExpectedRoute Read(JsonElement json, SupervisionPlanReading reading, string where) =>
-        new(json, reading, where);
-}
-
-/// <summary>An absence's counter-evidence: its series' slots, and how many of them a vehicle realised.</summary>
-public sealed record AbsenceCounterEvidence
-{
-    private AbsenceCounterEvidence(JsonElement json, SupervisionPlanReading reading, string where)
-    {
-        SeriesSlotsTotal = reading.Integer(json, "series_slots_total", where);
-        SeriesSlotsRealised = reading.Integer(json, "series_slots_realised", where);
-    }
-
-    /// <summary>Every slot of the series.</summary>
-    public int SeriesSlotsTotal { get; }
-
-    /// <summary>Those a vehicle realised.</summary>
-    public int SeriesSlotsRealised { get; }
-
-    internal static AbsenceCounterEvidence Read(JsonElement json, SupervisionPlanReading reading, string where) =>
-        new(json, reading, where);
-}
-
-/// <summary>
-/// A recurring series: a rota read as a cadence, one slot per occasion, its realised members in one
-/// declared state (06 §3.4, D6.5).
+/// A recurring series: a rota read as a cadence, one slot per occasion a vehicle realises, its members
+/// in one declared state (06 §3.4, D6.5). An occasion the rota skips writes no trip and no slot: there is
+/// no vehicle for a label to follow (06 §3.5).
 /// </summary>
 public sealed record RecurringSeries
 {
@@ -495,14 +335,14 @@ public sealed record RecurringSeries
     /// <summary>Its terms' <c>hard_negative_for</c> when nominal; null where nothing narrows it.</summary>
     public ImmutableArray<string>? HardNegativeFor { get; }
 
-    /// <summary>One slot per occasion, by declared start.</summary>
+    /// <summary>One slot per realised occasion, by declared start.</summary>
     public ImmutableArray<SeriesSlot> Slots { get; }
 
     internal static RecurringSeries Read(JsonElement json, SupervisionPlanReading reading, string where) =>
         new(json, reading, where);
 }
 
-/// <summary>One occasion of a recurring series, realised by a vehicle or left unrealised.</summary>
+/// <summary>One occasion of a recurring series, and the vehicle that realises it.</summary>
 public sealed record SeriesSlot
 {
     private SeriesSlot(JsonElement json, SupervisionPlanReading reading, string where)
@@ -513,8 +353,7 @@ public sealed record SeriesSlot
         DeclaredStartCivil = reading.Text(json, "declared_start_civil", where);
         DeclaredEndSeconds = reading.NullableNumber(json, "declared_end_s", where);
         DeclaredEndCivil = reading.NullableText(json, "declared_end_civil", where);
-        ExpectedEntityId = reading.Text(json, "expected_entity_id", where);
-        RealisedBy = reading.NullableText(json, "realised_by", where);
+        EntityId = reading.Text(json, "entity_id", where);
     }
 
     /// <summary>The occasion's key.</summary>
@@ -535,14 +374,8 @@ public sealed record SeriesSlot
     /// <summary>Its declared end in civil time; null with <see cref="DeclaredEndSeconds"/>.</summary>
     public string? DeclaredEndCivil { get; }
 
-    /// <summary>The entity expected to realise it.</summary>
-    public string ExpectedEntityId { get; }
-
-    /// <summary>The entity that realises it; null where the rota leaves it unrealised.</summary>
-    public string? RealisedBy { get; }
-
-    /// <summary>Whether a vehicle realises it.</summary>
-    public bool Realised => RealisedBy is not null;
+    /// <summary>The entity that realises it: the rota entry's vehicle, its SUMO id.</summary>
+    public string EntityId { get; }
 
     internal static SeriesSlot Read(JsonElement json, SupervisionPlanReading reading, string where) =>
         new(json, reading, where);

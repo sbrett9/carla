@@ -104,11 +104,8 @@ public sealed class SumoDriveSession : IDisposable
     private readonly List<LentBody> _lentSinceNamed = [];
     private readonly List<ActorId> _parkedSinceNamed = [];
     private readonly Dictionary<ActorId, (string VehicleId, SupervisionInForce Supervision)> _supervisionNamed = [];
-    private readonly Dictionary<string, AbsenceInForce> _absencesNamed = new(StringComparer.Ordinal);
     private readonly List<ActorId> _supervisionDropped = [];
     private readonly List<BodySupervision> _supervisionSinceNamed = [];
-    private readonly List<AbsenceInForce> _absencesOpenedSinceNamed = [];
-    private readonly List<string> _absencesClosedSinceNamed = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly List<VehiclePose> _appliedPoses = [];
@@ -1092,8 +1089,8 @@ public sealed class SumoDriveSession : IDisposable
         Attempt(failures, "close the world truth track", () => _track?.Dispose());
         Attempt(failures, "close the run manifest", () => _manifest?.Dispose());
         Attempt(failures, "give back the world's sun", () => _sun?.Dispose());
-        // Before the bodies go, though they take their own supervision with them: the plan and the
-        // absences are held for the world, and outlive every body.
+        // Before the bodies go, though they take their own supervision with them: the plan is held for
+        // the world, and outlives every body.
         Attempt(failures, "withdraw the supervision put to the server", WithdrawTheSupervisionAtTheEnd);
         Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
         Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
@@ -1403,7 +1400,6 @@ public sealed class SumoDriveSession : IDisposable
         if (fresh)
         {
             _supervisionNamed.Clear();
-            _absencesNamed.Clear();
         }
         else if (lendingChanged)
         {
@@ -1442,33 +1438,13 @@ public sealed class SumoDriveSession : IDisposable
             }
         }
 
-        _absencesOpenedSinceNamed.Clear();
-        _absencesClosedSinceNamed.Clear();
-        foreach (AbsenceInForce absence in Supervision.Absences)
-        {
-            if (!_absencesNamed.TryGetValue(absence.InstanceId, out AbsenceInForce? named) || !named.Equals(absence))
-            {
-                _absencesOpenedSinceNamed.Add(absence);
-            }
-        }
-
-        foreach (string instanceId in _absencesNamed.Keys)
-        {
-            if (!Supervision.IsOpen(instanceId))
-            {
-                _absencesClosedSinceNamed.Add(instanceId);
-            }
-        }
-
-        if (!fresh && _supervisionSinceNamed.Count == 0 && _absencesOpenedSinceNamed.Count == 0
-            && _absencesClosedSinceNamed.Count == 0)
+        if (!fresh && _supervisionSinceNamed.Count == 0)
         {
             _supervisionRevisionNamed = Supervision.Revision;
             return;
         }
 
-        SupervisionWrite written = world.WriteSupervision(new SupervisionChange(
-            fresh, plan, _supervisionSinceNamed, _absencesOpenedSinceNamed, _absencesClosedSinceNamed));
+        SupervisionWrite written = world.WriteSupervision(new SupervisionChange(fresh, plan, _supervisionSinceNamed));
         if (!written.Taken)
         {
             Report.SupervisionRefused = written.Refusal;
@@ -1486,16 +1462,6 @@ public sealed class SumoDriveSession : IDisposable
             {
                 _supervisionNamed[body.Actor] = (_namedToServer[body.Actor], body.Supervision);
             }
-        }
-
-        foreach (string instanceId in _absencesClosedSinceNamed)
-        {
-            _absencesNamed.Remove(instanceId);
-        }
-
-        foreach (AbsenceInForce absence in _absencesOpenedSinceNamed)
-        {
-            _absencesNamed[absence.InstanceId] = absence;
         }
 
         _supervisionRevisionNamed = Supervision.Revision;
@@ -1517,14 +1483,13 @@ public sealed class SumoDriveSession : IDisposable
 
         _supervisionPlanNamed = null;
         _supervisionNamed.Clear();
-        _absencesNamed.Clear();
         _supervisionRevisionNamed = -1;
         Report.SupervisionUpdates++;
     }
 
     /// <summary>
     /// Withdraw what the session put to the server, as it ends: the bodies take their own supervision
-    /// with them when they are destroyed, but the plan and the absences are the world's.
+    /// with them when they are destroyed, but the plan is the world's.
     /// </summary>
     private void WithdrawTheSupervisionAtTheEnd()
     {

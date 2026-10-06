@@ -206,13 +206,10 @@ internal sealed class CompiledFixture : IDisposable
                 {
                     ["instance_id"] = $"{ScenarioId}/turn_nominal",
                     ["supervision"] = "nominal",
-                    ["realisation"] = "present",
                     ["labels"] = new JsonArray(),
                     ["parameters"] = new JsonObject(),
                     ["hard_negative_for"] = null,
                     ["counterfactual"] = null,
-                    ["series_ref"] = null,
-                    ["slot_ref"] = null,
                     ["aoi_refs"] = new JsonArray(),
                     ["participants"] = new JsonArray
                     {

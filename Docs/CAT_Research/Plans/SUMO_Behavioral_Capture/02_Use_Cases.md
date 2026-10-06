@@ -21,6 +21,11 @@ was run.
   an imagery folder. UC-10 step 3 and the back-door failure flow are withdrawn, UC-10's artifacts are
   the capture folder as written, §1.3 point 2 follows, and D2.9's export half is amended; the published
   supervision-transfer rule stands.
+- 2026-10-05: labels follow vehicles, by the owner's ruling ([`06`](06_Truth_And_Annotation.md) §3.5):
+  UC-10's alternate flow for an anomaly that is an absence is withdrawn. SUMO reports vehicles, not
+  places, so no supervision row has an empty place as its subject; a schedule's skip writes no trip and
+  no row, and an author who wants a planted omission in the record labels the vehicle that deviates, or
+  states the intent as a note at scenario level, never per frame.
 **Owner role:** Systems architect. Companion section: [01 — Architecture](01_Architecture.md), whose
 component names, modes and authority model this section uses without restating them.
 **Scope:** The actors, the use cases each one drives, and the four flows that carry the most risk drawn as
@@ -609,12 +614,14 @@ vocabulary and its version.
    rather than by omission ([20 decision 2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
 
 **Alternate flows.**
-- *An anomaly that is an absence* — a guard who never arrives has no vehicle to attach to. The sizing
-  scenario already carries one such case in its `anomaly_notes` (**measured**: a `guard_no_show` covering
-  tower 3 over `begin_s = 370,800` to `end_s = 399,600`, which the epoch resolves to **day 4, 07:00 to
-  15:00**). It is a pattern instance with a participant that is expected and does not appear, with a
-  place and a window, and the compiler must be able to express it rather than relegating it to a note.
-  Note that this instance is *defined* by a shift boundary, so it is a step 5 case.
+- *An anomaly that is an absence* — **withdrawn 2026-10-05 by the owner's ruling**
+  ([`06`](06_Truth_And_Annotation.md) §3.5). A guard who never arrives has no vehicle to attach to, and
+  that is the point: SUMO reports vehicles, not places, and a label follows the vehicle it is about. The
+  sizing scenario's `guard_no_show` (**measured** in its `anomaly_notes`: tower 3 over `begin_s = 370,800`
+  to `end_s = 399,600`, which the epoch resolves to **day 4, 07:00 to 15:00**) is the rota's skip: the
+  posting writes no trip and no supervision row, and the compiler refuses an instance about no vehicle
+  (check 19). An author who wants the omission in the record labels the vehicle that deviates, or states
+  the intent as a note at scenario level — never per frame.
 - *An hour-defined pattern with no vehicle-level signature* — permitted, and precisely the class the epoch
   unlocks. It is also the class most exposed to the confound, so it is the class UC-11 must be strongest
   on.

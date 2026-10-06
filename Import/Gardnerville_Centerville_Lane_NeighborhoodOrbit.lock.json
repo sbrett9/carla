@@ -24,7 +24,7 @@
     },
     "supervision": {
       "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-      "sha256": "9c289826492cf0dee6ac28c4c82ae9313d34e3c08714fd454b07c14d126e9a6b"
+      "sha256": "47f8806a0f288094115c068e03f60956c6fe0132617b68d6229ef26d32f47b0f"
     }
   },
   "world": {
@@ -80,9 +80,9 @@
     "content_build_id": "carla-0.10.0-windows"
   },
   "vocabulary": {
-    "core_version": 2,
+    "core_version": 3,
     "namespaces": [],
-    "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
+    "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63"
   },
   "traffic": {
     "sumo_seed": 42,

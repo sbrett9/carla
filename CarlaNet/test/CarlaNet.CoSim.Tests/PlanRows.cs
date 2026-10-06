@@ -5,8 +5,8 @@ namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
 /// The rows of a supervision plan in the shape the scenario compiler writes them, for a test that needs a
-/// plan of its own: instances with their participants and intervals, anchors, absences, series, cohorts
-/// and entities.
+/// plan of its own: instances with their participants and intervals, anchors, series, cohorts and
+/// entities.
 /// </summary>
 /// <remarks>
 /// A plan is the shipped Gardnerville plan's identity and vocabulary -- digested by the compiler, no
@@ -64,13 +64,10 @@ internal static class PlanRows
     {
         ["instance_id"] = $"{ScenarioId}/{name}",
         ["supervision"] = supervision,
-        ["realisation"] = "present",
         ["labels"] = Texts(labels),
         ["parameters"] = new JsonObject(),
         ["hard_negative_for"] = null,
         ["counterfactual"] = null,
-        ["series_ref"] = null,
-        ["slot_ref"] = null,
         ["aoi_refs"] = new JsonArray(),
         ["participants"] = new JsonArray(participants.Select(participant => (JsonNode?)new JsonObject
         {
@@ -112,48 +109,9 @@ internal static class PlanRows
     public static JsonObject Phase(int index, int routeIndex, string edge) =>
         new() { ["event"] = $"phase:{index}", ["route_index"] = routeIndex, ["edge"] = edge };
 
-    /// <summary>An absence over a series' unrealised slot, with its vacancy over the declared seconds.</summary>
-    public static JsonObject Absence(string name, string series, string slot, string expectedEntity, string[] labels,
-                                     string area, double from, double to) => new()
-    {
-        ["instance_id"] = $"{ScenarioId}/{name}",
-        ["supervision"] = "annotated",
-        ["realisation"] = "absent",
-        ["labels"] = Texts(labels),
-        ["parameters"] = new JsonObject(),
-        ["hard_negative_for"] = null,
-        ["counterfactual"] = new JsonObject { ["kind"] = "series", ["ref"] = series },
-        ["series_ref"] = series,
-        ["slot_ref"] = slot,
-        ["aoi_refs"] = new JsonArray(area),
-        ["participants"] = new JsonArray(),
-        ["expected"] = new JsonObject
-        {
-            ["role"] = "test:guard",
-            ["expected_entity_id"] = expectedEntity,
-            ["route"] = new JsonObject { ["from"] = "approach", ["to"] = "turn_east", ["via"] = new JsonArray() },
-            ["site_lane"] = "turn_east_0",
-            ["site_pos_m"] = 50.0,
-            ["declared_start_s"] = from,
-            ["declared_end_s"] = to,
-        },
-        ["intervals"] = new JsonArray(new JsonObject
-        {
-            ["entity_id"] = null,
-            ["phase"] = "vacancy",
-            ["anchor"] = null,
-            ["declared_start_s"] = from,
-            ["declared_start_civil"] = "2026-09-29T07:00:00+03:30",
-            ["declared_end_s"] = to,
-            ["declared_end_civil"] = "2026-09-29T07:00:00+03:30",
-            ["declared_duration_s"] = to - from,
-        }),
-        ["counter_evidence"] = new JsonObject { ["series_slots_total"] = 2, ["series_slots_realised"] = 1 },
-    };
-
-    /// <summary>A series with a slot per member given, realised by it or, where null, unrealised.</summary>
+    /// <summary>A series with a slot per occasion given, each realised by the vehicle named.</summary>
     public static JsonObject Series(string id, string supervision, string[] labels,
-                                    params (string Slot, string? RealisedBy, double From, double To)[] slots) => new()
+                                    params (string Slot, string EntityId, double From, double To)[] slots) => new()
     {
         ["series_id"] = id,
         ["rota_ref"] = id,
@@ -171,8 +129,7 @@ internal static class PlanRows
             ["declared_start_civil"] = "2026-09-29T07:00:00+03:30",
             ["declared_end_s"] = slot.To,
             ["declared_end_civil"] = "2026-09-29T07:00:00+03:30",
-            ["expected_entity_id"] = slot.Slot,
-            ["realised_by"] = slot.RealisedBy,
+            ["entity_id"] = slot.EntityId,
         }).ToArray()),
     };
 

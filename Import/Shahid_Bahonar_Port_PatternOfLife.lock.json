@@ -4,7 +4,7 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "ebfe6a198bf4e8324ab752cbd686230135be3f357d5ad99c590b3947ebb30b29",
+  "specification_sha256": "2ed0e942c0b97199e60ddbe2eb2259097110ede819eeff716fc7cfb4a003a2cf",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "1.0.0"
@@ -24,7 +24,7 @@
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-      "sha256": "4c68a019547c2d5638b02ad59d4e47d6f668717ed67e37a2f5b1985d53791442"
+      "sha256": "292b3909573bec7ec8cf5c66dc1e0f532c940955088e7c19b26f6e03989a2302"
     }
   },
   "world": {
@@ -78,14 +78,14 @@
     "content_build_id": "carla-0.10.0-windows"
   },
   "vocabulary": {
-    "core_version": 2,
+    "core_version": 3,
     "namespaces": [
       {
         "namespace": "bahonar",
         "version": 1
       }
     ],
-    "vocabulary_digest": "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad"
+    "vocabulary_digest": "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7"
   },
   "traffic": {
     "sumo_seed": 42,

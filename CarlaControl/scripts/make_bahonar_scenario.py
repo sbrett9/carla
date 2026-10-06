@@ -54,10 +54,13 @@ alone except where the difference is the behaviour itself: the perimeter shadow'
 stay-behind, a civilian car cleared into the port.
 
 **Supervision** goes to the supervision plan and nowhere else: the five vehicle anomalies as pattern
-instances, the no-show as an absence in the guard rota's recurring series, the guard postings and
-the air-freight hauls as nominal hard negatives, and the ferry pulses as a cleared-gate cohort. The
-terms are the scenario's own, in namespace `bahonar` (`06_Truth_And_Annotation.md` §9.4). A slot
-and an instance are sited at the world's areas of interest, `Import/Shahid_Bahonar_Port.aoi.geojson`.
+instances, the guard postings and the air-freight hauls as nominal hard negatives, and the ferry
+pulses as a cleared-gate cohort. The guard no-show is a skip in the rota and nothing more: the posting
+it removes writes no trip and no supervision row, because a label follows a vehicle and there is none
+(`06_Truth_And_Annotation.md` §3.5, the owner's ruling of 2026-10-05); whether to re-author it with a
+vehicle that deviates is the owner's. The terms are the scenario's own, in namespace `bahonar` (06
+§9.4). A slot and an instance are sited at the world's areas of interest,
+`Import/Shahid_Bahonar_Port.aoi.geojson`.
 Each anomaly's interval is anchored to the event of its vehicle that commits it: the escort's and the
 shadow's transits to their departures, each probe's standoff and the stay-behind's dwell to their stop.
 
@@ -260,20 +263,8 @@ VOCABULARY = {"namespaces": [{
     "version": 1,
     "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
     "terms": [
-        {"term": "bahonar:expected_arrival_absent", "since": 1, "status": "active",
-         "applies_to": ["slot"], "realisation": ["absent"],
-         "definition": "A recurring series enumerated an occasion and no vehicle realised it. The "
-                       "signal is the vacancy; the realised siblings of the same series are its "
-                       "evidence."},
-        {"term": "bahonar:post_unmanned", "since": 1, "status": "active",
-         "broader": "bahonar:expected_arrival_absent",
-         "applies_to": ["slot"], "realisation": ["absent"],
-         "definition": "A guard tower that should have been manned at a shift change stands "
-                       "unmanned for the whole shift, while the other fifteen towers are relieved "
-                       "as usual.",
-         "counterfactual": {"kind": "series", "ref": "tower_relief"}},
         {"term": "bahonar:coordinated_group_transit", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "Several vehicles depart together and travel as one group in tight "
                        "formation: a dense military escort around a shipment.",
          "parameters": {
@@ -282,11 +273,11 @@ VOCABULARY = {"namespaces": [{
                                     "definition": "first to last departure"}},
          "counterfactual": {"kind": "term", "ref": "bahonar:routine_freight_haul"}},
         {"term": "bahonar:destination_off_pattern", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A vehicle travels to a place the routine traffic of its kind never goes: "
                        "an air-freight shipment taken to the drydock rather than to the port."},
         {"term": "bahonar:standoff_dwell_at_access_point", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A vehicle approaches a controlled access point from the public side, halts "
                        "short of it for several minutes, and departs without transiting.",
          "parameters": {"dwell_s": {"type": "number", "unit": "s",
@@ -294,29 +285,29 @@ VOCABULARY = {"namespaces": [{
          "contrast_with": ["bahonar:cleared_gate_transit"],
          "counterfactual": {"kind": "term", "ref": "bahonar:cleared_gate_transit"}},
         {"term": "bahonar:perimeter_transit_off_cadence", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "During the pre-dawn dead hours one vehicle slowly follows the fence line "
                        "past the guard posts without stopping at any of them.",
          "parameters": {
              "speed_factor": {"type": "number", "definition": "fraction of each limit driven"},
              "circuit_edges": {"type": "integer", "definition": "fence-line roads driven"}}},
         {"term": "bahonar:arrival_without_departure", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its "
                        "dwell is still open when the scenario ends."},
         {"term": "bahonar:tower_posting", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked "
                        "dwell, in a legitimate place, for a legitimate reason.",
          "hard_negative_for": ["bahonar:standoff_dwell_at_access_point",
                                "bahonar:arrival_without_departure"]},
         {"term": "bahonar:routine_freight_haul", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
          "hard_negative_for": ["bahonar:coordinated_group_transit",
                                "bahonar:destination_off_pattern"]},
         {"term": "bahonar:cleared_gate_transit", "since": 1, "status": "active",
-         "applies_to": ["cohort"], "realisation": ["present"],
+         "applies_to": ["cohort"],
          "definition": "Port-cleared traffic that transits a checkpoint and enters: every member "
                        "of a ferry sailing's pulse, for its whole life."},
     ],
@@ -500,7 +491,7 @@ class BahonarPatternOfLifeSpecification:
         shift, off the running lane, so at any hour a guard stands at every post and the shift
         change is a wave of arrivals and departures across the fence. The no-show is one occasion
         the rota skips: that tower stands unmanned for a shift while the other fifteen are
-        relieved as usual."""
+        relieved as usual. The skip writes no trip and no supervision row (06 §3.5)."""
         rota = {
             "id": "guard_posting",
             "days": f"0..{self.days - 1}",
@@ -521,10 +512,6 @@ class BahonarPatternOfLifeSpecification:
     @property
     def no_show_in_run(self) -> bool:
         return self.no_show_day < self.days
-
-    @property
-    def no_show_entry(self) -> str:
-        return f"guard_d{self.no_show_day}_h{self.no_show_hour}_t{self.no_show_tower}"
 
     def hauls(self) -> list[dict]:
         """Light air-freight runs from the apron to the port, a few a day."""
@@ -552,7 +539,7 @@ class BahonarPatternOfLifeSpecification:
         return self.in_run(int(day), clock)
 
     def anomalies(self) -> list[dict]:
-        """The anomalies that are vehicles; the guard no-show is an absence, in the rota's skip."""
+        """The anomalies that are vehicles; the guard no-show is a skip in the rota, with no row."""
         out = []
         # Escort-to-drydock: five military jeeps from the apron to the drydock in tight formation.
         for index, escort in enumerate(self.escort_ids()):
@@ -635,7 +622,7 @@ class BahonarPatternOfLifeSpecification:
             instances.append({"name": haul["id"], "supervision": "nominal",
                               "labels": ["bahonar:routine_freight_haul"],
                               "participants": [{"actor": haul["id"], "role": "subject"}]})
-        block = {
+        return {
             "instances": instances,
             "cohorts": [{"flow": flow["id"], "supervision": "annotated",
                          "labels": ["bahonar:cleared_gate_transit"]}
@@ -645,14 +632,6 @@ class BahonarPatternOfLifeSpecification:
                         "slot_aoi_refs": {tower: tower for tower in self.towers()},
                         "supervision": "nominal", "labels": ["bahonar:tower_posting"]}],
         }
-        if self.no_show_in_run:
-            block["absences"] = [{
-                "name": f"pi_tower_relief_d{self.no_show_day}_h{self.no_show_hour}"
-                        f"_t{self.no_show_tower}_unmanned",
-                "series": "tower_relief", "entry": self.no_show_entry,
-                "labels": ["bahonar:post_unmanned"],
-                "counterfactual": {"kind": "series", "ref": "tower_relief"}}]
-        return block
 
     @staticmethod
     def _subject_instance(name: str, actor: str, label: str, phase: str, anchor: dict,

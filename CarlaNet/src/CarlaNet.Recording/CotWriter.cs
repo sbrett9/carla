@@ -34,8 +34,7 @@ namespace CarlaNet.Recording;
 ///
 /// <para>A capture of a frame a supervision plan was in force on carries that frame's supervision, as
 /// the server held it (<see cref="CaptureSupervision"/>): the plan and the vocabulary's version and
-/// digest on the container, a world-scoped <c>&lt;_supervision scope="world"&gt;</c> with an
-/// <c>&lt;absence&gt;</c> per absence in force, and on every drawn SUMO vehicle a
+/// digest on the container, and on every drawn SUMO vehicle a
 /// <c>&lt;_supervision&gt;</c> whose <c>state</c> is always written, <c>unlabelled</c> included, with an
 /// <c>&lt;annotation&gt;</c> per pattern instance in force. One whose frame's supervision is not to be had
 /// says <c>supervision="unknown"</c> on its container and writes none. A capture of a frame no plan was
@@ -98,12 +97,8 @@ public static class CotWriter
 
         // The supervision plan in force on the frame, with the vocabulary version and digest that pin
         // what its labels mean; or that a plan was in force and this frame's supervision is unknown.
-        // Absent, no plan was in force.
+        // Absent, no plan was in force. Every other supervision fact is a vehicle's, on its event.
         supervision.WriteContainerAttributes(w);
-
-        // World-scoped supervision: facts about the world, not about any one track, so a sibling of
-        // _solar rather than an event. An absence has no vehicle, and an event would fabricate one.
-        supervision.WriteWorld(w);
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame. A

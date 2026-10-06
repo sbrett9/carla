@@ -136,10 +136,10 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
     public void A_Change_To_The_Supervision_Reaches_The_Server_In_The_Arrays_The_Server_Unpacks()
     {
         // The server binds one carla::rpc::SupervisionUpdate, a MSGPACK_DEFINE_ARRAY of
-        // (fresh, plan_id, vocabulary_version, vocabulary_digest, actors, absences_opened, absences_closed),
-        // each actor (actor_id, state, annotations), each annotation (instance_id, labels, phase, role) and
-        // each absence (instance_id, labels, areas, phase). Read raw here, as nested arrays, so the order
-        // is checked against the server's and not against this client's own reading of it.
+        // (fresh, plan_id, vocabulary_version, vocabulary_digest, actors), each actor (actor_id, state,
+        // annotations) and each annotation (instance_id, labels, phase, role). Read raw here, as nested
+        // arrays, so the order is checked against the server's and not against this client's own reading
+        // of it. Every row is a body's: the array carries nothing for the world apart from the plan.
         List<object?[]> sent = [];
         _server!.RegisterHandler<object, SuccessResponse<uint>>("update_supervision", update =>
         {
@@ -147,25 +147,22 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
             return Ok(1u);
         });
         CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
-        var plan = new SupervisionPlanIdentity("Shahid_Bahonar_Port_PatternOfLife", 2, "e357");
+        var plan = new SupervisionPlanIdentity("Shahid_Bahonar_Port_PatternOfLife", 3, "e357");
         var lead = new AnnotationInForce("Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3",
                                          ["bahonar:coordinated_group_transit"], "transit", "bahonar:lead");
-        var unmanned = new AbsenceInForce("Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned",
-                                          ["bahonar:post_unmanned"], ["tower_03"], "vacancy");
 
         SupervisionWrite written = world.WriteSupervision(new SupervisionChange(
             true, plan,
             [new BodySupervision(7, new SupervisionInForce(SupervisionState.Annotated, [lead])),
-             new BodySupervision(9, SupervisionInForce.Unlabelled)],
-            [unmanned], ["Shahid_Bahonar_Port_PatternOfLife/pi_earlier"]));
+             new BodySupervision(9, SupervisionInForce.Unlabelled)]));
 
         Assert.True(written.Taken);
         Assert.Equal(1, written.BodiesApplied);
         object?[] update = Assert.Single(sent);
-        Assert.Equal(7, update.Length);
+        Assert.Equal(5, update.Length);
         Assert.Equal(true, update[0]);
         Assert.Equal("Shahid_Bahonar_Port_PatternOfLife", update[1]);
-        Assert.Equal(2u, Convert.ToUInt32(update[2]));
+        Assert.Equal(3u, Convert.ToUInt32(update[2]));
         Assert.Equal("e357", update[3]);
 
         object?[] actors = (object?[])update[4]!;
@@ -184,21 +181,13 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
         Assert.Equal("unlabelled", cleared[1]);
         Assert.Empty((object?[])cleared[2]!);
 
-        object?[] absence = (object?[])Assert.Single((object?[])update[5]!)!;
-        Assert.Equal(unmanned.InstanceId, absence[0]);
-        Assert.Equal(["bahonar:post_unmanned"], ((object?[])absence[1]!).Cast<string>());
-        Assert.Equal(["tower_03"], ((object?[])absence[2]!).Cast<string>());
-        Assert.Equal("vacancy", absence[3]);
-        Assert.Equal(["Shahid_Bahonar_Port_PatternOfLife/pi_earlier"], ((object?[])update[6]!).Cast<string>());
-
         // A withdrawal goes as a change naming no plan, and carrying nothing else.
         world.WriteSupervision(SupervisionChange.Withdrawal);
         object?[] withdrawal = sent[^1];
+        Assert.Equal(5, withdrawal.Length);
         Assert.Equal(false, withdrawal[0]);
         Assert.Equal(string.Empty, withdrawal[1]);
         Assert.Empty((object?[])withdrawal[4]!);
-        Assert.Empty((object?[])withdrawal[5]!);
-        Assert.Empty((object?[])withdrawal[6]!);
     }
 
     [Fact]
@@ -207,7 +196,7 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
         CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
 
         SupervisionWrite written = world.WriteSupervision(new SupervisionChange(
-            true, new SupervisionPlanIdentity("plan", 2, "digest"), [], [], []));
+            true, new SupervisionPlanIdentity("plan", 3, "digest"), []));
 
         Assert.False(written.Taken);
         Assert.Equal(0, written.BodiesApplied);

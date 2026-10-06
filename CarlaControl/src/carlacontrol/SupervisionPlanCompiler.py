@@ -14,11 +14,14 @@ What an author declares, and what it compiles to:
 |---|---|
 | `instances[]` -- annotated or nominal, over actors | a pattern instance with participants, roles and intervals |
 | `cohorts[]` -- a flow, annotated whole-life or unlabelled | a cohort row; `nominal` and intervals refuse (D6.2) |
-| `series[]` -- a rota read as a recurring series | a series with one slot per occasion, each realised slot's vehicle an entity in the declared state |
-| `absences[]` -- a skipped rota occasion, annotated | an instance with `realisation: absent`, no participant, one `vacancy` interval, and the route and site its vehicle would have had |
+| `series[]` -- a rota read as a recurring series | a series with one slot per occasion a vehicle realises, each slot's vehicle an entity in the declared state |
 
-Every actor not named in an instance and every flow not named in a cohort is written explicitly as
-`unlabelled`, because absence of an element must not stand for an asserted negative (06 §3.1).
+**Every row is a vehicle's or a flow's** (06 §3.5, the owner's ruling of 2026-10-05). SUMO reports
+vehicles, not places, so a label follows the vehicle it is about and nothing here writes a row for an
+empty place: an occasion a rota skips writes no trip and no slot, and an author who wants a planted
+omission in the record labels the vehicle that deviates, or states the intent as a note at scenario
+level. Every actor not named in an instance and every flow not named in a cohort is written explicitly
+as `unlabelled`, because a missing element must not stand for an asserted negative (06 §3.1).
 
 **A row says nothing its terms do not define.** A row's `parameters` are keys its labels' terms
 declare, each of the declared type (check 56), so a magnitude reaches a consumer with its unit and
@@ -46,10 +49,10 @@ from dataclasses import dataclass, field
 import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
 from CarlaNet.Types.Supervision import AnchorEvent, CoreVocabulary
 
-from carlacontrol.AnnotationVocabulary import SUBJECT_ROLE, VACANCY_PHASE, AnnotationVocabulary
+from carlacontrol.AnnotationVocabulary import SUBJECT_ROLE, AnnotationVocabulary
 from carlacontrol.CivilTimeResolver import CivilTimeResolver, ResolvedInstant
 from carlacontrol.CompileFindings import CompileFindings
-from carlacontrol.RotaExpander import RotaEntry, RotaSkip
+from carlacontrol.RotaExpander import RotaEntry
 
 SUPERVISION_PLAN_VERSION = 1
 
@@ -70,7 +73,7 @@ class PlannedInterval:
     interval's start declares no instant: an anchor to a stop's arrival or to a later phase."""
 
     instance_id: str
-    entity_id: str | None
+    entity_id: str
     phase: str
     supervision: str
     begin: ResolvedInstant | None
@@ -101,11 +104,8 @@ class SupervisionInputs:
     actor_stops: dict[str, list[dict]] = field(default_factory=dict)
     actor_phases: dict[str, list[dict]] = field(default_factory=dict)
     rota_entries: dict[str, list[RotaEntry]] = field(default_factory=dict)
-    rota_skips: dict[str, list[RotaSkip]] = field(default_factory=dict)
     rota_templates: dict[str, dict] = field(default_factory=dict)
     areas: dict[str, dict] = field(default_factory=dict)
-    skip_routes: dict[str, dict] = field(default_factory=dict)
-    skip_sites: dict[str, dict] = field(default_factory=dict)
 
 
 class SupervisionPlanCompiler:
@@ -127,9 +127,8 @@ class SupervisionPlanCompiler:
         self._instance_names: dict[str, str] = {}
         series_rows = [self._series(entry) for entry in block.get("series", [])]
         series_by_id = {row["series_id"]: row for row in series_rows if row}
-        instances = [self._instance(entry) for entry in block.get("instances", [])]
-        instances += [self._absence(entry, series_by_id) for entry in block.get("absences", [])]
-        instances = [row for row in instances if row]
+        instances = [row for row in (self._instance(entry) for entry in block.get("instances", []))
+                     if row]
         cohorts = self._cohorts(block.get("cohorts", []))
         self._check_counterfactuals(block, instances, series_by_id)
         self._check_exemplars(instances)
@@ -160,7 +159,7 @@ class SupervisionPlanCompiler:
         supervision = entry["supervision"]
         participants = entry.get("participants", [])
         labels = list(entry.get("labels", []))
-        self.vocabulary.check_labels(labels, "entity", "present", where)
+        self.vocabulary.check_labels(labels, "entity", where)
         if supervision == "annotated" and not labels:
             self.findings.refuse(18, where, "is annotated and carries no label; an annotation "
                                  "names what the author asserts")
@@ -178,8 +177,10 @@ class SupervisionPlanCompiler:
             self.vocabulary.check_role(role, where)
             rows.append({"entity_id": actor, "role": role, "sumo_id": actor})
         if not participants:
-            self.findings.refuse(19, where, "has no participant; only an absence has none, and an "
-                                 "absence is declared under 'absences'")
+            self.findings.refuse(19, where, "has no participant. An instance is an assertion about "
+                                 "one or more vehicles, and a label follows its vehicle (06 §3.5); "
+                                 "an omission is conveyed by labelling the vehicle that deviates, or "
+                                 "as a scenario-level note")
         if len(participants) == 1 and participants[0]["role"] != SUBJECT_ROLE:
             self.findings.refuse(50, where, f"has one participant, whose role is "
                                  f"'{participants[0]['role']}'; a one-participant instance names "
@@ -194,13 +195,10 @@ class SupervisionPlanCompiler:
         return {
             "instance_id": instance_id,
             "supervision": supervision,
-            "realisation": "present",
             "labels": labels,
             "parameters": parameters,
             "hard_negative_for": hard_negative_for,
             "counterfactual": entry.get("counterfactual"),
-            "series_ref": None,
-            "slot_ref": None,
             "aoi_refs": aoi_refs,
             "participants": rows,
             "intervals": intervals,
@@ -213,9 +211,6 @@ class SupervisionPlanCompiler:
         if participant not in actors:
             self.findings.refuse(19, where, f"interval participant '{participant}' is not a "
                                  "participant of this instance")
-        if phase == VACANCY_PHASE:
-            self.findings.refuse(50, where, f"authors the phase '{VACANCY_PHASE}', which the absence "
-                                 "writer emits and no author writes")
         self.vocabulary.check_namespaced(phase, "phase", where)
         if "anchor" in entry:
             return self._anchored_interval(entry, instance_id, supervision, where)
@@ -357,9 +352,14 @@ class SupervisionPlanCompiler:
     def _count(number: int, noun: str) -> str:
         return f"{number} {noun}{'' if number == 1 else 's'}"
 
-    # -- series and absences ----------------------------------------------------------------------
+    # -- series -----------------------------------------------------------------------------------
 
     def _series(self, entry: dict) -> dict | None:
+        """A rota read as a recurring series: one slot per occasion a vehicle realises.
+
+        An occasion the rota skips has no slot: the skip writes no trip, so there is no vehicle for a
+        label to follow, and a slot of no vehicle would be a labelled place (06 §3.5).
+        """
         series_id = entry["series_id"]
         where = f"series {series_id}"
         rota_id = entry["rota"]
@@ -372,7 +372,7 @@ class SupervisionPlanCompiler:
         supervision = entry["supervision"]
         labels = list(entry.get("labels", []))
         if supervision != "unlabelled":
-            self.vocabulary.check_labels(labels, "entity", "present", where)
+            self.vocabulary.check_labels(labels, "entity", where)
         elif labels:
             self.findings.refuse(18, where, "is unlabelled and carries labels; an unlabelled "
                                  "subject asserts nothing")
@@ -381,10 +381,8 @@ class SupervisionPlanCompiler:
         hard_negative_for = self._hard_negatives(entry, supervision, labels, where)
         length = self.resolver.duration(entry["slot_length"], f"{where} slot_length")
         aoi_by_subject = entry["slot_aoi_refs"]
-        entries = self._inputs.rota_entries.get(rota_id, [])
-        skips = self._inputs.rota_skips.get(rota_id, [])
         slots = []
-        for occasion, realised_by in [(e, e.entry_id) for e in entries] + [(s, None) for s in skips]:
+        for occasion in self._inputs.rota_entries.get(rota_id, []):
             aoi = aoi_by_subject.get(occasion.subject)
             if aoi is None:
                 self.findings.refuse(20, where, f"gives no area for subject '{occasion.subject}'; "
@@ -402,8 +400,7 @@ class SupervisionPlanCompiler:
                 "declared_start_civil": occasion.depart.civil,
                 "declared_end_s": end,
                 "declared_end_civil": None if end is None else self.resolver.epoch.civil_instant_at(end),
-                "expected_entity_id": occasion.entry_id,
-                "realised_by": realised_by,
+                "entity_id": occasion.entry_id,
             })
         slots.sort(key=lambda s: (s["declared_start_s"], s["slot_key"]))
         return {
@@ -416,71 +413,6 @@ class SupervisionPlanCompiler:
             "parameters": parameters,
             "hard_negative_for": hard_negative_for,
             "slots": slots,
-        }
-
-    def _absence(self, entry: dict, series_by_id: dict[str, dict]) -> dict | None:
-        name = entry["name"]
-        where = f"absence {name}"
-        instance_id = self._instance_id(name, where)
-        series = series_by_id.get(entry["series"])
-        if series is None:
-            self.findings.refuse(8, where, f"names series '{entry['series']}', which the "
-                                 "supervision block does not declare")
-            return None
-        slot = next((s for s in series["slots"] if s["slot_key"] == entry["entry"]), None)
-        if slot is None or slot["realised_by"] is not None:
-            skipped = [s["slot_key"] for s in series["slots"] if s["realised_by"] is None]
-            self.findings.refuse(8, where, f"names occasion '{entry['entry']}', which rota "
-                                 f"'{series['rota_ref']}' does not skip; an absence is a slot the "
-                                 f"rota leaves unrealised (skipped: {skipped or 'none'})")
-            return None
-        self.vocabulary.check_labels(entry["labels"], "slot", "absent", where)
-        parameters = dict(entry.get("parameters", {}))
-        self.vocabulary.check_parameters(parameters, entry["labels"], where)
-        aoi_refs = self._aoi_refs(entry.get("aoi_refs") or ([slot["aoi_ref"]] if slot["aoi_ref"]
-                                                             else []), where)
-        site = self._inputs.skip_sites.get(slot["slot_key"], {})
-        begin = self.resolver.instant(slot["declared_start_s"], f"{where} vacancy begin")
-        end_s = slot["declared_end_s"]
-        end = None if end_s is None else self.resolver.instant(end_s, f"{where} vacancy end")
-        if instance_id is not None and begin is not None:
-            self.intervals.append(PlannedInterval(instance_id, None, VACANCY_PHASE, "annotated",
-                                                  begin, end))
-        realised = sum(1 for s in series["slots"] if s["realised_by"] is not None)
-        return {
-            "instance_id": instance_id,
-            "supervision": "annotated",
-            "realisation": "absent",
-            "labels": list(entry["labels"]),
-            "parameters": parameters,
-            "hard_negative_for": None,
-            "counterfactual": entry.get("counterfactual"),
-            "series_ref": series["series_id"],
-            "slot_ref": slot["slot_key"],
-            "aoi_refs": aoi_refs,
-            "participants": [],
-            "expected": {
-                "role": series["member_role"],
-                "expected_entity_id": slot["expected_entity_id"],
-                "route": self._inputs.skip_routes.get(slot["slot_key"], {}),
-                "site_lane": site.get("site_lane"),
-                "site_pos_m": site.get("site_pos_m"),
-                "declared_start_s": slot["declared_start_s"],
-                "declared_end_s": slot["declared_end_s"],
-            },
-            "intervals": [{
-                "entity_id": None, "phase": VACANCY_PHASE, "anchor": None,
-                "declared_start_s": slot["declared_start_s"],
-                "declared_start_civil": slot["declared_start_civil"],
-                "declared_end_s": slot["declared_end_s"],
-                "declared_end_civil": slot["declared_end_civil"],
-                "declared_duration_s": (None if slot["declared_end_s"] is None
-                                        else slot["declared_end_s"] - slot["declared_start_s"]),
-            }],
-            "counter_evidence": {
-                "series_slots_total": len(series["slots"]),
-                "series_slots_realised": realised,
-            },
         }
 
     # -- cohorts ----------------------------------------------------------------------------------
@@ -513,7 +445,7 @@ class SupervisionPlanCompiler:
             if supervision == "annotated":
                 if not labels:
                     self.findings.refuse(18, where, "is annotated and carries no label")
-                self.vocabulary.check_labels(labels, "cohort", "present", where)
+                self.vocabulary.check_labels(labels, "cohort", where)
             elif labels:
                 self.findings.refuse(18, where, "is unlabelled and carries labels")
             parameters = dict(entry.get("parameters", {}))
@@ -538,9 +470,9 @@ class SupervisionPlanCompiler:
             if not series or series["supervision"] == "unlabelled":
                 continue
             for slot in series["slots"]:
-                if slot["realised_by"] in states:
-                    states[slot["realised_by"]].add(series["supervision"])
-                    refs[slot["realised_by"]].append(f"series:{series['series_id']}")
+                if slot["entity_id"] in states:
+                    states[slot["entity_id"]].add(series["supervision"])
+                    refs[slot["entity_id"]].append(f"series:{series['series_id']}")
         return [{"entity_id": actor,
                  "supervision": sorted(states[actor]) or ["unlabelled"],
                  "refs": refs[actor]}
@@ -558,8 +490,8 @@ class SupervisionPlanCompiler:
         names = {row["instance_id"].split("/", 1)[1] for row in instances}
         known = {"series": set(series_by_id), "instance": names,
                  "cohort": set(self._inputs.flow_ids), "term": set(self.vocabulary.terms)}
-        declared = [(f"{group[:-1]} {entry['name']}", entry.get("counterfactual"))
-                    for group in ("instances", "absences") for entry in block.get(group, [])]
+        declared = [(f"instance {entry['name']}", entry.get("counterfactual"))
+                    for entry in block.get("instances", [])]
         declared += [(f"namespace {spelled.split(':', 1)[0]}", term["counterfactual"])
                      for spelled, term in sorted(self.vocabulary.terms.items())
                      if term.get("counterfactual") and term["counterfactual"]["kind"] != "term"]
@@ -591,8 +523,8 @@ class SupervisionPlanCompiler:
                         if named in names else "")
                 self.findings.refuse(8, f"namespace {spelled.split(':', 1)[0]}",
                                      f"'{spelled}' exemplar_instances names '{ref}', which is no "
-                                     f"instance or absence of this scenario{hint}. An exemplar "
-                                     "resolves or it is prose (06 §3.8)")
+                                     f"instance of this scenario{hint}. An exemplar resolves or it "
+                                     "is prose (06 §3.8)")
 
     def _hard_negatives(self, entry: dict, supervision: str, labels: list[str],
                         where: str) -> list[str] | None:

@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch whole hour",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_whole_hour.scenario.json",
-    "specification_sha256": "c62207a1f451d400de2d929600184be1781de0461f52eb05b5a854564113ae7d",
+    "specification_sha256": "ca9090d2211312f3a1104128494a775fd437a905a60a9627b47673678153f00d",
     "spec_version": 1
   },
   "findings": [
@@ -20,7 +20,7 @@
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -85,6 +85,12 @@
         "elevation_deg": -4.8278,
         "geometric_elevation_deg": -4.8952,
         "azimuth_deg": 113.4407
+      },
+      "sun_lowest": {
+        "elevation_deg": -4.8278,
+        "elevation_kind": "refraction_corrected",
+        "band": "civil_twilight",
+        "band_source": "11_Time_And_Illumination.md §4.4"
       }
     }
   ],
@@ -140,7 +146,7 @@
       "base_annotated_rate": 0.0,
       "normalized_mutual_information": null,
       "degenerate_bands": [],
-      "usable_bands": [],
+      "mixed_bands": [],
       "windows": [
         "morning"
       ]
@@ -173,7 +179,7 @@
       "base_annotated_rate": 0.0,
       "normalized_mutual_information": null,
       "degenerate_bands": [],
-      "usable_bands": []
+      "mixed_bands": []
     },
     "normalized_mutual_information": null,
     "bands": {
@@ -204,7 +210,7 @@
     "georeference": "+proj=tmerc +lat_0=39.5 +lon_0=-104.9 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
       "version": "1.27.0",
-      "matched_by": "explicit",
+      "matched_by": "SUMO_HOME",
       "release_agreement": "SameRelease",
       "verdict": "the world was converted by 'Eclipse SUMO netconvert 1.27.0', the same release"
     }
@@ -460,7 +466,7 @@
     "scenario_name": "Street layout, epoch whole hour",
     "spec_version": 1,
     "specification": "street_layout_epoch_whole_hour.scenario.json",
-    "specification_sha256": "c62207a1f451d400de2d929600184be1781de0461f52eb05b5a854564113ae7d",
+    "specification_sha256": "ca9090d2211312f3a1104128494a775fd437a905a60a9627b47673678153f00d",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -480,7 +486,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_whole_hour.supervision.json",
-        "sha256": "921acc3310091b1ea820272977d07c836e28dd14e00a93cbb4f7f7d5cac6a9e2"
+        "sha256": "2a3e94f920d39680e96744c1651de88df25bcdd3941cdacd499c3b51162098f1"
       }
     },
     "world": {
@@ -536,9 +542,9 @@
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {
-      "core_version": 2,
+      "core_version": 3,
       "namespaces": [],
-      "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
+      "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63"
     },
     "traffic": {
       "sumo_seed": 42,

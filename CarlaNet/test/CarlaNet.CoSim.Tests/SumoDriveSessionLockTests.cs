@@ -122,7 +122,7 @@ public sealed class SumoDriveSessionLockTests
         _output.WriteLine(report);
         SupervisionPlan plan = Assert.IsType<SupervisionPlan>(session.Report.CompileLock.Plan);
         Assert.Equal("RightAngleTurn/turn_nominal", Assert.Single(plan.Instances).InstanceId);
-        Assert.Contains("  supervision plan RightAngleTurn: 1 instance (0 annotated, 1 nominal, 0 absent), ", report);
+        Assert.Contains("  supervision plan RightAngleTurn: 1 instance (0 annotated, 1 nominal), ", report);
     }
 
     [RequiresSumoFact]

@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 43 | 2026-10-05. Labels follow vehicles, by the owner's ruling ([`06`](06_Truth_And_Annotation.md) §3.5): `C6` §8.3b's `update_supervision` loses `absences_opened` and `absences_closed` and the snapshot's supervision block its absence count and absences; `C8` §10.6's *Supervised* row loses the world-scoped `<_supervision>`; `C3`'s plan completions lose an absence's site. `C9`: `corpus_eligible` is renamed `sun_matched_declaration` on the `solar_window_end` row (§11.6-§11.8, D4.24, §12.5, V10.4), a fact — an epoch declared, the sun bound and present, the audit within tolerance — carrying no verdict in its name, as the owner agreed. |
 | 42 | 2026-10-05. The two-folder split is dropped by the owner's ruling: imagery and truth sit side by side in one capture folder, with no separate imagery folder, no held-back partition and no validator over an imagery folder. `D4.26` and `D4.16` amended, the `C8` table row and §10.5 point 2 follow, `C10`'s and §14's references to the roots amended. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and model output is neither produced nor consumed here. |
 | 41 | 2026-10-05. `C7`: the world's drive lease, held on the server (§9.3a, `D4.47`). A SUMO drive session takes it before SUMO starts with `take_drive_lease(holder)` and gives it back with `release_drive_lease`; while any client holds it the server refuses every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` for every actor, direct and in a batch, naming the holder, so a traffic manager or a second drive in any process is refused. `break_drive_lease` ends a dead holder's lease, logged; `get_drive_lease` names the holder. §9.1's traffic-manager row states it. |
 | 40 | 2026-10-05. `C10`: the run manifest's closing row carries the bridge's divergence over the run as `bridge_divergence` -- the commanded-against-applied comparisons taken, the vehicle-ticks nothing read back, the worst and mean position, the worst yaw, pitch and roll, the worst and mean velocity against the mean commanded speed, and the vehicle and instant of each worst -- a run-level figure as the owner ruled, with no per-capture field ([`06`](06_Truth_And_Annotation.md) §4.3, D6.10); `run_capture` carries the same figures in its result and gates the worst position and velocity against run-configuration limits ([`12`](12_Operator_Control_Surface.md) §7.2). The opening row carries the rule the vehicle lights follow as `vehicle_lights` ([`11`](11_Time_And_Illumination.md) §6.3). §12.7 |
@@ -50,7 +51,7 @@ checked*).
 | 27 | 2026-10-05. `C4`: a camera name is short and plain, as the owner asked — `Overwatch_1`, `Southeast_1700m_orbit`, `NapOfEarth_2`: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and no other character (§6.3). A Windows device name, a role name the server gives sensors (`front`, `back`, …) and another camera's `CARLA-SENSOR-<digits>` default stay refused, and every refusal says what is allowed. `run_free_move_camera.py` names its camera too (§6.1) |
 | 26 | 2026-10-02. `C10`: the world truth track ([`06`](06_Truth_And_Annotation.md) §8.3) joins §12.7's artifacts. It is written under W2, the header first and every row flushed as one line, so a track cut off anywhere is the rows before the cut; its summary is written under W1, and its `ended`, written as the session ends, is the closing statement. A capture run always writes it, under its capture directory's `truth/` |
 | 25 | 2026-10-02. `C9`: every capture's `<_solar>` and `carla:solar` carry `illumination_band`, from the achieved sun and never the declared time, and `illumination_band_elevation`, the elevation it was cut from — refraction-corrected wherever the block carries it (§11.8.3). The manifest's `captures_missing_solar_block` is stated, zero in a healthy run; until the manifest exists each recorder counts it and the closeout gates it at zero. `C8`: the observation writer strips both band fields and V8.7 refuses them, so the frozen field set is unchanged (§10.4a) |
-| 24 | 2026-10-02. `C3`: the supervision plan carries `additional_digest`, the lane closures' additional file's SHA-256 as the lock's `files` records it, null where a scenario closes no lane, beside the routes', configuration's and network's (§5.2, §5.3). The lock's `files` table names `additional` where there is one. The plan's other completions — checked parameters, projected `hard_negative_for`, resolved exemplars, an absence's site — are [`06`](06_Truth_And_Annotation.md) §8.1's |
+| 24 | 2026-10-02. `C3`: the supervision plan carries `additional_digest`, the lane closures' additional file's SHA-256 as the lock's `files` records it, null where a scenario closes no lane, beside the routes', configuration's and network's (§5.2, §5.3). The lock's `files` table names `additional` where there is one. The plan's other completions — checked parameters, projected `hard_negative_for`, resolved exemplars — are [`06`](06_Truth_And_Annotation.md) §8.1's; an absence's site is withdrawn with the absence (row 42) |
 | 23 | 2026-10-02. `C4`: a `sensor_id` is the camera's name, and every camera has one (§6.1, §6.3). Every capture is named after it, `<sensor_id>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the platform track's callsign is it, where it defaulted to `OVERWATCH` for every camera given none; a camera given none is `CARLA-SENSOR-<actor id>`. Its grammar loses `:`, which no Windows file name holds, and a name is used as given or refused, never rewritten. It is unique within a process and, spawned as the camera's `role_name`, refused where another camera in the world holds it, case aside. The platform track's uid stays `CARLA-SENSOR-<actor id>` |
 | 22 | 2026-10-02. `C1`: the truth record's `special_type` is the catalogue's `cot_special_type`, as the owner ruled ([`06`](06_Truth_And_Annotation.md) D6.18): a vehicle whose body's blueprint a class draws carries that class's kind, empty where the class curates none, whatever the blueprint declares, and a blueprint no class draws keeps its own. A drive session hands its catalogue's table to the client it drives through, so the capture sidecar and the live pull of that process report it; the standalone producer writes it when given the catalogue (§3.4.2, §3.4.3) |
 | 21 | 2026-10-02. `C2`: two optional performance controls, off by default and recommended for no scenario (§4.2, D4.44, D4.45). A limit on which vehicles get a body -- a circle, the cameras' footprints or a capacity, chosen by the run -- adds `in_limit` to the admission predicate, two eviction rows (E5, E6) under new numbers and the reason `outside_limit`; a vehicle outside it is simulated, has no body and no imagery-side truth, and is counted. A draw distance changes no admission: every vehicle keeps its body and its truth, and each camera's sidecar marks the vehicles beyond it, which are not observed by that camera (§4.5). The participant guarantee holds with no limit, the default (§4.4). E2, E4, V2.3 and V2.4 stay withdrawn |
@@ -1201,7 +1202,7 @@ This keeps everything everyone needs:
 
 A package-level switch `render_uses_vtype_colour` exists for diagnostic runs where an operator wants
 the `sumo-gui` colours on screen. Setting it `true` stamps `appearance_confounded: true` into the run
-manifest and marks the run **not corpus-eligible**. It is a debugging aid with a recorded consequence,
+manifest and records `sun_matched_declaration: false`. It is a debugging aid with a recorded consequence,
 not a configuration choice.
 
 ### 3.8 One class, many blueprints, one reproducible draw
@@ -2580,22 +2581,19 @@ each part a msgpack array in this field order:
 
 | Message | Field | Type | Meaning |
 |---|---|---|---|
-| `SupervisionUpdate` | `fresh` | bool | Drop every row and absence held before applying the change: the first change after a plan is bound |
+| `SupervisionUpdate` | `fresh` | bool | Drop every row held before applying the change: the first change after a plan is bound |
 | | `plan_id` | string | The plan everything is bound from. **Empty withdraws all supervision**, and the change then carries nothing else |
 | | `vocabulary_version` | uint32 | The core version the plan's terms were resolved against ([`06`](06_Truth_And_Annotation.md) D6.30) |
 | | `vocabulary_digest` | string | The plan's digest over its resolved terms |
-| | `actors` | `SupervisionUpdateActor[]` | The bodies whose supervision changes, each replaced whole |
-| | `absences_opened` | `SupervisionUpdateAbsence[]` | Absences that open; one opened again replaces itself |
-| | `absences_closed` | string[] | The instances of absences that close |
+| | `actors` | `SupervisionUpdateActor[]` | The bodies whose supervision changes, each replaced whole. Every row is a vehicle's: the message carries nothing for the world apart from the plan ([`06`](06_Truth_And_Annotation.md) §3.5) |
 | `SupervisionUpdateActor` | `actor_id` | uint32 | A body; taken only where the render set names it lent |
 | | `state` | string | `annotated`, `nominal` or `unlabelled`, spelled as the core spells it; `unlabelled` clears the body |
 | | `annotations` | `SupervisionUpdateAnnotation[]` | At least one when annotated; none when unlabelled |
 | `SupervisionUpdateAnnotation` | `instance_id`, `labels`, `phase`, `role` | string, string[], string, string | The instance in force, its terms, the phase of its interval and the vehicle's role in it |
-| `SupervisionUpdateAbsence` | `instance_id`, `labels`, `areas`, `phase` | string, string[], string[], string | The absence, its terms, the areas it is sited at, and `vacancy` |
 
 The answer is how many of the named bodies were found lent and took their supervision. **Refused, with
 nothing changed**: a state outside the three spellings, an unlabelled body with annotations, an annotated
-body with none, an instance unnamed, a withdrawal carrying rows or absences, and a change naming another
+body with none, an instance unnamed, a withdrawal carrying rows, and a change naming another
 plan, version or digest than the one held unless it is `fresh`. `update_render_set` drops a body's
 supervision when it parks the body or lends it to another vehicle; a body destroyed takes its own with
 it; a map load starts an episode with none. A server built before the call refuses it, and the session
@@ -2614,9 +2612,7 @@ unpadded (`EpisodeStateSerializer.h`):
 | vocabulary digest | uint16 n + n bytes | UTF-8 |
 | row count | uint32 | One row per lent body whose vehicle is annotated or nominal |
 | each row | uint32 actor id, uint8 state (`1` annotated, `2` nominal), uint16 annotation count | |
-| each annotation | instance, phase, role (each uint16 n + n bytes), uint16 label count, each label uint16 n + n bytes | |
-| absence count | uint32 | |
-| each absence | instance, phase (each uint16 n + n bytes), uint16 label count and labels, uint16 area count and areas | |
+| each annotation | instance, phase, role (each uint16 n + n bytes), uint16 label count, each label uint16 n + n bytes | The block ends with its last row: nothing is written for the world apart from the plan |
 
 **Three properties of the layout, each deliberate.** *Whole state, every snapshot*, as the render set: a
 reader may join at any frame and pairs an image with its own frame's snapshot ticks later, so a frame's
@@ -2629,7 +2625,7 @@ actors and the set exactly as before and skips the supervision unread, and every
 session supervises reads it as it always did.
 
 **Where it is read.** `EpisodeStateLayout.ReadSupervision` into an `ObservedSupervision`: the plan, the
-rows by actor, the absences, and `ForVehicles(renderSet)` for every drawn vehicle's state by SUMO id,
+rows by actor, and `ForVehicles(renderSet)` for every drawn vehicle's state by SUMO id,
 unlabelled included. `CarlaClient` keeps it with the frame's actors and render set in `SnapshotHistory`;
 a recorder takes all three at once with `GetSnapshotFrame(frame, out served, out renderSet, out supervision)`.
 
@@ -3362,7 +3358,7 @@ vehicle, the `TRUTH` root carries:
 | **Timed** | `sim_time_s` on the container (`:43`), and interval bounds `t_begin_s` / `t_end_s` in the manifest, in the same simulated-seconds clock | clipping a track at an interval boundary needs the boundary |
 | **Boxed** | the 2D and 3D boxes on the per-image label record, in the frame's own pixel coordinates and in world coordinates | image space is where a detector's error actually lives, so the box has to exist there too |
 | **Identified, stably** | `sumo_vehicle_id` and `entity_id` on every truth event (`C4`), so transferred supervision names something that survives across runs | `actor_id` alone cannot support cross-run comparison (`C4` §6.8) |
-| **Supervised, with bounds** | `<_supervision>` per tick, and the interval bounds in the manifest — the per-frame element alone cannot support clipping (doc 20 §7.6). **As built (2026-10-05):** a sidecar of a frame a plan was in force on carries `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence instance labels areas phase>` per absence in force, and on every rendered SUMO vehicle a `<_supervision state>` -- `annotated`, `nominal` or `unlabelled`, always written -- with an `<annotation instance labels phase role>` per instance in force; `labels` and `areas` are space-separated, which neither grammar admits inside a value. It is the server's supervision for the capture's own frame, read from that frame's snapshot with its vehicles (§8.3b), so every sidecar of one tick carries the same; one whose frame's supervision was not to be had says `supervision="unknown"` and carries none, never a neighbour's, counted and gated at zero ([`06`](06_Truth_And_Annotation.md) §8.2, [`12`](12_Operator_Control_Surface.md) §7.2). The PNG carries none (`D4.20`) | the manifest is the authoritative artifact for interval extent |
+| **Supervised, with bounds** | `<_supervision>` per tick, and the interval bounds in the manifest — the per-frame element alone cannot support clipping (doc 20 §7.6). **As built (2026-10-05):** a sidecar of a frame a plan was in force on carries `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>` and nothing else for the world, and on every rendered SUMO vehicle a `<_supervision state>` -- `annotated`, `nominal` or `unlabelled`, always written -- with an `<annotation instance labels phase role>` per instance in force; `labels` is space-separated, which a term's grammar does not admit inside a value. Every supervision element is a vehicle's, since 2026-10-05 ([`06`](06_Truth_And_Annotation.md) §3.5). It is the server's supervision for the capture's own frame, read from that frame's snapshot with its vehicles (§8.3b), so every sidecar of one tick carries the same; one whose frame's supervision was not to be had says `supervision="unknown"` and carries none, never a neighbour's, counted and gated at zero ([`06`](06_Truth_And_Annotation.md) §8.2, [`12`](12_Operator_Control_Surface.md) §7.2). The PNG carries none (`D4.20`) | the manifest is the authoritative artifact for interval extent |
 | **Honestly scoped** | `observed_spans[]` and `observed_union_s` per sensor (`C2` §4.5) | a transfer over a span nothing observed is a transfer onto nothing, and the corpus says which spans those are |
 
 **The documented rule — not performed here, and the reason it is written down at all.** A consumer who
@@ -4100,7 +4096,7 @@ on the world tick's delta — is set off by the session under every policy (`set
 | `advance` | Tracks civil time at `rate_sun_s_per_sim_s`, written by the clock owner for every tick at the whole second nearest the frame's declared instant | `C6` G9 and G10 hold, with the engine's own advance off: `<_solar>` reads `advancing = false`, `rate = 0`, and `<_illumination>` carries the declared policy and rate. At `rate = 1.0`, the civil time of a frame and its solar state are within half a second of the same instant | A long window that should show the light changing — dawn over a shift change |
 | `freeze_at_window_start` | Is set once, to the civil instant each capture window opens, and does not move within the window | The observed sun clock is constant across the window to within the §8.3a tolerance, and `advancing = false`. Different windows get **different** frozen suns, each correct for its own opening instant | The default for a sweep: illumination is a controlled constant within a window and a deliberate variable between windows |
 | `freeze_at` | Is set once, to `freeze_at_civil_time`, for every window | As above, and **identical across every window**. The declared civil time of a frame and its solar state then deliberately disagree, and the manifest records that they do | Holding lighting fixed while varying behaviour — the counterfactual pair whose only difference is the thing that was varied |
-| `ignore` | Is not written at all | Nothing. The manifest carries `illumination_in_force.policy = "ignore"`, `epoch_honoured: false` and `corpus_eligible: false` | Diagnostics, and the only legal behaviour when no epoch is declared (§11.7) |
+| `ignore` | Is not written at all | Nothing. The manifest carries `illumination_in_force.policy = "ignore"`, `epoch_honoured: false` and `sun_matched_declaration: false` | Diagnostics, and the only legal behaviour when no epoch is declared (§11.7) |
 
 **`freeze_at` is the one that can lie, so it is the one that must be recorded loudly.** Under it a frame
 whose civil time is 23:00 may be lit as though it were 15:00. That is a legitimate experiment and an
@@ -4127,13 +4123,13 @@ The rule that stops this contract from being decorative.
 | Situation | Response |
 |---|---|
 | A scenario with no `epoch` | **Refused at compile** (check 33), so no lock carries none (`C3` V3.11). There is no honest default |
-| A legacy package predating `C9` | **Refuse by default.** An operator may opt in to `policy = "ignore"`, which stamps `epoch_declared: false` and `corpus_eligible: false` into the manifest and marks every sidecar's solar block as unbacked by an epoch — an added `<_solar>` attribute that [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) owns the shape of. It never guesses an epoch from trip identifiers, however regular they look — Measurement 6 shows the pattern is perfectly consistent and Measurement 7 shows it contradicts the only epoch anyone wrote down |
+| A legacy package predating `C9` | **Refuse by default.** An operator may opt in to `policy = "ignore"`, which stamps `epoch_declared: false` and `sun_matched_declaration: false` into the manifest and marks every sidecar's solar block as unbacked by an epoch — an added `<_solar>` attribute that [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) owns the shape of. It never guesses an epoch from trip identifiers, however regular they look — Measurement 6 shows the pattern is perfectly consistent and Measurement 7 shows it contradicts the only epoch anyone wrote down |
 | A bare `.sumocfg` run outside a package | Same as legacy. `C9` does not require a package to exist; it requires the declaration not to be fabricated |
 | A world with no `CesiumSunSky` | `require_sun: true` ⇒ refuse (`C3` V3.13). `require_sun: false` ⇒ run, with `no_sun: true` in the manifest and the audit skipped and **recorded as skipped**, never recorded as passed |
 | An epoch declared but the policy is `ignore` | Legal, and the manifest carries both — the epoch, so the civil time of every frame is still recoverable, and `epoch_honoured: false`, so nobody reads the lighting as evidence of it |
 
 This mirrors `render_uses_vtype_colour` (§3.7.1): a
-diagnostic escape hatch exists, it is loud, it is recorded, and it costs the run its corpus eligibility.
+diagnostic escape hatch exists, it is loud, it is recorded, and the manifest says the sun did not match the declaration.
 The alternative — a default that renders something plausible — is the failure mode this whole contract
 was added to prevent.
 
@@ -4152,7 +4148,7 @@ append-only rows, so what was already true survives a kill at any instant (`D4.3
 | `illumination_override` | object | — | no | What the operator supplied at run start, if anything ([`12`](12_Operator_Control_Surface.md) owns how) |
 | `illumination_in_force` | object | — | yes | Which one won, resolved. **Always written even when there was no override**, so no consumer has to re-derive precedence |
 | `epoch_honoured` | boolean | — | yes | True when the policy wrote the sun from the epoch — i.e. `advance` or `freeze_at_window_start`. False under `freeze_at` and `ignore` |
-| `corpus_eligible` | boolean | — | yes | False whenever `epoch_declared` is false, `policy == "ignore"`, `no_sun` is true, or the audit failed. The single field a corpus builder filters on |
+| `sun_matched_declaration` | boolean | — | yes | True only when an epoch was declared, the policy bound the sun, the world held one (`no_sun` false) and the audit stayed within its tolerance over the window; false otherwise. A fact about the run and no verdict: what a consumer makes of it is theirs (renamed from `corpus_eligible` 2026-10-05, as the owner agreed) |
 | `sun_time_zone_hours` | number | h | yes | The zone the world's sun held when the session found it, read before the first write (§11.4, D4.19). The zone written is `epoch.utc_offset_hours`; this records what the world held beforehand — `longitude / 15` once its georeference is configured, or whatever the last session left — and is given back on exit |
 | `no_sun` | boolean | — | yes | True when the world had no `CesiumSunSky` |
 | `advance_mechanism` | string | — | yes | `per_tick_write`, the only value: under `advance` the session writes the sun for every tick and the engine's own advance is off under every policy ([`03`](03_CoSimulation_Runtime.md), [`11`](11_Time_And_Illumination.md) D11.19). Not a policy choice and not declarable; recorded so a corpus states the mechanism its residuals come from |
@@ -4160,7 +4156,7 @@ append-only rows, so what was already true survives a kill at any instant (`D4.3
 | `solar_residual` | object | — | yes | The run's worst case, §11.8.2 |
 | `lamp_gaps[]` | array | — | yes | `{ class_id, blueprint_id, lamp, verdict }` for every V1.18 / V1.18a warning that fired. Empty array when none, never absent |
 
-**As built (2026-10-05).** The run manifest's opening row carries `epoch` verbatim, `epoch_declared`, `epoch_block_sha256`, `illumination_declared`, `illumination_in_force` (the declared one: no override exists at run start yet), `epoch_honoured` and `advance_mechanism`. Its `solar_window_open` and `solar_window_end` rows carry §11.8.1's begin and end fields for the one window a session renders, from the sun the world reported at the window's first and last capture tick, with `sun_time_zone_hours` and `no_sun` at the opening and, at the end, §11.8.2's `solar_residual` and `corpus_eligible`; each also carries the band of its sun, cut as a capture's is (§11.8.3). `max_at_tick` is null where the worst angle was the read-back at the window's opening. `illumination_override` and `lamp_gaps[]` are not written.
+**As built (2026-10-05).** The run manifest's opening row carries `epoch` verbatim, `epoch_declared`, `epoch_block_sha256`, `illumination_declared`, `illumination_in_force` (the declared one: no override exists at run start yet), `epoch_honoured` and `advance_mechanism`. Its `solar_window_open` and `solar_window_end` rows carry §11.8.1's begin and end fields for the one window a session renders, from the sun the world reported at the window's first and last capture tick, with `sun_time_zone_hours` and `no_sun` at the opening and, at the end, §11.8.2's `solar_residual` and `sun_matched_declaration`; each also carries the band of its sun, cut as a capture's is (§11.8.3). `max_at_tick` is null where the worst angle was the read-back at the window's opening. `illumination_override` and `lamp_gaps[]` are not written.
 
 #### 11.8.1 `solar_achieved[]` — one entry per capture window
 
@@ -4258,7 +4254,7 @@ which is 23:00–23:30 on day 0, the night shift:
 | Zone as found | `3.7453767` — `longitude / 15`, from configuring the georeference | read before the first write and recorded as `sun_time_zone_hours` (§11.8); written over, and given back on exit |
 | Written | `set_solar_epoch(2026, 3, 21, 23.0000002778, 3.5)` — 23:00:00.001 at +03:30; then `set_time_advance(false, 0)` | `carlanet/__init__.py:1523`, `:1575`; `C6` §8.3a for the millisecond |
 | Audited every capture tick | observed `solar_time ≈ 23.0000002778`, `time_zone == 3.5`, `advancing == false`, date `2026-03-21` | `C6` §8.3a |
-| Recorded | `declared_civil_vs_solar_delta_h: 0.0`, `epoch_honoured: true`, `corpus_eligible: true` | §11.8 |
+| Recorded | `declared_civil_vs_solar_delta_h: 0.0`, `epoch_honoured: true`, `sun_matched_declaration: true` | §11.8 |
 
 **And for the day-4 shift change**, `t = 370,800` — the instant the shipped `.labels.json` gives as the
 start of the guard-no-show anomaly (`begin_s: 370800`) — the civil instant is
@@ -4274,7 +4270,7 @@ V6.8 then checks it exactly. Both are legitimate, and the manifest records which
 `ignore` (`IlluminationPolicy.Ignore`), so it writes no sun and the world renders whatever it holds —
 `ACesiumSunSky`'s class-default date 2019-09-21, or what the last session or operator left — with
 `<_solar>` recording it faithfully and the scenario asserting 23:00. The manifest's
-`epoch_declared: false` and `corpus_eligible: false` are what keep that run out of a corpus (§11.7).
+`epoch_declared: false` and `sun_matched_declaration: false` are what a reader of that run's manifest finds (§11.7).
 
 ### 11.10 Validation
 
@@ -4312,7 +4308,7 @@ At `S` the scenario compiler carries these out: V9.1–V9.8 by handing both obje
 | `utc_datetime` disagrees with `civil_datetime` | package build, V9.5 | **Refuse**, printing both and their difference in hours. This is the sign-error catcher |
 | Impossible date | package build, V9.6 | **Refuse.** State that the engine would have clamped it silently (`CesiumHeightSampler.cpp:747-748`) |
 | World has no sun, `require_sun: true` | run start, V9.11 | **Refuse.** `get_solar_state` returning empty is the detection (`CesiumHeightSampler.cpp:760-763`) |
-| World has no sun, `require_sun: false` | run start | Run; `no_sun: true`, `audit_skipped: true`, `corpus_eligible: false` |
+| World has no sun, `require_sun: false` | run start | Run; `no_sun: true`, `audit_skipped: true`, `sun_matched_declaration: false` |
 | Sun drifts out of tolerance mid-run | per tick, `C6` V6.6 | **Fail the run**, naming the tick and both residuals. Every frame after the drift began would carry a `<_solar>` contradicting the scenario |
 | Date not advanced across midnight | per tick, `C6` V6.8 | **Fail the run.** Exact check; a wrong date is a wrong seasonal sun |
 | `freeze_at` used, civil and solar disagree | by construction | Not a failure. Recorded in `declared_civil_vs_solar_delta_h` per window and in `epoch_honoured: false` |
@@ -4411,7 +4407,7 @@ Three properties shape everything below.
 
 | Where the record's content comes from | What it contributes |
 |---|---|
-| The **run manifest** — `C2` §4.5 (`render_states[]`, observed spans), `C6` §8.5 (`stalled`, last good tick), `C9` §11.8 (`epoch`, `illumination_in_force`, `solar_residual`, `lamp_gaps[]`, `corpus_eligible`) | Identity, what ran, and most of the gate inputs |
+| The **run manifest** — `C2` §4.5 (`render_states[]`, observed spans), `C6` §8.5 (`stalled`, last good tick), `C9` §11.8 (`epoch`, `illumination_in_force`, `solar_residual`, `lamp_gaps[]`, `sun_matched_declaration`) | Identity, what ran, and most of the gate inputs |
 | The **corpus manifest** (`C8` §10.12) | Root versions, declared omissions, partitions — when the run reached publication. A run the caller stopped has none, and §12.7 says what a reader does then |
 | The **stream close records** (`C8` §10.9.2) | What a live delivery actually delivered, and what it dropped, where they exist |
 | [`12`](12_Operator_Control_Surface.md) §7.2's closeout gates, and the values [`10`](10_Scale_And_Performance.md) owns | The status of each check, with its threshold |
@@ -4588,7 +4584,7 @@ verdict.
                  "effective_configuration_sha256": "aa90…", "non_interactive": true },
   "started_wall_utc": "2026-03-21T17:02:11Z" }
 
-{ "record_kind": "gate", "id": "C9.corpus_eligible", "owner": "04", "severity": "fail",
+{ "record_kind": "gate", "id": "C9.sun_matched_declaration", "owner": "04", "severity": "fail",
   "status": "passed", "observed": true,
   "name": "epoch declared, sun written from it, audit passed",
   "evaluated_at_tick": 1656000, "evaluated_at_sim_time_s": 82800.0 }
@@ -4689,7 +4685,7 @@ absence would let a corpus be misread:
 | Every participant was drawn throughout each open annotated interval | `04` `D4.6` | fail |
 | `render_states[]` covers every SUMO vehicle, and no participant ended un-rendered with an open interval | `04` V2.6, V2.7 | fail |
 | Neither side stalled | `04` `D4.12`, `C6` §8.5 | fail |
-| `corpus_eligible` | `04` `C9` §11.8 | fail. The check is factual (an epoch declared, the sun bound and present, the audit within tolerance); its name is under the owner's review as a verdict word |
+| `sun_matched_declaration` | `04` `C9` §11.8 | fail. The check is factual (an epoch declared, the sun bound and present, the audit within tolerance), and so is its name since 2026-10-05, when the owner agreed `corpus_eligible` was a verdict word |
 | The solar residual stayed in tolerance, and the audit was not skipped | `04` `C9` §11.8.2 | fail |
 | The observation root contains nothing from §10.4's right-hand column | `04` V8.1, V8.7, V8.8 | fail |
 | `Dropped` is zero on every channel | `10` `D10.7` | fail |
@@ -4699,9 +4695,10 @@ absence would let a corpus be misread:
 
 Three gates this list once required are withdrawn 2026-10-05 by the owner's ruling: V8.6 (prevalence per solar bin), V8.9 (the statement of omissions) and V8.16 (drop counters against coverage). Each compared the data against a roll-up over withdrawn words.
 
-**`corpus_eligible` keeps its own meaning and is not restated as a verdict.** `C9` §11.8 defines it as a
-statement about the epoch and the sun — *"the single field a corpus builder filters on"* — and it appears
-here as one gate row among the others, stated once and projected once.
+**`sun_matched_declaration` keeps its own meaning and is not restated as a verdict.** `C9` §11.8 defines
+it as a statement about the epoch and the sun, and it appears here as one gate row among the others,
+stated once and projected once. Its earlier name, `corpus_eligible`, said what a consumer should do with
+the run; the field says only what the run did.
 
 ### 12.6 Regeneration and lineage
 
@@ -4913,7 +4910,7 @@ bind whatever that surface looks like.
 | V10.1 | A `run_opened` row exists for every run, written before the first irreversible step | assertion at the writer. A run that produced artifacts but has no record is a run nothing can describe |
 | V10.2 | No row in the record is an aggregate of other rows, and the record contains no field that grades the corpus as a whole | refuse to publish the record ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3d) |
 | V10.3 | In a run that wrote `run_closed`, every gate of §12.5's required list either appears as a `gate` row or is named in `gates_not_evaluated[]`. In a run with no `run_closed`, an absent gate means *not evaluated*, and no reader may treat it as passed or failed | refuse to publish the record; the reader's half is §12.5 rule 3 |
-| V10.4 | `corpus_eligible` appears exactly once, as a gate row projected from `C9` §11.8, and the record states no verdict derived from it | refuse to publish |
+| V10.4 | `sun_matched_declaration` appears exactly once, as a gate row projected from `C9` §11.8, and the record states no verdict derived from it | refuse to publish |
 | V10.5 | Every identity digest in `run_opened` is present and equal to the run manifest's | refuse to open the run — a record that cannot be tied to its manifest is an assertion about nothing |
 | V10.6 | Every row is a single line of valid JSON, flushed to disk before the next row is composed; a reader discards a trailing line that does not parse | assertion at the writer, and a reader rule. This is `D4.36` for this artifact |
 | V10.7 | No field of the record is a function of any transcript row (`D4.32`, V8.20) | fail the build |
@@ -5114,7 +5111,7 @@ Stated as properties needed, not as requests.
 | **D4.21** | **Solar state and the scenario epoch are placed in the `OBSERVATION` root as collection context, in the frozen field set of §10.4a, written from the sidecar's `<_solar>` and the PNG's `carla:solar` chunk — never copied from the run manifest.** `advancing`, `rate`, the policy and the residual stay out: they describe the experiment, not the world. The element goes in; not all of it does (§10.4a) |
 | **D4.22** | **The bridge owns a SUMO-driven vehicle's light state, in two disjoint halves** — SUMO owns brake and indicators because they are consequences of the driving it simulated; the illumination policy owns position and low beam because SUMO has no headlight model. Measured: `VEH_SIGNAL_FRONTLIGHT`, `FOGLIGHT`, `HIGHBEAM` and `BACKDRIVE` appear only in the enum declaration (`MSVehicle.h:1110-1138`) and are never set anywhere in SUMO. Everything else is **undefined and must be left alone** (§9.4) |
 | **D4.23** | **Lamp capability is measured optically per blueprint per lamp and carried in the catalogue; `has_lights` is recorded verbatim and used for nothing.** Measured `true` on all 17, so it discriminates nothing; and the read-back returns the command rather than the vehicle (`CarlaWheeledVehicle.cpp:486-489`) because illumination is a `BlueprintImplementableEvent` (`CarlaWheeledVehicle.h:310-311`), so a set-and-read probe cannot substitute for an optical one (§3.2a) |
-| **D4.24** | **A consumer that finds no epoch does not invent one.** It refuses, or runs with `policy = "ignore"` and records `epoch_declared: false`, `corpus_eligible: false`. Defaulting to noon, to the host date, or to `t = 0` being UTC midnight is prohibited — all three exist in the tree today and all three are silent (§11.7) |
+| **D4.24** | **A consumer that finds no epoch does not invent one.** It refuses, or runs with `policy = "ignore"` and records `epoch_declared: false`, `sun_matched_declaration: false` (the field's name since 2026-10-05). Defaulting to noon, to the host date, or to `t = 0` being UTC midnight is prohibited — all three exist in the tree today and all three are silent (§11.7) |
 | **D4.25** | **The clock owner owns civil time too, because civil time is a function of the tick and of nothing else.** No component may read the host clock, host time zone or host locale to decide what time the scene is, and no component but the owner may write the sun. A second writer of the sun is a second owner of time (§8.1, §8.3a) |
 | **D4.26** | **Amended 2026-10-05 by the owner's ruling:** the two roots are not two folders. Imagery and truth sit side by side in one capture folder, with no separate imagery folder, no held-back partition and no validator over an imagery folder; the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, and the truth sidecar sits beside it. What stands is the rest of the ruling. As decided: **This system owns exactly two artifact roots, `OBSERVATION` and `TRUTH`. There is no third.** Model output — detections, tracks, assessments, associations, reports — is neither produced, consumed, stored, validated nor versioned here, and no artifact of this pipeline may be written into a location that holds it. The anti-leak separation that matters is the `OBSERVATION`/`TRUTH` boundary and it needs no third root (§10.2) |
 | **D4.27** | **Supervision transfer is a format guarantee plus a documented rule, never an operation performed here.** Truth is emitted in an associable form — per tick, positioned, timed, boxed, stably identified, with interval bounds in the manifest — and the rule by which supervision would transfer is written down. No association is performed, no harness ships, and no artifact is derived from a consumer's output (§10.6) |

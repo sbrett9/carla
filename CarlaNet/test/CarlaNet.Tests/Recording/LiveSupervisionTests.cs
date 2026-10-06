@@ -48,10 +48,6 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
         "Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3",
         ["bahonar:coordinated_group_transit", "bahonar:destination_off_pattern"], "transit", "bahonar:lead");
 
-    private static readonly SupervisionUpdateAbsence Unmanned = new(
-        "Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned",
-        ["bahonar:post_unmanned"], ["tower_03"], "vacancy");
-
     private readonly StandInStreams _streams = new(Patience);
     private readonly HeldSupervision _held = new();
     private readonly List<SupervisionUpdate> _received = [];
@@ -95,9 +91,7 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
     [Fact]
     public async Task A_Change_Reaches_The_Server_As_It_Was_Put()
     {
-        SupervisionUpdate put = Bound(fresh: true,
-                                      [new SupervisionUpdateActor(EscortBody, "annotated", [Lead])],
-                                      [Unmanned], []);
+        SupervisionUpdate put = Bound(fresh: true, [new SupervisionUpdateActor(EscortBody, "annotated", [Lead])]);
 
         uint applied = await _driving!.UpdateSupervisionAsync(put);
 
@@ -115,11 +109,6 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
         Assert.Equal(Lead.Labels, annotation.Labels);
         Assert.Equal("transit", annotation.Phase);
         Assert.Equal("bahonar:lead", annotation.Role);
-        SupervisionUpdateAbsence absence = Assert.Single(arrived.AbsencesOpened);
-        Assert.Equal(Unmanned.InstanceId, absence.InstanceId);
-        Assert.Equal(["tower_03"], absence.Areas);
-        Assert.Equal("vacancy", absence.Phase);
-        Assert.Empty(arrived.AbsencesClosed);
     }
 
     [Theory]
@@ -129,13 +118,13 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
     [InlineData("unlabelled", false)]  // unlabelled carrying an annotation
     public async Task A_Change_The_Server_Would_Refuse_Is_Refused_Before_It_Is_Sent(string state, bool bare)
     {
-        SupervisionUpdate put = Bound(fresh: true,
-                                      [new SupervisionUpdateActor(EscortBody, state, bare ? [] : [Lead])], [], []);
+        SupervisionUpdate put = Bound(fresh: true, [new SupervisionUpdateActor(EscortBody, state, bare ? [] : [Lead])]);
 
         await Assert.ThrowsAsync<ArgumentException>(() => _driving!.UpdateSupervisionAsync(put));
 
         // And a withdrawal carries nothing but itself.
-        SupervisionUpdate withdrawal = new(false, string.Empty, 0, string.Empty, [], [Unmanned], []);
+        SupervisionUpdate withdrawal = new(false, string.Empty, 0, string.Empty,
+                                           [new SupervisionUpdateActor(EscortBody, "unlabelled", [])]);
         await Assert.ThrowsAsync<ArgumentException>(() => _driving!.UpdateSupervisionAsync(withdrawal));
         Assert.Empty(_received);
     }
@@ -143,15 +132,13 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
     [Fact]
     public async Task Every_Client_Of_The_World_Reads_The_Same_Supervision_For_The_Same_Frame()
     {
-        // Frame 100: the escort's lead annotated, the ambient vehicle unlabelled, the tower unmanned.
+        // Frame 100: the escort's lead annotated, the ambient vehicle unlabelled.
         await _driving!.UpdateSupervisionAsync(Bound(fresh: true,
-                                                     [new SupervisionUpdateActor(EscortBody, "annotated", [Lead])],
-                                                     [Unmanned], []));
+                                                     [new SupervisionUpdateActor(EscortBody, "annotated", [Lead])]));
         await Observe(100);
-        // Frame 101: the transit's interval closed and the absence with it.
+        // Frame 101: the transit's interval closed.
         await _driving.UpdateSupervisionAsync(Bound(fresh: false,
-                                                    [new SupervisionUpdateActor(EscortBody, "unlabelled", [])],
-                                                    [], [Unmanned.InstanceId]));
+                                                    [new SupervisionUpdateActor(EscortBody, "unlabelled", [])]));
         await Observe(101);
 
         foreach (CarlaClient reader in new[] { _driving, _elsewhere! })
@@ -164,14 +151,12 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
             Assert.Equal(SupervisionState.Annotated, vehicles["escort_0"].State);
             Assert.Equal(Lead.InstanceId, Assert.Single(vehicles["escort_0"].Annotations).InstanceId);
             Assert.Same(SupervisionInForce.Unlabelled, vehicles["corridor_d0_p0_h6.12"]);
-            Assert.Equal(Unmanned.InstanceId, Assert.Single(atHundred.Absences).InstanceId);
             // A parked body draws no vehicle, so it is no subject of the plan.
             Assert.False(vehicles.ContainsKey(string.Empty));
             Assert.True(renderSet.IsParked(ParkedBody));
 
             ObservedSupervision atHundredOne = reader.GetSupervisionFrame(101)!;
             Assert.Empty(atHundredOne.ByActor);
-            Assert.Empty(atHundredOne.Absences);
             Assert.True(atHundredOne.IsCarried);
             Assert.Same(atHundredOne, reader.GetCachedSupervision());
             Assert.Equal(0, reader.SupervisionBlocksUnreadable);
@@ -180,17 +165,15 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
         // Read in two processes, frame for frame the same truth.
         Assert.Equal(_driving.GetSupervisionFrame(100)!.ForVehicles(_driving.GetRenderSetFrame(100)!),
                      _elsewhere!.GetSupervisionFrame(100)!.ForVehicles(_elsewhere.GetRenderSetFrame(100)!));
-        Assert.Equal(_driving.GetSupervisionFrame(100)!.Absences, _elsewhere.GetSupervisionFrame(100)!.Absences);
     }
 
     [Fact]
     public async Task A_Withdrawal_Leaves_Every_Client_Reading_No_Supervision()
     {
         await _driving!.UpdateSupervisionAsync(Bound(fresh: true,
-                                                     [new SupervisionUpdateActor(EscortBody, "annotated", [Lead])],
-                                                     [Unmanned], []));
+                                                     [new SupervisionUpdateActor(EscortBody, "annotated", [Lead])]));
         await Observe(100);
-        await _driving.UpdateSupervisionAsync(new SupervisionUpdate(false, string.Empty, 0, string.Empty, [], [], []));
+        await _driving.UpdateSupervisionAsync(new SupervisionUpdate(false, string.Empty, 0, string.Empty, []));
         await Observe(101);
 
         foreach (CarlaClient reader in new[] { _driving, _elsewhere! })
@@ -201,10 +184,8 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
         }
     }
 
-    private static SupervisionUpdate Bound(bool fresh, IReadOnlyList<SupervisionUpdateActor> actors,
-                                           IReadOnlyList<SupervisionUpdateAbsence> opened,
-                                           IReadOnlyList<string> closed) =>
-        new(fresh, PlanId, VocabularyVersion, VocabularyDigest, actors, opened, closed);
+    private static SupervisionUpdate Bound(bool fresh, IReadOnlyList<SupervisionUpdateActor> actors) =>
+        new(fresh, PlanId, VocabularyVersion, VocabularyDigest, actors);
 
     /// <summary>
     /// The stand-in's world observer writes <paramref name="frame"/> from what it holds, and both clients
@@ -249,13 +230,12 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
 
     /// <summary>
     /// The supervision the stand-in holds, kept as the plugin keeps it (CarlaServer.cpp's
-    /// update_supervision): under one plan, a body's row only while it is lent, absences by instance, and
-    /// a change naming no plan withdrawing everything; written as WorldObserver.cpp writes it.
+    /// update_supervision): under one plan, a body's row only while it is lent, and a change naming no
+    /// plan withdrawing everything; written as WorldObserver.cpp writes it.
     /// </summary>
     private sealed class HeldSupervision
     {
         private readonly Dictionary<uint, Row> _rows = [];
-        private readonly List<Absence> _absences = [];
 
         public string? PlanId { get; private set; }
 
@@ -265,14 +245,12 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
             {
                 PlanId = null;
                 _rows.Clear();
-                _absences.Clear();
                 return 0;
             }
 
             if (update.Fresh || PlanId is null)
             {
                 _rows.Clear();
-                _absences.Clear();
             }
 
             PlanId = update.PlanId;
@@ -293,20 +271,9 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
                 applied++;
             }
 
-            foreach (string closed in update.AbsencesClosed)
-            {
-                _absences.RemoveAll(absence => absence.Instance == closed);
-            }
-
-            foreach (SupervisionUpdateAbsence opened in update.AbsencesOpened)
-            {
-                _absences.RemoveAll(absence => absence.Instance == opened.InstanceId);
-                _absences.Add(new Absence(opened.InstanceId, opened.Phase, [.. opened.Labels], [.. opened.Areas]));
-            }
-
             return applied;
         }
 
-        public byte[] Write() => SupervisionBlock([.. _rows.Values], [.. _absences], PlanId!);
+        public byte[] Write() => SupervisionBlock([.. _rows.Values], PlanId!);
     }
 }

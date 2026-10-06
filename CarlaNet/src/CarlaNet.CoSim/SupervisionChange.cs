@@ -15,26 +15,23 @@ namespace CarlaNet.CoSim;
 public readonly record struct BodySupervision(ActorId Actor, SupervisionInForce Supervision);
 
 /// <summary>
-/// One change to the supervision a session holds on the server: the plan it is bound from, the bodies
-/// whose supervision changes, and the absences that open and close.
+/// One change to the supervision a session holds on the server: the plan it is bound from and the bodies
+/// whose supervision changes. Every row is a vehicle's; nothing is held for the world apart from the plan
+/// (06 §3.5).
 /// </summary>
 /// <param name="Fresh">
-/// Whether the server drops every row and absence it holds before applying the change: a session's first
-/// change, and the first after it binds another plan.
+/// Whether the server drops every row it holds before applying the change: a session's first change, and
+/// the first after it binds another plan.
 /// </param>
 /// <param name="Plan">The plan everything is bound from; <see langword="null"/> withdraws all supervision.</param>
 /// <param name="Bodies">The bodies whose supervision changes.</param>
-/// <param name="AbsencesOpened">The absences that open.</param>
-/// <param name="AbsencesClosed">The instances of the absences that close.</param>
 public sealed record SupervisionChange(
     bool Fresh,
     SupervisionPlanIdentity? Plan,
-    IReadOnlyList<BodySupervision> Bodies,
-    IReadOnlyList<AbsenceInForce> AbsencesOpened,
-    IReadOnlyList<string> AbsencesClosed)
+    IReadOnlyList<BodySupervision> Bodies)
 {
     /// <summary>The change that withdraws all supervision, so the world carries none again.</summary>
-    public static SupervisionChange Withdrawal { get; } = new(false, null, [], [], []);
+    public static SupervisionChange Withdrawal { get; } = new(false, null, []);
 }
 
 /// <summary>

@@ -19,9 +19,11 @@ package (`07_Scenario_Authoring.md` §3.4). Held here:
   the 335 guard postings, the 21 hauls, the nine planted vehicles and every flow window -- comes back
   with the same id, the same roads and stops and the same local time; what it held before 07:00 on
   day 0 is gone and what the run adds is day 7 before 07:00.
-* **The six anomalies are supervision.** The nine planted vehicles are the participants of the five
-  annotated instances, and the guard no-show is an absence in the guard rota's series, at the tower,
-  instant and length the labels' described gap gave it.
+* **The five vehicle anomalies are supervision, and the no-show is a skip.** The nine planted vehicles
+  are the participants of the five annotated instances. The guard no-show is a skip in the guard rota
+  at the tower, instant and length the labels' described gap gave it, and nothing more: the posting it
+  removes has no trip and no supervision row, because a label follows a vehicle and there is none
+  (06 §3.5, the owner's ruling of 2026-10-05).
 * **The plan says nothing its terms do not define.** The perimeter shadow's `speed_factor` and
   `circuit_edges` are the keys its term declares, of the declared types, and a value of another type
   is refused (check 56); the hauls and the guard postings carry their terms' `hard_negative_for`.
@@ -261,8 +263,7 @@ def test_the_shipped_anomalies_are_anchored_to_the_events_that_commit_them():
     """Each transit opens at its vehicle's departure, which it declares; each probe's standoff and
     the stay-behind's dwell are their one stop, which declares a length (06 D6.4) or an end."""
     intervals = {i["instance_id"].split("/", 1)[1]: i["intervals"]
-                 for i in shipped_plan()["instances"]
-                 if i["supervision"] == "annotated" and i["realisation"] == "present"}
+                 for i in shipped_plan()["instances"] if i["supervision"] == "annotated"}
     reading = Reading(generated_specification())
     departs = {a["id"]: reading.resolver.instant(a["depart"], a["id"]).seconds
                for a in reading.spec["actors"]}
@@ -295,13 +296,21 @@ def test_a_probe_anchored_to_a_stop_it_does_not_make_is_refused_under_check_58(t
         f.message for f in result.findings.by_check(58))
 
 
-def test_the_shipped_absence_is_sited_where_the_labels_described_the_gap():
-    labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
-    (gap,) = labels["anomaly_notes"]
-    (absence,) = [i for i in shipped_plan()["instances"] if i["realisation"] == "absent"]
-    expected = absence["expected"]
-    assert expected["site_lane"].rsplit("_", 1)[0] == gap["edge"]
-    assert expected["site_pos_m"] == gap["edge_pos_m"]
+def test_the_shipped_plan_carries_no_row_for_the_skipped_posting():
+    """The no-show is a skip and nothing else: no instance, no slot, no interval names the posting the
+    rota leaves out, and every row of the plan is a vehicle's or a flow's (06 §3.5)."""
+    plan = shipped_plan()
+    skipped = "guard_d4_h7_t3"
+    assert all(row["participants"] for row in plan["instances"])
+    assert all(interval["entity_id"] for row in plan["instances"] for interval in row["intervals"])
+    assert not any(skipped in json.dumps(row) for row in plan["instances"])
+    (series,) = plan["series"]
+    assert len(series["slots"]) == 335
+    assert all(slot["entity_id"] == slot["slot_key"] for slot in series["slots"])
+    assert skipped not in {slot["slot_key"] for slot in series["slots"]}
+    assert skipped not in {entity["entity_id"] for entity in plan["entities"]}
+    assert "realisation" not in json.dumps(plan)
+    assert plan["vocabulary"]["core"]["vocabulary_version"] == 3
 
 
 # ---- the owner's epoch ---------------------------------------------------------------------------------
@@ -460,7 +469,7 @@ def test_every_flow_window_comes_back_cut_to_the_run():
         assert reading.shipped_seconds(flow["end"], flow_id) <= run_end
 
 
-def test_the_six_anomalies_are_supervision_and_the_no_show_keeps_its_described_gap():
+def test_the_five_vehicle_anomalies_are_supervision_and_the_no_show_is_a_skip_at_its_described_gap():
     specification = generated_specification()
     reading = Reading(specification)
     labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
@@ -470,15 +479,15 @@ def test_the_six_anomalies_are_supervision_and_the_no_show_keeps_its_described_g
     assert sorted(p["actor"] for i in annotated for p in i["participants"]) == \
         sorted(labels["marked_ids"])
     assert all(i["labels"] for i in annotated)
-    (absence,) = supervision["absences"]
+    # The no-show is conveyed by the rota's skip alone: the block declares no row for it.
+    assert "absences" not in supervision
     (series,) = supervision["series"]
-    assert (absence["series"], series["rota"], series["supervision"]) == (
-        series["series_id"], "guard_posting", "nominal")
+    assert (series["rota"], series["supervision"]) == ("guard_posting", "nominal")
     (gap,) = labels["anomaly_notes"]
     _, skips = RotaExpander(reading.resolver, CompileFindings()).expand(
         specification["rotas"][0], specification["place_sets"]["guard_towers"])
     (skip,) = skips
-    assert absence["entry"] == skip.entry_id
+    assert skip.entry_id == "guard_d4_h7_t3"
     assert skip.subject_index == gap["tower_index"]
     lane, offset = reading.stop({"place": skip.subject})
     assert (lane.rsplit("_", 1)[0], offset) == (gap["edge"], gap["edge_pos_m"])

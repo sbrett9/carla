@@ -240,13 +240,13 @@
     {
       "id": 45,
       "group": "annotation",
-      "title": "Every label's applies_to includes the subject kind, and its realisation the instance's realisation",
+      "title": "Every label's applies_to includes the subject kind: a vehicle, or every vehicle of a flow",
       "against": "the vocabulary block",
       "outcomes": [
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "A per-member term on a flow, or an absence term on a vehicle"
+      "prevents": "A per-member term on a flow, or a whole-flow term on one vehicle"
     },
     {
       "id": 46,
@@ -262,7 +262,7 @@
     {
       "id": 56,
       "group": "annotation",
-      "title": "Every parameter an instance, absence, series or cohort carries is declared by one of its labels' terms and is of the declared type; labels declaring one key agree on its type and unit",
+      "title": "Every parameter an instance, series or cohort carries is declared by one of its labels' terms and is of the declared type; labels declaring one key agree on its type and unit",
       "against": "the vocabulary block",
       "outcomes": [
         "refuse"
@@ -284,13 +284,13 @@
     {
       "id": 19,
       "group": "annotation",
-      "title": "Every participant names a declared actor",
+      "title": "Every participant names a declared actor, and every instance has a participant",
       "against": "the specification",
       "outcomes": [
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "An instance whose participant never exists"
+      "prevents": "An instance whose participant never exists, or a label with no vehicle to follow"
     },
     {
       "id": 20,
@@ -361,7 +361,7 @@
     {
       "id": 50,
       "group": "annotation",
-      "title": "A one-participant instance names its participant subject; the phase vacancy is never authored",
+      "title": "A one-participant instance names its participant subject",
       "against": "06 §3.7 reserved words",
       "outcomes": [
         "refuse"
@@ -475,7 +475,7 @@
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "An absence that was never planted"
+      "prevents": "A skip that removes nothing, so the schedule runs complete where its author meant a gap"
     },
     {
       "id": 37,
@@ -536,13 +536,11 @@
     {
       "id": 42,
       "group": "epoch_and_illumination",
-      "title": "A window whose sun is below -6 degrees is named as not corpus-eligible",
-      "against": "11 D11.7",
-      "outcomes": [
-        "warn"
-      ],
+      "title": "Every window's lowest sun elevation and its band are stated in the resolution report; a fact with no pass mark, never a finding",
+      "against": "the declared sun, through WindowSun",
+      "outcomes": [],
       "status": "compiler",
-      "prevents": "A night window captured by accident"
+      "prevents": "A window authored without its author knowing what light it is under"
     },
     {
       "id": 41,

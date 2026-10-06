@@ -17,7 +17,7 @@ recorder listed only the rendered set is shown to carry the defect and one made 
 to (`06_Truth_And_Annotation.md` §8.2).
 
 **And the supervision, where the run had a plan.** A sidecar of a frame a supervision plan was in force
-on names the plan on its container and carries a world-scoped `<_supervision scope="world">`, and every
+on names the plan on its container, and every
 SUMO vehicle record in it carries a `<_supervision>` whose `state` is `annotated`, `nominal` or
 `unlabelled` -- always written, because a missing state is a bug and not a negative. A sidecar whose
 frame's supervision was not to be had says `supervision="unknown"` and carries none, which is counted
@@ -124,7 +124,7 @@ class SidecarAuditResult:
     sidecars_with_plan: int = 0
     sidecars_supervision_unknown: int = 0
     plans: set[str] = field(default_factory=set)
-    sidecars_with_plan_without_world: list[str] = field(default_factory=list)
+    sidecars_with_world_supervision: list[str] = field(default_factory=list)
     sidecars_saying_nothing_of_supervision: list[str] = field(default_factory=list)
     records_without_supervision: list[VehicleRecord] = field(default_factory=list)
     records_with_unknown_state: list[VehicleRecord] = field(default_factory=list)
@@ -184,9 +184,9 @@ class SidecarAuditResult:
         if self.records_unlabelled_naming_something:
             found.append(f"{len(self.records_unlabelled_naming_something)} unlabelled vehicle record(s) "
                          "name an instance")
-        if self.sidecars_with_plan_without_world:
-            found.append(f"{len(self.sidecars_with_plan_without_world)} sidecar(s) name a supervision "
-                         "plan and carry no world-scoped <_supervision>")
+        if self.sidecars_with_world_supervision:
+            found.append(f"{len(self.sidecars_with_world_supervision)} sidecar(s) carry a <_supervision> "
+                         "outside any vehicle record: a label with no vehicle to follow")
         if self.had_plan and self.sidecars_saying_nothing_of_supervision:
             found.append(f"{len(self.sidecars_saying_nothing_of_supervision)} sidecar(s) of a run with a "
                          "supervision plan neither name it nor say their supervision was unknown")
@@ -289,8 +289,11 @@ class TruthSidecarAudit:
             return False
         result.sidecars_with_plan += 1
         result.plans.add(plan)
-        if not any(child.get("scope") == "world" for child in root.findall("_supervision")):
-            result.sidecars_with_plan_without_world.append(path.name)
+        # Every supervision element is a vehicle's, inside its event: a `<_supervision>` directly under
+        # the container would be a label with no vehicle, which the recorder never writes (06 §3.5).
+        for stray in root.findall("_supervision"):
+            result.sidecars_with_world_supervision.append(path.name)
+            break
         return True
 
     @staticmethod

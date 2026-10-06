@@ -166,9 +166,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "since": 1,
             "status": "active"
           },
@@ -178,30 +175,11 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "since": 1,
             "status": "active",
             "hard_negative_for": [
               "fixture:standoff"
             ]
-          },
-          {
-            "term": "fixture:patrol_missed",
-            "definition": "A scheduled patrol that never came.",
-            "applies_to": [
-              "slot"
-            ],
-            "realisation": [
-              "absent"
-            ],
-            "since": 1,
-            "status": "active",
-            "counterfactual": {
-              "kind": "term",
-              "ref": "fixture:routine_patrol"
-            }
           }
         ],
         "roles": [
@@ -274,16 +252,6 @@
         "supervision": "nominal",
         "labels": [
           "fixture:routine_patrol"
-        ]
-      }
-    ],
-    "absences": [
-      {
-        "name": "patrol_missed_d0_h8",
-        "series": "kerb_patrol",
-        "entry": "patrol_d0_h8",
-        "labels": [
-          "fixture:patrol_missed"
         ]
       }
     ]

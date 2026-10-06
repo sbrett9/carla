@@ -46,11 +46,11 @@ Each band holds its upper edge. They are terms the pipeline derives, never an au
 
 ## Night
 
-**No window whose sun is below −6° is corpus-eligible** (doc 11, D11.7): at those instants the scene
-holds no light source at all, and under SUMO drive nothing switches a headlight on. The compiler warns
-and never refuses (check 42) — a night window still yields complete behavioural truth — so an author
-may capture one deliberately and nobody captures one by accident. At the sizing site 23:00 is −38° to
-−80° on every date.
+**Below −6° the scene holds no light source at all** (doc 11, D11.7), and under SUMO drive nothing
+switches a headlight on. The compiler states each window's lowest sun elevation and its band in the
+resolution report (`capture_windows[].sun_lowest`, check 42) and concludes nothing — neither a warning
+nor a refusal — so an author who captures a night window does it knowing the number, and a night window
+still yields complete behavioural truth. At the sizing site 23:00 is −38° to −80° on every date.
 
 ## The illumination–label association
 

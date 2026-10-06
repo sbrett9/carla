@@ -168,9 +168,9 @@ public interface ICarlaWorld
     RenderSetWrite WriteRenderSet(IReadOnlyList<LentBody> lent, IReadOnlyList<ActorId> parked);
 
     /// <summary>
-    /// Put a change to the supervision in force on the server: the plan it is bound from, what the
-    /// author asserts from now on of the vehicle each named body draws, and the absences that open and
-    /// close; answer what the server made of it.
+    /// Put a change to the supervision in force on the server: the plan it is bound from, and what the
+    /// author asserts from now on of the vehicle each named body draws; answer what the server made of
+    /// it.
     /// </summary>
     /// <remarks>
     /// <para>The server carries what it holds on each world-observer snapshot from the next frame on,
@@ -178,7 +178,8 @@ public interface ICarlaWorld
     /// one in another process, the live CoT feed -- reads the same truth for the same frame, and none
     /// holds it in its own process. A body's supervision is held on the server's record of the actor
     /// only while the render set names it lent: it is dropped when the body is given back or handed to
-    /// another vehicle, and a body not lent is not given one. Absences are held for the world.</para>
+    /// another vehicle, and a body not lent is not given one. Every row is a vehicle's; only the plan is
+    /// held for the world.</para>
     ///
     /// <para>One round trip, made only on a tick whose supervision changed -- an interval opened or
     /// closed, or a supervised vehicle lent a body anew -- after <see cref="WriteRenderSet"/> and before

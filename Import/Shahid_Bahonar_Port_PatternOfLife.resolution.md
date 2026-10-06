@@ -17,7 +17,7 @@
 | 17 | warn | vehicle class mil_jeep | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class mil_truck | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class guard | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.142 over 613 entries (at their departures; no capture window is declared); degenerate bands, where the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.142 over 613 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -53,7 +53,7 @@ Normalized mutual information: 0.142 over 613 entries.
 | astronomical_twilight | 7 | 0 | 0 | 7 |
 | night | 1 | 112 | 56 | 169 |
 
-Degenerate bands: nautical_twilight, astronomical_twilight. Usable bands: day, golden, night.
+Bands where one state alone occurs: nautical_twilight, astronomical_twilight. Bands where both occur: day, golden, night.
 
 Remedies:
 
@@ -731,45 +731,102 @@ Remedies:
 | shift_in_d6_h23 | mil_mix | 2026-10-05T23:00:00+03:30 to 2026-10-05T23:20:00+03:30 | 26417705#0 26417705#1 26417705#2 -26413274#2 -26413274#1 26413277 -26413373#1 26413385 -26413338#1 26413391 -26413409#1 -26413409#0 26413425#1 26413425#2 26413425#4 26413425#5 | 8077.01 m | 1052.9 s |
 | shift_out_d6_h23 | mil_mix | 2026-10-05T23:15:00+03:30 to 2026-10-05T23:35:00+03:30 | 26413425#5 -26413425#5 -26413425#4 -26413425#3 -26413425#1 -26413425#0 26413409#1 -26413391 26413338#1 -26413385 26413373#1 26413281 26413274#0 26413274#2 26417705#3 26402480#0 26402480#1 26402480#2 168434252 1396607730 1396607721 1396607732 | 11132.8 m | 1271.3 s |
 
+## Vehicle types
+
+Bodies from catalogue `carla-0.10.0-windows` (vehicles.catalogue.json, digest `6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d`). The lights are whether each lights up on the body when the session drives it: headlights by the sun, brake lights and turn signals from SUMO's signals.
+
+- civ_car: 10 measured bodies, length 4.18-5.59 m, mean 4.89 m, share 0
+- civ_pickup: 1 measured body, length 3.87-3.87 m, mean 3.87 m, share 0
+- civ_taxi: 1 measured body, length 5.35-5.35 m, mean 5.35 m, share 0
+- civ_truck: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0
+- civ_bus: 1 measured body, length 10.17-10.17 m, mean 10.17 m, share 0
+- port_vehicle: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0
+- port_truck: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0
+- mil_jeep: 1 measured body, length 3.87-3.87 m, mean 3.87 m, share 0
+- mil_truck: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0
+- guard: 1 measured body, length 3.87-3.87 m, mean 3.87 m, share 0
+- army_car_crawl: 10 measured bodies, length 4.18-5.59 m, mean 4.89 m, share 0
+- port_car: 10 measured bodies, length 4.18-5.59 m, mean 4.89 m, share 0
+
+| Type | Body | Length (m) | Body width (m) | Height (m) | Headlights | Brake lights | Turn signals |
+|---|---|---|---|---|---|---|---|
+| civ_car.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| civ_car.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| civ_car.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| civ_car.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| civ_car.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| civ_car.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| civ_car.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| civ_car.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| civ_car.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| civ_car.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| civ_pickup.vehicle.jeep.wrangler_rubicon | vehicle.jeep.wrangler_rubicon | 3.866 | 1.855 | 1.878 | unlit | unlit | unlit |
+| civ_taxi.vehicle.taxi.ford | vehicle.taxi.ford | 5.354 | 1.779 | 1.575 | unlit | unlit | unlit |
+| civ_truck.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+| civ_bus.vehicle.fuso.mitsubishi | vehicle.fuso.mitsubishi | 10.174 | 3.233 | 4.241 | unlit | unlit | unlit |
+| port_vehicle.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| port_truck.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+| mil_jeep.vehicle.jeep.wrangler_rubicon | vehicle.jeep.wrangler_rubicon | 3.866 | 1.855 | 1.878 | unlit | unlit | unlit |
+| mil_truck.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+| guard.vehicle.jeep.wrangler_rubicon | vehicle.jeep.wrangler_rubicon | 3.866 | 1.855 | 1.878 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| army_car_crawl.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| port_car.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| port_car.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| port_car.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| port_car.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| port_car.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| port_car.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| port_car.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| port_car.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| port_car.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| port_car.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+
 ## Supervision
 
-- **Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3**: annotated, present, labels bahonar:coordinated_group_transit, bahonar:destination_off_pattern; escort_0 (bahonar:lead), escort_1 (bahonar:follower), escort_2 (bahonar:follower), escort_3 (bahonar:follower), escort_4 (bahonar:follower); parameters group_size = 5, departure_spread_s = 16
+- **Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3**: annotated, labels bahonar:coordinated_group_transit, bahonar:destination_off_pattern; escort_0 (bahonar:lead), escort_1 (bahonar:follower), escort_2 (bahonar:follower), escort_3 (bahonar:follower), escort_4 (bahonar:follower); parameters group_size = 5, departure_spread_s = 16
   - transit: from depart (2026-10-02T10:00:00+03:30) to open
   - transit: from depart (2026-10-02T10:00:04+03:30) to open
   - transit: from depart (2026-10-02T10:00:08+03:30) to open
   - transit: from depart (2026-10-02T10:00:12+03:30) to open
   - transit: from depart (2026-10-02T10:00:16+03:30) to open
-- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d2 (subject); parameters dwell_s = 300
+- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d2**: annotated, labels bahonar:standoff_dwell_at_access_point; probe_d2 (subject); parameters dwell_s = 300
   - standoff: from stop:0 to stop_end:0, 300 s declared
-- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5**: annotated, present, labels bahonar:standoff_dwell_at_access_point; probe_d5 (subject); parameters dwell_s = 300
+- **Shahid_Bahonar_Port_PatternOfLife/pi_gate_probe_d5**: annotated, labels bahonar:standoff_dwell_at_access_point; probe_d5 (subject); parameters dwell_s = 300
   - standoff: from stop:0 to stop_end:0, 300 s declared
-- **Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6**: annotated, present, labels bahonar:perimeter_transit_off_cadence; shadow (subject); parameters speed_factor = 0.45, circuit_edges = 7
+- **Shahid_Bahonar_Port_PatternOfLife/pi_perimeter_shadow_d6**: annotated, labels bahonar:perimeter_transit_off_cadence; shadow (subject); parameters speed_factor = 0.45, circuit_edges = 7
   - transit: from depart (2026-10-05T02:30:00+03:30) to open
-- **Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1**: annotated, present, labels bahonar:arrival_without_departure; staybehind (subject)
+- **Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1**: annotated, labels bahonar:arrival_without_departure; staybehind (subject)
   - dwell: from stop:0 to stop_end:0 (2026-10-06T07:00:00+03:30)
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d0_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d1_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d2_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d3_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d4_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d5_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_0**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_1**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_2**: nominal, present, labels bahonar:routine_freight_haul; haul_d6_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
-- **Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned**: annotated, absent, labels bahonar:post_unmanned; no participant
-  - vacancy: 2026-10-03T07:00:00+03:30 to 2026-10-03T15:00:00+03:30
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_0**: nominal, labels bahonar:routine_freight_haul; haul_d0_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_1**: nominal, labels bahonar:routine_freight_haul; haul_d0_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d0_2**: nominal, labels bahonar:routine_freight_haul; haul_d0_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_0**: nominal, labels bahonar:routine_freight_haul; haul_d1_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_1**: nominal, labels bahonar:routine_freight_haul; haul_d1_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d1_2**: nominal, labels bahonar:routine_freight_haul; haul_d1_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_0**: nominal, labels bahonar:routine_freight_haul; haul_d2_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_1**: nominal, labels bahonar:routine_freight_haul; haul_d2_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d2_2**: nominal, labels bahonar:routine_freight_haul; haul_d2_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_0**: nominal, labels bahonar:routine_freight_haul; haul_d3_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_1**: nominal, labels bahonar:routine_freight_haul; haul_d3_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d3_2**: nominal, labels bahonar:routine_freight_haul; haul_d3_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_0**: nominal, labels bahonar:routine_freight_haul; haul_d4_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_1**: nominal, labels bahonar:routine_freight_haul; haul_d4_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d4_2**: nominal, labels bahonar:routine_freight_haul; haul_d4_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_0**: nominal, labels bahonar:routine_freight_haul; haul_d5_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_1**: nominal, labels bahonar:routine_freight_haul; haul_d5_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d5_2**: nominal, labels bahonar:routine_freight_haul; haul_d5_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_0**: nominal, labels bahonar:routine_freight_haul; haul_d6_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_1**: nominal, labels bahonar:routine_freight_haul; haul_d6_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
+- **Shahid_Bahonar_Port_PatternOfLife/haul_d6_2**: nominal, labels bahonar:routine_freight_haul; haul_d6_2 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
 - cohort **ferry_in_d0_h8**: annotated, labels bahonar:cleared_gate_transit
 - cohort **ferry_out_d0_h8**: annotated, labels bahonar:cleared_gate_transit
 - cohort **ferry_in_d0_h10**: annotated, labels bahonar:cleared_gate_transit
@@ -868,7 +925,7 @@ Remedies:
 - cohort **ferry_out_d6_h18**: annotated, labels bahonar:cleared_gate_transit
 - cohort **ferry_in_d7_h6**: annotated, labels bahonar:cleared_gate_transit
 - cohort **ferry_out_d7_h6**: annotated, labels bahonar:cleared_gate_transit
-- series **tower_relief**: 336 slots, members nominal; a hard negative for bahonar:standoff_dwell_at_access_point, bahonar:arrival_without_departure
+- series **tower_relief**: 335 slots, members nominal; a hard negative for bahonar:standoff_dwell_at_access_point, bahonar:arrival_without_departure
 
 ## Dry run (check 59)
 
@@ -1271,7 +1328,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "4c68a019547c2d5638b02ad59d4e47d6f668717ed67e37a2f5b1985d53791442"
+    "sha256": "292b3909573bec7ec8cf5c66dc1e0f532c940955088e7c19b26f6e03989a2302"
   }
 }
 ```

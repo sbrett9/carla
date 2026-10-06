@@ -13,7 +13,7 @@ One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange
 | 17 | warn | vehicle class truck | draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class semi | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class marked | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = undefined (one supervision state only) over 52 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = undefined (one supervision state only) over 52 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -45,7 +45,7 @@ Normalized mutual information: undefined over 52 entries.
 |---|---|---|---|---|
 | golden | 0 | 0 | 52 | 52 |
 
-Degenerate bands: none. Usable bands: none.
+Bands where one state alone occurs: none. Bands where both occur: none.
 
 Remedies:
 
@@ -178,6 +178,44 @@ Remedies:
 |---|---|---|---|---|---|---|
 | incident | 1001791386 South Valley Highway | 1001791386_0 1001791386_1 1001791386_2 1001791386_3 1001791386_4 | 1 | 2026-09-29T07:15:00-06:00 | 2026-09-29T07:18:00-06:00 | 907700111 1342047649 |
 
+## Vehicle types
+
+Bodies from catalogue `carla-0.10.0-windows` (vehicles.catalogue.json, digest `6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d`). The lights are whether each lights up on the body when the session drives it: headlights by the sun, brake lights and turn signals from SUMO's signals.
+
+- car_quick: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0
+- car: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0
+- suv: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0
+- van: 1 measured body, length 5.92-5.92 m, mean 5.92 m, share 0
+- truck: 1 measured body, length 8.00-8.00 m, mean 8.00 m, share 0
+- semi: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0
+- marked: 1 measured body, length 3.87-3.87 m, mean 3.87 m, share 0
+
+| Type | Body | Length (m) | Body width (m) | Height (m) | Headlights | Brake lights | Turn signals |
+|---|---|---|---|---|---|---|---|
+| car_quick.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car_quick.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car_quick.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car_quick.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| car.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| suv.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| van.vehicle.sprinter.mercedes | vehicle.sprinter.mercedes | 5.915 | 1.982 | 2.726 | unlit | unlit | unlit |
+| truck.vehicle.carlacola.actors | vehicle.carlacola.actors | 8.004 | 2.787 | 4.055 | unlit | unlit | unlit |
+| semi.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+| marked.vehicle.jeep.wrangler_rubicon | vehicle.jeep.wrangler_rubicon | 3.866 | 1.855 | 1.878 | unlit | unlit | unlit |
+
 ## Supervision
 
 
@@ -210,7 +248,7 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "dea811c20fd2b2e6965d0eb55d98c23f8132a7423a1f1fb749aa1780c75e2458"
+    "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
   },
   "additional": {
     "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -218,7 +256,7 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
   },
   "supervision": {
     "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-    "sha256": "82482b0ed312e9d85f81bae8a7be2ea10f9ff255c4f2348b3c5942a1f9023555"
+    "sha256": "e55b9d5d3eb64e8caa121a3784b62e1845c9c96c2e0590069466795025096628"
   }
 }
 ```

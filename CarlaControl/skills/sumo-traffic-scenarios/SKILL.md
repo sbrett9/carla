@@ -2,7 +2,7 @@
 name: sumo-traffic-scenarios
 description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work. Also use when writing or compiling a scenario specification (compile_scenario.py): the epoch that says what civil time t = 0 is, civil-time literals, named places, rotas, supervision labels and vocabulary, capture windows, the illumination default, sweeps and counterfactual pairs.
 metadata:
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -148,8 +148,9 @@ file cannot carry it. `make_arapahoe_scenario.py` closes five of I-25's six nort
 minutes this way.
 
 `make_bahonar_scenario.py` is the worked pattern of life: a week scheduled in civil clocks under a
-07:00 epoch, a guard rota whose one skip plants the no-show, five annotated instances, a nominal series
-over the rota with the no-show as its absence, each sited at the world's areas of interest
+07:00 epoch, a guard rota whose one skip leaves the no-show's posting unmanned, five annotated instances,
+a nominal series over the rota whose slots are the 335 postings a guard realises, each sited at the
+world's areas of interest
 (`Import/<Name>.aoi.geojson`, published into the package), and three named mixes.
 
 ### The epoch — ask for it, never assume it
@@ -211,7 +212,9 @@ street names (Bahonar: 4.5 %), use points, gateways and areas:
  "skip": [{"day": 4, "at": "07:00", "subject_index": 3, "because": "the no-show anomaly"}]}
 ```
 
-A skip must match exactly one occasion and say why: it is how an absence is planted.
+A skip must match exactly one occasion and say why. It writes no trip and no supervision row: a label
+follows a vehicle, and there is none (doc 06 §3.5). An author who wants the omission in the record labels
+the vehicle that deviates, or states the intent as a note at scenario level, never per frame.
 
 ### An orbit — an explicit route in phases, a held phase waypointed per edge
 
@@ -240,21 +243,21 @@ carries none, and the compiler refuses a route file carrying anything but the ve
 - **Three states:** `annotated` (executing the named pattern), `nominal` (executing no target pattern —
   a hard negative), `unlabelled` (no assertion; everything not declared). A flow may be `annotated`
   whole-life or `unlabelled`, **never `nominal`** and never with intervals.
-- `instances[]` carry participants (`actor`, `role`), `intervals`, `aoi_refs`, `labels`. A
-  one-participant instance names its participant `subject`. Never author the phase `vacancy`.
+- `instances[]` carry participants (`actor`, `role`), `intervals`, `aoi_refs`, `labels`. Every instance
+  has at least one participant: an instance about no vehicle is refused (check 19). A one-participant
+  instance names its participant `subject`.
 - **An interval is declared in civil time** (`begin` with `end` or `duration`) **or by an `anchor`**,
   never both (check 58). An anchor names the events of the participant that commit the interval:
   `{"start": "stop:0", "end": "stop_end:0"}` for a dwell at its first stop, `{"start": "depart"}` for
   a transit from its insertion, `phase:<i>` for entering the i-th of its `phases[]`; indices count from
   0. Prefer an anchor where the pattern is a stop or a phase: SUMO decides when a vehicle arrives, so a
   civil begin there is a guess, and a `duration` stop declares only its length.
-- `series[]` reads a rota as a recurring series; `absences[]` annotate a skipped occasion — an anomaly
-  with no vehicle.
+- `series[]` reads a rota as a recurring series: one slot per occasion a vehicle realises, each naming
+  its vehicle. There is no `absences[]`: a skipped occasion has no row.
 - **Terms are the author's**, declared in `vocabulary.namespaces[]` as `<namespace>:<name>` with a
-  definition, `applies_to` (`entity`/`cohort`/`slot`), `realisation` (`present`/`absent`), `since` and
-  `status`. **Invent no terms on the author's behalf** — the label is a contract between the author and
+  definition, `applies_to` (`entity`/`cohort`), `since` and `status`. **Invent no terms on the author's behalf** — the label is a contract between the author and
   the model trainer, and this pipeline carries it without judging it. Ask for the author's words.
-- **A subject's magnitudes go in `parameters`** — on an instance, an absence, a series or a cohort — and
+- **A subject's magnitudes go in `parameters`** — on an instance, a series or a cohort — and
   each key must be declared in the `parameters{}` of one of its labels' terms, with a `type`
   (`number`, `integer`, `string`, `boolean`), a `unit` where it has one and a `definition`. An
   undeclared key, or a value of another type, is refused (check 56); there is no free-form attribute map.
@@ -271,10 +274,13 @@ carries none, and the compiler refuses a route file carrying anything but the ve
 - `capture_windows[]` are **candidates**, not run instructions; a window may not cut a declared
   interval. The report states each window's civil date and the sun it opens under.
 - **Expect the illumination–label association (check 41) to be non-zero, and report it to the author
-  in words** with its degenerate bands and remedies. In a pattern of life the correlation is
-  structural — the sizing scenario measures 0.600 — and it is a warning, never a refusal.
-- A window below −6° is not corpus-eligible (doc 11 D11.7): night gives complete behavioural truth and
-  no usable imagery. It warns; the choice stays the author's.
+  in words** with the bands where one state alone occurs, the bands where both do, and the remedies. In
+  a pattern of life the correlation is structural — the sizing scenario measures 0.600 — and it is a
+  warning, never a refusal. The report carries counts, ratios and bands and no word that judges them.
+- **Tell the author what light each window is under.** The resolution report states every window's
+  lowest sun elevation and its band (`capture_windows[].sun_lowest`, check 42) and concludes nothing;
+  doc 11 D11.7 says why a sun below −6° renders no lit scene. Read the number to the author; the choice
+  is theirs.
 
 ### Sweeps and counterfactual pairs
 
@@ -514,7 +520,7 @@ type names, and empty for a type that names none (06 D6.18). The UDP feed carrie
 `base_type`, in every sink and in the callsign, is the catalogue's for the same blueprint, and the
 vehicle class's (`passenger` a car, `delivery` a van) only for a type that names none of its
 blueprints. A compiled scenario's ground truth is its `.supervision.json` (instances,
-series, absences, cohorts), which this tool does not read and which joins to the sidecar by vehicle
+series, cohorts), which this tool does not read and which joins to the sidecar by vehicle
 id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
 
 - `marked_ids` — vehicle IDs flagged as anomalies (`marked=1`; a distinct affiliation only on the
@@ -523,12 +529,12 @@ id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
   `f` (friendly). The letter appears in `cot_type` = `a-<letter>-G-E-V`. It is the run's display
   convention when no display convention is given or found beside the scenario. The `u` it gave every
   anomaly type is not applied: that letter wrote the answer into the CoT type (06 §9.1).
-- `anomaly_notes` — anomalies that are *absences* (e.g. a guard who never arrives) have no vehicle,
-  so they are documented here as a described gap (location + time window). A run carries them out to
-  a `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped
+- `anomaly_notes` — anomalies with no vehicle (e.g. a guard who never arrives) are documented here as
+  a described gap (location + time window), a note at scenario level. A run carries them out to a
+  `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped
   (`SupervisionSidecar`, written by `sumo_cot_telemetry`). It is written beside the dataset and never
-  into it: a note saying which post stood unmanned between which hours is the answer to the question
-  the dataset asks.
+  into it, and never per frame: a note saying which post stood unmanned between which hours is the
+  answer to the question the dataset asks (doc 06 §3.5).
 
 Height (`hae_m`) is ellipsoidal, read from `bareearth.bin`. Coordinates convert through the running
 simulation (`traci.simulation.convertGeo`), which uses SUMO's own PROJ and the network's projection

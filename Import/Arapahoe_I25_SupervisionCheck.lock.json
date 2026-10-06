@@ -4,7 +4,7 @@
   "scenario_name": "Arapahoe supervision check",
   "spec_version": 1,
   "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-  "specification_sha256": "1c2748c47f80f6edc9947f6fdf0fa73ddaebc82d47892d58d5b0eb0f4c6fa203",
+  "specification_sha256": "53477560f61a8668649984059c4850140eb379836ea9c1d4d62bce183d94fd9f",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "1.0.0"
@@ -20,11 +20,11 @@
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
-      "sha256": "dea811c20fd2b2e6965d0eb55d98c23f8132a7423a1f1fb749aa1780c75e2458"
+      "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
     },
     "supervision": {
       "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-      "sha256": "b292a1ef9ad78722131b9dcc692cb5cc604aae4690b14c95ff349704107720f7"
+      "sha256": "2ce5636f05c05724994dabc8bddca60d493a7f577a90577d1868124b2ede829d"
     }
   },
   "world": {
@@ -84,14 +84,14 @@
     "content_build_id": "carla-0.10.0-windows"
   },
   "vocabulary": {
-    "core_version": 2,
+    "core_version": 3,
     "namespaces": [
       {
         "namespace": "check",
         "version": 1
       }
     ],
-    "vocabulary_digest": "f4ee7b480df7209dfa2404bced4ff6d0504692e5e4cbc03d9781326c14a604ff"
+    "vocabulary_digest": "19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197"
   },
   "traffic": {
     "sumo_seed": 42,

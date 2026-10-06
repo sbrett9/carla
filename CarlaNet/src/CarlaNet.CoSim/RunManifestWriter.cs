@@ -65,7 +65,9 @@ namespace CarlaNet.CoSim;
 /// other events that change the population the scenario authored.</description></item>
 /// <item><term><c>solar_window_open</c>, <c>solar_window_end</c></term><description>The sun the world
 /// reported at the window's first and last capture tick, and at the end the audit's worst residual and
-/// whether the run is eligible for a corpus (doc 04 C9 §11.8.1, §11.8.2).</description></item>
+/// whether the sun the world held matched the declaration throughout (<c>sun_matched_declaration</c>:
+/// an epoch declared, the policy binding the sun, a sun present, and the audit within its tolerance;
+/// doc 04 C9 §11.8.1, §11.8.2).</description></item>
 /// <item><term><c>manifest_closed</c></term><description>Last: why the run ended --
 /// <c>scenario_finished</c>, <c>caller_stopped</c> or <c>run_stopped</c> with its stage and cause -- with
 /// the caller's own reason where it gave one, what the manifest holds, the intervals still open
@@ -1222,12 +1224,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             {
                 json.WriteString("instance_id", instance.InstanceId);
                 json.WriteString("supervision", CoreVocabulary.Name(instance.Supervision));
-                json.WriteString("realisation", CoreVocabulary.Name(instance.Realisation));
                 WriteStrings(json, "labels", instance.Labels);
                 WriteParameters(json, instance.Parameters);
                 WriteStringsOrNull(json, "hard_negative_for", instance.HardNegativeFor);
-                json.WriteString("series_ref", instance.SeriesRef);
-                json.WriteString("slot_ref", instance.SlotRef);
                 WriteStrings(json, "aoi_refs", instance.AoiRefs);
                 json.WriteStartArray("participants");
                 foreach (InstanceParticipant participant in instance.Participants)
@@ -1257,22 +1256,6 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                 }
 
                 json.WriteEndArray();
-                json.WritePropertyName("expected");
-                if (instance.Expected is { } expected)
-                {
-                    json.WriteStartObject();
-                    json.WriteString("role", expected.Role);
-                    json.WriteString("expected_entity_id", expected.ExpectedEntityId);
-                    json.WriteString("site_lane", expected.SiteLane);
-                    WriteNumberOrNull(json, "site_pos_m", expected.SitePositionMetres);
-                    json.WriteNumber("declared_start_s", expected.DeclaredStartSeconds);
-                    WriteNumberOrNull(json, "declared_end_s", expected.DeclaredEndSeconds);
-                    json.WriteEndObject();
-                }
-                else
-                {
-                    json.WriteNullValue();
-                }
             });
         }
 
@@ -1296,8 +1279,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                     json.WriteString("aoi_ref", slot.AoiRef);
                     json.WriteNumber("declared_start_s", slot.DeclaredStartSeconds);
                     WriteNumberOrNull(json, "declared_end_s", slot.DeclaredEndSeconds);
-                    json.WriteString("expected_entity_id", slot.ExpectedEntityId);
-                    json.WriteString("realised_by", slot.RealisedBy);
+                    json.WriteString("entity_id", slot.EntityId);
                     json.WriteEndObject();
                 }
 
@@ -1391,8 +1373,10 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             json.WriteEndObject();
 
             json.WriteBoolean("no_sun", noSun);
-            json.WriteBoolean("corpus_eligible", epoch is not null && policy is { BindsTheSun: true } && !noSun
-                                                 && withinTolerance);
+            // A fact, not a verdict: an epoch was declared, the policy bound the sun, the world held one,
+            // and the audit held within its tolerance over the window. What a consumer makes of it is theirs.
+            json.WriteBoolean("sun_matched_declaration", epoch is not null && policy is { BindsTheSun: true } && !noSun
+                                                         && withinTolerance);
         });
     }
 

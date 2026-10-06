@@ -249,10 +249,9 @@ public class SnapshotHistoryTests
     // The supervision travels with each snapshot too, and names bodies as the render set does, so a
     // frame's actors, set and supervision are only ever read together, from one frame.
     private static ObservedSupervision Annotated(uint actor, string instance) =>
-        new(new SupervisionPlanIdentity("plan", 2, "digest"),
+        new(new SupervisionPlanIdentity("plan", 3, "digest"),
             [KeyValuePair.Create(actor, new SupervisionInForce(SupervisionState.Annotated,
-                                                               [new AnnotationInForce(instance, ["ns:term"], "dwell", "subject")]))],
-            []);
+                                                               [new AnnotationInForce(instance, ["ns:term"], "dwell", "subject")]))]);
 
     [Fact]
     public void A_Frame_s_Actors_Are_Served_With_The_Supervision_That_Frame_Carried()

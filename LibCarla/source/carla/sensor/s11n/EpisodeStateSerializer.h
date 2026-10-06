@@ -109,16 +109,12 @@ namespace s11n {
     ///       uint16 n, then n bytes  the phase of its interval in force, UTF-8
     ///       uint16 n, then n bytes  the role the vehicle plays in it, UTF-8
     ///       uint16 count, then count labels, each a uint16 n and n bytes of UTF-8
-    ///   uint32 count             absences that follow, each:
-    ///     uint16 n, then n bytes  the pattern instance, UTF-8
-    ///     uint16 n, then n bytes  the phase of its interval, UTF-8
-    ///     uint16 count, then count labels, each a uint16 n and n bytes of UTF-8
-    ///     uint16 count, then count areas, each a uint16 n and n bytes of UTF-8
     ///
     /// The supervision in force is held on the server, so every client of the world reads the same
     /// truth paired to the same frame. A lent body with no row draws a vehicle the author asserts
     /// nothing of -- unlabelled, which costs no bytes -- and an actor the render set does not name lent
-    /// is no subject of the plan at all. An absence has no body and is held for the world as a whole.
+    /// is no subject of the plan at all. Every row is a body's: the block holds nothing for the world
+    /// apart from the plan, because a label follows the vehicle it is about (06 §3.5).
     enum class SupervisionEntryState : uint8_t {
       /// Executing the named pattern over the interval in force.
       Annotated = 1u,

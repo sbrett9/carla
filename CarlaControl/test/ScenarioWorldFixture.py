@@ -115,14 +115,10 @@ SPECIFICATION = {
         "namespace": "fixture", "version": 1, "authority": "the compiler's test fixture",
         "terms": [
             {"term": "fixture:standoff", "definition": "A vehicle halts at the kerb for minutes "
-             "and leaves.", "applies_to": ["entity"], "realisation": ["present"], "since": 1,
-             "status": "active"},
+             "and leaves.", "applies_to": ["entity"], "since": 1, "status": "active"},
             {"term": "fixture:routine_patrol", "definition": "A scheduled patrol that halts at "
-             "the kerb.", "applies_to": ["entity"], "realisation": ["present"], "since": 1,
-             "status": "active", "hard_negative_for": ["fixture:standoff"]},
-            {"term": "fixture:patrol_missed", "definition": "A scheduled patrol that never came.",
-             "applies_to": ["slot"], "realisation": ["absent"], "since": 1, "status": "active",
-             "counterfactual": {"kind": "term", "ref": "fixture:routine_patrol"}},
+             "the kerb.", "applies_to": ["entity"], "since": 1, "status": "active",
+             "hard_negative_for": ["fixture:standoff"]},
         ],
         "roles": [{"role": "fixture:patroller", "definition": "the vehicle making a patrol"}],
         "area_kinds": [{"kind": "fixture:kerb"}],
@@ -142,8 +138,6 @@ SPECIFICATION = {
                     "member_role": "fixture:patroller", "slot_length": "10m",
                     "slot_aoi_refs": {"kerb": "kerb"}, "supervision": "nominal",
                     "labels": ["fixture:routine_patrol"]}],
-        "absences": [{"name": "patrol_missed_d0_h8", "series": "kerb_patrol",
-                      "entry": "patrol_d0_h8", "labels": ["fixture:patrol_missed"]}],
     },
     "capture_windows": [{"id": "morning", "begin": "d0 07:00", "length": "15m"}],
 }

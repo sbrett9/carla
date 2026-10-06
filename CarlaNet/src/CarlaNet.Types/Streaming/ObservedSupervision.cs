@@ -3,9 +3,9 @@ using CarlaNet.Types.Supervision;
 namespace CarlaNet.Types.Streaming;
 
 /// <summary>
-/// The supervision a world-observer snapshot carried: the plan it is bound from, what the scenario's
-/// author asserts of the vehicle each lent body drew on that frame, and the absences in force for the
-/// world as a whole.
+/// The supervision a world-observer snapshot carried: the plan it is bound from, and what the scenario's
+/// author asserts of the vehicle each lent body drew on that frame. Every row is a vehicle's; nothing is
+/// held for the world apart from the plan (06 §3.5).
 /// </summary>
 /// <remarks>
 /// <para><b>Held on the server, so every reader reads the same truth.</b> A co-simulation session puts
@@ -32,7 +32,6 @@ namespace CarlaNet.Types.Streaming;
 public sealed class ObservedSupervision
 {
     private readonly Dictionary<uint, SupervisionInForce> _byActor;
-    private readonly AbsenceInForce[] _absences;
     private readonly byte[] _block;
 
     /// <param name="plan">The plan the supervision is bound from.</param>
@@ -40,20 +39,16 @@ public sealed class ObservedSupervision
     /// Every body whose vehicle is annotated or nominal, with its supervision. An unlabelled entry is
     /// left out, as the server leaves it out.
     /// </param>
-    /// <param name="absences">The absences in force.</param>
     public ObservedSupervision(SupervisionPlanIdentity plan,
-                               IEnumerable<KeyValuePair<uint, SupervisionInForce>> byActor,
-                               IEnumerable<AbsenceInForce> absences)
-        : this(plan ?? throw new ArgumentNullException(nameof(plan)), byActor, absences, [])
+                               IEnumerable<KeyValuePair<uint, SupervisionInForce>> byActor)
+        : this(plan ?? throw new ArgumentNullException(nameof(plan)), byActor, [])
     {
     }
 
     private ObservedSupervision(SupervisionPlanIdentity? plan,
-                                IEnumerable<KeyValuePair<uint, SupervisionInForce>> byActor,
-                                IEnumerable<AbsenceInForce> absences, byte[] block)
+                                IEnumerable<KeyValuePair<uint, SupervisionInForce>> byActor, byte[] block)
     {
         ArgumentNullException.ThrowIfNull(byActor);
-        ArgumentNullException.ThrowIfNull(absences);
         Plan = plan;
         _byActor = [];
         foreach ((uint actor, SupervisionInForce supervision) in byActor)
@@ -64,19 +59,18 @@ public sealed class ObservedSupervision
             }
         }
 
-        _absences = [.. absences];
         _block = block;
     }
 
     /// <summary>The supervision of a snapshot that carried none: no plan was in force.</summary>
-    public static ObservedSupervision None { get; } = new(null, [], [], []);
+    public static ObservedSupervision None { get; } = new(null, [], []);
 
     /// <summary>
     /// The supervision of a snapshot that said it carried a block this reader could not read: a plan
     /// was in force, and what it asserted on the frame is unknown. Never read as <see cref="None"/>,
     /// which would say no plan was in force.
     /// </summary>
-    public static ObservedSupervision Unreadable { get; } = new(null, [], [], []);
+    public static ObservedSupervision Unreadable { get; } = new(null, [], []);
 
     /// <summary>Whether the snapshot said it carried supervision and its block could not be read.</summary>
     public bool IsUnreadable => ReferenceEquals(this, Unreadable);
@@ -89,9 +83,6 @@ public sealed class ObservedSupervision
 
     /// <summary>Every body whose vehicle was annotated or nominal on the frame, by actor id.</summary>
     public IReadOnlyDictionary<uint, SupervisionInForce> ByActor => _byActor;
-
-    /// <summary>The absences in force on the frame, in the order they opened.</summary>
-    public IReadOnlyList<AbsenceInForce> Absences => _absences;
 
     /// <summary>
     /// What the author asserted on the frame of the vehicle a body drew: its row, or
@@ -191,19 +182,8 @@ public sealed class ObservedSupervision
             rows.Add(KeyValuePair.Create(actorId, new SupervisionInForce(asserted, annotations)));
         }
 
-        uint absenceCount = reader.UInt32();
-        var absences = new List<AbsenceInForce>((int)Math.Min(absenceCount, 65536u));
-        for (uint absence = 0; absence < absenceCount; absence++)
-        {
-            string instanceId = reader.Name();
-            string phase = reader.Name();
-            string[] labels = reader.Names();
-            string[] areas = reader.Names();
-            absences.Add(new AbsenceInForce(instanceId, labels, areas, phase));
-        }
-
         return new ObservedSupervision(new SupervisionPlanIdentity(planId, vocabularyVersion, vocabularyDigest),
-                                       rows, absences, block.ToArray());
+                                       rows, block.ToArray());
     }
 
     /// <summary>The server's value for an annotated row: <c>EpisodeStateSerializer::SupervisionEntryState::Annotated</c>.</summary>

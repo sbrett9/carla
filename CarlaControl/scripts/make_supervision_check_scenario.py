@@ -20,10 +20,10 @@ map's west edge on East Arapahoe Road and turn left up Yosemite at the signal; m
   * and around them, ordinary traffic on Arapahoe Road and South Yosemite Street, drawn from the
     Arapahoe dwell's own flows and vehicle classes at the rates that scenario was measured at.
 
-The terms are this check's own, in namespace `check`. **No recurring series and no absence**: a series
-sites each of its slots at an area of interest, and the Arapahoe package publishes none, so neither can
+The terms are this check's own, in namespace `check`. **No recurring series**: a series sites each
+of its slots at an area of interest, and the Arapahoe package publishes none, so it cannot
 be declared without inventing an area. The first scenario of a world that does publish areas can carry
-them.
+one.
 
 **Time.** Simulated second zero is 07:26:00 Mountain Daylight Time on 29 September 2026, the morning
 the Arapahoe dwell starts on, chosen so the sun crosses the +6 degree line between doc 11's `golden`
@@ -145,7 +145,7 @@ VOCABULARY = {"namespaces": [{
                  "CarlaControl/scripts/make_supervision_check_scenario.py",
     "terms": [
         {"term": "check:kerbside_dwell", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A car pulls to the kerb and waits there for minutes, with nothing to "
                        "deliver or collect, then drives on.",
          "parameters": {"dwell_s": {"type": "number", "unit": "s",
@@ -154,11 +154,11 @@ VOCABULARY = {"namespaces": [{
          "counterfactual": {"kind": "term", "ref": "check:brief_kerb_stop"},
          "exemplar_instances": ["kerbside_dwell"]},
         {"term": "check:through_transit", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A car drives through the scene without stopping: in from East Arapahoe "
                        "Road and out to the north along South Yosemite Street."},
         {"term": "check:brief_kerb_stop", "since": 1, "status": "active",
-         "applies_to": ["entity"], "realisation": ["present"],
+         "applies_to": ["entity"],
          "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a "
                        "pick-up does, and drives on: an ordinary stop where the dwell happens.",
          "hard_negative_for": ["check:kerbside_dwell"]},

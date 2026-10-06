@@ -53,7 +53,6 @@ internal class RecordedWorld : ICarlaWorld
     private readonly Dictionary<ulong, PublishedRenderSet> _published = [];
     private readonly List<(IReadOnlyList<LentBody> Lent, IReadOnlyList<ActorId> Parked, long AtTick)> _renderSetWrites = [];
     private readonly Dictionary<ActorId, SupervisionInForce> _supervisionHeld = [];
-    private readonly List<AbsenceInForce> _absencesHeld = [];
     private readonly Dictionary<ulong, PublishedSupervision> _publishedSupervision = [];
     private readonly List<(SupervisionChange Change, long AtTick)> _supervisionWrites = [];
     private SupervisionPlanIdentity? _planHeld;
@@ -263,9 +262,8 @@ internal class RecordedWorld : ICarlaWorld
 
     /// <summary>
     /// The supervision the world-observer snapshot of a frame carried, as the server publishes it: the
-    /// plan, every lent body whose vehicle is annotated or nominal, and the absences, as they stood when
-    /// the frame was produced. Null for a frame the world did not produce, or one produced while no plan
-    /// was held.
+    /// plan and every lent body whose vehicle is annotated or nominal, as they stood when the frame was
+    /// produced. Null for a frame the world did not produce, or one produced while no plan was held.
     /// </summary>
     public PublishedSupervision? PublishedSupervisionOf(ulong frame) => _publishedSupervision.GetValueOrDefault(frame);
 
@@ -538,20 +536,14 @@ internal class RecordedWorld : ICarlaWorld
     /// <remarks>
     /// Held as the server holds it: under one plan, which a change naming another must start afresh;
     /// each body's supervision on its own record and only while the body is named lent, so a body the
-    /// world does not have, or holds parked, is not given one; absences for the world, opened and closed
-    /// by instance; and a change naming no plan withdrawing everything. A change the server would refuse
-    /// is refused here too, with its words.
+    /// world does not have, or holds parked, is not given one; and a change naming no plan withdrawing
+    /// everything. A change the server would refuse is refused here too, with its words.
     /// </remarks>
     public SupervisionWrite WriteSupervision(SupervisionChange change)
     {
         Connected(nameof(WriteSupervision));
         // A copy, because the session reuses its lists from one change to the next.
-        _supervisionWrites.Add((change with
-        {
-            Bodies = [.. change.Bodies],
-            AbsencesOpened = [.. change.AbsencesOpened],
-            AbsencesClosed = [.. change.AbsencesClosed],
-        }, Ticks));
+        _supervisionWrites.Add((change with { Bodies = [.. change.Bodies] }, Ticks));
         if (RefusesSupervision is { } refusal)
         {
             return new SupervisionWrite(0, refusal);
@@ -565,7 +557,7 @@ internal class RecordedWorld : ICarlaWorld
 
         if (change.Plan is not { } plan)
         {
-            if (change.Bodies.Count > 0 || change.AbsencesOpened.Count > 0 || change.AbsencesClosed.Count > 0)
+            if (change.Bodies.Count > 0)
             {
                 return new SupervisionWrite(
                     0, "update_supervision: a change naming no plan withdraws all supervision and carries nothing else");
@@ -573,7 +565,6 @@ internal class RecordedWorld : ICarlaWorld
 
             _planHeld = null;
             _supervisionHeld.Clear();
-            _absencesHeld.Clear();
             return new SupervisionWrite(0, null);
         }
 
@@ -586,7 +577,6 @@ internal class RecordedWorld : ICarlaWorld
         if (change.Fresh || _planHeld is null)
         {
             _supervisionHeld.Clear();
-            _absencesHeld.Clear();
         }
 
         _planHeld = plan;
@@ -608,24 +598,6 @@ internal class RecordedWorld : ICarlaWorld
             }
 
             applied++;
-        }
-
-        foreach (string closed in change.AbsencesClosed)
-        {
-            _absencesHeld.RemoveAll(absence => absence.InstanceId == closed);
-        }
-
-        foreach (AbsenceInForce opened in change.AbsencesOpened)
-        {
-            int held = _absencesHeld.FindIndex(absence => absence.InstanceId == opened.InstanceId);
-            if (held < 0)
-            {
-                _absencesHeld.Add(opened);
-            }
-            else
-            {
-                _absencesHeld[held] = opened;
-            }
         }
 
         return new SupervisionWrite(applied, null);
@@ -757,8 +729,7 @@ internal class RecordedWorld : ICarlaWorld
                 _publishedSupervision[(ulong)Ticks] = new PublishedSupervision(
                     plan,
                     _supervisionHeld.Where(pair => _namedLent.ContainsKey(pair.Key))
-                        .ToDictionary(pair => pair.Key, pair => pair.Value),
-                    [.. _absencesHeld]);
+                        .ToDictionary(pair => pair.Key, pair => pair.Value));
             }
         }
 
@@ -847,8 +818,6 @@ internal sealed record PublishedRenderSet(
 /// </summary>
 /// <param name="Plan">The plan held.</param>
 /// <param name="ByActor">Every lent body whose vehicle was annotated or nominal, with its supervision.</param>
-/// <param name="Absences">The absences in force, in the order they opened.</param>
 internal sealed record PublishedSupervision(
     SupervisionPlanIdentity Plan,
-    IReadOnlyDictionary<ActorId, SupervisionInForce> ByActor,
-    IReadOnlyList<AbsenceInForce> Absences);
+    IReadOnlyDictionary<ActorId, SupervisionInForce> ByActor);
