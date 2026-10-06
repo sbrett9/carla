@@ -114,8 +114,10 @@ Before writing, the compiler runs the scenario in SUMO alone over its whole span
 the plan names that SUMO never inserts -- discarded after waiting 900 s at its entrance, or still
 waiting when the run ends -- refuses the compile; the report's dry-run section gives every planned
 vehicle's wait, the other vehicles discarded and every collision. It adds minutes to a long scenario;
-`--skip-dry-run` skips it while drafting, and the lock says it was skipped, so compile without it
-before capturing.
+`--skip-dry-run` skips it while drafting, and the lock says it was skipped; `run_capture` and the
+co-simulation session then refuse the scenario before anything is started (run check 54), unless
+the run accepts the skipped run in writing (`scenario.accept_skipped_dry_run`, `run_sumo_drive.py
+--accept-skipped-dry-run`), so compile without it before capturing.
 
 The schema is `schemas/scenario.schema.json` beside this file; every check, with its id, what it
 compares and whether it refuses or warns, is `checks.json`. Both are generated from the compiler. The

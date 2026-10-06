@@ -447,6 +447,65 @@ def test_a_lock_of_another_version_is_refused(layout):
     assert 6 in checks(findings)
 
 
+SKIPPED_DRY_RUN = {"ran": False, "reason": "skipped at the author's request: nothing established that "
+                                           "every vehicle the plan names enters the run"}
+
+
+def test_a_lock_whose_compile_skipped_the_dry_run_is_refused_naming_the_scenario_and_the_reason(layout):
+    # As the compiler writes the lock under --skip-dry-run.
+    write_scenario_package(layout.scenario_root, dry_run=SKIPPED_DRY_RUN)
+    *_, findings, _, _ = offline(layout)
+    finding = only(findings, 54)
+    assert finding.subject.startswith("scenario gardnerville_fixture@")
+    assert "records that the compile skipped its SUMO-only run (skipped at the author's request" \
+        in finding.message
+    assert "scenario.accept_skipped_dry_run" in finding.message
+    assert "--skip-dry-run" in finding.message
+
+
+def test_a_lock_written_before_the_compiler_ran_a_dry_run_is_refused_the_same_way(layout):
+    write_scenario_package(layout.scenario_root, dry_run=None)
+    *_, findings, _, _ = offline(layout)
+    assert "records no dry_run block, so it was written before the compiler" in only(findings, 54).message
+
+
+def test_an_accepted_skipped_dry_run_launches_and_the_echo_says_so(layout):
+    write_scenario_package(layout.scenario_root, dry_run=SKIPPED_DRY_RUN)
+    *_, findings, _, _ = offline(layout, overrides=["scenario.accept_skipped_dry_run=true"])
+    assert 54 not in checks(findings)
+    assert launch(layout, overrides=["scenario.accept_skipped_dry_run=true"]).findings == []
+
+    effective = resolve(layout, overrides=["scenario.accept_skipped_dry_run=true"])
+    echo = LaunchEcho.compute(effective, "cap-test", layout.capture_root / "cap-test",
+                              layout.runs_root / "run.result.json", PLENTY, None, 1.0, [])
+    dry_run = echo.to_dict()["scenario"]["dry_run"]
+    assert dry_run["ran"] is False and dry_run["skipped_accepted"] is True
+    assert dry_run["statement"].startswith("skipped at the compile: skipped at the author's request")
+    assert "accepted by scenario.accept_skipped_dry_run" in dry_run["statement"]
+    assert "  dry run     skipped at the compile:" in echo.render()
+    assert echo.values()["launch_echo.scenario.dry_run.skipped_accepted"] is True
+
+
+def test_a_dry_run_that_ran_needs_no_acceptance_and_the_echo_states_what_it_found(layout):
+    # The fixture lock records a completed run, as every shipped lock does.
+    findings = launch(layout)
+    assert findings.findings == []
+    effective = resolve(layout)
+    echo = LaunchEcho.compute(effective, "cap-test", layout.capture_root / "cap-test",
+                              layout.runs_root / "run.result.json", PLENTY, None, 1.0, [])
+    dry_run = echo.to_dict()["scenario"]["dry_run"]
+    assert dry_run == {"ran": True, "skipped_accepted": False,
+                       "statement": "ran with SUMO 1.27.0 over 86400.0 s: 1 vehicles loaded, 1 "
+                                    "inserted, 0 discarded, 0 waiting at the end; 0 of 0 planned "
+                                    "vehicles inserted; 0 collisions"}
+    assert "dry run" not in echo.render()
+    # Accepting accepts nothing where the run happened.
+    effective = resolve(layout, overrides=["scenario.accept_skipped_dry_run=true"])
+    echo = LaunchEcho.compute(effective, "cap-test", layout.capture_root / "cap-test",
+                              layout.runs_root / "run.result.json", PLENTY, None, 1.0, [])
+    assert echo.to_dict()["scenario"]["dry_run"]["skipped_accepted"] is False
+
+
 def test_a_catalogue_of_another_digest_is_refused(layout, tmp_path):
     other = tmp_path / "other.catalogue.json"
     other.write_text(CATALOGUE.read_text(encoding="utf-8").replace(

@@ -381,6 +381,12 @@ _FIELDS: tuple[RunField, ...] = (
        help="The simulated second the scenario ends at."),
     _F("scenario.catalogue_digest", {"type": "string"}, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
        help="The digest of the catalogue the scenario was compiled against."),
+    _F("scenario.accept_skipped_dry_run", _BOOLEAN, False, SESSION_FIXED,
+       help="Run a scenario whose compile skipped its SUMO-only run (compile_scenario.py "
+            "--skip-dry-run), or whose lock records none, instead of refusing it (check 54). That "
+            "run is what finds a vehicle the supervision plan names that never enters the "
+            "simulation; without it the same fault stops the run only when SUMO drops the vehicle. "
+            "The echo and the session's report record the acceptance."),
 )
 
 _CHANNEL_HELP = {

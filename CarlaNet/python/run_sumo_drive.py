@@ -87,7 +87,11 @@ Linux it needs a display.
 A compiled scenario is checked against the compile lock the compiler wrote beside its configuration
 (`<stem>.lock.json`) before SUMO is started: its configuration, route file and network must be the
 ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
-scenario with no lock runs and is logged as uncompiled. A scenario whose configuration lets SUMO
+scenario with no lock runs and is logged as uncompiled. The lock also says whether the compiler ran the
+scenario in SUMO alone before writing it, which is what finds a vehicle the supervision plan names that
+never enters the simulation; a lock that says the run was skipped (`compile_scenario.py
+--skip-dry-run`), or records none, is refused unless `--accept-skipped-dry-run` is given, and the
+report records the acceptance. A scenario whose configuration lets SUMO
 teleport a waiting vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s, or any
 of SUMO's other teleport triggers -- is refused unless `--allow-teleporting` is given. One that sets
 `ignore-route-errors` is refused outright, because SUMO then keeps a vehicle it cannot route standing at
@@ -254,6 +258,13 @@ def parse_args() -> argparse.Namespace:
                              "another teleport trigger, such as time-to-teleport.highways or a vehicle "
                              "type's own timeToTeleport) instead of refusing it. The run report records "
                              "that it was accepted. It accepts no collision.action but warn")
+    parser.add_argument("--accept-skipped-dry-run", action="store_true",
+                        help="run a compiled scenario whose compile skipped its SUMO-only run "
+                             "(compile_scenario.py --skip-dry-run), or whose lock was written before "
+                             "the compiler ran one, instead of refusing it. That run is what finds a "
+                             "vehicle the supervision plan names that never enters the simulation; "
+                             "without it the same fault stops a run only when SUMO drops the vehicle. "
+                             "The run report records that the skipped run was accepted")
     parser.add_argument("--collision-detail", action="store_true",
                         help="print every collision as it ends, and list every collision and every "
                              "collision warning SUMO wrote in the report. Off by default, which prints "
@@ -1047,6 +1058,7 @@ def main() -> int:
             allow_sumo_version_mismatch=args.allow_sumo_version_mismatch,
             sumo_gui=args.sumo_gui,
             allow_teleporting=args.allow_teleporting,
+            accept_skipped_dry_run=args.accept_skipped_dry_run,
             sumo_answer_timeout_s=args.sumo_answer_timeout,
             vehicle_lamps=not args.no_vehicle_lamps,
             headlight_on_below_deg=args.headlight_on_below,
@@ -1092,6 +1104,10 @@ def main() -> int:
         (logger.info if compiled.Compiled else logger.warning)("compile lock: %s", compiled)
         if compiled.Compiled:
             logger.info("routed by: %s", compiled.RoutedByText)
+            # A skipped run the drive accepted is said louder: the compile never checked that every
+            # planned vehicle enters.
+            (logger.warning if compiled.SkippedDryRunAccepted else logger.info)(
+                "dry run: %s", compiled.DryRunText)
         teleporting = session.Report.Teleporting
         (logger.warning if teleporting.Enabled else logger.info)("teleporting: %s", teleporting)
         logger.info("clock: %s", session.Clock)
