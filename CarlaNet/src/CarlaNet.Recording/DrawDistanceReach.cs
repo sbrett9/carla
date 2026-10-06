@@ -79,14 +79,9 @@ public static class DrawDistanceCheck
                                                                     double drawDistanceMetres)
     {
         ArgumentNullException.ThrowIfNull(record);
-        Transform pose = record.ActorTransform;
         BoundingBox box = record.BoundingBox;
-        Vector3D offset = new RotationBasis(pose.Rotation)
-            .Rotate(new Vector3D(box.Location.X, box.Location.Y, box.Location.Z));
-        double dx = pose.Location.X + offset.X - camera.X;
-        double dy = pose.Location.Y + offset.Y - camera.Y;
-        double dz = pose.Location.Z + offset.Z - camera.Z;
-        double range = Math.Sqrt((dx * dx) + (dy * dy) + (dz * dz));
+        // The range a record in the picture carries too (BoxProjector.Mark): one center, one camera.
+        double range = new OrientedBox(record.ActorTransform, box).RangeFrom(camera.X, camera.Y, camera.Z);
         double radius = Math.Sqrt(((double)box.Extent.X * box.Extent.X) + ((double)box.Extent.Y * box.Extent.Y)
                                   + ((double)box.Extent.Z * box.Extent.Z));
         DrawDistanceReach reach = range - radius > drawDistanceMetres

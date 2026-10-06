@@ -49,6 +49,7 @@ the real scenario artifacts. No code changed, no build run.
 | 40 · 2026-10-05 | The two exports are withdrawn by the owner's ruling (§10.3, D6.15): imagery and truth stay side by side in one capture folder, with no export step, no separate imagery folder, no held-back partition and no validator over an imagery folder. §10.2 is reduced to what the collection contains and where each thing is written; §10's opening and §10.1's per-tick row follow. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and the supervision-transfer rule of §10.1 is published and not applied here. |
 | 41 · 2026-10-06 | Bahonar's planted omission is carried by a vehicle that deviates, as the owner ruled (§3.5, §9.1, §9.2, §9.4). The guard schedule still skips the posting at tower 3 on day 4 at 07:00, which writes no trip and no row; the guard who should have taken it, `offpost_d4_h7_t3`, departs the apron on schedule as the guards do, parks for the eight-hour shift on a dead-end airside road between the air base's western aprons, and returns. It is the `subject` of the annotated instance `pi_posting_not_taken_up_d4`, labeled with the new term `bahonar:posting_not_taken_up`, whose parameters name the tower and the shift it was due at, its interval anchored to its stop. The namespace is at version 2; the term's counterfactual is `bahonar:tower_posting`, whose `hard_negative_for` now names it, since the postings differ from it only in where the guard parks. The plan has 27 instances, 6 of them annotated, and 366 entities; its vocabulary digest is `9b05590f…`. |
 | 42 · 2026-10-06 | §3.5: one way to convey a planted omission, as the owner ruled: label the vehicle that deviates. The note at scenario level is no longer offered; the skip's `because` is the reason for the skip, and a legacy `anomaly_notes` is carried for old datasets only. |
+| 43 · 2026-10-06 | §8.2: a vehicle in the picture carries its box on its record in the capture truth sidecar, as the owner ruled: `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg` and `roll_deg` in `_carla`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, each converted as the record's own point is. A vehicle outside the picture or behind the lens carries none, there is no separate label file per image, and the sidecar audit holds both. `pose_source` and the commanded lamps are not written: no snapshot carries either. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2166,7 +2167,9 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
            WRITTEN TODAY (CotWriter.cs): the attributes above the fold, sumo_id, vtype_id,
            admitted_tick, heading_deg, sumo_angle_deg, in_frame, occlusion_unmeasured where
            occlusion is absent, and, under a draw distance, beyond_draw_distance and
-           camera_range_m. WRITTEN BY NOTHING: producer, entity_id,
+           camera_range_m; on a vehicle in the picture, pitch_deg, roll_deg, box_px,
+           box_oriented_px, truncation and camera_range_m, with a <_box3d> beside _carla
+           (2026-10-06, below). WRITTEN BY NOTHING: producer, entity_id,
            provenance, kinematics_source, pose_source, render_state, the sumo_* network state,
            the vtype dimensions and the four separations of 4.3 (D6.10). The SUMO-against-CARLA
            difference is measured every tick and only its worst and mean reach the log; where it
@@ -2537,6 +2540,32 @@ The live pull has no camera and carries none of this; the PNG carries none. `Tru
 (`audit_truth_sidecars.py`) holds every vehicle record of a capture to `in_frame`, to occlusion fields
 only where the picture has a view of the vehicle, and to a reason wherever they are absent, so a
 capture written before this date shows the defect it carries.
+
+**As built (2026-10-06): a vehicle in the picture carries its box.** The owner ruled that the box
+fields go on each vehicle's existing record in the sidecar, with no separate label file per image
+([08](08_Collection_And_EPoL.md) D8.6 amended), that the 3D box is written as explicit corners, and that
+only a vehicle in the picture gets one. So the recorder, which projected every vehicle's box and wrote
+only its place and size, now writes, on a vehicle whose `in_frame` is `wholly` or `partly`:
+**`box_px`**, the axis-aligned rectangle its eight projected corners span; **`box_oriented_px`**, the
+minimum-area rectangle enclosing them, four corners clockwise from the top-most; **`truncation`**, the
+share of `box_px` outside the picture; **`camera_range_m`**, the range from the camera to the box's
+center, the attribute and the method the draw distance mark already used, one range whichever needs it;
+**`pitch_deg`** and **`roll_deg`** from the body's transform, beside `heading_deg`; and beside `_carla` a
+**`<_box3d frame="geodetic">`** of eight `<corner lat lon hae>`, the bottom face around from the front
+left and then the top face, each converted exactly as the record's own point is -- the same conversion
+from the same origin, less the height-align offset taken off the point, one offset for all eight -- so a
+corner and the point agree and the box is never warped by a drape's gradient across it
+([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md); `CaptureBox`, `CaptureBoxes`,
+`BoxProjector.Mark`). A vehicle outside the picture or behind the lens carries none of it, its range
+apart where the draw distance reached it; a record no camera projected, the live pull's, carries none;
+the PNG carries none. `TruthSidecarAudit` holds every vehicle in the picture to the whole box and every
+other to none of it; pointed at the Arapahoe check capture of 2026-10-06
+(`cap-20261006-171114-1747f6`), written before this, it reports all 472 records in the picture as
+lacking it. Two of the ruled fields are not written, because the truth state is the server's and no
+snapshot carries them: **`pose_source`** -- where the frame falls in its SUMO step, and which bodies the
+session held, are known only inside the session ([08](08_Collection_And_EPoL.md) §6.4 states what the
+server would have to carry) -- and **the commanded lamps**, which the snapshot's per-vehicle state does
+not hold ([08](08_Collection_And_EPoL.md) §5.1).
 
 ### 8.3 The world truth track
 

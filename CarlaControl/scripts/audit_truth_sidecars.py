@@ -22,6 +22,11 @@ Every vehicle record must say whether the vehicle is in the camera's picture (`i
 neither occlusion nor a reason, a reason beside a measurement, and a place or reason outside the
 recorder's words are defects.
 
+Every vehicle record in the picture (`wholly` or `partly`) must carry its box -- `box_px`,
+`box_oriented_px`, `truncation`, `pitch_deg`, `roll_deg`, `camera_range_m` and a
+`<_box3d frame="geodetic">` of eight corners -- and no record outside the picture or behind the lens may
+carry any of it, `camera_range_m` beside `beyond_draw_distance` apart.
+
 Any of those is a defect and the exit status is 1. A capture of traffic-manager traffic carries no
 SUMO id by design: pass `--traffic-manager` and only the ground band, the uid and the in-picture
 checks apply.
@@ -82,7 +87,8 @@ def main() -> int:
         logging.error("DEFECT: %s", defect)
     if defects:
         return 1
-    logging.info("every vehicle record stands on the ground, says whether it is in the picture"
+    logging.info("every vehicle record stands on the ground, says whether it is in the picture, carries "
+                 "its box where it is"
                  + (" and names one SUMO vehicle under one uid" if not args.traffic_manager else "")
                  + (", and carries its supervision" if result.had_plan else ""))
     return 0

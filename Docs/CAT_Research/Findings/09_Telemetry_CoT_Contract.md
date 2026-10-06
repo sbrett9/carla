@@ -47,6 +47,14 @@
 > measurement from the frame's geometry by a fixed published method with no pass mark. The live pull
 > and the live feed, which have no camera, are unchanged.
 
+> **Revision (2026-10-06):** A vehicle record of a recorded sidecar whose `in_frame` is `wholly` or
+> `partly` carries the vehicle's box, as the owner ruled: `box_px`, `box_oriented_px`, `truncation`,
+> `camera_range_m`, `pitch_deg` and `roll_deg` in `_carla`, and a `<_box3d frame="geodetic">` beside it
+> holding the box's eight corners as explicit corners, converted as the record's own point is (§5.1). A
+> vehicle outside the picture or behind the lens carries none of them. The box is on the vehicle's
+> record in the sidecar; there is no separate label file per image. The live pull and the live feed,
+> which have no camera, are unchanged.
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -153,12 +161,35 @@ body's `role_name` is `sumo`, the authority that drives it
 ([04 D4.9](../Plans/SUMO_Behavioral_Capture/04_Contracts.md)); traffic-manager traffic reads
 `autopilot`.
 
-### 5.1 In the picture, apparent size and occlusion (recorded captures only)
+### 5.1 In the picture, apparent size, box and occlusion (recorded captures only)
 
 | Attribute | Written | Meaning |
 |---|---|---|
 | `in_frame` | on every vehicle record a recorder writes | Where the vehicle's bounding box fell against **this capture's picture**, from its eight corners projected through the camera's pinhole (the capture's camera pose, the picture's width and height, and the horizontal field of view the recorder was started with): `wholly` -- every corner inside the picture; `partly` -- the corners' rectangle crosses an edge; `none` -- the rectangle lies wholly outside; `behind_camera` -- a corner is at or behind the lens, so the box has no projection. The only lines it is read against are the picture's edges and the camera's near plane (0.1 m). |
 | `apparent_width_px`, `apparent_height_px` | wherever the box has a footprint: every place but `behind_camera` | How large the vehicle appears in the picture -- its full projected footprint, including any part outside the picture. From the projection alone; needs no depth capture. |
+| `box_px` | on a vehicle whose `in_frame` is `wholly` or `partly`, and on no other | The axis-aligned rectangle the box's eight projected corners span, in pixels: `x_min y_min x_max y_max`, x across from the picture's left edge and y down from its top edge, to two places. Not clipped to the picture, so a `partly` vehicle's runs past the edge. |
+| `box_oriented_px` | with `box_px` | The minimum-area rectangle enclosing the same eight projected corners: four `x y` pairs, clockwise in the picture from the top-most corner (of two within a thousandth of a pixel in height, the left one). It is found by trying a side along every edge of the corners' convex hull, which is where the least-area rectangle has one (Freeman and Shapira, 1975). Not clipped; where the body is turned against the picture it reaches past `box_px` along the axis it is not aligned with. |
+| `truncation` | with `box_px` | The share of `box_px`'s area outside the picture, `0.000` to `1.000`: one less the product of each axis's share inside the picture. `0` on every `wholly` vehicle. |
+| `camera_range_m` | with `box_px`, and beside `beyond_draw_distance` (§5.3) | The range in meters from the camera to the center of the vehicle's box. One range, computed by one method from one center and one camera, written once whichever needs it. |
+| `pitch_deg`, `roll_deg` | with `box_px` | The body's pitch (positive nose up) and roll (positive right side down) from its transform, degrees in (−180, 180], to two places. With `heading_deg` they are the body's attitude. |
+| `<_box3d frame="geodetic">` | a child of `<detail>` beside `_carla`, with `box_px` | The box's eight corners, each a `<corner lat="…" lon="…" hae="…"/>`, in this order: the bottom face front left, front right, back right, back left, then the top face in the same order, so corner *n* + 4 stands above corner *n*. Front is the body's forward axis, the way `heading_deg` points; left and right are as seen from the driver's seat facing forward; bottom and top are along the body's up axis. |
+
+**The corners are the record's own point's conversion.** Each corner of `<_box3d>` is converted from
+the CARLA frame exactly as the record's `point` is: the same ENU → ECEF → WGS84 conversion
+(`Geodesy.CarlaLocalToGeodetic`) from the same georeference origin, less the height-align offset taken
+off the point -- one offset, the point's, taken off all eight -- so `hae` is in the bare-earth
+convention of §3 and the box is the body's box shifted whole, never warped by a drape's gradient across
+it. A corner at the point's height has the point's `hae`, and where the box stands on the point its
+bottom four average to the point. Latitude and longitude are written to seven places and `hae` to two,
+as the point is.
+
+**What a vehicle in the picture does not carry, and why.** `pose_source` (whether the body's pose on
+the frame is SUMO's own step, interpolated between two, or held) is not written: no world-observer
+snapshot says where a frame falls in its SUMO step, nor which bodies' poses the session held, and the
+truth state is the server's to carry, so a recorder in another process could not write the same value
+([06 §8.2](../Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md)). The lamps commanded on a
+vehicle are not written either: the snapshot's per-vehicle state carries no light state, and asking the
+server for it per vehicle would answer the lamps of the moment asked, not of the capture's frame.
 | `occlusion` | where occlusion was measured | Fraction of the vehicle's silhouette hidden from this capture's camera by anything nearer — photoreal buildings and trees, terrain relief, other vehicles — 0 (wholly visible) to 1 (wholly hidden). |
 | `occlusion_level` | with `occlusion` | The same value as a coarse band: `0` wholly visible · `1` up to 30 % · `2` 30–60 % · `3` 60–90 % · `4` over 90 % (the bands the amodal-segmentation datasets report against). |
 | `occlusion_samples` | with `occlusion` | How many points across the vehicle's outline the fraction was measured over. |
@@ -185,7 +216,10 @@ carries none of them. Before 2026-10-05 the five occlusion fields were simply ab
 situations and nothing said which; a sidecar from before then carries no `in_frame`, which
 `audit_truth_sidecars.py` reports as a defect, as it does occlusion fields on a vehicle whose
 `in_frame` says the picture has no view of it, a record with neither occlusion nor a reason, and a
-reason beside a measurement. Measurement and tuning:
+reason beside a measurement. A sidecar from before 2026-10-06 carries no box on a vehicle in the
+picture, which the audit reports as a defect, as it does any box field or `<_box3d>` on a vehicle
+outside the picture or behind the lens (`camera_range_m` beside `beyond_draw_distance` apart).
+Measurement and tuning:
 [17_Photoreal_Occlusion_Metric.md](17_Photoreal_Occlusion_Metric.md); the projection is
 `CarlaNet.Recording.BoxProjector`, the sampling `OcclusionEstimator.Sample`.
 
@@ -245,7 +279,7 @@ sidecar says so:
 |---|---|---|
 | `draw_distance_m` | on the sidecar's `<events>` container | The distance, in metres, the frame was drawn under. Absent where none was in force, which is the default, or where the server refused it: the image then drew every vehicle at any range. |
 | `beyond_draw_distance` | in a vehicle's `_carla` | `wholly` -- the whole of the vehicle's bounding sphere lies beyond the distance from **this capture's camera**, so the image shows nothing of it; `partly` -- the distance falls across the sphere, so the image may lack the vehicle's far parts. Absent where the vehicle lies wholly inside the distance. |
-| `camera_range_m` | in a vehicle's `_carla`, beside `beyond_draw_distance` | The range in metres from the camera to the centre of the vehicle's box that the mark rests on. |
+| `camera_range_m` | in a vehicle's `_carla`, beside `beyond_draw_distance`; and on every vehicle in the picture, as a box field (§5.1) | The range in metres from the camera to the centre of the vehicle's box that the mark rests on. |
 
 The renderer culls each primitive by the nearest point of its bounding sphere, so the sidecar judges
 the vehicle the same way, by the sphere around its box, from the camera pose of the capture's own

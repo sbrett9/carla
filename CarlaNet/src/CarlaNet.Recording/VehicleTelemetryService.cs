@@ -153,7 +153,8 @@ public sealed class VehicleTelemetryService
             var geo = Geodesy.CarlaLocalToGeodetic(origin, loc.X, loc.Y, loc.Z);
             double physicalHae = geo.Altitude;
 
-            double hae = physicalHae - OffsetAt(loc.X, loc.Y);
+            double offset = OffsetAt(loc.X, loc.Y);
+            double hae = physicalHae - offset;
             double haeDtm = (drape && _dtmGrid is not null)
                 ? Sample(_dtmGrid, loc.X, loc.Y)
                 : NearestDtm(dtmSamples, geo.Latitude, geo.Longitude);
@@ -190,6 +191,8 @@ public sealed class VehicleTelemetryService
                 2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z)
             {
                 HeadingDeg = heading,
+                // The corners of the vehicle's box take the same offset off, so they and the point agree.
+                HeightAlignOffset = offset,
                 Opacity = _client.GetActorOpacity(id),
                 // Carried alongside the truth so anything measuring against the imagery — occlusion,
                 // a projected bounding box — works from the same pose this record was built from.

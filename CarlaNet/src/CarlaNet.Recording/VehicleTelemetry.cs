@@ -85,9 +85,28 @@ public sealed record VehicleTelemetry(
 
     /// <summary>
     /// How far the centre of the vehicle's bounding box was from the recording camera, metres, where
-    /// a draw distance was in force; NaN otherwise. What <see cref="DrawDistance"/> rests on.
+    /// a draw distance was in force or the box fell in the picture; NaN otherwise. What
+    /// <see cref="DrawDistance"/> rests on, and one of the box fields of a vehicle in the picture: one
+    /// range, from one center to one camera, whichever marked it.
     /// </summary>
     public double CameraRangeMetres { get; init; } = double.NaN;
+
+    /// <summary>
+    /// This vehicle's box against the recording camera's picture and the world -- the pixel rectangles,
+    /// the share outside the picture, the body's tilt and the box's eight corners in latitude, longitude
+    /// and bare-earth height (<see cref="CaptureBox"/>) -- where its box fell in the picture, wholly or
+    /// partly. Null for a vehicle outside the picture or with a corner behind the lens, and on every
+    /// record no camera projected, which is every record of the live pull.
+    /// </summary>
+    public CaptureBox? Box { get; init; }
+
+    /// <summary>
+    /// The height-align offset, meters, taken off the vehicle's physical altitude to give
+    /// <see cref="Hae"/> its bare-earth convention (<c>VehicleTelemetryService.OffsetAt</c> at the
+    /// vehicle's point): 0 with no shift. Kept so the corners of the vehicle's box are given the same
+    /// convention as its point. Not serialized.
+    /// </summary>
+    public double HeightAlignOffset { get; init; }
 
     /// <summary>
     /// The direction the body points, degrees clockwise from true north: its transform's yaw, so the
@@ -105,7 +124,8 @@ public sealed record VehicleTelemetry(
     /// <summary>
     /// The vehicle's pose in simulator coordinates, paired with <see cref="BoundingBox"/> to give the
     /// oriented box an occlusion test or a bounding-box projection works from. Geometry rather than
-    /// telemetry: it is not part of the CoT contract and is not serialized to the sidecar.
+    /// telemetry: it is not serialized to the sidecar as it stands; the <see cref="Box"/> of a vehicle
+    /// in the picture, its tilt included, is measured from it.
     /// </summary>
     public Transform ActorTransform { get; init; }
 

@@ -35,6 +35,17 @@ picture has no view of the vehicle, one carrying neither occlusion nor a reason,
 beside a measurement, and a place or a reason outside the recorder's words are each a defect. A capture
 made before the recorder wrote the place is shown to carry the first.
 
+**And a box on every vehicle in the picture, and on no other.** A vehicle whose box fell in the picture
+(`in_frame` of `wholly` or `partly`) carries its box, as the owner ruled on 2026-10-06: `box_px`,
+`box_oriented_px`, `truncation`, `pitch_deg`, `roll_deg` and `camera_range_m` in `_carla`, and a
+`<_box3d frame="geodetic">` beside it holding eight corners, each with its `lat`, `lon` and `hae`. A
+record in the picture missing any of them, and a record outside the picture or behind the lens carrying
+any of them, are each a defect; `camera_range_m` is the one a record outside the picture may carry, beside
+`beyond_draw_distance`, which it rests on there. A capture made before the recorder wrote boxes is shown to
+carry the first. The audit reads that the fields are there, not what they hold: whether a rectangle
+encloses the box's corners, or a corner agrees with the record's point, is the writer's to hold, and its
+tests do.
+
 **A uid that changes vehicle is seen even where no record names one.** With SUMO ids on the records,
 a uid carrying two of them over the capture is counted directly. Without them, a uid seen on the
 road, then below the ground band, then on the road again is a body that was given back and lent again
@@ -81,6 +92,13 @@ OCCLUSION_UNMEASURED_REASONS = ("behind_camera", "outside_frame", "beyond_draw_d
                                 "no_depth_capture", "depth_out_of_step", "depth_pose_mismatch",
                                 "beyond_depth_range", "no_sample")
 
+# The box fields a recorder writes in the `_carla` block of a vehicle in the picture and of no other
+# (`CarlaNet.Recording.CotWriter`), and the corners of its `<_box3d frame="geodetic">`. `camera_range_m`
+# is also written beside `beyond_draw_distance` wherever the draw distance reached a vehicle.
+BOX_ATTRIBUTES = ("box_px", "box_oriented_px", "truncation", "pitch_deg", "roll_deg", "camera_range_m")
+BOX3D_FRAME = "geodetic"
+BOX3D_CORNERS = 8
+
 
 @dataclass(frozen=True)
 class VehicleRecord:
@@ -103,6 +121,11 @@ class VehicleRecord:
     in_frame: str | None = None
     occlusion_measured: bool = False
     occlusion_unmeasured: str | None = None
+    # Which box fields it carries, whether it is marked beyond the draw distance, and how many whole
+    # corners (lat, lon and hae) its geodetic <_box3d> holds, None where it carries no <_box3d>.
+    box_attributes: frozenset[str] = frozenset()
+    beyond_draw_distance: str | None = None
+    box3d_corners: int | None = None
 
 
 @dataclass
@@ -136,6 +159,8 @@ class SidecarAuditResult:
     records_without_occlusion_or_reason: list[VehicleRecord] = field(default_factory=list)
     records_with_reason_beside_measurement: list[VehicleRecord] = field(default_factory=list)
     records_with_unknown_reason: list[VehicleRecord] = field(default_factory=list)
+    records_in_picture_without_box: list[VehicleRecord] = field(default_factory=list)
+    records_outside_picture_with_box: list[VehicleRecord] = field(default_factory=list)
 
     @property
     def had_plan(self) -> bool:
@@ -208,12 +233,20 @@ class SidecarAuditResult:
         if self.records_with_unknown_reason:
             found.append(f"{len(self.records_with_unknown_reason)} vehicle record(s) carry an "
                          f"occlusion_unmeasured other than {', '.join(OCCLUSION_UNMEASURED_REASONS)}")
+        if self.records_in_picture_without_box:
+            found.append(f"{len(self.records_in_picture_without_box)} vehicle record(s) in the picture lack "
+                         f"part of their box ({', '.join(BOX_ATTRIBUTES)} and a <_box3d> of "
+                         f"{BOX3D_CORNERS} corners)")
+        if self.records_outside_picture_with_box:
+            found.append(f"{len(self.records_outside_picture_with_box)} vehicle record(s) outside the picture "
+                         "carry box fields or a <_box3d>")
         return found
 
 
 class TruthSidecarAudit:
-    """Counts parked bodies listed as vehicles, records with no, or no stable, SUMO identity, and
-    records that do not say whether their vehicle is in the picture or why its occlusion is absent."""
+    """Counts parked bodies listed as vehicles, records with no, or no stable, SUMO identity, records
+    that do not say whether their vehicle is in the picture or why its occlusion is absent, and boxes
+    missing from a vehicle in the picture or written on one outside it."""
 
     def __init__(self, margin_m: float = DEFAULT_MARGIN_M, floor_hae: float | None = None) -> None:
         self.margin_m = float(margin_m)
@@ -264,6 +297,7 @@ class TruthSidecarAudit:
                 result.below_band.append(record)
             self._check_supervision(record, result)
             self._check_in_frame(record, result)
+            self._check_box(record, result)
             if record.sumo_id is None:
                 result.without_sumo_id.append(record)
                 continue
@@ -330,6 +364,21 @@ class TruthSidecarAudit:
             result.records_with_unknown_reason.append(record)
 
     @staticmethod
+    def _check_box(record: VehicleRecord, result: SidecarAuditResult) -> None:
+        """Hold a record in the picture to carrying its whole box, and one outside it to carrying none of
+        it. A record saying nothing of its place, or a place outside the recorder's words, is faulted for
+        that and not held to either."""
+        if record.in_frame in IN_PICTURE:
+            if (record.box_attributes != frozenset(BOX_ATTRIBUTES)
+                    or record.box3d_corners != BOX3D_CORNERS):
+                result.records_in_picture_without_box.append(record)
+        elif record.in_frame in IN_FRAME_VALUES:
+            # The range rests the draw distance mark there; written alone, it is a box field.
+            stray = record.box_attributes - ({"camera_range_m"} if record.beyond_draw_distance else set())
+            if stray or record.box3d_corners is not None:
+                result.records_outside_picture_with_box.append(record)
+
+    @staticmethod
     def _lent_again_after_parking(result: SidecarAuditResult) -> list[str]:
         """The uids seen on the road, below the ground band, then on the road again, in tick order."""
         if result.floor_hae is None:
@@ -364,6 +413,7 @@ class TruthSidecarAudit:
             if extras is None or point is None:
                 continue
             supervision = event.find("detail/_supervision")
+            box3d = event.find("detail/_box3d")
             yield VehicleRecord(
                 sidecar=path.name, tick=tick, uid=event.get("uid", ""),
                 actor_id=extras.get("actor_id", ""), sumo_id=extras.get("sumo_id"),
@@ -374,7 +424,19 @@ class TruthSidecarAudit:
                 in_supervised_sidecar=supervised,
                 in_frame=extras.get("in_frame"),
                 occlusion_measured="occlusion" in extras.attrib,
-                occlusion_unmeasured=extras.get("occlusion_unmeasured"))
+                occlusion_unmeasured=extras.get("occlusion_unmeasured"),
+                box_attributes=frozenset(name for name in BOX_ATTRIBUTES if name in extras.attrib),
+                beyond_draw_distance=extras.get("beyond_draw_distance"),
+                box3d_corners=None if box3d is None else TruthSidecarAudit._whole_corners(box3d))
+
+    @staticmethod
+    def _whole_corners(box3d: ET.Element) -> int:
+        """How many corners of a `<_box3d>` carry a lat, a lon and a hae, where it is the geodetic frame;
+        none of a `<_box3d>` in any other frame, which is not the box the recorder writes."""
+        if box3d.get("frame") != BOX3D_FRAME:
+            return 0
+        return sum(1 for corner in box3d.findall("corner")
+                   if all(corner.get(axis) is not None for axis in ("lat", "lon", "hae")))
 
     @staticmethod
     def describe(result: SidecarAuditResult) -> list[str]:
@@ -417,6 +479,10 @@ class TruthSidecarAudit:
         lines.append(f"  occlusion measured: {measured} of {total}; unmeasured by reason: "
                      + (", ".join(f"{reason} {reasons[reason]}" for reason in sorted(reasons)) or "none")
                      + f"; neither measured nor a reason given: {len(result.records_without_occlusion_or_reason)}")
+        in_picture = sum(1 for record in result.records if record.in_frame in IN_PICTURE)
+        lines.append(f"  boxes: whole on {in_picture - len(result.records_in_picture_without_box)} of "
+                     f"{in_picture} records in the picture; on records outside it: "
+                     f"{len(result.records_outside_picture_with_box)}")
         if result.had_plan:
             states = defaultdict(int)
             for record in result.records:
