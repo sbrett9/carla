@@ -10,6 +10,7 @@ using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
+using CarlaNet.Types.Rpc.Orbit;
 using CarlaNet.Types.Rpc.Supervision;
 using CarlaNet.Types.Streaming;
 using Microsoft.Extensions.Logging;
@@ -1898,6 +1899,65 @@ public sealed class CarlaClient : IAsyncDisposable
 
         return _rpc.CallAsync<uint>("set_actors_max_draw_distance", actorIds, maxDrawDistanceMetres);
     }
+
+    // ── The orbit mover: the server flies an orbiting actor from parameters sent once ─────────
+
+    /// <summary>
+    /// Fly an actor round a circle on the server (<c>set_orbit</c>): put an orbit mover on it where it
+    /// has none, give it the circle, and -- where <see cref="OrbitParameters.Enabled"/> -- start it
+    /// moving from the start angle at once. From then on the server advances the angle by each tick's
+    /// delta on the simulation clock and sets the actor on the circle with its boresight on the centre,
+    /// before the frame's sensors capture and before the world observer reports the frame; this client
+    /// sends nothing per frame. Whatever is attached to the actor rides with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The pose rule is <see cref="OrbitParameters.PoseAt"/>, so the angle at any simulated instant
+    /// is <see cref="OrbitParameters.AngleAfter"/> of the seconds since the orbit was enabled, and a
+    /// client that wants to show it computes it rather than asking.</para>
+    ///
+    /// <para>While the orbit is enabled the mover owns the actor's transform, paused or not: disable it
+    /// (<see cref="SetOrbitEnabledAsync"/>) before moving the actor by hand. A server built before it
+    /// carried the mover refuses the call with an error naming it
+    /// (<see cref="MsgPackRpc.CarlaRpcException.NamesNoSuchFunction"/>).</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// The circle is one the server refuses: a radius or period that is not positive, or a centre,
+    /// altitude, start angle or pitch override that is not finite. It is refused before it is sent.
+    /// </exception>
+    public Task SetOrbitAsync(ActorId actorId, OrbitParameters parameters)
+    {
+        if (parameters.Problem() is { } problem)
+        {
+            throw new ArgumentException(problem, nameof(parameters));
+        }
+
+        return _rpc.CallVoidAsync("set_orbit", actorId, parameters);
+    }
+
+    /// <summary>
+    /// Start or stop the server flying an actor's orbit. Enabled, the mover places the actor on its circle
+    /// at the angle it holds at once and advances from there each tick; disabled, the actor stays where it
+    /// is and a client may move it. Disabling an actor that carries no orbit is nothing to do and
+    /// succeeds; enabling one is refused, since there is no circle to fly.
+    /// </summary>
+    public Task SetOrbitEnabledAsync(ActorId actorId, bool enabled)
+        => _rpc.CallVoidAsync("set_orbit_enabled", actorId, enabled);
+
+    /// <summary>
+    /// Hold an actor's orbit at its angle, or let it advance again. The actor stays on the circle
+    /// meanwhile; the mover still owns its transform. Refused for an actor that carries no orbit.
+    /// </summary>
+    public Task SetOrbitPausedAsync(ActorId actorId, bool paused)
+        => _rpc.CallVoidAsync("set_orbit_paused", actorId, paused);
+
+    /// <summary>
+    /// Where an actor's orbit stands: the angle the server last placed it at, and whether it is enabled
+    /// and paused. An actor that carries no orbit answers zero, disabled, not paused; an actor the
+    /// server does not have is an error. For a check, not a loop: the angle is predictable from the
+    /// parameters and the simulated clock (<see cref="OrbitParameters.AngleAfter"/>).
+    /// </summary>
+    public Task<OrbitState> GetOrbitStateAsync(ActorId actorId)
+        => _rpc.CallAsync<OrbitState>("get_orbit_state", actorId);
 
     /// <summary>
     /// Take the drive lease on the world: the claim to be the one traffic system that drives its

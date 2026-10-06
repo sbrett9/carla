@@ -25,7 +25,12 @@ with none, the depth cameras included, is `Camera_<n>` from a counter the server
 server built before it named cameras, which leaves an unnamed camera its blueprint's role name. An
 actor spawned attached to another (`spawn_actor(..., attach_to=)`) holds its parent's world pose from
 then on, as the server reports an attached actor's pose on its snapshot, and stays where it was,
-detached, when its parent is destroyed.
+detached, when its parent is destroyed. A camera given an orbit (`set_orbit`, as the shim's `Sensor`
+offers it) is flown by the stand-in server as the plugin's orbit mover flies it: on each tick, before
+the frame's snapshot, the angle advances by the tick's delta while the orbit is enabled and not paused
+and the camera is placed on the circle, by the plugin's pose rule, as a server move and never a client
+one. `FakeServer.flies_orbits = False` stands for a server built before it carried the mover, which
+refuses every orbit call as the shim says it.
 
 Every tick of a step advances the server's frame counter and its wall clock, and a camera being
 listened to is handed an image on each frame its `sensor_tick` renders, from its spawn frame on --
@@ -43,9 +48,11 @@ each vehicle the box `FakeServer.vehicle_extent` describes.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 _SRC = Path(__file__).resolve().parents[1] / "src"
@@ -149,6 +156,11 @@ class FakeActor:
         self.listener = None
         tick = float(self.attributes.get("sensor_tick", "0") or 0.0)
         self.ticks_per_frame = max(1, round(tick / FakeSession.DELTA_S))
+        # The server's orbit mover on this actor (`set_orbit`), or None: the circle, the angle it
+        # holds the actor at, and whether it is moving the actor. Whether this server flies orbits at
+        # all is the server's knob, set on the actor as it is spawned.
+        self.orbit: dict | None = None
+        self.flies_orbits = True
 
     @property
     def transform(self) -> Any:
@@ -190,6 +202,89 @@ class FakeActor:
     def set_transform(self, transform: Any) -> None:
         self.transform = transform
         self.events.add("move", self.id, transform)
+
+    # -- the server's orbit mover, as the shim's Sensor offers it -------------------------------------
+
+    def _orbit_call(self, call: str) -> None:
+        # The shim's refusal, carlanet.OrbitNotOnServerError, is a RuntimeError with these words; the
+        # tests here run against whichever carlanet is installed, which may predate the class.
+        if not self.flies_orbits:
+            raise RuntimeError(
+                f"this server cannot fly an orbit: it binds no {call}, so it was built before the "
+                f"Carla plugin carried the orbit mover. Rebuild the plugin. Nothing in the client moves "
+                f"the camera in the server's place (the server said: rpclib: server could not find "
+                f"function '{call}' with argument count 3.)")
+
+    def set_orbit(self, centre, radius: float, altitude: float, period: float, *,
+                  clockwise: bool = True, start_angle: float = 0.0, pitch=None,
+                  enabled: bool = True) -> None:
+        self._orbit_call("set_orbit")
+        if radius <= 0.0 or period <= 0.0:
+            raise RuntimeError("set_orbit: the radius and the period are positive numbers")
+        self.orbit = {"centre": (float(centre.x), float(centre.y), float(centre.z)),
+                      "radius": float(radius), "altitude": float(altitude), "period": float(period),
+                      "clockwise": bool(clockwise), "angle": float(start_angle) % (2.0 * math.pi),
+                      "pitch": None if pitch is None else float(pitch), "enabled": bool(enabled),
+                      "paused": False}
+        self.events.add("set_orbit", self.id, bool(enabled), float(start_angle))
+        if enabled:
+            self._place_on_orbit()
+
+    def set_orbit_enabled(self, enabled: bool) -> None:
+        self._orbit_call("set_orbit_enabled")
+        self.events.add("set_orbit_enabled", self.id, bool(enabled))
+        if self.orbit is None:
+            if not enabled:
+                return
+            raise RuntimeError("set_orbit_enabled: the actor has no orbit; give it one with set_orbit "
+                               "first")
+        self.orbit["enabled"] = bool(enabled)
+        if enabled:
+            self._place_on_orbit()
+
+    def set_orbit_paused(self, paused: bool) -> None:
+        self._orbit_call("set_orbit_paused")
+        self.events.add("set_orbit_paused", self.id, bool(paused))
+        if self.orbit is None:
+            raise RuntimeError("set_orbit_paused: the actor has no orbit; give it one with set_orbit "
+                               "first")
+        self.orbit["paused"] = bool(paused)
+
+    def get_orbit_state(self):
+        self._orbit_call("get_orbit_state")
+        self.events.add("get_orbit_state", self.id)
+        orbit = self.orbit or {"angle": 0.0, "enabled": False, "paused": False}
+        return SimpleNamespace(angle=orbit["angle"], enabled=orbit["enabled"],
+                               paused=orbit["paused"])
+
+    def tick_orbit(self, delta_s: float) -> None:
+        """One tick of the server's orbit mover, before the frame's snapshot is taken: the angle
+        advances by the tick's delta where the orbit is enabled and not paused, and the actor is
+        placed on the circle while it is enabled."""
+        orbit = self.orbit
+        if orbit is None or not orbit["enabled"]:
+            return
+        if not orbit["paused"]:
+            sign = 1.0 if orbit["clockwise"] else -1.0
+            orbit["angle"] = (orbit["angle"] + sign * 2.0 * math.pi / orbit["period"] * delta_s) \
+                % (2.0 * math.pi)
+        self._place_on_orbit()
+
+    def _place_on_orbit(self) -> None:
+        # The plugin's pose rule (UOrbitMoverComponent::PoseAt): on the circle at the centre's height
+        # plus the altitude, yaw to the centre, pitch the depression to it unless overridden. Set as
+        # the server sets it, not as a client move, so it is no "move" event.
+        orbit = self.orbit
+        cx, cy, cz = orbit["centre"]
+        angle = orbit["angle"]
+        x = cx + orbit["radius"] * math.cos(angle)
+        y = cy + orbit["radius"] * math.sin(angle)
+        z = cz + orbit["altitude"]
+        dx, dy, dz = cx - x, cy - y, cz - z
+        pitch = (math.degrees(math.atan2(dz, math.hypot(dx, dy))) if orbit["pitch"] is None
+                 else orbit["pitch"])
+        yaw = math.degrees(math.atan2(dy, dx))
+        self._transform = FakeTransform(x, y, z, pitch, yaw, 0.0)
 
 
 class FakeRecorder:
@@ -783,6 +878,7 @@ class FakeWorld:
         self.server.next_actor += 1
         actor = FakeActor(self.server.events, self.server.next_actor, blueprint, transform,
                           self.server.frame, parent, attachment_type)
+        actor.flies_orbits = self.server.flies_orbits
         self.server.actors.append(actor)
         self.server.events.add("spawn", blueprint.id, actor.id,
                                None if parent is None else parent.id)
@@ -855,6 +951,9 @@ class FakeServer:
         self.names_cameras = True
         self.cameras_named = 0
         self.cameras_of_other_clients: dict[int, str] = {}
+        # Whether the server flies orbits (False: a server built before it carried the orbit mover,
+        # which binds no set_orbit and refuses every orbit call as the shim says it).
+        self.flies_orbits = True
         self.recorders: list[FakeRecorder] = []
         self.session: FakeSession | None = None
         self.next_actor = 100
@@ -911,6 +1010,10 @@ class FakeServer:
         to that renders this frame is handed its image."""
         self.frame += 1
         self.wall_s += self.wall_per_tick
+        # The server's orbit movers run before the frame's snapshot is taken, as TG_PrePhysics does.
+        for actor in self.actors:
+            if not actor.destroyed:
+                actor.tick_orbit(FakeSession.DELTA_S)
         vehicles = list(self.vehicles_at(self.frame))
         self.render_sets[self.frame] = [actor for actor, _pose in vehicles]
         snapshot = {actor: FakeTransform(x, y, z, 0.0, yaw) for actor, (x, y, z, yaw) in vehicles}

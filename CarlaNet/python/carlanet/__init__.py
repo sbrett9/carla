@@ -1086,9 +1086,116 @@ class WalkerAIController(Actor):
         nav.SetMaxSpeed(self._target_id(), float(speed))
 
 
+class OrbitNotOnServerError(RuntimeError):
+    """The server binds no orbit call: it was built before the Carla plugin flew orbits, so nothing
+    on it can fly a camera round a circle. Rebuild the plugin. Nothing in the client moves the camera
+    in the server's place."""
+
+
+class OrbitState:
+    """Where a sensor's server-side orbit stands (`Sensor.get_orbit_state`): the angle in radians
+    the server last placed it at, in [0, 2 pi), and whether the orbit is enabled and paused. A
+    sensor given no orbit reads angle 0, not enabled, not paused."""
+
+    def __init__(self, angle: float, enabled: bool, paused: bool) -> None:
+        self.angle = float(angle)
+        self.enabled = bool(enabled)
+        self.paused = bool(paused)
+
+    def __repr__(self) -> str:
+        return f"OrbitState(angle={self.angle:.6f}, enabled={self.enabled}, paused={self.paused})"
+
+
+_ORBIT_NOT_ON_SERVER = (
+    "this server cannot fly an orbit: it binds no {call}, so it was built before the Carla plugin "
+    "carried the orbit mover. Rebuild the plugin. Nothing in the client moves the camera in the "
+    "server's place (the server said: {said})")
+
+
+def _orbit_call(call: str, task):
+    """Wait on an orbit call, saying plainly when the server has no such call."""
+    try:
+        return _sync(task)
+    except Exception as failure:
+        if _names_no_such_function(failure):
+            said = str(getattr(failure, "Message", None) or failure)
+            raise OrbitNotOnServerError(_ORBIT_NOT_ON_SERVER.format(call=call, said=said)) from failure
+        raise
+
+
 class Sensor(Actor):
-    """Marker subclass for sensor.* actors. listen/stop/is_listening live on Actor."""
-    pass
+    """A sensor.* actor. listen/stop/is_listening live on Actor; the orbit calls are here, because
+    the actor the server flies round a circle is a camera."""
+
+    def set_orbit(self, centre, radius: float, altitude: float, period: float, *,
+                  clockwise: bool = True, start_angle: float = 0.0, pitch=None,
+                  enabled: bool = True) -> None:
+        """Have the server fly this sensor round a circle, from these parameters and no pose after.
+
+        The server puts an orbit mover on the sensor (`set_orbit`), which advances the angle by each
+        tick's delta on the simulation clock -- the fixed delta under synchronous ticking -- and sets
+        the sensor on the circle with its boresight on the centre before the frame's sensors capture,
+        so the image, its header and the frame's snapshot agree on the pose, and anything attached to
+        the sensor (a depth camera) rides with it. The client sends nothing per frame; where a client
+        thread used to push a pose fifty times a second on its own wall clock, the server's tick rate
+        on a loaded world fell by half and a synchronous run's camera turned as far per captured frame
+        as the pace was high.
+
+        The pose at an angle a is `OrbitSensorController.orbit_transform`'s: on the circle at
+        (centre.x + radius cos a, centre.y + radius sin a, centre.z + altitude), yaw to the centre,
+        pitch the depression to it, roll zero. With the angle increasing the sensor goes from the
+        centre's east through its south -- clockwise seen from above where -y is north -- so the
+        angle at any simulated instant is start_angle + (2 pi / period) * seconds since enabling,
+        signed by direction, and a client that shows it computes it rather than asking.
+
+        While the orbit is enabled the mover owns the sensor's transform, paused or not: call
+        `set_orbit_enabled(False)` before moving the sensor by hand.
+
+        Args:
+            centre: The point circled and looked at, CARLA metres: a Location, or (x, y, z).
+            radius: Metres; positive.
+            altitude: Metres above the centre's height.
+            period: Simulated seconds per revolution; positive.
+            clockwise: The angle increases; False runs it the other way.
+            start_angle: Radians; zero is east of the centre.
+            pitch: Degrees to hold the pitch at instead of the depression to the centre, or None.
+            enabled: Start moving at once. False configures the orbit and leaves the sensor where it
+                is until `set_orbit_enabled(True)`: a capture that holds its opening pose through a
+                pre-roll sends that, having spawned the sensor at the pose of `start_angle`.
+
+        Raises:
+            OrbitNotOnServerError: The server binds no set_orbit; it was built before the orbit
+                mover. Nothing here moves the sensor in its place.
+        """
+        from CarlaNet.Types.Rpc.Orbit import OrbitParameters as _OrbitParameters
+        if hasattr(centre, "x"):
+            cx, cy, cz = float(centre.x), float(centre.y), float(centre.z)
+        else:
+            cx, cy, cz = (float(v) for v in centre)
+        parameters = _OrbitParameters(cx, cy, cz, float(radius), float(altitude), float(period),
+                                      bool(clockwise), float(start_angle), pitch is not None,
+                                      0.0 if pitch is None else float(pitch), bool(enabled))
+        _orbit_call("set_orbit", self._client.SetOrbitAsync(self._actor.Id, parameters))
+
+    def set_orbit_enabled(self, enabled: bool) -> None:
+        """Start or stop the server flying this sensor's orbit. Enabled, the server places the sensor
+        on its circle at the angle it holds at once and advances from there each tick; disabled, the
+        sensor stays where it is and may be moved by hand. Disabling a sensor with no orbit is
+        nothing to do; enabling one is refused by the server, since there is no circle to fly."""
+        _orbit_call("set_orbit_enabled",
+                    self._client.SetOrbitEnabledAsync(self._actor.Id, bool(enabled)))
+
+    def set_orbit_paused(self, paused: bool) -> None:
+        """Hold this sensor's orbit at its angle, or let it advance again. The sensor stays on the
+        circle meanwhile. Refused by the server for a sensor with no orbit."""
+        _orbit_call("set_orbit_paused",
+                    self._client.SetOrbitPausedAsync(self._actor.Id, bool(paused)))
+
+    def get_orbit_state(self) -> OrbitState:
+        """Where this sensor's orbit stands on the server. For a check, not a loop: the angle is
+        predictable from the parameters and the simulated clock, and asking costs a round trip."""
+        state = _orbit_call("get_orbit_state", self._client.GetOrbitStateAsync(self._actor.Id))
+        return OrbitState(state.AngleRadians, state.Enabled, state.Paused)
 
 
 class TrafficSign(Actor):

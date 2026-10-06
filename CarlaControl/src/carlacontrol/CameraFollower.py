@@ -43,10 +43,11 @@ class CameraFollower:
     the run: a monitor that computes its own numbers can disagree with the record
     (`12_Operator_Control_Surface.md` D12.14).
 
-    An orbit is flown by `OrbitSensorController`, unchanged: on its own thread, advancing by wall
-    clock, as it does in `run_SCTMV.py`. Under a synchronous world the camera therefore moves
-    between ticks by however much wall time passed, which is smooth when the drive is paced to real
-    time and jumpy when it is not.
+    An orbit is flown by the server: `OrbitSensorController` gives the circle to the server's orbit
+    mover once, which advances the angle by each tick's delta on the simulation clock, so the camera
+    moves with the world's ticks whatever pace the drive holds, and this process sends no pose per
+    frame. A server built before it flew orbits refuses, and the follower ends saying so rather than
+    showing a camera that does not move.
 
     **It records nothing.** The annotation registry is process-local, so a recorder in a follower
     process would read an empty registry and write every vehicle as unlabelled
@@ -153,8 +154,8 @@ class CameraFollower:
             except Exception as failure:
                 self.logger.error("could not place the camera: %r", failure)
                 return 1
-            if self.channel.pattern == ChannelDescription.ORBIT:
-                self._start_orbit()
+            if self.channel.pattern == ChannelDescription.ORBIT and not self._start_orbit():
+                return 1
             self._show_until_stopped()
             return 0
         finally:
@@ -174,7 +175,10 @@ class CameraFollower:
                            z=channel.orbit_centre_z_m + channel.orbit_altitude_m),
             carla.Rotation(pitch=-90.0, yaw=0.0, roll=0.0))
 
-    def _start_orbit(self) -> None:
+    def _start_orbit(self) -> bool:
+        """Give the circle to the server and set it moving. False where the server refused -- one
+        built before it flew orbits, which the controller has already said -- so the viewer ends
+        rather than showing a camera that does not move."""
         channel = self.channel
         self.orbit = OrbitSensorController(self.camera, world=None, logger=self.logger)
         self.orbit.set_orbit_params(
@@ -190,8 +194,11 @@ class CameraFollower:
             f"{channel.orbit_centre_z_m:.1f}) m, radius {channel.orbit_radius_m:.1f} m, "
             f"{channel.orbit_altitude_m:.1f} m above the centre, "
             f"{channel.orbit_period_s:.0f} s per revolution")
-        self.orbit.start_updater()
         self.orbit.set_enabled(True)
+        if not self.orbit.orbit_enabled:
+            self.logger.error("the orbit could not be started on the server; closing")
+            return False
+        return True
 
     def _show_until_stopped(self) -> None:
         watch = FrameStallWatch(self.stall_after_s, self.clock)
@@ -238,10 +245,10 @@ class CameraFollower:
             self.logger.info("the world is running free: frames arrive at the server's own rate")
 
     def _shut_down(self) -> None:
-        """Stop the orbit before the camera goes, so nothing moves a camera that is gone."""
+        """Turn the server's orbit off before the camera goes."""
         if self.orbit is not None:
             try:
-                self.orbit.stop_updater()
+                self.orbit.set_enabled(False)
             except Exception as failure:
                 self.logger.warning("could not stop the orbit: %r", failure)
         if self.camera is not None:

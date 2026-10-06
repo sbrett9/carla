@@ -116,15 +116,19 @@ class _SpawningWorld:
     def __init__(self) -> None:
         self.spawned: list[tuple[str, str | None]] = []
         self.names: dict[int, str] = {}
+        # Child camera id -> the id of the camera it was spawned attached to.
+        self.attached: dict[int, int] = {}
 
     def get_blueprint_library(self):
         return SimpleNamespace(find=_Blueprint)
 
-    def spawn_actor(self, blueprint, _transform) -> _Camera:
+    def spawn_actor(self, blueprint, _transform, attach_to=None, attachment_type=None) -> _Camera:
         # The server names every camera spawned without a name, the depth camera included.
         self.spawned.append((blueprint.id, None))
         camera = _Camera(100 + len(self.spawned))
         self.names[camera.id] = f"Camera_{len(self.spawned)}"
+        if attach_to is not None:
+            self.attached[camera.id] = attach_to.id
         return camera
 
     def spawn_camera(self, blueprint, transform, name=None) -> _Camera:
@@ -152,6 +156,9 @@ def test_the_rig_s_camera_is_spawned_under_the_name_given_and_its_depth_camera_u
     rig = SensorRig(world, _rig_settings(camera_name="DECK-I25"))
     assert world.spawned == [("sensor.camera.rgb", "DECK-I25"), ("sensor.camera.depth", None)]
     assert rig.camera_name == "DECK-I25"
+    # The depth camera rides the RGB camera: spawned attached to it, so one move -- a client's, or
+    # the server's orbit mover's -- carries both.
+    assert world.attached == {rig.depth_cam.id: rig.camera.id}
 
 
 def test_a_rig_given_no_name_takes_the_name_the_server_gives_its_camera():

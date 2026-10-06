@@ -23,6 +23,7 @@
 | 2026-10-02 | §4.1: a still is named after its camera, `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`; the time is written as before, so the clock ratio is read from either name. |
 | 2026-10-05 | Status corrected against the tree: M1 is measured and `sensor_tick` is set by both front ends (§4.6, §11); `FrameRecorder.Dropped` is read and gated and the clock ratio recorded (§4.6, §7, D10.7); the shipped networks' edge counts and place-name coverage are restated beside the 2026-09-18 figures (§3). |
 | 2026-10-05 | §4.1: the `--no-occlusion` switch the 2026-09-16 measurements name is removed, as the owner ruled; the occlusion measurement is on in every capture path, so every recording camera streams RGB and depth, which is what the "×2" rows cost. |
+| 2026-10-05 | §4.3.3, §4.4: the orbiting camera is flown by the server (issue #37, promoted into the plan by the owner), an option of §4.3.3's list now taken. The client's orbit thread -- 50 batched transform calls a second on the wall clock, measured to halve the server's tick rate on the loaded world -- is gone; the per-tick round trips are D5.2's two and nothing beside them. The remaining tick-rate gap between a paused and a running orbit, tile streaming from a moving view, is the live check's to measure. |
 
 ---
 
@@ -951,6 +952,18 @@ capture of the server (§9).
   truth is built from, per-vehicle lamps and per-actor segmentation.
 - Stop the three per-tick `GetSolarState` sweeps of the actor list (§4.7.2), which scale with the
   vehicle count while the sun does not change.
+- Move the orbiting camera's automation into the plugin, so the client sends no per-frame pose
+  (issue #37). **Taken, 2026-10-05**, as the owner promoted the issue into the plan: `UOrbitMoverComponent`
+  advances the angle by each tick's delta on the simulation clock and sets the camera on the circle in
+  `TG_PrePhysics`; `set_orbit` sends the circle once, `set_orbit_paused` and `set_orbit_enabled` are one
+  call each. What it removes was measured in the issue, 2026-09-23/24, on Arapahoe with a 1280×720 RGB
+  and depth rig: 50 batched transform calls a second whatever the frame rate, median 11 ms a round trip
+  on an empty level (p90 46 ms), and the server's tick rate on the loaded world with no traffic falling
+  from 41.6 per second with the orbit paused to 20.7 with it running -- that gap has two parts, the RPC
+  traffic and Cesium streaming tiles for a moving view, and only the first is removed; the live check
+  (`CarlaNet/python/test_plugin_orbit.py --tick-rate-seconds`) prints the two rates again so the
+  remainder is measured, not inferred. Under a synchronous drive it also ends the orbit turning as far
+  per captured frame as the pace was high.
 
 ### 4.4 RPC round trips per tick
 
@@ -960,7 +973,9 @@ with `std::visit` on the game thread (`CarlaServer.cpp:3198-3213`), and `ApplyTr
 execution (`:3157-3164`). The client side is a single RPC call
 (`CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1779-1785`).
 [`05`](05_CarlaNet_Capability_Audit.md) D5.2 concludes: **exactly two RPC round trips per step, independent
-of vehicle count** — one `apply_batch`, one `tick_cue`.
+of vehicle count** — one `apply_batch`, one `tick_cue`. An orbiting camera adds none of its own since
+2026-10-05: the server flies it from a circle sent once (`set_orbit`, issue #37, §4.3.3), where the
+client's orbit thread sent about fifty poses a second beside that count, on the wall clock.
 
 The budget, stated both ways so it holds whichever answer the audit had returned:
 

@@ -29,6 +29,7 @@
 #include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Game/DriveLease.h"
 #include "Carla/Game/WorldSupervisionState.h"
+#include "Carla/Sensor/OrbitMoverComponent.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
 #include "Components/LightComponent.h"
@@ -56,6 +57,8 @@
 #include <carla/rpc/LightState.h>
 #include <carla/rpc/MapInfo.h>
 #include <carla/rpc/MapLayer.h>
+#include <carla/rpc/OrbitParameters.h>
+#include <carla/rpc/OrbitState.h>
 #include <carla/rpc/Response.h>
 #include <carla/rpc/Server.h>
 #include <carla/rpc/String.h>
@@ -2147,6 +2150,169 @@ void FCarlaServer::FPimpl::BindActions()
     }
 
     return Found;
+  };
+
+  // -- The orbit mover --------------------------------------------------------
+  //
+  // An orbiting camera is a pure function of simulated time, so the server flies it: set_orbit puts
+  // a UOrbitMoverComponent on the actor, which advances the angle by each tick's delta in
+  // TG_PrePhysics and sets the actor on the circle with its boresight on the centre, before the
+  // sensors capture and the world observer reports the frame. The client sends the circle once and
+  // nothing per frame, where it used to push a pose about fifty times a second on its own wall
+  // clock -- measured to halve the server's tick rate on a loaded world, and to turn the camera as
+  // far per captured frame as a synchronous run's pace was high. Whatever is attached to the actor,
+  // a depth camera spawned rigidly on a colour camera, rides with it, so the two are never a frame
+  // apart.
+  //
+  // The pose rule is the client's (OrbitSensorController.orbit_transform; UOrbitMoverComponent::
+  // PoseAt), so a client predicts the angle from the parameters and the simulated clock and never
+  // asks per frame; get_orbit_state is there for a check, not a loop. While the orbit is enabled the
+  // mover owns the actor's transform, paused or not: a client that wants to move the actor itself
+  // disables the orbit first, so the two never fight over the pose.
+
+  BIND_SYNC(set_orbit) << [this](
+      cr::ActorId ActorId,
+      cr::OrbitParameters Parameters) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_orbit",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    if (CarlaActor->IsDormant())
+    {
+      RESPOND_ERROR("set_orbit: the actor is dormant, so nothing in the world can fly it");
+    }
+    AActor* Actor = CarlaActor->GetActor();
+    if (!IsValid(Actor))
+    {
+      RESPOND_ERROR("set_orbit: the actor is gone from the world");
+    }
+    if (!FMath::IsFinite(Parameters.centre_x_m) || !FMath::IsFinite(Parameters.centre_y_m) ||
+        !FMath::IsFinite(Parameters.centre_z_m))
+    {
+      RESPOND_ERROR("set_orbit: the centre is three finite numbers of metres");
+    }
+    if (!FMath::IsFinite(Parameters.radius_m) || Parameters.radius_m <= 0.0)
+    {
+      RESPOND_ERROR("set_orbit: the radius is a positive number of metres");
+    }
+    if (!FMath::IsFinite(Parameters.altitude_m))
+    {
+      RESPOND_ERROR("set_orbit: the altitude is a finite number of metres above the centre");
+    }
+    if (!FMath::IsFinite(Parameters.period_s) || Parameters.period_s <= 0.0)
+    {
+      RESPOND_ERROR("set_orbit: the period is a positive number of simulated seconds per revolution");
+    }
+    if (!FMath::IsFinite(Parameters.start_angle_rad))
+    {
+      RESPOND_ERROR("set_orbit: the start angle is a finite number of radians");
+    }
+    if (Parameters.pitch_overridden && !FMath::IsFinite(Parameters.pitch_deg))
+    {
+      RESPOND_ERROR("set_orbit: a pitch override is a finite number of degrees");
+    }
+
+    // Unreal measures in centimetres.
+    FOrbitMoverParameters Circle;
+    Circle.Centre = FVector(
+        Parameters.centre_x_m * 100.0,
+        Parameters.centre_y_m * 100.0,
+        Parameters.centre_z_m * 100.0);
+    Circle.RadiusCm = Parameters.radius_m * 100.0;
+    Circle.AltitudeCm = Parameters.altitude_m * 100.0;
+    Circle.PeriodSeconds = Parameters.period_s;
+    Circle.bClockwise = Parameters.clockwise;
+    Circle.StartAngleRadians = Parameters.start_angle_rad;
+    if (Parameters.pitch_overridden)
+    {
+      Circle.PitchDegrees = Parameters.pitch_deg;
+    }
+
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::FindOrAdd(Actor);
+    if (Mover == nullptr)
+    {
+      RESPOND_ERROR("set_orbit: the orbit mover could not be added to the actor");
+    }
+    Mover->Configure(Circle, Parameters.enabled);
+    return R<void>::Success();
+  };
+
+  // Disabling an actor that carries no orbit is nothing to do and succeeds; enabling one is a
+  // mistake and is refused, since there is no circle to fly.
+  BIND_SYNC(set_orbit_enabled) << [this](
+      cr::ActorId ActorId,
+      bool enabled) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_orbit_enabled",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::Find(CarlaActor->GetActor());
+    if (Mover == nullptr)
+    {
+      if (!enabled)
+      {
+        return R<void>::Success();
+      }
+      RESPOND_ERROR("set_orbit_enabled: the actor has no orbit; give it one with set_orbit first");
+    }
+    Mover->SetEnabled(enabled);
+    return R<void>::Success();
+  };
+
+  BIND_SYNC(set_orbit_paused) << [this](
+      cr::ActorId ActorId,
+      bool paused) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_orbit_paused",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::Find(CarlaActor->GetActor());
+    if (Mover == nullptr)
+    {
+      RESPOND_ERROR("set_orbit_paused: the actor has no orbit; give it one with set_orbit first");
+    }
+    Mover->SetPaused(paused);
+    return R<void>::Success();
+  };
+
+  BIND_SYNC(get_orbit_state) << [this](cr::ActorId ActorId) -> R<cr::OrbitState>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "get_orbit_state",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    cr::OrbitState State;
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::Find(CarlaActor->GetActor());
+    if (Mover != nullptr)
+    {
+      State.angle_rad = Mover->GetAngleRadians();
+      State.enabled = Mover->IsEnabled();
+      State.paused = Mover->IsPaused();
+    }
+    return State;
   };
 
   BIND_SYNC(console_command) << [this](std::string cmd) -> R<bool>

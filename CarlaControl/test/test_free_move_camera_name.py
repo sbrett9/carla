@@ -88,9 +88,9 @@ class _World:
     def get_blueprint_library(self):
         return SimpleNamespace(find=_Blueprint)
 
-    def spawn_actor(self, blueprint, _transform) -> _Camera:
-        # The server names every camera spawned without a name, the depth camera included, and
-        # refuses one a live camera holds.
+    def spawn_actor(self, blueprint, _transform, attach_to=None, attachment_type=None) -> _Camera:
+        # The server names every camera spawned without a name, the depth camera included -- which is
+        # spawned attached to the picture camera -- and refuses one a live camera holds.
         given = blueprint.values.get("role_name")
         if given is not None and self.held is not None and given.upper() == self.held.upper():
             raise RuntimeError(f"camera name '{given}' is already held in this world by camera 7 "

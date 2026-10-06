@@ -96,37 +96,39 @@ class SensorRig:
                 "(rebuild the server to raise it)"
             )
 
-        # Spawn cameras
+        # Spawn cameras. The depth camera is attached to the RGB camera, rigidly and at its own pose,
+        # so one move of the RGB camera carries both -- a move from here, or the server's orbit mover
+        # flying the RGB camera -- and the two are never captured a frame apart. The server reports
+        # an attached sensor's world pose on its snapshot and in its image header, which is what the
+        # recorder's depth pose check reads.
         tf = self.initial_pose.to_carla_transform()
         self.camera = world.spawn_camera(bp, tf, name=getattr(args, "camera_name", None))
         self.camera_name = world.camera_name(self.camera)
-        self.depth_cam = world.spawn_actor(dbp, tf)
+        self.depth_cam = world.spawn_actor(dbp, carla.Transform(), attach_to=self.camera,
+                                           attachment_type=carla.AttachmentType.Rigid)
         self.spectator = world.get_spectator()
         self.spectator.set_transform(tf)
 
         self.logger.info(f"spawned RGB camera {self.camera_name} id={self.camera.id}, "
-                         f"depth camera id={self.depth_cam.id}")
+                         f"depth camera id={self.depth_cam.id} attached to it")
         if self._client is None:
             self.logger.warning(
-                "no client given: the rig's cameras will be moved one call each, so under a "
-                "free-running world a frame can be captured with them at different poses"
+                "no client given: the rig's camera and the spectator will be moved one call each"
             )
 
         # Set up listeners based on sync mode
         self._setup_listeners_internal()
 
     def set_transform(self, tf: carla.Transform) -> None:
-        """Move every camera in the rig to one pose, together.
+        """Move the rig to one pose: the RGB camera, with its depth camera attached, and the spectator.
 
-        One batch is one game-thread task, so the RGB camera, the depth camera and the spectator
-        all take the new pose before the next frame is rendered. Moving them with a call each is
-        not the same thing: each call is its own round trip, and under a free-running world the
-        simulator renders between them, so a frame can be captured with the RGB camera at the new
-        pose and the depth camera still at the old one. The recorder then refuses to pair those
-        two captures -- correctly, since they were not taken from the same place -- and the
-        capture carries no occlusion. Measured on an orbiting camera over a hundred vehicles:
-        25 of 65 captures lost that way, every one a pose mismatch, none a missing or late depth
-        frame.
+        The depth camera is never moved itself: it is attached to the RGB camera and rides with it,
+        so the two cannot be captured a frame apart. Measured before the attachment, on an orbiting
+        camera moved by a call each over a hundred vehicles, 25 of 65 captures were lost to the
+        recorder's pose check, every one a pose mismatch, none a missing or late depth frame. The
+        RGB camera and the spectator go in one batch, one game-thread task, so both take the new
+        pose before the next frame is rendered. A rig the server is flying round an orbit is not
+        moved from here: `OrbitSensorController` turns the orbit off before any manual move.
 
         Args:
             tf: The pose for the whole rig
@@ -137,13 +139,12 @@ class SensorRig:
         try:
             responses = self._client.apply_batch_sync([
                 carla.command.ApplyTransform(self.camera, tf),
-                carla.command.ApplyTransform(self.depth_cam, tf),
                 carla.command.ApplyTransform(self.spectator, tf),
             ])
         except Exception as e:
             self.logger.warning(f"failed to move the rig: {e}")
             return
-        for which, response in zip(("RGB camera", "depth camera", "spectator"), responses):
+        for which, response in zip(("RGB camera", "spectator"), responses):
             if response.has_error:
                 self.logger.warning(f"failed to move the {which}: {response.error}")
 
@@ -156,11 +157,10 @@ class SensorRig:
         self.set_transform(pose.to_carla_transform())
 
     def _set_transform_separately(self, tf: carla.Transform) -> None:
-        """Move the cameras one call each. Only for a rig built without a client: the calls are
-        separate round trips, so the cameras can end up a frame apart -- see set_transform."""
+        """Move the RGB camera and the spectator one call each. Only for a rig built without a
+        client; the depth camera is attached to the RGB camera and goes with it either way."""
         try:
             self.camera.set_transform(tf)
-            self.depth_cam.set_transform(tf)
             self.spectator.set_transform(tf)
         except Exception as e:
             self.logger.warning(f"failed to set transform: {e}")
@@ -420,13 +420,14 @@ class SensorRig:
         block until the sensor is fully stopped.
         """
         self.logger.info(f"cleaning up sensor rig: RGB camera id={self.camera.id}, depth camera id={self.depth_cam.id}")
-        try:
-            self.camera.stop()
-            self.camera.destroy()
-        except Exception as e:
-            self.logger.warning(f"failed to cleanup RGB camera: {e}")
+        # The depth camera leaves before the camera it is attached to.
         try:
             self.depth_cam.stop()
             self.depth_cam.destroy()
         except Exception as e:
             self.logger.warning(f"failed to cleanup depth camera: {e}")
+        try:
+            self.camera.stop()
+            self.camera.destroy()
+        except Exception as e:
+            self.logger.warning(f"failed to cleanup RGB camera: {e}")
