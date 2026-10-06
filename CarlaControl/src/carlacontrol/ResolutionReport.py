@@ -150,8 +150,9 @@ class ResolutionReport:
             for band, row in table["table"].items():
                 lines.append(f"| {band} | {row['annotated']} | {row['nominal']} | "
                              f"{row['unlabelled']} | {row['total']} |")
-            lines += ["", f"Degenerate bands: {', '.join(table['degenerate_bands']) or 'none'}. "
-                      f"Usable bands: {', '.join(table['usable_bands']) or 'none'}.", ""]
+            lines += ["", f"Bands where one state alone occurs: "
+                      f"{', '.join(table['degenerate_bands']) or 'none'}. "
+                      f"Bands where both occur: {', '.join(table['mixed_bands']) or 'none'}.", ""]
         lines += ["Remedies:", ""] + [f"- {r}" for r in association["remedies"]] + [""]
         return lines
 
@@ -248,7 +249,7 @@ class ResolutionReport:
             who = ", ".join(f"{p['entity_id']} ({p['role']})" for p in instance["participants"]) \
                 or "no participant"
             lines.append(f"- **{instance['instance_id']}**: {instance['supervision']}, "
-                         f"{instance['realisation']}, labels {', '.join(instance['labels']) or '-'}; "
+                         f"labels {', '.join(instance['labels']) or '-'}; "
                          f"{who}" + ResolutionReport._declared(instance))
             for interval in instance["intervals"]:
                 lines.append(f"  - {interval['phase']}: " + ResolutionReport._bounds(interval))

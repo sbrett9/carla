@@ -2,7 +2,9 @@ namespace CarlaNet.Types.Supervision;
 
 // The supervision half of the annotation vocabulary's closed core (06_Truth_And_Annotation.md §3.7):
 // the values the pipeline's own code branches on, so that a misspelling makes it behave differently.
-// Each is published by CoreVocabulary under the name every record writes it by.
+// Each is published by CoreVocabulary under the name every record writes it by. Every subject is a
+// vehicle or a flow's vehicles: SUMO reports vehicles, not places, and a label follows the vehicle it
+// is about (06 §3.5, the owner's ruling of 2026-10-05).
 
 /// <summary>What the author asserts of a subject (06 §3.1).</summary>
 public enum SupervisionState
@@ -25,19 +27,6 @@ public enum SubjectKind
 
     /// <summary>Every vehicle a flow emits.</summary>
     Cohort,
-
-    /// <summary>An occasion of a recurring series, the one subject that can go unrealised.</summary>
-    Slot,
-}
-
-/// <summary>Whether a pattern instance happened or is a declared absence (06 §3.5).</summary>
-public enum Realisation
-{
-    /// <summary>A vehicle realised it.</summary>
-    Present,
-
-    /// <summary>An occasion passed with no vehicle; world-scoped, never a vehicle's event.</summary>
-    Absent,
 }
 
 /// <summary>The three authorities an interval's start is read from (06 §3.3).</summary>
@@ -68,9 +57,6 @@ public enum ClosedBy
     /// <summary>Declared, and discarded before it ever existed.</summary>
     NeverInserted,
 
-    /// <summary>The occasion passed with no vehicle: the absence.</summary>
-    SlotUnrealised,
-
     /// <summary>SUMO committed and the body never did: a defect signal.</summary>
     PhysicalPredicateNeverHeld,
 
@@ -99,13 +85,6 @@ public enum ReservedRole
 {
     /// <summary>The single participant of a one-participant instance.</summary>
     Subject,
-}
-
-/// <summary>The one phase the pipeline reserves (06 D6.35).</summary>
-public enum ReservedPhase
-{
-    /// <summary>The interval of an absence, which the absence writer emits and no author writes.</summary>
-    Vacancy,
 }
 
 /// <summary>

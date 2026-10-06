@@ -21,8 +21,8 @@ namespace CarlaNet.Types.Streaming;
 /// session has named a body in is laid out exactly as before.</para>
 ///
 /// <para>A supervision block can follow the render set's entries, inside the render set block: the plan
-/// a co-simulation session has bound, what the author asserts of the vehicle each lent body draws, and
-/// the absences in force (<see cref="ObservedSupervision"/>). The server carries it only while a plan
+/// a co-simulation session has bound, and what the author asserts of the vehicle each lent body draws
+/// (<see cref="ObservedSupervision"/>). The server carries it only while a plan
 /// is held, says so with <see cref="SupervisionCarried"/>, and always writes the render set block with
 /// it -- with no entries where no body is lent yet -- whose size counts it. So a reader that knows the
 /// render set and not the supervision finds the actors and the render set as before and skips the

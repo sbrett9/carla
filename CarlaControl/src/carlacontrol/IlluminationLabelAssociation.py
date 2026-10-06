@@ -1,4 +1,4 @@
-"""How much of the supervision label an illumination band gives away: check 41, which warns and never refuses.
+"""How much of the supervision label an illumination band gives away: check 41, which states a number and never refuses.
 
 In a pattern of life the correlation between time of day and label is structural -- the sizing
 scenario's probes are a mid-morning phenomenon because that is when a probe would probe, and its guard
@@ -24,8 +24,10 @@ Two tables are computed:
 
 For each: the contingency table of band against the three-valued supervision state, the per-band
 rates, `I(band; supervision) / H(supervision)` in bits to three decimals with the counts it rests on,
-every **degenerate** band (the annotated rate is 0 or 1 there, so the band determines the label), the
-**usable** bands (both occur), and the remedies §5.6.3 names.
+every band where one state alone occurs (the annotated rate is 0 or 1 there, so the band determines
+the label; `degenerate_bands`), every band where both occur (`mixed_bands`), and the ways §5.6.3
+names of changing the numbers. Every field is a count or a ratio over the declarations: the report
+carries no word that judges what the numbers mean (the charter's §4b).
 
 What it cannot see: what an operator's override of the illumination default or a window of their own
 would capture, and anything about the imagery. It is a statistic over declarations, not over pixels.
@@ -101,11 +103,11 @@ class IlluminationLabelAssociation:
         return (f"I(band; supervision) / H(supervision) = {shown} over {headline['entries']} "
                 f"entr{'y' if headline['entries'] == 1 else 'ies'} "
                 f"({'captured by the declared windows' if result['measured_over'] == 'windows' else 'at their departures; no capture window is declared'})"
-                + (f"; degenerate bands, where the band determines the label: "
+                + (f"; bands where one state alone occurs, so the band determines the label: "
                    f"{', '.join(degenerate)}" if degenerate else "")
-                + ". Expected in a pattern of life and never a refusal; the table, the usable "
-                  "bands and the remedies are in the resolution report, and the statistic is in "
-                  "the lock")
+                + ". Expected in a pattern of life and never a refusal; the table, the bands where "
+                  "both states occur and the ways of changing the numbers are in the resolution "
+                  "report, and the statistic is in the lock")
 
     # -- the two tables ----------------------------------------------------------------------------
 
@@ -159,8 +161,8 @@ class IlluminationLabelAssociation:
         any_annotated = state_totals["annotated"] > 0
         result["degenerate_bands"] = [band for band, rate in result["annotated_rate"].items()
                                       if any_annotated and rate in (0.0, 1.0)]
-        result["usable_bands"] = [band for band, rate in result["annotated_rate"].items()
-                                  if 0.0 < rate < 1.0]
+        result["mixed_bands"] = [band for band, rate in result["annotated_rate"].items()
+                                 if 0.0 < rate < 1.0]
         return result
 
     @staticmethod

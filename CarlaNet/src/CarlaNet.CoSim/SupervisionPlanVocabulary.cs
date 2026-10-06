@@ -139,8 +139,8 @@ public sealed record AuthorNamespace
 }
 
 /// <summary>
-/// One author term, self-describing as D6.28 requires: its definition, the subjects and realisations it
-/// may be asserted of, and its optional relations, each as declared.
+/// One author term, self-describing as D6.28 requires: its definition, the kinds of subject it may be
+/// asserted of, and its optional relations, each as declared.
 /// </summary>
 public sealed record AuthorTerm
 {
@@ -151,7 +151,6 @@ public sealed record AuthorTerm
         Status = reading.Text(json, "status", where);
         SupersededBy = reading.NullableText(json, "superseded_by", where, required: false);
         AppliesTo = reading.CoreList<SubjectKind>(json, "applies_to", where, CoreVocabulary.Name, "subject_kind");
-        Realisation = reading.CoreList<Realisation>(json, "realisation", where, CoreVocabulary.Name, "realisation");
         Definition = reading.Text(json, "definition", where);
         Broader = reading.NullableText(json, "broader", where, required: false);
         Parameters = reading.Map(json, "parameters", where, TermParameter.Read, required: false);
@@ -176,11 +175,8 @@ public sealed record AuthorTerm
     /// <summary>The term that replaces a deprecated one; null otherwise.</summary>
     public string? SupersededBy { get; }
 
-    /// <summary>The kinds of subject it may be asserted of.</summary>
+    /// <summary>The kinds of subject it may be asserted of: a vehicle, or every vehicle of a flow.</summary>
     public ImmutableArray<SubjectKind> AppliesTo { get; }
-
-    /// <summary>The realisations it may be asserted of.</summary>
-    public ImmutableArray<Realisation> Realisation { get; }
 
     /// <summary>What it means, for a reader who never met the author.</summary>
     public string Definition { get; }

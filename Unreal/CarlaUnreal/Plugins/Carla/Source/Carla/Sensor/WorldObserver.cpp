@@ -350,15 +350,6 @@ static size_t FWorldObserver_SupervisionRowSize(const FActorSupervision &Supervi
   return Size;
 }
 
-/// One absence's size: its instance, phase, labels and areas.
-static size_t FWorldObserver_SupervisionAbsenceSize(const FSupervisionAbsence &Absence)
-{
-  return FWorldObserver_WrittenNameSize(Absence.InstanceId)
-      + FWorldObserver_WrittenNameSize(Absence.Phase)
-      + FWorldObserver_WrittenNamesSize(Absence.Labels)
-      + FWorldObserver_WrittenNamesSize(Absence.Areas);
-}
-
 static carla::Buffer FWorldObserver_Serialize(
     carla::Buffer &&buffer,
     const UCarlaEpisode &Episode,
@@ -410,8 +401,8 @@ static carla::Buffer FWorldObserver_Serialize(
       SupervisionRowsSize += FWorldObserver_SupervisionRowSize(Body->GetSupervision());
     }
   }
-  // The supervision block's own size, the plan, the vocabulary version and digest, the row count and
-  // rows, then the absence count and absences.
+  // The supervision block's own size, the plan, the vocabulary version and digest, then the row count
+  // and rows. Every row is a lent body's: nothing is written for the world apart from the plan.
   size_t SupervisionBlockSize = 0u;
   if (bSupervisionCarried)
   {
@@ -419,12 +410,7 @@ static carla::Buffer FWorldObserver_Serialize(
         + FWorldObserver_WrittenNameSize(WorldSupervision.PlanId)
         + sizeof(uint32_t)
         + FWorldObserver_WrittenNameSize(WorldSupervision.VocabularyDigest)
-        + sizeof(uint32_t) + SupervisionRowsSize
-        + sizeof(uint32_t);
-    for (const FSupervisionAbsence &Absence : WorldSupervision.Absences)
-    {
-      SupervisionBlockSize += FWorldObserver_SupervisionAbsenceSize(Absence);
-    }
+        + sizeof(uint32_t) + SupervisionRowsSize;
   }
   // Written whenever either is carried: the supervision rides inside the render set block, whose
   // size counts it, so a reader that knows only the render set skips it unread.
@@ -550,10 +536,9 @@ static carla::Buffer FWorldObserver_Serialize(
       write_name(bLent ? Membership.VehicleTypeId : std::string());
     }
 
-    // The supervision in force: the plan, each lent body whose vehicle is annotated or nominal with
-    // the instances in force for it, and the absences held for the world as a whole. What the session
-    // last put in force is what holds on this frame, because the session names a change before the
-    // tick cue of the frame it is drawn in.
+    // The supervision in force: the plan, and each lent body whose vehicle is annotated or nominal
+    // with the instances in force for it. What the session last put in force is what holds on this
+    // frame, because the session names a change before the tick cue of the frame it is drawn in.
     if (bSupervisionCarried)
     {
       const uint32_t SupervisionSize = static_cast<uint32_t>(SupervisionBlockSize - sizeof(uint32_t));
@@ -583,15 +568,6 @@ static carla::Buffer FWorldObserver_Serialize(
           write_name(Annotation.Role);
           write_names(Annotation.Labels);
         }
-      }
-      const uint32_t AbsenceCount = static_cast<uint32_t>(WorldSupervision.Absences.size());
-      write_data(AbsenceCount);
-      for (const FSupervisionAbsence &Absence : WorldSupervision.Absences)
-      {
-        write_name(Absence.InstanceId);
-        write_name(Absence.Phase);
-        write_names(Absence.Labels);
-        write_names(Absence.Areas);
       }
     }
   }

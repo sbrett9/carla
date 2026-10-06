@@ -331,9 +331,9 @@ public:
 
   FFrameData& GetFrameData() { return FrameData; }
 
-  /// The supervision a co-simulation session holds for this world as a whole -- the plan it is bound
-  /// from and the absences in force -- which the world observer carries on every snapshot while a
-  /// plan is held (update_supervision). Ends with the episode.
+  /// The supervision a co-simulation session holds for this world as a whole -- the plan every
+  /// body's row is bound from, and nothing else -- which the world observer carries on every snapshot
+  /// while a plan is held (update_supervision). Ends with the episode.
   const FWorldSupervisionState &GetWorldSupervision() const { return WorldSupervision; }
 
   FWorldSupervisionState &GetWorldSupervision() { return WorldSupervision; }

@@ -322,7 +322,7 @@ public class CotWriterTests
     // The supervision a Bahonar frame might carry: the escort's lead annotated, a guard on its posting
     // nominal with the ordinary behaviour named, and the tower it should have relieved unmanned.
     private static readonly SupervisionPlanIdentity BahonarPlan = new(
-        "Shahid_Bahonar_Port_PatternOfLife", 2, "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad");
+        "Shahid_Bahonar_Port_PatternOfLife", 3, "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad");
 
     private static ObservedSupervision Bahonar() => new(
         BahonarPlan,
@@ -338,10 +338,6 @@ public class CotWriterTests
                 new AnnotationInForce("Shahid_Bahonar_Port_PatternOfLife/pi_tower_posting_d4_h15_t3",
                                       ["bahonar:tower_posting"], "dwell", "bahonar:guard"),
             ])),
-        ],
-        [
-            new AbsenceInForce("Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned",
-                               ["bahonar:post_unmanned"], ["tower_03"], "vacancy"),
         ]);
 
     private static string WriteSupervised(CaptureSupervision supervision, params VehicleTelemetry[] records)
@@ -358,7 +354,7 @@ public class CotWriterTests
     }
 
     [Fact]
-    public void A_Supervised_Capture_Carries_The_Plan_The_World_s_Absences_And_Every_Drawn_Vehicle_s_State()
+    public void A_Supervised_Capture_Carries_The_Plan_And_Every_Drawn_Vehicle_s_State_And_Nothing_For_The_World()
     {
         // The escort's lead, a guard on its posting, an ambient flow vehicle the author asserts nothing
         // of, and a vehicle actor no session named.
@@ -373,22 +369,19 @@ public class CotWriterTests
 
         Assert.Contains(
             """
-            <events captured="2026-07-10T18:00:00.000Z" count="4" source="truth" tick="1044000" sim_time_s="370800" telemetry_tick="1044000" run_id="cap-1" seed="42" vehicles="rendered" plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
-              <_supervision scope="world" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
-                <absence instance="Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned" labels="bahonar:post_unmanned" areas="tower_03" phase="vacancy" />
-              </_supervision>
+            <events captured="2026-07-10T18:00:00.000Z" count="4" source="truth" tick="1044000" sim_time_s="370800" telemetry_tick="1044000" run_id="cap-1" seed="42" vehicles="rendered" plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
             """.ReplaceLineEndings(), xml);
         Assert.Contains(
             """
                   <_carla source="truth" actor_id="21" type_id="vehicle.audi.tt" base_type="car" special_type="" length_m="4.50" width_m="2.00" height_m="1.40" color="0,0,0" role_name="autopilot" vx="11.20" vy="-1.40" vz="0.00" sumo_id="escort_0" vtype_id="military_truck" admitted_tick="1043990" />
-                  <_supervision state="annotated" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
+                  <_supervision state="annotated" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
                     <annotation instance="Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3" labels="bahonar:coordinated_group_transit bahonar:destination_off_pattern" phase="transit" role="bahonar:lead" />
                   </_supervision>
             """.ReplaceLineEndings(), xml);
         // A nominal vehicle names which authored ordinary behaviour it is (06 D6.31).
         Assert.Contains(
             """
-                  <_supervision state="nominal" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
+                  <_supervision state="nominal" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
                     <annotation instance="Shahid_Bahonar_Port_PatternOfLife/pi_tower_posting_d4_h15_t3" labels="bahonar:tower_posting" phase="dwell" role="bahonar:guard" />
                   </_supervision>
             """.ReplaceLineEndings(), xml);
@@ -396,15 +389,19 @@ public class CotWriterTests
         Assert.Contains(
             """
                   <_carla source="truth" actor_id="23" type_id="vehicle.audi.tt" base_type="car" special_type="" length_m="4.50" width_m="2.00" height_m="1.40" color="0,0,0" role_name="autopilot" vx="11.20" vy="-1.40" vz="0.00" sumo_id="corridor_d0_p0_h6.12" vtype_id="car" admitted_tick="1043000" />
-                  <_supervision state="unlabelled" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad" />
+                  <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad" />
             """.ReplaceLineEndings(), xml);
 
         XElement root = XDocument.Parse(xml).Root!;
-        // A vehicle no session named is no subject of the plan, and an absence is never an event.
+        // A vehicle no session named is no subject of the plan.
         XElement unnamedEvent = root.Elements("event").Single(e => (string?)e.Attribute("uid") == "CARLA-TRUTH-24");
         Assert.Null(unnamedEvent.Element("detail")!.Element("_supervision"));
         Assert.Equal(4, root.Elements("event").Count());
-        Assert.DoesNotContain(root.Elements("event"), e => ((string?)e.Attribute("uid") ?? "").Contains("unmanned"));
+        // Nothing is written for the world apart from the plan on the container: every label follows a
+        // vehicle, so every _supervision element is inside a vehicle's event (06 §3.5).
+        Assert.Empty(root.Elements("_supervision"));
+        Assert.Equal(3, root.Descendants("_supervision").Count());
+        Assert.All(root.Descendants("_supervision"), element => Assert.Equal("detail", element.Parent!.Name.LocalName));
     }
 
     [Fact]

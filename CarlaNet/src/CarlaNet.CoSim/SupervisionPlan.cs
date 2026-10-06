@@ -23,15 +23,15 @@ namespace CarlaNet.CoSim;
 /// field and no epoch (D6.21).</para>
 ///
 /// <para><b>Core values are read through the core's own enumerations</b>
-/// (<c>CarlaNet.Types.Supervision</c>, D6.30): a supervision state, a realisation, a subject kind, a
-/// cadence and an interval anchor are each the member whose published name the plan spells, and a
+/// (<c>CarlaNet.Types.Supervision</c>, D6.30): a supervision state, a subject kind, a cadence and an
+/// interval anchor are each the member whose published name the plan spells, and a
 /// spelling that is none of them is refused, naming every value the family has. The vocabulary the
 /// plan carries must publish exactly this core, at <see cref="CoreVocabulary.Version"/>.</para>
 ///
 /// <para><b>What reading checks.</b> The shape version; every field the compiler writes, of the kind it
-/// writes; the core values; the anchor grammar; that an absence has no participant, an expectation
-/// and only its vacancy, and that every other interval is one of its instance's participants'; that no
-/// cohort is nominal and no instance unlabelled; and that the vocabulary digests as the plan says
+/// writes; the core values; the anchor grammar; that every instance has a participant and every
+/// interval is one of its instance's participants'; that no cohort is nominal and no instance
+/// unlabelled; and that the vocabulary digests as the plan says
 /// (<c>04_Contracts.md</c> C3 V3.15), by the compiler's own canonical form. Every problem is named in
 /// one refusal.</para>
 ///
@@ -124,7 +124,7 @@ public sealed record SupervisionPlan
     /// <summary>The vocabulary, resolved: the core's version, its digest and every author namespace.</summary>
     public PlanVocabulary Vocabulary { get; }
 
-    /// <summary>Every pattern instance and absence, in the plan's order.</summary>
+    /// <summary>Every pattern instance, in the plan's order.</summary>
     public ImmutableArray<PatternInstance> Instances { get; }
 
     /// <summary>Every recurring series.</summary>
@@ -207,20 +207,17 @@ public sealed record SupervisionPlan
     /// <summary>What the plan holds, in the report's words.</summary>
     public override string ToString()
     {
-        int annotated = Instances.Count(instance => instance.Realisation == Realisation.Present
-                                                    && instance.Supervision == SupervisionState.Annotated);
+        int annotated = Instances.Count(instance => instance.Supervision == SupervisionState.Annotated);
         int nominal = Instances.Count(instance => instance.Supervision == SupervisionState.Nominal);
-        int absent = Instances.Count(instance => instance.Realisation == Realisation.Absent);
         int slots = Series.Sum(series => series.Slots.Length);
-        int unrealised = Series.Sum(series => series.Slots.Count(slot => !slot.Realised));
         int annotatedCohorts = Cohorts.Count(cohort => cohort.Supervision == SupervisionState.Annotated);
         string namespaces = Vocabulary.Namespaces.Length == 0
             ? "no author namespace"
             : string.Join(", ", Vocabulary.Namespaces.Select(name => $"{name.Namespace} {name.Version}"));
-        return $"{PlanId}: {Counted(Instances.Length, "instance")} ({annotated} annotated, {nominal} nominal, "
-               + $"{absent} absent), {Counted(Series.Length, "series", "series")} of "
-               + $"{Counted(slots, "slot")} ({unrealised} unrealised), {Counted(Cohorts.Length, "cohort")} "
-               + $"({annotatedCohorts} annotated), {Counted(Entities.Length, "entity", "entities")}; "
+        return $"{PlanId}: {Counted(Instances.Length, "instance")} ({annotated} annotated, {nominal} nominal), "
+               + $"{Counted(Series.Length, "series", "series")} of {Counted(slots, "slot")}, "
+               + $"{Counted(Cohorts.Length, "cohort")} ({annotatedCohorts} annotated), "
+               + $"{Counted(Entities.Length, "entity", "entities")}; "
                + $"vocabulary core {Vocabulary.CoreVersion}, {namespaces}, digest {Vocabulary.Digest}";
     }
 

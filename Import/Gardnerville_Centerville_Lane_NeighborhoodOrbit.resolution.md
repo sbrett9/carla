@@ -11,7 +11,7 @@ One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, dri
 | 17 | warn | vehicle class suv | draws one body, vehicle.nissan.patrol, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class van | draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class orbiter | draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = undefined (one supervision state only) over 31 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = undefined (one supervision state only) over 31 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -43,7 +43,7 @@ Normalized mutual information: undefined over 31 entries.
 |---|---|---|---|---|
 | day | 0 | 0 | 31 | 31 |
 
-Degenerate bands: none. Usable bands: none.
+Bands where one state alone occurs: none. Bands where both occur: none.
 
 Remedies:
 
@@ -137,6 +137,33 @@ Remedies:
 | keystone_to_west | ambient_mix | 2026-06-21T10:00:00-07:00 to 2026-06-21T10:37:00-07:00 | -219060584#1 -219060581#4 219060582#2 -108141475#4 -108141475#3 -108141475#2 -108141475#1 | 1479.79 m | 78.8 s |
 | west_to_keystone | ambient_mix | 2026-06-21T10:00:00-07:00 to 2026-06-21T10:37:00-07:00 | 108141475#0 108141475#2 108141475#3 108141475#4 -219060582#2 219060581#4 219060584#1 | 1476.84 m | 78.6 s |
 
+## Vehicle types
+
+Bodies from catalogue `carla-0.10.0-windows` (vehicles.catalogue.json, digest `6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d`). The lights are whether each lights up on the body when the session drives it: headlights by the sun, brake lights and turn signals from SUMO's signals.
+
+- car: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0.45
+- suv: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0.18
+- van: 1 measured body, length 5.92-5.92 m, mean 5.92 m, share 0.07
+- truck: 2 measured bodies, length 7.92-8.00 m, mean 7.96 m, share 0.05
+- orbiter: 1 measured body, length 4.89-4.89 m, mean 4.89 m, share 0
+
+| Type | Body | Length (m) | Body width (m) | Height (m) | Headlights | Brake lights | Turn signals |
+|---|---|---|---|---|---|---|---|
+| car.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| suv.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| van.vehicle.sprinter.mercedes | vehicle.sprinter.mercedes | 5.915 | 1.982 | 2.726 | unlit | unlit | unlit |
+| truck.vehicle.carlacola.actors | vehicle.carlacola.actors | 8.004 | 2.787 | 4.055 | unlit | unlit | unlit |
+| truck.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+| orbiter.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+
 ## Supervision
 
 
@@ -173,7 +200,7 @@ SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-    "sha256": "9c289826492cf0dee6ac28c4c82ae9313d34e3c08714fd454b07c14d126e9a6b"
+    "sha256": "47f8806a0f288094115c068e03f60956c6fe0132617b68d6229ef26d32f47b0f"
   }
 }
 ```

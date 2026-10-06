@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch half hour",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_half_hour.scenario.json",
-    "specification_sha256": "f10375d305058b58d734ef50c3081a417a5ce7324c0a60b4c4c49d7a239a6199",
+    "specification_sha256": "e608c47bd781a330678a37179cce75983ef31e315787ac22581d14d539805449",
     "spec_version": 1
   },
   "findings": [
@@ -23,16 +23,10 @@
       "message": "declares UTC+03:30 and the world's georeference configures -06:59:36 (longitude / 15): more than an hour apart, so the offset and the map probably describe different places"
     },
     {
-      "check": 42,
-      "outcome": "warn",
-      "subject": "capture window morning",
-      "message": "its sun reaches -25.75 deg (refraction_corrected), below -6 deg: not corpus-eligible (11 D11.7). Its behavioural truth is complete; its imagery is not night imagery"
-    },
-    {
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -97,6 +91,12 @@
         "elevation_deg": -25.7497,
         "geometric_elevation_deg": -25.7616,
         "azimuth_deg": 293.8632
+      },
+      "sun_lowest": {
+        "elevation_deg": -25.7497,
+        "elevation_kind": "refraction_corrected",
+        "band": "night",
+        "band_source": "11_Time_And_Illumination.md §4.4"
       }
     }
   ],
@@ -152,7 +152,7 @@
       "base_annotated_rate": 0.0,
       "normalized_mutual_information": null,
       "degenerate_bands": [],
-      "usable_bands": [],
+      "mixed_bands": [],
       "windows": [
         "morning"
       ]
@@ -185,7 +185,7 @@
       "base_annotated_rate": 0.0,
       "normalized_mutual_information": null,
       "degenerate_bands": [],
-      "usable_bands": []
+      "mixed_bands": []
     },
     "normalized_mutual_information": null,
     "bands": {
@@ -216,7 +216,7 @@
     "georeference": "+proj=tmerc +lat_0=39.5 +lon_0=-104.9 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
       "version": "1.27.0",
-      "matched_by": "explicit",
+      "matched_by": "SUMO_HOME",
       "release_agreement": "SameRelease",
       "verdict": "the world was converted by 'Eclipse SUMO netconvert 1.27.0', the same release"
     }
@@ -472,7 +472,7 @@
     "scenario_name": "Street layout, epoch half hour",
     "spec_version": 1,
     "specification": "street_layout_epoch_half_hour.scenario.json",
-    "specification_sha256": "f10375d305058b58d734ef50c3081a417a5ce7324c0a60b4c4c49d7a239a6199",
+    "specification_sha256": "e608c47bd781a330678a37179cce75983ef31e315787ac22581d14d539805449",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -492,7 +492,7 @@
       },
       "supervision": {
         "path": "street_layout_epoch_half_hour.supervision.json",
-        "sha256": "d3ad18bb15b553b4d7cea23b2f00ca70a27d94adb310d5b1aae14ec64e4239d3"
+        "sha256": "e96eaecaa4d58841c837b0e786060fe08d87b3d352b2da1d5c45e6161e18cca6"
       }
     },
     "world": {
@@ -548,9 +548,9 @@
       "content_build_id": "carla-0.10.0-windows"
     },
     "vocabulary": {
-      "core_version": 2,
+      "core_version": 3,
       "namespaces": [],
-      "vocabulary_digest": "86ab5acc216611ce878500401cbb3a04b3c8e19a315794121cd7c1e427ed2873"
+      "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63"
     },
     "traffic": {
       "sumo_seed": 42,

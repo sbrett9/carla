@@ -191,8 +191,8 @@ public sealed class CarlaClient : IAsyncDisposable
     private long _renderSetBlocksUnreadable;
 
     // The supervision from the latest world-observer snapshot: the plan a co-simulation session has
-    // bound, what the author asserts of the vehicle each lent body drew, and the absences in force.
-    // None until a session binds a plan, and for as long as no snapshot carries one. Held on the
+    // bound, and what the author asserts of the vehicle each lent body drew. None until a session
+    // binds a plan, and for as long as no snapshot carries one. Held on the
     // server, never in this process, so every client of the world reads the same truth for a frame;
     // replaced whole on the observer thread, the same instance kept while the block's bytes do not
     // change.
@@ -1796,8 +1796,8 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// <summary>
     /// Put a change to the supervision a co-simulation session holds on the server: the plan it is bound
-    /// from, what the author asserts from now on of the vehicle each named body draws, and the absences
-    /// that open and close. The world observer carries what the server holds on each snapshot from the
+    /// from, and what the author asserts from now on of the vehicle each named body draws. The world
+    /// observer carries what the server holds on each snapshot from the
     /// next frame on (<see cref="GetCachedSupervision"/>), so every client of the world, in any process,
     /// reads the same truth for the same frame. Answers how many of the named bodies the server found
     /// lent and gave their supervision.
@@ -1816,15 +1816,13 @@ public sealed class CarlaClient : IAsyncDisposable
     /// <exception cref="ArgumentException">
     /// The change is one the server refuses: a state other than the vocabulary core's three spellings,
     /// an unlabelled body with annotations or an annotated one with none, an instance unnamed, or a
-    /// withdrawal carrying rows or absences. It is refused before it is sent.
+    /// withdrawal carrying rows. It is refused before it is sent.
     /// </exception>
     public Task<uint> UpdateSupervisionAsync(SupervisionUpdate update)
     {
         ArgumentNullException.ThrowIfNull(update.PlanId);
         ArgumentNullException.ThrowIfNull(update.VocabularyDigest);
         ArgumentNullException.ThrowIfNull(update.Actors);
-        ArgumentNullException.ThrowIfNull(update.AbsencesOpened);
-        ArgumentNullException.ThrowIfNull(update.AbsencesClosed);
         if (SupervisionUpdateProblem(update) is { } problem)
         {
             throw new ArgumentException(problem, nameof(update));
@@ -1838,7 +1836,7 @@ public sealed class CarlaClient : IAsyncDisposable
     {
         if (update.PlanId.Length == 0)
         {
-            return update.Actors.Count > 0 || update.AbsencesOpened.Count > 0 || update.AbsencesClosed.Count > 0
+            return update.Actors.Count > 0
                 ? "A change naming no plan withdraws all supervision and carries nothing else."
                 : null;
         }
@@ -1865,9 +1863,7 @@ public sealed class CarlaClient : IAsyncDisposable
             }
         }
 
-        return update.AbsencesOpened.Any(absence => string.IsNullOrEmpty(absence.InstanceId))
-            ? "An absence names no instance."
-            : null;
+        return null;
     }
 
     /// <summary>
@@ -2605,8 +2601,8 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// <summary>
     /// The supervision the latest world-observer snapshot carried: the plan a co-simulation session has
-    /// bound, what the scenario's author asserts of the vehicle each lent body drew, and the absences in
-    /// force for the world. <see cref="ObservedSupervision.None"/> before the first snapshot, and
+    /// bound, and what the scenario's author asserts of the vehicle each lent body drew.
+    /// <see cref="ObservedSupervision.None"/> before the first snapshot, and
     /// whenever no session has bound a plan. Requires the world observer to be running
     /// (StartWorldObserverAsync).
     /// </summary>

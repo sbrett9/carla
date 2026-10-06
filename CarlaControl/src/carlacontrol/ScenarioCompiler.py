@@ -70,6 +70,7 @@ from carlacontrol.AnnotationVocabulary import AnnotationVocabulary
 from carlacontrol.CivilTimeResolver import CivilTimeResolver, ResolvedInstant
 from carlacontrol.CompileFindings import CompileFindings
 from carlacontrol.CompileResult import CompileResult
+from carlacontrol.IlluminationBand import BAND_SOURCE, IlluminationBand
 from carlacontrol.IlluminationLabelAssociation import (
     AssociationEntry,
     IlluminationLabelAssociation,
@@ -794,46 +795,13 @@ class ScenarioCompiler:
             flow_ids=[f["id"] for f in self.flows],
             actor_stops={a["id"]: a["stops"] for a in self.actors},
             actor_phases={a["id"]: a["phase_entries"] for a in self.actors},
-            rota_entries=self.rota_entries, rota_skips=self.rota_skips,
-            rota_templates=self.rota_templates, areas=self.areas,
-            skip_routes=self._skip_routes(), skip_sites=self._skip_sites())
+            rota_entries=self.rota_entries, rota_templates=self.rota_templates, areas=self.areas)
         self.supervision = SupervisionPlanCompiler(self.vocabulary, self.resolver, self.findings)
         self.plan_rows = self.supervision.compile(self.spec.get("supervision"), inputs)
         for area_id in sorted(self.supervision.referenced_areas):
             for warning in self.areas[area_id].get("warnings", []):
                 check = 28 if warning.startswith("V5.7") else 27
                 self.findings.warn(check, f"area {area_id}", warning)
-
-    def _skip_routes(self) -> dict[str, dict]:
-        """The edges each skipped rota occasion would have driven, for its absence's `expected`."""
-        routes = {}
-        for rota_id, skips in self.rota_skips.items():
-            template = self.rota_templates[rota_id]
-            for skip in skips:
-                body = self._substitute(template, skip.subject)
-                where = f"rota {rota_id} skip {skip.entry_id}"
-                route = {key: self.places.single_edge(body[key], f"{where} {key}")
-                         for key in ("from", "to") if key in body}
-                route["via"] = self._via(body.get("via", []), where)
-                routes[skip.entry_id] = route
-        return routes
-
-    def _skip_sites(self) -> dict[str, dict]:
-        """Where each skipped rota occasion is sited, for its absence's `expected`: its subject's
-        place as a lane and a position on it, resolved from the network as a stop at it is.
-
-        The subject is what a series sites a slot at (its area is keyed by it), so the place it names
-        is where the vehicle would have been. A subject naming an edge or several lanes, rather than
-        one lane position, sites the absence at its area alone, and both fields are null.
-        """
-        sites = {}
-        for skips in self.rota_skips.values():
-            for skip in skips:
-                place = self.places.resolved.get(skip.subject)
-                at_lane = place is not None and place.lane is not None and place.end_pos is not None
-                sites[skip.entry_id] = {"site_lane": place.lane if at_lane else None,
-                                        "site_pos_m": place.end_pos if at_lane else None}
-        return sites
 
     # -- stage: epoch and illumination --------------------------------------------------------------------
     def _stage_epoch_and_illumination(self) -> None:
@@ -933,11 +901,14 @@ class ScenarioCompiler:
                                f"written with {opens.sun_date} (calendar_advances "
                                f"{self.epoch.calendar_advances}, policy {self.policy.Name}), so it "
                                "renders under that date's seasonal sun")
+        # Check 42 states a fact and concludes nothing: the lowest the sun reaches over the window, and
+        # the band that elevation falls in, so the author knows what light the window is under. What
+        # to make of it is the author's; the report carries no pass mark (the charter's §4b).
         lowest = min(opens.elevation_deg, closes.elevation_deg)
-        if lowest < -6.0:
-            self.findings.warn(42, where, f"its sun reaches {lowest:.2f} deg ({WindowSun.ELEVATION_KIND}),"
-                               " below -6 deg: not corpus-eligible (11 D11.7). Its behavioural truth "
-                               "is complete; its imagery is not night imagery")
+        record["sun_lowest"] = {"elevation_deg": round(lowest, 4),
+                                "elevation_kind": WindowSun.ELEVATION_KIND,
+                                "band": IlluminationBand.of(lowest),
+                                "band_source": BAND_SOURCE}
         if bool(self.policy.Advances):
             self.findings.warn(39, where, f"the default policy advances the sun, from "
                                f"{opens.elevation_deg:.2f} deg at {begin.civil} to "
@@ -1015,17 +986,16 @@ class ScenarioCompiler:
         self.report.set("dry_run", run.report())
 
     def _planned_vehicles(self) -> list[PlannedVehicle]:
-        """Every vehicle the plan names: each instance's participants, annotated or nominal, and every
-        realised slot of every series, whose count is an absence's counter-evidence. A flow's members
-        are unknown until the run, so no cohort names one."""
+        """Every vehicle the plan names: each instance's participants, annotated or nominal, and the
+        vehicle of every slot of every series. A flow's members are unknown until the run, so no
+        cohort names one."""
         refs: dict[str, list[str]] = {}
         for row in self.plan_rows["instances"]:
             for participant in row["participants"]:
                 refs.setdefault(participant["entity_id"], []).append(row["instance_id"])
         for series in self.plan_rows["series"]:
             for slot in series["slots"]:
-                if slot["realised_by"] is not None:
-                    refs.setdefault(slot["realised_by"], []).append(f"series {series['series_id']}")
+                refs.setdefault(slot["entity_id"], []).append(f"series {series['series_id']}")
         actors = {actor["id"]: actor for actor in self.actors}
         planned = [PlannedVehicle(vehicle_id, actors[vehicle_id]["where"],
                                   actors[vehicle_id]["depart"],

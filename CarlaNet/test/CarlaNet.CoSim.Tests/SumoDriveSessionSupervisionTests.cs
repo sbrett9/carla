@@ -24,9 +24,6 @@ public sealed class SumoDriveSessionSupervisionTests
     private static readonly SupervisionInForce Ordinary = new(SupervisionState.Nominal,
         [new AnnotationInForce("Succession/pi_second_haul", ["test:routine_haul"], "haul", "subject")]);
 
-    private static readonly AbsenceInForce Unmanned = new(
-        "Succession/pi_post_unmanned", ["test:post_unmanned"], ["post_1"], CoreVocabulary.VacancyPhase);
-
     private readonly ITestOutputHelper _output;
 
     public SumoDriveSessionSupervisionTests(ITestOutputHelper output)
@@ -43,23 +40,14 @@ public sealed class SumoDriveSessionSupervisionTests
         SumoDriveSessionOptions options = Options(CoSimFixtures.SuccessionScenario, world);
         options.World = carla;
 
-        long absenceClosedAfter;
         using (SumoDriveSession session = SumoDriveSession.Start(options))
         {
             // Bound, and every interval stated, before the first frame.
             session.Supervision.Bind(Plan);
             session.Supervision.Set("first", Transit);
             session.Supervision.Set("second", Ordinary);
-            session.Supervision.Open(Unmanned);
 
-            int step = 0;
-            for (; step < 60 && session.Advance(); step++)
-            {
-            }
-
-            session.Supervision.Close(Unmanned.InstanceId);
-            absenceClosedAfter = session.Report.Ticks;
-            for (; step < 400 && session.Advance(); step++)
+            for (int step = 0; step < 400 && session.Advance(); step++)
             {
             }
 
@@ -82,29 +70,22 @@ public sealed class SumoDriveSessionSupervisionTests
                 Assert.Equal(expected.OrderBy(pair => pair.Key), published.ByActor.OrderBy(pair => pair.Key));
                 sawFirst |= lent.Values.Any(vehicle => vehicle.VehicleId == "first");
                 sawSecond |= lent.Values.Any(vehicle => vehicle.VehicleId == "second");
-
-                // The absence is the world's, on every frame until it closed and on none after.
-                if (frame <= (ulong)absenceClosedAfter)
-                {
-                    Assert.Equal(Unmanned, Assert.Single(published.Absences));
-                }
-                else
-                {
-                    Assert.Empty(published.Absences);
-                }
             }
 
             Assert.True(sawFirst && sawSecond, "the run never drew both vehicles");
 
             // Put fresh, once, before the first cue; then only on a change: the body lent to each
-            // vehicle, given back between them, and the absence closing.
+            // vehicle, given back between them.
             (SupervisionChange opening, long openedAt) = carla.SupervisionWrites[0];
             Assert.True(opening.Fresh);
             Assert.Equal(0, openedAt);
             Assert.Equal(Plan, opening.Plan);
             Assert.Single(carla.SupervisionWrites, write => write.Change.Fresh);
-            Assert.Contains(carla.SupervisionWrites, write => write.Change.AbsencesClosed.Contains(Unmanned.InstanceId));
-            Assert.True(carla.SupervisionWrites.Count <= 6,
+            // Every change after the fresh opening names bodies, and no change names anything else: there is
+            // no row for the world (06 §3.5). The opening may name none, put before any body is lent.
+            Assert.All(carla.SupervisionWrites.SkipLast(1),
+                       write => Assert.True(write.Change.Fresh || write.Change.Bodies.Count > 0));
+            Assert.True(carla.SupervisionWrites.Count <= 5,
                         $"{carla.SupervisionWrites.Count} changes put over {frames} ticks");
             // No body is ever named unlabelled: the one body was given back between its two vehicles, and
             // the server dropped what it carried then, so an unlabelled vehicle cost nothing to put.
@@ -115,7 +96,7 @@ public sealed class SumoDriveSessionSupervisionTests
             Assert.Null(session.Report.SupervisionRefused);
         }
 
-        // Disposed: the plan and the absences withdrawn, and the bodies gone with their own.
+        // Disposed: the plan withdrawn, and the bodies gone with their own supervision.
         Assert.Null(carla.SupervisionPlanHeld);
         Assert.Equal(0, carla.SupervisedBodies);
         Assert.Null(carla.SupervisionWrites[^1].Change.Plan);
@@ -229,7 +210,7 @@ public sealed class SumoDriveSessionSupervisionTests
 
         using SumoDriveSession session = SumoDriveSession.Start(options);
         session.Supervision.Bind(Plan);
-        session.Supervision.Open(Unmanned);
+        session.Supervision.Set("first", Transit);
         for (int step = 0; step < 50 && session.Advance(); step++)
         {
         }

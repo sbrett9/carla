@@ -50,7 +50,7 @@ DEFECT_ROW = "supervision_defect"
 BOUND_FIELDS = ("committed_start_s", "observed_start_s", "begun_before_window", "closed_by", "closed_s",
                 "committed_end_s")
 
-Triple = tuple[str, "str | None", str]
+Triple = tuple[str, str, str]
 
 
 class ManifestUnreadable(ValueError):
@@ -58,13 +58,13 @@ class ManifestUnreadable(ValueError):
 
 
 def describe_triple(triple: Triple) -> str:
-    """A triple as one reads it: instance, participant -- none for an absence's vacancy -- and phase."""
+    """A triple as one reads it: instance, participant and phase."""
     instance_id, participant, phase = triple
-    return f"({instance_id}, {participant if participant is not None else 'no participant'}, {phase})"
+    return f"({instance_id}, {participant}, {phase})"
 
 
 def _triple(row: dict) -> Triple:
-    return (str(row["instance_id"]), row.get("participant"), str(row["phase"]))
+    return (str(row["instance_id"]), str(row["participant"]), str(row["phase"]))
 
 
 @dataclass

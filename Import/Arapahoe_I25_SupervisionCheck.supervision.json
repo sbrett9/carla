@@ -7,11 +7,11 @@
   "network_digest": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
   "config_digest": "79a64f258e881cdb5d81638b6c4a95b467d036551ccdefc74f823bd9b1a856ff",
   "additional_digest": null,
-  "vocabulary_version": 2,
-  "vocabulary_digest": "f4ee7b480df7209dfa2404bced4ff6d0504692e5e4cbc03d9781326c14a604ff",
+  "vocabulary_version": 3,
+  "vocabulary_digest": "19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197",
   "vocabulary": {
     "core": {
-      "vocabulary_version": 2,
+      "vocabulary_version": 3,
       "source": "06_Truth_And_Annotation.md §3.7",
       "terms": {
         "supervision_state": [
@@ -21,12 +21,7 @@
         ],
         "subject_kind": [
           "entity",
-          "cohort",
-          "slot"
-        ],
-        "realisation": [
-          "present",
-          "absent"
+          "cohort"
         ],
         "interval_onset": [
           "declared",
@@ -38,19 +33,10 @@
           "entity_arrived",
           "sumo_removed",
           "never_inserted",
-          "slot_unrealised",
           "physical_predicate_never_held",
           "render_released",
           "capture_window_end",
           "scenario_end"
-        ],
-        "observability_outcome": [
-          "observed",
-          "out_of_frame",
-          "occluded",
-          "not_rendered",
-          "site_unobserved",
-          "beyond_draw_distance"
         ],
         "illumination_band": [
           "day",
@@ -66,9 +52,6 @@
         ],
         "reserved_role": [
           "subject"
-        ],
-        "reserved_phase": [
-          "vacancy"
         ],
         "interval_anchor": [
           "depart",
@@ -105,9 +88,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A car pulls to the kerb and waits there for minutes, with nothing to deliver or collect, then drives on.",
             "parameters": {
               "dwell_s": {
@@ -134,9 +114,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A car drives through the scene without stopping: in from East Arapahoe Road and out to the north along South Yosemite Street."
           },
           {
@@ -145,9 +122,6 @@
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
             "hard_negative_for": [
@@ -162,7 +136,6 @@
     {
       "instance_id": "Arapahoe_I25_SupervisionCheck/kerbside_dwell",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "check:kerbside_dwell"
       ],
@@ -171,8 +144,6 @@
       },
       "hard_negative_for": null,
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -208,15 +179,12 @@
     {
       "instance_id": "Arapahoe_I25_SupervisionCheck/through_transit",
       "supervision": "annotated",
-      "realisation": "present",
       "labels": [
         "check:through_transit"
       ],
       "parameters": {},
       "hard_negative_for": null,
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {
@@ -267,7 +235,6 @@
     {
       "instance_id": "Arapahoe_I25_SupervisionCheck/brief_stop",
       "supervision": "nominal",
-      "realisation": "present",
       "labels": [
         "check:brief_kerb_stop"
       ],
@@ -276,8 +243,6 @@
         "check:kerbside_dwell"
       ],
       "counterfactual": null,
-      "series_ref": null,
-      "slot_ref": null,
       "aoi_refs": [],
       "participants": [
         {

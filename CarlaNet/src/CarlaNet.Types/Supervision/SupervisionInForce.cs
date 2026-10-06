@@ -1,10 +1,10 @@
 namespace CarlaNet.Types.Supervision;
 
-// The supervision in force on a frame (06_Truth_And_Annotation.md §3.1-§3.5, §8.2): what the scenario's
-// author asserts of each vehicle, and the absences declared for the world as a whole. One shape for
-// every side of it -- what a drive session puts in force, what the server carries on each world-observer
-// snapshot, and what a reader decodes -- so the truth a recorder writes is the truth the session named,
-// field for field.
+// The supervision in force on a frame (06_Truth_And_Annotation.md §3.1-§3.4, §8.2): what the scenario's
+// author asserts of each vehicle. One shape for every side of it -- what a drive session puts in force,
+// what the server carries on each world-observer snapshot, and what a reader decodes -- so the truth a
+// recorder writes is the truth the session named, field for field. Every row is a vehicle's: nothing is
+// held for the world apart from the plan it is all bound from (06 §3.5).
 
 /// <summary>
 /// The plan supervision is bound from, by the identity every record of it carries: the plan, and the
@@ -83,28 +83,4 @@ public sealed record SupervisionInForce(SupervisionState State, IReadOnlyList<An
 
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(State, Annotations.Count);
-}
-
-/// <summary>
-/// An absence in force: an occasion the author declared, which passed with no vehicle (06 §3.5).
-/// World-scoped and never a vehicle's, because there is no vehicle: nothing may stand for one that does
-/// not exist (06 D6.6).
-/// </summary>
-/// <param name="InstanceId">The instance, as the plan names it.</param>
-/// <param name="Labels">The terms it is labelled with.</param>
-/// <param name="Areas">The areas of interest it is sited at.</param>
-/// <param name="Phase">The phase of its interval: the vacancy (06 D6.35).</param>
-public sealed record AbsenceInForce(string InstanceId, IReadOnlyList<string> Labels, IReadOnlyList<string> Areas,
-                                    string Phase)
-{
-    /// <inheritdoc/>
-    public bool Equals(AbsenceInForce? other) =>
-        other is not null
-        && InstanceId == other.InstanceId
-        && Phase == other.Phase
-        && Labels.SequenceEqual(other.Labels)
-        && Areas.SequenceEqual(other.Areas);
-
-    /// <inheritdoc/>
-    public override int GetHashCode() => HashCode.Combine(InstanceId, Phase, Labels.Count, Areas.Count);
 }

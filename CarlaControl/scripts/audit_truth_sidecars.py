@@ -12,9 +12,9 @@ whole.
 
 Where the run had a supervision plan -- a sidecar names one, or says its supervision was unknown --
 every SUMO vehicle record must carry a `<_supervision>` in one of the three states, consistent with
-the instances it names, and every sidecar naming the plan its world-scoped element; a sidecar saying
-nothing of supervision in such a run is a defect too. Sidecars whose supervision was unknown are
-counted, not faulted: the run's closeout gates them.
+the instances it names; a sidecar saying nothing of supervision in such a run is a defect too, and so
+is a supervision element outside a vehicle's record, which would be a label with no vehicle. Sidecars
+whose supervision was unknown are counted, not faulted: the run's closeout gates them.
 
 Every vehicle record must say whether the vehicle is in the camera's picture (`in_frame`: `wholly`,
 `partly`, `none` or `behind_camera`) and, where its five occlusion fields are absent, why

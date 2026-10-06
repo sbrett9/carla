@@ -43,10 +43,12 @@ def test_the_measured_figure_is_reproduced_from_its_own_table():
     assert table["normalized_mutual_information"] == 0.600
 
 
-def test_the_degenerate_and_usable_buckets_are_named():
+def test_the_bands_where_one_state_alone_occurs_and_where_both_do_are_named():
     table = IlluminationLabelAssociation._table(bahonar_pairs())
     assert {"02", "11"} <= set(table["degenerate_bands"])
-    assert set(table["usable_bands"]) == {"08", "10"}
+    assert set(table["mixed_bands"]) == {"08", "10"}
+    # Every key is a count, a ratio or a list of bands: no word that judges what they mean.
+    assert "usable_bands" not in table
 
 
 def test_one_supervision_state_leaves_the_statistic_undefined_rather_than_zero():

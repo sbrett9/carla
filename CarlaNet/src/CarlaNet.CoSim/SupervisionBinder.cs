@@ -7,8 +7,8 @@ namespace CarlaNet.CoSim;
 
 /// <summary>
 /// Binds the supervision plan to what SUMO does in a run: opens and closes each of the plan's intervals
-/// on the events that commit it, at the bridge's clock, and states what is in force for each vehicle,
-/// and for the world, as it changes, for the session to put on the server.
+/// on the events that commit it, at the bridge's clock, and states what is in force for each vehicle as
+/// it changes, for the session to put on the server.
 /// </summary>
 /// <remarks>
 /// <para><b>It binds rows; it never makes one</b> (<c>06_Truth_And_Annotation.md</c> §3.6, D6.8). It is
@@ -40,8 +40,8 @@ namespace CarlaNet.CoSim;
 /// ends it -- or <c>physical_predicate_never_held</c> where a stop it opened on ended while the body was
 /// drawn and never stood still; <c>entity_arrived</c> where SUMO lists the vehicle among its arrivals;
 /// <c>sumo_removed</c> where it took the vehicle out otherwise -- a teleport off the network, or gone between
-/// two steps; <c>never_inserted</c> where SUMO gave up inserting it; <c>slot_unrealised</c> at an absence's
-/// declared end; <c>capture_window_end</c> or <c>scenario_end</c> where the session ends with it open. A
+/// two steps; <c>never_inserted</c> where SUMO gave up inserting it; <c>capture_window_end</c> or
+/// <c>scenario_end</c> where the session ends with it open. A
 /// body under an optional render-set limit is lost and regained without closing anything: the annotation
 /// is the SUMO vehicle's for its life, and a span with no body is recorded as not drawn, as the owner
 /// ruled. <c>render_released</c>, a body the CARLA side lost, has no producer yet.</para>
@@ -61,9 +61,9 @@ namespace CarlaNet.CoSim;
 /// <c>series:&lt;series_id&gt;</c>, as the plan's entities refer to it), and of its flow's cohort if the
 /// flow is annotated (named <c>cohort:&lt;flow_id&gt;</c>, for every <c>&lt;flow_id&gt;.&lt;n&gt;</c>). The state
 /// is annotated if any of them is, otherwise nominal if any is, and the annotations are those of that
-/// state. An unlabelled vehicle is never stated. Absences open and close on their declared seconds. Each
-/// change takes effect from the frame at its instant: it is put in force once the next tick to be rendered
-/// has reached it.</para>
+/// state. An unlabelled vehicle is never stated, and nothing is stated for the world: every label follows
+/// a vehicle (06 §3.5). Each change takes effect from the frame at its instant: it is put in force once the
+/// next tick to be rendered has reached it.</para>
 ///
 /// <para><b>A plan subject SUMO never inserts fails the run</b>, as the owner ruled: its intervals are
 /// closed <c>never_inserted</c>, and the step that showed it refuses, naming the vehicle.</para>
@@ -272,18 +272,6 @@ public sealed class SupervisionBinder : ISumoStepObserver
     {
         foreach (PatternInstance instance in plan.Instances)
         {
-            if (instance.Realisation == Realisation.Absent)
-            {
-                foreach (PlannedInterval vacancy in instance.Intervals)
-                {
-                    var interval = new BoundInterval(instance, vacancy, string.Empty, null);
-                    _intervals.Add(interval);
-                    Declare(interval);
-                }
-
-                continue;
-            }
-
             Dictionary<string, (Subject Subject, string Role)> byEntity = new(StringComparer.Ordinal);
             foreach (InstanceParticipant participant in instance.Participants)
             {
@@ -316,10 +304,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
         {
             foreach (SeriesSlot slot in series.Slots)
             {
-                if (slot.RealisedBy is { } member)
-                {
-                    SubjectOf(member).Series.Add(series);
-                }
+                SubjectOf(slot.EntityId).Series.Add(series);
             }
         }
 
@@ -350,7 +335,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
         return subject;
     }
 
-    /// <summary>An interval that opens and closes on its declared seconds: unanchored, or an absence's vacancy.</summary>
+    /// <summary>An unanchored interval, which opens and closes on its declared seconds.</summary>
     private void Declare(BoundInterval interval)
     {
         if (interval.Planned.DeclaredStartSeconds is { } start)
@@ -372,30 +357,15 @@ public sealed class SupervisionBinder : ISumoStepObserver
         while (_nextTimed < _timed.Count && _timed[_nextTimed].At <= frameSeconds + Tolerance)
         {
             (double at, BoundInterval interval, bool opens) = _timed[_nextTimed++];
-            bool absence = interval.Subject is null;
             if (opens && interval.Status == SupervisionIntervalStatus.Planned)
             {
                 Open(interval, committed: null, startedAt: at);
-                if (absence)
-                {
-                    Schedule(new Change(at, Opened: Absence(interval)));
-                }
-                else
-                {
-                    Restate(interval.Subject!.Id, at);
-                }
+                Restate(interval.Subject.Id, at);
             }
             else if (!opens && interval.Status == SupervisionIntervalStatus.Open)
             {
-                Close(interval, absence ? ClosedBy.SlotUnrealised : ClosedBy.Trigger, at, committedEnd: null);
-                if (absence)
-                {
-                    Schedule(new Change(at, Closed: interval.Instance.InstanceId));
-                }
-                else
-                {
-                    Restate(interval.Subject!.Id, at);
-                }
+                Close(interval, ClosedBy.Trigger, at, committedEnd: null);
+                Restate(interval.Subject.Id, at);
             }
         }
     }
@@ -653,12 +623,12 @@ public sealed class SupervisionBinder : ISumoStepObserver
 
         foreach (BoundInterval interval in _intervals)
         {
-            if (interval.Status != SupervisionIntervalStatus.Open || interval.Subject is not { Alive: true } subject)
+            if (interval.Status != SupervisionIntervalStatus.Open || !interval.Subject.Alive)
             {
                 continue;
             }
 
-            bool drawn = step.RenderedVehicleIds.Contains(subject.Id);
+            bool drawn = step.RenderedVehicleIds.Contains(interval.Subject.Id);
             if (!drawn && interval.GapFrom is null)
             {
                 interval.GapFrom = at;
@@ -686,7 +656,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
             _drawn.Add(vehicle.SumoId);
         }
 
-        foreach (BoundInterval interval in _watchingEntry.Where(interval => _drawn.Contains(interval.Subject!.Id)).ToList())
+        foreach (BoundInterval interval in _watchingEntry.Where(interval => _drawn.Contains(interval.Subject.Id)).ToList())
         {
             interval.ObservedStartSeconds = frame.SimulatedTimeSeconds;
             interval.ObservedStartFrame = frame.Frame;
@@ -694,7 +664,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
             if (interval.CommittedStartSeconds is { } committed
                 && Math.Abs(frame.SimulatedTimeSeconds - committed) > _worldDeltaSeconds / 2.0)
             {
-                _defects.Add($"'{interval.Subject!.Id}' ({interval.Instance.InstanceId}, {interval.Planned.Phase}): "
+                _defects.Add($"'{interval.Subject.Id}' ({interval.Instance.InstanceId}, {interval.Planned.Phase}): "
                              + $"SUMO inserted it at {Seconds(committed)} s and the first frame drew it at "
                              + $"{Seconds(frame.SimulatedTimeSeconds)} s; a vehicle is drawn from the frame SUMO "
                              + "first reports it in, so the two are one frame (03 D3.6)");
@@ -712,7 +682,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
         foreach (VehiclePose pose in frame.AppliedPoses)
         {
             foreach (BoundInterval interval in _watchingStandstill.Where(
-                         interval => interval.Subject!.Id == pose.VehicleId).ToList())
+                         interval => interval.Subject.Id == pose.VehicleId).ToList())
             {
                 interval.SawAppliedPose = true;
                 double speed = Math.Sqrt((pose.VelocityX * pose.VelocityX) + (pose.VelocityY * pose.VelocityY)
@@ -737,7 +707,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
         interval.Status = SupervisionIntervalStatus.Open;
         interval.CommittedStartSeconds = interval.Planned.Anchor is null ? null : committed;
         interval.BegunBeforeWindow = startedAt is not { } started || started < _windowOpensAt() - Tolerance;
-        if (!interval.BegunBeforeWindow && interval.Subject is not null)
+        if (!interval.BegunBeforeWindow)
         {
             switch (interval.Planned.Anchor?.Start.Event)
             {
@@ -784,7 +754,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
 
     /// <summary>State a vehicle's supervision as of an instant, to be put in force from the frame at it.</summary>
     private void Restate(string vehicleId, double at) =>
-        Schedule(new Change(at, VehicleId: vehicleId, Supervision: InForce(vehicleId)));
+        Schedule(new Change(at, vehicleId, InForce(vehicleId)));
 
     private void Schedule(Change change) => _pending.Enqueue(change, (change.At, _order++));
 
@@ -803,18 +773,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
                && due.At <= _nextTickSeconds + Tolerance)
         {
             _pending.Dequeue();
-            if (change.VehicleId is { } vehicle)
-            {
-                _supervision.Set(vehicle, change.Supervision!);
-            }
-            else if (change.Opened is { } absence)
-            {
-                _supervision.Open(absence);
-            }
-            else if (change.Closed is { } closed)
-            {
-                _supervision.Close(closed);
-            }
+            _supervision.Set(change.VehicleId, change.Supervision);
         }
     }
 
@@ -879,9 +838,6 @@ public sealed class SupervisionBinder : ISumoStepObserver
             : null;
     }
 
-    private static AbsenceInForce Absence(BoundInterval interval) =>
-        new(interval.Instance.InstanceId, interval.Instance.Labels, interval.Instance.AoiRefs, interval.Planned.Phase);
-
     /// <summary>A plan subject one of whose intervals is anchored to a stop, or null.</summary>
     private Subject? StopWatcher(string id) =>
         _subjects.TryGetValue(id, out Subject? subject)
@@ -945,16 +901,11 @@ public sealed class SupervisionBinder : ISumoStepObserver
 
     private sealed record Participation(PatternInstance Instance, string Role, List<BoundInterval> Intervals);
 
-    /// <summary>One change to what is in force, to take effect from the frame at its instant.</summary>
-    private readonly record struct Change(
-        double At,
-        string? VehicleId = null,
-        SupervisionInForce? Supervision = null,
-        AbsenceInForce? Opened = null,
-        string? Closed = null);
+    /// <summary>One change to what is in force for a vehicle, to take effect from the frame at its instant.</summary>
+    private readonly record struct Change(double At, string VehicleId, SupervisionInForce Supervision);
 
     /// <summary>One of the plan's intervals, and what the run has bound of it.</summary>
-    private sealed class BoundInterval(PatternInstance instance, PlannedInterval planned, string role, Subject? subject)
+    private sealed class BoundInterval(PatternInstance instance, PlannedInterval planned, string role, Subject subject)
     {
         public PatternInstance Instance { get; } = instance;
 
@@ -962,8 +913,8 @@ public sealed class SupervisionBinder : ISumoStepObserver
 
         public string Role { get; } = role;
 
-        /// <summary>Its participant; null for an absence's vacancy.</summary>
-        public Subject? Subject { get; } = subject;
+        /// <summary>Its participant.</summary>
+        public Subject Subject { get; } = subject;
 
         public SupervisionIntervalStatus Status { get; set; }
 
@@ -994,7 +945,6 @@ public sealed class SupervisionBinder : ISumoStepObserver
             Phase = Planned.Phase,
             Role = Role,
             Supervision = Instance.Supervision,
-            Realisation = Instance.Realisation,
             Labels = Instance.Labels,
             Anchor = Planned.Anchor,
             DeclaredStartSeconds = Planned.DeclaredStartSeconds,

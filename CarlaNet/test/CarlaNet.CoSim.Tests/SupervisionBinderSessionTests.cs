@@ -43,8 +43,7 @@ public sealed class SupervisionBinderSessionTests
         SupervisionIntervalRecord exit = IntervalOf(run, "exit");
         Assert.Equal((10.0, ClosedBy.EntityArrived, 16.0), (exit.CommittedStartSeconds, exit.ClosedBy, exit.ClosedAtSeconds));
 
-        SupervisionIntervalRecord vacancy = IntervalOf(run, "vacancy");
-        Assert.Equal((ClosedBy.SlotUnrealised, 9.0), (vacancy.ClosedBy, vacancy.ClosedAtSeconds));
+        Assert.Equal(["approach", "exit", "standoff"], run.Intervals.Select(interval => interval.Phase).Order());
         Assert.All(run.Intervals, interval => Assert.False(interval.BegunBeforeWindow));
         Assert.Empty(run.Defects);
 
@@ -62,10 +61,8 @@ public sealed class SupervisionBinderSessionTests
         Assert.Equal("annotated cohort:corridor:", frames.At(12.0, "corridor.2"));
         Assert.Equal("unlabelled", frames.At(4.95, "corridor.0"));
         Assert.Equal("annotated cohort:corridor:", frames.At(5.0, "corridor.0"));
-        Assert.Equal(string.Empty, frames.AbsencesAt(4.95));
-        Assert.Equal("Supervised/missing", frames.AbsencesAt(5.0));
-        Assert.Equal("Supervised/missing", frames.AbsencesAt(8.95));
-        Assert.Equal(string.Empty, frames.AbsencesAt(9.0));
+        // Every row the server was told is a vehicle's: nothing is held for the world (06 §3.5).
+        Assert.All(frames.Vehicles(), vehicle => Assert.NotEqual(string.Empty, vehicle));
 
         // Asked of SUMO: the dweller's completed stops as its stop started and as it ended, and the left-turner's
         // route index on insertion and on reaching its second part -- not on the junction's internal edge, and
@@ -121,8 +118,6 @@ public sealed class SupervisionBinderSessionTests
         // Over before the window: its declared seconds, and nothing in force on any frame.
         SupervisionIntervalRecord approach = IntervalOf(run, "approach");
         Assert.Equal((ClosedBy.Trigger, 3.0, true), (approach.ClosedBy, approach.ClosedAtSeconds, approach.BegunBeforeWindow));
-        Assert.Equal(ClosedBy.SlotUnrealised, IntervalOf(run, "vacancy").ClosedBy);
-        Assert.Equal(string.Empty, frames.AbsencesAt(15.0));
         Assert.Empty(run.Defects);
     }
 
@@ -219,8 +214,8 @@ public sealed class SupervisionBinderSessionTests
 
     /// <summary>
     /// The fixture's every kind of subject, compiled: the dweller's stop and an unanchored approach, the
-    /// left-turner's second route part, a nominal instance and a nominal series member, an absence and an
-    /// annotated flow.
+    /// left-turner's second route part, a nominal instance and a nominal series member, and an annotated
+    /// flow. The series' second occasion is one the schedule skipped, so it has no slot (06 §3.5).
     /// </summary>
     internal static CompiledFixture Supervised()
     {
@@ -235,9 +230,8 @@ public sealed class SupervisionBinderSessionTests
                 Instance("transit", "annotated", ["test:transit"], [("passer", "subject")],
                          Interval("passer", "exit", Anchor(Phase(1, 1, "turn_west")))),
                 Instance("haul", "nominal", ["test:routine"], [("parker", "subject")]),
-                Absence("missing", "relief", "s2", "s2", ["test:missing"], "site", 5.0, 9.0),
             ],
-            series: [Series("relief", "nominal", ["test:posting"], ("s1", "passer", 2.0, 30.0), ("s2", null, 5.0, 9.0))],
+            series: [Series("relief", "nominal", ["test:posting"], ("s1", "passer", 2.0, 30.0))],
             cohorts: [Cohort("corridor", "annotated", "test:convoy")],
             entities:
             [
@@ -337,7 +331,7 @@ public sealed class SupervisionBinderSessionTests
     /// </summary>
     private sealed class FrameSupervision : ISumoStepObserver
     {
-        private readonly Dictionary<long, (Dictionary<string, string> Vehicles, string Absences)> _frames = [];
+        private readonly Dictionary<long, Dictionary<string, string>> _frames = [];
 
         public DriveSupervision? Table { get; set; }
 
@@ -354,9 +348,8 @@ public sealed class SupervisionBinderSessionTests
         public void OnFrameRendered(RenderedFrameRecord frame)
         {
             DriveSupervision table = Table!;
-            _frames[Key(frame.SimulatedTimeSeconds)] = (
-                table.Vehicles.ToDictionary(entry => entry.Key, entry => Describe(entry.Value)),
-                string.Join(", ", table.Absences.Select(absence => absence.InstanceId)));
+            _frames[Key(frame.SimulatedTimeSeconds)] =
+                table.Vehicles.ToDictionary(entry => entry.Key, entry => Describe(entry.Value));
         }
 
         public void OnSessionEnded(SessionEndRecord end)
@@ -364,9 +357,10 @@ public sealed class SupervisionBinderSessionTests
         }
 
         public string At(double seconds, string vehicle) =>
-            _frames[Key(seconds)].Vehicles.GetValueOrDefault(vehicle, "unlabelled");
+            _frames[Key(seconds)].GetValueOrDefault(vehicle, "unlabelled");
 
-        public string AbsencesAt(double seconds) => _frames[Key(seconds)].Absences;
+        /// <summary>Every vehicle id any frame held a row for.</summary>
+        public IEnumerable<string> Vehicles() => _frames.Values.SelectMany(frame => frame.Keys).Distinct();
 
         private static long Key(double seconds) => (long)Math.Round(seconds * 1000.0, MidpointRounding.AwayFromZero);
     }

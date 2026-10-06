@@ -7,8 +7,8 @@ owner checks supervision on live, and compiles it with the scenario compiler. He
 * **`Import/` is the generator's output**, byte for byte, as the shipped scenarios are
   (`07_Scenario_Authoring.md` §8.5), the run configuration written beside it included.
 * **The plan carries an annotated dwell, an annotated transit and a nominal matched negative**, each
-  interval anchored to the event that commits it, and no series or absence, because the Arapahoe
-  package publishes no area of interest a slot could be sited at.
+  interval anchored to the event that commits it, and no series, because the Arapahoe package
+  publishes no area of interest a slot could be sited at.
 * **Its two capture windows lie in two illumination bands**, and every planned vehicle passes the
   compile's SUMO-only run.
 * **The plan binds in a session**: driven world-less by a real SUMO, as the binder's own tests are, the
@@ -122,8 +122,8 @@ def test_the_plan_carries_a_dwell_a_transit_and_a_nominal_matched_negative():
             phases["past_the_kerb"]["anchor"]["end"]["event"]) == ("phase:1", "phase:2")
     assert instances["brief_stop"]["hard_negative_for"] == ["check:kerbside_dwell"]
     assert instances["kerbside_dwell"]["parameters"] == {"dwell_s": 120}
-    # No series and no absence: a slot is sited at an area, and the world publishes none.
-    assert plan["series"] == [] and all(row["realisation"] == "present" for row in plan["instances"])
+    # No series: a slot is sited at an area, and the world publishes none. Every row is a vehicle's.
+    assert plan["series"] == [] and all(row["participants"] for row in plan["instances"])
     if PACKAGE.exists():
         areas = json.loads(zipfile.ZipFile(PACKAGE).read("areas.resolved.json"))["areas"]
         assert areas == []

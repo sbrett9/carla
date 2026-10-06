@@ -1,7 +1,7 @@
 """The two-run manifest diff: two runs of one scenario name the same supervision rows (06 D6.8).
 
 The fixtures are the manifests of three real runs of one supervised scenario -- the fixture cross
-under a plan with a stop-anchored dwell, an unanchored approach, a route-part transit and an absence --
+under a plan with a stop-anchored dwell, an unanchored approach and a route-part transit --
 written by `CarlaNet.CoSim.RunManifestWriter` against SUMO with no CARLA: at a 1 s SUMO step, at a
 0.5 s step, and at 1 s with the capture window opening at 15 s, the three ways the binder's own D6.8
 test runs it. Only the absolute paths in their opening rows were cut to file names. Asserted:
@@ -42,7 +42,6 @@ TOOL = _REPO / "CarlaControl" / "scripts" / "diff_run_manifests.py"
 
 STANDOFF = ("Supervised/standoff", "dweller", "standoff")
 EXIT = ("Supervised/transit", "passer", "exit")
-VACANCY = ("Supervised/missing", None, "vacancy")
 APPROACH = ("Supervised/approach", "dweller", "approach")
 
 
@@ -54,7 +53,7 @@ def run_tool(first: Path, second: Path) -> subprocess.CompletedProcess:
 def test_two_runs_at_different_steps_name_the_same_triples_and_bind_them_at_different_times():
     whole, finer = read_manifest(WHOLE), read_manifest(FINER)
     assert whole.closed and finer.closed
-    assert whole.named == finer.named == set(whole.planned) == {STANDOFF, EXIT, VACANCY, APPROACH}
+    assert whole.named == finer.named == set(whole.planned) == {STANDOFF, EXIT, APPROACH}
 
     result = diff(whole, finer)
     assert result.same, result.differences

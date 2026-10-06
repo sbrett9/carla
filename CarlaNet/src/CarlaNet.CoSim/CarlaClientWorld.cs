@@ -316,10 +316,7 @@ public sealed class CarlaClientWorld : ICarlaWorld
             change.Plan?.PlanId ?? string.Empty,
             (uint)(change.Plan?.VocabularyVersion ?? 0),
             change.Plan?.VocabularyDigest ?? string.Empty,
-            actors,
-            [.. change.AbsencesOpened.Select(absence => new SupervisionUpdateAbsence(
-                absence.InstanceId, [.. absence.Labels], [.. absence.Areas], absence.Phase))],
-            [.. change.AbsencesClosed]);
+            actors);
 
         try
         {

@@ -4,9 +4,9 @@ namespace CarlaNet.CoSim;
 
 /// <summary>
 /// The supervision in force for a drive, as the interval binder states it: what the scenario's author
-/// asserts of each SUMO vehicle, and the absences in force for the world as a whole. The session puts it
-/// on the server, onto the bodies that draw those vehicles, before the tick cue of each frame it changes
-/// in, and every reader takes it from there (<c>CarlaClient.GetSnapshotFrame</c>).
+/// asserts of each SUMO vehicle. The session puts it on the server, onto the bodies that draw those
+/// vehicles, before the tick cue of each frame it changes in, and every reader takes it from there
+/// (<c>CarlaClient.GetSnapshotFrame</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Held on the server, never here.</b> This table is what the binder hands over, not a source
@@ -19,12 +19,13 @@ namespace CarlaNet.CoSim;
 /// the binder states a vehicle's supervision here once, when it changes, and the session names it to the
 /// server for whichever body draws the vehicle -- again whenever the vehicle is lent a body anew, because
 /// the server drops a body's supervision when the body is given back or handed on. A vehicle no body
-/// draws is on no snapshot, because no frame shows it.</para>
+/// draws is on no snapshot, because no frame shows it. Nothing is held for the world apart from the plan:
+/// SUMO reports vehicles, not places, and every label follows a vehicle (doc 06 §3.5).</para>
 ///
 /// <para><b>Bound to one plan, and it never mints a row.</b> Nothing is held until a plan is bound, and
-/// binding one starts afresh: every vehicle unlabelled and no absence open. What is held is only what the
-/// binder copies from the plan's rows (doc 06 D6.8). This table checks that each state is one a vehicle can
-/// be in, never that the plan has the row.</para>
+/// binding one starts afresh: every vehicle unlabelled. What is held is only what the binder copies from
+/// the plan's rows (doc 06 D6.8). This table checks that each state is one a vehicle can be in, never that
+/// the plan has the row.</para>
 ///
 /// <para><b>On the session's thread.</b> Written between ticks -- from a step observer, or by whatever
 /// drives the session between two advances -- and read by the session before each tick's cue.</para>
@@ -32,7 +33,6 @@ namespace CarlaNet.CoSim;
 public sealed class DriveSupervision
 {
     private readonly Dictionary<string, SupervisionInForce> _vehicles = new(StringComparer.Ordinal);
-    private readonly List<AbsenceInForce> _absences = [];
 
     /// <summary>The plan bound, or <see langword="null"/> where none is, or it was withdrawn.</summary>
     public SupervisionPlanIdentity? Plan { get; private set; }
@@ -46,13 +46,7 @@ public sealed class DriveSupervision
     /// <summary>Every vehicle the author asserts something of, by SUMO vehicle id; any other is unlabelled.</summary>
     public IReadOnlyDictionary<string, SupervisionInForce> Vehicles => _vehicles;
 
-    /// <summary>The absences in force, in the order they opened.</summary>
-    public IReadOnlyList<AbsenceInForce> Absences => _absences;
-
-    /// <summary>
-    /// Bind the plan every row is copied from, and start afresh: every vehicle unlabelled and no absence
-    /// open.
-    /// </summary>
+    /// <summary>Bind the plan every row is copied from, and start afresh: every vehicle unlabelled.</summary>
     public void Bind(SupervisionPlanIdentity plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -60,7 +54,6 @@ public sealed class DriveSupervision
         ArgumentNullException.ThrowIfNull(plan.VocabularyDigest);
         Plan = plan;
         _vehicles.Clear();
-        _absences.Clear();
         Revision++;
     }
 
@@ -102,57 +95,19 @@ public sealed class DriveSupervision
     public SupervisionInForce Of(string vehicleId) =>
         _vehicles.TryGetValue(vehicleId, out SupervisionInForce? held) ? held : SupervisionInForce.Unlabelled;
 
-    /// <summary>Open an absence, or replace one open under the same instance.</summary>
-    /// <exception cref="InvalidOperationException">No plan is bound.</exception>
-    public void Open(AbsenceInForce absence)
-    {
-        ArgumentNullException.ThrowIfNull(absence);
-        ArgumentException.ThrowIfNullOrEmpty(absence.InstanceId);
-        Bound();
-        int held = _absences.FindIndex(open => open.InstanceId == absence.InstanceId);
-        if (held < 0)
-        {
-            _absences.Add(absence);
-        }
-        else if (!_absences[held].Equals(absence))
-        {
-            _absences[held] = absence;
-        }
-        else
-        {
-            return;
-        }
-
-        Revision++;
-    }
-
-    /// <summary>Close the absence open under an instance; nothing where none is.</summary>
-    public void Close(string instanceId)
-    {
-        ArgumentNullException.ThrowIfNull(instanceId);
-        if (_absences.RemoveAll(open => open.InstanceId == instanceId) > 0)
-        {
-            Revision++;
-        }
-    }
-
-    /// <summary>Whether an absence is open under an instance.</summary>
-    public bool IsOpen(string instanceId) => _absences.Exists(open => open.InstanceId == instanceId);
-
     /// <summary>
-    /// Withdraw everything: no plan, no vehicle's supervision, no absence, so the world carries no
-    /// supervision from the next frame on.
+    /// Withdraw everything: no plan and no vehicle's supervision, so the world carries no supervision from
+    /// the next frame on.
     /// </summary>
     public void Withdraw()
     {
-        if (Plan is null && _vehicles.Count == 0 && _absences.Count == 0)
+        if (Plan is null && _vehicles.Count == 0)
         {
             return;
         }
 
         Plan = null;
         _vehicles.Clear();
-        _absences.Clear();
         Revision++;
     }
 

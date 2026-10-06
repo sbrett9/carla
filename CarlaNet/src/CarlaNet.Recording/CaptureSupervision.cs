@@ -19,7 +19,8 @@ public enum SidecarSupervision
 
     /// <summary>
     /// A plan was in force and the frame's supervision is written: the plan and vocabulary on the
-    /// container, the world-scoped supervision with its absences, and every drawn SUMO vehicle's state.
+    /// container, and every drawn SUMO vehicle's state. Nothing is written for the world apart from the
+    /// plan: every label follows a vehicle (doc 06 §3.5).
     /// </summary>
     InForce,
 
@@ -119,38 +120,6 @@ public sealed class CaptureSupervision
     }
 
     /// <summary>
-    /// The world-scoped supervision, where it is in force: one <c>&lt;absence&gt;</c> per absence in force,
-    /// none where there is none, so an empty element says no absence was in force rather than nothing
-    /// being known. An absence is never a CoT event, because there is no vehicle (doc 06 D6.6).
-    /// </summary>
-    internal void WriteWorld(XmlWriter w)
-    {
-        if (State != SidecarSupervision.InForce || Observed.Plan is not { } plan)
-        {
-            return;
-        }
-
-        w.WriteStartElement("_supervision");
-        w.WriteAttributeString("scope", "world");
-        WriteVocabulary(w, plan);
-        foreach (AbsenceInForce absence in Observed.Absences)
-        {
-            w.WriteStartElement("absence");
-            w.WriteAttributeString("instance", absence.InstanceId);
-            WriteList(w, "labels", absence.Labels);
-            WriteList(w, "areas", absence.Areas);
-            if (absence.Phase.Length > 0)
-            {
-                w.WriteAttributeString("phase", absence.Phase);
-            }
-
-            w.WriteEndElement(); // absence
-        }
-
-        w.WriteEndElement(); // _supervision
-    }
-
-    /// <summary>
     /// A drawn SUMO vehicle's supervision, where it is in force: its state, always, <c>unlabelled</c>
     /// included, and one <c>&lt;annotation&gt;</c> per pattern instance in force for it -- which a nominal
     /// vehicle may carry as an annotated one does (doc 06 D6.31), and an unlabelled one never does.
@@ -200,8 +169,8 @@ public sealed class CaptureSupervision
     }
 
     /// <summary>
-    /// A set of terms or areas, space-separated: neither grammar admits a space, a term being
-    /// <c>namespace:name</c> in lower snake case and an area id lower snake case.
+    /// A set of terms, space-separated: the grammar admits no space, a term being <c>namespace:name</c>
+    /// in lower snake case.
     /// </summary>
     private static void WriteList(XmlWriter w, string name, IReadOnlyList<string> values)
     {

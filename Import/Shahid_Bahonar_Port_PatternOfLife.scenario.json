@@ -3543,43 +3543,11 @@
         "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
         "terms": [
           {
-            "term": "bahonar:expected_arrival_absent",
-            "since": 1,
-            "status": "active",
-            "applies_to": [
-              "slot"
-            ],
-            "realisation": [
-              "absent"
-            ],
-            "definition": "A recurring series enumerated an occasion and no vehicle realised it. The signal is the vacancy; the realised siblings of the same series are its evidence."
-          },
-          {
-            "term": "bahonar:post_unmanned",
-            "since": 1,
-            "status": "active",
-            "broader": "bahonar:expected_arrival_absent",
-            "applies_to": [
-              "slot"
-            ],
-            "realisation": [
-              "absent"
-            ],
-            "definition": "A guard tower that should have been manned at a shift change stands unmanned for the whole shift, while the other fifteen towers are relieved as usual.",
-            "counterfactual": {
-              "kind": "series",
-              "ref": "tower_relief"
-            }
-          },
-          {
             "term": "bahonar:coordinated_group_transit",
             "since": 1,
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "Several vehicles depart together and travel as one group in tight formation: a dense military escort around a shipment.",
             "parameters": {
@@ -3605,9 +3573,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A vehicle travels to a place the routine traffic of its kind never goes: an air-freight shipment taken to the drydock rather than to the port."
           },
           {
@@ -3616,9 +3581,6 @@
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "A vehicle approaches a controlled access point from the public side, halts short of it for several minutes, and departs without transiting.",
             "parameters": {
@@ -3643,9 +3605,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "During the pre-dawn dead hours one vehicle slowly follows the fence line past the guard posts without stopping at any of them.",
             "parameters": {
               "speed_factor": {
@@ -3665,9 +3624,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its dwell is still open when the scenario ends."
           },
           {
@@ -3676,9 +3632,6 @@
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
             "hard_negative_for": [
@@ -3693,9 +3646,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
             "hard_negative_for": [
               "bahonar:coordinated_group_transit",
@@ -3708,9 +3658,6 @@
             "status": "active",
             "applies_to": [
               "cohort"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "Port-cleared traffic that transits a checkpoint and enters: every member of a ferry sailing's pulse, for its whole life."
           }
@@ -4926,20 +4873,6 @@
         "labels": [
           "bahonar:tower_posting"
         ]
-      }
-    ],
-    "absences": [
-      {
-        "name": "pi_tower_relief_d4_h7_t3_unmanned",
-        "series": "tower_relief",
-        "entry": "guard_d4_h7_t3",
-        "labels": [
-          "bahonar:post_unmanned"
-        ],
-        "counterfactual": {
-          "kind": "series",
-          "ref": "tower_relief"
-        }
       }
     ]
   }

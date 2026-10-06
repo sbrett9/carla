@@ -72,10 +72,6 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
         new Annotation("Shahid_Bahonar_Port_PatternOfLife/pi_tower_posting_d4_h15_t3", "dwell", "bahonar:guard",
                        "bahonar:tower_posting"));
 
-    private static readonly Absence Unmanned = new(
-        "Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned", "vacancy",
-        ["bahonar:post_unmanned"], ["tower_03"]);
-
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "carlanet-sidecar-supervision-" + Guid.NewGuid().ToString("N"));
     private readonly StandInStreams _streams = new(Patience);
@@ -108,24 +104,18 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     [Fact]
     public async Task A_Capture_Carries_The_Supervision_The_Server_Held_On_Its_Own_Frame()
     {
-        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow], [Unmanned])));
+        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow])));
 
         (FrameRecorder recorder, XElement events, _) = await RecordOneImage(100);
 
         Assert.Equal(PlanId, (string?)events.Attribute("plan_id"));
-        Assert.Equal("2", (string?)events.Attribute("vocabulary"));
+        Assert.Equal("3", (string?)events.Attribute("vocabulary"));
         Assert.Equal(VocabularyDigest, (string?)events.Attribute("vocabulary_digest"));
         Assert.Null(events.Attribute("supervision"));
 
-        // The world's: one absence, never an event of its own.
-        XElement world = Assert.Single(events.Elements("_supervision"));
-        Assert.Equal("world", (string?)world.Attribute("scope"));
-        Assert.Equal(VocabularyDigest, (string?)world.Attribute("vocabulary_digest"));
-        XElement absence = Assert.Single(world.Elements("absence"));
-        Assert.Equal(Unmanned.Instance, (string?)absence.Attribute("instance"));
-        Assert.Equal("bahonar:post_unmanned", (string?)absence.Attribute("labels"));
-        Assert.Equal("tower_03", (string?)absence.Attribute("areas"));
-        Assert.Equal("vacancy", (string?)absence.Attribute("phase"));
+        // Nothing for the world apart from the plan on the container: every label follows a vehicle, so
+        // every other supervision element is inside a vehicle's event (06 §3.5).
+        Assert.Empty(events.Elements("_supervision"));
         Assert.Equal(3, events.Elements("event").Count());
 
         // Every vehicle the frame drew, by its SUMO vehicle, and no parked body.
@@ -136,7 +126,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
 
         XElement escort = vehicles["CARLA-TRUTH-SUMO-escort_0"];
         Assert.Equal("annotated", (string?)escort.Attribute("state"));
-        Assert.Equal("2", (string?)escort.Attribute("vocabulary"));
+        Assert.Equal("3", (string?)escort.Attribute("vocabulary"));
         XElement lead = Assert.Single(escort.Elements("annotation"));
         Assert.Equal("Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3", (string?)lead.Attribute("instance"));
         Assert.Equal("bahonar:coordinated_group_transit bahonar:destination_off_pattern",
@@ -163,7 +153,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     {
         // The owner's ruling: a still is an observation artifact and carries none, however much supervision
         // the frame had in force; it is in the sidecar beside it.
-        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow], [Unmanned])));
+        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow])));
 
         (_, XElement events, string stem) = await RecordOneImage(100);
 
@@ -175,7 +165,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
         }));
         string text = string.Join("\n", chunks.Select(chunk => chunk.Keyword + "=" + chunk.Text));
         foreach (string leak in new[] { "supervision", "annotated", "nominal", "unlabelled", "bahonar:",
-                                        PlanId, VocabularyDigest, "pi_escort_drydock_d3", "tower_03" })
+                                        PlanId, VocabularyDigest, "pi_escort_drydock_d3" })
         {
             Assert.DoesNotContain(leak, text);
         }
@@ -190,7 +180,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
         // The image is of frame 300 and the client holds only frame 100, whose snapshot carried a plan: its
         // vehicles are read from frame 100 and the sidecar names it, but frame 100's supervision is not
         // frame 300's, so none is written and the sidecar says it is unknown.
-        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow], [Unmanned])));
+        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow])));
 
         (FrameRecorder recorder, XElement events, _) = await RecordOneImage(300);
 
@@ -207,7 +197,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     public async Task A_Capture_Whose_Frame_s_Supervision_Could_Not_Be_Read_Is_Written_With_It_Unknown()
     {
         // The block says it holds two rows and carries one.
-        byte[] supervision = SupervisionBlock([EscortRow], [Unmanned]);
+        byte[] supervision = SupervisionBlock([EscortRow]);
         int rowCountAt = 4 + 2 + PlanId.Length + 4 + 2 + VocabularyDigest.Length;
         BinaryPrimitives.WriteUInt32LittleEndian(supervision.AsSpan(rowCountAt), 2u);
         await Observe(100, Supervised(supervision));
@@ -243,7 +233,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     {
         // A recorder given the session's render set pairs its vehicles in process; its supervision is still
         // the server's, so it writes exactly what a recorder in another process writes for the frame.
-        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow], [Unmanned])));
+        await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow])));
         RenderSet inProcess = new(
         [
             new RenderedVehicle(EscortBody, "escort_0", "military_truck", 96),

@@ -87,7 +87,7 @@ def test_the_rota_under_test_is_the_one_the_generator_writes():
     assert written["subjects"] == {"place_set": "guard_towers"}
 
 
-def test_the_skip_is_the_one_absence_with_its_reason_and_its_civil_time():
+def test_the_skip_is_the_one_occasion_removed_with_its_reason_and_its_civil_time():
     rota, findings = expander()
     _, skips = rota.expand(GUARD_ROTA, TOWERS)
     assert len(skips) == 1
@@ -111,7 +111,7 @@ def test_a_skip_that_matches_nothing_is_refused():
     rota, findings = expander()
     stale = dict(GUARD_ROTA, skip=[{"day": 9, "at": "07:00", "subject_index": 3, "because": "x"}])
     rota.expand(stale, TOWERS)
-    assert any("never planted" in f.message for f in findings.by_check(48))
+    assert any("removes nothing" in f.message for f in findings.by_check(48))
 
 
 def test_a_skip_without_a_reason_is_refused():

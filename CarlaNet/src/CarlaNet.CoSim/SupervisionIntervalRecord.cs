@@ -45,20 +45,17 @@ public sealed record SupervisionIntervalRecord
     /// <summary>The instance, as the plan names it.</summary>
     public required string InstanceId { get; init; }
 
-    /// <summary>The participant whose phase it is, its SUMO id; null for an absence's vacancy.</summary>
-    public required string? EntityId { get; init; }
+    /// <summary>The participant whose phase it is, its SUMO id.</summary>
+    public required string EntityId { get; init; }
 
     /// <summary>The phase.</summary>
     public required string Phase { get; init; }
 
-    /// <summary>The participant's role in the instance; empty for an absence.</summary>
+    /// <summary>The participant's role in the instance.</summary>
     public required string Role { get; init; }
 
     /// <summary>What the instance asserts: annotated or nominal.</summary>
     public required SupervisionState Supervision { get; init; }
-
-    /// <summary>Whether the instance is one a vehicle realises, or an absence.</summary>
-    public required Realisation Realisation { get; init; }
 
     /// <summary>The instance's labels.</summary>
     public required IReadOnlyList<string> Labels { get; init; }
@@ -114,7 +111,7 @@ public sealed record SupervisionIntervalRecord
     /// <summary>
     /// The spans inside the window over which its participant was open, SUMO had it, and no body drew it:
     /// a gap in drawing under an optional render-set limit, which ends nothing (the owner's ruling of
-    /// 2026-10-05). Empty for an absence.
+    /// 2026-10-05).
     /// </summary>
     public required IReadOnlyList<NotDrawnSpan> NotDrawn { get; init; }
 }

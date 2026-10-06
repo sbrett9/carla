@@ -613,9 +613,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A car pulls to the kerb and waits there for minutes, with nothing to deliver or collect, then drives on.",
             "parameters": {
               "dwell_s": {
@@ -642,9 +639,6 @@
             "applies_to": [
               "entity"
             ],
-            "realisation": [
-              "present"
-            ],
             "definition": "A car drives through the scene without stopping: in from East Arapahoe Road and out to the north along South Yosemite Street."
           },
           {
@@ -653,9 +647,6 @@
             "status": "active",
             "applies_to": [
               "entity"
-            ],
-            "realisation": [
-              "present"
             ],
             "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
             "hard_negative_for": [

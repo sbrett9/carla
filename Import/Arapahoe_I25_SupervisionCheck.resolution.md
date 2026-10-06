@@ -12,7 +12,7 @@ Six minutes on South Yosemite Street just north of East Arapahoe Road: a car wai
 | 17 | warn | vehicle class van | draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class truck | draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class semi | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.098 over 22 entries (captured by the declared windows); degenerate bands, where the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the usable bands and the remedies are in the resolution report, and the statistic is in the lock |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.098 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -48,7 +48,7 @@ Normalized mutual information: 0.098 over 22 entries.
 | day | 0 | 1 | 9 | 10 |
 | golden | 2 | 1 | 9 | 12 |
 
-Degenerate bands: day. Usable bands: golden.
+Bands where one state alone occurs: day. Bands where both occur: golden.
 
 ### Over the span, at each departure
 
@@ -59,7 +59,7 @@ Normalized mutual information: 0.398 over 12 entries.
 | day | 0 | 1 | 0 | 1 |
 | golden | 2 | 0 | 9 | 11 |
 
-Degenerate bands: day. Usable bands: golden.
+Bands where one state alone occurs: day. Bands where both occur: golden.
 
 Remedies:
 
@@ -159,14 +159,50 @@ Remedies:
 | arapahoe_west_to_clinton | arterial_mix | 2026-09-29T07:26:00-06:00 to 2026-09-29T07:32:00-06:00 | 427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 903817668#0 1384299163 629634782 629634784 | 871.05 m | 42.6 s |
 | wabash_to_arapahoe_west | arterial_mix | 2026-09-29T07:26:00-06:00 to 2026-09-29T07:32:00-06:00 | 427479206 550665532 737508780#0 1035917283#0 223289022#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819541#0 | 1186.69 m | 81.7 s |
 
+## Vehicle types
+
+Bodies from catalogue `carla-0.10.0-windows` (vehicles.catalogue.json, digest `6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d`). The lights are whether each lights up on the body when the session drives it: headlights by the sun, brake lights and turn signals from SUMO's signals.
+
+- car_quick: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0
+- car: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0
+- suv: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0
+- van: 1 measured body, length 5.92-5.92 m, mean 5.92 m, share 0
+- truck: 1 measured body, length 8.00-8.00 m, mean 8.00 m, share 0
+- semi: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0
+
+| Type | Body | Length (m) | Body width (m) | Height (m) | Headlights | Brake lights | Turn signals |
+|---|---|---|---|---|---|---|---|
+| car_quick.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car_quick.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car_quick.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car_quick.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| car.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| suv.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| van.vehicle.sprinter.mercedes | vehicle.sprinter.mercedes | 5.915 | 1.982 | 2.726 | unlit | unlit | unlit |
+| truck.vehicle.carlacola.actors | vehicle.carlacola.actors | 8.004 | 2.787 | 4.055 | unlit | unlit | unlit |
+| semi.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+
 ## Supervision
 
-- **Arapahoe_I25_SupervisionCheck/kerbside_dwell**: annotated, present, labels check:kerbside_dwell; dweller (subject); parameters dwell_s = 120
+- **Arapahoe_I25_SupervisionCheck/kerbside_dwell**: annotated, labels check:kerbside_dwell; dweller (subject); parameters dwell_s = 120
   - dwell: from stop:0 to stop_end:0, 120 s declared
-- **Arapahoe_I25_SupervisionCheck/through_transit**: annotated, present, labels check:through_transit; transit (subject)
+- **Arapahoe_I25_SupervisionCheck/through_transit**: annotated, labels check:through_transit; transit (subject)
   - transit: from depart (2026-09-29T07:27:30-06:00) to open
   - past_the_kerb: from phase:1 to phase:2
-- **Arapahoe_I25_SupervisionCheck/brief_stop**: nominal, present, labels check:brief_kerb_stop; brief_stopper (subject); a hard negative for check:kerbside_dwell
+- **Arapahoe_I25_SupervisionCheck/brief_stop**: nominal, labels check:brief_kerb_stop; brief_stopper (subject); a hard negative for check:kerbside_dwell
   - stop: from stop:0 to stop_end:0, 20 s declared
 
 ## Dry run (check 59)
@@ -204,11 +240,11 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "dea811c20fd2b2e6965d0eb55d98c23f8132a7423a1f1fb749aa1780c75e2458"
+    "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
   },
   "supervision": {
     "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-    "sha256": "b292a1ef9ad78722131b9dcc692cb5cc604aae4690b14c95ff349704107720f7"
+    "sha256": "2ce5636f05c05724994dabc8bddca60d493a7f577a90577d1868124b2ede829d"
   }
 }
 ```

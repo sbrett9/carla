@@ -18,6 +18,9 @@ public sealed class SupervisionPlanTests
     private const string Arapahoe = "Arapahoe_I25_UnderpassDwell";
     private const string Gardnerville = "Gardnerville_Centerville_Lane_NeighborhoodOrbit";
 
+    /// <summary>The shipped Bahonar plan's vocabulary digest, over the core at version 3 and the bahonar namespace.</summary>
+    private const string BahonarDigest = "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7";
+
     private readonly ITestOutputHelper _output;
 
     public SupervisionPlanTests(ITestOutputHelper output)
@@ -26,7 +29,7 @@ public sealed class SupervisionPlanTests
     }
 
     [Fact]
-    public void TheShippedBahonarPlanExposesItsInstancesAnchoredIntervalsSeriesAndAbsence()
+    public void TheShippedBahonarPlanExposesItsInstancesAnchoredIntervalsAndSeries()
     {
         SupervisionPlan plan = SupervisionPlan.Read(ShippedPlan(Bahonar));
         ScenarioLock locked = ScenarioLock.Read(ShippedFile(Bahonar, ".lock.json"));
@@ -40,10 +43,10 @@ public sealed class SupervisionPlanTests
         Assert.Equal(locked.WorldNetworkFingerprint, plan.NetworkDigest);
         Assert.Null(plan.AdditionalDigest);
 
-        Assert.Equal(27, plan.Instances.Length);
-        Assert.Equal(5, plan.Instances.Count(instance => instance.Supervision == SupervisionState.Annotated
-                                                         && instance.Realisation == Realisation.Present));
+        Assert.Equal(26, plan.Instances.Length);
+        Assert.Equal(5, plan.Instances.Count(instance => instance.Supervision == SupervisionState.Annotated));
         Assert.Equal(21, plan.Instances.Count(instance => instance.Supervision == SupervisionState.Nominal));
+        Assert.All(plan.Instances, instance => Assert.NotEmpty(instance.Participants));
 
         // The escort: five participants, departure-anchored, the group's parameters as authored.
         PatternInstance escort = Instance(plan, "pi_escort_drydock_d3");
@@ -91,38 +94,21 @@ public sealed class SupervisionPlanTests
         Assert.Empty(haul.Intervals);
         Assert.Null(Instance(plan, "pi_gate_probe_d2").HardNegativeFor);
 
-        // The no-show: an absence over the series' one unrealised slot, sited at a lane position.
-        PatternInstance absence = Assert.Single(plan.Instances, instance => instance.Realisation == Realisation.Absent);
-        Assert.Equal($"{Bahonar}/pi_tower_relief_d4_h7_t3_unmanned", absence.InstanceId);
-        Assert.Equal(SupervisionState.Annotated, absence.Supervision);
-        Assert.Equal<string>(["bahonar:post_unmanned"], absence.Labels);
-        Assert.Empty(absence.Participants);
-        Assert.Equal(("tower_relief", "guard_d4_h7_t3"), (absence.SeriesRef, absence.SlotRef));
-        Assert.Equal<string>(["tower_03"], absence.AoiRefs);
-        AbsenceExpectation expected = absence.Expected!;
-        Assert.Equal(("bahonar:guard", "guard_d4_h7_t3"), (expected.Role, expected.ExpectedEntityId));
-        Assert.Equal(("26413459_0", 58.9), (expected.SiteLane, expected.SitePositionMetres));
-        Assert.Equal(("26413425#5", "26413425#5"), (expected.Route!.From, expected.Route.To));
-        Assert.Equal<string>(["26413459"], expected.Route.Via);
-        Assert.Equal((345600.0, 374400.0), (expected.DeclaredStartSeconds, expected.DeclaredEndSeconds));
-        PlannedInterval vacancy = Assert.Single(absence.Intervals);
-        Assert.Equal((null, CoreVocabulary.VacancyPhase, null), (vacancy.EntityId, vacancy.Phase, vacancy.Anchor));
-        Assert.Equal((345600.0, 374400.0, 28800.0),
-                     (vacancy.DeclaredStartSeconds, vacancy.DeclaredEndSeconds, vacancy.DeclaredDurationSeconds));
-        Assert.Equal((336, 335), (absence.CounterEvidence!.SeriesSlotsTotal, absence.CounterEvidence.SeriesSlotsRealised));
-
-        // The guard rota as a series: 336 slots, the absence's the one left unrealised.
+        // The guard rota as a series: 335 slots, one per posting a guard realises. The schedule skips the
+        // posting at tower 3 on day 4 at 07:00, and a skipped occasion has no slot: there is no vehicle for
+        // a label to follow (06 §3.5, the owner's ruling of 2026-10-05).
         RecurringSeries relief = Assert.Single(plan.Series);
         Assert.Equal(("tower_relief", "guard_posting", CadenceForm.Enumerated, "bahonar:guard", SupervisionState.Nominal),
                      (relief.SeriesId, relief.RotaRef, relief.Cadence, relief.MemberRole, relief.Supervision));
         Assert.Equal<string>(["bahonar:tower_posting"], relief.Labels);
         Assert.Equal<string>(["bahonar:standoff_dwell_at_access_point", "bahonar:arrival_without_departure"],
                      relief.HardNegativeFor!);
-        Assert.Equal(336, relief.Slots.Length);
-        SeriesSlot unrealised = Assert.Single(relief.Slots, slot => !slot.Realised);
-        Assert.Equal(("guard_d4_h7_t3", "tower_03", 345600.0, 374400.0),
-                     (unrealised.SlotKey, unrealised.AoiRef, unrealised.DeclaredStartSeconds, unrealised.DeclaredEndSeconds));
-        Assert.Equal(("guard_d0_h7_t0", "guard_d0_h7_t0"), (relief.Slots[0].SlotKey, relief.Slots[0].RealisedBy));
+        Assert.Equal(335, relief.Slots.Length);
+        Assert.DoesNotContain(relief.Slots, slot => slot.SlotKey == "guard_d4_h7_t3");
+        Assert.All(relief.Slots, slot => Assert.Equal(slot.SlotKey, slot.EntityId));
+        Assert.Equal(("guard_d0_h7_t0", "guard_d0_h7_t0", "tower_00"),
+                     (relief.Slots[0].SlotKey, relief.Slots[0].EntityId, relief.Slots[0].AoiRef));
+        Assert.DoesNotContain(plan.Instances, instance => instance.InstanceId.Contains("unmanned", StringComparison.Ordinal));
 
         // Every flow and every authored vehicle, explicitly.
         Assert.Equal(248, plan.Cohorts.Length);
@@ -137,9 +123,9 @@ public sealed class SupervisionPlanTests
         Assert.Equal<SupervisionState>([SupervisionState.Nominal], guard.Supervision);
         Assert.Equal<string>(["series:tower_relief"], guard.Refs);
 
-        Assert.StartsWith($"{Bahonar}: 27 instances (5 annotated, 21 nominal, 1 absent), 1 series of 336 slots "
-                          + "(1 unrealised), 248 cohorts (98 annotated), 365 entities; vocabulary core 2, bahonar 1, "
-                          + "digest e3571085", plan.ToString());
+        Assert.StartsWith($"{Bahonar}: 26 instances (5 annotated, 21 nominal), 1 series of 335 slots, "
+                          + "248 cohorts (98 annotated), 365 entities; vocabulary core 3, bahonar 1, "
+                          + $"digest {BahonarDigest[..8]}", plan.ToString());
     }
 
     [Fact]
@@ -149,22 +135,22 @@ public sealed class SupervisionPlanTests
 
         Assert.Equal(CoreVocabulary.Version, vocabulary.CoreVersion);
         Assert.Equal(CoreVocabulary.Source, vocabulary.CoreSource);
-        Assert.Equal("e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad", vocabulary.Digest);
+        Assert.Equal(BahonarDigest, vocabulary.Digest);
         AuthorNamespace bahonar = Assert.Single(vocabulary.Namespaces);
         Assert.Equal(("bahonar", 1), (bahonar.Namespace, bahonar.Version));
         Assert.StartsWith("Shahid Bahonar Port pattern of life", bahonar.Authority);
-        Assert.Equal(10, bahonar.Terms.Length);
+        Assert.Equal(8, bahonar.Terms.Length);
         Assert.Equal<string>(["bahonar:lead", "bahonar:follower", "bahonar:guard"], bahonar.Roles.Select(role => role.Role));
         Assert.Equal<string>(["bahonar:guard_post", "bahonar:gate", "bahonar:drydock", "bahonar:ferry_terminal"],
                      bahonar.AreaKinds.Select(kind => kind.Kind));
 
-        AuthorTerm unmanned = Term(bahonar, "bahonar:post_unmanned");
-        Assert.Equal("bahonar:expected_arrival_absent", unmanned.Broader);
-        Assert.Equal<SubjectKind>([SubjectKind.Slot], unmanned.AppliesTo);
-        Assert.Equal<Realisation>([Realisation.Absent], unmanned.Realisation);
-        Assert.Equal(("series", "tower_relief"), (unmanned.Counterfactual!.Kind, unmanned.Counterfactual.Ref));
-        Assert.Equal(("active", 1), (unmanned.Status, unmanned.Since));
-        Assert.Null(unmanned.SupersededBy);
+        // Every term applies to a vehicle or to a flow's vehicles: no term labels a place (06 §3.5).
+        Assert.All(bahonar.Terms, term => Assert.All(term.AppliesTo, kind => Assert.Contains(kind, new[] { SubjectKind.Entity, SubjectKind.Cohort })));
+        Assert.DoesNotContain(bahonar.Terms, term => term.Term is "bahonar:post_unmanned" or "bahonar:expected_arrival_absent");
+        AuthorTerm posting = Term(bahonar, "bahonar:tower_posting");
+        Assert.Equal<SubjectKind>([SubjectKind.Entity], posting.AppliesTo);
+        Assert.Equal(("active", 1), (posting.Status, posting.Since));
+        Assert.Null(posting.SupersededBy);
 
         AuthorTerm group = Term(bahonar, "bahonar:coordinated_group_transit");
         Assert.Equal<string>(["departure_spread_s", "group_size"], group.Parameters.Keys);
@@ -218,7 +204,7 @@ public sealed class SupervisionPlanTests
         _output.WriteLine(string.Join(", ", types.Select(type => type.Name)));
         Assert.Contains(typeof(AnchorPoint), types);
         Assert.Contains(typeof(TermParameter), types);
-        Assert.Contains(typeof(AbsenceCounterEvidence), types);
+        Assert.Contains(typeof(SeriesSlot), types);
 
         foreach (Type type in types)
         {
@@ -257,12 +243,9 @@ public sealed class SupervisionPlanTests
     [Theory]
     [InlineData("instances[0].supervision", "\"anomalous\"",
                 "plan.instances[0].supervision is 'anomalous', which is no supervision_state of the core vocabulary at "
-                + "version 2 (annotated, nominal, unlabelled)")]
-    [InlineData("instances[26].realisation", "\"missing\"",
-                "plan.instances[26].realisation is 'missing', which is no realisation of the core vocabulary at version 2 "
-                + "(present, absent)")]
+                + "version 3 (annotated, nominal, unlabelled)")]
     [InlineData("series[0].cadence", "\"weekly\"",
-                "plan.series[0].cadence is 'weekly', which is no cadence of the core vocabulary at version 2 (enumerated, "
+                "plan.series[0].cadence is 'weekly', which is no cadence of the core vocabulary at version 3 (enumerated, "
                 + "period_s + offsets_s[] + span)")]
     [InlineData("entities[0].supervision", "[\"negative\"]",
                 "plan.entities[0].supervision[0] is 'negative', which is no supervision_state")]
@@ -277,7 +260,10 @@ public sealed class SupervisionPlanTests
                 "plan.instances[0].intervals[0].anchor.start.event is 'depart:0', which is none of")]
     [InlineData("vocabulary.namespaces[0].terms[0].applies_to", "[\"vehicle\"]",
                 "vocabulary.namespaces[0].terms[0].applies_to[0] is 'vehicle', which is no subject_kind of the core "
-                + "vocabulary at version 2 (entity, cohort, slot)")]
+                + "vocabulary at version 3 (entity, cohort)")]
+    [InlineData("vocabulary.namespaces[0].terms[0].applies_to", "[\"slot\"]",
+                "vocabulary.namespaces[0].terms[0].applies_to[0] is 'slot', which is no subject_kind of the core "
+                + "vocabulary at version 3 (entity, cohort)")]
     public void ACoreValueOutsideTheCoreIsRefusedNamingItsFamilyAndEveryValue(string at, string value, string expected)
     {
         using var copy = new PlanCopy(Bahonar, plan => Set(plan, at, JsonNode.Parse(value)));
@@ -304,7 +290,7 @@ public sealed class SupervisionPlanTests
             () => SupervisionPlan.Read(copy.Path));
 
         _output.WriteLine(refused.Message);
-        Assert.Contains("(1) plan.vocabulary_digest is e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad, "
+        Assert.Contains($"(1) plan.vocabulary_digest is {BahonarDigest}, "
                         + "and the vocabulary the plan carries digests as ", refused.Message);
         Assert.DoesNotContain("(2)", refused.Message);
     }
@@ -367,17 +353,61 @@ public sealed class SupervisionPlanTests
         });
         string message = Assert.Throws<CoSimSessionRefusedException>(() => SupervisionPlan.Read(older.Path)).Message;
         _output.WriteLine(message);
-        Assert.Contains("vocabulary.core.vocabulary_version is 1, and this session branches on the core at version 2",
+        Assert.Contains("vocabulary.core.vocabulary_version is 1, and this session branches on the core at version 3",
                         message);
 
         // The same version with a value gone: a core this session does not branch on.
         using var edited = new PlanCopy(Gardnerville, plan =>
-            plan["vocabulary"]!["core"]!["terms"]!["observability_outcome"]!.AsArray().RemoveAt(5));
+            plan["vocabulary"]!["core"]!["terms"]!["closed_by"]!.AsArray().RemoveAt(3));
         message = Assert.Throws<CoSimSessionRefusedException>(() => SupervisionPlan.Read(edited.Path)).Message;
         _output.WriteLine(message);
-        Assert.Contains("vocabulary.core.terms.observability_outcome is [observed, out_of_frame, occluded, not_rendered, "
-                        + "site_unobserved], and the core at version 2 publishes [observed, out_of_frame, occluded, "
-                        + "not_rendered, site_unobserved, beyond_draw_distance]", message);
+        Assert.Contains("vocabulary.core.terms.closed_by is [trigger, entity_arrived, sumo_removed, "
+                        + "physical_predicate_never_held, render_released, capture_window_end, scenario_end], and the core "
+                        + "at version 3 publishes [trigger, entity_arrived, sumo_removed, never_inserted, "
+                        + "physical_predicate_never_held, render_released, capture_window_end, scenario_end]", message);
+
+        // A plan compiled against the core at version 2, which published the absence shape: refused as another
+        // core, naming the version and the families this session does not have.
+        using var withAbsences = new PlanCopy(Gardnerville, plan =>
+        {
+            plan["vocabulary_version"] = 2;
+            plan["vocabulary"]!["core"]!["vocabulary_version"] = 2;
+            plan["vocabulary"]!["core"]!["terms"]!["realisation"] = new JsonArray("present", "absent");
+        });
+        message = Assert.Throws<CoSimSessionRefusedException>(() => SupervisionPlan.Read(withAbsences.Path)).Message;
+        _output.WriteLine(message);
+        Assert.Contains("vocabulary.core.vocabulary_version is 2, and this session branches on the core at version 3",
+                        message);
+    }
+
+    [Fact]
+    public void APlanCarryingTheAbsenceShapeIsRefused()
+    {
+        // The owner's ruling of 2026-10-05 (06 §3.5): an instance is an assertion about vehicles. A row with
+        // no participant, and an interval of no vehicle, are refused rather than read as a place's label.
+        using var copy = new PlanCopy(Bahonar, plan =>
+        {
+            JsonObject haul = plan["instances"]!.AsArray().Select(node => node!.AsObject())
+                .Single(instance => instance["instance_id"]!.GetValue<string>() == $"{Bahonar}/haul_d0_0");
+            haul["participants"] = new JsonArray();
+            haul["realisation"] = "absent";
+            haul["intervals"] = new JsonArray(new JsonObject
+            {
+                ["entity_id"] = null,
+                ["phase"] = "vacancy",
+                ["anchor"] = null,
+                ["declared_start_s"] = 345600.0,
+                ["declared_start_civil"] = "2026-09-29T07:00:00+03:30",
+                ["declared_end_s"] = 374400.0,
+                ["declared_end_civil"] = "2026-09-29T15:00:00+03:30",
+                ["declared_duration_s"] = 28800.0,
+            });
+        });
+
+        string message = Refusal(copy.Path);
+        Assert.Contains("participants is empty. An instance is an assertion about one or more vehicles, and a label "
+                        + "follows its vehicle (06 §3.5)", message);
+        Assert.Contains("intervals[0].entity_id is null, where the compiler writes a non-empty string", message);
     }
 
     [Fact]
@@ -396,10 +426,7 @@ public sealed class SupervisionPlanTests
             plan.Remove("routes_digest");
             plan["instances"]![1]!.AsObject().Remove("intervals");
             plan["instances"]![2]!["intervals"]![0]!["entity_id"] = "probe_d2";
-            plan["instances"]![26]!["participants"]!.AsArray().Add(new JsonObject
-            {
-                ["entity_id"] = "guard_d4_h7_t3", ["role"] = "bahonar:guard", ["sumo_id"] = "guard_d4_h7_t3",
-            });
+            plan["series"]![0]!["slots"]![0]!.AsObject().Remove("entity_id");
             plan["cohorts"]![0]!["supervision"] = "nominal";
         });
         string message = Refusal(partial.Path);
@@ -408,7 +435,7 @@ public sealed class SupervisionPlanTests
         Assert.Contains("(2) plan.instances[1].intervals is missing", message);
         Assert.Contains("(3) plan.instances[2].intervals[0].entity_id is 'probe_d2', which is no participant of the "
                         + "instance", message);
-        Assert.Contains("(4) plan.instances[26].participants names a participant on an absence", message);
+        Assert.Contains("(4) plan.series[0].slots[0].entity_id is missing", message);
         Assert.Contains("(5) plan.cohorts[0].supervision is nominal on a cohort", message);
     }
 

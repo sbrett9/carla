@@ -121,14 +121,15 @@ public sealed class RunManifestWriterTests : IDisposable
         AssertTheReleasesAreTheIntervals(rows, released);
         Assert.Equal(2, released.Count);
 
-        // The sun at the window's opening and end: none, with no world, and so not eligible for a corpus.
+        // The sun at the window's opening and end: none, with no world, so no sun matched the declaration.
         JsonElement open = Assert.Single(rows, row => Kind(row) == "solar_window_open");
         Assert.Equal(watcher.FirstFrameSeconds, open.GetProperty("begin_s").GetDouble());
         Assert.True(open.GetProperty("no_sun").GetBoolean());
         JsonElement end = Assert.Single(rows, row => Kind(row) == "solar_window_end");
         Assert.Equal(rows.Count - 2, rows.IndexOf(end));
         Assert.True(end.GetProperty("solar_residual").GetProperty("audit_skipped").GetBoolean());
-        Assert.False(end.GetProperty("corpus_eligible").GetBoolean());
+        Assert.False(end.GetProperty("sun_matched_declaration").GetBoolean());
+        Assert.False(end.TryGetProperty("corpus_eligible", out _));
 
         // Closed at the session's end, SUMO having nothing left.
         JsonElement closed = rows[^1];
@@ -374,7 +375,7 @@ public sealed class RunManifestWriterTests : IDisposable
         Assert.Equal(Math.Round(last.SimulatedTimeSeconds, 6), end.GetProperty("end_s").GetDouble());
         Assert.Equal(watcher.Frames.Count(frame => frame.IsCaptureTick), end.GetProperty("capture_ticks").GetInt64());
         Assert.True(end.GetProperty("solar_residual").GetProperty("within_tolerance").GetBoolean());
-        Assert.True(end.GetProperty("corpus_eligible").GetBoolean());
+        Assert.True(end.GetProperty("sun_matched_declaration").GetBoolean());
         Assert.Equal("freeze_at_window_start",
                      rows[0].GetProperty("solar").GetProperty("illumination_in_force").GetProperty("policy").GetString());
         Assert.Equal(SolarLeaseTests.PortEpoch().Digest,

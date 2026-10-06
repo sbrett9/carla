@@ -284,14 +284,15 @@ SCHEMA: dict = {
         },
         "term": {
             "type": "object", "additionalProperties": False,
-            "required": ["term", "definition", "applies_to", "realisation", "since", "status"],
+            "required": ["term", "definition", "applies_to", "since", "status"],
             "properties": {
                 "term": {"type": "string", "pattern": _TERM},
                 "definition": {"type": "string", "minLength": 1},
                 "applies_to": {"type": "array", "minItems": 1,
-                               "items": {"enum": ["entity", "cohort", "slot"]}},
-                "realisation": {"type": "array", "minItems": 1,
-                                "items": {"enum": ["present", "absent"]}},
+                               "items": {"enum": ["entity", "cohort"]},
+                               "description": "The kinds of subject the term may label: one authored "
+                                              "vehicle, or every vehicle a flow emits. A label "
+                                              "follows a vehicle; nothing labels a place (06 §3.5)"},
                 "since": {"type": "integer", "minimum": 1},
                 "status": {"enum": ["active", "deprecated"]},
                 "superseded_by": {"type": "string", "pattern": _TERM},
@@ -406,20 +407,6 @@ SCHEMA: dict = {
                         "labels": {"type": "array", "items": {"type": "string", "pattern": _TERM}},
                         "parameters": _PARAMETERS,
                         "hard_negative_for": dict(_TERMS, description=_HARD_NEGATIVE_FOR),
-                    }}},
-                "absences": {"type": "array", "items": {
-                    "type": "object", "additionalProperties": False,
-                    "required": ["name", "series", "entry", "labels"],
-                    "properties": {
-                        "name": {"type": "string", "pattern": "^[a-z0-9_]+$"},
-                        "series": {"type": "string", "minLength": 1},
-                        "entry": {"type": "string", "minLength": 1,
-                                  "description": "The id the skipped rota entry would have had"},
-                        "labels": {"type": "array", "minItems": 1,
-                                   "items": {"type": "string", "pattern": _TERM}},
-                        "aoi_refs": _STRINGS,
-                        "parameters": _PARAMETERS,
-                        "counterfactual": {"$ref": "#/$defs/counterfactual"},
                     }}},
             },
         },

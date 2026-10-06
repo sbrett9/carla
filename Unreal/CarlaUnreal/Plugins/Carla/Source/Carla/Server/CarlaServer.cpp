@@ -1806,21 +1806,22 @@ void FCarlaServer::FPimpl::BindActions()
 
   // Hold the supervision a co-simulation session has put in force: what the scenario's author
   // asserts of the vehicle each of its lent bodies draws -- annotated, nominal or unlabelled, with
-  // the pattern instances in force -- and the absences declared for the world as a whole, with the
-  // plan they are all bound from and the vocabulary version and digest that pin what its terms mean.
-  // The world observer carries what is held on every snapshot from the next frame on, after the
-  // render set's entries, so every client of the world reads the same truth for the same frame;
-  // nothing about it is kept in one client's process. Sent by the session only when the supervision
-  // changes, after its render set and before the tick cue of the frame the change is drawn in.
+  // the pattern instances in force -- with the plan every row is bound from and the vocabulary
+  // version and digest that pin what its terms mean. Every row is a vehicle's: nothing is held for
+  // the world apart from the plan, because SUMO reports vehicles, not places, and a label follows the
+  // vehicle it is about (06_Truth_And_Annotation.md §3.5). The world observer carries what is held
+  // on every snapshot from the next frame on, after the render set's entries, so every client of the
+  // world reads the same truth for the same frame; nothing about it is kept in one client's process.
+  // Sent by the session only when the supervision changes, after its render set and before the tick
+  // cue of the frame the change is drawn in.
   //
-  // A change replaces each named body's supervision whole, opens and closes absences by instance, and
-  // is bound to one plan: a change naming another plan than the one held must start afresh, which
-  // drops every row and absence held before it, and a change naming no plan withdraws everything, so
-  // the snapshot carries no supervision block again. A body's supervision is held on its own record
-  // and only while the render set names it lent; a body given back or handed to another vehicle loses
-  // it (update_render_set), and a body not lent is not given one. Everything is checked before
-  // anything is changed, so a refused change leaves what was held. Answers how many of the named
-  // bodies were found lent and took their supervision.
+  // A change replaces each named body's supervision whole and is bound to one plan: a change naming
+  // another plan than the one held must start afresh, which drops every row held before it, and a
+  // change naming no plan withdraws everything, so the snapshot carries no supervision block again.
+  // A body's supervision is held on its own record and only while the render set names it lent; a
+  // body given back or handed to another vehicle loses it (update_render_set), and a body not lent is
+  // not given one. Everything is checked before anything is changed, so a refused change leaves what
+  // was held. Answers how many of the named bodies were found lent and took their supervision.
   BIND_SYNC(update_supervision) << [this](const cr::SupervisionUpdate &update) -> R<uint32_t>
   {
     REQUIRE_CARLA_EPISODE();
@@ -1861,13 +1862,6 @@ void FCarlaServer::FPimpl::BindActions()
       }
       States.push_back(State);
     }
-    for (const cr::SupervisionUpdateAbsence &Absence : update.absences_opened)
-    {
-      if (Absence.instance_id.empty())
-      {
-        RESPOND_ERROR("update_supervision: every absence names its instance");
-      }
-    }
 
     FWorldSupervisionState &WorldSupervision = Episode->GetWorldSupervision();
     // Every body's supervision dropped, wherever it is held.
@@ -1885,7 +1879,7 @@ void FCarlaServer::FPimpl::BindActions()
 
     if (update.plan_id.empty())
     {
-      if (!update.actors.empty() || !update.absences_opened.empty() || !update.absences_closed.empty())
+      if (!update.actors.empty())
       {
         RESPOND_ERROR("update_supervision: a change naming no plan withdraws all supervision and carries nothing else");
       }
@@ -1941,38 +1935,6 @@ void FCarlaServer::FPimpl::BindActions()
       }
       View->SetSupervision(Supervision);
       ++Applied;
-    }
-
-    for (const std::string &Closed : update.absences_closed)
-    {
-      WorldSupervision.Absences.erase(
-          std::remove_if(
-              WorldSupervision.Absences.begin(),
-              WorldSupervision.Absences.end(),
-              [&Closed](const FSupervisionAbsence &Held) { return Held.InstanceId == Closed; }),
-          WorldSupervision.Absences.end());
-    }
-
-    for (const cr::SupervisionUpdateAbsence &Opened : update.absences_opened)
-    {
-      FSupervisionAbsence Absence;
-      Absence.InstanceId = Opened.instance_id;
-      Absence.Labels = Opened.labels;
-      Absence.Areas = Opened.areas;
-      Absence.Phase = Opened.phase;
-      // An instance opened again replaces itself where it stands.
-      auto Held = std::find_if(
-          WorldSupervision.Absences.begin(),
-          WorldSupervision.Absences.end(),
-          [&Absence](const FSupervisionAbsence &Each) { return Each.InstanceId == Absence.InstanceId; });
-      if (Held != WorldSupervision.Absences.end())
-      {
-        *Held = std::move(Absence);
-      }
-      else
-      {
-        WorldSupervision.Absences.push_back(std::move(Absence));
-      }
     }
 
     return Applied;

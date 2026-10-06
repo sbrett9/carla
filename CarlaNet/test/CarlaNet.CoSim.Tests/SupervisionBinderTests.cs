@@ -219,34 +219,28 @@ public sealed class SupervisionBinderTests
     }
 
     [Fact]
-    public void AnAbsenceIsInForceForTheWorldOverItsDeclaredSecondsAndClosesUnrealised()
+    public void ASeriesStatesOnlyTheVehiclesThatRealiseItsSlotsAndNothingForTheWorld()
     {
+        // The owner's ruling of 2026-10-05 (06 §3.5): a series' slots are its realised postings, each a
+        // vehicle's; an occasion the schedule skipped has no slot, no interval and no row anywhere. What the
+        // binder states is a vehicle's, and only while SUMO has the vehicle.
         var feed = new BinderFeed(Read(Plan(
-            [Absence("missing", "relief", "s2", "s2", ["test:missing"], "site", 2.0, 4.0)],
-            series: [Series("relief", "nominal", ["test:posting"], ("s1", "g", 0.0, 10.0), ("s2", null, 2.0, 4.0))],
+            [],
+            series: [Series("relief", "nominal", ["test:posting"], ("s1", "g", 0.0, 10.0))],
             entities: [Entity("g", "nominal", "series:relief")])));
 
         feed.Step(0);
-        feed.Step(1);
+        feed.Step(1, departed: ["g"]);
         feed.Render(0);
-        Assert.Empty(feed.Table.Absences);
-        feed.Step(2);
-        feed.Render(1);
-        AbsenceInForce open = Assert.Single(feed.Table.Absences);
-        Assert.Equal(("Supervised/missing", "vacancy"), (open.InstanceId, open.Phase));
-        Assert.Equal(["site"], open.Areas);
-        Assert.Equal(["test:missing"], open.Labels);
-        feed.Step(3);
-        feed.Render(2);
-        feed.Step(4);
-        feed.Render(3);
-        Assert.Empty(feed.Table.Absences);
+        Assert.Equal(SupervisionState.Nominal, feed.Of("g").State);
+        Assert.Equal("series:relief:", feed.Of("g").Annotations);
+        Assert.Equal<string>(["g"], feed.Table.Vehicles.Keys);
+        Assert.Empty(feed.Binder.Intervals);
 
-        SupervisionIntervalRecord vacancy = feed.Interval("missing", "vacancy");
-        Assert.Equal((null, ClosedBy.SlotUnrealised, 4.0, Realisation.Absent),
-                     (vacancy.EntityId, vacancy.ClosedBy, vacancy.ClosedAtSeconds, vacancy.Realisation));
-        Assert.Null(vacancy.CommittedStartSeconds);
-        Assert.Null(vacancy.ObservedStartSeconds);
+        feed.Step(2, arrived: ["g"]);
+        feed.Render(1);
+        Assert.Equal(SupervisionState.Unlabelled, feed.Of("g").State);
+        Assert.Empty(feed.Table.Vehicles);
     }
 
     [Fact]
@@ -446,16 +440,14 @@ public sealed class SupervisionBinderTests
             [
                 Instance("transit", "annotated", ["test:transit"], [("a", "test:lead"), ("b", "test:follower")],
                          Interval("a", "transit", Anchor(Depart())), Interval("b", "transit", Anchor(Depart()))),
-                Absence("missing", "relief", "s2", "s2", ["test:missing"], "site", 2.0, 4.0),
             ],
-            series: [Series("relief", "nominal", ["test:posting"], ("s2", null, 2.0, 4.0))]);
+            series: [Series("relief", "nominal", ["test:posting"], ("s1", "a", 2.0, 4.0))]);
         var feed = new BinderFeed(Read(plan));
         feed.Step(0);
         feed.Step(1, departed: ["a", "b", "stranger"]);
         feed.Render(0);
 
-        Assert.Equal([("Supervised/transit", "a", "transit"), ("Supervised/transit", "b", "transit"),
-                      ("Supervised/missing", null, "vacancy")],
+        Assert.Equal([("Supervised/transit", "a", "transit"), ("Supervised/transit", "b", "transit")],
                      feed.Binder.Intervals.Select(interval => (interval.InstanceId, interval.EntityId, interval.Phase)));
         Assert.Equal(["test:lead"], feed.Table.Of("a").Annotations.Select(annotation => annotation.Role));
         Assert.Equal(SupervisionState.Unlabelled, feed.Of("stranger").State);

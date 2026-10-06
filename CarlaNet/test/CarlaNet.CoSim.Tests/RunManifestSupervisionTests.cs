@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CarlaNet.Types.Supervision;
 using Xunit.Abstractions;
 using static CarlaNet.CoSim.Tests.PlanRows;
@@ -60,9 +61,11 @@ public sealed class RunManifestSupervisionTests : IDisposable
         Assert.Equal(plan.Instances.Select(instance => instance.InstanceId),
                      rows.Where(row => Kind(row) == "instance").Select(row => row.GetProperty("instance_id").GetString()));
         JsonElement standoff = InstanceRow(rows, "Supervised/standoff");
-        Assert.Equal(("annotated", "present", "test:standoff"),
-                     (standoff.GetProperty("supervision").GetString(), standoff.GetProperty("realisation").GetString(),
-                      standoff.GetProperty("labels")[0].GetString()));
+        Assert.Equal(("annotated", "test:standoff"),
+                     (standoff.GetProperty("supervision").GetString(), standoff.GetProperty("labels")[0].GetString()));
+        // An instance row says what a vehicle does and nothing of a place: no realisation, no expectation.
+        Assert.False(standoff.TryGetProperty("realisation", out _));
+        Assert.False(standoff.TryGetProperty("expected", out _));
         JsonElement participant = Assert.Single(standoff.GetProperty("participants").EnumerateArray());
         Assert.Equal(("dweller", "subject"), (participant.GetProperty("participant").GetString(), participant.GetProperty("role").GetString()));
         JsonElement declared = Assert.Single(standoff.GetProperty("intervals").EnumerateArray());
@@ -71,12 +74,14 @@ public sealed class RunManifestSupervisionTests : IDisposable
                       declared.GetProperty("declared_duration_s").GetDouble()));
         Assert.Equal(plan.Instances.Single(instance => instance.InstanceId == "Supervised/standoff").Intervals[0].Anchor!.Start.Spelled,
                      declared.GetProperty("anchor_start").GetString());
-        JsonElement missing = InstanceRow(rows, "Supervised/missing");
-        Assert.Equal(("absent", "test:guard"),
-                     (missing.GetProperty("realisation").GetString(), missing.GetProperty("expected").GetProperty("role").GetString()));
         Assert.Empty(InstanceRow(rows, "Supervised/haul").GetProperty("intervals").EnumerateArray());
         JsonElement series = rows.Single(row => Kind(row) == "series");
-        Assert.Equal(("relief", 2), (series.GetProperty("series_id").GetString(), series.GetProperty("slots").GetArrayLength()));
+        Assert.Equal(("relief", 1), (series.GetProperty("series_id").GetString(), series.GetProperty("slots").GetArrayLength()));
+        // A slot is a realised posting: it names the vehicle that realises it, and nothing expected of a place.
+        JsonElement slot = Assert.Single(series.GetProperty("slots").EnumerateArray());
+        Assert.Equal(("s1", "passer"), (slot.GetProperty("slot_key").GetString(), slot.GetProperty("entity_id").GetString()));
+        Assert.False(slot.TryGetProperty("realised_by", out _));
+        Assert.False(slot.TryGetProperty("expected_entity_id", out _));
         JsonElement cohort = rows.Single(row => Kind(row) == "cohort");
         Assert.Equal(("corridor", "annotated"), (cohort.GetProperty("flow_id").GetString(), cohort.GetProperty("supervision").GetString()));
 
@@ -108,9 +113,9 @@ public sealed class RunManifestSupervisionTests : IDisposable
                                           NumberOrNull(standoffOpened, "declared_duration_s")));
         Assert.Equal(("trigger", 31.0, 31.0), (standoffClosed.GetProperty("closed_by").GetString(),
                                                NumberOrNull(standoffClosed, "sim_time_s"), NumberOrNull(standoffClosed, "committed_end_s")));
-        JsonElement vacancy = Single(rows, "interval_closed", bound.Single(interval => interval.Phase == "vacancy"));
-        Assert.Equal(JsonValueKind.Null, vacancy.GetProperty("participant").ValueKind);
-        Assert.Equal(("slot_unrealised", 9.0), (vacancy.GetProperty("closed_by").GetString(), NumberOrNull(vacancy, "sim_time_s")));
+        // Every interval row names its participant: there is no interval of no vehicle (06 §3.5).
+        Assert.All(rows.Where(row => Kind(row) is "interval_opened" or "interval_closed"),
+                   row => Assert.Equal(JsonValueKind.String, row.GetProperty("participant").ValueKind));
 
         // The terminal row: the counts, and the intervals the binder closed only once the session ended,
         // listed as open with the word it closed them with.
@@ -178,8 +183,8 @@ public sealed class RunManifestSupervisionTests : IDisposable
     {
         foreach ((int steps, string[] open, string[] notYet) in new[]
                  {
-                     // The vacancy is in force from the tick at its declared start, which the fourth step's frames reach.
-                     (4, new[] { "vacancy" }, new[] { "exit", "standoff" }),
+                     // At the fourth step nothing anchored has opened yet; the approach, declared 1 s to 3 s, has closed.
+                     (4, Array.Empty<string>(), new[] { "exit", "standoff" }),
                      (12, new[] { "exit", "standoff" }, Array.Empty<string>()),
                  })
         {
@@ -272,6 +277,41 @@ public sealed class RunManifestSupervisionTests : IDisposable
         // And the times did differ.
         Assert.NotEqual(OpenedAt(whole, "standoff"), OpenedAt(finer, "standoff"));
         Assert.NotEqual(BegunBeforeWindow(whole, "approach"), BegunBeforeWindow(late, "approach"));
+
+        RecordFixtures([(wholePath, "supervised_step_1.0.jsonl"), (finerPath, "supervised_step_0.5.jsonl"),
+                        (latePath, "supervised_window_15.jsonl")]);
+    }
+
+    /// <summary>
+    /// After a deliberate change to what the writer writes, record these three manifests as the fixtures
+    /// <c>CarlaControl/test/test_run_manifest_diff.py</c> reads, by running this test with
+    /// <c>CARLANET_RECORD_RUN_MANIFEST_FIXTURES</c> naming the fixtures directory. The opening row's
+    /// paths are cut to file names, as the fixtures carry them; read the diff before committing it.
+    /// </summary>
+    private static void RecordFixtures(IEnumerable<(string Written, string Fixture)> manifests)
+    {
+        if (Environment.GetEnvironmentVariable("CARLANET_RECORD_RUN_MANIFEST_FIXTURES") is not { Length: > 0 } directory)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        foreach ((string written, string fixture) in manifests)
+        {
+            string[] lines = File.ReadAllLines(written);
+            JsonNode opening = JsonNode.Parse(lines[0])!;
+            foreach ((string parent, string key) in new[] { ("scenario", "config_path"), ("scenario", "world_package"),
+                                                            ("scenario", "lock_path"), ("plan", "path") })
+            {
+                if (opening[parent]?[key] is { } value && value.GetValue<string>() is { Length: > 0 } path)
+                {
+                    opening[parent]![key] = Path.GetFileName(path);
+                }
+            }
+
+            lines[0] = opening.ToJsonString();
+            File.WriteAllText(Path.Combine(directory, fixture), string.Join("\n", lines) + "\n");
+        }
     }
 
     private static (SupervisionPlan Plan, IReadOnlyList<SupervisionIntervalRecord> Bound) Drive(

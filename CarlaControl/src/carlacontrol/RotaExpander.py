@@ -1,7 +1,7 @@
 """A rota: the one repetition form a specification has, written as days x civil clocks x subjects.
 
 The sizing scenario's guard rota is a triple loop over seven days, three shift changes and sixteen
-towers with one iteration skipped to plant an absence (`CarlaControl/scripts/make_bahonar_scenario.py`,
+towers with one iteration skipped to leave a posting unmanned (`CarlaControl/scripts/make_bahonar_scenario.py`,
 `tower_postings`). As a rota it is one block:
 
 ```jsonc
@@ -18,10 +18,12 @@ variables, no conditionals -- a cross product of declared days, declared clocks 
 with an explicit exclusion list. Each entry departs at `d<day> <clock>` under the epoch, resolved by
 `CivilTimeResolver`, so the civil meaning of every departure is recoverable from the artifact.
 
-**A skip is a planted absence, so it must hit something** (check 48). A skip matching no entry is an
+**A skip removes an occasion, so it must hit something** (check 48). A skip matching no entry is an
 anomaly that was never planted -- the whole of the sizing scenario's no-show rests on one `continue`
-firing -- and a skip carries its reason as a field, so the report can state it and the supervision
-plan can join it to the slot it vacates.
+firing -- and a skip carries its reason as a field, so the report can state it. A skipped occasion
+writes no trip and no supervision row: there is no vehicle for a label to follow (06 §3.5), so the
+gap it makes in the schedule is conveyed by the report, by the vehicle an author labels as deviating,
+or by a note at scenario level, never per frame.
 
 `id_pattern` fields: `{day}`, `{hour}` and `{minute}` of the clock as integers, `{subject_index}`,
 and `{subject}`, the subject's place name.
@@ -133,11 +135,11 @@ class RotaExpander:
         for n, skip in enumerate(skips):
             if not str(skip.get("because", "")).strip():
                 self.findings.refuse(ROTA_CHECK, where, f"skip {skip} gives no 'because'; a "
-                                     "deliberate absence states its reason")
+                                     "deliberate skip states its reason")
             if matched[n] == 0:
                 self.findings.refuse(ROTA_CHECK, where,
-                                     f"skip {skip} matches no occasion the rota produces, so the "
-                                     "absence it describes is never planted")
+                                     f"skip {skip} matches no occasion the rota produces, so it "
+                                     "removes nothing")
             elif matched[n] > 1:
                 self.findings.refuse(ROTA_CHECK, where,
                                      f"skip {skip} matches {matched[n]} occasions; a skip names "

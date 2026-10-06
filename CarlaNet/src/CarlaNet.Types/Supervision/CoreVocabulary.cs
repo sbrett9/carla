@@ -31,10 +31,13 @@ public sealed record CoreTermFamily(string Family, IReadOnlyList<string> Terms);
 public static class CoreVocabulary
 {
     /// <summary>
-    /// The core's version. 2 added <c>beyond_draw_distance</c> to the observability outcomes and the
-    /// interval anchor, render state and render reason families, and generates the core from here.
+    /// The core's version. 2 added the interval anchor, render state and render reason families and
+    /// generates the core from here. 3 removed the <c>realisation</c>, <c>observability_outcome</c> and
+    /// <c>reserved_phase</c> families, the subject kind <c>slot</c> and the close <c>slot_unrealised</c>:
+    /// every label follows a vehicle, and the core carries no outcome that rests on a pass mark (06 §3.5,
+    /// the owner's rulings of 2026-10-05).
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>Where the core is defined.</summary>
     public const string Source = "06_Truth_And_Annotation.md §3.7";
@@ -47,14 +50,11 @@ public static class CoreVocabulary
     [
         Family<SupervisionState>("supervision_state"),
         Family<SubjectKind>("subject_kind"),
-        Family<Realisation>("realisation"),
         Family<IntervalOnset>("interval_onset"),
         Family<ClosedBy>("closed_by"),
-        Family<ObservabilityOutcome>("observability_outcome"),
         new("illumination_band", IlluminationBands.Names),
         Family<CadenceForm>("cadence"),
         Family<ReservedRole>("reserved_role"),
-        Family<ReservedPhase>("reserved_phase"),
         Family<AnchorEvent>("interval_anchor"),
         Family<RenderState>("render_state"),
         Family<RenderReason>("render_reason"),
@@ -63,17 +63,11 @@ public static class CoreVocabulary
     /// <summary>The role a one-participant instance names its participant.</summary>
     public static string SubjectRole { get; } = Name(ReservedRole.Subject);
 
-    /// <summary>The phase of an absence's interval.</summary>
-    public static string VacancyPhase { get; } = Name(ReservedPhase.Vacancy);
-
     /// <summary>A supervision state's name.</summary>
     public static string Name(SupervisionState value) => Snake(value);
 
     /// <summary>A subject kind's name.</summary>
     public static string Name(SubjectKind value) => Snake(value);
-
-    /// <summary>A realisation's name.</summary>
-    public static string Name(Realisation value) => Snake(value);
 
     /// <summary>An interval onset's name.</summary>
     public static string Name(IntervalOnset value) => Snake(value);
@@ -81,18 +75,12 @@ public static class CoreVocabulary
     /// <summary>A <c>closed_by</c> value's name.</summary>
     public static string Name(ClosedBy value) => Snake(value);
 
-    /// <summary>An observability outcome's name.</summary>
-    public static string Name(ObservabilityOutcome value) => Snake(value);
-
     /// <summary>A cadence form's name.</summary>
     public static string Name(CadenceForm value) =>
         value == CadenceForm.Periodic ? PeriodicCadence : Snake(value);
 
     /// <summary>The reserved role's name.</summary>
     public static string Name(ReservedRole value) => Snake(value);
-
-    /// <summary>The reserved phase's name.</summary>
-    public static string Name(ReservedPhase value) => Snake(value);
 
     /// <summary>An anchor event's name, without the index a stop or a phase carries.</summary>
     public static string Name(AnchorEvent value) => Snake(value);
@@ -110,7 +98,7 @@ public static class CoreVocabulary
             _ => Snake(value),
         })]);
 
-    /// <summary>A member's name in lower snake case: <c>OutOfFrame</c> is <c>out_of_frame</c>.</summary>
+    /// <summary>A member's name in lower snake case: <c>EntityArrived</c> is <c>entity_arrived</c>.</summary>
     private static string Snake<TEnum>(TEnum value) where TEnum : struct, Enum
     {
         string name = value.ToString();
