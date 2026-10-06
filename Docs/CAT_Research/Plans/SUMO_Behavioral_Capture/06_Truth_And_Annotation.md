@@ -2869,9 +2869,10 @@ and every instant is TraCI's clock for the SUMO frame it describes:
   counts, its vocabulary's version, digest and author namespaces, the SUMO settings checked at start
   (the collision action, every teleport trigger, the departure and seeding options, the scale and the
   insertion limits), the clock, the render set, the rule the vehicle lights follow (`vehicle_lights`:
-  whether they are driven, the sun elevations the headlights come on below and go off above and that
-  they read the geometric elevation, and that brake lights and turn signals follow SUMO's signals;
-  [11](11_Time_And_Illumination.md) §6.3), and [04](04_Contracts.md) C9's epoch verbatim with its
+  whether they are driven, whether the headlights follow a bound sun, the sun elevations they come on
+  below and go off above and that they read the geometric elevation, and that brake lights and turn
+  signals follow SUMO's signals; [11](11_Time_And_Illumination.md) §6.3), and [04](04_Contracts.md)
+  C9's epoch verbatim with its
   digest, the illumination declared and in force, `epoch_honoured` and `advance_mechanism`;
 - `sensor_placed`, for each camera as it is placed, under the name its captures carry;
 - `render_admitted`, at the instant of the pass that admitted the vehicle, with why

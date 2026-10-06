@@ -87,9 +87,11 @@ public sealed class RunManifestWriterTests : IDisposable
         Assert.False(opened.GetProperty("solar").GetProperty("epoch_declared").GetBoolean());
 
         // The rule the vehicle lights follow, at its defaults: driven, headlights on below +3 and off above
-        // +6 degrees of the geometric sun, brake lights and turn signals from SUMO's signals.
+        // +6 degrees of the geometric sun, brake lights and turn signals from SUMO's signals. No policy binds
+        // a sun here, so the headlights follow none and stay off.
         JsonElement lights = opened.GetProperty("vehicle_lights");
         Assert.True(lights.GetProperty("driven").GetBoolean());
+        Assert.False(lights.GetProperty("headlights_follow_sun").GetBoolean());
         Assert.Equal(HeadlightRule.DefaultOnBelowDegrees, lights.GetProperty("headlights_on_below_deg").GetDouble());
         Assert.Equal(HeadlightRule.DefaultOffAboveDegrees, lights.GetProperty("headlights_off_above_deg").GetDouble());
         Assert.Equal("geometric", lights.GetProperty("headlights_elevation").GetString());
@@ -161,6 +163,7 @@ public sealed class RunManifestWriterTests : IDisposable
 
         JsonElement lights = ReadRows(File.ReadAllText(driven))[0].GetProperty("vehicle_lights");
         Assert.True(lights.GetProperty("driven").GetBoolean());
+        Assert.False(lights.GetProperty("headlights_follow_sun").GetBoolean());
         Assert.Equal(2.5, lights.GetProperty("headlights_on_below_deg").GetDouble());
         Assert.Equal(7.0, lights.GetProperty("headlights_off_above_deg").GetDouble());
         Assert.Equal("geometric", lights.GetProperty("headlights_elevation").GetString());
@@ -179,6 +182,7 @@ public sealed class RunManifestWriterTests : IDisposable
 
         JsonElement none = ReadRows(File.ReadAllText(undriven))[0].GetProperty("vehicle_lights");
         Assert.False(none.GetProperty("driven").GetBoolean());
+        Assert.False(none.GetProperty("headlights_follow_sun").GetBoolean());
         foreach (string field in new[] { "headlights_on_below_deg", "headlights_off_above_deg", "headlights_elevation",
                                          "brake_lights", "turn_signals" })
         {
@@ -372,6 +376,11 @@ public sealed class RunManifestWriterTests : IDisposable
                      rows[0].GetProperty("solar").GetProperty("illumination_in_force").GetProperty("policy").GetString());
         Assert.Equal(SolarLeaseTests.PortEpoch().Digest,
                      rows[0].GetProperty("solar").GetProperty("epoch_block_sha256").GetString());
+
+        // A policy that binds the sun: the headlights follow it, which is what the drive's own report says.
+        JsonElement lights = rows[0].GetProperty("vehicle_lights");
+        Assert.True(lights.GetProperty("driven").GetBoolean());
+        Assert.True(lights.GetProperty("headlights_follow_sun").GetBoolean());
     }
 
     [RequiresSumoFact]

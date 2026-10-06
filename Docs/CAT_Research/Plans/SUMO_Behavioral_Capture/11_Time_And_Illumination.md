@@ -1036,9 +1036,11 @@ frame renders, so they follow the sun the previous frame reported, a twentieth o
 window opening inside the band starts with the headlights off. The brake lights and turn signals come
 from `VehicleLampMapping` (§6.2, D11.8), written on a loan, on a change of SUMO's signals and darkened on
 release. **The rule each run ran under is on the run manifest's opening row**, as the owner ruled, as
-`vehicle_lights`: `driven`, `headlights_on_below_deg`, `headlights_off_above_deg`,
-`headlights_elevation` (`geometric`), `brake_lights` and `turn_signals` (`sumo_signals`), all but
-`driven` null where the lights are not driven ([`12`](12_Operator_Control_Surface.md) §4.5). Per-vehicle
+`vehicle_lights`: `driven`, `headlights_follow_sun` (true only where the policy binds the sun; under
+`ignore` the headlights stay off while the brake lights and turn signals still follow SUMO),
+`headlights_on_below_deg`, `headlights_off_above_deg`, `headlights_elevation` (`geometric`),
+`brake_lights` and `turn_signals` (`sumo_signals`), the last five null where the lights are not driven
+([`12`](12_Operator_Control_Surface.md) §4.5). Per-vehicle
 light state in the truth record comes later, by the same ruling. Whether a light *shows* on a body is
 the catalogue's statement: its optical pass measured every body's lights, and as measured no shipped body
 shows headlights, brake lights or turn signals lit; the authoring skill's generated

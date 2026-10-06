@@ -790,15 +790,20 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     /// </summary>
     /// <remarks>
     /// Written from the options the session runs under, which are the values its headlight rule was built
-    /// from before the manifest was opened. Where the lights are not driven every body keeps the lights it
+    /// from before the manifest was opened. The rule runs only on a sun the session bound and audits
+    /// (<see cref="SumoDriveSession"/>, <c>HeadlightsForThisTick</c>): under a policy that leaves the sun
+    /// alone <c>headlights_follow_sun</c> is false and every headlight stays off, while brake lights and
+    /// turn signals still follow SUMO. Where the lights are not driven at all every body keeps the lights it
     /// was spawned with, and the elevations and the signal source are written null. Per-vehicle light state
     /// is not in the truth record; this row is where a reader learns what rule the imagery's lights follow.
     /// </remarks>
     private void WriteVehicleLights(Utf8JsonWriter json)
     {
         bool driven = _options.VehicleLampsDriven;
+        bool followSun = driven && _options.Illumination is { BindsTheSun: true };
         json.WriteStartObject("vehicle_lights");
         json.WriteBoolean("driven", driven);
+        json.WriteBoolean("headlights_follow_sun", followSun);
         WriteNumberOrNull(json, "headlights_on_below_deg", driven ? _options.HeadlightOnBelowDegrees : null);
         WriteNumberOrNull(json, "headlights_off_above_deg", driven ? _options.HeadlightOffAboveDegrees : null);
         json.WriteString("headlights_elevation", driven ? SolarElevationKinds.Name(SolarElevationKind.Geometric) : null);

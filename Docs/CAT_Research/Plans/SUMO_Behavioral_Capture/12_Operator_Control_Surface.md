@@ -1099,15 +1099,19 @@ is a block of its own on the manifest's opening row, beside `solar`:
 ```jsonc
 "vehicle_lights": {
   "driven": true,
+  "headlights_follow_sun": true,
   "headlights_on_below_deg": 3.0, "headlights_off_above_deg": 6.0,
   "headlights_elevation": "geometric",
   "brake_lights": "sumo_signals", "turn_signals": "sumo_signals"
 }
 ```
 
-With the lights not driven, `driven` is `false` and every other field `null`: every body keeps the
-lights it was spawned with. The elevations are the run's own (`SumoDriveSessionOptions`), so a run that
-set other thresholds records them; an inverted band is refused before any manifest is opened.
+`headlights_follow_sun` is true only where the policy binds the sun: the rule runs on a sun the session
+bound and audits, so under `ignore` every headlight stays off while brake lights and turn signals still
+follow SUMO. With the lights not driven, `driven` and `headlights_follow_sun` are `false` and every
+other field `null`: every body keeps the lights it was spawned with. The elevations are the run's own
+(`SumoDriveSessionOptions`), so a run that set other thresholds records them; an inverted band is
+refused before any manifest is opened.
 
 ### 4.6 What this section needs from `11_Time_And_Illumination.md`
 
