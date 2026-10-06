@@ -111,7 +111,7 @@ the CarlaNet DLL tree — the user runs those, and publishing without installing
 repository copy from the installed one. `dotnet build` and `dotnet test` are expected and welcome.
 LibCarla is built separately by CMake; editing its source does not rebuild it through the normal path.
 
-**Windows and Linux move together.** Every `Scripts/Windows/*.ps1` change lands with its
+**Windows and Linux move together.** Every `Scripts/Windows/*.ps1` change goes in with its
 `Scripts/Linux/*.sh` counterpart **in the same commit**, help text and documentation included. A
 difference between the platforms is a defect, never a policy — that is now a settled decision, not a
 preference ([`13`](13_Work_Breakdown.md) §13.2).

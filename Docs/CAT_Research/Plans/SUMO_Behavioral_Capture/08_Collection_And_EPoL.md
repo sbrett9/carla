@@ -300,7 +300,7 @@ The engine already exposes the fix and nothing uses it. `sensor_tick` is a stand
 `ASensor::Set` turns it into `SetActorTickInterval`
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/Sensor.cpp:44-49`). `SensorRig` never sets it
 (`SensorRig.py:61-86`). Whether `sensor_tick` composes correctly with synchronous world ticking, and
-whether two cameras given the same `sensor_tick` land on the same simulation frames — which
+whether two cameras given the same `sensor_tick` fall on the same simulation frames — which
 `OcclusionEstimator` requires for pairing (§2.5) — is **unmeasured**; the measurement is in §12.4.
 
 The contention is already recorded as a measurement in the source: "With two camera streams saturating
@@ -1140,7 +1140,7 @@ Three measured properties of the product, and what each costs.
 asset 2275207 is unlit photogrammetry whose textures "already encode the aerial capture's sun-lit
 albedo, cast shadows, and ambient occlusion from a daytime pass", there is no per-texel operation that
 recovers true albedo from a single baked capture, and any added light is additive on top. Two
-consequences land on collection rather than on rendering:
+consequences fall on collection rather than on rendering:
 
 - **Shadows in the imagery are two populations, and only one of them moves with our sun.** The tiles'
   baked shadows point wherever the aerial capture's sun pointed and are **identical in every capture of
@@ -1247,7 +1247,7 @@ in the order they break things:
    `army`, `authority` and `passenger` (measured, §5.6). **If a light projector maps an anomaly's
    vClass — or worse, its supervision state — to a flashing lamp, the corpus teaches "blue flashing =
    anomaly", and at night it is far worse than the orange-paint confounder of §5.6 because the lamp is
-   the entire signal.** Rule, and it belongs here because it lands in the pixels:
+   the entire signal.** Rule, and it belongs here because it shows in the pixels:
 
    > **The light composition may read only a vehicle's own motion signals and the world's illumination.
    > It may never read a supervision state, an anomaly flag, an `instance_id`, or a `vType` name.**
@@ -2135,7 +2135,7 @@ is to characterise a model is not.
 
 The block's eight fields, one at a time, and plainly which side each falls on:
 
-| Field | Side of the line | Where it lands |
+| Field | Side of the line | Where it goes |
 |---|---|---|
 | **`truth_density`** → **`truth_neighbour_count`** | **Data.** How many truth vehicles sit close together in image space is a property of our scene and our camera, with no detector anywhere in it | **Ours, computed with no detector.** Computed per (sensor, tick, vehicle) from the label record alone (§5.1) and shipped with the labels. It is the density term that says whether a close call was expected |
 | **`margin`** → **`truth_separation_px` / `truth_separation_norm`** | **Data**, as defined here. A gap to a *detection's* runner-up would need a detection. The gap to the **nearest other truth vehicle**, normalised by apparent size, needs none, and it is the quantity that actually predicts mis-transfer | **Ours, computed with no detector.** This is the single most useful field in the block: a label at 12 px from its nearest neighbour is safe to transfer, one at 1.2 px is not, and we can say which every label is **before anyone runs anything** |
@@ -2485,7 +2485,7 @@ It is a **handover**, not an exchange — one direction, from us to a consumer:
 |---|---|---|
 | Direction | files: the consumer reads a released tree | push, one way, no acknowledgement: the collection chain streams `CollectionFrame` records (§7.2, §11.5) |
 | Shape | the on-disk layout of §3.5 plus a release attestation (§9.4) | a persistent connection carrying the same records, line-delimited |
-| Back-channel | **none.** Nothing comes back into this pipeline | **none into the pipeline.** A consumer's output goes wherever they send it. *If* they also push something to us, it lands in the transcript — an opaque blob that terminates at a file and is never read back into truth, supervision, coverage, a manifest or a decision (§11.6, D8.41) |
+| Back-channel | **none.** Nothing comes back into this pipeline | **none into the pipeline.** A consumer's output goes wherever they send it. *If* they also push something to us, it goes into the transcript — an opaque blob that terminates at a file and is never read back into truth, supervision, coverage, a manifest or a decision (§11.6, D8.41) |
 | Failure | a failed read is the consumer's retry | slow within the declared floor first, then drop-oldest at our end, counted and recorded (§11.3, D8.40) |
 
 The record is the contract; the transport is not. Writing the same record for both products is what
@@ -2766,7 +2766,7 @@ and that executor is not the authoring surface here.
 the authority that produces each — **declared** (the author), **committed** (SUMO's own
 model), **observed** (the rendered body) — showing that SUMO already makes the declared/committed
 distinction itself in `StopData.intendedArrival` versus `arrival`. **This section uses those names and
-that decomposition, and adds nothing to it.** Two consequences land on the corpus:
+that decomposition, and adds nothing to it.** Two consequences fall on the corpus:
 
 - **An onset can be legitimately absent, which doc 20's schema had no case for.** 06 §3.3 measured that
   337 of the 338 stops in the sizing scenario use `duration`, and the stay-behind's uses `until` the
@@ -3367,7 +3367,7 @@ their formats, which is exactly the thing we do not have. **Recording an unrecog
 verbatim is correct behaviour and not a degraded mode**, and a transcript full of blobs we cannot
 interpret is a complete and successful transcript.
 
-**How that rule lands on the rest of the design.** Four places, and they agree:
+**How that rule bears on the rest of the design.** Four places, and they agree:
 
 - **D8.23 refuses an `<_epol>` CoT detail child** — we emit no assessments and we re-broadcast nobody
   else's.
@@ -3519,7 +3519,7 @@ that every branch changes something we do, and none of them says anything about 
   driver.
 - **B-low collapses** → the corpus must be stratified by elevation, and **our** rig geometry must be
   re-examined at low sun.
-- **B-dark yields nothing** → **night is off the table until doc 13's Phase 2 lands**, the sizing
+- **B-dark yields nothing** → **night is off the table until doc 13's night work is done**, the sizing
   scenario's 23:00 window and doc 20's class 4 are recorded in the corpus's statement of what it does
   not contain, and the plan says so rather than collecting a window of black frames. This is the
   measurement that turns §4.6's verdict from a reasoned position into a settled one.
@@ -3550,7 +3550,7 @@ this plan and no dependency on anything external.
 
 All are cheap, all are read-only or single-run, and all are currently inferences.
 
-1. **Does `sensor_tick` compose with synchronous ticking, and do two cameras given the same value land
+1. **Does `sensor_tick` compose with synchronous ticking, and do two cameras given the same value fall
    on the same simulation frames?** (§2.3.) Method: spawn an RGB and a depth camera with equal
    `sensor_tick`, record, and compare `OcclusionEstimator`'s five pairing counters
    (`FrameRecorder.cs:53-69`) against a run without it. If pairing degrades, server-side decimation is
@@ -3792,7 +3792,7 @@ author's feedback loop and is the reason coverage is an artifact rather than a s
 cannot see that a site was never observed will keep authoring for it. **`U13 --> U14` is the
 uncomfortable loop**: the steward discovers that the labels correlate with the hour, and the only real
 fix is upstream, in what the author wrote. **`U16 --> U11`**: the fitness probe's verdict
-about rig geometry lands on the author's coverage expectations before a corpus is collected rather than
+about rig geometry falls on the author's coverage expectations before a corpus is collected rather than
 after.
 
 ---

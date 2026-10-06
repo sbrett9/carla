@@ -2211,7 +2211,7 @@ Six things this diagram is asserting, each of which is a refusal somewhere in UC
 
 This is UC-13. The run itself is UC-7 unchanged (§5); what this case adds is at the edges — how a run is
 entered without a person, how it can be watched while it runs, and the three different ways it can end.
-**The stop edge is the one to read first**: it lands inside `RUN`, at any tick, not after it — because a
+**The stop edge is the one to read first**: it falls inside `RUN`, at any tick, not after it — because a
 kill is the expected path, not a tidy exit the diagram can place at the end.
 
 ```mermaid
@@ -2279,7 +2279,7 @@ flowchart TB
 
 Five things this diagram is asserting:
 
-- **The stop edge, `N4 ⇒ R1`, lands inside the run, not after it.** It can arrive at any tick, and the
+- **The stop edge, `N4 ⇒ R1`, falls inside the run, not after it.** It can arrive at any tick, and the
   diagram treats it with the same weight as reaching the window's own end, because both are normal ways
   for this case to end (main flow step 5).
 - **`E4` is a real, intended branch, not a missing edge.** A hard kill reaches no closing step and writes

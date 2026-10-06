@@ -1,8 +1,14 @@
 # 09 — Toolchain and Packaging
 
-**Status:** planning only, scoped to `_TEAM_BRIEF.md` §3a. No code changed, no build/cook/engine run.
-Every claim below is either cited to `path:line` in the tree as it stands today, or marked as measured
-with the command that produced it, or explicitly labelled an inference.
+**Status:** plan, written against the tree of 2026-09-18 and since built on Windows: the whole SUMO set
+(`netconvert`, `sumo`, `duarouter`, `sumo-gui`, the `data/` and `tools/` subsets) is staged under
+`Build/sumo-install` by a guard that checks the whole set (§2), `CarlaNet.Sumo` is the managed TraCI
+client (§3.4), both distribution scripts bundle both wheels and write the generated manifest (§5), and the
+clipper emits nodes in a sorted order (§7.3, D9.9). The Linux and CI builds are written and not verified,
+and the distribution's clean-tree check is deferred by the owner. Where a section below says "current" or
+"proposed" of the setup scripts, it describes the tree of 2026-09-18; the measured facts stand as the
+record of what was found. Every claim is cited to `path:line`, marked as measured with the command that
+produced it, or labelled an inference.
 **Date:** 2026-09-18.
 **Owner role:** build, toolchain and packaging engineer. This document only.
 **Reads:** [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) (binding, especially §3a — the added time-of-day and
@@ -37,6 +43,7 @@ specifies only their packaging shape.
 | 2026-09-22 | Setup is two scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`; §3.1's environment citations re-resolved. |
 | 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
 | 2026-09-29 | The setup scripts build and stage `sumo-gui` for development (§2.5); FOX a Linux prerequisite in both homes; bundling it is an open decision (§5.4, Open question 5). |
+| 2026-10-05 | Status corrected against the tree: the guard and the full staged set are built on Windows (§1, §2.1); `CarlaNet.Sumo` exists (§3.4); the clipper's node order is sorted (§7.3, D9.9); the skill is a bundle at 1.5.0 (§5.4). |
 
 ---
 
@@ -50,7 +57,7 @@ Doc 23 §1/§1.2 was measured 2026-08-21. Re-measured today against the same fou
 | `Build/sumo-src` | complete, v1.27.0 pinned `e238ea04b7` | confirmed: `git -C Build/sumo-src rev-parse HEAD` pin matches `CarlaSetup.ps1:616`'s `$sumoSrcPin` exactly; `bin/` holds `sumo.exe` (6.9 MB), `duarouter.exe` (2.6 MB), `netconvert.exe`, `libtracics.dll` + `.lib`/`.exp`, `libtracics-sources.zip`, `libsumostatic.lib`, `libtracistatic.lib` | none |
 | `Build/SUMOLibraries` | pinned tag `1.27.0` | confirmed present, matches `CarlaSetup.ps1:617-618` pins | none |
 | `Build/sumo-build` | fully configured — `sumo.vcxproj`, `duarouter.vcxproj`, `libtracics.vcxproj`, `libsumocs.vcxproj` all generated | confirmed all four exist: `src/sumo.vcxproj`, `src/duarouter/duarouter.vcxproj`, `src/libtraci/libtracics.vcxproj`, `src/libsumo/libsumocs.vcxproj` | none |
-| `Build/sumo-install/bin` | **`netconvert.exe` only** staged; `sumo`/`duarouter`/`libtracics` exist in the source tree's `bin/` but are not staged | confirmed identical: `netconvert.exe` + 32 DLLs + `share/proj`; no `sumo.exe`, `duarouter.exe`, or `libtracics.dll` in `sumo-install/bin` | none |
+| `Build/sumo-install/bin` | **`netconvert.exe` only** staged; `sumo`/`duarouter`/`libtracics` exist in the source tree's `bin/` but are not staged | as measured 2026-09-18, confirmed identical (since then `sumo.exe`, `duarouter.exe` and `sumo-gui.exe` are staged beside it, with `data/typemap`, `data/xsd`, `tools/traci` and `tools/sumolib`): `netconvert.exe` + 32 DLLs + `share/proj`; no `sumo.exe`, `duarouter.exe`, or `libtracics.dll` in `sumo-install/bin` | none |
 | Generated C# bindings | **94 generated C# files** in `Eclipse.Sumo.Libtraci/` | **93 `.cs` files.** The 94th file in that directory is `libtraciCSHARP_wrap.cxx` — the SWIG-generated **C++** glue compiled into the native `libtracics.dll`, not a C# source file. Confirmed by unzipping `Build/sumo-src/bin/libtracics-sources.zip` (95 zip entries = 1 directory entry + 93 `.cs` + 1 `.cxx`) and by `find … -iname '*.cs' \| wc -l` = 93 | doc 23 off by one. Inventory only — nothing in this plan builds from these files (§4.1) |
 | `data/`, `tools/` staged | present in source, **unstaged** | confirmed: `Build/sumo-src/data` and `Build/sumo-src/tools` exist and are populated (type maps, XSDs, `traci`/`sumolib`); nothing under `Build/sumo-install` or `Build/Dist/*/tools/sumo` | none |
 | Distribution slot | `MakeDistribution.ps1:237` creates `tools\sumo\` | the directory list is now at `Scripts/Windows/MakeDistribution.ps1:211`; the actual SUMO copy block is `:248-260`. Contents of the built `Build/Dist/Carla-0.10.0-Win64-Development/tools/sumo/`: `netconvert.exe` + its DLLs + a `proj/` subfolder (**PROJ's own data**, not SUMO's `data/typemap/`). No `sumo.exe`, no `duarouter.exe`, no `libtracics.dll`, no SUMO `data/`, no SUMO `tools/` | line-number drift only (script has grown since 2026-08-21); the packaging gap doc 23 described is confirmed unchanged |
@@ -77,7 +84,7 @@ that line wherever it appears below. `Findings/22_Digital_Twin_Feature_Port.md`'
 `Scripts/Windows/MakeDistribution.ps1`, `Scripts/Linux/MakeDistribution.sh`,
 `CarlaControl/src/carlacontrol/SumoInstallation.py`, `OsmClipper.py:154,219`,
 `Unreal/Package/CreateCarlaVersionFile.cmake`, the CarlaNet `.csproj` files, and the
-`CarlaServer.cpp:611-661` / `carlanet/__init__.py` solar citations in §2.4 — lands on the exact line
+`CarlaServer.cpp:611-661` / `carlanet/__init__.py` solar citations in §2.4 — resolves to the exact line
 cited.
 
 **The build and staging pipeline, source pin to staged install to distribution bundle** — current state
@@ -114,7 +121,11 @@ flowchart TD
 
 ### 2.1 What changes, and why the guard has to change with it
 
-`CarlaSetup.ps1:677` builds exactly one target:
+**Built.** `CarlaSetup.ps1` names the required set (`$sumoRequiredBinaries`, `$sumoRequiredData`,
+`$sumoRequiredTools`), lists every member that is missing, and builds `netconvert sumo duarouter sumo-gui`
+in one `cmake --build` when any is. What follows is the tree of 2026-09-18 that it replaced.
+
+`CarlaSetup.ps1:677` built exactly one target:
 
 ```powershell
 cmake --build $sumoBuild --target netconvert --config Release -- -m
@@ -500,7 +511,7 @@ What changes once `data/` is staged and `SUMO_HOME` points at a complete install
 - **It becomes possible to pass `--type-files $SUMO_HOME/data/typemap/osmNetconvert.typ.xml`
   deliberately** — to diff the compiled-in defaults against the shipped file (they are expected to
   agree, but "expected" is not "measured" — this is a cheap, worthwhile one-time check once staging
-  lands), or to hand `netconvert` a **customized** type map (e.g. one that changes vClass permissions
+  is in), or to hand `netconvert` a **customized** type map (e.g. one that changes vClass permissions
   for a road class this fork cares about) without that customization living nowhere on disk.
 - **Other SUMO tools need `data/` and `tools/` for reasons unrelated to netconvert's type map**:
   `sumo`/`duarouter` reference `data/` for XSD validation of generated files under some invocations,
@@ -572,9 +583,9 @@ What a consuming .NET project needs, concretely:
    a clean, acyclic dependency: `CarlaNet.CoSim` → `CarlaNet.Sumo` + `CarlaNet.Types` + `CarlaNet.Transport`
    + `CarlaNet.Map` + `CarlaNet.TrafficManager`, mirroring the existing pattern at
    `CarlaNet.Scenario.csproj:4-7`. `TargetFramework` is `net10.0`, matching every existing CarlaNet
-   assembly (verified: `CarlaNet.Types.csproj:4`, `CarlaNet.Scenario.csproj:11`). Confirmed by directory
-   listing: `CarlaNet/src/CarlaNet.Sumo/` does not exist yet — this is a proposal, not a description of
-   something already built.
+   assembly (verified: `CarlaNet.Types.csproj:4`, `CarlaNet.Scenario.csproj:11`). `CarlaNet/src/CarlaNet.Sumo/` exists as described: `SumoConnection`, `TraCIConnection`, the
+   reader and writer, the vehicle and simulation domains and their subscriptions, `SumoInstallation` and
+   `SumoRelease`, with `CarlaNet.Sumo.Tests` stepping a live `sumo` over TraCI.
 2. **It builds from a clean clone on a machine with no SUMO.** The project's only inputs are its own
    `.cs` files and `System.Net.Sockets`, so `dotnet build` and `dotnet restore` work before
    `CarlaSetup.ps1`/`.sh` has ever run. Only *running* the tests against a live simulation needs a
@@ -823,7 +834,9 @@ template (`12`).
   discoverable, versioned file shipped with the distribution (or with a captured corpus — that's `06`'s
   and `08`'s call), not embedded in code.
 - **The authoring skill — a bundle, not a single file, and it lives in the repository.** It is a
-  single 14 KB `SKILL.md` today, at `carla/CarlaControl/skills/sumo-traffic-scenarios/`, beside the
+  bundle at `carla/CarlaControl/skills/sumo-traffic-scenarios/` (`SKILL.md` at `metadata.version`
+  1.5.0, about 41 KB; `checks.json`; `schemas/`, `references/` and `examples/`; about 257 KB in all,
+  where it was a single 14 KB `SKILL.md` on 2026-09-18), beside the
   compiler [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §8 says generates most of its
   contents, so generator and generated output sit under one directory and one licence and
   `MakeDistribution` has a real source path on both platforms (§5.4, `D9.10`). `07` §8 specifies its
@@ -954,7 +967,7 @@ wheels. `12` states plainly that its new launcher "ships on both platforms in th
 repair. This document agrees and sharpens it: **both repairs touch the identical few lines of each
 `MakeDistribution` script — the wheel-copy block and the launcher-heredoc block — so doing them as two
 separate changes means editing the same lines twice: once to fix `run-sctmv.ps1`, and once more, shortly
-after, to add `run-capture.ps1` beside it.** One change landing both is not a convenience; it is the only
+after, to add `run-capture.ps1` beside it.** One change carrying both is not a convenience; it is the only
 way to avoid a second pass over code the first pass just touched.
 
 **The consequence for `D9.7`.** `12`'s new launcher makes bundling `carlacontrol` a hard requirement
@@ -1040,7 +1053,7 @@ this section:
    stops on an image without FOX, naming it.
 2. **No workflow change is needed to trigger the new targets.** `CarlaSetup.sh --skip-prerequisites`
    (the only build-relevant flag the workflow passes) skips `InstallPrerequisites.sh`, not the SUMO build
-   block — the two are separate steps in the script. Once §2's target-list change lands, the existing
+   block — the two are separate steps in the script. Once §2's target-list change is in, the existing
    "Build CARLA distribution" step picks it up with no workflow edit and no image rebuild.
 3. **The persistent `Build/` tree means §2's guard fix is a CI-correctness fix, not only a developer
    convenience.** Before this change, a CI box that already has `netconvert.exe` staged from an earlier
@@ -1081,11 +1094,10 @@ independent of whether the toolchain build itself is reproducible. §7.3's check
 **toolchain artifacts** (the SUMO binaries, which are ordinary compiler output and do not have this
 problem) and, for anything downstream of `OsmClipper`, compares **semantic** properties instead — exactly
 the shape doc 23 §2 already used (edge count, junction count, `<request>` row count, `tlLogic` count) —
-or a canonicalized serialization (sort node IDs before comparing) rather than raw bytes. The actual fix
-(`sorted(used_orig, key=int)` at the call site) is a one-line change in
-`CarlaControl/`, outside this document's "no code changes" mandate and outside SUMO toolchain packaging
-proper; it is named here as a decision to hand to whoever owns `OsmClipper.py` (`D9.9`), and worked around
-in the verification design regardless of whether that fix ever lands.
+or a canonicalized serialization (sort node IDs before comparing) rather than raw bytes. The fix is in: `OsmClipper.py` emits `sorted(used_orig | standalone | relation_nodes, key=int)`, so
+the same input clips to the same bytes. The verification design still compares semantic properties for
+anything downstream of the clipper (`D9.9`), because the network fingerprint, not a byte digest, is what
+every lock and session compare.
 
 ---
 
@@ -1147,7 +1159,7 @@ traci.close()
 ```
 
 Run directly: `python CarlaControl/scripts/test_sumo_toolchain.py [--sumo-home PATH]`. Exercised against
-both the repo-staged install (`Build/sumo-install`, once §2/§3 land) and, deliberately, against whatever
+both the repo-staged install (`Build/sumo-install`, once §2/§3 are in) and, deliberately, against whatever
 `SUMO_HOME` happens to be set to — the second run is what would have caught §3.3 immediately, since it
 prints the resolved home and version unconditionally rather than assuming.
 
@@ -1175,11 +1187,11 @@ this document's scope to verify (§2.4).
 | D9.6 | `SUMO_HOME` precedence in `SumoInstallation.locate` is **not** reordered — `SUMO_HOME` continues to win, matching raw `traci`'s own convention. Instead: resolution is always logged (home + version), a `.version` property is added, and a version-mismatch between the netconvert that built a world and the SUMO installation resolved to author/run a scenario against it becomes a **hard-refusing** condition with an explicit override flag. The consumer-side refuse-vs-warn UX is `07_Scenario_Authoring.md`'s call to finalize against `SumoScenarioBuilder`. Corroborated independently by `07` §9.4 (§3.5); its interaction with `12`'s proposed site profile is answered generically in §3.5. |
 | D9.7 | **There is one distribution and it contains all of the tools**, and both platforms produce it (`13` §13.2). Neither script gains an internal/external packaging mode: there is no second distribution for one to gate, and an unused mode is a switch that eventually gets flipped by accident. The `carlacontrol` wheel ships on both platforms — which `12`'s capture launcher makes unavoidable regardless of §5.2 (§5.6). `Findings/22` §14's exclusion of `CarlaControl/` came from a plan that did not manifest and is corrected at source. What the package must carry instead is a **generated `MANIFEST.md` and a `licenses/` directory** (§4.3, §5.4), driven by third-party obligations the distribution meets none of today: 42 native DLLs spanning nine or more licences including LGPL, SUMO's EPL-2.0 notice and source offer, and ODbL on the OSM extracts and generated `.xodr`. Where the package may go is governed by access to the channel it is published to. |
 | D9.8 | **A Linux build prerequisite must be declared in two places**, `Util/SetupUtils/InstallPrerequisites.sh` and `Util/Docker/Base.alma8.Dockerfile`, in the same change: CI pulls the image pre-built and calls `CarlaSetup.sh --skip-prerequisites`, so the script never runs against it and a package added only there fails the first time a clean `Build/` tree forces a configure (§2.3). `D9.1`'s original target set needed nothing new in either file; `sumo-gui` added FOX to both (`D9.15`). Whether `carla-base:alma8`'s by-tag reference in `build-carla-ue5.yml:51` should move to a digest pin, so a future base-image change cannot silently ride into a build, is an open question (below) and stands on its own. |
-| D9.9 | `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission is a real reproducibility hazard for anything that hashes its output, and the proprietary tools are part of the shipped system (`D9.7`), so it is this plan's defect to fix. The fix is: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it lands, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
+| D9.9 | **Closed in the tree**: `OsmClipper.py` sorts the emitted node ids by integer. As found, `CarlaControl/src/carlacontrol/OsmClipper.py:154,219`'s non-deterministic `set`-ordered node emission was a real reproducibility hazard for anything that hashes its output, and the proprietary tools are part of the shipped system (`D9.7`), so it is this plan's defect to fix. The fix is: the fix is `sorted(used_orig, key=int)` (or equivalent) at the emission site; until it is in, no reproducibility or acceptance check in this plan hashes OSM-clip-derived file bytes (§7.3). |
 | D9.10 | **Every skill an assistant reads in this workspace has a commit behind it, and only the first-party ones ship.** Ours lives at `carla/CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, beside the compiler `07` §8 says generates most of its contents, and ships from there (§5.4); the workspace copy is a stub naming the canonical path, not a directory junction — a junction is invisible in `git status` and does not survive a fresh clone. **The 27 `ue-*` directories are third-party and are vendored under `carla/CarlaControl/skills/third-party/unreal-engine-skills/`**, byte-identical to `quodsoler/unreal-engine-skills` at commit `231c8571be6f3335685edc566a28ec6f9621361d`, with the upstream MIT `LICENSE` copied verbatim beside them and a `PROVENANCE.md` carrying the URL, the commit and the update procedure; the `third-party` path segment is what marks whose they are. They are **excluded from `MakeDistribution` on both platforms**, because a distribution recipient writes no engine C++, shipping 1.3 MB of somebody else's MIT content would attach an attribution obligation to material the bundle has no use for, and it would falsify the `skills/` manifest row's single provenance and licence. The `.agents/skills/` copies are what the harness loads and are left exactly as they are. A **stage A item** (`13` §13.3): `07` §8.4 depends on the skill's repository home. |
-| D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction land as one change, not two, because they touch the same lines of the same scripts (§5.6); and `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms, which `D9.7` settles on both platforms. |
+| D9.11 | **The operator control surface's distribution footprint is packaged generically only where `12` had not yet fixed a shape; where it has, this document packages that shape as fact.** The new capture launcher (`run-capture.ps1`/`.sh`) coexists beside `run-sctmv.ps1`/`.sh` rather than replacing it; the run-configuration schema and site-profile template stage alongside the vehicle catalogue and vocabulary (§5.5); the broken-launcher repair (§5.2) and the new launcher's introduction go in as one change, not two, because they touch the same lines of the same scripts (§5.6); and `12`'s launcher makes bundling `carlacontrol` unavoidable on both platforms, which `D9.7` settles on both platforms. |
 | D9.12 | **`tzdata` is added to `CarlaControl/pyproject.toml`'s dependencies once `07`/`11` settle whether IANA zone resolution is required or merely an optional cross-check (§4.4, Open question 4).** It needs no new packaging mechanism — it resolves through the same `pip install` step that already installs `numpy` and `pygame` for every distribution recipient — and it introduces no SUMO dependency, no native code, and no new distribution slot. |
-| D9.13 | **There are two setup scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`, and every build change lands in both.** The charter's parity rule covers exactly that pair, and `Docs/build_windows_ue5.md:20` names `CarlaSetup.ps1` as the Windows entry point. A third copy is what a maintained port costs and what drift is made of: the SUMO block is duplicated once, not twice, and the `SUMOLibraries` pin (`CarlaSetup.ps1:621-623`, with `:614-620`'s comment recording exactly how an unpinned clone breaks the SUMO build) has one place to be wrong rather than two. |
+| D9.13 | **There are two setup scripts, `CarlaSetup.ps1` and `CarlaSetup.sh`, and every build change goes into both.** The charter's parity rule covers exactly that pair, and `Docs/build_windows_ue5.md:20` names `CarlaSetup.ps1` as the Windows entry point. A third copy is what a maintained port costs and what drift is made of: the SUMO block is duplicated once, not twice, and the `SUMOLibraries` pin (`CarlaSetup.ps1:621-623`, with `:614-620`'s comment recording exactly how an unpinned clone breaks the SUMO build) has one place to be wrong rather than two. |
 | D9.14 | **`SUMO_HOME` resolution is logged unconditionally, once per process, and a mismatch against the world's converter refuses.** Without it, `SUMO_HOME` silently outranks the repo-pinned install — measured on a developer machine, worlds built by the pinned **1.27.0** while every scenario tool resolved an unrelated **1.27.1**, with no log line saying which ran. `SumoInstallation` carries a `version` parsed from `netconvert --version` (not `sumo` — `_is_installation` accepts a netconvert-only directory), a `source` naming which rule matched, an `INFO` line stating path, version and source before `locate` returns (`SumoInstallation.py:120-128`), and `require_version` (`:158`). Precedence is **not** reordered; `D9.6` stands. The escapes are `--sumo-home`, `--allow-version-mismatch`, and a world package recording no converter, which warns rather than refuses. **Releases are compared by number, not by printed string**: a package records what the tool printed (`Eclipse SUMO netconvert 1.27.0`) while the installation carries the release alone, and comparing them verbatim refuses a matched pair — a false refusal with no escape but disabling the check. |
 | D9.15 | **`sumo-gui` is built and staged with the toolchain, on both platforms, for development, and is not bundled.** The co-simulation session launches it in place of `sumo` from the same installation, pinned by its own release (`03` D3.36), so it belongs in that installation: it is a member of both scripts' required set, so a tree without it rebuilds, restages and names it missing (`D9.2`). Its prerequisite is the FOX toolkit with OpenGL and GLU — on Windows the pinned SUMOLibraries bundle's, on Ubuntu `libfox-1.6-dev`, and in the EL8 CI image FOX 1.6.59 built from source pinned by checksum, because EL8 and EPEL package none (`D9.8`) — and a configure that finds none stops the setup naming it. On Linux, finding FOX also links it into `sumo` and `duarouter`, as on Windows. Neither `MakeDistribution` bundles `sumo-gui`: whether a distribution carries it turns on FOX's LGPL and is the owner's decision (§5.4, Open question 5). |
 

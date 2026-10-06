@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 36 | 2026-10-05. Corrected against the code: the session's compile-lock check refuses on the lock's `catalogue_digest` and `epoch_block_sha256` (`C3` §5.4 V3.5, V3.6, V3.11); the lock table gains `dry_run` (§5.3); open questions 1, 4, 5 and 6 are superseded by decisions since taken. |
 | 35 | 2026-10-05. `C10`: the world truth track flushes its rows once for each SUMO frame, when the frame's every row is written, and whatever it still holds as it closes, rather than after every row, as the owner ruled: it is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. W2 states the flush per frame as the track's rule. Every row is still a whole line, so the prefix stays valid, and a kill loses at most the frame being written (§12.7) |
 | 34 | 2026-10-05. `C10`: the run manifest carries supervision (§12.7). The writer is one of the interval binder's sinks: it writes the plan the compile lock binds as `instance`, `series` and `cohort` rows after `manifest_opened`, each interval as it opens and closes, named by its `(instance_id, participant, phase)` triple with its declared, committed and observed onsets and its `closed_by`, and each seam defect the binder finds; `manifest_closed` lists the intervals still open, which the binder closes after it, and those never opened, so a closed manifest names every triple the plan declares. `open_at_interruption` is not written: a reader infers it from a manifest with no terminal row. `diff_run_manifests.py` compares two runs' manifests by their triples and exits non-zero on a difference ([`06`](06_Truth_And_Annotation.md) D6.8). The closing-record gate reads a terminal row of any length |
 | 33 | 2026-10-05. `C8`: the truth sidecar carries each capture's supervision as built (§10.6's *Supervised* row): the plan and the vocabulary's version and digest on `<events>`, the world-scoped `<_supervision>` with its absences, and every rendered SUMO vehicle's `<_supervision state>`, `unlabelled` included, with its annotations -- the server's for the capture's own frame (§8.3b), or `supervision="unknown"` and none where that frame's is not to be had, counted and gated at zero. The PNG carries none. §12.8.4's first gap is closed for the state in force |
@@ -1741,6 +1742,7 @@ runs as it did before lane changes were spread.
 | **`catalogue`** | `catalogue_id`, `catalogue_digest`, `blueprint_set_digest`, `content_build_id` (`C1` §3.11) |
 | **`vocabulary`** | `core_version` — 2, the closed core as `CarlaNet.Types` enumerates it ([`06`](06_Truth_And_Annotation.md) §3.7) — `namespaces` with their versions, and `vocabulary_digest`, the digest of the vocabulary document the supervision plan carries |
 | **`traffic`** | `sumo_seed`, `step_length_s`, `end_s`, `processing` (the SUMO options that decide how traffic moves, §5.2a), and `routed_by`: the `duarouter` release that routed, the world's converter, how the two stand by release number and whether a mismatch was accepted ([`07`](07_Scenario_Authoring.md) check 6) |
+| `dry_run` | The SUMO-only run of the compiled files over the whole span ([`07`](07_Scenario_Authoring.md) check 59): whether it ran, every planned vehicle's wait, the other discards and every collision, or that `--skip-dry-run` skipped it. Nothing at run start reads it; whether a capture refuses a skipped run is with the owner |
 | `epoch`, `epoch_block_sha256` | The `C9` epoch object verbatim, and its digest canonicalised per §1 |
 | `illumination` | The authored `C9` illumination default. An operator may override it at run start (`C9` §11.8); the run manifest records which won |
 | `capture_windows` | The authored candidate windows: id, begin and end seconds, civil begin, end and date |
@@ -1766,13 +1768,13 @@ Each rule states where it is enforced today. The compiler's checks are [`07`](07
 | V3.2 | *Retired.* The clipped OSM's digest differs | — | The OSM is not carried (§5.1 finding 2); the network fingerprint of V3.4 is the binding |
 | V3.3 | The network is in another frame: its `convBoundary`, projection or `netOffset` against the package and its OpenDRIVE | **refuse** | At compile, checks 3, 4 and 5; at run start, the session's frame check |
 | V3.4 | The network the scenario runs is not the world package's, by canonical fingerprint | **refuse** | At compile, check 1 against the specification, and D7.32 for what is written; at run start, `ScenarioNetworkCheck` on the network the `.sumocfg` loads ([`03`](03_CoSimulation_Runtime.md) D3.28) |
-| V3.5 | `blueprint_set_digest` differs | **refuse** | At compile, checks 14 and 15 bind every type to the catalogue's measured body. At run start, not built: the session records the catalogue it loaded and does not compare it with the lock |
-| V3.6 | `catalogue_digest` differs, set digest matches | **warn**, naming every moved entry | Not built |
+| V3.5 | `blueprint_set_digest` differs | **refuse** | At compile, checks 14 and 15 bind every type to the catalogue's measured body. At run start, by the session's compile-lock check (`ScenarioLockCheck`): the catalogue the session loads must carry the lock's `catalogue_digest`, naming both digests on refusal, and a changed blueprint set changes that digest; `blueprint_set_digest` itself is not read separately |
+| V3.6 | `catalogue_digest` differs, set digest matches | **warn**, naming every moved entry | As built the session **refuses** any `catalogue_digest` other than the lock's (V3.5), so this softer tier does not exist: a moved entry means a recompile |
 | V3.7 | The areas of interest differ, everything else matches | **warn** | Not built. An area edit republishes the world package's table without a rebuild and without moving the network fingerprint (07 D7.28); a recompile re-resolves every area the supervision names (check 20) |
 | V3.8 | `content_build_id` differs, all digests match | **warn** | Not built |
 | V3.9 | `sumo_step_s` is not a whole multiple of the run's fixed delta | **refuse** | `C6`: the run's, not the package's |
 | V3.10 | A file the lock lists is absent, or its SHA-256 is not the lock's | **refuse** | At run start, by the session's compile-lock check, for every file the lock lists, and a file the configuration loads that the lock does not list; the supervision plan's own digests against the files the run loads too ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29) |
-| V3.11 | The epoch is absent, or `epoch_block_sha256` does not match the epoch as carried | **refuse** | At compile, check 33: no lock is written without an epoch. At run start the session validates the epoch it is handed (`SolarEpoch`) — the lock is a file it can read one from (`run_sumo_drive.py --epoch <scenario_id>.lock.json`) — and does not compare the digest |
+| V3.11 | The epoch is absent, or `epoch_block_sha256` does not match the epoch as carried | **refuse** | At compile, check 33: no lock is written without an epoch. At run start the session validates the epoch it is handed (`SolarEpoch`) — the lock is a file it can read one from (`run_sumo_drive.py --epoch <scenario_id>.lock.json`) — and its compile-lock check refuses an epoch whose digest is not the lock's `epoch_block_sha256`, naming both |
 | V3.12 | The epoch fails a `C9` V9.* rule | **refuse** | At compile, checks 33 and 34, through the session's own `SolarEpoch`; at run start, `SolarEpoch` again |
 | V3.13 | The world reports no sun and `illumination.require_sun` is true | **refuse** | At run start, by the session; `run_sumo_drive.py --no-sun-required` is `require_sun: false` |
 | V3.14 | The world's origin longitude differs from the lock's | already **refuse** by V3.1 and V3.3 | Restated because the sun's position is computed from the world's origin (§11.3) |
@@ -5068,7 +5070,9 @@ Stated as properties needed, not as requests.
 
 Each carries the options and a recommendation; none is decided here.
 
-1. **Where the catalogue's class list comes from.** `C1` requires `classes[]` to be curated — measured
+1. *Superseded by [`13`](13_Work_Breakdown.md) §13 decision 3:* derive the classes from the sweep, allow a
+   validated override, and correct `VehicleParameters.json` at the next content build; the catalogue is
+   built that way. **Where the catalogue's class list comes from.** `C1` requires `classes[]` to be curated — measured
    necessity, since `base_type` is wrong for 7 of 17 blueprints and `special_type` is empty for all 17.
    But the sweep generates the catalogue, and a sweep cannot curate. Options: (a) a hand-maintained
    `classes` fragment merged by the sweep, which reintroduces a hand-maintained file that doc 20 §5.6
@@ -5088,14 +5092,19 @@ Each carries the options and a recommendation; none is decided here.
    the digests the lock already records.
 3. *Withdrawn 2026-09-30.* Whether the render cap was a count or a budget: there is no render cap, and
    every vehicle SUMO has in a window is drawn (`C2` §4.2).
-4. **What `render_state` should say about a vehicle SUMO teleported.** The shipped configs set
+4. *Superseded by [`03`](03_CoSimulation_Runtime.md) D3.14 as built:* the session refuses a positive or
+   absent `time-to-teleport` and every other teleport trigger unless the run accepts teleporting
+   (`TeleportingCheck`, `SumoDistributionEditCheck`), and `collision.action` is held to `warn`; across a
+   discontinuity the body is snapped to the new position. **What `render_state` should say about a vehicle SUMO teleported.** The shipped configs set
    `<time-to-teleport value="-1"/>`, forbidding it, with the comment that a teleport is a vehicle
    jumping position that nothing downstream can reproduce faithfully. If a scenario ever raises it,
    a rendered vehicle jumps. Options: a fourth `render_state` value; a per-rendering flag; forbid
    teleporting in `C3` validation. **Recommend forbidding it** — `time-to-teleport` must be `-1` for a
    corpus-eligible run — with a flag for diagnostic runs that marks the run not corpus-eligible, by
    analogy with `render_uses_vtype_colour`.
-5. **Whether the annotation state must be readable across processes.** Doc 20 decision 11 leaves this
+5. *Superseded by [`06`](06_Truth_And_Annotation.md) D6.41 as built:* the supervision in force is held on
+   the server and carried on every world-observer snapshot, so a recorder in any process reads the same
+   state. **Whether the annotation state must be readable across processes.** Doc 20 decision 11 leaves this
    open and says it must be decided before multi-camera capture, not after. `C2`'s observability
    accounting is per sensor and `C4`'s `sensor_id` rule assumes several sensors, so this plan pushes
    towards the decision. Options: publish the annotation state on a world actor the way staging bounds
@@ -5103,7 +5112,9 @@ Each carries the options and a recommendation; none is decided here.
    process. **Recommend publishing it**, because the second option's failure mode is silent — a
    recorder in another process reads an empty registry and writes `unlabelled` on every vehicle — and
    because `C5` is building the actor-plus-RPC-pair pattern anyway.
-6. **Whether a SUMO-driven actor should be given a non-zero physics velocity anyway.** `D4.13` fixes
+6. *Superseded by [`03`](03_CoSimulation_Runtime.md) D3.5 as built:* `set_actor_target_velocity` on a body
+   whose physics is off writes the engine's velocity, so a pose-applied body reports SUMO's own speed to
+   every reader of `GetVelocity()`. **Whether a SUMO-driven actor should be given a non-zero physics velocity anyway.** `D4.13` fixes
    the truth record, but other consumers read the engine's velocity directly — the traffic manager's
    collision stage, and the arrival and occlusion gating of
    [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). The traffic manager is locked out, so the

@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — Corrected against the code: the session drives vehicle lamps by default and `run_capture` offers no field for them (§4.4, §5.2, check 14); the run manifest and its supervision rows exist (§3.9, §3.10.3); `capture_rgb` is not a field of the schema (§5.2); the Windows distribution's four parity breaks are fixed and its launcher is still unbuilt (§10).
 `2026-10-05` — §7.2: the closeout gates `capture.supervision_unpaired[<sensor>]`, a channel's captures of a frame a supervision plan was in force on that were written with `supervision="unknown"`, at zero, skipped from a recorder built before it counted them; the channel's closeout line states the supervision paired and unknown, and the free view's status shows an unknown count as it climbs ([`06`](06_Truth_And_Annotation.md) §8.2).
 `2026-10-05` — `run_capture` writes the run manifest, `truth/manifest.jsonl` under the capture directory beside the world truth track (`truth/world_truth_track.csv`), and names both in its result's `produced`; it closes the manifest with its `closed_by` before it reads its closing gates, so `supervision.manifest_closing_record` is measured: met where the manifest's last complete row is `manifest_closed` (§3.10.3, §7.2). `run_sumo_drive.py --run-manifest PATH` writes one for a drive (§9.6).
 `2026-10-05` — How much a run prints about collisions is a switch, off by default: `collision_detail` (`--collision-detail on`) in `run_capture`, and `run_sumo_drive.py --collision-detail`. Off, the session's report prints the count; on, each collision is printed as it ends and the report lists every collision and every collision warning SUMO wrote. Printing only: every collision is recorded either way (§5.2, §9.6).
@@ -71,7 +72,7 @@ publishes facts about its own data and never an aggregate judgement of whether a
 purpose it does not know; [`04`](04_Contracts.md) `C10` owns the result artifact's fields on the same
 principle (§3.10.3, §7.2). And **the external
 detect-and-track and model services**: this section specifies a socket a run writes to and a blob store
-a transcript lands in, and nothing about what is on the other end
+a transcript goes into, and nothing about what is on the other end
 ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c).
 
 ---
@@ -577,7 +578,7 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `RunConfigurationFindings.py` | `RunConfigurationFindings` | **Built.** One launch's findings: the compiler's `CompileFinding`, cited against this catalogue, with a warning's `on_warning` code |
 | `ScenarioPackage.py` | `ScenarioPackage` | **Built.** A compiled scenario re-bound by its lock rather than recompiled: the lock's layer-4 declarations, and a refusal of any file the lock no longer digests (check 49) |
 | `SessionMonitor.py` | `SessionMonitor` | **Built.** §7.1's live view and §7.4's `pace` row; formats `RunCloseoutReport`'s snapshot and holds no reference to the session or a recorder, and degrades to line-oriented logging when standard output is not a terminal |
-| `RunCloseoutReport.py` | `RunCloseoutReport` | **Built.** The one computation of what a run has established — a snapshot of the session and the recorders at any instant — and §7.2's gate records read from it. With no run manifest to append to, the records reach disk in `RunResult` at the terminal outcome (§7.2) |
+| `RunCloseoutReport.py` | `RunCloseoutReport` | **Built.** The one computation of what a run has established — a snapshot of the session and the recorders at any instant — and §7.2's gate records read from it. The run manifest exists and is appended as the run goes, but the gate records are not among its rows; they reach disk in `RunResult` at the terminal outcome (§7.2) |
 | `RunResult.py` | `RunResult` | **Built.** §3.10.3's result artifact. Written in **every** terminal outcome the tool survives, including a refusal that produced no session, to a temporary name renamed into place; the process exit status is read from its outcome rather than computed beside it |
 | `RunTerminationSequence.py` | `RunTerminationSequence` | **Built.** §3.10.2's ordered flush. Installed as the handler for `SIGINT`, `SIGTERM` and, on Windows, `SIGBREAK` *and* run as the session's `finally`, so one code path serves a stop, a signal and a fault. Idempotent, time-boxed at every step that can block on the server, and re-entrant: a second signal abandons the remaining steps |
 | `WorldBuildConfiguration.py` | `WorldBuildConfiguration` | §9.2's single definition of the 24 world-build inputs, produced by both front ends |
@@ -589,11 +590,12 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `scripts/run_capture.py` | — | **Built.** Thin `main`: parses the command line, discovers the site profile, constructs `CaptureSession`, runs it, and returns the exit status its `RunResult` carries |
 | `scripts/run_camera_follower.py` | — | **Built.** Thin `main` for `CameraFollower` |
 
-`PlaybackClock`, `RenderSetSelector` and `SumoSession` are [`01`](01_Architecture.md) §2.3's
-components; in the tree they are one object, `CarlaNet.CoSim.SumoDriveSession`, which
-`CaptureSession` constructs with the effective configuration's values. `RunManifestWriter` is not
-built: no run manifest is written, so the monitor, the gate records and the run result read the
-session and the recorders directly (§7.1, §7.2).
+The clock, the render set and the SUMO connection [`01`](01_Architecture.md) §2.3 describes are, in
+the tree, one object and its parts: `CarlaNet.CoSim.SumoDriveSession` with `CoSimClock`,
+`RenderSetManager` and `VehicleBodyPool`, which `CaptureSession` constructs with the effective
+configuration's values. `RunManifestWriter` writes `truth/manifest.jsonl` as the run goes (§7.2); the
+monitor, the gate records and the run result read the session and the recorders directly, not the
+manifest (§7.1, §7.2).
 
 ### 3.10 The caller that starts us and stops us
 
@@ -603,7 +605,7 @@ comes next. They may kill the SUMO or CARLA server — or this client — at any
 query through CarlaNet and the Python shim to decide when enough is enough.
 
 So the caller is not a scheduler we serve with a verdict. It is a process that **starts us, watches us
-through interfaces that already exist, and stops us when it decides to.** Three things land on this
+through interfaces that already exist, and stops us when it decides to.** Three things fall on this
 surface, and only three:
 
 1. **Non-interactive, parameterised, reproducible invocation** — a caller that cannot answer a question
@@ -613,7 +615,7 @@ surface, and only three:
 3. **An honest record of whether we stopped or finished**, and of what exists on disk either way
    (§3.10.2, §3.10.3) — plus, while the run is still going, a surface the caller can watch (§7.6).
 
-What does **not** land here: a cadence, a run-length policy, an aggregate verdict on the corpus, or any
+What does **not** fall here: a cadence, a run-length policy, an aggregate verdict on the corpus, or any
 assumption that we are asked politely to stop.
 
 [`02`](02_Use_Cases.md) UC-12's *scripted launch* alternate flow states the governing rule — "the
@@ -897,7 +899,7 @@ achieved factor, the run id every recorder was given, each termination step as i
   and no gate records.
 
 `C10`'s `run_record.jsonl` is not written. `C10` makes it the run manifest's owner's to write, and
-most of its required rows project the run manifest, whose supervision rows do not exist yet; its `run_closed.completion`
+most of its required rows project the run manifest, whose supervision rows exist since 2026-10-05; its `run_closed.completion`
 values also have no counterpart for a window's declared end or for a loud condition's self-stop, which
 `closed_by` above carries.
 
@@ -1051,11 +1053,16 @@ policy fails:
 `freeze_at_window_start` is the recommended value because a window is meant to be one lighting
 condition; it is recommended, not silent.
 
-**Vehicle lights are not offered.** The session writes no vehicle lamps — no light-state command is
-issued anywhere in `CarlaNet.CoSim` — so there is no `solar.vehicle_lights` field to state and check 14
-has nothing to compare. When lamps are built, the field is a conditional requirement: default `off`,
-and no default in a window whose sun falls below −6°, so that a dark corpus with unlit vehicles and a
-dark corpus with lit ones are both deliberate choices. *Inference, labelled:* brake and indicator state
+**Vehicle lights are driven and not offered as a field.** The session drives every rendered body's
+lamps by default (`SumoDriveSessionOptions.VehicleLampsDriven`): brake lights and indicators from
+SUMO's signals, headlights on below +3° and off above +6° of the reported sun
+([`11`](11_Time_And_Illumination.md) D11.9, `HeadlightRule`). `run_sumo_drive.py --no-vehicle-lamps`
+switches them off as a control condition. The run configuration has no `solar.vehicle_lights` field, so
+a `run_capture` run drives them under the session's default and records nothing about it, and check 14
+has no field to compare; no truth file states a vehicle's lamp state. Whether the commanded lamp state
+is recorded, and where, is with the owner. When the field exists it is a conditional requirement:
+default `on`, and no default in a window whose sun falls below −6°, so that a dark corpus with unlit
+vehicles and a dark corpus with lit ones are both deliberate choices. *Inference, labelled:* brake and indicator state
 is the most detectable vehicle signature available to a night EO detector, so the choice plausibly
 dominates a night corpus's usefulness; it belongs to whoever captures the first night window.
 
@@ -1240,7 +1247,7 @@ other field.
 | `sensor_id` | **—** when more than one channel; a single channel without one is `CARLA-SENSOR-<camera id>` | Session-fixed. The camera's name, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens. The channel's directory, the first part of every capture's file name and the platform track's callsign, spawned as the camera's `role_name` | [`08`](08_Collection_And_EPoL.md) D8.4; [`04`](04_Contracts.md) §6.3 for the grammar |
 | `pattern` | `stare` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
-| `capture_rgb` | `true` | Bound — a channel without it is not a channel | [`08`](08_Collection_And_EPoL.md) D8.2 |
+| `capture_rgb` | *not a field*: every channel records RGB, so the schema has nothing to switch | — | [`08`](08_Collection_And_EPoL.md) D8.2 |
 | `capture_depth` | *not offered*: the recorder writes no depth imagery; a depth camera is spawned at a stare channel's pose only to measure occlusion (`occlusion.enabled`) | — | D8.2 |
 | `capture_segmentation` | *not offered*: the recorder writes no segmentation | — | [`08`](08_Collection_And_EPoL.md) OQ2 |
 | `depth_max_range_m` | *not offered per channel*: `occlusion.depth_max_range_m`, one range for every depth camera | — | `:274-285`; and see §1.5's divergent second default |
@@ -1336,7 +1343,7 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 | `solar.require_sun` | `null` | Session-fixed; `null` means required | check 23 |
 | `solar.note` | `null` | Session-fixed | [`04`](04_Contracts.md) C9 §11.5 |
 | `scenario.epoch` | **—**: the scenario lock | **Bound** | §4.3, D12.9 |
-| `solar.vehicle_lights` | *not offered*: the session writes no vehicle lamps | — | §4.4 |
+| `solar.vehicle_lights` | *not offered*: the session drives lamps under its own default (`on`), and `run_capture` has no field to state it | — | §4.4 |
 
 #### Telemetry and occlusion
 
@@ -1545,7 +1552,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 11 | offline | `run_capture` | RunConfigurationValidator |
 | 12 | offline | `run_capture` | RunConfigurationValidator |
 | 13 | offline | `run_capture` | ScenarioEpoch, which reads the epoch with the session's SolarEpoch |
-| 14 | offline | **not built** | the session writes no vehicle lamps, so there is no field to state |
+| 14 | offline | **not built** | the session drives vehicle lamps under its own default and the run configuration offers no field to state it, so there is nothing to compare |
 | 15 | offline | `run_capture` | RunConfigurationValidator |
 | 16 | resolution | `run_capture` | RunConfiguration; the refusal names post_process_profile, the field that exists |
 | 17 | offline | **not built** | the recorder writes each capture's image and sidecar into one directory; the two-root split is stage K's and no writer makes it |
@@ -2080,7 +2087,7 @@ Stated as properties, in the manner of §4.6.
 
 | # | Property needed | Why this section needs it |
 |---|---|---|
-| **L1** | **The handover drop counter's identity and scope** — per sensor, per session, incremented at the socket — and a statement that it is a distinct field from `FrameRecorder.Dropped`, with distinct names in the manifest | §7.4.2. If the two land in one field, the closeout's gate on a recorder drop (D10.7) fires on a healthy live run, and the first thing anybody does about that is switch the gate off |
+| **L1** | **The handover drop counter's identity and scope** — per sensor, per session, incremented at the socket — and a statement that it is a distinct field from `FrameRecorder.Dropped`, with distinct names in the manifest | §7.4.2. If the two go into one field, the closeout's gate on a recorder drop (D10.7) fires on a healthy live run, and the first thing anybody does about that is switch the gate off |
 | **L2** | **At what granularity the achieved real-time factor is published** — per tick, per window, or per session — and by which component | D12.14 forbids the monitor from computing its own figures, so the `pace` row can only show a field something else already publishes. §11.1 says the achieved factor must be recorded per session; the panel needs it at least per window and ideally as a rolling value |
 | **L3** | **A ruling on the pacing floor**: below what fraction of the requested real-time factor has a live exercise failed, or an explicit statement that there is no such number and the operator supplies one | §5.2 gives `pacing.min_achieved_factor` no tool default on the assumption the answer is *the operator supplies it*. If `08` fixes a number, it becomes a tool default and check 44's message changes |
 | **L4** | **Confirmation that a transcript is not a corpus artifact** and belongs outside both roots on D8.38's precedent, or a ruling that overrules it | §7.4.3. `08` owns the root structure and the release attestation (D8.17); this section should not place a new directory near it without that section agreeing |
@@ -2601,14 +2608,15 @@ read-only, the divergence callback bound, no depth camera, and the pairing not s
 [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4: any change to `Scripts/Windows/*.ps1` requires its
 `Scripts/Linux/*.sh` counterpart in the same change, help text and documentation included.
 
-**The parity is already broken, measured.** `Scripts/Windows/MakeDistribution.ps1:237` copies
-`CarlaNet\python\SCTMV.py`, a file deleted in `d2c666c23`; the copy only warns, so the build succeeds,
-and `:301` then writes a `run-sctmv.ps1` that executes the absent script. The Linux script was
-migrated correctly: `Scripts/Linux/MakeDistribution.sh:117` copies
-`CarlaControl/scripts/run_SCTMV.py` and `:196` executes it. A second, unrecorded half of the same
-break: `MakeDistribution.sh:112-113` bundles **both** the `carlanet` and `carlacontrol` wheels, while
-the Windows script bundles only `carlanet` (`:230-234`) and mentions `carlacontrol` nowhere — so even
-with the script path fixed, a Windows distribution could not import `carlacontrol`.
+**The parity was broken, measured on 2026-09-18, and the four breaks are fixed.**
+`Scripts/Windows/MakeDistribution.ps1` copied `CarlaNet\python\SCTMV.py`, a file deleted in
+`d2c666c23`, with a copy that only warned, and wrote a `run-sctmv.ps1` that executed the absent
+script; it bundled only the `carlanet` wheel where `Scripts/Linux/MakeDistribution.sh` bundled
+`carlacontrol` as well. Today both scripts bundle both wheels, copy
+`CarlaControl/scripts/run_SCTMV.py`, write a launcher that runs it, install every wheel with
+`--find-links`, and write the generated `MANIFEST.md` and `licenses/` directory
+([`13`](13_Work_Breakdown.md) §13.2). Running a distribution built from a clean tree is the check the
+owner deferred until everything else is done.
 
 What this section's work requires, on both platforms in the same change:
 

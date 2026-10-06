@@ -63,6 +63,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §2.7, §9.7, D3.29: the compile-lock check binds the lane closures' additional file and the supervision plan. The plan is refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not those of the route file, configuration, additional file and network the run loads; once bound it is handed to the session on the run report. A lock that names no plan runs without one. |
 | 2026-10-05 | §8.9, D3.43: the supervision in force is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The binder states it per SUMO vehicle (`SumoDriveSession.Supervision`); the session puts each change for the body drawing the vehicle in one `update_supervision` after the render set's and before the tick cue; the server holds a body's on its record while it is lent and the plan and absences on the episode; the world observer carries it on every snapshot inside the render set block, where a reader built before it skips it. An unlabelled vehicle costs nothing. Written; the plugin awaits a build. |
 | 2026-10-05 | §8.9, §9.7, D3.43: the interval binder is built. The session builds one from the plan its compile lock binds and tells it of every SUMO frame and every rendered frame after the caller's observers; it opens and closes the plan's intervals on SUMO's events at TraCI's clock, states each vehicle's supervision and each absence on the session's table from the frame at its instant and never before the window, reads back once the plan subjects SUMO already has when the session opens, and refuses the advance that shows SUMO dropped a plan subject. Each rendered frame now carries the pose written to each body it drew, from which the binder takes a stopping body's speed; an observer that writes intervals is handed them as they open and close. |
+| 2026-10-05 | Corrected against the tree: §1's components carry the names the code has (`SolarLease`, `SolarAudit`, `VehicleLampMapping`, `HeadlightRule`, `VehicleBodyPool`, `TickBatch`, `SumoStepRecord`, `SumoRoadNetwork`, `CoSimStopCause`); the subscription is nine variables (§8.3); `sumo-gui` is staged and run (§2.6); the interval binder takes the bound plan (§2.7). |
 
 ---
 
@@ -129,20 +130,20 @@ flowchart LR
   subgraph cosim["CarlaNet.CoSim"]
     DRV["SumoDriveSession<br/>owns both clocks, owns the lease"]
     CONN["SumoConnection<br/>TraCI socket client,<br/>subscriptions only"]
-    BUF["PoseBuffer<br/>two SUMO frames:<br/>P&#40;k&#41; and P&#40;k+1&#41;"]
+    BUF["CoSimVehicleFrame / InterpolatedState<br/>two SUMO frames:<br/>P&#40;k&#41; and P&#40;k+1&#41;"]
     INT["LaneArcInterpolator<br/>sub-step pose along lane shape"]
     CONV["PoseConverter<br/>frame, yaw, bumper shift, Z, pitch/roll"]
-    POOL["ActorPool<br/>per blueprint, reuse not respawn"]
+    POOL["VehicleBodyPool<br/>per blueprint, reuse not respawn"]
     RS["RenderSetManager<br/>admission and release,<br/>instants recorded, no opacity"]
-    SOL["SolarClock<br/>civil time from t_render;<br/>sets the sun, audits it every tick"]
-    LIGHT["VehicleLightMapper<br/>SUMO signal bits + sun elevation<br/>to VehicleLightStateFlags"]
-    WR["BatchWriter<br/>one apply_batch per world tick:<br/>poses, velocities,<br/>changed vehicle light states"]
-    REC["StepRecord<br/>every SUMO vehicle, per step,<br/>plus the tick's solar state"]
+    SOL["SolarLease / SolarAudit<br/>civil time from t_render;<br/>sets the sun, audits it every tick"]
+    LIGHT["VehicleLampMapping / HeadlightRule<br/>SUMO signal bits + sun elevation<br/>to VehicleLightStateFlags"]
+    WR["TickBatch<br/>one apply_batch per world tick:<br/>poses, velocities,<br/>changed vehicle light states"]
+    REC["SumoStepRecord / CoSimPoseRecord<br/>every SUMO vehicle, per step,<br/>plus the tick's solar state"]
   end
 
   subgraph deps["Existing CarlaNet"]
     CC["CarlaClient<br/>RPC + world-observer cache<br/>incl. GetCachedSolarState"]
-    NET["RoadNetwork / net.xml reader<br/>lane shapes for interpolation"]
+    NET["SumoRoadNetwork<br/>lane shapes for interpolation"]
     DRAPE["GroundSurface<br/>the package's drape grid, in-process bilinear, no RPC:<br/>the seat at grade and off every road"]
     ROADS["RoadSurface<br/>the package's OpenDRIVE joined to its lanes:<br/>the seat on a structure, and which roads are"]
   end
@@ -170,11 +171,13 @@ flowchart LR
   DRV --> CC
 ```
 
-`SolarClock` and `VehicleLightMapper` complete the component set. Neither owns a
-policy: `SolarClock` turns a simulated instant into a solar-clock write and audits the result
-(§9.1–§9.6), and `VehicleLightMapper` turns SUMO's signal word plus the tick's sun elevation into a
-`VehicleLightStateFlags` value (§3.5). The thresholds and the epoch both come from
-[`11_Time_And_Illumination.md`](11_Time_And_Illumination.md).
+The names are the tree's (`CarlaNet/src/CarlaNet.CoSim/`). `SolarLease` turns a simulated instant into
+a solar-clock write and `SolarAudit` checks the result (§9.1–§9.6); `VehicleLampMapping` turns SUMO's
+signal word into `VehicleLightStateFlags` bit by bit and `HeadlightRule` adds the headlights from the
+tick's sun elevation (§3.5). None owns a policy: the thresholds and the epoch both come from
+[`11_Time_And_Illumination.md`](11_Time_And_Illumination.md). `CoSimClock` holds the two clocks and
+their ratio, `SubscribedPopulation` the per-vehicle subscription, and `WorldDriveAuthority` the
+process-scoped lease (§10).
 
 ---
 
@@ -473,8 +476,8 @@ will not run -- missing, not executable, not a program for the platform -- is re
 SUMO failing to start: `SumoConnection.Start` reports it as a `FatalTraCIError` naming the file, for
 `sumo` as for `sumo-gui`, where before it escaped as the operating system's own exception.
 
-**Built and exercised offline; not yet run.** `sumo-gui` is not staged on this machine yet, so no
-session has launched it. `SumoGuiTests` asserts the command line, where the binary is looked for, and
+**Built, and run.** `sumo-gui` is staged on Windows (`Build/sumo-install/bin/sumo-gui.exe`, 2026-09-29)
+and a drive has been run with it as the session's SUMO. `SumoGuiTests` asserts the command line, where the binary is looked for, and
 that the pin reads the GUI's own release, with nothing launched; `SumoDriveSessionGuiTests` asserts the
 up-front refusal, the binary the pin names and the binary the launch starts, against placeholder
 installations whose binaries cannot run, so no test can ever open a window. Each was seen failing
@@ -536,8 +539,9 @@ run loads:
 
 Every disagreement is named in one refusal, before SUMO is started: a plan compiled against another
 generation of the files would resolve some of its ids and not others, and nothing in the run would show
-it. The bound plan is `ScenarioLockCheck.Plan`, on `CoSimRunReport.CompileLock`, for the session's
-interval binder to take (not built), and the report's `supervision plan` line says what it holds:
+it. The bound plan is `ScenarioLockCheck.Plan`, on `CoSimRunReport.CompileLock`, which the session's
+interval binder (`SupervisionBinder`, §8.9, §9.7) takes, and the report's `supervision plan` line says
+what it holds:
 `Shahid_Bahonar_Port_PatternOfLife: 27 instances (5 annotated, 21 nominal, 1 absent), 1 series of 336
 slots (1 unrealised), 248 cohorts (98 annotated), 365 entities; vocabulary core 2, bahonar 1, digest
 e3571085…`. A lock that names no plan binds no supervision, and the line says so; every lock the compiler
@@ -2242,9 +2246,10 @@ Upstream, the scenario compiler refuses a vehicle class naming a blueprint the c
 ([`07`](07_Scenario_Authoring.md) scenario-compiler check 14). What the truth record says of such a
 vehicle, and of one outside any capture window, is [`04`](04_Contracts.md)'s.
 
-**Every vehicle is subscribed, with the whole set the bridge reads**: the client's seven-variable state
-plus `VAR_LANEPOSITION`, the parameter the lane polyline is evaluated at. There are no tiers and no
-margin. A vehicle subscribed as it departs delivers its state on the step the subscription is made,
+**Every vehicle is subscribed, with the whole set the bridge reads**: nine variables
+(`SubscribedPopulation`): position, angle, speed, road id, lane id, lane position — the parameter the
+lane polyline is evaluated at — lateral lane position (§6.4 case 2), type id and signals. There are no
+tiers and no margin. A vehicle subscribed as it departs delivers its state on the step the subscription is made,
 because SUMO answers a subscribe command with the current values of everything subscribed, and those
 arrive in the same per-step store the step response fills. Subscribing the population is charged
 inside SUMO's step (§2.5) — through this client, 8.16 ms per step with Arapahoe's 388 vehicles
@@ -2325,8 +2330,8 @@ registers each channel's RGB camera under `cameras` and lets it go before destro
 `run_sumo_drive.py` registers its fixed camera, or the flown one, and a free view over a circle smaller
 than the world is told the region that takes all of it in (`RenderRegionCoverage`).
 
-**Not restored:** a limit as a default; the pool's ceiling (`MaximumBodies`), and with it a vehicle the
-render set admits and the pool gives no body; and the subscription tiers.
+**Not restored:** a limit as a default; the pool's ceiling, and with it a vehicle the render set admits
+and the pool gives no body (`VehicleBodyPool` grows to demand); and the subscription tiers.
 
 **Exercised by** `RenderSetManagerTests` (the default leaving nothing out; the circle's two radii; the
 nearest drawn under a capacity and a nearer newcomer taking the farthest place; every vehicle under a
@@ -3355,7 +3360,8 @@ session.start():
     assert 1 / captureRateHz is a whole number of Δw      # a frame falls on the tick it is stamped
     Vehicle.subscribe(each vehicle, [VAR_POSITION, VAR_ANGLE, VAR_SPEED,
                                      VAR_ROAD_ID, VAR_LANE_ID, VAR_LANEPOSITION,
-                                     VAR_TYPE, VAR_SIGNALS])       # signals ride the same call, §3.5
+                                     VAR_LANEPOSITION_LAT, VAR_TYPE, VAR_SIGNALS])
+                                                          # nine; signals ride the same call, §3.5
     client.setLayerVisible("signals", false)              # once; fixed off for the session, D3.24
                                                           # no bodies yet: the pool spawns one when a
                                                           #   vehicle needs it and none is parked, §8.2
@@ -3746,8 +3752,8 @@ its stream is recoverable and a deadlocked client is not"* (`CarlaClient.cs:419-
 right default for an interactive viewer and the wrong one here: a null observation means a batch was
 applied to a frame that may never have rendered, so any capture attributed to it is unattributable.
 
-The bridge treats a null frame observation as `TickFault`: stop, park, close the record with
-`terminated: world-tick-timeout`, fail the run. The frame-wait timeout is the RPC timeout
+The bridge treats a null frame observation as a stop with cause `CoSimStopCause.WorldTickTimeout`:
+stop, park, close the record with `terminated: world-tick-timeout`, fail the run. The frame-wait timeout is the RPC timeout
 (`CarlaClient.cs:293-300`) and must be set deliberately for a capture session rather than inherited
 from a viewer default.
 
@@ -4180,8 +4186,8 @@ a capture of it says what it was measured against.
 | A date a whole day out | `solar_time` correct, `solar_day` wrong | caught by auditing the **date** with the clock as one instant; under `advance` the session writes the date with every frame |
 | No sun at all | zeros | caught earlier and harder by D3.22 |
 
-> **D3.23 — A solar disagreement is a `SolarDisagreement` fault with the same consequence as a
-> `TickFault`: stop, park the render set, close the step record with
+> **D3.23 — A solar disagreement is a stop with cause `CoSimStopCause.SolarStateDisagreement`
+> (`SolarAuditFailedException`), with the same consequence as `WorldTickTimeout`: stop, park the render set, close the step record with
 > `terminated: solar-state-disagreement` and the last valid `t_render`, fail the run. The session
 > never silently re-writes the sun to make the audit pass.**
 

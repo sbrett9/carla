@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Plan section. Nothing here is implemented. |
+| **Status** | Plan section, with its measurements. The capture path it sizes is built (`run_capture`, `SumoDriveSession`); of the measurements it asks for, `sensor_tick` (M1), the pace at Arapahoe's full population, the sun against the model and the shadow cache are taken ([`13`](13_Work_Breakdown.md) §4), and performance work beyond them is halted by the owner (§4.3.3). Figures measured on 2026-09-17 and 2026-09-18 describe the tree of that date; where the tree has moved, the section says so. |
 | **Scope** | Whether the SUMO-driven behavioural-capture mode works at the size the user actually needs, and what has to be true for it to. Sizes the scenario corpus, what drawing every vehicle the scenario has costs, the RPC and TraCI budgets, the solar and vehicle-light surfaces, the capture pipeline and memory; recommends an envelope, a degradation strategy and the measurements that must precede commitment. |
 | **Audience** | An engineer implementing or reviewing the co-simulation runtime or the capture path, who has not read the conversation that produced this plan. |
 | **Owns** | The *numeric values* of the capture-window parameters that [`04_Contracts.md`](04_Contracts.md) §4.2 declares and defers here (`prewarm_s`, `capture_windows[]`), the wall-clock budget, and the **cost** of the time-of-day and vehicle-light surfaces. |
@@ -21,6 +21,7 @@
 | 2026-10-02 | §4.3.2, `D10.12`, `D10.20`, `D10.21`: two optional performance controls an operator may choose to trade fidelity for speed, both off by default and neither a sizing rule nor a recommendation -- a draw distance, which changes only how far from a camera a body is drawn, and a limit on which vehicles get a body (a circle, the cameras' footprints, a capacity). Neither has a measured speed-up yet; `D10.4` and `D10.5` stay withdrawn. |
 | 2026-10-02 | §4.3.3: the full-population tick measured on the owner's workstation -- what the camera, the vehicles and each optional control cost, the machine's power mode moving the pace more than any control, what is not yet known, and the options recorded but not pursued. M2 measured. |
 | 2026-10-02 | §4.1: a still is named after its camera, `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`; the time is written as before, so the clock ratio is read from either name. |
+| 2026-10-05 | Status corrected against the tree: M1 is measured and `sensor_tick` is set by both front ends (§4.6, §11); `FrameRecorder.Dropped` is read and gated and the clock ratio recorded (§4.6, §7, D10.7); the shipped networks' edge counts and place-name coverage are restated beside the 2026-09-18 figures (§3). |
 
 ---
 
@@ -320,8 +321,12 @@ real-time budget at `fixed_delta = 0.05`, and against a **1,000 ms** budget at B
 
 ### 3.3 The networks
 
-Measured by parsing each `.net.xml`. The right-hand column is doc 23 §2's Arapahoe measurement on the
-**unclipped** OSM, carried forward, so there is a second point on the curve for the same location.
+Measured by parsing each `.net.xml` on 2026-09-18. The right-hand column is doc 23 §2's Arapahoe measurement on the
+**unclipped** OSM, carried forward, so there is a second point on the curve for the same location. The
+networks shipped on 2026-10-05 differ a little, after the type-map build of Bahonar, the ramp meters on
+Arapahoe and the unified netconvert flags: normal and internal edges are 1,000 and 2,984 (Bahonar), 319
+and 691 (Arapahoe) and 57 and 207 (Gardnerville), and the place index names 90.3% of Arapahoe's edges,
+91.2% of Gardnerville's and 4.7% of Bahonar's (47 of 1,000). The sizing conclusions below do not move.
 
 | | **Bahonar** | **Arapahoe (clipped, shipped)** | **Gardnerville** | *Arapahoe (doc 23 §2, unclipped)* |
 |---|---|---|---|---|
@@ -1145,9 +1150,11 @@ stream-reader thread never blocks (`:118`).
 **Encoding is not a bottleneck and is not close to one**, which the disk confirms: every capture interval
 in all four recorded runs is exactly 10 ticks, so `_dropped` was zero.
 
-**But a drop would be silent.** `FrameRecorder.Dropped` (`FrameRecorder.cs:49`) has **no reader anywhere in
-the tree** — grepped across `CarlaNet/src`, `CarlaControl` and the shim. A recorder that falls behind
-produces a corpus with holes and says nothing. That is a hole in the observability denominator of exactly
+**A drop was silent when this was measured.** `FrameRecorder.Dropped` (`FrameRecorder.cs:49`) had **no reader
+anywhere in the tree** — grepped across `CarlaNet/src`, `CarlaControl` and the shim. It is read now:
+`RunCloseoutReport` records it per channel as the gate `capture.recorder_dropped` at a threshold of 0,
+and a non-zero value is the run's loud condition ([`12`](12_Operator_Control_Surface.md) §7.1, §7.2).
+Before that, a recorder that fell behind produced a corpus with holes and said nothing. That is a hole in the observability denominator of exactly
 the kind doc 20 §2.5 forbids.
 
 > **D10.7 — `FrameRecorder.Dropped` is read at window close and written into the run manifest, and a
@@ -1181,8 +1188,10 @@ captures on a *simulated*-time gate (`FrameRecorder.cs:129-133`), but the sensor
 serialised and streamed every one of them. `sensor_tick` — the blueprint attribute that throttles a
 sensor's tick interval — defaults to `0.0`, meaning every tick
 (`ActorBlueprintFunctionLibrary.cpp:246-252`), is honoured server-side via `SetActorTickInterval`
-(`Sensor.cpp:43-49`), and is **set nowhere in `carlacontrol`, `CarlaNet` or the shim** (grepped). At the
-measured configuration — 2 Hz capture, 20 Hz tick — **90% of the rendered and streamed frames are thrown
+(`Sensor.cpp:43-49`), and was **set nowhere in `carlacontrol`, `CarlaNet` or the shim** when this was
+measured (grepped); `run_capture` (`CaptureSession`) and `run_sumo_drive.py` set it to `1 / record_hz`
+now, and `run_SCTMV.py`'s rig does not. At the
+measured configuration — 2 Hz capture, 20 Hz tick — **90% of the rendered and streamed frames were thrown
 away client-side**, and §4.1 measured the tick as 13.3 ms per streamed megapixel.
 
 If throttling the sensor removes that work, the arithmetic is (derived, on the measured 13.3 ms/Mpx and
@@ -1197,9 +1206,13 @@ If throttling the sensor removes that work, the arithmetic is (derived, on the m
 | 2 × 1920 × 1080 with `sensor_tick = 0.5` | 11.4 | 88 | 100% |
 | 4 × 1920 × 1080 with `sensor_tick = 0.5` | 16.9 | 59 | 100% |
 
-**This is a hypothesis, explicitly labelled.** It rests on `SetActorTickInterval` actually suppressing the
-render and readout rather than only the enqueue, which no one has measured. It is the cheapest
-high-value probe in this plan and it is measurement **M1** (§9). If it holds, it is worth roughly an order
+**This was a hypothesis, and M1 confirmed it on 2026-09-21** (`probe_sensor_tick.py`, Arapahoe, RGB and
+depth pair from 1,000 ft, 300 ticks per arm, two repeats): `SetActorTickInterval` suppresses the render,
+not only the enqueue. With `sensor_tick` at `1 / record_hz` the tick rate is 2.8 to 3.3 times the unset
+rate across 640 × 360 to 2560 × 1440; at 1920 × 1080 the camera pair fell from 35.1 ms of a 43.0 ms tick
+to 5.0 ms, 86% of the pair's cost returned. The table above is the derivation that preceded the
+measurement; the measured gain is smaller than its order of magnitude because the base tick is larger
+than 5.85 ms with the pair present. It was the cheapest high-value probe in this plan, measurement **M1** (§9). If it holds, it is worth roughly an order
 of magnitude on the clock ratio, which is worth more than every other optimisation in this document
 combined.
 
@@ -1871,9 +1884,10 @@ Three properties this needs, and each closes a silent-failure path of exactly th
 Two existing silent failures must be closed at the same time, because they are the same defect in other
 clothes:
 
-- **`FrameRecorder.Dropped`** has no reader (`FrameRecorder.cs:49`; §4.6, `D10.7`).
-- **The clock ratio is not recorded anywhere.** It was recoverable here only by differencing PNG `tEXt`
-  ticks against filename timestamps. Doc 18 §6 already measured that it is **not a constant** — 84% in one
+- **`FrameRecorder.Dropped`** had no reader (`FrameRecorder.cs:49`; §4.6, `D10.7`); it is gated at 0 now.
+- **The clock ratio was not recorded anywhere.** It was recoverable here only by differencing PNG `tEXt`
+  ticks against filename timestamps; the closeout records it now (`clock.ratio_recorded`) and the
+  achieved real-time factor per window beside it. Doc 18 §6 already measured that it is **not a constant** — 84% in one
   session, 99% in another, and 29.5% in the sessions measured here. A window that ran at 15% produced the
   same imagery as one that ran at 90% and cost six times as much; nothing in the corpus says which.
   Record achieved ticks per wall-second per window in the manifest.
@@ -1981,7 +1995,7 @@ and M2's drive at full population already contains them.
 | **D10.4** | **Withdrawn 2026-09-30.** There is no render cap: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner. |
 | **D10.5** | **Withdrawn 2026-09-30.** There is no render region: every vehicle SUMO has is drawn, wherever it is. |
 | **D10.6** | **TraCI reads are subscriptions, for every vehicle SUMO has, restricted to the variables the bridge and truth record consume.** Measured 116.0 ms → 8.1 ms per step at 388 vehicles (14×), and the naive path alone exceeds a 50 ms tick budget by 2.3× (§4.5). A subscription is charged inside the step whether or not it is read (3.73 ms → 9.26 ms subscribed and unread), so the **subscribed** population is a budget line in its own right, and at 388 vehicles it is the measured 9.26 ms. |
-| **D10.7** | **`FrameRecorder.Dropped` is read at window close, written into the run manifest, and a non-zero value fails the run's quality gate.** It is incremented today (`FrameRecorder.cs:184`) and has no reader anywhere in the tree (§4.6). |
+| **D10.7** | **`FrameRecorder.Dropped` is read at window close, written into the run manifest, and a non-zero value fails the run's quality gate.** Built as the gate `capture.recorder_dropped[<sensor>]` at 0 in the run result and the run's loud condition; when decided it was incremented (`FrameRecorder.cs:184`) and had no reader anywhere in the tree (§4.6). |
 | **D10.8** | **`aoi_max_relations_per_vehicle` = 4, nearest always present, and truncation is marked `<_aoi truncated="true">`.** Measured: 4 relations cost 1.49× the base sidecar; 50 cost 6.91×, not the 3× doc 20 §7.4 estimates (§4.6). |
 | **D10.9** | **The bare-earth plane is read as `array.array('f')` or a `numpy` view, not a tuple of Python floats.** Measured: 243.6 MB → 32.3 MB, 5.61 s → 0.011 s, identical semantics, one line at `SumoCotBridge.py:112` (§3.4). |
 | **D10.10** | **A capture window runs in synchronous mode with no other polling client attached.** In sync mode the server drains every client's pending requests on the game thread before advancing (`CarlaEngine.cpp:331-343`), so a second client's service time is added directly to the tick. A consumer needing world state reads the world-observer push stream, which costs no RPC (§4.4). |
@@ -2001,11 +2015,11 @@ and M2's drive at full population already contains them.
 
 ## 11. Open questions
 
-1. **Does `sensor_tick` suppress the render, or only the enqueue?** (M1.) If it suppresses the render, the
-   clock ratio improves by roughly an order of magnitude and every wall-clock figure in this document is
+1. *Answered 2026-09-21 (§4.6):* it suppresses the render; the tick rate is 2.8 to 3.3 times the unset
+   rate, and both front ends set it. **Does `sensor_tick` suppress the render, or only the enqueue?** (M1.)
+   If it suppresses the render, the clock ratio improves and every wall-clock figure in this document is
    pessimistic by that factor. If it only suppresses the enqueue, the camera stays the budget and the
-   envelope stands as written. **This is the single largest unknown in the plan.** Recommendation: run M1
-   before anything else, because it changes what the rest is worth.
+   envelope stands as written.
 2. **Is a tick at full population set by the pose write or by the camera?** (M2, M3.) The evidence points
    hard at the camera — 13.3 ms per streamed megapixel against a 5.85 ms engine base, with 100 actors
    fitting inside that without visible cost, and kinematic actors being cheaper than the physics-driven

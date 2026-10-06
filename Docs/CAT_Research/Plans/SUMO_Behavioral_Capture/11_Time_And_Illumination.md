@@ -2,8 +2,9 @@
 
 **Status:** Plan. The epoch, the per-window sun binding, the session's per-frame write of an advancing
 sun, the asserted policy, the per-tick solar audit, the per-frame record and every capture's
-illumination band are built in `CarlaNet.CoSim`, `CarlaNet.Recording` and `CarlaNet.Types`; the night
-work and the lamps are not. Claims about existing behaviour are cited to `path:line`; measurements
+illumination band are built in `CarlaNet.CoSim`, `CarlaNet.Recording` and `CarlaNet.Types`, and so are
+the lamps (§6.3): brake lights and indicators from SUMO's signals, headlights from the reported sun. No
+truth file records a lamp state. The night work is not built. Claims about existing behaviour are cited to `path:line`; measurements
 say how they were taken; inferences are labelled.
 **Scope:** The mapping from a scenario's simulated seconds to a civil date, time and zone; how the
 solar clock is driven during a capture window; the freeze-versus-advance policy; what is actually
@@ -19,6 +20,7 @@ possible. Assumes familiarity with the fork but not with the conversation that p
 | 2026-09-28 | §8.3: a sun absent from a snapshot after binding stops the run as built, and the shutdown does not fail for it. |
 | 2026-09-30 | The render cap (128, hard 192) is removed: never measured, since M2 never ran, and the scenario is the arbiter of population. Every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner, so lamp-command and solar-sweep costs are stated on the whole live population from [`10`](10_Scale_And_Performance.md) §4.8.1's map-wide measurements (§6.6, §9, D11.11). |
 | 2026-10-02 | The bands are built: one table in `CarlaNet.Types` (`IlluminationBands`), read by Python through `carlanet`. Every capture's `<_solar>` and `carla:solar` carry `illumination_band`, cut from the achieved sun's refraction-corrected elevation where the block carries it, and `illumination_band_elevation` naming the elevation used; an elevation that is not a sun's has none. A capture written without a solar block is counted per recorder and gated at zero at closeout (§4.4, §8.2-§8.4, F8). |
+| 2026-10-05 | Corrected against the code: the lamps and the headlight rule are built and drive every rendered body, with no truth file recording a lamp state (status, §6.3, §8.2); the run manifest is built and its solar rows are stated (§8.4). |
 
 Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
 epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
@@ -695,8 +697,9 @@ section: a stated intent that nothing honours and nothing reports.
 policy, and any field it does not read are refused, each by name. The contract's audit-tolerance
 overrides are refused too, because the bound [`04`](04_Contracts.md) `C9` places on them has not been
 valued and an unbounded override is an off switch. The corpus-eligibility rule for a non-unit rate
-belongs with the corpus, which is not built; the headlight thresholds are built with the lamps
-(on below +3°, off above +6° of reported sun elevation, D11.9).
+belongs with the export, which is not built; the headlight thresholds are built with the lamps
+(`HeadlightRule`: on below +3°, off above +6° of reported sun elevation, D11.9), applied to every
+rendered body by `SumoDriveSession` and written to no truth file.
 
 `illumination_band` is a derived, coarse stratification key computed from the sun elevation by one
 shared function — `day` above +6°, `golden` +6° to 0°, `civil_twilight` 0° to −6°,
@@ -1291,8 +1294,9 @@ at Gardnerville: `declared_civil` 10:01:00.05, `<_solar>` holding 10:01:00.001 (
 10.0167 h), `residual_clock_s` −0.049.
 
 A run that declared nothing writes no `<_illumination>` at all. Of the two §4.4 fields that depend on
-the lamps and the band, `headlights_asserted` is not written, because the headlight rule is not built.
-`illumination_band` is written, and with the achieved sun rather than the declaration: on `<_solar>`
+the lamps and the band, `headlights_asserted` is not written: the headlight rule is built and drives
+the lamps, but no writer carries the commanded state into a truth file, and whether it should is with
+the owner. `illumination_band` is written, and with the achieved sun rather than the declaration: on `<_solar>`
 and in `carla:solar`, after the attributes those always carried, because the band comes from the sun
 the frame was lit by and never from the time the run declared ([`06`](06_Truth_And_Annotation.md)
 D6.23). It is cut from the block's refraction-corrected elevation, the one the light is rotated by and
@@ -1403,7 +1407,10 @@ agreeing with the declaration and the frame disagreeing with it (§5.5, question
 `captures_missing_solar_block`. The last three should all be zero in a healthy run, and the gate is
 that they are.
 
-The run manifest belongs to stage J and is not built. Until it is, the co-simulation run report
+The run manifest is built (`RunManifestWriter`, `truth/manifest.jsonl`): its `solar_window_open` and
+`solar_window_end` rows carry the sun the world reported at the window's first and last capture tick,
+and at the end the audit's worst residual, `within_tolerance` and `corpus_eligible`; it carries no lamp
+state and no statement that lamps were driven. Beside it, the co-simulation run report
 (`CoSimRunReport`) carries the run-level record: the epoch and its digest, the policy, the sun the
 world was found holding, the sun bound at window open with its declared elevation — refraction-corrected,
 with the geometric one beside it — and the audit's ticks, tolerances and worst clock, direction and

@@ -39,6 +39,7 @@ the real scenario artifacts. No code changed, no build run.
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
 | 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
 | 33 · 2026-10-05 | The world truth track's rows are flushed once for each SUMO frame, when the frame's every row is written, and not after each row, as the owner ruled: the track is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. Every row is still a whole line, so a track cut off is still the rows before the cut, and a kill loses at most the frame being written (§8.3, [04](04_Contracts.md) C10 §12.7 W2). |
+| 34 · 2026-10-05 | Corrected against the code: the §8.2 example marks the `_carla` attributes and the `<_aoi>` block that nothing writes; the gap between the path heading and SUMO's angle is not §4.3's `heading_separation_deg`; open question 10 states the one solar limit the audit enforces. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2369,7 +2370,14 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
       <contact callsign="car-guard_d4_h15_t3"/>
 
       <!-- _carla keeps its name although the source is SUMO, deliberately, so the two producers
-           stay directly comparable. Existing attributes unchanged; new ones below the fold. -->
+           stay directly comparable. Existing attributes unchanged; new ones below the fold.
+           WRITTEN TODAY (CotWriter.cs): the attributes above the fold, sumo_id, vtype_id,
+           admitted_tick, heading_deg, sumo_angle_deg and, under a draw distance,
+           beyond_draw_distance and camera_range_m. WRITTEN BY NOTHING: producer, entity_id,
+           provenance, kinematics_source, pose_source, render_state, the sumo_* network state,
+           the vtype dimensions and the four separations of 4.3 (D6.10). The SUMO-against-CARLA
+           difference is measured every tick and only its worst and mean reach the log; where it
+           is written, and whether it has a limit, is with the owner. -->
       <_carla source="truth" actor_id="412" type_id="vehicle.audi.a2" base_type="car"
               special_type="" length_m="4.24" width_m="1.85" height_m="1.48"
               color="72,72,74" role_name="guard_d4_h15_t3"
@@ -2397,7 +2405,10 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
                                        bahonar:arrival_without_departure"/>
       </_supervision>
 
-      <!-- computed identically for EVERY vehicle, ambient included; never a label -->
+      <!-- computed identically for EVERY vehicle, ambient included; never a label.
+           NOT BUILT: no writer produces <_aoi>, and it needs the server-side holder for areas
+           (04 C5 7.4), which is specified and not built. Both relations are derivable downstream
+           from the published positions and the package's area outlines. -->
       <_aoi>
         <relation id="tower_03" state="inside" range_m="0.00" continuous_s="28741.0"/>
       </_aoi>
@@ -2494,8 +2505,11 @@ Notes, each carrying a decision:
 - **The CoT `type` affiliation is untouched**: every vehicle stays `a-n-G-E-V` unless an author
   overrides for display reasons unrelated to supervision. The `affiliation_by_type` mapping of
   anomaly types to `u` is removed (§9). Doc 20 decision 9, enforced rather than restated.
-- **`<_aoi>` is emitted for every vehicle**, capped to areas containing the vehicle plus those within
-  a configured radius with the nearest always present, per doc 20 §7.4.
+- **`<_aoi>` is planned for every vehicle**, capped to areas containing the vehicle plus those within
+  a configured radius with the nearest always present, per doc 20 §7.4. Nothing writes it today: it
+  needs the server-side holder for areas ([04](04_Contracts.md) C5 §7.4), which is not built, and
+  whether to build either is with the owner; the relations are derivable downstream from the published
+  positions and the package's area outlines.
 - **`<_solar>` is world-scoped and is extended, not restructured.** The nine existing attributes keep
   their names, their formats and their source, because they are already written into shipped corpora
   and into PNG chunks (§2.7) and renaming them would strand every capture taken so far. The four
@@ -2562,8 +2576,10 @@ pull and a recorder in another process carry `heading_deg` and not SUMO's angle,
 not told. The bumper is SUMO's position exactly, so positional truth is unchanged. While moving, the
 body's heading is within 10.3° (Gardnerville) and 10.9° (Arapahoe) of SUMO's angle at the 99th
 percentile: SUMO's angle is the chord from the vehicle's back to its front, and over 300 s of Arapahoe
-it steps by more than 15° 363 times where the path heading does 18 times. This is the `heading_separation_deg`
-the reconciler above will report; until it exists, the two angles side by side are the record of it.
+it steps by more than 15° 363 times where the path heading does 18 times. This gap is a property of the
+rendering rule, not a defect, and the two angles side by side are its record. It is **not** §4.3's
+`heading_separation_deg`, which is the commanded yaw against the yaw the world applied and should sit at
+the numeric floor; nothing writes that attribute today.
 
 **As built (2026-10-02): the optional draw distance, marked per camera.** Where a run sets a draw
 distance ([03](03_CoSimulation_Runtime.md) §8.3.3, D3.41), each frame's render set records the distance
@@ -4029,7 +4045,11 @@ owner acts on it rather than rediscovers it.
    plan, the manifest and the sidecar elements are not SUMO-specific; only the compiler's front end
    is. Making the artifacts shared would let a storyboard capture and a SUMO capture sit in one
    corpus. Not required by anything here, which is why it is a question.
-10. **The solar residual's soft and hard thresholds.** Question 7 with a different quantity, and the
+10. **The solar residual's soft and hard thresholds.** As built there is one limit, not two:
+    `SolarAudit` stops the run when the clock residual passes 0.5 s or the elevation residual 0.01°
+    ([11](11_Time_And_Illumination.md) D11.14), the closeout records the worst residual against it
+    (`solar.applied_equals_confirmed`), and no capture "ships flagged". What stays open is whether a
+    second, softer threshold is wanted at all. Question 7 with a different quantity, and the
     same recommendation for the same reason: set both from the first measured distribution rather than
     by guess. Two things make this one easier than question 7, and worth saying. The failure *modes*
     are discrete and diagnosable (§4.5's signature table) rather than a continuum, so a threshold does
