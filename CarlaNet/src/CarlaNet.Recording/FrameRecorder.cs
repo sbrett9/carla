@@ -269,13 +269,16 @@ public sealed class FrameRecorder : IDisposable
     /// that the image does not show is never listed as seen. Where a source is given, each frame's own
     /// set says what it was drawn under -- including that the server refused a distance, so nothing
     /// was culled -- and this is not read. Null marks nothing.</param>
-    /// <param name="cameraName">The recorded camera's name (<see cref="CameraName"/>): every still is
-    /// written as <c>&lt;name&gt;_&lt;local capture time&gt;.png</c> and <c>.xml</c>, and the platform
-    /// track's callsign is the name, so a <paramref name="platform"/> with another callsign is refused.
-    /// Null takes the platform's callsign, or with no platform the default of
-    /// <paramref name="cameraActorId"/>, <c>CARLA-SENSOR-&lt;id&gt;</c>; a recorder given none of the
-    /// three is refused. A name the rule refuses is refused here, and so is one another recorder in
-    /// this process holds: the recorder holds its name until it is disposed.</param>
+    /// <param name="cameraName">The recorded camera's name (<see cref="CameraName"/>), as the server
+    /// holds it (<see cref="CameraName.Of"/>): every still is written as
+    /// <c>&lt;name&gt;_&lt;local capture time&gt;.png</c> and <c>.xml</c>, and the platform track's
+    /// callsign is the name, so a <paramref name="platform"/> with another callsign is refused. Null
+    /// takes the platform's callsign, or with no platform the default of
+    /// <paramref name="cameraActorId"/>, <c>CARLA-SENSOR-&lt;id&gt;</c>, which is an unnamed camera's
+    /// name only on a server built before it named cameras; a recorder given none of the three is
+    /// refused. A name the rule refuses as a camera's (<see cref="CameraName.HeldProblem"/>) is refused
+    /// here, and so is one another recorder in this process holds: the recorder holds its name until
+    /// it is disposed.</param>
     /// <remarks>
     /// The supervision in force is given by no parameter: it is held on the server and carried on every
     /// world-observer snapshot, and each capture takes its own frame's from the snapshot its vehicles are
@@ -302,7 +305,7 @@ public sealed class FrameRecorder : IDisposable
                           : throw new ArgumentException(
                               "a recorder names every still after its camera: give the camera's name, or "
                               + "the camera actor to take its default name from", nameof(cameraName)));
-        if (CameraName.Problem(name, cameraActorId) is { } refused)
+        if (CameraName.HeldProblem(name, cameraActorId) is { } refused)
             throw new ArgumentException(refused, nameof(cameraName));
         if (platform is not null && platform.Callsign != name)
             throw new ArgumentException($"the platform track's callsign is the camera's name, and "

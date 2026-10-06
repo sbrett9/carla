@@ -83,12 +83,30 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_Camera_Given_No_Name_Is_Recorded_Under_Its_Default()
+    public async Task A_Camera_Given_No_Name_By_A_Server_That_Names_None_Is_Recorded_Under_Its_Default()
     {
         (FrameRecorder recorder, string png, _) = await RecordOneImage(cameraActorId: Camera);
 
         Assert.Equal("CARLA-SENSOR-4121", recorder.Name);
         Assert.StartsWith("CARLA-SENSOR-4121_", Path.GetFileName(png));
+    }
+
+    [Fact]
+    public async Task A_Camera_The_Server_Named_Is_Recorded_Under_The_Server_s_Name()
+    {
+        // The name the server issued the camera, read back from its attributes (CameraName.Of): no
+        // client may choose it, and the recorder takes it as the camera's.
+        const string issued = "Camera_4121";
+        Assert.NotNull(CameraName.Problem(issued));
+        var platform = new SensorPlatformOptions(90.0, "a-f-A-M-F-Q", issued, CameraName.Default(Camera));
+
+        (FrameRecorder recorder, string png, string xml) = await RecordOneImage(platform: platform, cameraActorId: Camera);
+
+        Assert.Equal(issued, recorder.Name);
+        Assert.StartsWith("Camera_4121_", Path.GetFileName(png));
+        XElement track = XDocument.Load(xml).Root!.Elements("event")
+            .Single(e => (string?)e.Attribute("uid") == "CARLA-SENSOR-4121");
+        Assert.Equal(issued, (string?)track.Element("detail")!.Element("contact")!.Attribute("callsign"));
     }
 
     [Fact]

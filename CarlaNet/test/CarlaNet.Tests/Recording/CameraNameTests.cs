@@ -1,9 +1,10 @@
 // Every camera's recordings are named after it, and the name is its platform track's callsign: see
-// CameraName, and FrameRecorderCameraNameTests for the same rule through a real recorder. The cases
-// here are the ones CarlaControl's mirror of the rule (carlacontrol.CameraName, which run_capture's
-// offline checks use) is tested against, so the two are held to the same answers. A name is 1 to 63
-// ASCII letters, digits, underscores and hyphens -- Overwatch_1, Southeast_1700m_orbit -- and every
-// refusal says so.
+// CameraName, and FrameRecorderCameraNameTests for the same rule through a real recorder. The server
+// issues the name of a camera spawned without one, Camera_<n>, and every client reads a camera's name
+// back from its attributes (SpawnedCameraNameTests). The cases here are the ones CarlaControl's mirror
+// of the rule (carlacontrol.CameraName, which run_capture's offline checks use) is tested against, so
+// the two are held to the same answers. A name is 1 to 63 ASCII letters, digits, underscores and
+// hyphens -- Overwatch_1, Southeast_1700m_orbit -- and every refusal says so.
 using CarlaNet.Recording;
 
 namespace CarlaNet.Tests.Recording;
@@ -11,7 +12,7 @@ namespace CarlaNet.Tests.Recording;
 public class CameraNameTests
 {
     [Fact]
-    public void A_Camera_Given_No_Name_Is_Named_By_Its_Actor_Id()
+    public void A_Camera_s_Platform_Track_Uid_Is_Its_Default_Name_On_A_Server_That_Names_No_Cameras()
     {
         Assert.Equal("CARLA-SENSOR-42", CameraName.Default(42));
         Assert.Null(CameraName.Problem(CameraName.Default(42), 42));
@@ -32,6 +33,10 @@ public class CameraNameTests
     [InlineData("frontier")]
     [InlineData("CARLA-SENSOR-")]
     [InlineData("CARLA-SENSOR-12a")]
+    [InlineData("Camera_")]
+    [InlineData("Camera_1a")]
+    [InlineData("Camera-1")]
+    [InlineData("Cameras_1")]
     [InlineData("123456789012345678901234567890123456789012345678901234567890123")]
     public void A_Short_Plain_Name_Is_Accepted(string name)
     {
@@ -70,6 +75,9 @@ public class CameraNameTests
     [InlineData("Back_Left", "role name the server gives sensors")]
     [InlineData("CARLA-SENSOR-12", "another camera's name")]
     [InlineData("carla-sensor-12", "another camera's name")]
+    [InlineData("Camera_1", "which a client cannot claim")]
+    [InlineData("camera_007", "which a client cannot claim")]
+    [InlineData("CAMERA_12", "which a client cannot claim")]
     public void A_Name_Outside_The_Rule_Is_Refused_Saying_What_Is_Allowed(string name, string reason)
     {
         string? problem = CameraName.Problem(name);
@@ -87,6 +95,41 @@ public class CameraNameTests
         Assert.Null(CameraName.Problem("carla-sensor-42", 42));
         Assert.Contains("is not camera 43's own", CameraName.Problem("CARLA-SENSOR-42", 43));
         Assert.Contains("names no camera of its own", CameraName.Problem("CARLA-SENSOR-42"));
+    }
+
+    [Theory]
+    [InlineData("Camera_1")]
+    [InlineData("camera_007")]
+    [InlineData("CAMERA_12")]
+    public void A_Name_The_Server_Issued_Is_Held_By_Its_Camera_Though_No_Client_May_Choose_It(string name)
+    {
+        Assert.True(CameraName.IsServerIssued(name));
+        Assert.NotNull(CameraName.Problem(name));
+        Assert.Null(CameraName.HeldProblem(name));
+        Assert.Null(CameraName.HeldProblem(name, 42));
+    }
+
+    [Theory]
+    [InlineData("Camera_")]
+    [InlineData("Camera_1a")]
+    [InlineData("Camera-1")]
+    [InlineData("Cameras_1")]
+    [InlineData("CARLA-SENSOR-1")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Only_Camera_And_Digits_Is_The_Server_s_Form(string? name)
+    {
+        Assert.False(CameraName.IsServerIssued(name));
+    }
+
+    [Fact]
+    public void A_Held_Name_Is_Held_To_The_Rule_Unless_The_Server_Issued_It()
+    {
+        Assert.Equal(CameraName.Problem("Deck Cam 1"), CameraName.HeldProblem("Deck Cam 1"));
+        Assert.Equal(CameraName.Problem("front"), CameraName.HeldProblem("front"));
+        Assert.Equal(CameraName.Problem("CARLA-SENSOR-42", 43), CameraName.HeldProblem("CARLA-SENSOR-42", 43));
+        Assert.Null(CameraName.HeldProblem("CARLA-SENSOR-42", 42));
+        Assert.Null(CameraName.HeldProblem("OVERWATCH"));
     }
 
     [Fact]
@@ -126,23 +169,37 @@ public class CameraNameTests
     }
 
     [Fact]
-    public void The_Camera_That_Holds_A_Name_In_The_World_Is_Found_Among_The_Actors()
+    public void A_Spawned_Camera_s_Name_Is_Read_From_Its_Attributes()
     {
-        Actor[] world =
-        [
-            Described(11, "vehicle.audi.tt", "DECK"),
-            Described(12, "sensor.camera.depth", "front"),
-            Described(13, "sensor.camera.rgb", "DECK"),
-            Described(14, "sensor.camera.rgb", null),
-        ];
+        // Named by the server: a camera spawned without a name, as a server that names cameras returns it.
+        Actor named = Described(13, "sensor.camera.rgb", "Camera_7");
+        Assert.Equal("Camera_7", CameraName.RoleNameOf(named));
+        Assert.True(CameraName.NamedByServer(named));
+        Assert.Equal("Camera_7", CameraName.Of(named));
 
-        // A vehicle's role_name names no camera; a sensor's does, in any case.
-        Assert.Equal(13u, CameraName.HolderAmong(world, "deck")?.Id);
-        Assert.Null(CameraName.HolderAmong(world, "deck", except: 13));
-        // A camera spawned with no name holds its default.
-        Assert.Equal(14u, CameraName.HolderAmong(world, "CARLA-SENSOR-14")?.Id);
-        Assert.Null(CameraName.HolderAmong(world, "OVERWATCH"));
-        Assert.Equal("camera 13 (sensor.camera.rgb)", CameraName.DescribeHolder(world[2]));
+        // Named by its client: the server returns the name it accepted.
+        Actor chosen = Described(14, "sensor.camera.rgb", "DECK");
+        Assert.False(CameraName.NamedByServer(chosen));
+        Assert.Equal("DECK", CameraName.Of(chosen));
+    }
+
+    [Fact]
+    public void A_Camera_A_Server_Built_Before_It_Named_Cameras_Left_Unnamed_Is_Its_Default()
+    {
+        // Such a server hands an unnamed camera back with its blueprint's role name, or with none.
+        Actor stockRole = Described(15, "sensor.camera.depth", "front");
+        Assert.Equal("front", CameraName.RoleNameOf(stockRole));
+        Assert.False(CameraName.NamedByServer(stockRole));
+        Assert.Equal("CARLA-SENSOR-15", CameraName.Of(stockRole));
+
+        Actor noRole = Described(16, "sensor.camera.rgb", null);
+        Assert.Null(CameraName.RoleNameOf(noRole));
+        Assert.False(CameraName.NamedByServer(noRole));
+        Assert.Equal("CARLA-SENSOR-16", CameraName.Of(noRole));
+
+        // A role name no camera may be named -- one set past the rule -- names nothing either.
+        Assert.Equal("CARLA-SENSOR-17", CameraName.Of(Described(17, "sensor.camera.rgb", "Deck Cam 1")));
+        Assert.Equal("CARLA-SENSOR-18", CameraName.Of(Described(18, "sensor.camera.rgb", "")));
     }
 
     private static Actor Described(ActorId id, string type, string? roleName) => new(
