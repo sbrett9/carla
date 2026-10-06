@@ -31,6 +31,7 @@ Findings set. Every external claim is cited.
 | 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
 | 2026-10-02 | §2.4, §3.5: every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none. A client names each camera as it chooses, used as given or refused, never rewritten; one it does not name is `CARLA-SENSOR-<camera id>`. A name is unique within a process and, set as the camera's `role_name`, visible to every client, so one another camera in the world holds is refused. The uid is unchanged. |
 | 2026-10-05 | §2.4, §3.5: a camera name is short and plain -- 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or `Southeast_1700m_orbit` -- and no other character; the free-move camera can be named too. |
+| 2026-10-05 | §2.4, §3.5: the server issues camera names and refuses duplicates, as the owner ruled. A camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, never reset by a world reload and never reused; a name a live camera holds is refused at spawn, case aside, and a client cannot claim `Camera_<digits>`. Every client reads the name back from the spawned camera for its files, callsign and recorder; the client-side check across the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras. The plugin change awaits a build. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -311,9 +312,12 @@ fps" (`run_SCTMV.py:215-219`). Two streams is today's rig. Multi-camera multipli
 
 Per capture, two files sharing a filename stem: the camera's name and local wall-clock time to the
 millisecond, `<camera name>_<yyyy.MM.dd_HH.mm.ss.fff>` (`CameraName.StillStem`). The name is the one
-the client gave the camera, used as given or refused, or `CARLA-SENSOR-<camera id>` where it gave none.
-A name is 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` (2026-10-05);
-captures written before 2026-10-02 carry `SCTMV` where the name is, whatever camera took them:
+the camera holds on the server: the one the client gave it, used as given or refused, or
+`Camera_<n>`, which the server names a camera spawned without one (2026-10-05); the client reads it
+back from the spawned camera. A client-given name is 1 to 63 ASCII letters, digits, underscores and
+hyphens, such as `Overwatch_1`, and never of the server's form. `CARLA-SENSOR-<camera id>` is an
+unnamed camera's name only on a server built before it named cameras; captures written before
+2026-10-02 carry `SCTMV` where the name is, whatever camera took them:
 
 - a lossless PNG with `carla:solar`, `carla:sensor` and `carla:capture` tEXt chunks
   (`FrameRecorder.cs:225-229`);
@@ -847,12 +851,18 @@ Three identity defects, one already half-solved:
   camera's name:** its directory, the first part of every capture's file name and its platform
   track's callsign, which had defaulted to `OVERWATCH` for every camera given none. It is unique
   within the session without regard to case, since a Windows file system holds `Deck` and `deck` as
-  one name, and the camera is spawned under it as its `role_name`, so a name another client's camera
-  in the same world holds refuses the run at pre-roll. Since 2026-10-05 it is short and plain:
-  1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or
-  `Southeast_1700m_orbit`, and not a Windows device name, a sensor's stock role name or another
-  camera's default. A single channel given none is
-  `CARLA-SENSOR-<camera id>`, unstable across runs as before.
+  one name, and the camera is spawned under it as its `role_name`. Since 2026-10-05 it is short and
+  plain: 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or
+  `Southeast_1700m_orbit`, and not a Windows device name, a sensor's stock role name, the server's
+  own `Camera_<digits>` or another camera's default. **The server issues the names and refuses the
+  duplicates (2026-10-05, the owner's ruling):** a name a live camera in the same world holds, in
+  any case, is refused by the server at spawn, which refuses the run at pre-roll with the holder
+  named, and a single channel given no `sensor_id` takes the name the server gives its camera,
+  `Camera_<n>`, from a counter the server keeps for its lifetime — read back from the spawned
+  camera, as every client reads a camera's name, and still unstable across runs. Before this the
+  check across clients read the actor list at spawn, which two clients could pass in one tick.
+  `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named
+  cameras.
 - **`scenario_id` is still never supplied** (§2.8). Under SUMO drive the analogous identity is the
   scenario configuration, and it must reach `CaptureIdentity` (`CaptureMetadata.cs:24-29`) or the
   captures cannot be tied to the annotations. This belongs to [`04_Contracts.md`](04_Contracts.md); the
