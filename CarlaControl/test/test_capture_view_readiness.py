@@ -265,10 +265,12 @@ def test_recording_starts_on_the_frame_after_the_view_is_ready(layout):
     assert result.outcome == "run_finished"
     view = the_view(result)
     assert view["tiles"]["in_at_frame"] == 6980
+    # The camera's 600th frame against its 599th: it renders every tenth frame from its spawn.
     assert view["picture"] == {"settled_at_frame": LAST_PREWARM_FRAME, "compared_with_frame": 6990,
-                               "frames": 3, "ticks_since_tiles": 20, "residual_levels": 0.0,
-                               "worst_block_px": [0, 0], "blocks": 8, "excluded_blocks": 0,
-                               "judged_share": 1.0, "vehicles": [0, 0]}
+                               "frames": 3, "ticks_since_tiles": 20, "camera_frames": [600, 599],
+                               "residual_levels": 0.0, "worst_block_px": [0, 0], "blocks": 8,
+                               "excluded_blocks": 0, "judged_share": 1.0, "vehicles": [0, 0],
+                               "camera_from_snapshot": [True, True]}
     assert view["ready_at_window_open"] is True
     [start] = server.events.of("start_recording")
     assert start[5] == BEGIN_S and start[6] == LAST_PREWARM_FRAME
@@ -367,6 +369,44 @@ def test_the_picture_ceiling_refuses_naming_the_picture_witness(layout):
         in result.detail
     assert "frame 1140 differs from frame 1130, 10 ticks earlier" in result.detail
     assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 8.0
+
+
+def test_the_record_keeps_every_comparison_with_the_camera_s_own_frame_count(layout):
+    # Tiles in from the first step, on frame 1020. The picture converges on its own: the camera's
+    # k-th frame is 128 + 2^(7-k) grey up to its seventh and 128 from its eighth on, so the
+    # comparisons from frame 1030 -- the third frame against the second -- read 16, 8, 4, 2, 1, 1
+    # and settle at frame 1090, the ninth against the eighth, at 0. The record keeps every one,
+    # each with the camera's frame count on either side, so a refusal shows the trend against the
+    # camera's own frames and not only against the ticks since the tiles.
+    server = FakeServer()
+    server.picture_at = lambda _camera, frame: 128 + (
+        2 ** (7 - camera_frame(frame)) if camera_frame(frame) < 8 else 0)
+    _, result = capture(layout, server)
+    assert result.outcome == "run_finished"
+    view = the_view(result)
+    history = view["comparison_history"]
+    assert [entry["frame"] for entry in history] == list(range(1030, 1100, 10))
+    assert [entry["worst_block_levels"] for entry in history] == \
+        [16.0, 8.0, 4.0, 2.0, 1.0, 1.0, 0.0]
+    assert [entry["camera_frames"] for entry in history] == [[k, k - 1] for k in range(3, 10)]
+    assert all(entry["camera_from_snapshot"] == [True, True] for entry in history)
+    assert (view["picture"]["settled_at_frame"], view["picture"]["camera_frames"]) == (1090, [9, 8])
+    assert view["last_comparison"] == history[-1]
+
+
+def test_the_refusal_lists_every_judged_comparison_against_the_camera_s_frames(layout):
+    # The camera's k-th frame is 128 + (k mod 3) grey, so the comparisons read 2, 1, 1, 2, 1, 1, ...
+    # and never settle. The refusal lists them all, from the camera's third frame (1030, against its
+    # second) to its fourteenth (1140, the last inside the ceiling), so the trend can be read from
+    # the log alone.
+    server = FakeServer()
+    server.picture_at = lambda _camera, frame: 128 + camera_frame(frame) % 3
+    _, result = capture(layout, server)
+    refused_by_check_50(server, result)
+    assert ("the 12 judged comparisons read 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, "
+            "2.00, 1.00, 1.00 grey levels in order, from the camera's frame 3 to its frame 14"
+            in result.detail)
+    assert len(the_view(result)["comparison_history"]) == 12
 
 
 def test_the_span_is_ten_ticks_whatever_the_capture_rate(layout):
@@ -499,6 +539,30 @@ def test_a_view_too_full_of_vehicles_to_judge_is_refused_naming_that(layout):
     assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 8.0
     comparisons = the_view(result)["comparisons"]
     assert comparisons["judged"] == 0 and comparisons["too_few_blocks"] == comparisons["made"]
+
+
+def test_a_camera_the_snapshot_does_not_hold_is_posed_where_it_is_held(layout):
+    # The client's snapshots hold the vehicle and not the camera: the camera is posed where the
+    # channel holds it, which is where it was spawned, the vehicle's blocks are left out just the
+    # same, and the record says which pose was used.
+    server = FakeServer()
+    at, server.vehicles_at = driving((0, 1), (1, 2))
+    server.picture_at = lambda _camera, frame: painted({at(frame): frame * 7 % 256})
+    held = server._client.GetSnapshotFrame
+
+    def vehicles_only(frame):
+        snapshot = held(frame)
+        if snapshot is not None:
+            snapshot.transforms = {actor: transform for actor, transform
+                                   in snapshot.transforms.items() if actor == 11}
+        return snapshot
+
+    server._client.GetSnapshotFrame = vehicles_only
+    _, result = capture(layout, server, channels=[A_NADIR])
+    assert result.outcome == "run_finished"
+    picture = the_view(result)["picture"]
+    assert (picture["settled_at_frame"], picture["excluded_blocks"],
+            picture["camera_from_snapshot"]) == (1030, 2, [False, False])
 
 
 def test_a_frame_whose_vehicles_cannot_be_placed_is_not_judged(layout):

@@ -69,6 +69,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §8.9: a still is written with the truth of its own frame or not at all, as the owner ruled ([`06`](06_Truth_And_Annotation.md) §8.2). The client's snapshot history serves a frame exactly or not at all and keeps every frame a recording recorder may still ask for, up to 256, so a frame whose truth is held has its render set held; `telemetry_tick` is gone. |
 | 2026-10-05 | §10, D3.13: the drive lease is built. The episode holds `FDriveLease`, taken by `take_drive_lease` and given back by `release_drive_lease`; while it is held every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` is refused for every actor, direct and in a batch, naming the holder. The session takes it before SUMO starts, as `<holder> (process <pid> on <machine>)`, and gives it back after the world's settings on every exit path; a lease another client holds refuses the start at `Authority` naming the holder, with SUMO never launched. `break_drive_lease` ends a dead holder's lease, logged, since rpclib gives no disconnect notice; the per-actor mark and the solar cover are not built, the latter for want of a per-connection identity. The traffic tools refuse naming the holder; a server without the lease is recorded `NOT HELD`. |
 | 2026-10-05 | §9.5.1: an orbit is flown by the server (issue #37, promoted into the plan by the owner). The circle goes to the plugin's orbit mover (`set_orbit`) as the camera is placed, held, and is set moving as the window opens; the mover advances the angle by each tick's delta on the simulation clock in `TG_PrePhysics`, before the sensors capture and the world observer reports the frame. The client's orbit thread, which sent a pose about fifty times a second on the wall clock beside D3.3's two round trips, is gone. Written and tested offline; the plugin awaits a build. |
+| 2026-10-06 | §9.5.1: the three pre-roll refusals of 2026-10-06 on the Arapahoe check stare are explained against the run that passed the day before. The vehicle mask's zero was right -- SUMO run offline puts no vehicle's box or shadow in the frame before t = 65.55 s, and the projection is held equal to the occlusion estimate's -- and the tiles never went out, so the 0.53–0.69 at the ceiling is the renderer settling a freshly spawned camera's view, judged over the camera's 2nd to 13th frames where the passing run was judged over its 72nd and 73rd. Across the four runs to hand the residual orders by the camera's frame count and not by the ticks since its tiles, which the one Bahonar run had been read the other way; inference only, decided by one warm stare with `capture.capture_hz` the only thing varied, the owner's to run. The ceiling and the tolerance stand. The run result keeps every comparison with the camera's frame count on either side and the camera's pose source, and a refusal at the ceiling lists the judged residuals in order. |
 
 ---
 
@@ -3282,6 +3283,40 @@ the view; nor can one whose vehicles could not be placed, because the session no
 frame's render set or the client its snapshot. A view that stays so until the ceiling is refused at
 pre-roll with that as the reason. Half is chosen, not measured; the run result records, per
 comparison, the blocks left out and the share judged, so it can be set from what live runs show.
+
+**The refusals of 2026-10-06, and the count the picture converges against.** Three runs of the
+Arapahoe check scenario -- one stare at 70 m, 25 m back from (−374.2, −313.7) along bearing 90°,
+1920×1080, 50° of view, the sun at 5.7° -- were refused at pre-roll on 2026-10-06 after the same run
+had passed on 2026-10-05, with no change to the scenario or the sun. The passing run's tiles were in
+712 ticks after the wait began and its picture settled 19 ticks later at 0.055 grey levels, judged
+between the camera's 72nd and 73rd frames. The refused runs' tiles were in 4 ticks after the wait
+began, the view having been loaded minutes before, and their pictures were judged over the camera's
+2nd to 13th frames: 0.53 at the ceiling in one run and 0.69 in another, the last judged between the
+camera's 12th and 13th frames, the worst block at the road under the look-at point, 0 of 312 blocks
+left out with 9 bodies placed in every frame. The zero was right. The scenario is deterministic (seed
+42, departures as declared), and SUMO run offline over its first 70 s puts no vehicle's box or shadow
+-- as a car or as a truck, under the 5.7° sun -- inside the frame before t = 65.55 s, when the first
+Yosemite vehicle enters from the north; the nearest vehicle to the look-at point in the first 7 s is
+over 250 m away, and the dweller reaches the point at t = 104 s. The projection is held equal to
+`OcclusionEstimator`'s by test, and a car placed at the look-at point projects to the frame's centre
+and covers 24 blocks with its shadow. The tiles stayed in over the 136 ticks of the last run with no
+relapse, so a level of detail refining after them would have shown as the tiles going out, and did
+not. What the evidence leaves is the renderer's own settling of a freshly spawned camera's view, and
+the four runs to hand order the residual by the camera's frame count, not by the ticks since its
+tiles: 0.53 and 0.69 at the camera's 13th frame; 0.477 at about its 18th, the orbit check of
+2026-10-05 with its tiles in after 113 ticks; 0.46 between about its 8th and 18th on Bahonar at 450 m
+and 1280×720, frames 100 ticks apart under the rule as it then was; 0.055 at its 73rd. The capture
+component keeps its rendering state between captures (`bAlwaysPersistRenderingState`), so whatever
+accumulates over frames -- antialiasing history, exposure, global illumination -- advances once per
+captured frame and not once per tick. *Inference, not yet measured:* the picture settles in the
+camera's frames, the opposite of the inference drawn above from one Bahonar run, and the 120-tick
+ceiling at 2 Hz allows twelve of them where the placements, at a frame per tick, needed 29 to 81. The
+measurement that decides it is one stare at a warm pose with `capture.capture_hz` the only thing
+varied -- 2 against 20 -- which only a live run gives; the ceiling and the tolerance stand until it is
+made. From 2026-10-06 the run result keeps every comparison with the camera's frame count at each of
+its two frames and whether the camera was posed from the snapshot (`comparison_history`,
+`camera_frames`, `camera_from_snapshot`), and a refusal at the ceiling lists the judged residuals in
+order, so the next refusal shows its trend without a probe.
 
 **What the server reports.** `get_view_readiness(actor_id)` reads the tilesets' state as of the end of
 the last tick. The camera counts only once `ACesiumSensorViewPublisher` has written its view on that

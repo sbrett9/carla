@@ -52,9 +52,15 @@ which is also where each frame's vehicles are placed.
 
 **What a readiness record describes.** A view as of the end of a step: the tiles are asked about once
 per SUMO step, so the ticks until they were in are counted to within one step, and the picture is
-compared frame by frame. Nothing here is written into a capture. An image reaches a recorder several
-ticks after its frame, and the server answers only for the last tick, so a capture's own readiness
-would need the server to publish it per frame, which it does not.
+compared frame by frame. Every comparison is kept on the record, with how many frames the camera had
+delivered at each of its two frames and whether the camera was posed from the snapshot or where it is
+held: a refusal then shows whether the picture was converging, and against which count -- the ticks
+since the tiles, or the camera's own frames. The three refusals of 2026-10-06 were judged over a
+camera's 2nd to 13th frames, its tiles in 4 ticks after it was spawned, with no vehicle within 250 m
+of the view; the run that passed the day before was judged over the same camera's 72nd and 73rd
+frames, its tiles in after 712 ticks (03 §9.5.1). Nothing here is written into a capture. An image
+reaches a recorder several ticks after its frame, and the server answers only for the last tick, so a
+capture's own readiness would need the server to publish it per frame, which it does not.
 """
 from __future__ import annotations
 
@@ -466,7 +472,7 @@ class CameraFrames:
     """
 
     def __init__(self) -> None:
-        self._pending: list[tuple[int, np.ndarray, int, int]] = []
+        self._pending: list[tuple[int, np.ndarray, int, int, int]] = []
         self._newest: int | None = None
         self._keeping = False
         self._condition = threading.Condition()
@@ -483,6 +489,8 @@ class CameraFrames:
         with self._condition:
             self.received += 1
             keeping = self._keeping
+            # How many frames the camera has delivered, this one included: its age in its own frames.
+            delivered = self.received
         if not keeping:
             return
         try:
@@ -494,7 +502,7 @@ class CameraFrames:
                 self.unreadable += 1
             return
         with self._condition:
-            self._pending.append((frame, small, width, height))
+            self._pending.append((frame, small, width, height, delivered))
             self._newest = frame if self._newest is None else max(self._newest, frame)
             self._condition.notify_all()
 
@@ -503,8 +511,9 @@ class CameraFrames:
         with self._condition:
             return self._newest
 
-    def take(self) -> list[tuple[int, np.ndarray, int, int]]:
-        """Every frame arrived since the last take, in frame order: frame, reduced grey, size."""
+    def take(self) -> list[tuple[int, np.ndarray, int, int, int]]:
+        """Every frame arrived since the last take, in frame order: frame, reduced grey, size, and
+        how many frames the camera had delivered by then, that one included."""
         with self._condition:
             taken, self._pending = self._pending, []
         return sorted(taken, key=lambda entry: entry[0])
@@ -523,13 +532,16 @@ class CameraFrames:
 
 @dataclass
 class _Frame:
-    """One frame kept for comparing: its reduced picture, and the blocks its vehicles cover (None
-    where they could not be placed)."""
+    """One frame kept for comparing: its reduced picture, the blocks its vehicles cover (None where
+    they could not be placed), how many frames the camera had delivered by it, and whether the camera
+    was posed from the snapshot of the frame (None where the vehicles could not be placed)."""
 
     frame: int
     small: np.ndarray
     covered: np.ndarray | None
     vehicles: int | None
+    camera_frame: int
+    camera_from_snapshot: bool | None
 
 
 class ChannelReadiness:
@@ -559,6 +571,8 @@ class ChannelReadiness:
         self.picture: dict | None = None
         self.last_answer: dict | None = None
         self.last_comparison: dict | None = None
+        # Every comparison made, in order, across the whole wait.
+        self.comparison_history: list[dict] = []
         self.relapses: list[dict] = []
         self.ready_at_window_open: bool | None = None
         self.comparisons = {"made": 0, "judged": 0, TOO_FEW_BLOCKS: 0, VEHICLES_UNKNOWN: 0}
@@ -657,8 +671,9 @@ class ChannelReadiness:
         self._tiles_wait_wall = now
         self._tiles_wait_ticks = ticks
 
-    def _settle(self, arrived: list[tuple[int, np.ndarray, int, int]]) -> list[tuple[int, str]]:
-        for frame, small, width, height in arrived:
+    def _settle(self, arrived: list[tuple[int, np.ndarray, int, int, int]]
+                ) -> list[tuple[int, str]]:
+        for frame, small, width, height, camera_frame in arrived:
             if frame < self._settle_from or (self._history and frame <= self._history[-1].frame):
                 continue
             if frame - self._settle_from > PICTURE_CEILING_TICKS:
@@ -668,7 +683,7 @@ class ChannelReadiness:
                     f"{PICTURE_CEILING_TICKS} ticks of its tiles being in at frame "
                     f"{self._settle_from} ({RULE}): {self._comparison_text()}")
             self._compared += 1
-            entry = self._keep(frame, small, width, height)
+            entry = self._keep(frame, small, width, height, camera_frame)
             older = next((kept for kept in reversed(self._history)
                           if kept.frame <= frame - PICTURE_SPAN_TICKS), None)
             self._history.append(entry)
@@ -676,18 +691,21 @@ class ChannelReadiness:
                 continue
             comparison = self._compare(entry, older)
             self.last_comparison = comparison
+            self.comparison_history.append(comparison)
             if comparison["reason"] is None and \
                     comparison["worst_block_levels"] <= PICTURE_TOLERANCE_LEVELS:
                 self.state = READY
                 self.picture = {"settled_at_frame": frame, "compared_with_frame": older.frame,
                                 "frames": self._compared,
                                 "ticks_since_tiles": frame - self._settle_from,
+                                "camera_frames": comparison["camera_frames"],
                                 "residual_levels": comparison["worst_block_levels"],
                                 "worst_block_px": comparison["worst_block_px"],
                                 "blocks": comparison["blocks"],
                                 "excluded_blocks": comparison["excluded_blocks"],
                                 "judged_share": comparison["judged_share"],
-                                "vehicles": comparison["vehicles"]}
+                                "vehicles": comparison["vehicles"],
+                                "camera_from_snapshot": comparison["camera_from_snapshot"]}
                 return [(logging.INFO,
                          f"channel {self.sensor_id}: picture settled at frame {frame}, "
                          f"{frame - self._settle_from} ticks after its tiles were in; worst judged "
@@ -696,11 +714,13 @@ class ChannelReadiness:
                          f"{comparison['blocks']} blocks left out for rendered vehicles")]
         return []
 
-    def _keep(self, frame: int, small: np.ndarray, width: int, height: int) -> _Frame:
+    def _keep(self, frame: int, small: np.ndarray, width: int, height: int,
+              camera_frame: int) -> _Frame:
         """A frame with the blocks its rendered vehicles cover."""
         rows, columns = block_grid(width, height)
         if self._locate is None:
-            return _Frame(frame, small, np.zeros((rows, columns), dtype=bool), 0)
+            return _Frame(frame, small, np.zeros((rows, columns), dtype=bool), 0, camera_frame,
+                          None)
         try:
             located = self._locate(frame)
         except Exception as failure:
@@ -710,13 +730,13 @@ class ChannelReadiness:
             self.last_locate_failure = f"frame {frame}: {failure!r}"
             located = None
         if located is None:
-            return _Frame(frame, small, None, None)
+            return _Frame(frame, small, None, None, camera_frame, None)
         rectangles = [footprint for pose, box in located.vehicles
                       if (footprint := vehicle_footprint(located.camera, self.fov_deg, width,
                                                          height, pose, box, located.sun,
                                                          VEHICLE_MARGIN_PX)) is not None]
         return _Frame(frame, small, blocks_covered(rectangles, width, height),
-                      len(located.vehicles))
+                      len(located.vehicles), camera_frame, bool(located.camera_from_snapshot))
 
     def _compare(self, newer: _Frame, older: _Frame) -> dict:
         """One comparison: the worst judged block, or why it could not be judged."""
@@ -725,10 +745,15 @@ class ChannelReadiness:
         comparison = {"frame": newer.frame, "against_frame": older.frame,
                       "ticks_apart": newer.frame - older.frame,
                       "ticks_since_tiles": newer.frame - self._settle_from,
-                      "frames_since_tiles": self._compared, "blocks": int(blocks.size),
-                      "vehicles": [newer.vehicles, older.vehicles], "excluded_blocks": None,
-                      "judged_share": None, "worst_block_levels": None, "worst_block_px": None,
-                      "reason": None}
+                      "frames_since_tiles": self._compared,
+                      # How many frames the camera had delivered at each: its age in its own frames.
+                      "camera_frames": [newer.camera_frame, older.camera_frame],
+                      "blocks": int(blocks.size),
+                      "vehicles": [newer.vehicles, older.vehicles],
+                      "camera_from_snapshot": [newer.camera_from_snapshot,
+                                               older.camera_from_snapshot],
+                      "excluded_blocks": None, "judged_share": None, "worst_block_levels": None,
+                      "worst_block_px": None, "reason": None}
         if newer.covered is None or older.covered is None:
             comparison["reason"] = VEHICLES_UNKNOWN
             self.comparisons[VEHICLES_UNKNOWN] += 1
@@ -775,7 +800,19 @@ class ChannelReadiness:
                 f"{comparison['worst_block_levels']:.2f} grey levels in its worst judged 80-pixel "
                 f"block (at x {x}, y {y}) against {PICTURE_TOLERANCE_LEVELS}, with "
                 f"{comparison['excluded_blocks']} of {comparison['blocks']} blocks left out for "
-                f"rendered vehicles{counts}")
+                f"rendered vehicles{counts}{self._series_text()}")
+
+    def _series_text(self) -> str:
+        """Every judged comparison so far, in order, against the camera's own frame count, so a
+        refusal shows whether the picture was converging and how fast."""
+        judged = [comparison for comparison in self.comparison_history
+                  if comparison["reason"] is None]
+        if len(judged) < 2:
+            return ""
+        levels = ", ".join(f"{comparison['worst_block_levels']:.2f}" for comparison in judged)
+        return (f"; the {len(judged)} judged comparisons read {levels} grey levels in order, from "
+                f"the camera's frame {judged[0]['camera_frames'][0]} to its frame "
+                f"{judged[-1]['camera_frames'][0]}")
 
     @staticmethod
     def _tilesets_text(answer: dict) -> str:
@@ -817,6 +854,7 @@ class ChannelReadiness:
                     "published": bool(self.last_answer.get("published")),
                     "visible_tilesets": visible_tilesets(self.last_answer)},
                 "last_comparison": self.last_comparison,
+                "comparison_history": list(self.comparison_history),
                 "comparisons": dict(self.comparisons),
                 "locate_failures": self.locate_failures,
                 "last_locate_failure": self.last_locate_failure,
