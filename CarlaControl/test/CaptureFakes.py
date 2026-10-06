@@ -408,6 +408,16 @@ class FakePoseRecord:
         self.Pose = _Position(x, y, z)
 
 
+class FakeDivergence:
+    """A `PoseDivergence`: the vehicle, instant, tick and body one worst figure was measured on."""
+
+    def __init__(self, vehicle_id: str, seconds: float, tick: int, actor: int) -> None:
+        self.VehicleId = vehicle_id
+        self.SimulatedTimeSeconds = seconds
+        self.TickIndex = tick
+        self.Actor = actor
+
+
 class _Report:
     def __init__(self, pacing: _Pacing) -> None:
         self.Pacing = pacing
@@ -419,6 +429,21 @@ class _Report:
         self.SumoSteps = 0
         self.PosesComputed = 0
         self.BatchFailures = 0
+        # The commanded-against-applied comparison, one per rendered vehicle per tick: nothing compared
+        # until the first step, then the figures a world that applies every pose shows -- the
+        # single-precision wire's rounding on position and velocity.
+        self.DivergenceSamples = 0
+        self.VehicleTicksWithNoReadBack = 0
+        self.WorstPositionDivergenceMetres = 0.0
+        self.MeanPositionDivergenceMetres = 0.0
+        self.WorstYawDivergenceDegrees = 0.0
+        self.WorstPitchDivergenceDegrees = 0.0
+        self.WorstRollDivergenceDegrees = 0.0
+        self.WorstVelocityDivergenceMetresPerSecond = 0.0
+        self.MeanVelocityDivergenceMetresPerSecond = 0.0
+        self.MeanCommandedSpeedMetresPerSecond = 0.0
+        self.WorstDivergence = None
+        self.WorstVelocityDivergence = None
         self.Admissions = 0
         self.LastAdmissionPass = None
         self.DrawDistanceMetres = None
@@ -538,6 +563,26 @@ class FakeSession:
         if self.on_admission_pass is not None:
             self.on_admission_pass(admission)
 
+    def _compare_poses(self) -> None:
+        """One comparison per rendered vehicle per tick of the step just rendered, as a world that
+        applies every pose shows it: the wire's rounding, 0.0001 m and 0.000006 m/s at worst, the
+        first vehicle named for both."""
+        report = self.Report
+        rendered = self.RenderedVehicleIds.Count
+        report.DivergenceSamples += rendered * self.TICKS_PER_STEP
+        report.WorstPositionDivergenceMetres = 0.0001
+        report.MeanPositionDivergenceMetres = 0.00002
+        report.WorstYawDivergenceDegrees = 0.0001
+        report.WorstPitchDivergenceDegrees = 0.0001
+        report.WorstRollDivergenceDegrees = 0.0001
+        report.WorstVelocityDivergenceMetresPerSecond = 0.000006
+        report.MeanVelocityDivergenceMetresPerSecond = 0.000001
+        report.MeanCommandedSpeedMetresPerSecond = 15.2
+        if report.WorstDivergence is None:
+            report.WorstDivergence = FakeDivergence("flow.0", self.RenderedTimeSeconds, self.ticks, 11)
+            report.WorstVelocityDivergence = FakeDivergence("flow.1", self.RenderedTimeSeconds,
+                                                            self.ticks + 1, 12)
+
     def _hand_over_poses(self) -> None:
         """A pose record per vehicle per tick of the step about to be rendered."""
         if self.on_pose is None or self.world.traffic_at is None:
@@ -560,6 +605,7 @@ class FakeSession:
         self.Report.Ticks += 20
         self.Report.SumoSteps += 1
         self.Report.PosesComputed += 5
+        self._compare_poses()
         self._publish_pass(self.RenderedTimeSeconds + self.step_s)
         pacing = self.Report.Pacing
         pacing.AchievedFactor = self.world.achieved_factor
