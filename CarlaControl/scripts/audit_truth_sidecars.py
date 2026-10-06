@@ -16,8 +16,15 @@ the instances it names, and every sidecar naming the plan its world-scoped eleme
 nothing of supervision in such a run is a defect too. Sidecars whose supervision was unknown are
 counted, not faulted: the run's closeout gates them.
 
+Every vehicle record must say whether the vehicle is in the camera's picture (`in_frame`: `wholly`,
+`partly`, `none` or `behind_camera`) and, where its five occlusion fields are absent, why
+(`occlusion_unmeasured`); occlusion fields on a vehicle the picture has no view of, a record with
+neither occlusion nor a reason, a reason beside a measurement, and a place or reason outside the
+recorder's words are defects.
+
 Any of those is a defect and the exit status is 1. A capture of traffic-manager traffic carries no
-SUMO id by design: pass `--traffic-manager` and only the ground band and the uid checks apply.
+SUMO id by design: pass `--traffic-manager` and only the ground band, the uid and the in-picture
+checks apply.
 
 Examples:
     python audit_truth_sidecars.py ../../Build/captures/cap-20260928-210156-b06714
@@ -75,9 +82,9 @@ def main() -> int:
         logging.error("DEFECT: %s", defect)
     if defects:
         return 1
-    logging.info("every vehicle record stands on the ground and names one SUMO vehicle under one uid"
-                 + (", and carries its supervision" if result.had_plan else "")
-                 if not args.traffic_manager else "every vehicle record stands on the ground")
+    logging.info("every vehicle record stands on the ground, says whether it is in the picture"
+                 + (" and names one SUMO vehicle under one uid" if not args.traffic_manager else "")
+                 + (", and carries its supervision" if result.had_plan else ""))
     return 0
 
 

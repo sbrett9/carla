@@ -39,6 +39,7 @@ the real scenario artifacts. No code changed, no build run.
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
 | 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
 | 33 · 2026-10-05 | The world truth track's rows are flushed once for each SUMO frame, when the frame's every row is written, and not after each row, as the owner ruled: the track is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. Every row is still a whole line, so a track cut off is still the rows before the cut, and a kill loses at most the frame being written (§8.3, [04](04_Contracts.md) C10 §12.7 W2). |
+| 34 · 2026-10-05 | Every vehicle record of a capture's truth sidecar says where the vehicle's box fell against that camera's picture, `in_frame` (`wholly`, `partly`, `none`, `behind_camera`), with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; and where the five occlusion attributes are absent, `occlusion_unmeasured` says why in one word, never beside a measurement. The owner ruled that an absent fraction was being read as "not hidden", and that a truth field carries only what was declared, what happened, or a measurement from the frame's geometry by a fixed published method with no pass mark: nothing here rests on a threshold besides the picture's edges and the camera's near plane. The sidecar audit holds every record to it (§8.2, [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1313,7 +1314,7 @@ different place.
 | Height | drape / bare-earth decoupling: `hae` and `hae_dtm`, `:83-86` | a lookup in `bareearth.bin` at (x, y), `BareEarthGrid.height_at`, `:115-119` |
 | Velocity | `WorldObserver.cpp:385` serialises `GetActor()->GetVelocity()`, which for a pose-applied non-simulating body **is the velocity the bridge wrote with its pose** — SUMO's own ([03](03_CoSimulation_Runtime.md) D3.5) | `Vehicle.getSpeed` and `getAngle`, exact and never zero for a moving vehicle (measured: 0 of 2000 sample rows have speed 0) |
 | Dimensions | the **spawned blueprint's** bounding box, `:103,110` | the `vType`'s declared `length`/`width`/`height`, `:323-325` |
-| Camera-relative | occlusion fraction, band, sample count, apparent size ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md)); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
+| Camera-relative | where the box fell against the picture (`in_frame`) and apparent size, from the box's projection; occlusion fraction, band and sample count where measured, and otherwise why not (`occlusion_unmeasured`) ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md), [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
 | Network state | none | edge, lane, lane position, stop state, waiting time |
 | Illumination | the solar block paired to this tick, read from the world-observer cache with no RPC (`CarlaClient.cs:1988-1991`) and already emitted (`CotWriter.cs:52-65`) | **none.** SUMO has no sun, no date and no concept of illumination. It does not even know what civil time its own seconds mean (§4.5) |
 | Identity | `actor_id`, assigned at spawn, different every run | the SUMO vehicle id, which for a `<trip>` is **authored and stable across runs** |
@@ -2696,6 +2697,29 @@ process writes the same thing for one frame. Of the shape above, as written:
   frame's plan, digest, states, instances, labels or areas. The capture sidecar has no CSV twin, so no CSV
   carries it; the CSV that mirrors a sidecar's per-vehicle fields is the standalone producer's
   (`SumoCotBridge`), which runs without a CARLA server and so without the server's supervision.
+
+**As built (2026-10-05): every vehicle record says whether it is in the picture, and why its occlusion
+is absent.** The owner ruled that the five occlusion attributes may not simply be absent -- they were,
+in six different situations, and a reader could not tell "no occlusion value" from "not hidden" -- and
+that a truth field carries only what was declared, what happened, or a measurement from the frame's
+geometry by a fixed published method with no pass mark. So the recorder projects every vehicle's
+bounding box into the capture's picture, from the camera pose the pixels were taken from, the
+picture's size and the horizontal field of view the recording was started with (the one the
+`<_carla_intrinsics>` element carries), whether or not a depth camera is attached, and every `_carla`
+block gains **`in_frame`** -- `wholly`, `partly`, `none` or `behind_camera`, read against the picture's
+edges and the camera's near plane and nothing else -- with **`apparent_width_px`** and
+**`apparent_height_px`** wherever the box has a footprint, a vehicle outside the picture included. The
+five occlusion attributes are written only where occlusion was measured, which is only on a vehicle
+`wholly` or `partly` in the picture; where they are absent **`occlusion_unmeasured`** says why, in one
+word and never beside a measurement: `behind_camera`, `outside_frame`, `beyond_draw_distance`,
+`no_depth_camera`, `no_depth_capture`, `depth_out_of_step`, `depth_pose_mismatch`,
+`beyond_depth_range` or `no_sample`, the reason nearest the vehicle where several hold
+([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). The projection (`BoxProjector`) is separated
+from the depth sampling (`OcclusionEstimator.Sample`), which runs over it and reports its own reasons.
+The live pull has no camera and carries none of this; the PNG carries none. `TruthSidecarAudit`
+(`audit_truth_sidecars.py`) holds every vehicle record of a capture to `in_frame`, to occlusion fields
+only where the picture has a view of the vehicle, and to a reason wherever they are absent, so a
+capture written before this date shows the defect it carries.
 
 ### 8.3 The world truth track
 

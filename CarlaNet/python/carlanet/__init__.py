@@ -2075,6 +2075,15 @@ class World:
         and `occlusion_samples` how finely each vehicle's outline is sampled. Measuring costs a second
         subscription to that camera's stream, so it happens only when a depth camera is given.
 
+        With or without one, every vehicle record says where the vehicle's box fell against this
+        camera's picture, `in_frame` -- `wholly`, `partly`, `none` or `behind_camera` -- with its
+        `apparent_width_px` and `apparent_height_px` wherever the box has a footprint, projected with
+        `fov` from the capture's own camera pose; and where the five occlusion fields are absent,
+        `occlusion_unmeasured` says why in one word (`no_depth_camera`, `outside_frame`,
+        `behind_camera`, `beyond_draw_distance`, `no_depth_capture`, `depth_out_of_step`,
+        `depth_pose_mismatch`, `beyond_depth_range` or `no_sample`), so an absent fraction is never
+        read as an unhidden vehicle. `audit_truth_sidecars.py` holds every record to it.
+
         Pass `illumination` -- a SUMO drive session's `session.Illumination` -- to have each capture
         also record what its sun was declared to be: the scenario epoch's digest, the illumination
         policy, the frame's civil instant, the sun declared for it with both its geometric and its

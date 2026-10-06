@@ -18,7 +18,12 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
   * where the run had a supervision plan, every SUMO vehicle record carries a `<_supervision>` in
     one of the three states, consistent with what it names, every sidecar naming the plan carries the
     world's element, a sidecar whose supervision was unknown says so and is counted, and a run with no
-    plan expects none.
+    plan expects none; and
+  * every vehicle record says where its box fell against the picture (`in_frame`) and, where its
+    occlusion fields are absent, why (`occlusion_unmeasured`): a record saying neither, occlusion
+    fields on a vehicle the picture has no view of, a reason beside a measurement, and a place or a
+    reason outside the recorder's words are each a defect, and a capture written before the recorder
+    said where each vehicle fell shows the first.
 """
 from __future__ import annotations
 
@@ -41,9 +46,24 @@ SENSOR = """  <event version="2.0" uid="CARLA-SENSOR-32" type="a-f-A-M-F-Q" how=
 """
 
 
-def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None = None) -> str:
+def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None = None,
+            in_frame: str | None = "wholly", occlusion: float | None = None,
+            unmeasured: str | None = "no_depth_camera") -> str:
+    """A vehicle record as `CotWriter` writes one: where its box fell against the picture, and either
+    the five occlusion fields (`occlusion` given) or the reason they are absent (`unmeasured`); None
+    for either leaves it out, as a recorder written before 2026-10-05 did."""
     identity = "" if sumo_id is None else (
         f' sumo_id="{sumo_id}" vtype_id="passenger" admitted_tick="100"')
+    place = "" if in_frame is None else f' in_frame="{in_frame}"'
+    if occlusion is not None:
+        picture = (f' occlusion="{occlusion:.3f}" occlusion_level="1" occlusion_samples="64" '
+                   'apparent_width_px="12" apparent_height_px="5"')
+    elif in_frame == "behind_camera":
+        picture = ""
+    else:
+        picture = ' apparent_width_px="12" apparent_height_px="5"'
+    if occlusion is None and unmeasured is not None:
+        picture += f' occlusion_unmeasured="{unmeasured}"'
     return (f'  <event version="2.0" uid="{uid}" type="a-n-G-E-V" how="m-g" time="t" start="t" '
             f'stale="t">\n'
             f'    <point lat="38.9051631" lon="-119.7526194" hae="{hae:.2f}" ce="0.0" le="0.0" />\n'
@@ -51,7 +71,7 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
             f'      <track course="90.0" speed="{speed:.2f}" />\n'
             f'      <contact callsign="car-{actor}" />\n'
             f'      <_carla source="truth" actor_id="{actor}" type_id="vehicle.audi.tt" '
-            f'base_type="car" role_name="autopilot"{identity} />\n'
+            f'base_type="car" role_name="autopilot"{place}{picture}{identity} />\n'
             f'    </detail>\n'
             f'  </event>\n')
 
@@ -287,3 +307,117 @@ def test_a_capture_of_a_run_with_no_plan_expects_no_supervision(tmp_path):
     assert not result.had_plan
     assert result.defects() == []
     assert any("no sidecar names a plan" in line for line in TruthSidecarAudit.describe(result))
+
+
+# Where each vehicle fell against the picture and why its occlusion is absent, as `CotWriter` writes
+# them for every record (09 §5.1): the in-picture fact for all, the five fields where measured, one
+# reason otherwise.
+def test_a_capture_whose_every_record_says_where_it_fell_and_why_has_no_defect(tmp_path):
+    sidecar(tmp_path, 100, [
+        # Measured against a paired depth capture, wholly and partly in the picture.
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly", occlusion=0.18),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly", occlusion=0.5),
+        # In the picture and unmeasured, for each reason a depth capture gives.
+        vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="wholly", unmeasured="beyond_depth_range"),
+        vehicle("CARLA-TRUTH-SUMO-d", 4, ROAD, 9.0, "d", in_frame="wholly", unmeasured="no_sample"),
+        vehicle("CARLA-TRUTH-SUMO-e", 5, ROAD, 9.0, "e", in_frame="wholly", unmeasured="beyond_draw_distance"),
+        # Outside the picture, and behind the camera, which has no footprint.
+        vehicle("CARLA-TRUTH-SUMO-f", 6, ROAD, 9.0, "f", in_frame="none", unmeasured="outside_frame"),
+        vehicle("CARLA-TRUTH-SUMO-g", 7, ROAD, 9.0, "g", in_frame="behind_camera", unmeasured="behind_camera")],
+        vehicles="rendered")
+    # A capture of the same run whose depth capture did not pair, each way it can fail.
+    sidecar(tmp_path, 110, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", unmeasured="no_depth_capture"),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", unmeasured="depth_out_of_step"),
+        vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", unmeasured="depth_pose_mismatch")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert result.defects() == []
+    assert result.records_without_in_frame == []
+    assert [record.sumo_id for record in result.records if record.occlusion_measured] == ["a", "b"]
+    lines = TruthSidecarAudit.describe(result)
+    assert any("in the picture: wholly 7, partly 1, none 1, behind_camera 1; not said: 0 of 10" in line
+               for line in lines)
+    assert any("occlusion measured: 2 of 10; unmeasured by reason: behind_camera 1, beyond_depth_range 1, "
+               "beyond_draw_distance 1, depth_out_of_step 1, depth_pose_mismatch 1, no_depth_capture 1, "
+               "no_sample 1, outside_frame 1; neither measured nor a reason given: 0" in line
+               for line in lines)
+
+
+def test_a_record_that_does_not_say_whether_it_is_in_the_picture_is_a_defect(tmp_path):
+    # A capture written before the recorder said where each vehicle fell: the fields are simply absent,
+    # which is exactly the silence the owner ruled out.
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame=None, unmeasured=None),
+                            vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b")],
+            vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_without_in_frame] == ["a"]
+    # Saying nothing of its place, the record is faulted for that alone, not twice.
+    assert result.records_without_occlusion_or_reason == []
+    assert result.defects() == ["1 of 2 vehicle records do not say whether the vehicle is in the picture "
+                                "(no in_frame)"]
+    assert any("not said: 1 of 2" in line for line in TruthSidecarAudit.describe(result))
+
+
+def test_occlusion_fields_on_a_vehicle_the_picture_has_no_view_of_are_a_defect(tmp_path):
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="none", occlusion=0.0),
+                            vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="behind_camera", occlusion=0.0),
+                            vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="partly", occlusion=0.0)],
+            vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_occluded_outside_picture] == ["a", "b"]
+    assert result.defects() == ["2 vehicle record(s) carry occlusion fields while in_frame says the picture "
+                                "has no view of the vehicle"]
+
+
+def test_a_record_with_neither_occlusion_nor_a_reason_is_a_defect(tmp_path):
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly", unmeasured=None),
+                            vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="none", unmeasured=None),
+                            vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="wholly", occlusion=0.2)],
+            vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_without_occlusion_or_reason] == ["a", "b"]
+    assert result.defects() == ["2 vehicle record(s) carry neither occlusion fields nor occlusion_unmeasured: "
+                                "an absent fraction with no reason"]
+
+
+def test_a_reason_beside_a_measurement_is_a_defect(tmp_path):
+    measured = vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly", occlusion=0.2)
+    sidecar(tmp_path, 100, [measured.replace('occlusion_samples="64"',
+                                             'occlusion_samples="64" occlusion_unmeasured="no_sample"')],
+            vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_with_reason_beside_measurement] == ["a"]
+    assert result.defects() == ["1 vehicle record(s) carry occlusion_unmeasured beside a measured occlusion"]
+
+
+def test_a_place_or_a_reason_outside_the_recorders_words_is_a_defect(tmp_path):
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="inside"),
+                            vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", unmeasured="too_small")],
+            vehicles="rendered")
+
+    defects = audit(tmp_path).defects()
+
+    assert len(defects) == 2
+    assert any("in_frame other than wholly, partly, none, behind_camera" in defect for defect in defects)
+    assert any("occlusion_unmeasured other than behind_camera, outside_frame" in defect for defect in defects)
+
+
+def test_the_in_picture_checks_apply_to_traffic_manager_captures_too(tmp_path):
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-7", 7, ROAD, 12.0, in_frame=None, unmeasured=None),
+                            vehicle("CARLA-TRUTH-8", 8, ROAD + 1, 0.0)])
+
+    result = audit(tmp_path)
+
+    assert result.defects(sumo_drive=False) == ["1 of 2 vehicle records do not say whether the vehicle is in "
+                                                "the picture (no in_frame)"]

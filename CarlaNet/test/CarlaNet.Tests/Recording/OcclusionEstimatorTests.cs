@@ -109,19 +109,61 @@ public class OcclusionEstimatorTests
     }
 
     [Fact]
-    public void A_Vehicle_Outside_The_Frame_Is_Not_Reported()
+    public void A_Vehicle_Outside_The_Frame_Is_Not_Reported_And_Says_So()
     {
         var depth = Capture(Boresight, (_, _) => SkyRange);
-        var measured = OcclusionEstimator.Estimate(depth, [Vehicle(1, 10, 100, 0)], OcclusionOptions.Default);
-        Assert.Empty(measured);
+        var vehicle = Vehicle(1, 10, 100, 0);
+
+        Assert.Empty(OcclusionEstimator.Estimate(depth, [vehicle], OcclusionOptions.Default));
+        Assert.Null(OcclusionEstimator.Sample(depth, vehicle, OcclusionOptions.Default, out var why));
+        Assert.Equal(OcclusionUnmeasured.OutsideFrame, why);
     }
 
     [Fact]
-    public void A_Vehicle_Behind_The_Camera_Is_Not_Reported()
+    public void A_Vehicle_Behind_The_Camera_Is_Not_Reported_And_Says_So()
     {
         var depth = Capture(Boresight, (_, _) => SkyRange);
-        var measured = OcclusionEstimator.Estimate(depth, [Vehicle(1, -10, 0, 0)], OcclusionOptions.Default);
-        Assert.Empty(measured);
+        var vehicle = Vehicle(1, -10, 0, 0);
+
+        Assert.Empty(OcclusionEstimator.Estimate(depth, [vehicle], OcclusionOptions.Default));
+        Assert.Null(OcclusionEstimator.Sample(depth, vehicle, OcclusionOptions.Default, out var why));
+        Assert.Equal(OcclusionUnmeasured.BehindCamera, why);
+    }
+
+    [Fact]
+    public void A_Measured_Vehicle_Gives_No_Reason()
+    {
+        var depth = Capture(Boresight, (_, _) => SkyRange);
+
+        var occlusion = OcclusionEstimator.Sample(depth, Vehicle(1, 10, 0, 0), OcclusionOptions.Default, out var why);
+
+        Assert.NotNull(occlusion);
+        Assert.Null(why);
+        Assert.Equal(0.0, occlusion.Value.Fraction, 6);
+    }
+
+    [Fact]
+    public void A_Vehicle_Narrower_Than_The_Sampling_Grid_Says_No_Sample_Met_It()
+    {
+        // A box a hand's breadth wide, 30 m out: it projects to a third of a pixel between two pixel
+        // centres, so the grid's rays all pass beside it and there is nothing to compare.
+        var depth = Capture(Boresight, (_, _) => SkyRange);
+        var sliver = new VehicleBox(1,
+            new Transform(new Location(30f, 0.5f, 0.5f), new Rotation()),
+            new BoundingBox(default, new Vector3D(0.05f, 0.05f, 0.05f), new Rotation()));
+
+        Assert.Null(OcclusionEstimator.Sample(depth, sliver, OcclusionOptions.Default, out var why));
+        Assert.Equal(OcclusionUnmeasured.NoSample, why);
+    }
+
+    [Fact]
+    public void A_Box_With_No_Extent_Says_No_Sample_Met_It()
+    {
+        var depth = Capture(Boresight, (_, _) => SkyRange);
+        var point = new VehicleBox(1, new Transform(new Location(10f, 0.33f, 0.33f), new Rotation()), default);
+
+        Assert.Null(OcclusionEstimator.Sample(depth, point, OcclusionOptions.Default, out var why));
+        Assert.Equal(OcclusionUnmeasured.NoSample, why);
     }
 
     // A vehicle far enough away that the depth camera's own range error is several times the base
@@ -177,13 +219,16 @@ public class OcclusionEstimatorTests
     }
 
     [Fact]
-    public void A_Vehicle_Past_The_Cameras_Range_Is_Not_Reported()
+    public void A_Vehicle_Past_The_Cameras_Range_Is_Not_Reported_And_Says_So()
     {
         // Out there every reading saturates, so nothing can be told apart; reporting the vehicle as
         // hidden would quietly drop a legitimate distant target from the training set.
         var depth = Capture(Boresight, (_, _) => SkyRange);
         var vehicle = Vehicle(1, DepthFrame.DefaultMaxRangeMetres + 50.0, 0, 0);
+
         Assert.Empty(OcclusionEstimator.Estimate(depth, [vehicle], OcclusionOptions.Default));
+        Assert.Null(OcclusionEstimator.Sample(depth, vehicle, OcclusionOptions.Default, out var why));
+        Assert.Equal(OcclusionUnmeasured.BeyondDepthRange, why);
     }
 
     [Fact]
@@ -236,7 +281,7 @@ public class OcclusionEstimatorTests
     [Fact]
     public void A_Distant_Vehicle_Rests_On_Few_Samples()
     {
-        // The reason a far-off fraction lands on coarse values like a half or a third.
+        // The reason a far-off fraction takes coarse values like a half or a third.
         var depth = Capture(Boresight, (_, _) => SkyRange);
         Assert.True(Measure(depth, Vehicle(1, 400, 0, 0)).Samples
                     < Measure(depth, Vehicle(1, 20, 0, 0)).Samples);

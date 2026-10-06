@@ -28,13 +28,30 @@ public sealed record VehicleTelemetry(
     double HeightM)
 {
     /// <summary>
+    /// Where this vehicle's box fell against the recording camera's picture -- wholly in it, partly,
+    /// wholly outside it, or with a corner at or behind the lens -- read off the box's eight corners
+    /// projected through the camera (<see cref="BoxProjector"/>). Null where no camera projected it,
+    /// which is every record of the live pull. Camera-relative, like <see cref="Occlusion"/>, so
+    /// meaningful only on a record that travels with a sensor pose.
+    /// </summary>
+    public InFrame? InFrame { get; init; }
+
+    /// <summary>
     /// Fraction of this vehicle's silhouette hidden from the recording camera by anything nearer —
     /// photoreal buildings and trees, terrain relief, other vehicles — on 0 (wholly visible) to 1
-    /// (wholly hidden). NaN when it was not measured: no depth capture paired with the frame, or the
-    /// vehicle projects outside it. Camera-relative, so it is a property of the (vehicle, sensor)
-    /// pair and only ever meaningful on a record that travels with a sensor pose.
+    /// (wholly hidden). NaN when it was not measured, and <see cref="OcclusionUnmeasured"/> then says
+    /// why. Camera-relative, so it is a property of the (vehicle, sensor) pair and only ever
+    /// meaningful on a record that travels with a sensor pose.
     /// </summary>
     public double Occlusion { get; init; } = double.NaN;
+
+    /// <summary>
+    /// Why <see cref="Occlusion"/> was not measured, where it was not: the vehicle's box behind the
+    /// lens or outside the picture, the vehicle beyond the draw distance, no depth camera or no depth
+    /// capture paired with the frame, or a sampling that met nothing to compare. Null where it was
+    /// measured, and on a record no recorder has said anything about.
+    /// </summary>
+    public OcclusionUnmeasured? OcclusionUnmeasured { get; init; }
 
     /// <summary>The <see cref="Occlusion"/> fraction as a coarse band — see
     /// <c>OcclusionEstimator.LevelFor</c>. -1 when occlusion was not measured.</summary>
@@ -49,7 +66,8 @@ public sealed record VehicleTelemetry(
     public int OcclusionSamples { get; init; }
 
     /// <summary>How wide the vehicle appears in the frame, in pixels — its full projected footprint,
-    /// including any part outside the frame. 0 when occlusion was not measured.</summary>
+    /// including any part outside the frame. Needs only the projection, not a depth capture, so it is
+    /// set wherever <see cref="InFrame"/> is; 0 where the box was not projected or has no footprint.</summary>
     public int ApparentWidthPx { get; init; }
 
     /// <summary>How tall the vehicle appears in the frame, in pixels. See

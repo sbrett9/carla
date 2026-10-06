@@ -40,9 +40,10 @@ namespace CarlaNet.Recording;
 /// </remarks>
 public sealed class FrameRecorder : IDisposable
 {
-    /// <summary>A decimated frame as the stream thread hands it on: nothing asked of the server yet.</summary>
+    /// <summary>A decimated frame as the stream thread hands it on: nothing asked of the server yet.
+    /// <paramref name="HeaderHFovDeg"/> is the field of view the image's own header reports.</summary>
     private sealed record Arrival(DateTime CapturedUtc, ulong Frame, double SimTimeSeconds,
-                                  Transform HeaderTransform, int Width, int Height,
+                                  Transform HeaderTransform, int Width, int Height, double HeaderHFovDeg,
                                   ReadOnlyMemory<byte> Bgra, IReadOnlyList<double> Solar);
 
     private sealed record Job(DateTime CapturedUtc, int Width, int Height,
@@ -183,7 +184,11 @@ public sealed class FrameRecorder : IDisposable
     /// </summary>
     public long VehiclesPartlyBeyondDrawDistance => Interlocked.Read(ref _partlyBeyondDrawDistance);
 
-    /// <summary>Whether captures carry a per-vehicle occlusion measurement.</summary>
+    /// <summary>
+    /// Whether captures carry a per-vehicle occlusion measurement. Every capture carries, for every
+    /// vehicle, where its box fell against the picture (<c>in_frame</c>) and its apparent size, and for
+    /// one unmeasured why (<c>occlusion_unmeasured</c>), whether or not a depth camera was given.
+    /// </summary>
     public bool MeasuresOcclusion => _occlusion is not null;
 
     /// <summary>Captures whose vehicles were measured against a depth capture of the same instant.</summary>
@@ -237,14 +242,18 @@ public sealed class FrameRecorder : IDisposable
     /// <param name="streamToken">The camera actor's StreamToken (24-byte sensor stream token).</param>
     /// <param name="hz">Captures per second (may be fractional). Decimated against sim time.</param>
     /// <param name="platform">Collection-platform options; when supplied (and a georeference origin is
-    /// available) each capture records the camera as a CoT air track. Null disables the platform track.</param>
+    /// available) each capture records the camera as a CoT air track. Its field of view is the one
+    /// every vehicle's box is projected into the picture with, so the sidecar's <c>in_frame</c> and
+    /// apparent sizes agree with the intrinsics it writes; a recorder given none projects with the
+    /// field of view each image's own header reports. Null disables the platform track.</param>
     /// <param name="runId">Identifier grouping every artifact produced by this execution. Recorded on
     /// each capture so stills and sidecars can be gathered back into a run after the fact.</param>
     /// <param name="scenarioId">The scenario driving this run, where there is one.</param>
     /// <param name="seed">Seed the run was started with, recorded so it can be reproduced.</param>
     /// <param name="depthStreamToken">StreamToken of a depth camera held at the recorded camera's
     /// pose and field of view. Supplying it adds a per-vehicle occlusion measurement to each capture,
-    /// at the cost of a second subscription to that camera. Null leaves occlusion unmeasured.</param>
+    /// at the cost of a second subscription to that camera. Null leaves occlusion unmeasured, and
+    /// every vehicle record says so (<c>occlusion_unmeasured="no_depth_camera"</c>).</param>
     /// <param name="occlusion">Tuning for that measurement; defaults when null.</param>
     /// <param name="illumination">What declared the sun this run is lit by. Supplying it writes, beside
     /// each capture's sun, the declaration for that capture's frame and the audit's residual on it,
@@ -295,6 +304,11 @@ public sealed class FrameRecorder : IDisposable
         if (drawDistanceMetres is { } limit && (!double.IsFinite(limit) || limit <= 0.0))
             throw new ArgumentOutOfRangeException(nameof(drawDistanceMetres), limit,
                                                   "a draw distance is a positive number of metres, or null for none");
+        // Every vehicle of every capture is projected into the picture with this field of view, so
+        // one the projection cannot be made with is refused here rather than failing every capture.
+        if (platform is not null && !(platform.HFovDeg > 0.0 && platform.HFovDeg < 180.0))
+            throw new ArgumentOutOfRangeException(nameof(platform), platform.HFovDeg,
+                                                  "the platform's horizontal field of view is between 0 and 180 degrees, exclusive");
 
         string name = cameraName ?? platform?.Callsign
                       ?? (cameraActorId is { } unnamed
@@ -387,6 +401,9 @@ public sealed class FrameRecorder : IDisposable
 
         int w = (int)img.Width, h = (int)img.Height;
         if (w <= 0 || h <= 0 || img.RawBgra.Length < (long)w * h * 4) return;
+        // With no platform the header's field of view is the only one the vehicles can be projected
+        // with, and an image whose header carries none usable is as malformed as one with no size.
+        if (_platform is null && !(img.FovAngle > 0f && img.FovAngle < 180f)) return;
 
         // Solar state read lock-free from the world-observer cache (no RPC, no poll), now rather than on
         // the preparation task, so it is the sun of the tick nearest the pixels.
@@ -395,7 +412,7 @@ public sealed class FrameRecorder : IDisposable
         // RawBgra is already a private copy produced by Deserialize, so it can be handed on without
         // copying again.
         var arrival = new Arrival(_captureClock.Next(DateTime.UtcNow), frame.Header.Frame, t,
-                                  frame.SensorTransform, w, h, img.RawBgra, solar);
+                                  frame.SensorTransform, w, h, img.FovAngle, img.RawBgra, solar);
         if (!_arrivals.Writer.TryWrite(arrival))
             Interlocked.Increment(ref _dropped);
     }
@@ -520,10 +537,24 @@ public sealed class FrameRecorder : IDisposable
             Interlocked.Add(ref _partlyBeyondDrawDistance, partly);
         }
 
+        // Where each vehicle's box fell against this picture, and how large it appears in it, from the
+        // pose the pixels were taken from and the picture's own size and field of view: a fact for
+        // every record, whether or not a depth camera is attached, so a record with no occlusion is
+        // never read as a vehicle the image shows unhidden. The field of view is the platform's where
+        // one was given, so the projection agrees with the intrinsics the sidecar writes.
+        var picture = new PinholeCamera(cameraPose, arrival.Width, arrival.Height,
+                                        _platform?.HFovDeg ?? arrival.HeaderHFovDeg);
+        recs = BoxProjector.Mark(recs, picture);
+
         // How much of each vehicle this camera can actually see. Occlusion belongs to the
         // (vehicle, camera) pair, so it is measured against the depth capture of THIS frame from THIS
-        // pose; when none matches, the capture simply carries no occlusion rather than a stale one.
-        if (_occlusion is not null && recs.Count > 0)
+        // pose; when none matches, the capture carries no occlusion rather than a stale one, and every
+        // record says why it carries none.
+        if (_occlusion is null)
+        {
+            recs = UnmeasuredOcclusion.Mark(recs, OcclusionUnmeasured.NoDepthCamera);
+        }
+        else if (recs.Count > 0)
         {
             try { recs = MeasureOcclusion(recs, arrival.Frame, arrival.SimTimeSeconds, cameraPose); }
             catch { }
@@ -554,34 +585,41 @@ public sealed class FrameRecorder : IDisposable
                        sensor, capture, vehicles, drawDistance, supervision);
     }
 
+    /// <summary>
+    /// Every record with its occlusion against the depth capture of the frame, or with why it has none:
+    /// the pairing's failure for all of them where no capture paired, and otherwise, per vehicle, what
+    /// its own geometry or its sampling says. The records are already marked with where their boxes
+    /// fell against the picture and their apparent sizes, which the depth sampling does not change.
+    /// </summary>
     private IReadOnlyList<VehicleTelemetry> MeasureOcclusion(
         IReadOnlyList<VehicleTelemetry> recs, ulong tick, double simTime, Transform cameraTransform)
     {
-        var depth = _occlusion!.MatchTo(tick, simTime, cameraTransform);
-        if (depth is null) return recs;
-
-        // A vehicle wholly beyond the draw distance is drawn in neither this image nor the depth
-        // capture, which would read the ground behind it as an unobstructed view of it; it is left
-        // unmeasured rather than reported visible.
-        var boxes = new List<VehicleBox>(recs.Count);
-        foreach (var r in recs)
-            if (DrawDistanceCheck.MayBeMeasuredForOcclusion(r))
-                boxes.Add(new VehicleBox(r.Id, r.ActorTransform, r.BoundingBox));
-        var measured = _occlusion.Estimate(depth, boxes);
-        if (measured.Count == 0) return recs;
+        var depth = _occlusion!.MatchTo(tick, simTime, cameraTransform, out OcclusionUnmeasured? unpaired);
+        if (depth is null) return UnmeasuredOcclusion.Mark(recs, unpaired!.Value);
 
         var merged = new List<VehicleTelemetry>(recs.Count);
         foreach (var r in recs)
-            merged.Add(measured.TryGetValue(r.Id, out var m)
+        {
+            // A box behind the lens or outside the picture is sampled by nothing, and a vehicle wholly
+            // beyond the draw distance is drawn in neither this image nor the depth capture, which
+            // would read the ground behind it as an unobstructed view of it.
+            if (UnmeasuredOcclusion.FromGeometry(r) is { } why)
+            {
+                merged.Add(r with { OcclusionUnmeasured = why });
+                continue;
+            }
+            var measured = _occlusion.Sample(depth, new VehicleBox(r.Id, r.ActorTransform, r.BoundingBox),
+                                             out OcclusionUnmeasured? unsampled);
+            merged.Add(measured is { } m
                 ? r with
                 {
                     Occlusion = m.Fraction,
                     OcclusionLevel = m.Level,
                     OcclusionSamples = m.Samples,
-                    ApparentWidthPx = m.ApparentWidthPx,
-                    ApparentHeightPx = m.ApparentHeightPx,
+                    OcclusionUnmeasured = null,
                 }
-                : r);
+                : r with { OcclusionUnmeasured = unsampled });
+        }
         return merged;
     }
 
