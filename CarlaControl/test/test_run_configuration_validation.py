@@ -190,13 +190,20 @@ def test_a_stare_with_nowhere_to_look_is_refused(layout):
     assert "somewhere to look" in only(findings, 47).message
 
 
-def test_an_orbit_measuring_occlusion_is_refused_and_passes_without_it(layout):
+def test_an_orbit_measuring_occlusion_is_accepted(layout):
+    # Occlusion is measured on an orbit as on a stare: the depth camera is attached to the channel's
+    # camera and moves with it, so check 47 has nothing to refuse, with occlusion on or off.
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     *_, findings, _, _ = offline(layout, document)
-    assert "occlusion.enabled false" in only(findings, 47).message
+    assert findings.findings == []
     *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false"])
     assert findings.findings == []
+    # And its other refusals stand: an orbit still needs its centre.
+    centreless = {key: value for key, value in AN_ORBIT.items() if key != "orbit_centre_x_m"}
+    document["capture"]["channels"] = [centreless]
+    *_, findings, _, _ = offline(layout, document)
+    assert "orbit_centre_x_m" in only(findings, 47).message
 
 
 def test_two_channels_must_name_distinct_sensors(layout):
@@ -639,6 +646,16 @@ def test_the_depth_camera_is_checked_only_when_occlusion_is_measured(layout):
     world = _World(depth=_World.DEPTH - {"max_range"})
     assert "max_range" in only(server(layout, world), 24).message
     assert 24 not in checks(server(layout, world, overrides=["occlusion.enabled=false"]))
+
+
+def test_the_depth_camera_is_checked_for_an_orbit_as_for_a_stare(layout):
+    # An orbit measuring occlusion gets a depth camera too, so the blueprint it is spawned from is
+    # checked against the server for a run whose only channel is an orbit.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    world = _World(depth=_World.DEPTH - {"max_range"})
+    assert "max_range" in only(server(layout, world, document), 24).message
+    assert 24 not in checks(server(layout, world, document, overrides=["occlusion.enabled=false"]))
 
 
 def test_a_vehicle_blueprint_the_server_lacks_is_refused(layout):

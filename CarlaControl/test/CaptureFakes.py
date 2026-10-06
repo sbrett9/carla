@@ -20,7 +20,10 @@ the names equal.
 A camera is spawned under a name as the shim spawns it (`spawn_camera`): the name set as its
 `role_name`, and refused where a camera in the world already holds it, in any case --
 `FakeServer.cameras_of_other_clients` stands for the cameras other clients spawned; without one it is
-named `CARLA-SENSOR-<actor id>`, and `camera_name` answers either.
+named `CARLA-SENSOR-<actor id>`, and `camera_name` answers either. An actor spawned attached to
+another (`spawn_actor(..., attach_to=)`) holds its parent's world pose from then on, as the server
+reports an attached actor's pose on its snapshot, and stays where it was, detached, when its parent
+is destroyed.
 
 Every tick of a step advances the server's frame counter and its wall clock, and a camera being
 listened to is handed an image on each frame its `sensor_tick` renders, from its spawn frame on --
@@ -109,21 +112,52 @@ class FakeImage:
 
 
 class FakeActor:
+    """An actor in the stand-in world. One spawned attached to another (`parent`) holds its parent's
+    world pose, as the server reports an attached actor's pose on its snapshot: the stand-in models
+    a child riding its parent at the parent's own pose, which is the one attachment the session
+    makes, and refuses any other relative pose rather than compose one."""
+
     def __init__(self, events: Events, actor_id: int, blueprint: FakeBlueprint,
-                 transform: Any, spawn_frame: int = 0) -> None:
+                 transform: Any, spawn_frame: int = 0, parent: FakeActor | None = None,
+                 attachment_type: Any = None) -> None:
         self.events = events
         self.id = actor_id
         self.type_id = blueprint.id
         self.attributes = dict(blueprint.values)
-        self.transform = transform
-        self.spawned_at = transform
+        self.parent = parent
+        self.attachment_type = attachment_type
+        self.children: list[FakeActor] = []
+        if parent is not None:
+            location, rotation = transform.location, transform.rotation
+            if (location.x, location.y, location.z, rotation.pitch, rotation.yaw,
+                    rotation.roll) != (0.0,) * 6:
+                raise ValueError("the stand-in attaches a child only at its parent's own pose")
+            parent.children.append(self)
+        self._transform = transform
+        self.spawned_at = self.transform
         self.spawn_frame = spawn_frame
         self.destroyed = False
         self.listener = None
         tick = float(self.attributes.get("sensor_tick", "0") or 0.0)
         self.ticks_per_frame = max(1, round(tick / FakeSession.DELTA_S))
 
+    @property
+    def transform(self) -> Any:
+        """The actor's world pose: its parent's while it is attached to one."""
+        if self.parent is not None:
+            return self.parent.transform
+        return self._transform
+
+    @transform.setter
+    def transform(self, transform: Any) -> None:
+        self._transform = transform
+
     def destroy(self) -> bool:
+        # A destroyed parent leaves its children in the world, detached where they stood.
+        for child in self.children:
+            child._transform = child.transform
+            child.parent = None
+        self.children = []
         self.destroyed = True
         self.listener = None
         self.events.add("destroy", self.type_id, self.id)
@@ -640,12 +674,25 @@ class FakeWorld:
         self.server.events.add("world_tick", self.server.frame)
         return self.server.frame
 
-    def spawn_actor(self, blueprint: FakeBlueprint, transform: Any) -> FakeActor:
+    def spawn_actor(self, blueprint: FakeBlueprint, transform: Any, attach_to=None,
+                    attachment_type=None) -> FakeActor:
+        """Spawn an actor; given `attach_to`, attached to that actor at `transform` relative to it,
+        as the shim's `spawn_actor` is called. The spawn event carries the parent's id, or None."""
+        refused = self.server.spawn_raises.get(blueprint.id)
+        if refused is not None:
+            raise refused
+        parent = None
+        if attach_to is not None:
+            parent = next((actor for actor in self.server.actors
+                           if actor.id == int(attach_to.id) and not actor.destroyed), None)
+            if parent is None:
+                raise RuntimeError("unable to attach actor: parent actor not found")
         self.server.next_actor += 1
         actor = FakeActor(self.server.events, self.server.next_actor, blueprint, transform,
-                          self.server.frame)
+                          self.server.frame, parent, attachment_type)
         self.server.actors.append(actor)
-        self.server.events.add("spawn", blueprint.id, actor.id)
+        self.server.events.add("spawn", blueprint.id, actor.id,
+                               None if parent is None else parent.id)
         return actor
 
     def spawn_camera(self, blueprint: FakeBlueprint, transform: Any,
@@ -711,6 +758,8 @@ class FakeServer:
         self.recorders: list[FakeRecorder] = []
         self.session: FakeSession | None = None
         self.next_actor = 100
+        # What the server answers a spawn of a blueprint with, where it refuses one: by blueprint id.
+        self.spawn_raises: dict[str, Exception] = {}
         self.start_raises: Exception | None = None
         self.start_returns_none = False
         self.fault_at: tuple[float, Exception] | None = None

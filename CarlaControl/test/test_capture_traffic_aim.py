@@ -199,7 +199,10 @@ def test_the_camera_follows_the_traffic_until_the_hold_and_holds_the_rest(layout
     rgb, depth = cameras(server)
     assert len(moves_of(server, rgb.id, before="start_recording")) == FOLLOWED_STEPS
     assert len(moves_of(server, rgb.id)) == FOLLOWED_STEPS, "the camera moved after its hold"
-    assert len(moves_of(server, depth.id)) == FOLLOWED_STEPS
+    # The depth camera is attached to the camera and rides every move in the same call: no call
+    # moves it on its own, and it stands where the camera stands.
+    assert moves_of(server, depth.id) == []
+    assert server.events.of("spawn")[1] == ("spawn", "sensor.camera.depth", depth.id, rgb.id)
     assert pose_of(depth.transform) == pose_of(rgb.transform)
     # The last move came with the step that ended at the hold, and none after it.
     log = server.events.log

@@ -294,13 +294,9 @@ class RunConfigurationValidator:
             except ValueError as refusal:
                 findings.refuse(47, subject, str(refusal))
                 continue
-            if effective.value("occlusion.enabled") and description.pattern == "orbit":
-                findings.refuse(47, subject, "occlusion is measured against a depth camera held at "
-                                "the channel's pose, and an orbit moves its camera with one call "
-                                "at a time, so the depth camera would be captured a frame apart "
-                                "(SensorRig.set_transform measured 25 of 65 captures lost that "
-                                "way). Set occlusion.enabled false for a run with an orbit, or "
-                                "make this channel a stare")
+            # Occlusion is measured on a stare and on an orbit alike: the depth camera is attached
+            # to the channel's camera and moves with it (CaptureSession._attach_depth_camera), so
+            # there is no pattern it cannot be measured on.
             if description.aims_at_rendered_traffic():
                 RunConfigurationValidator._traffic_prewarm(effective, subject, findings)
             sensor_id = description.sensor_id
@@ -664,9 +660,8 @@ class RunConfigurationValidator:
     def _rig_attributes(effective: EffectiveRunConfiguration, library: Any,
                         findings: RunConfigurationFindings) -> None:
         wanted = [(RGB_BLUEPRINT, RGB_ATTRIBUTES)]
-        stares = any(effective.channel_values(i)["pattern"] == "stare"
-                     for i in range(effective.channel_count))
-        if effective.value("occlusion.enabled") and stares:
+        # Every channel gets a depth camera where occlusion is measured, an orbit's included.
+        if effective.value("occlusion.enabled"):
             wanted.append((DEPTH_BLUEPRINT, DEPTH_ATTRIBUTES))
         for blueprint_id, attributes in wanted:
             try:

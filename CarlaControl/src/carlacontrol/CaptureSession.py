@@ -44,7 +44,11 @@ world (D1.12):
   `sensor_id` as its `role_name`, so a name another camera in the world already holds refuses at
   pre-roll; a single channel with no `sensor_id` is named `CARLA-SENSOR-<actor id>`. That name is
   the channel's directory, the first part of every still's file name in it and the callsign of its
-  platform track. And, where occlusion is measured, a depth camera at the stare's pose. The cameras
+  platform track. And, where occlusion is measured, a depth camera attached to the channel's camera,
+  rigidly and at its pose, for a stare and an orbit alike: one move of the camera carries both, so
+  the two are never captured a frame apart -- not a stare's through the prewarm, not an orbit's
+  through the window -- and the server reports the depth camera's world pose on its snapshot and in
+  its image header, which is what the recorder's depth pose check reads. The cameras
   exist through the prewarm, so the tiles their views select are streamed before the first capture.
   A stare aimed at the rendered traffic starts over the centre of the world's staging bounds. Every
   camera's frames are listened to from here until the recorders start (`ViewReadinessGate`). Under the optional `capture.render_set` `cameras`, each
@@ -146,9 +150,10 @@ HEADROOM_INTERVAL_S = 10.0
 DRAIN_TIMEOUT_S = 15.0
 CAMERA_TIMEOUT_S = 10.0
 DISPOSE_TIMEOUT_S = 60.0
-# Within the world's release: nothing moves a camera that is gone, and the cameras leave the world
-# before the session gives back its bodies, its lease and the world's clock.
-ORDER_ORBIT, ORDER_CAMERA, ORDER_SESSION, ORDER_REPORT = 0, 1, 2, 3
+# Within the world's release: nothing moves a camera that is gone, a depth camera leaves the world
+# before the camera it is attached to, and the cameras leave before the session gives back its
+# bodies, its lease and the world's clock.
+ORDER_ORBIT, ORDER_DEPTH, ORDER_CAMERA, ORDER_SESSION, ORDER_REPORT = 0, 1, 2, 3, 4
 # Within the record's closing: the manifest's terminal row is written before the snapshot reads it.
 ORDER_MANIFEST = -1
 ADJUDICATED_AT_TERMINAL = "the operator at the terminal"
@@ -704,16 +709,8 @@ class CaptureSession:
             rig.followed = True
         self.logger.info("channel %s: camera %s at %s", rig.sensor_id, rig.camera.id,
                          self._describe(transform))
-        if description.pattern == "stare" and effective.value("occlusion.enabled"):
-            depth = library.find(DEPTH_BLUEPRINT)
-            depth.set_attribute("image_size_x", str(description.width))
-            depth.set_attribute("image_size_y", str(description.height))
-            depth.set_attribute("fov", str(description.fov))
-            depth.set_attribute("sensor_tick", str(tick))
-            depth.set_attribute("max_range", str(effective.value("occlusion.depth_max_range_m")))
-            rig.depth = rig.world.spawn_actor(depth, transform)
-            self.termination.add_step(RELEASE_WORLD, f"destroy depth camera {rig.sensor_id}",
-                                      rig.depth.destroy, CAMERA_TIMEOUT_S, ORDER_CAMERA)
+        if effective.value("occlusion.enabled"):
+            self._attach_depth_camera(rig, library, tick)
         if description.pattern == "orbit":
             rig.orbit = OrbitSensorController(rig.camera, world=None, logger=self.logger)
             rig.orbit.set_orbit_params(center_x=description.orbit_centre_x_m,
@@ -727,6 +724,42 @@ class CaptureSession:
             # Held at the pose it opens on until the window opens (`_set_orbits_moving`): the view
             # the window's first frame is written from is the one whose readiness is witnessed.
             rig.orbit.start_updater()
+
+    def _attach_depth_camera(self, rig: ChannelRig, library: Any, tick: float) -> None:
+        """Spawn the depth camera occlusion is measured against, attached to the channel's camera.
+
+        The attachment is rigid and the depth camera's pose relative to its parent the identity, so
+        it holds the camera's pose and view by construction and one move of the camera carries
+        both. That is what keeps the two from being captured a frame apart: a move sent to each
+        camera in turn is two round trips, and under a free-running world the simulator renders
+        between them, so a frame can be captured with the camera at the new pose and the depth
+        camera still at the old one -- which the recorder refuses to pair (`OcclusionEstimator`'s
+        pose check), and measured on an orbit lost 25 of 65 captures that way before the rig moved
+        its cameras in one batch. Attached, there is no second camera to move: a stare moved
+        through the prewarm and an orbit flown through the window carry their depth camera with
+        them, and nothing in this process ever moves the depth camera itself.
+
+        The server spawns an attached actor at the given transform and attaches it keeping that
+        transform relative to its parent (`spawn_actor_with_parent`, `AttachActors`), so the pose
+        given here is the relative one. It reports an attached sensor's world pose on every
+        snapshot (`GetActorGlobalTransform`) and in every image header (`MakeCaptureHeader`), which
+        is what the recorder's depth pose check compares against the camera's. The depth camera
+        is destroyed before the camera it is attached to.
+        """
+        effective = self.effective
+        description = rig.description
+        depth = library.find(DEPTH_BLUEPRINT)
+        depth.set_attribute("image_size_x", str(description.width))
+        depth.set_attribute("image_size_y", str(description.height))
+        depth.set_attribute("fov", str(description.fov))
+        depth.set_attribute("sensor_tick", str(tick))
+        depth.set_attribute("max_range", str(effective.value("occlusion.depth_max_range_m")))
+        rig.depth = rig.world.spawn_actor(depth, carla.Transform(), attach_to=rig.camera,
+                                          attachment_type=carla.AttachmentType.Rigid)
+        self.termination.add_step(RELEASE_WORLD, f"destroy depth camera {rig.sensor_id}",
+                                  rig.depth.destroy, CAMERA_TIMEOUT_S, ORDER_DEPTH)
+        self.logger.info("channel %s: depth camera %s attached to camera %s", rig.sensor_id,
+                         rig.depth.id, rig.camera.id)
 
     @property
     def _follows_cameras(self) -> bool:
@@ -809,12 +842,11 @@ class CaptureSession:
                                carla.Rotation(pitch=aim.pitch_deg, yaw=aim.yaw_deg, roll=0.0))
 
     def _move(self, rig: ChannelRig, aim: StareAim) -> None:
-        """Put a stare's cameras -- the RGB camera and its depth camera -- at a new pose."""
+        """Put a stare's camera at a new pose. Its depth camera, where it has one, is attached to
+        the camera and goes with it in the same call (`_attach_depth_camera`)."""
         transform = self._transform_of(aim)
         rig.camera.set_transform(transform)
         rig.pose = transform
-        if rig.depth is not None:
-            rig.depth.set_transform(transform)
         previous = rig.aim
         rig.last_move_m = None if previous is None else math.dist(
             (previous.x_m, previous.y_m, previous.z_m), (aim.x_m, aim.y_m, aim.z_m))
