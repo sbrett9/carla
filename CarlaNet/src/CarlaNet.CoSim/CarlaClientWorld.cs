@@ -363,11 +363,12 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// <inheritdoc/>
     /// <remarks>
     /// <c>CarlaClient.GetSnapshotFrame</c>, the same history the recorder places a capture's camera
-    /// from. A client whose history holds nothing yet answers from the newest snapshot.
+    /// from, which serves a frame exactly or not at all. A client that does not hold the frame answers
+    /// from the newest snapshot.
     /// </remarks>
     public Transform? ObservedTransformAt(ActorId actor, ulong frame)
     {
-        if (_client.GetSnapshotFrame(frame, out _) is { } snapshots)
+        if (_client.GetSnapshotFrame(frame) is { } snapshots)
         {
             return snapshots.TryGetValue(actor, out ActorSnapshot? held) ? held.Transform : null;
         }

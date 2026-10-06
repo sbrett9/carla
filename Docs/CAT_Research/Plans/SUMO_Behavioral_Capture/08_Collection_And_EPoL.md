@@ -36,6 +36,8 @@ Findings set. Every external claim is cited.
 | 2026-10-05 | §2.4, §3.5: the server issues camera names and refuses duplicates, as the owner ruled. A camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, never reset by a world reload and never reused; a name a live camera holds is refused at spawn, case aside, and a client cannot claim `Camera_<digits>`. Every client reads the name back from the spawned camera for its files, callsign and recorder; the client-side check across the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras. The plugin change awaits a build. |
 | 2026-10-05 | §2.5, §3.2, D8.2: the occlusion measurement is always on, in every capture path, with no switch, as the owner ruled. Every channel of `run_capture` and the fixed camera of `run_sumo_drive.py` carry a depth camera attached to the camera -- the camera's image size, field of view and sensor tick, and the run configuration's depth range -- and every recorder is started with it; `occlusion.enabled` and `run_SCTMV.py --no-occlusion` are removed. The depth camera is no longer optional in the channel. |
 | 2026-10-05 | The judgement text is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the label record is cut to geometry and happened facts (§5.1); `visible_signature`, `lit_face_px`, `shadow_px`, `observability_level`, the separation fields and the in-frame flags go (§5.7, §5.8, §8.3, §8.4, §8.6, §8.7); `coverage.jsonl`, the five levels and prevalence go (§10.1, §10.2); §10.5 keeps the recorded-sun strata and the date sweep and loses its probes; the fitness probe goes (§12); §13, §14, §16 follow. D8.15, D8.16, D8.19, D8.25, D8.33, D8.34, D8.36, D8.38 withdrawn; D8.2 and D8.17 amended. |
+| 2026-10-05 | §2.4, §3.4: a still is written with the truth of its own frame or not at all, as the owner ruled. The recorder holds the client's snapshots open while it records and releases each frame once an image of a later frame has been prepared; a still whose frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`, gated at zero by the closeout), never written beside a neighbouring frame's truth, and `telemetry_tick` is gone ([`06`](06_Truth_And_Annotation.md) §8.2). |
+| 2026-10-05 | §3.5, §9.4, D8.17: the two-folder split is withdrawn by the owner's ruling, with its validator over the imagery folder, the held-back partition and the release attestation. Imagery and truth stay side by side in one capture folder, as the recorder writes them; the layout is stated as built, and no `.collect.json` is planned. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, and the truth sidecar sits beside it; §8.5 and D8.14, the published supervision-transfer rule, stand as the owner keeps them. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -348,10 +350,15 @@ occlusion fields were simply absent when unmeasured, in six different situations
 which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect.
 
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
-RunId, ScenarioId, Seed)` (`CaptureMetadata.cs:24-29`) is taken from the very sensor frame that
-produced the pixels (`FrameRecorder.cs:179`), and the record's own doc comment explains why wall-clock
-time cannot serve (`CaptureMetadata.cs:9-14`). Filenames are a camera's name and the wall clock, and
-must never be used to pair anything.
+RunId, ScenarioId, Seed)` (`CaptureMetadata.cs`) is taken from the very sensor frame that
+produced the pixels (`FrameRecorder.cs`), and the record's own doc comment explains why wall-clock
+time cannot serve. Filenames are a camera's name and the wall clock, and
+must never be used to pair anything. **The vehicle records beside a still are the truth of the still's
+own tick and no other** (2026-10-05, the owner's ruling): the recorder reads them from the client's
+snapshot of the image's frame, which it holds open while it records, and a still whose frame's truth is
+not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`, gated at zero by the closeout)
+rather than written beside a neighbouring frame's; the `telemetry_tick` attribute that once named which
+frame the truth came from is gone ([`06`](06_Truth_And_Annotation.md) §8.2).
 
 **The solar block is already there, and it is already bound to the pixels.** `_solar` carries
 `solar_time`, `date`, `time_zone`, `lat`, `lon`, `sun_elevation_deg`, `sun_azimuth_deg`, `advancing` and
@@ -871,10 +878,10 @@ header when it captures the frame, and the recorder no longer relies on it: the 
 pose occlusion is measured from, are the camera's and the depth camera's in the snapshot of the
 image's own frame, the same snapshot the truth records are read from, with the header checked against
 it and a disagreement counted (`SensorPoseHeaderDisagreed`, `OcclusionDepthPoseHeaderDisagreed`). A
-frame the client no longer holds is placed from its header and counted apart, as its truth is served
-from the nearest frame and stamped `telemetry_tick`. So pose, truth and render set are all read as of
-the image's frame, which is what makes the co-location in this section enough for a flown camera as
-it is for a fixed one.
+frame the client does not hold is not written at all, and counted (`FrameUnpaired`, 2026-10-05); before
+that its truth was served from the nearest frame and stamped `telemetry_tick`. So pose, truth and render
+set are all read as of the image's frame, which is what makes the co-location in this section enough
+for a flown camera as it is for a fixed one.
 
 ### 3.5 Session and sensor identity, and the artifact roots
 
@@ -913,10 +920,21 @@ Three identity defects, one already half-solved:
   captures cannot be tied to the annotations. This belongs to [`04_Contracts.md`](04_Contracts.md); the
   property needed is simply that it is supplied, since the field already exists end to end.
 
-**How many artifact roots? Two — the ruling.**
+**How many artifact roots? One capture folder — the owner's ruling of 2026-10-05.**
 
-**There are exactly two: `OBSERVATION` (what a model may be shown) and `TRUTH` (labels and
-supervision). There is no `SCORE` root for associations and reports.** The reasoning is short and it
+*Withdrawn 2026-10-05 by the owner's ruling:* the two roots, `OBSERVATION` and `TRUTH`, as two folders,
+and the held-back partition below. Imagery and truth stay side by side in one capture folder, as the
+recorder writes them; there is no separate imagery folder, no held-back partition and no validator over
+an imagery folder, and a recipient is handed the folder as written. What stands: the PNG carries only
+`carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test
+(`FrameRecorderSupervisionTests`), and the truth sidecar sits beside it; there is no `SCORE` root and no
+place for model output, which this pipeline neither produces nor consumes ([`04`](04_Contracts.md)
+D4.26 as amended); and the supervision-transfer rule of §8.5 is published and never performed (D8.14).
+Where other text in this document names two roots, a `.collect.json` or a held-back partition, this
+ruling is what it is measured against. The reasoning below is kept as written.
+
+**There were to be exactly two: `OBSERVATION` (what a model may be shown) and `TRUTH` (labels and
+supervision), and no `SCORE` root for associations and reports.** The reasoning is short and it
 follows directly from the scope decision:
 
 - **A `SCORE` root would be a directory for artifacts this pipeline never produces.** Its two contents
@@ -952,35 +970,25 @@ deliberately withheld, and recording what we withheld so the withholding is audi
 this**, and §15 records the consequence for
 [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s `roots.score` configuration key.
 
-**On-disk layout.** One session directory; one subdirectory per `sensor_id`; the manifest at the
-session root, written by one writer (doc 20 §7.5). A filename is the camera's name and a local
-wall-clock stem (`CameraName.StillStem`), so two channels' captures never share a name, and **nothing
-pairs across channels by filename** — the join key is the tick, which every capture already carries
-(`CotWriter.cs:42`, `CaptureMetadata.cs:24-29`). Captures written before 2026-10-02 are
-`SCTMV_<stem>`.
+**On-disk layout, as built.** One session directory; one subdirectory per `sensor_id`; the manifest and
+the world truth track under `truth/`, written by one writer each. A filename is the camera's name and a
+local wall-clock stem (`CameraName.StillStem`), so two channels' captures never share a name, and
+**nothing pairs across channels by filename** — the join key is the tick, which every capture carries
+(`CotWriter.cs`, `CaptureMetadata.cs`). Captures written before 2026-10-02 are `SCTMV_<stem>`.
 
 ```
 <session_root>/
-  truth/manifest.jsonl             # one per session, rows closed by a terminal row (built)  TRUTH
-  truth/world_truth_track.csv      # every SUMO vehicle at every SUMO frame of the window    TRUTH
+  truth/manifest.jsonl             # one per session, rows closed by a terminal row (built)
+  truth/world_truth_track.csv      # every SUMO vehicle at every SUMO frame of the window
   <sensor_id>/
-    <sensor_id>_<stem>.png             # imagery                                   OBSERVATION
-    <sensor_id>_<stem>.collect.json    # pose, intrinsics, RADIOMETRY, solar, tick  OBSERVATION
-    <sensor_id>_<stem>.xml             # CoT truth sidecar (+ solar policy, residual)  TRUTH
-    <sensor_id>_<stem>.labels.json     # per-image labels (5.1); not written today      TRUTH
-    <sensor_id>_<stem>.depth.png       # optional depth capture                    TRUTH
+    <sensor_id>_<stem>.png         # the still: carla:capture, carla:solar, carla:illumination, carla:sensor
+    <sensor_id>_<stem>.xml         # the CoT truth sidecar beside it (+ the illumination declaration)
 ```
 
-Physically the two roots are two directory trees with the same shape; a release materialises them as
-two mounts, two archives or two download bundles. **There is no third tree, and nothing this pipeline
-writes belongs anywhere else.**
-
-The split of a capture's metadata into a `.collect.json` that travels with the imagery, separate from
-the `.xml` sidecar that does not, is the physical form of the anti-leak boundary (§9.4). Today both live
-in one file; they must not. **Two things sit on the split because of §4**, and §9.7 is the reasoning for
-both: the *achieved* solar state and the camera's radiometry belong on the `OBSERVATION` side, while the
-*asserted* solar policy and the declared-versus-achieved residual — which exist only by comparison
-against the scenario's own declaration — belong on the `TRUTH` side.
+A `.collect.json` beside the imagery, a `.labels.json` per image and a depth capture on disk are written
+by nothing, and with the split withdrawn (2026-10-05) none is planned as a second folder's content: the
+achieved solar state, the camera's pose and intrinsics and the illumination declaration are on the still
+as its four text chunks and on the sidecar beside it.
 
 **There is no probe workspace.** §12's corpus fitness probe and §10.5's leakage probe are withdrawn
 (2026-10-05, D8.25, D8.38), so no detector output and no fitted predictor exist to be kept anywhere.
@@ -2293,6 +2301,15 @@ into each side for a later reader to check they were disjoint, and there is no d
 into what a consumer did with what we gave them. **Everything rests on what we put in the data**, which
 is exactly where the brief says the boundary lives.
 
+**Withdrawn 2026-10-05 by the owner's ruling:** the four mechanisms below and the fifth after them.
+Imagery and truth stay side by side in one capture folder, as the recorder writes them, with no
+separate imagery folder, no validator over an imagery folder, no held-back partition and no release
+attestation over two roots. What stands: the PNG carries only `carla:capture`, `carla:solar`,
+`carla:illumination` and `carla:sensor`, held by a test
+(`FrameRecorderSupervisionTests.A_Still_s_Text_Chunks_Carry_No_Supervision`, which reads every text
+chunk of a supervised capture's still), and the truth sidecar sits beside it (§3.5, D8.17). The text
+below is kept as written.
+
 Discipline is not an enforcement mechanism. Four structural ones, in order of how hard they are to
 circumvent by accident:
 
@@ -3422,7 +3439,7 @@ with this one:**
 | **D8.15** | **Withdrawn 2026-10-05 by the owner's ruling.** `truth_neighbour_count` and `truth_separation_*` existed to flag labels "below a stated separation", a pass mark nobody valued; the published transfer rules of §8.5 stand as a consumer's. As decided: **The association-quality block is label quality, and four of its fields are ours and need no detector.** `truth_density` → **`truth_neighbour_count`** and `margin` → **`truth_separation_px` / `truth_separation_norm`** are derived against the nearest *other truth vehicle* and computed at write time from the label record alone, so **the corpus can flag its own ambiguous labels before release**; `occlusion_at_assignment` and `signature_at_assignment` are label attributes and are carried as plain `occlusion` and `visible_signature`. `residual_px`/`residual_norm` and `dominant_truth_fraction` are **published rules** with stated thresholds, computed by whoever transfers supervision. **`assigned_fraction` and `switch_count` are no part of the corpus** — they are per-track recall and tracker performance, which are model metrics (§8.3) |
 | **D8.16** | **Withdrawn 2026-10-05 by the owner's ruling.** `observability_level` and `visible_signature` were words decided by thresholds; what stands is the measured occlusion and apparent size, and `beyond_draw_distance` under a draw distance (§8.4). As decided: **Every truth row states why it is not in the pixels, and the corpus never charges anybody for anything.** Each row carries `observability_level` and `visible_signature`, which between them distinguish out of frame, too small, hidden past the cutoff, truncated, and **present but unlit** (§8.4). The unlit case is not a corner case: the sizing scenario's overnight population is dominated by 17 parked guards (10 §3.1.3, measured). The corpus also records `shadow_px` per vehicle, so a displacement along the sun's azimuth is legible rather than mysterious. **Nothing here adjudicates, and nothing decides what to charge a detector for** (§2.6, §8.4) |
 | **D8.16a** | **Withdrawn 2026-09-30.** There is no render volume: every vehicle SUMO has is drawn, so a vehicle appears or disappears in frame only where SUMO inserts or removes it, and §5.7 flags those ticks rather than repairing them. |
-| **D8.17** | **Amended 2026-10-05:** the two-folder split stays as a packaging rule, and the validator checks that truth fields are absent from the imagery folder and nothing else; it names no withdrawn field and knows nothing of prevalence. The held-back partition has one axis, session; the illumination axis is withdrawn (§10.5). As decided: **The anti-leak rule is enforced structurally, by four mechanisms, not by discipline.** **Two artifact roots, not three:** `OBSERVATION` and `TRUTH`, one writer each; the split performed *at the writer* so nothing is ever stripped; a mechanical validator over the observation root run in CI — **which must read PNG tEXt chunks, not only files**, because `carla:solar` carries `advancing`/`rate` (`SolarMetadata.cs:26-34`) and `carla:capture` carries `scenario_id`/`seed` (`CaptureMetadata.cs:39-48`); and a **held-back release partition** at session granularity whose truth is not released but whose manifest digest is. **There is no `SCORE` root**: it would be a directory for artifacts this pipeline never produces, and a named empty shelf invites somebody's model output into our tree (§3.5). A fifth, weaker mechanism is a **release attestation** recording both roots' digests, every held-back manifest digest, and the validator's verdict and ruleset version. §9.3 is the exhaustive truth list, and a feature derived only from truth is truth (§3.5, §9.4) |
+| **D8.17** | **Withdrawn 2026-10-05 by the owner's ruling.** Imagery and truth stay side by side in one capture folder, as the recorder writes them: there is no separate imagery folder, no held-back partition and no validator over an imagery folder. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, and the truth sidecar sits beside it; there is no `SCORE` root and no place for model output ([`04`](04_Contracts.md) D4.26 as amended); the supervision-transfer rule is published and never performed (D8.14, §8.5). The amendment of earlier on 2026-10-05 -- the split kept as a packaging rule with a validator naming no withdrawn field, and the held-back partition cut to one axis -- is withdrawn with it. As decided: **The anti-leak rule is enforced structurally, by four mechanisms, not by discipline.** **Two artifact roots, not three:** `OBSERVATION` and `TRUTH`, one writer each; the split performed *at the writer* so nothing is ever stripped; a mechanical validator over the observation root run in CI — **which must read PNG tEXt chunks, not only files**, because `carla:solar` carries `advancing`/`rate` (`SolarMetadata.cs:26-34`) and `carla:capture` carries `scenario_id`/`seed` (`CaptureMetadata.cs:39-48`); and a **held-back release partition** at session granularity whose truth is not released but whose manifest digest is. **There is no `SCORE` root**: it would be a directory for artifacts this pipeline never produces, and a named empty shelf invites somebody's model output into our tree (§3.5). A fifth, weaker mechanism is a **release attestation** recording both roots' digests, every held-back manifest digest, and the validator's verdict and ruleset version. §9.3 is the exhaustive truth list, and a feature derived only from truth is truth (§3.5, §9.4) |
 | **D8.18** | **The corpus publishes no identity that a consumer's output could key on, and publishes the label vocabulary that makes its labels readable.** There is no `EpolAssessment` schema — model output is neither produced nor consumed here. What remains is ours: `actor_id`, `entity_id` and `instance_id` never reach the observation root, so any consumer output carrying one is evidence of a leak **in what we handed over**; and `vocabulary.json` travels with the corpus carrying the term definitions, the version, the three-valued semantics and the three onsets (§9.3, §9.5) |
 | **D8.19** | **Withdrawn 2026-10-05 by the owner's ruling.** The five levels were pass marks (`w_min`, `c_max`, a lamp-on elevation), and the accounting arithmetic over them; what stands is in §10.2. As decided: **Observability is accounted at nested levels, published per sensor and unioned**, per doc 20 §2.5 and decision 15. There are **five** levels: rendered, in-frustum, resolvable, unoccluded, **illuminated**. The first four are illumination-independent by construction and the fifth is not, which is why they are separated. A capture whose occlusion could not be paired is excluded from the unoccluded count entirely, and a capture with no solar or radiometric record is excluded from the illuminated count — never counted as lit. **The corpus publishes this accounting as a description of itself**, including the count of authored intervals with an empty span and the level at which each was lost; what anybody computes over it is theirs (§10.2) |
 | **D8.20** | **`unlabelled` is not a negative; `nominal` is an asserted negative; and the corpus says so in the artifact.** `annotated` asserts the behaviour occurred, `nominal` asserts it did not — the hard negatives doc 20 §2.7 calls the scenario system's unique product — and `unlabelled` asserts nothing at all. Collapsing the last two manufactures false labels out of silence, which is why the distinction is published in `vocabulary.json` rather than only in this plan (§9.5, §10.3) |

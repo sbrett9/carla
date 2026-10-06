@@ -159,8 +159,9 @@ class MovingCameraPoseCheck:
         net = self.world._client
         if int(net.LatestObservedFrame) == frame:
             self.snapshot_time[frame] = float(net.LatestElapsedSeconds)
-        actors, served = net.GetSnapshotFrame(frame, 0)
-        if actors is None or int(served) != frame:
+        # The client's snapshot of this frame exactly, or None where it does not hold the frame.
+        actors = net.GetSnapshotFrame(frame)
+        if actors is None:
             self.not_held.append(frame)
             return
         found, snapshot = actors.TryGetValue(UInt32(self.camera.id), None)

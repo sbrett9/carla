@@ -165,9 +165,10 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly HashSet<ActorId> _observedIds = new();
     private IDisposable? _worldObserver;
 
-    // The actor snapshots of the last few frames, by frame number, for a consumer that holds something
-    // stamped with a frame (a camera image) and needs the actor state of THAT frame. The cache above is
-    // always the newest frame; SnapshotHistory says why that is not the same thing.
+    // The actor snapshots of recent frames, by frame number, for a consumer that holds something
+    // stamped with a frame (a camera image) and needs the actor state of THAT frame, served for that
+    // frame exactly or not at all. The cache above is always the newest frame; SnapshotHistory says why
+    // that is not the same thing, and how long a frame is kept.
     private readonly SnapshotHistory _history = new();
 
     // Tick handlers that must not run on the observer thread: a Python delegate needs the interpreter
@@ -2464,38 +2465,44 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// <summary>
     /// Every actor's snapshot as of <paramref name="frame"/>, for pairing with something stamped with
-    /// that frame (a camera image), rather than the newest frame the queries above answer from. When
-    /// that frame is no longer held the nearest one still held is returned and
-    /// <paramref name="servedFrame"/> names it; null when no frame has been observed yet.
+    /// that frame (a camera image), rather than the newest frame the queries above answer from. That
+    /// frame exactly, or null where the client does not hold it: a neighbouring frame is another
+    /// instant's truth, and is never served in its place (<see cref="SnapshotHistory"/>).
     /// </summary>
-    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame)
-        => _history.Nearest(frame, out servedFrame);
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame)
+        => _history.Of(frame);
 
     /// <summary>
-    /// Every actor's snapshot as of <paramref name="frame"/>, or the nearest frame still held, as
-    /// <see cref="GetSnapshotFrame(ulong, out ulong)"/> answers, together with the render set the
-    /// same snapshot carried (<see cref="ObservedRenderSet.None"/> where it carried none). Both are
-    /// read at once, so a body lent or given back between two ticks is never paired with the other
-    /// frame's naming.
+    /// Every actor's snapshot as of <paramref name="frame"/>, as <see cref="GetSnapshotFrame(ulong)"/>
+    /// answers, together with the render set the same snapshot carried
+    /// (<see cref="ObservedRenderSet.None"/> where it carried none). Both are read at once, so a body
+    /// lent or given back between two ticks is never paired with the other frame's naming.
     /// </summary>
-    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame,
-                                                                        out ObservedRenderSet renderSet)
-        => _history.Nearest(frame, out servedFrame, out renderSet);
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ObservedRenderSet renderSet)
+        => _history.Of(frame, out renderSet);
 
     /// <summary>
-    /// Every actor's snapshot as of <paramref name="frame"/>, or the nearest frame still held, together
-    /// with the render set and the supervision the same snapshot carried
-    /// (<see cref="ObservedSupervision.None"/> where it carried none). All three are read at once, which
-    /// is how a recorder takes a capture's truth: its vehicles, the SUMO vehicle each body drew, and what
-    /// the author asserted of each, from the one frame the pixels were rendered on.
+    /// Every actor's snapshot as of <paramref name="frame"/>, together with the render set and the
+    /// supervision the same snapshot carried (<see cref="ObservedSupervision.None"/> where it carried
+    /// none). All three are read at once, which is how a recorder takes a capture's truth: its vehicles,
+    /// the SUMO vehicle each body drew, and what the author asserted of each, from the one frame the
+    /// pixels were rendered on.
     /// </summary>
-    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame,
-                                                                        out ObservedRenderSet renderSet,
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ObservedRenderSet renderSet,
                                                                         out ObservedSupervision supervision)
-        => _history.Nearest(frame, out servedFrame, out renderSet, out supervision);
+        => _history.Of(frame, out renderSet, out supervision);
 
-    /// <summary>How many recent frames <see cref="GetSnapshotFrame"/> can answer for exactly.</summary>
+    /// <summary>How many recent frames <see cref="GetSnapshotFrame(ulong)"/> can answer for.</summary>
     public int RetainedSnapshotFrames => _history.Count;
+
+    /// <summary>
+    /// Keep the frames a reader of <see cref="GetSnapshotFrame(ulong)"/> may still ask for. A recorder
+    /// opens one for as long as it records and releases each frame as it finishes with it
+    /// (<see cref="SnapshotHold.Release"/>), so an image's own frame is held until the image has arrived
+    /// and been paired, however late it arrives, and dropped soon after; with no hold open only the
+    /// newest few frames are kept (<see cref="SnapshotHistory"/>).
+    /// </summary>
+    public SnapshotHold HoldSnapshotFrames() => _history.Hold();
 
     /// <summary>
     /// Per-vehicle traffic-light state, speed limit, and at-traffic-light flag, decoded from the
@@ -2585,7 +2592,7 @@ public sealed class CarlaClient : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// The newest frame's, like the actor cache. A reader that pairs it with actor state should take
-    /// both from one frame -- <see cref="GetSnapshotFrame(ulong, out ulong, out ObservedRenderSet)"/>
+    /// both from one frame -- <see cref="GetSnapshotFrame(ulong, out ObservedRenderSet)"/>
     /// answers both at once -- because a body is lent or given back between two ticks.
     /// </remarks>
     public ObservedRenderSet GetCachedRenderSet() => _renderSet;
@@ -2613,7 +2620,7 @@ public sealed class CarlaClient : IAsyncDisposable
     /// <remarks>
     /// The newest frame's, like the actor cache and the render set. A reader that pairs it with a
     /// frame's vehicles takes all of them from that frame --
-    /// <see cref="GetSnapshotFrame(ulong, out ulong, out ObservedRenderSet, out ObservedSupervision)"/>
+    /// <see cref="GetSnapshotFrame(ulong, out ObservedRenderSet, out ObservedSupervision)"/>
     /// answers them at once -- because supervision names bodies, and a body is lent or given back
     /// between two ticks.
     /// </remarks>

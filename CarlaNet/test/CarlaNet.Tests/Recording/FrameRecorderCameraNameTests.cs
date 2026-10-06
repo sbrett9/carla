@@ -2,7 +2,9 @@
 // name as its callsign, so two cameras in one world never write files of one name or report under one
 // callsign. Before cameras were named, every still was SCTMV_<local time> whatever camera took it, and
 // the shim gave every platform track the callsign OVERWATCH. A stand-in server here streams a real
-// FrameRecorder one image and the files it writes are read back; the refusals need no image at all.
+// FrameRecorder the world observer's snapshot of one frame and the camera's image of it -- a still is
+// written with the truth of its own frame or not at all -- and the files it writes are read back; the
+// refusals need no image at all.
 // See CameraName for the rule a name must meet, and CameraNameTests for the rule on its own.
 using System.Buffers.Binary;
 using System.Net;
@@ -28,8 +30,10 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
 
     private static SuccessResponse<T> Ok<T>(T value) => new(new SuccessVariant<T>(1, value));
 
+    private const uint ObserverStream = 1;
     private const uint CameraStream = 2;
     private const ActorId Camera = 4121;
+    private const ulong RenderedFrame = 100;
     private const int Width = 64;
     private const int Height = 36;
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
@@ -51,6 +55,8 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
         int port = FreeLoopbackPort();
         _rpc = new MsgPackRpcServer(IPAddress.Loopback, port);
         _rpc.RegisterHandler("get_cesium_origin", () => Ok(Origin));
+        _rpc.RegisterHandler("get_episode_info",
+                             () => Ok(new EpisodeInfo(1UL, new RawToken(_streams.Token(ObserverStream)))));
         _rpc.RegisterHandler("get_bare_earth_reference",
                              () => Ok(new[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }));
         _rpc.RegisterHandler<uint[], SuccessResponse<int[]>>("get_actors_by_id", _ => Ok(Array.Empty<int>()));
@@ -166,16 +172,21 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
         Assert.Equal(twin, second.Name);
     }
 
-    /// Records the camera, streams it one image, and returns the recorder, flushed, with the still's
-    /// image and sidecar.
+    /// Observes the camera's frame, records the camera, streams it the image of that frame, and returns
+    /// the recorder, flushed, with the still's image and sidecar.
     private async Task<(FrameRecorder Recorder, string Png, string Xml)> RecordOneImage(
         SensorPlatformOptions? platform = null, ActorId? cameraActorId = null)
     {
-        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, platform: platform,
+        CarlaClient client = _client!;
+        await client.StartWorldObserverAsync();
+        await _streams.SendAsync(ObserverStream, RenderedFrame, 5.0, Looking, EpisodeState());
+        await Until(() => client.LatestObservedFrame == RenderedFrame, "the observer reaching frame 100");
+
+        var recorder = new FrameRecorder(client, _streams.Token(CameraStream), _dir, 2.0, platform: platform,
                                          cameraActorId: cameraActorId);
         try
         {
-            await _streams.SendAsync(CameraStream, 100, 5.0, Looking, Image());
+            await _streams.SendAsync(CameraStream, RenderedFrame, 5.0, Looking, Image());
             await Until(() => recorder.Saved == 1, "the capture being written");
         }
         finally
@@ -184,6 +195,19 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
         }
 
         return (recorder, Directory.GetFiles(_dir, "*.png").Single(), Directory.GetFiles(_dir, "*.xml").Single());
+    }
+
+    /// A world observer's payload holding the camera at <see cref="Looking"/>: the 124-byte header of a
+    /// server that measured no sun, then one 119-byte actor record.
+    private static byte[] EpisodeState()
+    {
+        const int headerSize = 124, actorSize = 119;
+        var payload = new byte[headerSize + actorSize];
+        Span<byte> actor = payload.AsSpan(headerSize, actorSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(actor, Camera);
+        actor[4] = (byte)ActorState.Active;
+        StandInStreams.WriteTransform(actor[5..], Looking);
+        return payload;
     }
 
     /// An image's payload: width, height and field of view, then BGRA pixels.

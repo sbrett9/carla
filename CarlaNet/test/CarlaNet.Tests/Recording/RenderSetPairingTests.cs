@@ -56,7 +56,7 @@ public class RenderSetPairingTests
         try
         {
             CotWriter.WriteToFile(path, new DateTime(2026, 9, 28, 21, 3, 8, DateTimeKind.Utc), paired.Records,
-                                  capture: new CaptureIdentity(frame, 353.9, "run-1", TelemetryTick: frame),
+                                  capture: new CaptureIdentity(frame, 353.9, "run-1"),
                                   vehicles: paired.Vehicles);
             return File.ReadAllText(path);
         }

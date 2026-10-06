@@ -159,7 +159,7 @@ public class DrawDistanceCheckTests
         try
         {
             CotWriter.WriteToFile(path, new DateTime(2026, 10, 2, 18, 0, 0, DateTimeKind.Utc), records,
-                                  capture: new CaptureIdentity(100, 5.0, "run-1", TelemetryTick: 100),
+                                  capture: new CaptureIdentity(100, 5.0, "run-1"),
                                   drawDistanceMetres: drawDistance);
             return XDocument.Load(path).Root!;
         }

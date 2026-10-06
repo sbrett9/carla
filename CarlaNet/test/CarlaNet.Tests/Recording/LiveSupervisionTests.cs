@@ -156,9 +156,8 @@ public sealed class LiveSupervisionTests : IAsyncLifetime
 
         foreach (CarlaClient reader in new[] { _driving, _elsewhere! })
         {
-            Assert.NotNull(reader.GetSnapshotFrame(100, out ulong served, out ObservedRenderSet renderSet,
+            Assert.NotNull(reader.GetSnapshotFrame(100, out ObservedRenderSet renderSet,
                                                    out ObservedSupervision atHundred));
-            Assert.Equal(100UL, served);
             Assert.Equal(new SupervisionPlanIdentity(PlanId, (int)VocabularyVersion, VocabularyDigest), atHundred.Plan);
             IReadOnlyDictionary<string, SupervisionInForce> vehicles = atHundred.ForVehicles(renderSet);
             Assert.Equal(["corridor_d0_p0_h6.12", "escort_0"], vehicles.Keys.Order(StringComparer.Ordinal));

@@ -110,10 +110,8 @@ class SidecarAuditResult:
     """What a capture's sidecars hold, counted."""
 
     sidecars: int = 0
-    sidecars_with_truth: int = 0
     sidecars_listing_rendered: int = 0
     sidecars_listing_unknown: int = 0
-    sidecars_truth_off_frame: int = 0
     records: list[VehicleRecord] = field(default_factory=list)
     floor_hae: float | None = None
     ceiling_hae: float | None = None
@@ -245,12 +243,9 @@ class TruthSidecarAudit:
         for path in paths:
             root = ET.parse(path).getroot()
             result.sidecars += 1
+            # The vehicle records are the truth of this tick and no other: a still whose own frame's
+            # truth was not to be had is not written (2026-10-05), so there is no second frame to read.
             tick = root.get("tick")
-            described = root.get("telemetry_tick")
-            if described is not None:
-                result.sidecars_with_truth += 1
-                if tick is not None and described != tick:
-                    result.sidecars_truth_off_frame += 1
             vehicles = root.get("vehicles")
             if vehicles == "rendered":
                 result.sidecars_listing_rendered += 1
@@ -382,12 +377,10 @@ class TruthSidecarAudit:
     def describe(result: SidecarAuditResult) -> list[str]:
         """The counts, a line each, for a person."""
         total = len(result.records)
-        lines = [f"{result.sidecars} truth sidecars, {result.sidecars_with_truth} with vehicle "
-                 f"truth, {total} vehicle records"]
+        lines = [f"{result.sidecars} truth sidecars, {total} vehicle records"]
         lines.append(f"  listing their frame's rendered set: {result.sidecars_listing_rendered}; "
                      f"listing none because the frame's set was no longer held: "
-                     f"{result.sidecars_listing_unknown}; truth from a neighbouring frame: "
-                     f"{result.sidecars_truth_off_frame}")
+                     f"{result.sidecars_listing_unknown}")
         if result.floor_hae is None:
             lines.append("  ground band: no moving vehicle to draw it from and no floor given; "
                          "below-ground records not counted")

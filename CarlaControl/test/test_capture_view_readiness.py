@@ -504,7 +504,7 @@ def test_a_view_too_full_of_vehicles_to_judge_is_refused_naming_that(layout):
 def test_a_frame_whose_vehicles_cannot_be_placed_is_not_judged(layout):
     # The client holds no snapshot of any frame: no vehicle can be placed, nothing is judged.
     server = FakeServer()
-    server._client.GetSnapshotFrame = lambda _frame, _out: (None, 0)
+    server._client.GetSnapshotFrame = lambda _frame: None
     _, result = capture(layout, server, channels=[A_NADIR])
     refused_by_check_50(server, result)
     assert "could not be placed" in result.detail

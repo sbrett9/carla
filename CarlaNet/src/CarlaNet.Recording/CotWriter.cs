@@ -71,15 +71,12 @@ public static class CotWriter
         // Capture identity belongs on this container rather than on the individual events: <events> is
         // this file's own wrapper, whereas each <event> is standard Cursor-on-Target and is also emitted
         // verbatim over the live feed, where a strict client may reject unknown attributes. Every event
-        // in a sidecar shares one tick, so recording it once here loses nothing.
+        // in a sidecar shares one tick, so recording it once here loses nothing; the vehicle records
+        // below are the truth of that tick and no other (FrameRecorder).
         if (capture is not null)
         {
             w.WriteAttributeString("tick", capture.Tick.ToString(CultureInfo.InvariantCulture));
             w.WriteAttributeString("sim_time_s", F(capture.SimTimeSeconds, "0.######"));
-            // The frame the vehicle records describe. Normally the same as tick; when it differs, the
-            // truth beside this still is from a neighbouring frame and this says which.
-            if (capture.TelemetryTick.HasValue)
-                w.WriteAttributeString("telemetry_tick", capture.TelemetryTick.Value.ToString(CultureInfo.InvariantCulture));
             if (!string.IsNullOrEmpty(capture.RunId)) w.WriteAttributeString("run_id", capture.RunId);
             if (!string.IsNullOrEmpty(capture.ScenarioId)) w.WriteAttributeString("scenario_id", capture.ScenarioId);
             if (capture.Seed.HasValue)

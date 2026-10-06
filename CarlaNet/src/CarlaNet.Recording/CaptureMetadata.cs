@@ -10,7 +10,8 @@ namespace CarlaNet.Recording;
 /// time — a world ticking at a fixed step falls behind under load — so two runs of the same scenario
 /// carry unrelated wall-clock timestamps and cannot be compared without first being re-aligned. The
 /// tick count is what identifies the same instant across runs, and it is what pairs a still with the
-/// truth recorded beside it.
+/// truth recorded beside it: the truth beside a still is always the truth of the still's own tick, and
+/// a still whose tick's truth was not to be had is not written (<see cref="FrameRecorder.FrameUnpaired"/>).
 ///
 /// <see cref="SimTimeSeconds"/> is recorded alongside the tick rather than derived from it, because the
 /// simulation step is a per-run setting and need not be the same in a later run.
@@ -21,18 +22,12 @@ namespace CarlaNet.Recording;
 /// <param name="ScenarioId">The scenario being executed, where one is driving the run.</param>
 /// <param name="Seed">Seed the run was started with, for reproducing it. Numeric because it seeds
 /// pseudo-random generators; typing it so removes any need to validate it downstream.</param>
-/// <param name="TelemetryTick">The frame the truth records beside this capture describe. Equal to
-/// <see cref="Tick"/> whenever the client still held that frame's snapshot when the image arrived,
-/// which is the normal case; when it did not, this names the nearest frame it did hold, so a
-/// consumer can see the pairing was inexact instead of trusting it blindly. Null when the capture
-/// carries no truth at all.</param>
 public sealed record CaptureIdentity(
     ulong Tick,
     double SimTimeSeconds,
     string? RunId = null,
     string? ScenarioId = null,
-    long? Seed = null,
-    ulong? TelemetryTick = null)
+    long? Seed = null)
 {
     /// PNG tEXt chunk carrying the capture identity, so a still is self-describing even once separated
     /// from its sidecar.
@@ -47,8 +42,6 @@ public sealed record CaptureIdentity(
         var sb = new StringBuilder("{");
         sb.Append("\"tick\":").Append(Tick.ToString(CultureInfo.InvariantCulture));
         sb.Append(",\"sim_time_s\":").Append(F(SimTimeSeconds));
-        if (TelemetryTick.HasValue)
-            sb.Append(",\"telemetry_tick\":").Append(TelemetryTick.Value.ToString(CultureInfo.InvariantCulture));
         Append(sb, "run_id", RunId);
         Append(sb, "scenario_id", ScenarioId);
         if (Seed.HasValue)

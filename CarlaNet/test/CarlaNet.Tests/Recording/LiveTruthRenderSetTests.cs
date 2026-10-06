@@ -130,23 +130,27 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
                       (BodyA, InItsParkingSlot), (BodyB, OnTheRoad));
         var telemetry = new VehicleTelemetryService(_client!);
 
-        IReadOnlyList<VehicleTelemetry> atHundred = telemetry.Compute(Origin, 100, out ulong servedHundred,
-                                                                      out ObservedRenderSet setHundred);
-        IReadOnlyList<VehicleTelemetry> atHundredOne = telemetry.Compute(Origin, 101, out ulong servedHundredOne);
+        IReadOnlyList<VehicleTelemetry>? atHundred = telemetry.ComputeAt(Origin, 100, out ObservedRenderSet setHundred,
+                                                                         out _);
+        IReadOnlyList<VehicleTelemetry>? atHundredOne = telemetry.ComputeAt(Origin, 101, out _, out _);
         IReadOnlyList<VehicleTelemetry> live = telemetry.Compute(Origin);
 
-        Assert.Equal(100UL, servedHundred);
+        Assert.NotNull(atHundred);
         Assert.False(setHundred.IsEmpty);
         Assert.Equal("first", Assert.Single(atHundred).Rendered!.SumoId);
         Assert.Equal(BodyA, atHundred[0].Id);
 
-        Assert.Equal(101UL, servedHundredOne);
+        Assert.NotNull(atHundredOne);
         Assert.Equal("second", Assert.Single(atHundredOne).Rendered!.SumoId);
         Assert.Equal(BodyB, atHundredOne[0].Id);
 
         // The live pull reads the newest frame, and its body and its naming from that same frame.
         Assert.Equal(BodyB, Assert.Single(live).Id);
         Assert.Equal("second", live[0].Rendered!.SumoId);
+
+        // A frame the client does not hold has no truth: not the neighbour's, and not the newest.
+        Assert.Null(telemetry.ComputeAt(Origin, 102, out ObservedRenderSet none, out _));
+        Assert.True(none.IsEmpty);
     }
 
     [Fact]
@@ -156,7 +160,7 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
                       (BodyA, OnTheRoad), (BodyB, InItsParkingSlot), (Ambient, ElsewhereOnTheRoad));
 
         IReadOnlyList<VehicleTelemetry> records = new VehicleTelemetryService(_client!)
-            .Compute(Origin, null, out _, out ObservedRenderSet renderSet);
+            .Compute(Origin, out ObservedRenderSet renderSet);
 
         Assert.True(renderSet.IsEmpty);
         Assert.Equal([BodyA, BodyB, Ambient], records.Select(record => record.Id).Order());

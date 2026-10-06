@@ -16,6 +16,11 @@ was run.
   statement of absences; UC-11 is withdrawn in full (the accidental-positive audit by 13 §13 decision 6,
   the leakage test and the fitness probe by the ruling); D2.8, D2.19, D2.20 withdrawn, D2.11 and D2.23
   amended; open question 3 moot.
+- 2026-10-05: the two-folder split is dropped by the owner's ruling: imagery and truth stay side by side
+  in one capture folder, with no separate imagery folder, no held-back partition and no validator over
+  an imagery folder. UC-10 step 3 and the back-door failure flow are withdrawn, UC-10's artifacts are
+  the capture folder as written, §1.3 point 2 follows, and D2.9's export half is amended; the published
+  supervision-transfer rule stands.
 **Owner role:** Systems architect. Companion section: [01 — Architecture](01_Architecture.md), whose
 component names, modes and authority model this section uses without restating them.
 **Scope:** The actors, the use cases each one drives, and the four flows that carry the most risk drawn as
@@ -160,11 +165,10 @@ never starts a session, configures a run, loads a world, or calls anything.
 1. **Neither ever interacts with the pipeline.** Both only ever receive artifacts. An actor with no
    interaction with the system is a stakeholder drawn inside the boundary, which is the standard way a
    use-case model acquires scope it does not have.
-2. **The pipeline cannot tell them apart, and must not try.** The same corpus serves training and
-   validation; the only thing that differs between the two is *which export* is read, and that is a
-   property of the artifact ([06 §10.2–10.3](06_Truth_And_Annotation.md)'s training export and full
-   export, written as two separate artifacts rather than two views) and not of who is reading. A boundary
-   drawn on the artifact holds; a boundary drawn on the reader's intention does not.
+2. **The pipeline cannot tell them apart, and must not try.** The same capture folder serves training
+   and validation; which of its files a recipient reads is the recipient's business and not a thing the
+   pipeline decides ([06 §10.2](06_Truth_And_Annotation.md) lists what the folder holds; the two exports
+   it once named are withdrawn 2026-10-05). A boundary drawn on the reader's intention does not hold.
 3. **Keeping "evaluator" as an actor keeps an evaluation use case.** An actor exists to drive a use case.
    Retaining this one would retain a case whose entire content is a model metric, which the scope
    decision removes. The actor and the use case go together.
@@ -1326,13 +1330,12 @@ report was a precondition until 2026-10-05; UC-11 is withdrawn.)
    anything later.
 2. *Withdrawn 2026-10-05.* The audit step is gone with UC-11: the author's labels pass through unjudged
    and the author is accountable for them ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b).
-3. **Split the export.** Two artifacts, not two views of one: a **training export** carrying only what a
-   fielded system could also have, and a **full export** carrying everything including truth. The split
-   and its table are [06 §10.2–10.3](06_Truth_And_Annotation.md)'s, and this case does not restate them;
-   the sun's achieved state is in both. Two properties it
-   *does* require of that split: the recipient is told which artifact is which and why, and the
-   supervision that ships is keyed to **truth** entities and intervals, because detector tracks are the
-   one thing this pipeline never sees.
+3. *Withdrawn 2026-10-05 by the owner's ruling.* The export split is gone: imagery and truth stay side
+   by side in one capture folder, with no separate imagery folder, no held-back partition and no
+   validator over an imagery folder ([06 §10.3](06_Truth_And_Annotation.md), [08](08_Collection_And_EPoL.md)
+   D8.17). The recipient is handed the capture folder as written ([06 §10.2](06_Truth_And_Annotation.md)
+   lists what it holds). What stands of this step: the supervision that ships is keyed to **truth**
+   entities and intervals, because detector tracks are the one thing this pipeline never sees.
 4. **Hand over the plain record of what happened**, which the truth files already carry, so that the
    recipient counts rather than estimates ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b):
    - the supervision plan as declared, and every interval as it opened and closed, with the spans its
@@ -1405,9 +1408,11 @@ report was a precondition until 2026-10-05; UC-11 is withdrawn.)
   cheapest place left to catch it.
 - *Corpora from different worlds or different scenarios bundled without saying so* — refuse; the world
   digest is part of the corpus identity.
-- *Truth reaching a training input by the back door* — refuse. The export split is a **process** boundary
-  and not a convention ([06 §10.3](06_Truth_And_Annotation.md)). The sun's achieved state is in both
-  exports; the prevalence gate that once conditioned it is withdrawn ([06 §10.2](06_Truth_And_Annotation.md)).
+- *Truth reaching a training input by the back door* — *withdrawn 2026-10-05 by the owner's ruling*
+  with the export split: imagery and truth sit side by side in one capture folder, and which of its
+  files a recipient reads is the recipient's business ([06 §10.3](06_Truth_And_Annotation.md)). The
+  PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a
+  test, and the truth sidecar sits beside it.
 - *A request for a score, a baseline, a model comparison or a pass/fail verdict* — **not a capability this
   system has, and the answer is not "later".** What the recipient gets instead is steps 4, 5 and 6: the
   plain record of what was simulated, drawn and lit, what the pipeline cannot render, and the transfer
@@ -1419,8 +1424,9 @@ a question; the record of what it contains and in what light travels with it; th
 handoff is recorded on our side. **Nothing about any model has been measured, here or anywhere upstream
 of here.**
 
-**Artifacts.** The training export; the full export; the supervision-transfer rule, shipped as a
-versioned contract; the handoff record.
+**Artifacts.** The capture folder as written, imagery and truth side by side (the training and full
+exports are withdrawn 2026-10-05); the supervision-transfer rule, shipped as a versioned contract; the
+handoff record.
 
 ---
 
@@ -2290,7 +2296,7 @@ renumbered.
 | D2.6 | **Population authority is acquired at session start, and a denial fails the session naming the holder.** It is the first thing that happens in UC-7, and there is no path that proceeds past it with a warning (UC-7, §5) |
 | D2.7 | **One capture session, one identity.** The session assigns the run identity, the scenario id and a stable `sensor_id` per camera, replacing the recorder's own wall-clock default and closing the never-supplied `scenario_id` gap at its current location (UC-7 step 5) |
 | D2.8 | **Withdrawn 2026-10-05 by the owner's ruling.** "Observed intervals" were a word decided by pass marks, and a denominator over them is arithmetic over a judgement. What stands: the manifest's interval rows with their `not_drawn` spans and the world truth track's `render_state` say, as happened facts, when a participant had no body; a recipient counts over them as they see fit (UC-10 step 4) |
-| D2.9 | **Nothing on the far side of the boundary is ever given truth, in any mode.** Live (UC-8) and by export (UC-10) alike, what leaves carries no truth-sourced field, and that is a structural property — two artifact roots with one writer each, two separate artifacts rather than two views of one ([06 §10.3](06_Truth_And_Annotation.md), [08](08_Collection_And_EPoL.md) D8.17) — not a configuration to get right. In a live exercise truth additionally rides its own endpoint and is off by default, because truth on a feed an exercised operator sees is a leak ([08](08_Collection_And_EPoL.md) D8.23) |
+| D2.9 | **Amended 2026-10-05 by the owner's ruling:** the export half is withdrawn with the two artifact roots and the two exports -- imagery and truth sit side by side in one capture folder, and what leaves by export (UC-10) is that folder. What stands: in a live exercise (UC-8) truth rides its own endpoint and is off by default, because truth on a feed an exercised operator sees is a leak ([08](08_Collection_And_EPoL.md) D8.23). As decided: **Nothing on the far side of the boundary is ever given truth, in any mode.** Live and by export alike, what leaves carries no truth-sourced field, and that is a structural property — two artifact roots with one writer each, two separate artifacts rather than two views of one ([06 §10.3](06_Truth_And_Annotation.md), [08](08_Collection_And_EPoL.md) D8.17) — not a configuration to get right |
 | D2.10 | **A corpus without a closed manifest is not handed over and not replayable.** Both UC-9 and UC-10 refuse it rather than degrading, because supervision in interval form is the only thing a detector track can be clipped against — and the recipient is the one who will do the clipping (UC-9, UC-10) |
 | D2.11 | **Withdrawn 2026-10-05**, with UC-11: no accidental-positive audit is built, because the system has no pattern to compare against and judging an author's labels is not its place ([13 §13](13_Work_Breakdown.md) decision 6). What stands is the realism gain that motivated it — long ambient stops under SUMO drive — and the three-valued contract that makes an `unlabelled` vehicle assert nothing ([06 §3.1](06_Truth_And_Annotation.md)) |
 | D2.12 | **A live exercise degrades visibly rather than silently slowing the world.** An observer who cannot tell that the pipeline is behind is being shown something other than what they think. The operative word is **silently**. A slower world is legitimate — it costs no truth, because truth is stamped in simulated time — **when somebody declared the band it may slow within, and the slip is displayed and recorded**; an undeclared stall never is, because nothing distinguishes it afterwards from a fast run. The visible degradations are the achieved factor against target and floor, and, at the floor, **dropped frames counted per channel and recorded in coverage**. D2.27 and [08 §11.3](08_Collection_And_EPoL.md) D8.40 are the full ruling (UC-8 §8a) |

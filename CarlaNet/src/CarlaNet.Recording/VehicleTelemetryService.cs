@@ -48,60 +48,55 @@ public sealed class VehicleTelemetryService
     public GeoLocation GetOrigin() => _client.GetCesiumOriginAsync().GetAwaiter().GetResult();
 
     /// <summary>Truth for every vehicle as of the newest world-observer frame.</summary>
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin) => Compute(origin, null, out _);
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin) => Compute(origin, out _);
+
+    /// <summary>
+    /// Truth for every vehicle as of the newest world-observer frame, and the render set that frame
+    /// carried: <see cref="ObservedRenderSet.None"/> where it carried none, so the records are every
+    /// vehicle actor, and otherwise the set they were cut to and named from.
+    /// </summary>
+    /// <remarks>
+    /// Where the newest snapshot carries a render set -- a SUMO drive -- the records are read from that
+    /// newest retained frame rather than the actor cache, so a body's pose and its naming always come
+    /// from one frame: a body is lent or given back between two ticks, and the cache is refreshed in
+    /// place while it is read.
+    /// </remarks>
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, out ObservedRenderSet renderSet)
+    {
+        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
+        renderSet = ObservedRenderSet.None;
+        if (!_client.GetCachedRenderSet().IsEmpty)
+            atFrame = _client.GetSnapshotFrame(_client.LatestObservedFrame, out renderSet);
+        return Build(origin, atFrame, renderSet);
+    }
 
     /// <summary>
     /// Truth for every vehicle as of <paramref name="frame"/>, for pairing with something produced at
     /// that frame: a camera image carries its frame in its header, and the snapshot of that frame is
-    /// what its pixels show. Null asks for the newest frame instead. <paramref name="telemetryFrame"/>
-    /// is the frame the records actually describe: the one asked for whenever the client still holds
-    /// it, otherwise the nearest it does hold, so a caller can record what it got rather than assume.
+    /// what its pixels show. Read with the render set and the supervision that same frame's snapshot
+    /// carried, in one read, so a body's naming and its supervision are always the ones it carried for
+    /// the vehicle it drew on that frame. Null, with <paramref name="renderSet"/>
+    /// <see cref="ObservedRenderSet.None"/> and <paramref name="supervision"/>
+    /// <see cref="ObservedSupervision.None"/>, where the client does not hold the frame: the newest
+    /// frame or a neighbouring one would be another instant's truth, and is never served in its place.
     /// </summary>
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame)
-        => Compute(origin, frame, out telemetryFrame, out _);
-
-    /// <summary>
-    /// Truth as <see cref="Compute(GeoLocation, ulong?, out ulong)"/> answers it, and the render set
-    /// the records' own frame carried: <see cref="ObservedRenderSet.None"/> where it carried none, so
-    /// the records are every vehicle actor, and otherwise the set they were cut to and named from.
-    /// </summary>
-    /// <remarks>
-    /// Where no frame is asked for and the newest snapshot carries a render set -- a SUMO drive -- the
-    /// records are read from that newest retained frame rather than the actor cache, so a body's pose
-    /// and its naming always come from one frame: a body is lent or given back between two ticks, and
-    /// the cache is refreshed in place while it is read.
-    /// </remarks>
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame,
-                                                   out ObservedRenderSet renderSet)
-        => Compute(origin, frame, out telemetryFrame, out renderSet, out _, out _);
-
-    /// <summary>
-    /// Truth as <see cref="Compute(GeoLocation, ulong?, out ulong, out ObservedRenderSet)"/> answers it,
-    /// and the supervision the records' own frame carried, read in the same read as its actors and its
-    /// render set, so a body's supervision is always the one it carried for the vehicle it drew on that
-    /// frame.
-    /// </summary>
-    /// <param name="fromSnapshot">
-    /// Whether the records were read from a held snapshot -- the one <paramref name="telemetryFrame"/>
-    /// names -- rather than the actor cache, which a client holding no snapshot yet answers from and
-    /// which carries no supervision.
-    /// </param>
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame,
-                                                   out ObservedRenderSet renderSet,
-                                                   out ObservedSupervision supervision, out bool fromSnapshot)
+    public IReadOnlyList<VehicleTelemetry>? ComputeAt(GeoLocation origin, ulong frame,
+                                                      out ObservedRenderSet renderSet,
+                                                      out ObservedSupervision supervision)
     {
-        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
-        telemetryFrame = 0;
-        renderSet = ObservedRenderSet.None;
-        supervision = ObservedSupervision.None;
-        if (frame.HasValue)
-            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame, out renderSet, out supervision);
-        else if (!_client.GetCachedRenderSet().IsEmpty)
-            atFrame = _client.GetSnapshotFrame(_client.LatestObservedFrame, out telemetryFrame, out renderSet,
-                                               out supervision);
-        fromSnapshot = atFrame is not null;
-        if (atFrame is null)
-            telemetryFrame = _client.LatestObservedFrame;
+        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame =
+            _client.GetSnapshotFrame(frame, out renderSet, out supervision);
+        return atFrame is null ? null : Build(origin, atFrame, renderSet);
+    }
+
+    /// <summary>
+    /// The records of the actors of <paramref name="atFrame"/>, or of the actor cache where it is null,
+    /// cut to and named from <paramref name="renderSet"/>.
+    /// </summary>
+    private IReadOnlyList<VehicleTelemetry> Build(GeoLocation origin,
+                                                  IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame,
+                                                  ObservedRenderSet renderSet)
+    {
         IReadOnlyList<ActorId> ids = atFrame is not null ? atFrame.Keys.ToArray() : _client.GetCachedActorIds();
 
         // Refresh descriptions only for actors we have not seen (RPC once per new actor, not per call).

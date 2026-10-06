@@ -82,7 +82,7 @@ def sidecar(directory: Path, tick: int, events: list[str], vehicles: str | None 
     (directory / f"{stem or f'SCTMV_{tick}'}.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<events captured="t" count="{len(events)}" source="truth" tick="{tick}" '
-        f'sim_time_s="{tick * 0.05:.3f}" telemetry_tick="{tick}"{marker}>\n'
+        f'sim_time_s="{tick * 0.05:.3f}"{marker}>\n'
         + SENSOR + "".join(events) + "</events>\n", encoding="utf-8")
 
 
@@ -232,7 +232,7 @@ def supervised_sidecar(directory: Path, tick: int, events: list[str], world: boo
     (directory / f"SUPERVISED_{tick}.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<events captured="t" count="{len(events)}" source="truth" tick="{tick}" '
-        f'sim_time_s="{tick * 0.05:.3f}" telemetry_tick="{tick}" vehicles="rendered"{attributes}>\n'
+        f'sim_time_s="{tick * 0.05:.3f}" vehicles="rendered"{attributes}>\n'
         + (WORLD if world and not unknown else "") + SENSOR + "".join(events) + "</events>\n",
         encoding="utf-8")
 
