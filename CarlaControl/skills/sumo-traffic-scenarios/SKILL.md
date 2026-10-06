@@ -2,7 +2,7 @@
 name: sumo-traffic-scenarios
 description: Use when building a SUMO traffic scenario or a Cursor-on-Target (CoT) telemetry dataset for a CARLA world generated from OpenStreetMap — including orbit/dwell/pattern-of-life scenarios, planted anomalies, ambient traffic, guard postings, fenced (access-restricted) road networks, or standalone scenario zips. Also use when the question is about how the OSM → world package (.xodr + bareearth.bin drape) → SUMO network → routes → CoT pipeline fits together, how run_SCTMV.py and CarlaNet produce the world, or which of the make_*_scenario.py / sumo_cot_telemetry.py tools to reach for. Covers the netconvert flags, coordinate alignment, which vehicles a scenario may ask for, and the measured gotchas that make routes actually work. Also use when writing or compiling a scenario specification (compile_scenario.py): the epoch that says what civil time t = 0 is, civil-time literals, named places, rotas, supervision labels and vocabulary, capture windows, the illumination default, sweeps and counterfactual pairs.
 metadata:
-  version: 1.6.0
+  version: 1.7.0
 ---
 
 # SUMO traffic scenarios for generated CARLA worlds
@@ -214,9 +214,87 @@ street names (Bahonar: 4.5 %), use points, gateways and areas:
  "skip": [{"day": 4, "at": "07:00", "subject_index": 3, "because": "the no-show anomaly"}]}
 ```
 
-A skip must match exactly one occasion and say why. It writes no trip and no supervision row: a label
-follows a vehicle, and there is none (doc 06 §3.5). An author who wants the omission in the record labels
-the vehicle that deviates, or states the intent as a note at scenario level, never per frame.
+A skip must match exactly one occasion and say why (check 48); its `because` is the author's reason for
+the skip, and the report states it. It writes no trip and no supervision row: a label follows a vehicle,
+and there is none (doc 06 §3.5). An author who wants the omission in the record labels the vehicle that
+deviates, as the next section shows. Nothing labels the empty place, and nothing is written per frame.
+
+### An omission: label the vehicle that deviates
+
+The pipeline has no label whose subject is an empty place: SUMO reports vehicles, and a label follows
+its vehicle. An omission is therefore planted as the vehicle that should have filled the occasion and
+does something else, and the label is that vehicle's. Bahonar's guard is the worked one. The schedule
+skips tower 3's 07:00 posting on day 4, and the guard due there, `offpost_d4_h7_t3`, departs the apron
+with the shift, parks for the eight hours on `west_apron_spur`, a dead-end airside road between the
+western aprons, and returns. `make_bahonar_scenario.py` writes these entries, among the rest of each
+block:
+
+```json
+{"places": {"west_apron_spur": {"lane": "-441624290#0_0", "offset_m": 70.0}},
+ "rotas": [{"id": "guard_posting", "days": "0..6", "at": ["07:00", "15:00", "23:00"],
+            "subjects": {"place_set": "guard_towers"},
+            "id_pattern": "guard_d{day}_h{hour}_t{subject_index}",
+            "template": {"type": "guard", "from": "apron", "to": "apron", "via": ["$subject"],
+                         "stops": [{"place": "$subject", "duration": "8h", "parking": true}],
+                         "depart_lane": "best", "depart_speed": "max", "arrival_speed": "current"},
+            "skip": [{"day": 4, "at": "07:00", "subject_index": 3,
+                      "because": "the guard due here this shift, offpost_d4_h7_t3, parks elsewhere: this post is not manned"}]}],
+ "actors": [{"id": "offpost_d4_h7_t3", "type": "guard", "depart": "d4 07:00",
+             "from": "apron", "to": "apron", "via": ["west_apron_spur"],
+             "stops": [{"place": "west_apron_spur", "duration": "8h", "parking": true}],
+             "depart_lane": "best", "depart_speed": "max", "arrival_speed": "current"}],
+ "vocabulary": {"namespaces": [{"namespace": "bahonar", "version": 2, "terms": [
+   {"term": "bahonar:posting_not_taken_up", "since": 2, "status": "active", "applies_to": ["entity"],
+    "definition": "A guard due to relieve a tower departs on schedule but parks elsewhere for the shift; the tower it was due at goes unmanned.",
+    "parameters": {
+      "expected_tower": {"type": "string",
+                         "definition": "the tower the guard was due to relieve, as the id of its area of interest"},
+      "expected_shift_start": {"type": "string",
+                               "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"}},
+    "counterfactual": {"kind": "term", "ref": "bahonar:tower_posting"}},
+   {"term": "bahonar:tower_posting", "since": 1, "status": "active", "applies_to": ["entity"],
+    "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
+    "hard_negative_for": ["bahonar:standoff_dwell_at_access_point",
+                          "bahonar:arrival_without_departure",
+                          "bahonar:posting_not_taken_up"]}]}]},
+ "supervision": {
+   "instances": [{"name": "pi_posting_not_taken_up_d4", "supervision": "annotated",
+                  "labels": ["bahonar:posting_not_taken_up"],
+                  "participants": [{"actor": "offpost_d4_h7_t3", "role": "subject"}],
+                  "intervals": [{"participant": "offpost_d4_h7_t3", "phase": "dwell",
+                                 "anchor": {"start": "stop:0", "end": "stop_end:0"}}],
+                  "parameters": {"expected_tower": "tower_03",
+                                 "expected_shift_start": "2026-10-03T07:00:00+03:30"}}],
+   "series": [{"series_id": "tower_relief", "rota": "guard_posting", "member_role": "bahonar:guard",
+               "slot_length": "8h", "supervision": "nominal", "labels": ["bahonar:tower_posting"]}]}}
+```
+
+The series also maps each tower to its area of interest (`slot_aoi_refs`). Compiled, it is 335 nominal
+slots, one per posting a guard realizes, and the plan carries one annotated instance for the guard who
+leaves the post. How to author one well:
+
+- **Keep the schedule's skip.** It removes the occasion, so no ordinary vehicle fills it; without it a
+  routine guard relieves the tower and there is nothing to deviate from. The `because` stays the
+  author's reason for the skip; it is not a label and reaches no supervision row.
+- **Make the deviating vehicle match the routine ones in everything but the behavior**: the same
+  vehicle type (`guard`), the same base (`apron`, out and back), the occasion's own departure time
+  (`d4 07:00`) and the same length of stay (`8h`, parked). The only signal is then where it parks. A
+  different body, base, departure or stay would be a second signal the label does not name.
+- **Name where it was expected, and when, in the term's `parameters`.** Declare each key on the term
+  with its `type` and `definition`, and give the values on the instance (check 56): `expected_tower`
+  is the tower's area of interest and `expected_shift_start` the shift's civil instant at the epoch's
+  offset. The empty place reaches the record as a magnitude of the vehicle's label, never as a label
+  of its own.
+- **Anchor the interval to the vehicle's own events**: `{"start": "stop:0", "end": "stop_end:0"}` spans
+  the parked shift from when SUMO has it arrive to when it leaves (check 58). The instance has one
+  participant, with role `subject` (checks 19, 50).
+- **List the term in the routine series' term's `hard_negative_for`.** `bahonar:tower_posting` lists
+  `bahonar:posting_not_taken_up`, and the plan copies it onto the series (check 57), so every realized
+  posting (the same guard type, base, shift and stay, parked at its tower) is a matched negative for
+  the deviation.
+- **The term and its definition are the author's.** Invent no term on the author's behalf: ask the
+  author what the deviating vehicle does instead of the routine, and what the label is called, and
+  write their words.
 
 ### An orbit — an explicit route in phases, a held phase waypointed per edge
 
@@ -255,7 +333,8 @@ carries none, and the compiler refuses a route file carrying anything but the ve
   0. Prefer an anchor where the pattern is a stop or a phase: SUMO decides when a vehicle arrives, so a
   civil begin there is a guess, and a `duration` stop declares only its length.
 - `series[]` reads a rota as a recurring series: one slot per occasion a vehicle realises, each naming
-  its vehicle. There is no `absences[]`: a skipped occasion has no row.
+  its vehicle. There is no `absences[]`: a skipped occasion has no row, and an omission is the label of
+  the vehicle that deviates (**An omission** above).
 - **Terms are the author's**, declared in `vocabulary.namespaces[]` as `<namespace>:<name>` with a
   definition, `applies_to` (`entity`/`cohort`), `since` and `status`. **Invent no terms on the author's behalf** — the label is a contract between the author and
   the model trainer, and this pipeline carries it without judging it. Ask for the author's words.
@@ -432,8 +511,15 @@ Prefer a specification compiled with `compile_scenario.py` (above): it resolves 
    vehicle types with `ScenarioVehicleMix` so every `vType` obeys the mapping contract above; no
    two-wheelers. The marked vehicle is a class like any other — one of one body, with a share of zero
    so it stays out of the ambient mix — so it is bound to a measurement by the same rule.
-5. **Write config + labels.** For a labelled dataset, emit a `.labels.json`:
-   `{marked_ids, affiliation_by_type, anomaly_notes}`.
+5. **Write the config; put the labels in a specification.** The only annotation channel is a
+   specification's `supervision` block, compiled by `compile_scenario.py` into
+   `<scenario_id>.supervision.json`: for a labeled dataset, write the scenario as a specification. Do
+   not write a `.labels.json`. The legacy file is read only for old datasets: `sumo_cot_telemetry.py
+   --labels` takes its `marked_ids` for the sidecar's `marked` field, its `affiliation_by_type` as the
+   display convention when no `.display.json` is given or found (withholding the anomaly `u`), and
+   its `anomaly_notes` out to a `*.supervision.json` beside the dataset (`SupervisionSidecar`), and
+   `check_corpus_leaks.py --labels` takes its `marked_ids`. `SumoCotBridge` reads no file; it is given
+   the marked ids and the affiliations as run settings.
 6. **Run and verify.** Simulate; read back the marked vehicles' fcd and the tripinfo; confirm each
    intended behaviour actually happened, with numbers. Confirm the population is stable (not a
    monotonically climbing count) and there are no route errors.
@@ -523,7 +609,8 @@ type names, and empty for a type that names none (06 D6.18). The UDP feed carrie
 vehicle class's (`passenger` a car, `delivery` a van) only for a type that names none of its
 blueprints. A compiled scenario's ground truth is its `.supervision.json` (instances,
 series, cohorts), which this tool does not read and which joins to the sidecar by vehicle
-id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
+id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads; it is read for old
+datasets only, and a new scenario writes none:
 
 - `marked_ids` — vehicle IDs flagged as anomalies (`marked=1`; a distinct affiliation only on the
   live feed, and only with `--marked-affiliation`).
@@ -531,12 +618,10 @@ id. A legacy scenario's rides in the `.labels.json` the telemetry tool reads:
   `f` (friendly). The letter appears in `cot_type` = `a-<letter>-G-E-V`. It is the run's display
   convention when no display convention is given or found beside the scenario. The `u` it gave every
   anomaly type is not applied: that letter wrote the answer into the CoT type (06 §9.1).
-- `anomaly_notes` — anomalies with no vehicle (e.g. a guard who never arrives) are documented here as
-  a described gap (location + time window), a note at scenario level. A run carries them out to a
-  `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped
-  (`SupervisionSidecar`, written by `sumo_cot_telemetry`). It is written beside the dataset and never
-  into it, and never per frame: a note saying which post stood unmanned between which hours is the
-  answer to the question the dataset asks (doc 06 §3.5).
+- `anomaly_notes` — an old dataset's described gaps, a location and a time window each. A run
+  carries them out to a `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped (`SupervisionSidecar`, written by
+  `sumo_cot_telemetry`), beside the dataset and never into it or per frame. A new scenario conveys an
+  omission by labeling the vehicle that deviates (**An omission** above).
 
 Height (`hae_m`) is ellipsoidal, read from `bareearth.bin`. Coordinates convert through the running
 simulation (`traci.simulation.convertGeo`), which uses SUMO's own PROJ and the network's projection
