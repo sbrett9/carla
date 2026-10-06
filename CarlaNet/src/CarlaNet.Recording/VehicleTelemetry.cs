@@ -153,8 +153,8 @@ public sealed record VehicleTelemetry(
 
     /// <summary>
     /// Where the pose the vehicle's body was drawn at on the record's frame came from, as the
-    /// world-observer snapshot of that frame carried it: SUMO's own step, interpolated between two, or
-    /// held where the session could not place it (<see cref="ObservedPoseSource"/>). Null for a vehicle
+    /// world-observer snapshot of that frame carried it: sumo, interpolated, jump or stale
+    /// (<see cref="ObservedPoseSource"/>, <see cref="PoseSources"/>). Null for a vehicle
     /// no session lent a body, and where the snapshot carried no pose source. Written on a record whose
     /// vehicle is in the picture (<see cref="CotWriter"/>).
     /// </summary>

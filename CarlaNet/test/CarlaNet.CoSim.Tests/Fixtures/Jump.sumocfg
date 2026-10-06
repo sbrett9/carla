@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The cross, with the jump of Jump.rou.xml on it. Teleporting stays off: a stop's jump is the
+     route's own instruction, not SUMO giving up on a waiting vehicle. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="RightAngleTurn.net.xml"/>
+        <route-files value="Jump.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="0.05"/>
+    </time>
+    <processing>
+        <!-- Fixed so the tests see the same vehicle states on every run. -->
+        <seed value="42"/>
+        <time-to-teleport value="-1"/>
+        <!-- SUMO's default moves a collider along its route; a capture scenario carries warn. -->
+        <collision.action value="warn"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+    </report>
+</configuration>

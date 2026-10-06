@@ -331,24 +331,34 @@ public sealed class CarlaClientWorld : ICarlaWorld
 
     /// <inheritdoc/>
     /// <remarks>
-    /// A server that answers with an error -- one built before it carried a pose source, which has no
+    /// <para>A server that answers with an error -- one built before it carried a pose source, which has no
     /// such call -- is answered as a refusal carrying its words, as the render set is, rather than
-    /// thrown: the run goes on, and the report says what the server said.
+    /// thrown: the run goes on, and the report says what the server said.</para>
+    ///
+    /// <para>The change goes with its jump list, the call's sixth argument. A server built before the jump
+    /// state binds the call with five and refuses six for their count, which is answered as a refusal that
+    /// <see cref="PoseSourceWrite.KnowsNoJump"/>. A change <see cref="PoseSourceChange.WithoutJump"/> goes
+    /// in those five, every jumping body named sumo.</para>
     /// </remarks>
     public PoseSourceWrite WritePoseSource(PoseSourceChange change)
     {
         ArgumentNullException.ThrowIfNull(change);
         try
         {
-            uint applied = _client.UpdatePoseSourceAsync(change.DeclareStep, change.TicksPerStep,
-                                                         change.Simulated.ToArray(), change.Held.ToArray(),
-                                                         change.Cleared.ToArray())
-                .GetAwaiter().GetResult();
+            Task<uint> put = change.WithoutJump
+                ? _client.UpdatePoseSourceWithoutJumpAsync(change.DeclareStep, change.TicksPerStep,
+                                                           [.. change.Sumo, .. change.Jump], change.Stale.ToArray(),
+                                                           change.Cleared.ToArray())
+                : _client.UpdatePoseSourceAsync(change.DeclareStep, change.TicksPerStep,
+                                                change.Sumo.ToArray(), change.Stale.ToArray(),
+                                                change.Cleared.ToArray(), change.Jump.ToArray());
+            uint applied = put.GetAwaiter().GetResult();
             return new PoseSourceWrite((int)applied, null);
         }
         catch (CarlaRpcException refused)
         {
-            return new PoseSourceWrite(0, refused.Message);
+            return new PoseSourceWrite(0, refused.Message,
+                                       KnowsNoJump: !change.WithoutJump && refused.NamesWrongArgumentCount);
         }
     }
 

@@ -63,6 +63,12 @@
 > `<events>` and writes it on no record. A vehicle outside the picture carries neither; the live pull
 > and the live feed are unchanged.
 
+> **Revision (2026-10-06):** `pose_source` is written in the owner's four words -- `sumo`,
+> `interpolated`, `jump` and `stale` -- in place of `simulated`, `interpolated` and `held` (§5.1). A body
+> shown at SUMO's later position across a step too far to drive in one, written `simulated` until now, is
+> `jump`. A capture from a SUMO drive against a server built before the jump state writes such a body
+> `sumo`, and the run's report and closeout say how many.
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -198,7 +204,7 @@ for per vehicle, which would answer the moment asked:
 | Attribute | Written | Meaning |
 |---|---|---|
 | `lights` | on a vehicle whose `in_frame` is `wholly` or `partly`, where the frame's snapshot carried the light state | The lights commanded on for the vehicle on the frame, one word per light in CARLA's flag order, separated by single spaces: `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`, `special2`; `none` where no light was on; `bit<n>` for a light CARLA declares and no word names. What was commanded -- by the SUMO drive's session from SUMO's signals and the sun, or by the traffic manager -- not what a body draws. For example `position low_beam brake left_blinker` |
-| `pose_source` | with `lights`'s place rule, on a record that names its SUMO vehicle (`sumo_id`), where the frame's snapshot carried a pose source | Where the body's drawn pose on the frame came from: `simulated` -- where SUMO put the vehicle at one of its steps, on a frame a step falls on or across a discontinuous step, where the body is placed at SUMO's later step; `interpolated` -- between two SUMO steps, along the lane; `held` -- where its last pose put it, because the session could not place it on the frame |
+| `pose_source` | with `lights`'s place rule, on a record that names its SUMO vehicle (`sumo_id`), where the frame's snapshot carried a pose source | Where the body's drawn pose on the frame came from, in the owner's words: `sumo` -- the frame falls on a SUMO step, and the position is SUMO's own; `interpolated` -- a frame between SUMO steps, the position filled in along the lane; `jump` -- SUMO reported a step too far from the last to drive in one step, and the body is shown at SUMO's later position for the frames of that step; `stale` -- the body could not be placed on the frame and stands where it was last drawn. A capture from a server built before the jump state writes a jump `sumo`, the one name that server has for it, and its run report says how many |
 
 A sidecar whose frame's snapshot did not carry the light state -- one from a server built before it
 did, whose vehicle bytes are zero and would read as every light off -- writes `lights` on no record and

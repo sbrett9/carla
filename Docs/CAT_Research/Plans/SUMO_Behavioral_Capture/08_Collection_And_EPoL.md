@@ -41,6 +41,7 @@ Findings set. Every external claim is cited.
 | 2026-10-05 | §3.3: the orbit is flown by the server (issue #37, promoted into the plan by the owner). `OrbitSensorController` gives the circle once to the plugin's orbit mover, which advances the angle by each tick's delta on the simulation clock and sets the camera on the circle before the frame's sensors capture; the client's 50 Hz wall-clock thread is gone, with the halved tick rate and the pace-dependent turn it cost. `SensorRig`'s depth camera is attached to its camera as `run_capture`'s is, so the server's move carries both. Written and tested offline; the plugin and the wheel await a build, and the live check (`CarlaNet/python/test_plugin_orbit.py`) is the owner's to run. |
 | 2026-10-06 | §2.7, §5.1, §5.2, §5.5, §6.4, D8.6, D8.8, D8.10: a vehicle in the picture carries its box on its record in the truth sidecar, as the owner ruled -- `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg`, `roll_deg`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, converted as the record's own point is -- and a vehicle outside the picture or behind the lens carries none. There is no separate label file per image (D8.6 amended); the box and `<_supervision>` share the sidecar and are kept apart by element (§5.5, D8.8 amended). `pose_source` and the commanded lamps are not written, because no snapshot carries either; what writing each needs is stated (§5.1, §6.4). |
 | 2026-10-06 | §5.1, §6.4, D8.10, D8.33: a vehicle in the picture also carries `lights`, the lights commanded on for it in words (`position low_beam brake left_blinker`, or `none`), and a SUMO vehicle in the picture `pose_source`, `simulated`, `interpolated` or `held`, as the owner ruled; a vehicle outside the picture carries neither. Both come from the world-observer snapshot of the capture's own frame: the world observer puts each vehicle's light state in `VehicleData` behind a new flag, with the snapshot's per-actor size unchanged, and the session declares its SUMO step to the server once and names a body only as it is held or placed at SUMO's later step across a discontinuity, carried in the render set block behind a new flag, so any reader computes `simulated` or `interpolated` from the frame number and nothing is sent per tick. From a server that carries neither, the records go without and the capture says `lights="unknown"` or `pose_source="unknown"`, counted and gated at zero by the closeout. The plugin and LibCarla change awaits a build. |
+| 2026-10-06 | §5.1, §6.4, D8.10: `pose_source` in the owner's four words -- `sumo` (the frame falls on a SUMO step: the position is SUMO's own), `interpolated` (a frame between SUMO steps: the position is filled in along the lane), `jump` (SUMO reported a step too far from the last to drive in one step: the body is shown at SUMO's later position for the frames of that step) and `stale` (the body could not be placed this frame and stands where it was last drawn) -- in place of `simulated`, `interpolated` and `held`. A jump, written `simulated` until now, is carried and written as its own state. A run on a server built before the jump state names a jump `sumo`, the one name that server has, and the run report and closeout say so and how many. Measured: a vehicle missing from SUMO's next step leaves the render set as that step begins, so no capture shows it stale; a stale body is one with no ground under it. The plugin and LibCarla change awaits a build. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -1570,7 +1571,7 @@ depends on a pass mark. Fields, with provenance; the written names and their exa
 | `opacity` | **constant 1.0 under the default**, since nothing fades (§2.6). Retained so a later fade mode is not a schema change | computed, unserialised (`VehicleTelemetry.cs:59-63`) |
 | `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | **written since 2026-10-06** on every vehicle in the picture as `camera_range_m`, the name it already had under a draw distance: one range, one method (`OrientedBox.RangeFrom`), written once whichever needs it |
 | `truncation` | fraction of the amodal box outside the frame | **written since 2026-10-06** as `truncation`, the share of `box_px`'s area outside the picture |
-| `pose_source` | `simulated` / `interpolated` / `held` — see §6.4 | **written since 2026-10-06** on every SUMO vehicle in the picture, from the snapshot of the capture's own frame: the SUMO step the session declared to the server and the bodies it named, resolved with the frame's number (`ObservedPoseSource`, `ActorSnapshot.PoseSource`), so a recorder in any process writes the same word. Left out, with `pose_source="unknown"` on the container, where the snapshot carried no pose source (§6.4). The plugin change awaits a build |
+| `pose_source` | `sumo` / `interpolated` / `jump` / `stale`, the owner's words — see §6.4 | **written since 2026-10-06** on every SUMO vehicle in the picture, from the snapshot of the capture's own frame: the SUMO step the session declared to the server and the bodies it named a jump or stale, resolved with the frame's number (`ObservedPoseSource`, `ActorSnapshot.PoseSource`), so a recorder in any process writes the same word. Left out, with `pose_source="unknown"` on the container, where the snapshot carried no pose source (§6.4). The plugin change awaits a build |
 | `yaw_world_deg` | heading supervision for free (doc 12 §7) | `ActorTransform`; the sidecar writes `heading_deg`, and since 2026-10-06 `pitch_deg` and `roll_deg` beside it on every vehicle in the picture |
 | `light_state` | the `VehicleLightStateFlags` commanded on for this vehicle at this tick, a happened fact | **written since 2026-10-06** as `lights` on every vehicle in the picture, in words in the flags' order -- `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`, `special2`, or `none` (`VehicleLights`) -- from the snapshot of the capture's own frame: the world observer puts each vehicle's light state in `VehicleData` (`light_state`, bytes 30-33 of the 54-byte union, so the per-actor size stays 119) and says so with `VehicleLightStateCarried`. A server built before it leaves those bytes zero and the flag clear; its records go without, and the container says `lights="unknown"` rather than every light off. The plugin and LibCarla change awaits a build |
 
@@ -1849,11 +1850,15 @@ mode, so that is context rather than a recommendation.
 Sub-second motion that nothing simulated is fabricated motion, and it must be labelled as such or a
 later reader will treat it as simulator output.
 
-- **`pose_source` per vehicle per capture** (§5.1): `simulated` at a SUMO step boundary,
-  `interpolated` between, `held` where the session could not place the body. **This is a label-accuracy
-  declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a
-  stated positional bound for the others, so a consumer knows the precision of every label they are
-  given rather than assuming all labels are equal.
+- **`pose_source` per vehicle per capture** (§5.1), in the owner's four words of 2026-10-06: `sumo`, the
+  frame falls on a SUMO step and the position is SUMO's own; `interpolated`, a frame between SUMO steps,
+  the position filled in along the lane; `jump`, SUMO reported a step too far from the last to drive in
+  one step, and the body is shown at SUMO's later position for the frames of that step; `stale`, the body
+  could not be placed this frame and stands where it was last drawn. **This is a label-accuracy
+  declaration**: only a `sumo` pose is exact for its frame. An `interpolated` one is held to the published
+  interpolation rule and a stated positional bound; a `jump` is SUMO's own position at the step's end,
+  shown from its start; a `stale` one is where the body was last drawn. So a consumer knows the precision
+  of every label they are given rather than assuming all labels are equal.
 
   **Written since 2026-10-06, on the server's word.** Truth state is held on the server so that no two
   readers hold different truth, so the session puts on the server what `pose_source` rests on and the
@@ -1862,19 +1867,26 @@ later reader will treat it as simulator output.
   (`CoSimClock.WorldTicksPerSumoStep`), and the interpolation fraction is zero on the first tick of each
   step. So it declares the step **once**, before the cue of the first tick it renders
   (`update_pose_source`: ticks per step, falling on the frame that cue produces), and every reader takes
-  a frame at or after it to be `simulated` where its distance from that frame is a whole number of steps
-  and `interpolated` otherwise -- nothing per tick, as the owner asked. Two cases follow neither, and the
-  session names a body only as one begins and ends: a lent body it did not pose on the tick stands where
-  its last pose put it, `held` (a pose refused for missing ground, `TickBatch.HoldStill`, or a vehicle
-  missing from SUMO's step); and a body whose step was discontinuous is placed at SUMO's later frame on
-  every tick of it rather than interpolated (`LaneInterpolationCase.Discontinuous`), which is SUMO's own
-  step and is written `simulated`. Both ride in the render set block behind `PoseSourceCarried`, after
-  the supervision block, sized so a reader that does not know it skips it; a body's name is part of its
-  loan on the server, dropped when the body is given back or handed on. Should a frame come back where
-  the declared step does not put it -- another client ticked the world -- the session declares the step
-  again at the next step and counts it (`CoSimRunReport.PoseSourceFramesOutOfStep`). A server built
-  before it carried the pose source refuses the call; the session records the refusal on its report and
-  goes on, and every capture says `pose_source="unknown"`, gated at zero by the closeout.
+  a frame at or after it to be `sumo` where its distance from that frame is a whole number of steps and
+  `interpolated` otherwise -- nothing per tick, as the owner asked. Two cases follow neither, and the
+  session names a body only as one begins and ends: a body whose step was discontinuous
+  (`LaneInterpolationCase.Discontinuous`) is shown at SUMO's later position on every tick of it rather
+  than slid along the lane, `jump` (`update_pose_source`'s sixth argument, entry state `3`); and a lent
+  body it did not pose on the tick stands where it was last drawn, `stale` (a pose refused for missing
+  ground, `TickBatch.HoldStill`). A vehicle missing from SUMO's next step -- at the end of its route, or
+  removed by SUMO -- is not stale: the render set releases it as that step begins and its body is parked
+  from the step's first frame, so no capture shows it (measured over three fixtures, a SUMO teleport off
+  the network among them). Both ride in the render set block behind `PoseSourceCarried`, after the
+  supervision block, sized so a reader that does not know it skips it; a body's name is part of its loan
+  on the server, dropped when the body is given back or handed on. Should a frame come back where the
+  declared step does not put it -- another client ticked the world -- the session declares the step again
+  at the next step and counts it (`CoSimRunReport.PoseSourceFramesOutOfStep`). A server built before it
+  carried the pose source refuses the call; the session records the refusal on its report and goes on,
+  and every capture says `pose_source="unknown"`, gated at zero by the closeout. A server built before the
+  jump state refuses the sixth argument for its count; the session sends it every change in the five,
+  names each jumping body `sumo`, the one name it has, and records the server's words and how many jumps
+  were so named on its report and the run's closeout, so a corpus from such a server says its jumps read
+  `sumo` ([03](03_CoSimulation_Runtime.md) §8.9).
 - **Truth velocity must be the derivative of the pose that was rendered.** `WorldObserver.cpp:385`
   serialises `View->GetActor()->GetVelocity()`, and a `set_transform` on a non-simulating body does not
   update it. [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** solves it at source: a
@@ -3471,7 +3483,7 @@ with this one:**
 | **D8.7** | **The label writer emits every in-frame vehicle with every gate input attached and applies no gate.** Apparent size, occlusion and truncation thresholds are consumer-side and are unmeasured (doc 17 §12.5); baking one into the artifact would fix an unvalidated number. **A fourth reason:** a size gate calibrated on daylight silhouettes is meaningless on a lamp, so a writer that gated would discard exactly the frames the night question is about (§5.3) |
 | **D8.8** | **The behavioural annotation never appears in a detector label.** It lives in the truth sidecar and the manifest. Amended 2026-10-06 with D8.6: with no separate label file, the box and `<_supervision>` share the sidecar and are separable by element, so a detector export derived from it takes the box and never the supervision (§5.5) |
 | **D8.9** | **The imagery's requirement on the co-simulation runtime is pose continuity, not capture rate.** Per-tick pose increments small against the projected vehicle length, and velocity discontinuities no more often than one per five capture intervals — which at a 2 Hz capture means a resampled pose whatever the authored SUMO step. Capturing faster does not fix a discontinuity; it samples it more finely. Against [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.6** this sharpens to: **the sub-step interpolant must be continuous in along-lane speed, not only in position** — a cubic Hermite through the two buffered endpoints and their two speeds, which costs nothing over the linear form D3.6 already has the inputs for (§6.2, §6.3) |
-| **D8.10** | **Fabricated motion is labelled.** Every vehicle carries `pose_source` ∈ `simulated` \| `interpolated` \| `held` per capture. This is a **label-accuracy declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a stated positional bound for the others, so a consumer knows the precision of each label rather than assuming they are all equal (§6.4). **Written since 2026-10-06** on every SUMO vehicle in the picture, from the step the session declares once to the server and the bodies it names held or simulated on a change, resolved with the capture's own frame number (§6.4); the plugin change awaits a build |
+| **D8.10** | **Fabricated motion is labelled.** Every vehicle carries `pose_source` ∈ `sumo` \| `interpolated` \| `jump` \| `stale` per capture, the owner's words of 2026-10-06. This is a **label-accuracy declaration**: only a `sumo` pose is exact for its frame, and the corpus publishes the interpolation rule and a stated positional bound for an `interpolated` one, so a consumer knows the precision of each label rather than assuming they are all equal (§6.4). **Written since 2026-10-06** on every SUMO vehicle in the picture, from the step the session declares once to the server and the bodies it names a jump or stale on a change, resolved with the capture's own frame number; a server built before the jump state writes a jump `sumo`, said on the run report and closeout (§6.4); the plugin change awaits a build |
 | **D8.11** | **Recorded truth speed must describe the motion in the pixels.** [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** fixes zero velocity at source and this section depends on it; what this section adds is the consistency requirement, because D3.5 reports SUMO's interpolated speed while D3.6 derives the pose from linear along-lane interpolation. Reported speed and rendered pose must agree to a stated tolerance; failing that the recorder derives speed from the pose using the pattern it already applies to the platform (`FrameRecorder.cs:166-174`); and both figures are carried so a disagreement is visible. Truth acceleration is not trustworthy at SUMO-step boundaries (`WorldObserver.cpp:264-277`), so those frames are flagged and the corpus documents the limitation rather than shipping a field that is silently wrong one frame in twenty (§6.4) |
 | **D8.12** | **The observation handover carries imagery plus collection metadata and never truth.** The corpus may publish a bare-earth surface beside the imagery — a legitimate prior a real exploitation chain has — and may never publish the simulator's depth capture there, because it is a per-frame measurement of the scene's contents. What a consumer does with the ray is theirs (§7.2, §7.4) |
 | **D8.13** | **Line-delimited JSON, one record per line, is the shape *our own* stream uses, and CoT is a display projection rather than an interchange** — a CoT event cannot carry a track's history or its coast state. **It is not offered as a recommendation for a consumer's output**: we state what we emit, their shape is theirs, and §7.3 specifies no `Detection` or `Track` schema for the same reason (§7.3, §11.0, §11.5) |

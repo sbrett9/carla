@@ -28,8 +28,8 @@ Every vehicle record in the picture (`wholly` or `partly`) must carry its box --
 carry any of it, `camera_range_m` beside `beyond_draw_distance` apart.
 
 Every vehicle record in the picture must also carry its `lights` -- the lights commanded on for it in
-words, or `none` -- and every SUMO vehicle record in it its `pose_source` -- `simulated`, `interpolated`
-or `held` -- unless its sidecar says `lights="unknown"` or `pose_source="unknown"`, because the snapshot of
+words, or `none` -- and every SUMO vehicle record in it its `pose_source` -- `sumo`, `interpolated`,
+`jump` or `stale` -- unless its sidecar says `lights="unknown"` or `pose_source="unknown"`, because the snapshot of
 its frame did not carry them; those sidecars are counted, not faulted, as the run's closeout gates them.
 Either on a record outside the picture, a `pose_source` on a record naming no SUMO vehicle, and a word
 outside the recorder's are defects.

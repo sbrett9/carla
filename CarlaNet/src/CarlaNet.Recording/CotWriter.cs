@@ -34,8 +34,8 @@ namespace CarlaNet.Recording;
 ///
 /// <para>A vehicle in the picture also carries, from the world-observer snapshot of the capture's own frame,
 /// as the owner ruled on 2026-10-06: <c>lights</c>, the lights commanded on for it in words
-/// (<see cref="VehicleLights"/>), and, where a SUMO drive lent it a body, <c>pose_source</c> -- <c>simulated</c>,
-/// <c>interpolated</c> or <c>held</c> (<see cref="PoseSources"/>). Neither is guessed: where the snapshot did not
+/// (<see cref="VehicleLights"/>), and, where a SUMO drive lent it a body, <c>pose_source</c> -- <c>sumo</c>,
+/// <c>interpolated</c>, <c>jump</c> or <c>stale</c> (<see cref="PoseSources"/>). Neither is guessed: where the snapshot did not
 /// carry one, every record in the picture goes without it and the container says <c>lights="unknown"</c> or
 /// <c>pose_source="unknown"</c>. A vehicle outside the picture carries neither.</para>
 ///

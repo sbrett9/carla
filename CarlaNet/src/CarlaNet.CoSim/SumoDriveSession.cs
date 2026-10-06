@@ -108,10 +108,10 @@ public sealed class SumoDriveSession : IDisposable
     private readonly List<ActorId> _supervisionDropped = [];
     private readonly List<BodySupervision> _supervisionSinceNamed = [];
     private readonly HashSet<ActorId> _posedThisTick = [];
-    private readonly HashSet<ActorId> _placedAtSumoStepThisTick = [];
+    private readonly HashSet<ActorId> _jumpedThisTick = [];
     private readonly Dictionary<ActorId, (string VehicleId, PoseSource Source)> _poseSourceNamed = [];
-    private readonly List<ActorId> _poseSimulatedSinceNamed = [];
-    private readonly List<ActorId> _poseHeldSinceNamed = [];
+    private readonly List<ActorId> _poseJumpSinceNamed = [];
+    private readonly List<ActorId> _poseStaleSinceNamed = [];
     private readonly List<ActorId> _poseClearedSinceNamed = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
@@ -1527,21 +1527,23 @@ public sealed class SumoDriveSession : IDisposable
     ///
     /// <para><b>The step once, not every tick.</b> The SUMO step is a whole number of world ticks
     /// (<see cref="CoSimClock.WorldTicksPerSumoStep"/>), and on the first tick of every step the
-    /// interpolation fraction is zero, so a body stands where SUMO put it; on every other tick it stands
-    /// between two steps. So the step is declared on the first tick of the first step the session renders
-    /// -- the server takes the frame that tick produces as a step frame -- and every reader computes the
-    /// rest from a frame's number. It is declared again only after a frame comes back where the step does
-    /// not put it (<see cref="CheckTheStep"/>).</para>
+    /// interpolation fraction is zero, so a body stands where SUMO put it, sumo; on every other tick it is
+    /// filled in along the lane between two steps, interpolated. So the step is declared on the first tick
+    /// of the first step the session renders -- the server takes the frame that tick produces as a step
+    /// frame -- and every reader computes the rest from a frame's number. It is declared again only after a
+    /// frame comes back where the step does not put it (<see cref="CheckTheStep"/>).</para>
     ///
-    /// <para><b>Bodies only on a change.</b> Two cases follow no step, and the code holds both: a lent body
-    /// this tick did not pose -- its pose refused for want of ground, or its vehicle missing from SUMO's
-    /// step -- stands where its last pose put it, held; and a body whose step was discontinuous is placed at
-    /// SUMO's later step on every tick of it rather than interpolated, simulated. Each is named as it
-    /// begins and named cleared as it ends, which in a run is rare; a body given back or handed to another
-    /// vehicle loses its name on the server when the render set says so, a moment before in this drain.
-    /// Only a body the server holds lent to the vehicle it draws is named, because no other frame shows
-    /// it. A server that refuses a change, or refused the render set, is sent nothing more, and the report
-    /// says why.</para>
+    /// <para><b>Bodies only on a change.</b> Two cases follow no step, and the code holds both: a body whose
+    /// step SUMO reported too far from the last to drive in one step is shown at SUMO's later position on
+    /// every tick of it rather than slid along the lane, jump; and a lent body this tick did not pose -- its
+    /// pose refused for want of ground under it -- stands where it was last drawn, stale. A vehicle missing
+    /// from SUMO's next step leaves the render set at that step and its body is parked from the step's first
+    /// frame, so no frame draws it, stale or otherwise. Each is named as it begins and named cleared as it
+    /// ends, which in a run is rare; a body given back or handed to another vehicle loses its name on the
+    /// server when the render set says so, a moment before in this drain. Only a body the server holds lent
+    /// to the vehicle it draws is named, because no other frame shows it. A server that refuses a change,
+    /// or refused the render set, is sent nothing more, and the report says why; one built before the jump
+    /// state is sent each change without it (<see cref="WriteThePoseSource"/>).</para>
     /// </remarks>
     private void NameThePoseSource(int tickWithinStep)
     {
@@ -1569,8 +1571,8 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         _poseClearedSinceNamed.Clear();
-        _poseSimulatedSinceNamed.Clear();
-        _poseHeldSinceNamed.Clear();
+        _poseJumpSinceNamed.Clear();
+        _poseStaleSinceNamed.Clear();
         foreach ((string vehicleId, PooledBody body) in pool.Held)
         {
             if (!_namedToServer.TryGetValue(body.Actor, out string? named) || named != vehicleId)
@@ -1578,8 +1580,8 @@ public sealed class SumoDriveSession : IDisposable
                 continue;
             }
 
-            PoseSource? wanted = !_posedThisTick.Contains(body.Actor) ? PoseSource.Held
-                : _placedAtSumoStepThisTick.Contains(body.Actor) ? PoseSource.Simulated
+            PoseSource? wanted = !_posedThisTick.Contains(body.Actor) ? PoseSource.Stale
+                : _jumpedThisTick.Contains(body.Actor) ? PoseSource.Jump
                 : null;
             PoseSource? carried = _poseSourceNamed.TryGetValue(body.Actor, out var held) ? held.Source : null;
             if (wanted == carried)
@@ -1589,11 +1591,11 @@ public sealed class SumoDriveSession : IDisposable
 
             switch (wanted)
             {
-                case PoseSource.Held:
-                    _poseHeldSinceNamed.Add(body.Actor);
+                case PoseSource.Stale:
+                    _poseStaleSinceNamed.Add(body.Actor);
                     break;
-                case PoseSource.Simulated:
-                    _poseSimulatedSinceNamed.Add(body.Actor);
+                case PoseSource.Jump:
+                    _poseJumpSinceNamed.Add(body.Actor);
                     break;
                 default:
                     _poseClearedSinceNamed.Add(body.Actor);
@@ -1602,15 +1604,15 @@ public sealed class SumoDriveSession : IDisposable
         }
 
         bool declare = _stepToDeclare && tickWithinStep == 0;
-        int changed = _poseSimulatedSinceNamed.Count + _poseHeldSinceNamed.Count + _poseClearedSinceNamed.Count;
+        int changed = _poseJumpSinceNamed.Count + _poseStaleSinceNamed.Count + _poseClearedSinceNamed.Count;
         if (!declare && changed == 0)
         {
             return;
         }
 
-        PoseSourceWrite written = world.WritePoseSource(new PoseSourceChange(
+        PoseSourceWrite written = WriteThePoseSource(world, new PoseSourceChange(
             declare, (uint)Clock.WorldTicksPerSumoStep,
-            _poseSimulatedSinceNamed, _poseHeldSinceNamed, _poseClearedSinceNamed));
+            [], _poseStaleSinceNamed, _poseClearedSinceNamed, _poseJumpSinceNamed));
         if (!written.Taken)
         {
             Report.PoseSourceRefused = written.Refusal;
@@ -1629,20 +1631,58 @@ public sealed class SumoDriveSession : IDisposable
             _poseSourceNamed.Remove(actor);
         }
 
-        foreach (ActorId actor in _poseSimulatedSinceNamed)
+        foreach (ActorId actor in _poseJumpSinceNamed)
         {
-            _poseSourceNamed[actor] = (_namedToServer[actor], PoseSource.Simulated);
+            _poseSourceNamed[actor] = (_namedToServer[actor], PoseSource.Jump);
         }
 
-        foreach (ActorId actor in _poseHeldSinceNamed)
+        foreach (ActorId actor in _poseStaleSinceNamed)
         {
-            _poseSourceNamed[actor] = (_namedToServer[actor], PoseSource.Held);
+            _poseSourceNamed[actor] = (_namedToServer[actor], PoseSource.Stale);
         }
 
         Report.PoseSourceUpdates++;
         Report.PoseSourceBodiesNotApplied += Math.Max(0, changed - written.BodiesApplied);
     }
 
+    /// <summary>
+    /// Put a change to the pose source on the server in the form it binds: with its jump list, or, to a
+    /// server built before the jump state, without it, every jumping body named sumo.
+    /// </summary>
+    /// <remarks>
+    /// <para>No call says which form a server binds, so the session learns it from the first change it
+    /// puts, the step's declaration: a server built before the jump state binds the call with five
+    /// arguments and refuses the six for their count (<see cref="PoseSourceWrite.KnowsNoJump"/>). The
+    /// session then sends the same change again <see cref="PoseSourceChange.WithoutJump"/>, and every later
+    /// change, the withdrawal at the end included, the same way.</para>
+    ///
+    /// <para>Such a server's only name for a body shown at SUMO's later position is sumo, so on it a jump
+    /// reaches every reader as <c>sumo</c>: the position is SUMO's own, only not of the step the frame falls
+    /// in. Recorded, not hidden: the report keeps the server's words
+    /// (<see cref="CoSimRunReport.PoseSourceWithoutJump"/>) and counts every body named sumo for a jump
+    /// (<see cref="CoSimRunReport.PoseSourceJumpsNamedSumo"/>), and the run goes on.</para>
+    /// </remarks>
+    private PoseSourceWrite WriteThePoseSource(ICarlaWorld world, PoseSourceChange change)
+    {
+        if (Report.PoseSourceWithoutJump is null)
+        {
+            PoseSourceWrite written = world.WritePoseSource(change);
+            if (!written.KnowsNoJump)
+            {
+                return written;
+            }
+
+            Report.PoseSourceWithoutJump = written.Refusal;
+        }
+
+        PoseSourceWrite withoutJump = world.WritePoseSource(change with { WithoutJump = true });
+        if (withoutJump.Taken)
+        {
+            Report.PoseSourceJumpsNamedSumo += change.Jump.Count;
+        }
+
+        return withoutJump;
+    }
     /// <summary>
     /// Hold the frame a tick produced against the step the server was told, and declare the step again
     /// at the next step's first tick where the frame is not where the step puts it.
@@ -1686,7 +1726,7 @@ public sealed class SumoDriveSession : IDisposable
             return;
         }
 
-        PoseSourceWrite written = world.WritePoseSource(PoseSourceChange.Withdrawal);
+        PoseSourceWrite written = WriteThePoseSource(world, PoseSourceChange.Withdrawal);
         if (!written.Taken)
         {
             Report.PoseSourceRefused = written.Refusal;
@@ -2216,7 +2256,7 @@ public sealed class SumoDriveSession : IDisposable
         _appliedPoses.Clear();
         _sumoAngles.Clear();
         _posedThisTick.Clear();
-        _placedAtSumoStepThisTick.Clear();
+        _jumpedThisTick.Clear();
         VehicleLightStateFlags headlights = HeadlightsForThisTick();
 
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
@@ -2311,13 +2351,13 @@ public sealed class SumoDriveSession : IDisposable
                 _batch.Pose(actor, applied);
                 _commanded.Add((vehicleId, actor, applied));
                 _appliedPoses.Add(applied);
-                // Where this pose came from, where it follows no step: a body not posed this tick is held,
-                // and one placed at SUMO's later step across a discontinuity stands at SUMO's own step on
-                // every frame of this one (NameThePoseSource).
+                // Where this pose came from, where it follows no step: a body not posed this tick is stale,
+                // and one whose step was too far to drive in one step is shown at SUMO's later position on
+                // every frame of it, a jump (NameThePoseSource).
                 _posedThisTick.Add(actor);
                 if (state.Case == LaneInterpolationCase.Discontinuous)
                 {
-                    _placedAtSumoStepThisTick.Add(actor);
+                    _jumpedThisTick.Add(actor);
                 }
                 lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
             }

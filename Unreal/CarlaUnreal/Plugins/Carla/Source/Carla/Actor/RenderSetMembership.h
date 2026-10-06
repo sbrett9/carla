@@ -48,13 +48,17 @@ struct FRenderSetMembership
   /// (FSumoStepPhase), as the session named it (update_pose_source).
   enum class EPoseSource : uint8_t
   {
-    /// Follows the step: SUMO's own pose on a frame a step falls on, interpolated on every other.
+    /// Follows the step: SUMO's own pose on a frame a step falls on (sumo), filled in along the lane
+    /// on every other (interpolated).
     FollowsStep,
-    /// Standing where SUMO put it at one of its steps, whichever frame it is: placed at SUMO's later
-    /// step across a discontinuity rather than interpolated.
-    Simulated,
-    /// Left where its last pose put it, because the session could not place it.
-    Held
+    /// Standing where SUMO put it at one of its steps, whichever frame it is. The session names no body
+    /// so on a server that has Jump; on one built before Jump it is the only name for a jumping body.
+    Sumo,
+    /// Standing where it was last drawn, because the session could not place it.
+    Stale,
+    /// Shown at SUMO's later position for every frame of a step too far from the last to drive in one
+    /// step, rather than slid along the lane.
+    Jump
   };
 
   /// Part of the loan: a body given back, or lent to another vehicle, follows the step again.

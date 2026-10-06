@@ -14,6 +14,7 @@ using System.Xml.Linq;
 using CarlaNet.Recording;
 using CarlaNet.Tests.Sensors;
 using CarlaNet.Transport;
+using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.MsgPackRpc.Server;
 using CarlaNet.Types.Rpc.Lighting;
 using CarlaNet.Types.Streaming;
@@ -37,7 +38,8 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
     private const double DeltaSeconds = 0.05;
     private const int WideHeaderSize = 132;
     private const int ActorSize = 119;
-    private const byte NamedHeld = 2;
+    private const byte NamedStale = 2;
+    private const byte NamedJump = 3;
     // A recorder holds its camera's name for the whole process, so no other test class records under it.
     private const string RecordedCamera = "LIVE-LIGHTS";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
@@ -62,7 +64,7 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "carlanet-live-lights-" + Guid.NewGuid().ToString("N"));
     private readonly StandInStreams _streams = new(Patience);
-    private readonly List<(bool Declare, uint TicksPerStep, uint[] Simulated, uint[] Held, uint[] Cleared)> _put = [];
+    private readonly List<(bool Declare, uint TicksPerStep, uint[] Sumo, uint[] Stale, uint[] Cleared, uint[] Jump)> _put = [];
     private MsgPackRpcServer? _rpc;
     private CarlaClient? _client;
 
@@ -77,15 +79,15 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
                              () => Ok(new[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }));
         _rpc.RegisterHandler<uint[], SuccessResponse<Actor[]>>(
             "get_actors_by_id", ids => Ok(ids.Select(Describe).ToArray()));
-        _rpc.RegisterHandler<bool, uint, uint[], uint[], uint[], SuccessResponse<uint>>(
-            "update_pose_source", (declare, ticksPerStep, simulated, held, cleared) =>
+        _rpc.RegisterHandler<bool, uint, uint[], uint[], uint[], uint[], SuccessResponse<uint>>(
+            "update_pose_source", (declare, ticksPerStep, sumo, stale, cleared, jump) =>
             {
                 lock (_put)
                 {
-                    _put.Add((declare, ticksPerStep, simulated, held, cleared));
+                    _put.Add((declare, ticksPerStep, sumo, stale, cleared, jump));
                 }
 
-                return Ok((uint)(simulated.Length + held.Length + cleared.Length));
+                return Ok((uint)(sumo.Length + stale.Length + cleared.Length + jump.Length));
             });
         await _rpc.StartAsync();
         _client = new CarlaClient("127.0.0.1", port, Patience);
@@ -115,7 +117,7 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
         XElement a = extras["CARLA-TRUTH-SUMO-escort_0"];
         Assert.Equal("wholly", (string?)a.Attribute("in_frame"));
         Assert.Equal("position low_beam brake left_blinker", (string?)a.Attribute("lights"));
-        Assert.Equal("simulated", (string?)a.Attribute("pose_source"));
+        Assert.Equal("sumo", (string?)a.Attribute("pose_source"));
 
         // A vehicle no session lent has lights, and no pose source: nothing placed it.
         XElement ambient = extras["CARLA-TRUTH-23"];
@@ -136,10 +138,10 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_Frame_Between_Two_Steps_Is_Interpolated_And_A_Body_The_Session_Could_Not_Place_Is_Held()
+    public async Task A_Frame_Between_Two_Steps_Is_Interpolated_And_A_Body_The_Session_Could_Not_Place_Is_Stale()
     {
-        // Frame 107 lies between the steps at 100 and 120; B was named held, and stands in the picture.
-        await Observe(107, ServerCarrying(PoseSource(20, 100, (BodyB, NamedHeld))),
+        // Frame 107 lies between the steps at 100 and 120; B was named stale, and stands in the picture.
+        await Observe(107, ServerCarrying(PoseSource(20, 100, (BodyB, NamedStale))),
                       (BodyA, BelowTheCamera, VehicleLightStateFlags.Position), (BodyB, AcrossFromIt, VehicleLightStateFlags.Reverse),
                       (Ambient, Elsewhere, VehicleLightStateFlags.None));
 
@@ -148,8 +150,25 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
         Dictionary<string, XElement> extras = Extras(events);
         Assert.Equal("interpolated", (string?)extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("pose_source"));
         Assert.Equal("position", (string?)extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("lights"));
-        Assert.Equal("held", (string?)extras["CARLA-TRUTH-SUMO-guard_0"].Attribute("pose_source"));
+        Assert.Equal("stale", (string?)extras["CARLA-TRUTH-SUMO-guard_0"].Attribute("pose_source"));
         Assert.Equal("reverse", (string?)extras["CARLA-TRUTH-SUMO-guard_0"].Attribute("lights"));
+    }
+
+    [Fact]
+    public async Task A_Body_Shown_At_SUMO_s_Later_Position_Across_A_Discontinuous_Step_Is_Written_Jump()
+    {
+        // Frame 120 falls on a step, and A was named jump for the frames of the step that SUMO reported too
+        // far from the last to drive: the record says jump, not sumo, on the step frame as on any other.
+        await Observe(120, ServerCarrying(PoseSource(20, 100, (BodyA, NamedJump))),
+                      (BodyA, BelowTheCamera, VehicleLightStateFlags.None), (BodyB, BesideIt, VehicleLightStateFlags.None),
+                      (Ambient, Elsewhere, VehicleLightStateFlags.None));
+
+        (FrameRecorder recorder, XElement events) = await RecordOneImage(120);
+
+        Dictionary<string, XElement> extras = Extras(events);
+        Assert.Equal("jump", (string?)extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("pose_source"));
+        Assert.Equal("sumo", (string?)extras["CARLA-TRUTH-SUMO-guard_0"].Attribute("pose_source"));
+        Assert.Equal(0, recorder.PoseSourceUnknown);
     }
 
     [Fact]
@@ -179,18 +198,50 @@ public sealed class LiveTruthLightsAndPoseSourceTests : IAsyncLifetime
     [Fact]
     public async Task A_Change_Is_Put_To_The_Server_As_Given_And_A_Withdrawal_Naming_Bodies_Is_Never_Sent()
     {
-        uint applied = await _client!.UpdatePoseSourceAsync(true, 20, [BodyA], [BodyB], [Ambient]);
+        uint applied = await _client!.UpdatePoseSourceAsync(true, 20, [], [BodyB], [Ambient], [BodyA]);
 
         Assert.Equal(3u, applied);
-        (bool declare, uint ticksPerStep, uint[] simulated, uint[] held, uint[] cleared) = Assert.Single(_put);
+        (bool declare, uint ticksPerStep, uint[] sumo, uint[] stale, uint[] cleared, uint[] jump) = Assert.Single(_put);
         Assert.True(declare);
         Assert.Equal(20u, ticksPerStep);
-        Assert.Equal([BodyA], simulated);
-        Assert.Equal([BodyB], held);
+        Assert.Empty(sumo);
+        Assert.Equal([BodyB], stale);
         Assert.Equal([Ambient], cleared);
+        Assert.Equal([BodyA], jump);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _client.UpdatePoseSourceAsync(true, 0, [], [BodyB], []));
+        await Assert.ThrowsAsync<ArgumentException>(() => _client.UpdatePoseSourceAsync(true, 0, [], [], [], [BodyA]));
+        await Assert.ThrowsAsync<ArgumentException>(() => _client.UpdatePoseSourceWithoutJumpAsync(true, 0, [], [BodyB], []));
         Assert.Single(_put);
+    }
+
+    [Fact]
+    public async Task A_Server_Built_Before_The_Jump_State_Refuses_The_Jump_List_For_Its_Count_And_Takes_The_Five()
+    {
+        // The call as a server built before the jump state binds it: five arguments, no jump list.
+        var older = new List<(uint[] Sumo, uint[] Stale, uint[] Cleared)>();
+        _rpc!.RegisterHandler<bool, uint, uint[], uint[], uint[], SuccessResponse<uint>>(
+            "update_pose_source", (_, _, sumo, stale, cleared) =>
+            {
+                lock (older)
+                {
+                    older.Add((sumo, stale, cleared));
+                }
+
+                return Ok((uint)(sumo.Length + stale.Length + cleared.Length));
+            });
+
+        CarlaRpcException refused = await Assert.ThrowsAsync<CarlaRpcException>(
+            () => _client!.UpdatePoseSourceAsync(true, 20, [], [], [], [BodyA]));
+        Assert.True(refused.NamesWrongArgumentCount);
+        Assert.False(refused.NamesNoSuchFunction);
+        Assert.Empty(older);
+
+        uint applied = await _client!.UpdatePoseSourceWithoutJumpAsync(true, 20, [BodyA], [BodyB], []);
+        Assert.Equal(2u, applied);
+        (uint[] sumo, uint[] stale, uint[] cleared) = Assert.Single(older);
+        Assert.Equal([BodyA], sumo);
+        Assert.Equal([BodyB], stale);
+        Assert.Empty(cleared);
     }
 
     /// <summary>What a snapshot's render set block carries, and whether its vehicles carry their lights.</summary>

@@ -317,6 +317,37 @@ def test_a_server_that_refused_the_pose_source_is_named_and_the_run_goes_on(layo
             "(unknown method 'update_pose_source')") in RunCloseoutReport.render(snapshot, [])
 
 
+def test_a_server_built_before_the_jump_state_is_named_with_the_jumps_written_as_sumo(layout):
+    # Such a server refuses the jump list for its count; the session sends every change without it and
+    # names each jumping body sumo, and the closeout says so and how many, while the run goes on.
+    report, session, _ = closeout(layout)
+    session.Advance()
+    render = report.snapshot()["render"]
+    assert (render["pose_source_without_jump"], render["pose_source_jumps_named_sumo"]) == (None, 0)
+    assert "jump state" not in RunCloseoutReport.render(report.snapshot(), [])
+
+    words = ("rpclib: Function 'update_pose_source' was called with an invalid number of arguments. "
+             "Expected: 6, got: 7")
+    session.Report.PoseSourceWithoutJump = words
+    session.Report.PoseSourceJumpsNamedSumo = 3
+    snapshot = report.snapshot()
+    assert snapshot["render"]["pose_source_without_jump"] == words
+    assert snapshot["render"]["pose_source_jumps_named_sumo"] == 3
+    assert snapshot["render"]["pose_source_refused"] is None
+    assert (f"pose source: the server was built before the jump state, so 3 jump(s) were sent and written "
+            f"as sumo ({words})") in RunCloseoutReport.render(snapshot, [])
+
+
+def test_a_session_report_built_before_the_jump_state_reads_as_no_fallback(layout):
+    # A report from a CarlaNet built before it recorded the fallback carries neither field.
+    report, session, _ = closeout(layout)
+    session.Advance()
+    del session.Report.PoseSourceWithoutJump
+    del session.Report.PoseSourceJumpsNamedSumo
+    render = report.snapshot()["render"]
+    assert (render["pose_source_without_jump"], render["pose_source_jumps_named_sumo"]) == (None, 0)
+
+
 def test_a_capture_whose_image_header_disagreed_with_its_frame_s_snapshot_is_a_gate_not_met(layout):
     # The recorder wrote the snapshot's pose, so the still is placed right; the gate records that the
     # server stamped the header after the frame.

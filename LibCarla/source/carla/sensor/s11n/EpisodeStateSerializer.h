@@ -151,20 +151,27 @@ namespace s11n {
     ///     uint8  state            a PoseSourceEntryState
     ///
     /// A co-simulation session poses its bodies every world tick from SUMO steps a whole number of
-    /// ticks apart: on the tick a step falls on a body stands where SUMO put it, and on every other it
-    /// stands between two steps. So the session declares the step once (update_pose_source), and the
-    /// server carries it on every snapshot: any reader takes a frame f at or after step_frame to show
-    /// SUMO's own step where (f - step_frame) is a multiple of ticks_per_step and an interpolated pose
-    /// otherwise, at no cost per tick. A body whose pose follows neither on a frame is named by the
-    /// session as its case begins and ends, and carried as an entry while it lasts: one held where the
-    /// session could not place it, or one placed at SUMO's own later step across a discontinuity. A lent
-    /// body with no entry follows the step; an actor the render set does not name lent has no pose
-    /// source at all.
+    /// ticks apart: on the tick a step falls on a body stands where SUMO put it (sumo), and on every
+    /// other it stands between two steps, filled in along the lane (interpolated). So the session
+    /// declares the step once (update_pose_source), and the server carries it on every snapshot: any
+    /// reader takes a frame f at or after step_frame to be sumo where (f - step_frame) is a multiple of
+    /// ticks_per_step and interpolated otherwise, at no cost per tick. A body whose pose follows neither
+    /// on a frame is named by the session as its case begins and ends, and carried as an entry while it
+    /// lasts: one shown at SUMO's later position for every frame of a step too far from the last to
+    /// drive in one step (jump), or one standing where it was last drawn because the session could not
+    /// place it (stale). A lent body with no entry follows the step; an actor the render set does not
+    /// name lent has no pose source at all.
+    ///
+    /// A server built before Jump carries a jumping body as Sumo, the one name it has for it; a reader
+    /// that does not know a state reads none of the block rather than guess.
     enum class PoseSourceEntryState : uint8_t {
       /// Standing where SUMO put it at one of its steps, whichever frame it is.
-      Simulated = 1u,
-      /// Left where its last pose put it, because the session could not place it on this frame.
-      Held      = 2u
+      Sumo  = 1u,
+      /// Standing where it was last drawn, because the session could not place it on this frame.
+      Stale = 2u,
+      /// Shown at SUMO's later position for every frame of a step too far from the last to drive in
+      /// one step, rather than slid along the lane.
+      Jump  = 3u
     };
 
 #pragma pack(push, 1)

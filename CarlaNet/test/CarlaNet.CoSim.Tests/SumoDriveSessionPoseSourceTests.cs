@@ -11,8 +11,10 @@ namespace CarlaNet.CoSim.Tests;
 /// </summary>
 /// <remarks>
 /// Each frame's published pose source is held against what the session itself did on the tick that drew
-/// it: the interpolation fraction is zero on the first tick of each SUMO step, a discontinuous step places
-/// a body at SUMO's later step, and a body the session did not pose stands where its last pose put it.
+/// it, in the owner's four words: sumo where the interpolation fraction is zero, on the first tick of each
+/// SUMO step; interpolated on every other tick; jump where SUMO's step was too far from the last to drive
+/// in one step and the body is shown at SUMO's later position; and stale where the session did not pose a
+/// body and it stands where it was last drawn.
 /// </remarks>
 public sealed class SumoDriveSessionPoseSourceTests
 {
@@ -24,7 +26,7 @@ public sealed class SumoDriveSessionPoseSourceTests
     }
 
     [RequiresSumoFact]
-    public void AtOneTickPerStepTheStepIsDeclaredOnceAndEveryFrameShowsSumosOwnStep()
+    public void AtOneTickPerStepTheStepIsDeclaredOnceAndEveryFrameIsSumo()
     {
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
@@ -62,7 +64,7 @@ public sealed class SumoDriveSessionPoseSourceTests
                     // Every frame is one a SUMO step falls on, so a body that follows the step stands at it.
                     if (!published.Named.ContainsKey(body))
                     {
-                        Assert.Equal(PoseSource.Simulated, published.Of(body, frame));
+                        Assert.Equal(PoseSource.Sumo, published.Of(body, frame));
                     }
 
                     lentBodyFrames++;
@@ -83,7 +85,7 @@ public sealed class SumoDriveSessionPoseSourceTests
     }
 
     [RequiresSumoFact]
-    public void AtTwentyTicksPerStepOneFrameInTwentyShowsSumosStepAndEveryOtherAnInterpolatedPose()
+    public void AtTwentyTicksPerStepOneFrameInTwentyIsSumoAndEveryOtherInterpolated()
     {
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
@@ -109,27 +111,80 @@ public sealed class SumoDriveSessionPoseSourceTests
         int stepFrames = Enumerable.Range(1, (int)frames).Count(frame => last.StepFallsOn((ulong)frame) == true);
         Assert.Equal((int)((frames + 19) / 20), stepFrames);
 
-        // And each body's published pose source is what the session did on the tick that drew it: SUMO's own
-        // step where the fraction was zero or the step discontinuous, interpolated everywhere else.
-        int simulated = 0, interpolated = 0;
+        // And each body's published pose source is what the session did on the tick that drew it: sumo where
+        // the fraction was zero, interpolated everywhere else.
+        int sumo = 0, interpolated = 0;
         foreach (CoSimPoseRecord record in computed.Where(record => record.Actor != 0))
         {
             ulong frame = (ulong)record.TickIndex + 1;
             ObservedPoseSource published = carla.PublishedPoseSourceOf(frame)!;
-            PoseSource expected = record.Case == LaneInterpolationCase.Discontinuous || record.TickIndex % 20 == 0
-                ? PoseSource.Simulated
-                : PoseSource.Interpolated;
+            Assert.NotEqual(LaneInterpolationCase.Discontinuous, record.Case);
+            PoseSource expected = record.TickIndex % 20 == 0 ? PoseSource.Sumo : PoseSource.Interpolated;
             Assert.Equal(expected, published.Of(record.Actor, frame));
-            simulated += expected == PoseSource.Simulated ? 1 : 0;
+            sumo += expected == PoseSource.Sumo ? 1 : 0;
             interpolated += expected == PoseSource.Interpolated ? 1 : 0;
         }
 
-        _output.WriteLine($"{simulated} body-frames at SUMO's step, {interpolated} interpolated");
-        Assert.True(simulated > 0 && interpolated > simulated * 15, "the drive drew too few bodies to tell");
+        _output.WriteLine($"{sumo} body-frames sumo, {interpolated} interpolated");
+        Assert.True(sumo > 0 && interpolated > sumo * 15, "the drive drew too few bodies to tell");
     }
 
     [RequiresSumoFact]
-    public void ABodyTheSessionCouldNotPlaceIsHeldOnEveryFrameItStoodAndOnNoOther()
+    public void ADiscontinuousStepIsAJumpOnEveryFrameOfItAndOnNoOther()
+    {
+        // The stop's jump moves the vehicle to the start of the exit: SUMO's two frames either side are
+        // further apart than it drives in a step, and at twenty ticks per step all twenty frames between them
+        // show the body at SUMO's later position, the step frame among them.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        List<CoSimPoseRecord> computed = [];
+        SumoDriveSessionOptions options = Options(CoSimFixtures.JumpScenario, world, computed);
+        options.World = carla;
+        options.WorldDeltaSeconds = 0.0025;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 200 && session.Advance(); step++)
+            {
+            }
+
+            _output.WriteLine(session.Report.ToString());
+            Assert.Equal(20, session.Clock.WorldTicksPerSumoStep);
+            int jumped = 0;
+            foreach (CoSimPoseRecord record in computed.Where(record => record.Actor != 0))
+            {
+                ulong frame = (ulong)record.TickIndex + 1;
+                PoseSource? published = carla.PublishedPoseSourceOf(frame)!.Of(record.Actor, frame);
+                if (record.Case == LaneInterpolationCase.Discontinuous)
+                {
+                    Assert.Equal(PoseSource.Jump, published);
+                    jumped++;
+                }
+                else
+                {
+                    Assert.Equal(record.TickIndex % 20 == 0 ? PoseSource.Sumo : PoseSource.Interpolated, published);
+                }
+            }
+
+            Assert.Equal(20, jumped);
+            Assert.Null(session.Report.PoseSourceWithoutJump);
+            Assert.Equal(0, session.Report.PoseSourceJumpsNamedSumo);
+            Assert.Equal(0, session.Report.PoseSourceBodiesNotApplied);
+        }
+
+        // Named as the jump began, on the step frame, and cleared as the next step began; never named sumo.
+        (PoseSourceChange named, long namedAt) = Assert.Single(carla.PoseSourceWrites, write => write.Change.Jump.Count > 0);
+        (PoseSourceChange cleared, long clearedAt) = Assert.Single(carla.PoseSourceWrites, write => write.Change.Cleared.Count > 0);
+        Assert.Equal(named.Jump, cleared.Cleared);
+        Assert.Equal(0, namedAt % 20);
+        Assert.Equal(namedAt + 20, clearedAt);
+        Assert.All(carla.PoseSourceWrites, write => Assert.Empty(write.Change.Sumo));
+        Assert.All(carla.PoseSourceWrites, write => Assert.False(write.Change.WithoutJump));
+    }
+
+    [RequiresSumoFact]
+    public void ABodyWithNoGroundUnderItIsStaleOnEveryFrameItStoodAndOnNoOther()
     {
         // A grid that stops short of the network's arms, so a vehicle driving off it keeps its body and the
         // session cannot place it (SumoDriveSessionTests.ABodyWhoseVehicleDrivesOffTheGroundIsLeftWhereItWasAndToldItIsStill).
@@ -151,7 +206,7 @@ public sealed class SumoDriveSessionPoseSourceTests
             .Where(record => record.Actor != 0)
             .Select(record => ((ulong)record.TickIndex + 1, record.Actor))];
 
-        int held = 0;
+        int stale = 0;
         for (ulong frame = 1; frame <= (ulong)session.Report.Ticks; frame++)
         {
             ObservedPoseSource published = carla.PublishedPoseSourceOf(frame)!;
@@ -160,21 +215,73 @@ public sealed class SumoDriveSessionPoseSourceTests
                 PoseSource? source = published.Of(body, frame);
                 if (posed.Contains((frame, body)))
                 {
-                    Assert.NotEqual(PoseSource.Held, source);
+                    Assert.NotEqual(PoseSource.Stale, source);
                 }
                 else
                 {
-                    Assert.Equal(PoseSource.Held, source);
-                    held++;
+                    Assert.Equal(PoseSource.Stale, source);
+                    stale++;
                 }
             }
         }
 
-        _output.WriteLine($"{held} body-frames held, {carla.PoseSourceWrites.Count} changes put");
-        Assert.True(held > 0, "no body was held");
-        // Named as the hold began and ended, not on every frame it lasted.
-        Assert.True(carla.PoseSourceWrites.Count < held, "a held body was named on every frame");
+        _output.WriteLine($"{stale} body-frames stale, {carla.PoseSourceWrites.Count} changes put");
+        Assert.True(stale > 0, "no body was stale");
+        // Named as it went stale and as it was placed again, not on every frame it lasted.
+        Assert.True(carla.PoseSourceWrites.Count < stale, "a stale body was named on every frame");
         Assert.Equal(0, session.Report.PoseSourceBodiesNotApplied);
+    }
+
+    [RequiresSumoFact]
+    public void ABodyWhoseVehicleIsMissingFromSumosNextStepIsParkedFromThatStepsFirstFrameAndNeverDrawnStale()
+    {
+        // The first truck reaches the end of its route and leaves SUMO. The step whose next SUMO frame no
+        // longer has it releases it as the step begins, so its body is parked from that step's first frame:
+        // no frame draws it standing where it was last drawn, and nothing is named stale on ground that is
+        // whole.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        List<CoSimPoseRecord> computed = [];
+        List<RenderedVehicleInterval> released = [];
+        SumoDriveSessionOptions options = Options(CoSimFixtures.SuccessionScenario, world, computed);
+        options.World = carla;
+        options.WorldDeltaSeconds = 0.0025;
+        options.OnRelease = released.Add;
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 400 && session.Advance(); step++)
+        {
+        }
+
+        _output.WriteLine(session.Report.ToString());
+        RenderedVehicleInterval first = Assert.Single(released, interval => interval.VehicleId == "first");
+        Assert.Equal(RenderSetReleaseReason.LeftTheSimulation, first.ReleaseReason);
+        Assert.NotEqual(0u, first.Actor);
+
+        HashSet<(ulong Frame, uint Actor)> posed = [.. computed
+            .Where(record => record.Actor != 0)
+            .Select(record => ((ulong)record.TickIndex + 1, record.Actor))];
+        ulong lastDrawn = 0;
+        for (ulong frame = 1; frame <= (ulong)session.Report.Ticks; frame++)
+        {
+            ObservedPoseSource published = carla.PublishedPoseSourceOf(frame)!;
+            foreach ((uint body, (string vehicleId, _, _)) in carla.PublishedRenderSetOf(frame)?.Lent
+                         ?? new Dictionary<uint, (string, string, ulong)>())
+            {
+                Assert.Contains((frame, body), posed);
+                Assert.NotEqual(PoseSource.Stale, published.Of(body, frame));
+                if (vehicleId == "first")
+                {
+                    lastDrawn = frame;
+                }
+            }
+        }
+
+        // The last frame that drew it ends a step: the next is a step frame, the first of the step it left in.
+        Assert.True(lastDrawn > 0, "the first truck was never drawn");
+        Assert.True(carla.PublishedPoseSourceOf(lastDrawn + 1)!.StepFallsOn(lastDrawn + 1));
+        Assert.All(carla.PoseSourceWrites, write => Assert.Empty(write.Change.Stale));
     }
 
     [RequiresSumoFact]
@@ -243,6 +350,60 @@ public sealed class SumoDriveSessionPoseSourceTests
 
         // Refused, so nothing is withdrawn either.
         Assert.Single(carla.PoseSourceWrites);
+    }
+
+    [RequiresSumoFact]
+    public void AServerBuiltBeforeTheJumpStateIsSentEveryChangeWithoutItAndAJumpIsNamedSumo()
+    {
+        // A server that binds the call with five arguments refuses the jump list for its count. The session
+        // sends the same declaration again without it, every later change the same way, and names the
+        // jumping body sumo, which is what every reader then writes for the frames of the jump; the report
+        // says so, and the run goes on.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        const string wrongCount = "rpclib: Function 'update_pose_source' was called with an invalid number of "
+                                  + "arguments. Expected: 6, got: 7";
+        var carla = new RecordedWorld { Loaded = world.AsLoaded(), KnowsNoJump = wrongCount };
+        List<CoSimPoseRecord> computed = [];
+        SumoDriveSessionOptions options = Options(CoSimFixtures.JumpScenario, world, computed);
+        options.World = carla;
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 400 && session.Advance(); step++)
+            {
+            }
+
+            _output.WriteLine(session.Report.ToString());
+            Assert.Null(session.Report.Stopped);
+            Assert.Null(session.Report.PoseSourceRefused);
+            Assert.Equal(wrongCount, session.Report.PoseSourceWithoutJump);
+            Assert.Equal(1, session.Report.PoseSourceJumpsNamedSumo);
+            Assert.Equal(1, session.Report.PoseSourceStepDeclarations);
+            Assert.Contains("the server knows no jump, so 1 jump(s) were named sumo", session.Report.ToString());
+
+            // The frame of the jump reads sumo: the one name such a server has for SUMO's later position.
+            CoSimPoseRecord jump = Assert.Single(computed,
+                                                 record => record.Actor != 0 && record.Case == LaneInterpolationCase.Discontinuous);
+            ulong frame = (ulong)jump.TickIndex + 1;
+            ObservedPoseSource published = carla.PublishedPoseSourceOf(frame)!;
+            Assert.Equal(PoseSource.Sumo, published.Named[jump.Actor]);
+            Assert.Equal(PoseSource.Sumo, published.Of(jump.Actor, frame));
+            Assert.DoesNotContain(PoseSource.Jump, published.Named.Values);
+        }
+
+        // Asked once with the jump list, the declaration refused for its count; the same declaration again
+        // without it, and every change after it, the withdrawal included.
+        (PoseSourceChange asked, _) = carla.PoseSourceWrites[0];
+        (PoseSourceChange again, _) = carla.PoseSourceWrites[1];
+        Assert.True(asked.DeclareStep);
+        Assert.False(asked.WithoutJump);
+        Assert.True(again.DeclareStep);
+        Assert.True(again.WithoutJump);
+        Assert.All(carla.PoseSourceWrites.Skip(1), write => Assert.True(write.Change.WithoutJump));
+        Assert.True(carla.PoseSourceWrites[^1].Change.IsWithdrawal);
+        Assert.Equal(0u, carla.StepDeclared);
+        Assert.Equal(0, carla.PoseNamedBodies);
     }
 
     private static SumoDriveSessionOptions Options(string scenario, SyntheticWorld world, List<CoSimPoseRecord> computed) =>

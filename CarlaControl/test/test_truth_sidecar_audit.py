@@ -571,9 +571,11 @@ def test_a_record_saying_nothing_of_its_place_is_not_held_to_a_box(tmp_path):
 def test_a_capture_whose_vehicles_in_the_picture_carry_their_lights_and_pose_source_has_no_defect(tmp_path):
     sidecar(tmp_path, 100, [
         vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights="position low_beam brake left_blinker",
-                pose_source="simulated"),
-        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly", lights="none", pose_source="held"),
+                pose_source="sumo"),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly", lights="none", pose_source="stale"),
         vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="none", unmeasured="outside_frame"),
+        vehicle("CARLA-TRUTH-SUMO-d", 4, ROAD, 9.0, "d", lights="none", pose_source="jump"),
+        vehicle("CARLA-TRUTH-SUMO-e", 5, ROAD, 9.0, "e", lights="none", pose_source="interpolated"),
         # A vehicle no session lent carries its lights and no pose source: nothing placed it.
         vehicle("CARLA-TRUTH-7", 7, ROAD, 9.0, lights="reverse bit11")],
         vehicles="rendered")
@@ -582,8 +584,8 @@ def test_a_capture_whose_vehicles_in_the_picture_carry_their_lights_and_pose_sou
 
     assert result.defects(sumo_drive=False) == []
     lines = TruthSidecarAudit.describe(result)
-    assert any("lights: on 3 of 3 records in the picture" in line for line in lines)
-    assert any("pose source in the picture: simulated 1, held 1" in line for line in lines)
+    assert any("lights: on 5 of 5 records in the picture" in line for line in lines)
+    assert any("pose source in the picture: sumo 1, interpolated 1, jump 1, stale 1" in line for line in lines)
 
 
 def test_a_record_in_the_picture_without_its_lights_or_pose_source_is_a_defect(tmp_path):
@@ -625,7 +627,7 @@ def test_lights_or_a_pose_source_outside_the_picture_on_no_sumo_vehicle_or_in_ot
                 lights="brake"),
         vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="behind_camera", unmeasured="behind_camera",
                 pose_source="interpolated"),
-        vehicle("CARLA-TRUTH-7", 7, ROAD, 9.0, pose_source="simulated"),
+        vehicle("CARLA-TRUTH-7", 7, ROAD, 9.0, pose_source="sumo"),
         vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", lights="headlights", pose_source="snapped")],
         vehicles="rendered")
 
@@ -636,3 +638,17 @@ def test_lights_or_a_pose_source_outside_the_picture_on_no_sumo_vehicle_or_in_ot
     assert [record.sumo_id for record in result.records_with_unknown_lights] == ["c"]
     assert [record.sumo_id for record in result.records_with_unknown_pose_source] == ["c"]
     assert len(result.defects(sumo_drive=False)) == 4
+
+def test_the_words_before_the_owner_s_ruling_are_outside_the_recorder_s(tmp_path):
+    # The recorder writes sumo, interpolated, jump or stale (the owner's ruling of 2026-10-06); the words it
+    # wrote before that ruling are no longer among them.
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights="none", pose_source="simulated"),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", lights="none", pose_source="held")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_with_unknown_pose_source] == ["a", "b"]
+    assert result.defects(sumo_drive=False) == [
+        "2 vehicle record(s) carry a pose_source other than sumo, interpolated, jump, stale"]

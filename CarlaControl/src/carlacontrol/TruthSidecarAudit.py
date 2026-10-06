@@ -49,15 +49,16 @@ tests do.
 **And the lights and the pose source of every vehicle in the picture.** A vehicle in the picture also
 carries, from the world-observer snapshot of the capture's own frame, as the owner ruled on 2026-10-06:
 `lights`, the lights commanded on for it in CARLA's words or `none`, and, where it names its SUMO
-vehicle, `pose_source` -- `simulated`, `interpolated` or `held`. A sidecar whose frame's snapshot did not
-carry one -- a server built before it did, or one that refused the session's pose source -- says
-`lights="unknown"` or `pose_source="unknown"` on its container and its records carry none, which is
-counted and not faulted here: the run's closeout gates it. Otherwise a record in the picture without its
-lights, a SUMO vehicle record in the picture without its pose source, either on a record outside the
-picture, a `pose_source` on a record naming no SUMO vehicle, and a word outside the recorder's are each a
-defect. A capture made before the recorder wrote them is shown to carry the first. The audit reads the
-words, not whether they are right: which lamps were commanded on, and which ticks fell on a SUMO step, is
-the server's and the session's, and their tests hold it.
+vehicle, `pose_source` in the owner's words -- `sumo`, `interpolated`, `jump` or `stale`. A sidecar
+whose frame's snapshot did not carry one -- a server built before it did, or one that refused the
+session's pose source -- says `lights="unknown"` or `pose_source="unknown"` on its container and its
+records carry none, which is counted and not faulted here: the run's closeout gates it. Otherwise a
+record in the picture without its lights, a SUMO vehicle record in the picture without its pose source,
+either on a record outside the picture, a `pose_source` on a record naming no SUMO vehicle, and a word
+outside the recorder's are each a defect. A capture made before the recorder wrote them is shown to carry
+the first. The audit reads the words, not whether they are right: which lamps were commanded on, which
+ticks fell on a SUMO step and which steps were a jump, is the server's and the session's, and their tests
+hold it.
 
 **A uid that changes vehicle is seen even where no record names one.** With SUMO ids on the records,
 a uid carrying two of them over the capture is counted directly. Without them, a uid seen on the
@@ -119,7 +120,9 @@ LIGHT_WORDS = ("position", "low_beam", "high_beam", "brake", "right_blinker", "l
 NO_LIGHT = "none"
 
 # Where a SUMO vehicle's drawn pose came from, as the recorder writes it (`CarlaNet.Recording.PoseSources`).
-POSE_SOURCES = ("simulated", "interpolated", "held")
+# The owner's four words (2026-10-06): the frame falls on a SUMO step; between two steps, filled in along the
+# lane; shown at SUMO's later position across a step too far to drive in one; standing where it was last drawn.
+POSE_SOURCES = ("sumo", "interpolated", "jump", "stale")
 
 
 @dataclass(frozen=True)
