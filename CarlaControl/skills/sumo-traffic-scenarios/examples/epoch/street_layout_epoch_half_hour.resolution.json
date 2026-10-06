@@ -385,28 +385,48 @@
         "length_m": 4.892,
         "width_m": 1.8356,
         "body_width_m": 1.8335,
-        "height_m": 1.5241
+        "height_m": 1.5241,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
       },
       "car.vehicle.dodge.charger": {
         "blueprint": "vehicle.dodge.charger",
         "length_m": 5.006,
         "width_m": 1.881,
         "body_width_m": 1.854,
-        "height_m": 1.5403
+        "height_m": 1.5403,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
       },
       "car.vehicle.mini.cooper": {
         "blueprint": "vehicle.mini.cooper",
         "length_m": 4.5526,
         "width_m": 2.0956,
         "body_width_m": 2.0897,
-        "height_m": 1.7725
+        "height_m": 1.7725,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
       },
       "saloon.vehicle.lincoln.mkz": {
         "blueprint": "vehicle.lincoln.mkz",
         "length_m": 4.892,
         "width_m": 1.8356,
         "body_width_m": 1.8335,
-        "height_m": 1.5241
+        "height_m": 1.5241,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
       }
     }
   },
