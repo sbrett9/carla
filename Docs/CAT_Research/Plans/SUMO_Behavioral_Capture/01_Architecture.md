@@ -1,6 +1,8 @@
 # 01 — System architecture
 
-**Status:** Plan section. Design, not implementation. No code was changed and no build was run.
+**Status:** Plan section. Design, with the bridge since built in `CarlaNet.CoSim`. The component names in
+this document are the design's; §2.3 maps each to the name the tree has, and where the two differ the
+tree's name is the one to search for.
 **Date:** 2026-09-18.
 **Owner role:** Systems architect. Companion section: [02 — Use cases](02_Use_Cases.md).
 **Scope:** The component decomposition, the process topology, the authority model, the mode matrix, the
@@ -28,6 +30,7 @@ cited is marked **inference**.
 | 7 — 2026-10-01 | D1.5, §2.3, §4.1, §4.2, §7, §8.2: a body is seated on the drape where its road is at grade and on its OpenDRIVE road's profile where the road is a structure — Z, pitch and roll by one weight from the road's departure from the drape at its reference line, blended between — and on the drape alone off every road. Measured live, the drape seated I-25's deck traffic on the ground beneath the deck; measured against the photoreal, the profile, built flat across from the carriageway's left edge, stands above a cambered road's outer lanes where the drape follows them. |
 | 8 — 2026-10-02 | §2.1: the converter keeps every OSM ramp meter out of junction joining and gives it a metering cycle read in the same invocation, converting an extract with meters twice and recording the second run; the package carries the meters' programme file as `map.tll.xml`. |
 | 9 — 2026-10-05 | §2.3, §4.1, D1.10: `WorldSupervisionState` is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The session puts each change on the server (`update_supervision`), the plan and the absences on the episode and each lent body's supervision on its own record, and the world observer carries it on every snapshot after the render set. Both world-scoped facts D1.10 names are now published that way. |
+| 10 — 2026-10-05 | §2.3 maps the design's component names to the tree's (`SumoDriveSession`, `CoSimClock`, `SolarLease`, `SolarAudit`, `RenderSetManager`, `VehicleBodyPool`, `PoseConverter`, `VehicleLampMapping`, `TickBatch`). §3, §4.4.3, D1.21: under `advance` the session writes the sun every tick with `set_solar_epoch` and the engine's advance is off (11 D11.19). §2.3, §5.3, D1.7: the population lease is in-process today; the server-side rule is not built. |
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
@@ -133,7 +136,7 @@ model's output to do it.
 
 **The two dashed edges are the only edges this architecture draws returning from `ext` into `sys`.**
 They exist because team brief §3c permits, but does not require, an
-attached consumer to push material back — tracks, reports, or anything else. What lands at `CS` is
+attached consumer to push material back — tracks, reports, or anything else. What arrives at `CS` is
 received as an **opaque, tick-stamped transcript with its own provenance**, not parsed for meaning, not
 merged into truth or supervision, and not read by anything this pipeline computes (D1.28); its container
 shape belongs to [08 §11.6](08_Collection_And_EPoL.md). The edge is dashed for the same reason the
@@ -211,6 +214,27 @@ common ancestor of `CarlaNet.Scenario` and `CarlaNet.Recording`.
 | `ControlLoopActuator` | The alternative actuation strategy of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) — SUMO's target fed through a controller, CARLA physics executing. Not used by this mode; see §8.4 |
 | `DriveAuthorityLease` | The client handle on the world's exclusive population authority (§5.3) |
 
+**The names the tree has** (`CarlaNet/src/CarlaNet.CoSim/`, read 2026-10-05). The responsibilities above
+are carried as follows; a design name that appears elsewhere in this document means the component on the
+right.
+
+| Design name | In the tree |
+|---|---|
+| `SumoSession`, `SumoStateReader` | `SumoDriveSession` owns the session, the `sumo` process and the connection (`CarlaNet.Sumo.SumoConnection`); `SubscribedPopulation` is the per-vehicle subscription, nine variables |
+| `PlaybackClock` | `SumoDriveSession` drives both clocks; `CoSimClock` holds the SUMO step, the world delta and their integer ratio; `RealTimePacer` is the real-time factor |
+| `ScenarioEpochResolver` | `SolarEpoch` and `IlluminationPolicy`, read from the compile lock by `ScenarioLockCheck` |
+| `SolarStateActuator` | `SolarLease` binds the sun and writes it; `SolarAudit` compares the world's sun with the declaration every tick |
+| `SumoSignalProjector`, `VehicleSignalActuator` | `VehicleLampMapping` (SUMO's signal word to `VehicleLightStateFlags`, bit by bit) and `HeadlightRule` (headlights from the sun); written in the tick's batch |
+| `RenderSetSelector` | `RenderSetManager` with an `IRenderSetPolicy`: `EveryVehicleRenderSetPolicy` by default, `RegionRenderSetPolicy` and `CameraFootprintRenderSetPolicy` as optional limits |
+| `RenderedVehicleRegistry` | `VehicleBodyPool`, lending `PooledBody` as `LentBody` |
+| `VehicleTypeCatalogueBinder` | `VehicleTypeBinder` over `VehicleCatalogue` |
+| `SumoPoseProjector` | `PoseConverter`, with `RoadSeat`, `GroundSurface` and `RoadSurface` for Z, pitch and roll, and `LaneArcInterpolator` for the sub-step pose |
+| `SumoMotionStateSource` | `CoSimVehicleFrame` and `InterpolatedState`, carried into `CoSimPoseRecord` |
+| `PoseApplicationActuator` | `TickBatch`, one `apply_batch` per world tick |
+| `ControlLoopActuator` | Not built; retained as the alternative strategy |
+| `DriveAuthorityLease` | `PopulationLease`, granted by `WorldDriveAuthority` |
+| `RunManifestWriter` | `RunManifestWriter`; and `WorldTruthTrackWriter`, `SupervisionBinder`, `SupervisionPlan` for stage J |
+
 **Held by the engine, world-scoped**, mirroring the `UStagingBounds` precedent exactly
 (`Unreal/CarlaUnreal/Plugins/CesiumCarlaBridge/Source/CesiumCarlaBridge/Public/StagingBounds.h`, bound at
 `Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Server/CarlaServer.cpp:808` and `:828`, surfaced on the
@@ -218,7 +242,7 @@ shim at `CarlaNet/python/carlanet/__init__.py:1589,1596`):
 
 | Component | Responsibility |
 |---|---|
-| `WorldDriveAuthority` | Which component holds population authority over this world, and under which mode. Read by every client; granted to at most one |
+| `WorldDriveAuthority` | Which component holds population authority over this world, and under which mode. Read by every client; granted to at most one. **As built, in-process only**: the class of that name in `CarlaNet.CoSim` is a process-scoped lease, so a second client can still start traffic-manager traffic during a SUMO drive; the server-side lease this row describes is not built, and building it is the owner's decision |
 | `WorldSupervisionState` | The tick-stamped annotation projection ([20 §7.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), published so a recorder in **any** process reads the same thing. **Built (2026-10-05)**: the plan and the absences held on the episode (`FWorldSupervisionState`), each lent body's supervision on its own record (`FActorSupervision`), put by `update_supervision` and carried on every world-observer snapshot |
 | `WorldAreasOfInterest` | The resolved area table ([20 §8.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
 | **Solar state** — `ACesiumSunSky` plus `ACesiumTimeOfDayController` | **Already built, already world-scoped, already published.** `CesiumSunSky` is named in the server binding as "the single sun/lighting authority for the georeferenced world (CARLA weather is inert here)" (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Server/CarlaServer.cpp:611-612`). `ACesiumTimeOfDayController` is spawned on demand by `set_time_advance` and advances the solar clock on the world tick (`CesiumTimeOfDayController.cpp:14-38`). Nothing new is needed here; see §4.4 |
@@ -480,7 +504,7 @@ architecture states nothing further about that transport (D1.28).
 | `CarlaNet.Transport` | CARLA server | CARLA RPC (msgpack over TCP) and the sensor/world-observer streams | `SendTickCueAsync` (`CarlaClient.cs:403`) is the synchronous rendezvous |
 | `CarlaNet.CoSim` | `sumo` | TraCI over TCP, spoken directly by `CarlaNet.Sumo` — a managed socket client ported from SUMO's own reference client | Out of process structurally: nothing of SUMO's is loaded into this process, so a SUMO assertion cannot take the client down and `sumo` is restartable ([23 §1.1, §6.3](../../Findings/23_SUMO_Traffic_Integration.md)) |
 | Any client | World-scoped state | CARLA RPC pairs, in the manner of `set_staging_bounds`/`get_staging_bounds` | Published on change, not per tick; see §4.1 |
-| `SolarStateActuator` | CARLA server | `set_solar_time`, `set_solar_date`, `set_time_advance` — three RPCs (`CarlaServer.cpp:614`, `:625`, `:661`) | **Write path only, and rare**: once at window open, once per solar-date rollover, once per policy change. Never per tick (§4.4) |
+| `SolarStateActuator` | CARLA server | `set_solar_time`, `set_solar_date`, `set_time_advance` — three RPCs (`CarlaServer.cpp:614`, `:625`, `:661`) | **Write path only.** As built (`SolarLease`, 11 D11.19): under `freeze`, one `set_solar_epoch` of date, clock and civil offset at window open and `set_time_advance(false, 0)`; under `advance`, one `set_solar_epoch` per tick after the pose batch and before the cue, at the whole second nearest the frame's instant, the date carried across midnight, the engine's own advance off throughout; 0.128 ms median per write (§4.4) |
 | CARLA server | Any client | Solar state, **on the world-observer snapshot header** — eleven doubles appended at offset 36 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/WorldObserver.cpp:322-339`; cached at `CarlaClient.cs:1850-1855`, exposed at `:1991`) | **No RPC at all**, tick-paired, lock-free. The read path costs nothing and is already consumed by the recorder (`FrameRecorder.cs:160-162`) |
 | `FrameRecorder` | Disk | PNG + CoT XML sidecar pairs, per camera | |
 | Truth producer | TAK client | CoT over UDP | Diagnostic; the sidecar is authoritative ([20 §7.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
@@ -676,10 +700,13 @@ The resolution is the pattern §4.2 already uses for pose, applied to the sun:
 
 > **The projection is the command. The published solar state is the record.**
 
-`SolarStateActuator` writes the command sparsely — `set_solar_date` and `set_solar_time` at window open
-and on any date rollover, `set_time_advance` once when the policy is established — and lets the engine
-accumulator carry per-tick continuity for free. Each tick it then reads the record, which costs nothing,
-and compares `solar_time` against the projection. A divergence beyond a stated tolerance is a session
+As built, the session writes the command itself every tick under `advance` (`SolarLease`, one
+`set_solar_epoch` of date, clock and civil offset per tick, with the engine's own advance switched off;
+[11](11_Time_And_Illumination.md) D11.19, the owner's ruling), and once at window open under `freeze`.
+The engine accumulator is not relied on for continuity: a sparse write with the engine advancing was
+the design here and was replaced, because the engine's clock truncates to whole seconds and rolls its
+date on its own. Each tick the session then reads the record, which costs nothing, and compares
+`solar_time` against the projection (`SolarAudit`). A divergence beyond a stated tolerance is a session
 fault, not a warning, for the same reason a pose divergence is a bridge defect: the frame was lit by the
 record, and the manifest asserts the command.
 
@@ -880,7 +907,11 @@ accidental case at compile time, but it does not stop a *different* component in
 starting ambient traffic, so it is not sufficient on its own.
 
 **Two — an exclusive, server-held lease.** `WorldDriveAuthority` grants **population authority** over a
-world to at most one holder, and names the mode in the grant. It is engine-held for the same reason
+world to at most one holder, and names the mode in the grant. **As built it is process-scoped**: the
+class of that name in `CarlaNet.CoSim` refuses a second holder inside the process that drives, and
+nothing stops a second process. The server-side lease is not built; it is the owner's standing decision
+that the lockout be impossible rather than discouraged, and the server-side rule is theirs to call for.
+The design is engine-held for the same reason
 staging bounds are: it must be visible to a client that did not create it, and must outlive the client
 that did (`StagingBounds.h`, `CarlaServer.cpp:808,828`). Acquisition is part of starting a session; a
 denied acquisition **fails the session start with the current holder named**. `TrafficController.enable`
@@ -1033,7 +1064,7 @@ Five rates meet here and their relationship is a contract, not a setting:
 | **Solar rate** | **1.0 sun-second per simulated second**, or frozen | `set_time_advance(enabled, rate)`, advancing on the world tick by `DeltaSeconds × rate` (`CesiumTimeOfDayController.cpp:34`); see §4.4.4 |
 | **Real-time factor** (live exercise only) | **0 — unconstrained**, today's default for every mode; a positive value locks the tick-cue cadence to wall time at that ratio | `PlaybackClock`'s pacing run input, in the manner of the existing `real_time_factor` idiom (`SumoCotBridge.py:184-194`); see §4.6 |
 
-So twenty world ticks fall inside one SUMO step, a capture lands every tenth world tick, and at
+So twenty world ticks fall inside one SUMO step, a capture falls on every tenth world tick, and at
 `rate = 1.0` each world tick moves the sun by 0.05 s of solar time. The solar rate and the real-time
 factor are the two rates here that are **run inputs rather than a derived contract** — the other three
 have to divide into one another, while the sun is free to be stopped and the tick-cue cadence is free to
@@ -1436,7 +1467,7 @@ run manifest. The only vehicles in a window that are not drawn are those whose t
 blueprint; each is still simulated, its truth is recorded, and the refusal is counted per type with its
 reason ([04](04_Contracts.md) §4.5).
 
-### 9.3 Where a window lands is an illumination choice, and it should be visible as one
+### 9.3 Where a window falls is an illumination choice, and it should be visible as one
 
 [10 §4.2.3](10_Scale_And_Performance.md) recommends four to eight windows placed on the authored events,
 naming **07:00** (shift change), **15:00** and **23:00** (the night shift) as the sizing scenario's daily
@@ -1686,7 +1717,7 @@ on opacity.
 | D1.4 | **Kinematic truth comes from SUMO.** The bridge writes SUMO's velocity to every body whose pose it writes, so `Actor.GetVelocity` on a pose-applied body reports SUMO's speed, measured equal to it in the truth sidecars ([03](03_CoSimulation_Runtime.md) §5.4); the record carries SUMO's speed and angle and says so (§4.3, §8.2) |
 | D1.5 | **A body is seated on the drape where its road is at grade and on its road where the road is a structure.** One weight, from how far the OpenDRIVE profile of the vehicle's own road departs from the drape at the road's reference line at the point its origin projects to, decides Z, pitch and roll alike: at grade the seat is the drape's exactly — the photoreal road across its whole width, crown and camber included, where the profile is the carriageway's left-edge height built flat across and stands above the outer lanes; on a structure Z and pitch are the profile's — the surface the engine builds its road mesh from, which alone knows a bridge deck and the road beneath it apart — and there is no roll; between, blended. A vehicle on no road — parked off its lane, or on an edge with no OpenDRIVE road — is seated on the drape alone. All of it in process with no RPC ([03](03_CoSimulation_Runtime.md) §7.5, D3.8). SUMO contributes no height and is never asked for one (§4.1, §8.2) |
 | D1.6 | **A `vType`'s colour never reaches a blueprint.** Appearance is drawn from the world's vehicle catalogue by the run seed; `vType` dimensions are respected because they change car-following behaviour, `vType` colour is display metadata and carrying it would make colour the label (§4.3). The same rule governs the light channel, which reopens the same hazard by a different route — see D1.24 |
-| D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. Ambient traffic and SUMO-driven playback both acquire it, so the lockout is a failed session start naming the current holder, never a runtime warning (§5.3) |
+| D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. Ambient traffic and SUMO-driven playback both acquire it, so the lockout is a failed session start naming the current holder, never a runtime warning (§5.3). As built the lease is in-process only (`WorldDriveAuthority`); the engine-held half is not built |
 | D1.8 | **Motion authority is per actor and is distinct from population authority.** This is what lets storyboard execution coexist with an ambient mode, and what lets the actuated shape of §8.4 exist without contradicting D1.7 (§5.3) |
 | D1.9 | **While a population-authority holder exists, every vehicle any component creates must be announced to it.** A placement that cannot be announced is refused. This is what makes SUMO-plus-storyboard safe rather than merely discouraged (§5.2, §5.3) |
 | D1.10 | **World-scoped facts are published to the server, not held in a client process.** Two of them: supervision state and the render set, alongside drive authority and the area table which are world-scoped by construction. This resolves [20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) in favour of publication and dissolves both process-local registry failures of §3.1 together. Fade and arrival state are **not** published, because there is none to publish: `--fade` is off by default in the working tree and the arrival gate is inert with nothing fading, so no truth is lost and no replacement is owed (§3.1, §3.4). **Solar state is a third published world-scoped fact, and it is already implemented.** Eleven doubles ride the world-observer snapshot header (`WorldObserver.cpp:322-339`), the client exposes them as a lock-free tick-paired cache read with **no RPC** (`CarlaClient.cs:1850-1855`, `:1991`), and the recorder already consumes them (`FrameRecorder.cs:160-162`). This is the same mechanism [08 D8.3](08_Collection_And_EPoL.md) chose for the other two — and the precedent D8.3 cited for choosing it was `_solar` itself, so publishing solar state costs nothing and introduces nothing new (§4.1). **Both of the other two are now built on it.** The render set since 2026-10-01 ([03](03_CoSimulation_Runtime.md) D3.39), and supervision state since 2026-10-05, as the owner ruled: "They have to be on the server. I do not want two clients ever having different truth state." The session puts each supervision change on the server with `update_supervision`; the server holds the plan and the absences on the episode and each lent body's supervision on that actor's record; and the world observer carries it on every snapshot after the render set's entries, so no client holds truth of its own ([03](03_CoSimulation_Runtime.md) D3.43, [04](04_Contracts.md) §8.3b, [06](06_Truth_And_Annotation.md) D6.41) |
@@ -1700,7 +1731,7 @@ on opacity.
 | D1.18 | **`SumoCotBridge` is retained unchanged** as the standalone, CARLA-free telemetry path. It is reference material and a comparison producer, not a component of the capture path (§2.3) |
 | D1.19 | **Simulated civil time is a projection of simulated elapsed time through the declared epoch, owned by `PlaybackClock`. There is no `SolarClock`.** A second clock would hold no state that is not derivable and would be a second owner of a concern D1.1 already assigns; worse, it would be a second accumulator running beside the engine's own (`CesiumTimeOfDayController.cpp:34-35`) and the two would drift. `ScenarioEpochResolver` supplies the epoch and the policy; `SolarStateActuator` performs the writes (§4.4) |
 | D1.20 | **A scenario package must declare its epoch — civil date, civil UTC offset, and the civil instant `t = 0` corresponds to — and a package without one fails validation.** Today that mapping exists only inside trip identifiers and in the author's head (**measured**, §2.2), so nothing can set a sun from it. The offset must admit half-hour zones: the sizing site is at **+03:30** (§4.4.2). [11](11_Time_And_Illumination.md) owns the grammar; this architecture requires the declaration to exist and to be part of the package digest (§2.2, §4.1) |
-| D1.21 | **The projection is the command and the published solar state is the record, checked every tick.** `SolarStateActuator` writes sparsely — at window open, on a date rollover, and once to establish the policy — and the engine accumulator carries per-tick continuity for free. The clock compares its projection against the tick-paired published value at zero cost, and a divergence beyond tolerance is a **session fault**. This is D1.3's pattern applied to the sun, and it is what stops a corpus being accurate and self-contradictory at the same time (§4.4.3) |
+| D1.21 | **The projection is the command and the published solar state is the record, checked every tick.** As built the session writes the sun every tick under `advance` and once at window open under `freeze` (`SolarLease`, 11 D11.19), with the engine's own advance off. The clock compares its projection against the tick-paired published value at zero cost, and a divergence beyond tolerance is a **session fault**. This is D1.3's pattern applied to the sun, and it is what stops a corpus being accurate and self-contradictory at the same time (§4.4.3) |
 | D1.22 | **The solar policy — frozen or advancing, and at what rate — is a run input, immutable for the session, and recorded in the manifest.** Both choices are legitimate and the difference is material: over the default 1,800 s window the sun's elevation moves by about 6°, and at the January 07:00 window that **more than doubles** it (computed, §9.3). Under synchronous ticking `rate` is sun-clock seconds per **simulated** second (§4.4.4). A capture that wants a different sun is a different run (§4.1, §6.1) |
 | D1.23 | **Solar command authority follows the population-authority lease; it is not a third lease.** Whoever holds population authority over a world is the only component permitted to command its sun. `StoryboardExecution`, which holds none, must not set the sun while a holder exists, and a storyboard whose environment action would do so is refused at session start rather than warned about. `RecordedReplay` re-establishes the original run's epoch and policy **from the run manifest**, because the engine recorder carries no solar packet at all (`CarlaRecorder.h:48-74`) and a 23:00 capture replayed today would render at solar noon (§4.5, §5.3, §5.5) |
 | D1.24 | **Vehicle light state is mandated, split by source: motion-derived lamps from SUMO, illumination-derived lamps from the published solar state.** SUMO models brake lights and blinkers in its core microsim and models headlights not at all (**read**, §8.5.1), so neither source alone is sufficient. It costs no round trips — the signals ride the existing subscription and the commands ride the existing batch — and without it the recommended 23:00 window captures unlit vehicles against a 38°-to-78°-below-the-horizon sun. **The guard rail of D1.6 extends to lamps**: a lamp computed from motion or light level is carried, a lamp that is a declared attribute of a vehicle reaches the world only as a property of its catalogue *class*, never of its annotation status (§8.5) |

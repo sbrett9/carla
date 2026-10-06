@@ -142,16 +142,18 @@ criteria. It now also excludes measuring the performance of the external models.
 **In scope — produce, and label as richly as we can:**
 
 - imagery, and every per-frame truth attribute: pose, kinematics, dimensions, class, occlusion,
-  visibility, apparent size, solar state, lamp state;
+  apparent size, solar state, lamp state;
 - labels for supervised training: two- and three-dimensional boxes, segmentation, and the
   three-valued supervision with its pattern instances, participants and intervals;
-- corpus metadata that describes the data honestly: observability spans, rendered spans, prevalence
-  in its several units, illumination bands, render states and refusals, what was captured and what
-  was not;
+- metadata that describes the data in plain facts: rendered spans, illumination bands, render states
+  and refusals, what was captured. *(Observability spans, prevalence and "what was not" captured were
+  listed here until 2026-10-05; the owner withdrew them under
+  [`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b, which now governs.)*
 - the contracts by which an external consumer reads all of the above, and the rule by which
   supervision *would* be transferred onto detector tracks;
-- quality gates on **the data**: is it internally consistent, is it leak-free, is it complete, does
-  it say what it does not contain.
+- correctness checks on **the data**: does what was produced match what was declared, is it
+  leak-free, is it complete. *("Does it say what it does not contain" was a gate here until 2026-10-05;
+  withdrawn by the owner, charter §4b.)*
 
 **Out of scope — do not design, build or specify:**
 
@@ -162,14 +164,19 @@ criteria. It now also excludes measuring the performance of the external models.
 - a "score" artifact root. There are artifacts we produce and artifacts we consume; model output is
   neither.
 
-**Three things sit near the line and stay in, reframed. Do not delete them.**
+**Three things sat near the line. On 2026-10-05 the owner withdrew the first two; the charter's rule on
+what a truth file may carry ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b) governs, and the
+items below stand as the record of what was once kept.**
 
-1. **"Does an annotated interval survive contact with a detector?"** This asks whether *our corpus* is
+1. *Withdrawn 2026-10-05 by the owner: it runs a model over our data, and usefulness is in the eye of
+   the beholder.* **"Does an annotated interval survive contact with a detector?"** This asks whether *our corpus* is
    fit for purpose, not whether a model is good. It stays as a **corpus fitness probe** that uses a
    stock detector as an *instrument* — the way a thermometer checks an oven. Its output is "our data
    does or does not yield trackable targets", never a figure of merit for the detector. It must not
    emit model metrics.
-2. **The illumination-only predictor.** Predicting the label from illumination with no imagery at all
+2. *Withdrawn 2026-10-05 by the owner: it fits a model to our data. The compiler's association
+   statistic over the author's own declarations (07 check 41) is what stands.* **The illumination-only
+   predictor.** Predicting the label from illumination with no imagery at all
    measures a property of *the dataset* — whether the label has leaked into a covariate. It stays as a
    **leakage probe**, not as a baseline for a model to beat.
 3. **Truth-to-track association.** We publish truth that is *associable* — per tick, positioned, timed,

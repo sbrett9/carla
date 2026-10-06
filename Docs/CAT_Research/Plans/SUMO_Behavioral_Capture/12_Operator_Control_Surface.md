@@ -8,6 +8,8 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — Withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the planned "per-interval observability, prevalence in all three units" and the gate `render_accounting.intervals_rendered` (§7.1, §7.2); the coverage record and the "unoccluded denominator" it served (§1.5, §5.1, §7.1, §7.4.2, §7.6.2). The occlusion estimator stays session-fixed because turning it off mid-run changes what the measured fields of later captures mean.
+`2026-10-05` — Corrected against the code: the session drives vehicle lamps by default and `run_capture` offers no field for them (§4.4, §5.2, check 14); the run manifest and its supervision rows exist (§3.9, §3.10.3); `capture_rgb` is not a field of the schema (§5.2); the Windows distribution's four parity breaks are fixed and its launcher is still unbuilt (§10).
 `2026-10-05` — Occlusion is measured on an orbit as on a stare, as the owner ruled. Every channel measuring occlusion gets a depth camera spawned attached to its camera, rigidly and at the camera's own pose, so one move carries both and the two are never captured a frame apart; the orbit's recorder is started with it, so its captures carry per-vehicle occlusion and apparent size. Check 47 no longer refuses occlusion on an orbit; its reason cited the measurement from before the rig moved its cameras in one batch (§5.2 `capture_depth`, `occlusion.enabled`; §6.2 check 47; §6.3).
 `2026-10-05` — §5.2, §6.2 check 54, §6.2.1: a run refuses a scenario whose compile skipped its SUMO-only run (the compiler's check 59) or whose lock records none, offline and before anything is spawned, unless `scenario.accept_skipped_dry_run` is true; the echo then states the acceptance, the session is told it and records it on its report, and `run_sumo_drive.py --accept-skipped-dry-run` is the drive's form of it ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29). All four shipped locks record a completed run.
 `2026-10-05` — The server issues camera names and refuses duplicates, as the owner ruled (§5.2, §9.6). A camera spawned without a name -- a single channel with no `sensor_id`, a front end given no `--camera-name`, every depth camera -- is `Camera_<n>` from a counter the server keeps for its lifetime; a `sensor_id` or `--camera-name` a live camera in the world holds is refused by the server at the spawn, case aside, and a client cannot give `Camera_<digits>`. Every front end reads the name back from the spawned camera for its directory, its files and its callsign. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras, which the shim says once on stderr.
@@ -74,7 +76,7 @@ publishes facts about its own data and never an aggregate judgement of whether a
 purpose it does not know; [`04`](04_Contracts.md) `C10` owns the result artifact's fields on the same
 principle (§3.10.3, §7.2). And **the external
 detect-and-track and model services**: this section specifies a socket a run writes to and a blob store
-a transcript lands in, and nothing about what is on the other end
+a transcript goes into, and nothing about what is on the other end
 ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3c).
 
 ---
@@ -233,7 +235,7 @@ consumer is driven by something other than this parser. **Today that never happe
 is latent.** It stops being latent the instant a second front end exists, which is precisely what this
 section proposes. `depth_max_range` is the sharpest case: the same run would measure depth to 20 km
 through one front end and 1 km through the other, and the second silently caps the occlusion
-measurement that [`08`](08_Collection_And_EPoL.md) D8.19's denominator depends on.
+measurement every capture's sidecar carries ([`08`](08_Collection_And_EPoL.md) §2.5).
 
 ### 1.6 The trigger case, measured: every run overwrites the sun to noon
 
@@ -580,7 +582,7 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `RunConfigurationFindings.py` | `RunConfigurationFindings` | **Built.** One launch's findings: the compiler's `CompileFinding`, cited against this catalogue, with a warning's `on_warning` code |
 | `ScenarioPackage.py` | `ScenarioPackage` | **Built.** A compiled scenario re-bound by its lock rather than recompiled: the lock's layer-4 declarations, and a refusal of any file the lock no longer digests (check 49) |
 | `SessionMonitor.py` | `SessionMonitor` | **Built.** §7.1's live view and §7.4's `pace` row; formats `RunCloseoutReport`'s snapshot and holds no reference to the session or a recorder, and degrades to line-oriented logging when standard output is not a terminal |
-| `RunCloseoutReport.py` | `RunCloseoutReport` | **Built.** The one computation of what a run has established — a snapshot of the session and the recorders at any instant — and §7.2's gate records read from it. With no run manifest to append to, the records reach disk in `RunResult` at the terminal outcome (§7.2) |
+| `RunCloseoutReport.py` | `RunCloseoutReport` | **Built.** The one computation of what a run has established — a snapshot of the session and the recorders at any instant — and §7.2's gate records read from it. The run manifest exists and is appended as the run goes, but the gate records are not among its rows; they reach disk in `RunResult` at the terminal outcome (§7.2) |
 | `RunResult.py` | `RunResult` | **Built.** §3.10.3's result artifact. Written in **every** terminal outcome the tool survives, including a refusal that produced no session, to a temporary name renamed into place; the process exit status is read from its outcome rather than computed beside it |
 | `RunTerminationSequence.py` | `RunTerminationSequence` | **Built.** §3.10.2's ordered flush. Installed as the handler for `SIGINT`, `SIGTERM` and, on Windows, `SIGBREAK` *and* run as the session's `finally`, so one code path serves a stop, a signal and a fault. Idempotent, time-boxed at every step that can block on the server, and re-entrant: a second signal abandons the remaining steps |
 | `WorldBuildConfiguration.py` | `WorldBuildConfiguration` | §9.2's single definition of the 24 world-build inputs, produced by both front ends |
@@ -592,11 +594,12 @@ PascalCase, modern union hints, absolute imports outside the package, all import
 | `scripts/run_capture.py` | — | **Built.** Thin `main`: parses the command line, discovers the site profile, constructs `CaptureSession`, runs it, and returns the exit status its `RunResult` carries |
 | `scripts/run_camera_follower.py` | — | **Built.** Thin `main` for `CameraFollower` |
 
-`PlaybackClock`, `RenderSetSelector` and `SumoSession` are [`01`](01_Architecture.md) §2.3's
-components; in the tree they are one object, `CarlaNet.CoSim.SumoDriveSession`, which
-`CaptureSession` constructs with the effective configuration's values. `RunManifestWriter` is not
-built: no run manifest is written, so the monitor, the gate records and the run result read the
-session and the recorders directly (§7.1, §7.2).
+The clock, the render set and the SUMO connection [`01`](01_Architecture.md) §2.3 describes are, in
+the tree, one object and its parts: `CarlaNet.CoSim.SumoDriveSession` with `CoSimClock`,
+`RenderSetManager` and `VehicleBodyPool`, which `CaptureSession` constructs with the effective
+configuration's values. `RunManifestWriter` writes `truth/manifest.jsonl` as the run goes (§7.2); the
+monitor, the gate records and the run result read the session and the recorders directly, not the
+manifest (§7.1, §7.2).
 
 ### 3.10 The caller that starts us and stops us
 
@@ -606,7 +609,7 @@ comes next. They may kill the SUMO or CARLA server — or this client — at any
 query through CarlaNet and the Python shim to decide when enough is enough.
 
 So the caller is not a scheduler we serve with a verdict. It is a process that **starts us, watches us
-through interfaces that already exist, and stops us when it decides to.** Three things land on this
+through interfaces that already exist, and stops us when it decides to.** Three things fall on this
 surface, and only three:
 
 1. **Non-interactive, parameterised, reproducible invocation** — a caller that cannot answer a question
@@ -616,7 +619,7 @@ surface, and only three:
 3. **An honest record of whether we stopped or finished**, and of what exists on disk either way
    (§3.10.2, §3.10.3) — plus, while the run is still going, a surface the caller can watch (§7.6).
 
-What does **not** land here: a cadence, a run-length policy, an aggregate verdict on the corpus, or any
+What does **not** fall here: a cadence, a run-length policy, an aggregate verdict on the corpus, or any
 assumption that we are asked politely to stop.
 
 [`02`](02_Use_Cases.md) UC-12's *scripted launch* alternate flow states the governing rule — "the
@@ -900,7 +903,7 @@ achieved factor, the run id every recorder was given, each termination step as i
   and no gate records.
 
 `C10`'s `run_record.jsonl` is not written. `C10` makes it the run manifest's owner's to write, and
-most of its required rows project the run manifest, whose supervision rows do not exist yet; its `run_closed.completion`
+most of its required rows project the run manifest, whose supervision rows exist since 2026-10-05; its `run_closed.completion`
 values also have no counterpart for a window's declared end or for a loud condition's self-stop, which
 `closed_by` above carries.
 
@@ -1054,11 +1057,16 @@ policy fails:
 `freeze_at_window_start` is the recommended value because a window is meant to be one lighting
 condition; it is recommended, not silent.
 
-**Vehicle lights are not offered.** The session writes no vehicle lamps — no light-state command is
-issued anywhere in `CarlaNet.CoSim` — so there is no `solar.vehicle_lights` field to state and check 14
-has nothing to compare. When lamps are built, the field is a conditional requirement: default `off`,
-and no default in a window whose sun falls below −6°, so that a dark corpus with unlit vehicles and a
-dark corpus with lit ones are both deliberate choices. *Inference, labelled:* brake and indicator state
+**Vehicle lights are driven and not offered as a field.** The session drives every rendered body's
+lamps by default (`SumoDriveSessionOptions.VehicleLampsDriven`): brake lights and indicators from
+SUMO's signals, headlights on below +3° and off above +6° of the reported sun
+([`11`](11_Time_And_Illumination.md) D11.9, `HeadlightRule`). `run_sumo_drive.py --no-vehicle-lamps`
+switches them off as a control condition. The run configuration has no `solar.vehicle_lights` field, so
+a `run_capture` run drives them under the session's default and records nothing about it, and check 14
+has no field to compare; no truth file states a vehicle's lamp state. Whether the commanded lamp state
+is recorded, and where, is with the owner. When the field exists it is a conditional requirement:
+default `on`, and no default in a window whose sun falls below −6°, so that a dark corpus with unlit
+vehicles and a dark corpus with lit ones are both deliberate choices. *Inference, labelled:* brake and indicator state
 is the most detectable vehicle signature available to a night EO detector, so the choice plausibly
 dominates a night corpus's usefulness; it belongs to whoever captures the first night window.
 
@@ -1120,9 +1128,9 @@ Named descriptively, because "static" and "dynamic" do not say what is at stake.
 The dividing line between Session-fixed and Run-mutable is one question: **would a consumer reading
 the corpus be wrong if this changed and they did not know?** If yes, it is Session-fixed. The
 occlusion estimator is the instructive case: it looks like a toggle (it is one today, implicitly, via
-`--no-occlusion` at `:542-552`), but [`08`](08_Collection_And_EPoL.md) D8.19 makes a capture whose
-occlusion could not be paired *excluded from the unoccluded denominator entirely* — so turning it off
-mid-run silently changes the meaning of the denominator. Session-fixed.
+`--no-occlusion` at `:542-552`), but an absent `occlusion` attribute means "this camera cannot say",
+not "not occluded" ([`08`](08_Collection_And_EPoL.md) §5.4) — so turning it off mid-run would leave a
+reader unable to tell a capture measured as unoccluded from one never measured. Session-fixed.
 
 **Bound covers a sibling section's ruling as well as an artifact's value**, and three rows depend on
 that: `synchronous` is Bound by [`10`](10_Scale_And_Performance.md) D10.10, `telemetry.on_tick_thread`
@@ -1244,7 +1252,7 @@ other field.
 | `sensor_id` | **—** when more than one channel; a single channel without one takes the name the server gives its camera, `Camera_<n>` | Session-fixed. The camera's name, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens, and not the server's own `Camera_<digits>`. The channel's directory, the first part of every capture's file name and the platform track's callsign, spawned as the camera's `role_name`, which the server refuses where a live camera holds it | [`08`](08_Collection_And_EPoL.md) D8.4; [`04`](04_Contracts.md) §6.3 for the grammar |
 | `pattern` | `stare` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
-| `capture_rgb` | `true` | Bound — a channel without it is not a channel | [`08`](08_Collection_And_EPoL.md) D8.2 |
+| `capture_rgb` | *not a field*: every channel records RGB, so the schema has nothing to switch | — | [`08`](08_Collection_And_EPoL.md) D8.2 |
 | `capture_depth` | *not offered*: the recorder writes no depth imagery; a depth camera is spawned attached to the channel's camera, a stare's or an orbit's, only to measure occlusion (`occlusion.enabled`) | — | D8.2 |
 | `capture_segmentation` | *not offered*: the recorder writes no segmentation | — | [`08`](08_Collection_And_EPoL.md) OQ2 |
 | `depth_max_range_m` | *not offered per channel*: `occlusion.depth_max_range_m`, one range for every depth camera | — | `:274-285`; and see §1.5's divergent second default |
@@ -1346,7 +1354,7 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 | `solar.require_sun` | `null` | Session-fixed; `null` means required | check 23 |
 | `solar.note` | `null` | Session-fixed | [`04`](04_Contracts.md) C9 §11.5 |
 | `scenario.epoch` | **—**: the scenario lock | **Bound** | §4.3, D12.9 |
-| `solar.vehicle_lights` | *not offered*: the session writes no vehicle lamps | — | §4.4 |
+| `solar.vehicle_lights` | *not offered*: the session drives lamps under its own default (`on`), and `run_capture` has no field to state it | — | §4.4 |
 
 #### Telemetry and occlusion
 
@@ -1556,7 +1564,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 11 | offline | `run_capture` | RunConfigurationValidator |
 | 12 | offline | `run_capture` | RunConfigurationValidator |
 | 13 | offline | `run_capture` | ScenarioEpoch, which reads the epoch with the session's SolarEpoch |
-| 14 | offline | **not built** | the session writes no vehicle lamps, so there is no field to state |
+| 14 | offline | **not built** | the session drives vehicle lamps under its own default and the run configuration offers no field to state it, so there is nothing to compare |
 | 15 | offline | `run_capture` | RunConfigurationValidator |
 | 16 | resolution | `run_capture` | RunConfiguration; the refusal names post_process_profile, the field that exists |
 | 17 | offline | **not built** | the recorder writes each capture's image and sidecar into one directory; the two-root split is stage K's and no writer makes it |
@@ -1883,7 +1891,7 @@ truth manifest flushed t=371 238 (2 s ago)   instances 7   intervals open 2
 | **Achieved ticks per wall-second and the clock ratio** | Recorded nowhere today; recoverable only by differencing PNG metadata against file timestamps | [`10`](10_Scale_And_Performance.md) D10.12 |
 | `population / rendered` | How many vehicles SUMO has and how many bodies the frame drew. By default every vehicle SUMO has is drawn, so they differ only by a vehicle SUMO has just inserted, drawn from the frame SUMO first reports it in, one SUMO step after the pass that admits it ([`03`](03_CoSimulation_Runtime.md) D3.6), and by a vehicle of a type with no measured body. Under an optional render-set limit the row names the limit and adds how many vehicles passed it, how many it held and how many a capacity declined; the vehicles outside it are not in CARLA | `render_states[]` ([`04`](04_Contracts.md) §4.5) |
 | **Frames written and `Dropped`, per channel** | `FrameRecorder.Dropped` is incremented at `FrameRecorder.cs:184` and has **no reader anywhere in the tree** | [`10`](10_Scale_And_Performance.md) D10.7 |
-| Occlusion pairing successes and failures | An unpaired capture is excluded from the unoccluded denominator entirely | [`08`](08_Collection_And_EPoL.md) D8.19 |
+| Occlusion pairing successes and failures | An unpaired capture carries no occlusion fields, which a reader must not read as unoccluded | [`08`](08_Collection_And_EPoL.md) §5.4 |
 | Manifest last-flush tick | The manifest is written incrementally; a stalled writer is a silent loss of supervision | [`06`](06_Truth_And_Annotation.md) §8.4 |
 
 **One condition is loud** — it interrupts rather than appearing in a column, because it means the
@@ -1891,11 +1899,13 @@ corpus is no longer what was asked for: the **recorder's** `Dropped` becomes non
 [`10`](10_Scale_And_Performance.md) D10.7. §7.4 names the second, unrelated drop counter that a live
 run introduces and explains why it is not loud, and adds a second loud condition for a live run only.
 A participant in an open annotated interval is not a loud condition: by default every vehicle SUMO
-has is drawn, so a participant always is ([`04`](04_Contracts.md) D4.6), and §7.2's
-`render_accounting.intervals_rendered` records it. Under an optional render-set limit a run chose, a
+has is drawn, so a participant always is ([`04`](04_Contracts.md) D4.6), and the run manifest's
+`not_drawn` spans on each closed interval record any frame it was not
+([`06`](06_Truth_And_Annotation.md) §8.4). Under an optional render-set limit a run chose, a
 participant can be left out; that is not loud either, because the run chose it and the echo said so
 before anything was acquired, and it is recorded the same way, with the closeout's render-set lines
-counting what the limit left out ([`04`](04_Contracts.md) D4.44).
+counting what the limit left out ([`04`](04_Contracts.md) D4.44). The gate
+`render_accounting.intervals_rendered` this paragraph once cited is withdrawn (2026-10-05, §7.2).
 
 **As built** (`SessionMonitor`, `RunCloseoutReport`), the panel shows the simulated time, the window's
 progress, the newest frame's declared civil instant, declared sun elevation and policy — read from the
@@ -1948,13 +1958,13 @@ rendering of the manifest, never a second computation, for the same reason the m
 | **What was asked for** | the effective configuration, with every field that came from an override or a non-default layer flagged | — |
 | **What ran** | window in simulated and civil time; the end declared, the end reached and `closed_by`; achieved ticks per wall-second per window; wall-clock elapsed | `clock.ratio_recorded` — observed: windows with a recorded ratio; threshold: all of them |
 | **Capture** | per channel: captured, written, `Dropped`, capture rate including any degradation step, occlusion pairing | `capture.recorder_dropped` — observed `Dropped`, threshold 0 (D10.7). `capture.captured_minus_written` — observed the difference, threshold 0, which is non-zero exactly when a kill left frames in the encode queue (§3.10.2). `capture.rate_changes_recorded` — observed rate changes carrying a record, threshold: all |
-| **Render accounting** | simulated / rendered / never rendered; admissions and releases; vehicle types refused a body, by reason (`no_blueprint`, `unknown_extent`) | `render_accounting.intervals_rendered` — observed annotated intervals never rendered, threshold 0 |
+| **Render set** | admissions and releases as the manifest's rows; vehicle types refused a body, by reason (`no_blueprint`, `unknown_extent`); the `not_drawn` spans on each closed interval | **no gate.** `render_accounting.intervals_rendered` is withdrawn 2026-10-05 by the owner's ruling: what a participant's undrawn spans are worth is the reader's question, and the spans are in the manifest as happened facts |
 | **Solar** | requested policy, epoch, applied state, confirmed state, closing state | `solar.applied_equals_confirmed` — observed the difference, threshold 0 |
 | **Radiometry** | per channel: the profile asked for and the digest of the profile the server loaded | `radiometry.profile_digest_present` — observed channels carrying a digest, threshold: all ([`08`](08_Collection_And_EPoL.md) D8.28) |
 | **Pacing** | requested mode and real-time factor; achieved factor per window | `pacing.factor_recorded` — under `wall_clock`, observed: recorded or not. `pacing.achieved_factor` — observed the achieved factor, threshold `min_achieved_factor` |
-| **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and the coverage record already carries it as *covered but not delivered* |
+| **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and is counted per sensor |
 | **Launch provenance** | caller, caller label, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | `launch.warnings_adjudicated` — observed warnings with no adjudication, threshold 0; an attended run's pre-roll warning that nobody adjudicated in writing misses it (§6.4.2), and otherwise only a bug in §6.4 can |
-| **Supervision** | instances, intervals, per-interval observability, prevalence in all three units | `supervision.manifest_closing_record` — observed: present or absent. A run killed with no chance to flush has none, and this record is what says so |
+| **Supervision** | instances, intervals opened and closed, intervals open at the end and never opened, defects — the terminal row's counts; the per-interval observability and prevalence once planned here are withdrawn 2026-10-05 | `supervision.manifest_closing_record` — observed: present or absent. A run killed with no chance to flush has none, and this record is what says so |
 | **Corpus-affecting events** | SUMO collisions, teleports, emergency stops, reconciliation refusals | recorded, not compared — [`01`](01_Architecture.md) OQ6 |
 
 **A gate record that did not meet its threshold deletes nothing, hides nothing and downgrades
@@ -2066,7 +2076,7 @@ They count different losses and they have different verdicts.
 |---|---|---|
 | What was lost | a frame that never reached disk | a frame that reached disk but not the consumer |
 | Where | the encode queue's `DropWrite` channel, counter incremented at `FrameRecorder.cs:184-185` (declared at `:46`), which §7.3 measures as having **no reader anywhere in the tree** | the handover socket's drop-oldest queue, per sensor ([`08`](08_Collection_And_EPoL.md) §11.3) |
-| What it does to the corpus | **a hole.** The imagery is short and the coverage record says the camera saw something that no file holds | **nothing.** The corpus is complete; the coverage record marks that `(sensor, tick)` *covered but not delivered* |
+| What it does to the corpus | **a hole.** The imagery is short: the recorder's count says a frame was captured that no file holds | **nothing.** The corpus is complete; the handover counter records the drop per sensor |
 | Verdict | **loud** — §7.1's loud condition, and D10.7 makes a non-zero value a gate record that misses its threshold | **a counted column.** [`08`](08_Collection_And_EPoL.md) §11.3 rules it the correct behaviour, so interrupting on it would be interrupting on the design working |
 
 A single "dropped" figure would be a number that is neither: non-zero on a healthy live run, and unable
@@ -2093,7 +2103,7 @@ Stated as properties, in the manner of §4.6.
 
 | # | Property needed | Why this section needs it |
 |---|---|---|
-| **L1** | **The handover drop counter's identity and scope** — per sensor, per session, incremented at the socket — and a statement that it is a distinct field from `FrameRecorder.Dropped`, with distinct names in the manifest | §7.4.2. If the two land in one field, the closeout's gate on a recorder drop (D10.7) fires on a healthy live run, and the first thing anybody does about that is switch the gate off |
+| **L1** | **The handover drop counter's identity and scope** — per sensor, per session, incremented at the socket — and a statement that it is a distinct field from `FrameRecorder.Dropped`, with distinct names in the manifest | §7.4.2. If the two go into one field, the closeout's gate on a recorder drop (D10.7) fires on a healthy live run, and the first thing anybody does about that is switch the gate off |
 | **L2** | **At what granularity the achieved real-time factor is published** — per tick, per window, or per session — and by which component | D12.14 forbids the monitor from computing its own figures, so the `pace` row can only show a field something else already publishes. §11.1 says the achieved factor must be recorded per session; the panel needs it at least per window and ideally as a rolling value |
 | **L3** | **A ruling on the pacing floor**: below what fraction of the requested real-time factor has a live exercise failed, or an explicit statement that there is no such number and the operator supplies one | §5.2 gives `pacing.min_achieved_factor` no tool default on the assumption the answer is *the operator supplies it*. If `08` fixes a number, it becomes a tool default and check 44's message changes |
 | **L4** | **Confirmation that a transcript is not a corpus artifact** and belongs outside both roots on D8.38's precedent, or a ruling that overrules it | §7.4.3. `08` owns the root structure and the release attestation (D8.17); this section should not place a new directory near it without that section agreeing |
@@ -2160,7 +2170,6 @@ session nothing at all.
 | How many frames have been written? | the manifest's per-channel `written` | artifact |
 | How many were captured but not yet written? | the manifest's per-channel `captured`; the difference is what a kill would lose | artifact |
 | How many annotated intervals have closed? | the manifest's supervision block ([`06`](06_Truth_And_Annotation.md) §8.4) | artifact |
-| How much of a declared area has been covered? | the coverage record ([`08`](08_Collection_And_EPoL.md)) | artifact |
 | Which gate records do not currently meet their threshold? | the manifest's gate records (§7.2) | artifact |
 | Is the run still alive, and did it stop? | the manifest's last append instant; then `RunResult` appearing, or not appearing (§3.10.2) | artifact |
 
@@ -2614,14 +2623,15 @@ read-only, the divergence callback bound, no depth camera, and the pairing not s
 [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §4: any change to `Scripts/Windows/*.ps1` requires its
 `Scripts/Linux/*.sh` counterpart in the same change, help text and documentation included.
 
-**The parity is already broken, measured.** `Scripts/Windows/MakeDistribution.ps1:237` copies
-`CarlaNet\python\SCTMV.py`, a file deleted in `d2c666c23`; the copy only warns, so the build succeeds,
-and `:301` then writes a `run-sctmv.ps1` that executes the absent script. The Linux script was
-migrated correctly: `Scripts/Linux/MakeDistribution.sh:117` copies
-`CarlaControl/scripts/run_SCTMV.py` and `:196` executes it. A second, unrecorded half of the same
-break: `MakeDistribution.sh:112-113` bundles **both** the `carlanet` and `carlacontrol` wheels, while
-the Windows script bundles only `carlanet` (`:230-234`) and mentions `carlacontrol` nowhere — so even
-with the script path fixed, a Windows distribution could not import `carlacontrol`.
+**The parity was broken, measured on 2026-09-18, and the four breaks are fixed.**
+`Scripts/Windows/MakeDistribution.ps1` copied `CarlaNet\python\SCTMV.py`, a file deleted in
+`d2c666c23`, with a copy that only warned, and wrote a `run-sctmv.ps1` that executed the absent
+script; it bundled only the `carlanet` wheel where `Scripts/Linux/MakeDistribution.sh` bundled
+`carlacontrol` as well. Today both scripts bundle both wheels, copy
+`CarlaControl/scripts/run_SCTMV.py`, write a launcher that runs it, install every wheel with
+`--find-links`, and write the generated `MANIFEST.md` and `licenses/` directory
+([`13`](13_Work_Breakdown.md) §13.2). Running a distribution built from a clean tree is the check the
+owner deferred until everything else is done.
 
 What this section's work requires, on both platforms in the same change:
 

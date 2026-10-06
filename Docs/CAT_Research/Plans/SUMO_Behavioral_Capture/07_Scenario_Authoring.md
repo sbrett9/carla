@@ -83,6 +83,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-05 | A scenario is run in SUMO alone before it is written, as the owner ruled, and refused when a vehicle the supervision plan names is discarded after waiting `max-depart-delay` or is still waiting at the end (§5.1, §5.2 check 59, §5.4). The report states every planned vehicle's wait, the other vehicles discarded and every collision; the lock records the run, or that `--skip-dry-run` skipped it. Measured, the run adds 130 to 160 s to Bahonar's week, 176 to 219 s to the Arapahoe dwell and 6 s to the Gardnerville orbit; all three shipped scenarios are recompiled, every planned vehicle enters, and none had a discard or a collision. |
 | 2026-10-05 | The supervision check (§3.4.3): a six-minute scenario on the Arapahoe world, generated and compiled into `Import/` with a run configuration beside it, carrying an annotated dwell anchored to its stop, an annotated transit with a phase past the kerb, and a nominal stop that is the dwell's matched negative, in two capture windows in two illumination bands. No series or absence: the Arapahoe package publishes no area. The Arapahoe dwell is recompiled against its world rebuilt the same day, its network fingerprint unchanged, so the two scenarios bind one network copy. |
 | 2026-10-05 | A capture run refuses a lock whose compile skipped its SUMO-only run, or that records none, before anything is started, as the owner ruled (§5.2 check 59, §5.4): `run_capture` check 54 offline and the co-simulation session before SUMO starts, naming the scenario and the lock's reason, unless the run accepts it in writing (`scenario.accept_skipped_dry_run`; `run_sumo_drive.py --accept-skipped-dry-run`), which the echo, the run report and the manifest record. `--skip-dry-run` stays for drafting; all four shipped locks record a completed run. |
+| 2026-10-05 | Corrected against the tree: the world package carries `map.net.xml`, the catalogue (`6037e3bb…`, nineteen bodies) and the network fingerprint exist (§2 bundle table); Bahonar is compiled against that catalogue (§3.4.1); the Arapahoe dwell is compiled against the ramp-meter world `ffe490b1…` (§3.4.2); the skill is at 1.5.0 (§8.2). |
 
 ---
 
@@ -277,12 +278,12 @@ states where it comes from, what it guarantees, and whether it exists.
 | 2 | `map.xodr` | same | **yes** | The road network CARLA loads; carries street names on non-junction roads (§4.4) |
 | 3 | `bareearth.bin` | same, only under `--height-align drape` | **yes** | Per-cell bare-earth ellipsoidal height; the telemetry altitude and the only elevation the flat SUMO network can borrow |
 | 4 | The clipped `.osm` | `OsmClipper.clip_osm_to_bounds`, written to `Build/sumo-smoketest/<Name>_clipped.osm` (`WorldBuilder.py:106-115`) | **yes**, outside the package | The exact geometry netconvert saw. Referenced by name and digest in `world.json`; the world build's input, never read by the compiler (§2.2) |
-| 5 | **The world's `.net.xml`** | netconvert, same run as the `.xodr` | **no — deleted** (`OsmConverter.cs:146`) | §1.3. The single missing artifact that makes the rest sound |
+| 5 | **The world's `.net.xml`** | netconvert, same run as the `.xodr`; `map.net.xml` in the world package | **yes** | §1.3. The network the compiler resolves against and the session refuses any other, compared by canonical fingerprint |
 | 6 | **Place index** | `places.json` in the world package, derived from 5 alone (§2.5) | **yes** | Street name → the edges carrying it, each with heading, cardinal direction, length, lanes, speed and extent; the index's own coverage and warnings. An area id resolves through row 8. §2.5, §4 |
-| 7 | **Vehicle catalogue** | [`04_Contracts.md`](04_Contracts.md) contract 1; doc 20 §5.6 and D12 | **no** | Which vehicles exist, with real dimensions. §2.6 states what this section needs from it |
+| 7 | **Vehicle catalogue** | [`04_Contracts.md`](04_Contracts.md) contract 1; `CarlaControl/catalogue/vehicles.catalogue.json`, `carla-0.10.0-windows`, digest `6037e3bb…` | **yes** | Which vehicles exist, with measured dimensions and each body's width without its mirrors; nineteen bodies. §2.6 states what this section needs from it |
 | 8 | **Area-of-interest table** | `areas.resolved.json` and `areas.aoi.geojson` in the world package, resolved from `<extract>.aoi.geojson` at world build ([`04`](04_Contracts.md) C5, §2.11) | **yes** | Named, stable places a scenario and an annotation can both reference, in CARLA-local metres and on SUMO lanes |
 | 9 | **Annotation vocabulary** | [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7–§3.8; the core written from 06 §3.7 in `AnnotationVocabulary`, its bands from `IlluminationBand` | **yes**, per compiled scenario, in its supervision plan (§8.3) | What a label means. Two halves: a closed, versioned core the pipeline's own code branches on, and the author terms this scenario declares or imports, each carrying its own definition |
-| 10 | **World digest** binding 1–9 | §2.7 | partially, and **unstable as recorded** | That a scenario and a run are talking about the same world |
+| 10 | **World digest** binding 1–9 | §2.7; the canonical network fingerprint in `world.json`, every lock and every run report | **yes** | That a scenario and a run are talking about the same world: the compiler refuses a specification naming another fingerprint (check 1) and the session refuses a scenario whose network is not the package's ([`03`](03_CoSimulation_Runtime.md) D3.28) |
 | 11 | **Site civil time zone** | new; derived from `world.json`'s origin lat/lon plus a time-zone database | **no** | The candidate civil offset for the epoch, and whether the site observes daylight saving. §2.8 |
 | 12 | **Illumination reference** | new; [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md), computed from origin lat/lon and the epoch's dates | **no** | Sunrise, sunset and sun elevation for every date the scenario spans, and the **night viability verdict**. §2.9 |
 | 13 | **Solar frame** | `solar.json` in the world package, derived from 1 (§2.10) | **yes** | The origin latitude and longitude and the time zone the engine derives from them, so an epoch's declared offset is checked against the world without a running server (check 40) |
@@ -846,22 +847,23 @@ body's width without its mirrors (D4.43), the routes unchanged: peak 170, median
 of 3.93 m, mirrors included, the same lane changes had deadlocked it within the first hour behind the
 bus at the end of edge `168434252` ([`04`](04_Contracts.md) §5.2a); its body is 3.23 m.
 
-**The compile.** Refused by check 14 alone, naming `vehicle.carlamotors.european_hgv` for `civ_truck`,
-`port_truck` and `mil_truck`: catalogue `carla-0.10.0-windows` (digest `771fa431…`) has not measured
-it. Every other check of the resolution stage passes, and with that body replaced by a measured one the
-whole compile passes and the session's network, lock, teleporting and route-error checks admit it
-against the package (`test_bahonar_generator.py`). It compiles, unchanged, once the catalogue measures
-the European heavy goods vehicle; a catalogue that also measures the Wrangler moves the jeep classes to
-it when the generator is next run. A compiled scenario's lock binds the catalogue digest, and the
-session refuses another, so every compiled scenario — Gardnerville's too — is recompiled after the
-catalogue is republished.
+**The compile.** Compiled into `Import/Shahid_Bahonar_Port_PatternOfLife.*` against catalogue
+`carla-0.10.0-windows` (digest `6037e3bb…`), which measures `vehicle.carlamotors.european_hgv` for
+`civ_truck`, `port_truck` and `mil_truck`; an earlier catalogue (digest `771fa431…`) had not, and check
+14 alone refused it then. Every check passes, the lock records a SUMO-only dry run that inserted every
+planned vehicle (check 59), and the session's network, lock, teleporting and route-error checks admit it
+against the package (`test_bahonar_generator.py`). A catalogue that also measures the Wrangler moves
+the jeep classes to it when the generator is next run. A compiled scenario's lock binds the catalogue
+digest, and the session refuses another, so every compiled scenario — Gardnerville's too — is
+recompiled after the catalogue is republished.
 
 ### 3.4.2 The Arapahoe underpass dwell, as built
 
 `make_arapahoe_scenario.py` writes the dwell as a specification,
 `Import/Arapahoe_I25_UnderpassDwell.scenario.json`, and compiles it against
-`Build/world-packages/Arapahoe_I25.cwp`, the world regenerated on 2026-10-01 (network
-`ac83aa8b541158e60f012d185405ec20e5a924ff95f1a4609660ccd3a714191b`), into `Import/` under the file
+`Build/world-packages/Arapahoe_I25.cwp`, the world as rebuilt with its ramp meters kept out of junction
+joining (network `ffe490b1…`, D7.38; the world regenerated on 2026-10-01 fingerprinted `ac83aa8b…`), into
+`Import/` under the file
 names the shipped scenario always had — its `.add.xml` now compiled — plus its specification, lock,
 supervision plan and resolution report. The network is the world's byte for byte; the two `opposite`
 attributes the SUMO-XML script wrote into its copy are gone.
@@ -2396,7 +2398,7 @@ Three further reasons are specific to this pipeline:
 | **Silent on time entirely** | **The epoch conventions** — §8.2.1 |
 | **Silent on illumination entirely** | **The illumination guidance** — §8.2.2 |
 
-`SKILL.md` 1.4.0 carries: the network as an input, the specification and `compile_scenario.py`, the
+`SKILL.md` 1.5.0 carries: the network as an input, the specification and `compile_scenario.py`, the
 epoch conventions of §8.2.1, the place forms, the rota, the supervision channel and the vocabulary's
 layering, the illumination guidance of §8.2.2, sweeps with counterfactual pairs, the fence as the
 world's type map (§9.8), route phases and the point, gateway and movement places, and — beside it — the

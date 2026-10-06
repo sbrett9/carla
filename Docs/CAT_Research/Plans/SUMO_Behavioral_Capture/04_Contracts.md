@@ -31,6 +31,8 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 39 | 2026-10-05. The judgement fields are withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: `C2` §4.5 loses `observed_spans`, `observed_union_s` and the accounting rules and keeps `render_state`, `reason` and `rendered_spans`; `C8` §10.7 (D4.28) is cut to the measured fields and V8.4 with it; V8.5, V8.6, V8.9 and V8.16 are withdrawn; `C10` §12.4.1 loses `prevalence_units_reported[]` and `observed_union_s`, and §12.5's required gates lose V8.6, V8.9 and V8.16, with `corpus_eligible`'s row kept under the owner's review of its name; §16 questions 12 and 13 are moot. |
+| 38 | 2026-10-05. Corrected against the code: the session's compile-lock check refuses on the lock's `catalogue_digest` and `epoch_block_sha256` (`C3` §5.4 V3.5, V3.6, V3.11); the lock table gains `dry_run` (§5.3); open questions 1, 4, 5 and 6 are superseded by decisions since taken. |
 | 37 | 2026-10-05. `C4`: the server issues camera names and refuses duplicates, as the owner ruled (§6.1, §6.3). A camera spawned with no `role_name`, or its blueprint's default, is `Camera_<n>` from a counter held on the server for its lifetime, never reset by a world reload and never reused; a client-given name a live camera holds is refused at spawn, case aside, and so is a client-given `Camera_<digits>`. Every client reads the name back from the spawned camera and uses it for the files, the callsign and the recorder; the client-side sweep of the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<actor id>` stays the platform track's uid, and is an unnamed camera's name only on a server built before it named cameras, which the shim detects and says. The plugin change awaits a build |
 | 36 | 2026-10-05. `C3`: the lock's `dry_run` block is in the lock table (§5.3) — the compiler's SUMO-only run of the scenario, `ran` with its release and counts, or the reason `--skip-dry-run` skipped it — and V3.16 is the rule a run holds it to: a lock whose `ran` is false, or with no block, is refused by `run_capture` check 54 offline and by the session's compile-lock check before SUMO is started, unless the run accepts it (`scenario.accept_skipped_dry_run`; `AcceptSkippedDryRun`, `run_sumo_drive.py --accept-skipped-dry-run`), and the acceptance is on the run report and the manifest's opening row ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29; [`12`](12_Operator_Control_Surface.md) §6.2 check 54) |
 | 35 | 2026-10-05. `C10`: the world truth track flushes its rows once for each SUMO frame, when the frame's every row is written, and whatever it still holds as it closes, rather than after every row, as the owner ruled: it is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. W2 states the flush per frame as the track's rule. Every row is still a whole line, so the prefix stays valid, and a kill loses at most the frame being written (§12.7) |
@@ -1517,7 +1519,8 @@ the same — a spawn the server refused, or a package that bypassed both checks 
 
 ### 4.5 What truth says about a simulated-but-unrendered vehicle
 
-This is doc 20 §2.5's observability accounting, stated as a contract.
+This is the record of what was simulated and what was drawn, stated as a contract. The observability
+accounting doc 20 §2.5 built on it is withdrawn 2026-10-05 by the owner's ruling ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b).
 
 > **D4.7 — behavioural truth exists for every SUMO vehicle in a capture window. Imagery-side truth
 > exists only for rendered ones. Every SUMO vehicle carries an explicit `render_state`, and the
@@ -1536,19 +1539,19 @@ window:
 | `reason` | string | — | yes when not `rendered` | `outside_window` \| `no_blueprint` \| `unknown_extent` \| `spawn_failed` \| `outside_limit`. `outside_window` covers the part of a vehicle's life outside every window CARLA was attached for, a truth-only window included; `no_blueprint` and `unknown_extent` are `C1` §3.2's runtime cases (`D4.17`); `outside_limit` is the part an optional render-set limit left out (D4.44) and is never written with no limit |
 | `sumo_span_s` | `[begin, end]` | s | yes | Simulated seconds of the vehicle's whole life in SUMO |
 | `rendered_spans` | array of `{ begin_s, end_s, actor_id }` | s | yes | Empty for `simulated_only`. One entry per *rendering* — a vehicle released and re-admitted has two, with two different `actor_id`s (`C4`) |
-| `observed_spans` | array of `{ sensor_id, begin_s, end_s }` | s | yes | In-frustum coverage per collection sensor, and drawn by it: a span where the vehicle stood wholly beyond an optional draw distance from that sensor is not observed by it (D4.45). Empty is meaningful and must be written |
-| `observed_union_s` | number | s | yes | Total simulated seconds observed by at least one sensor |
+| *`observed_spans`, `observed_union_s`* | — | — | — | *Withdrawn 2026-10-05 by the owner's ruling: a span "observed" by a sensor was a word for a vehicle in the frustum and drawn, which under a draw distance (D4.45) became a judgement, and the union was arithmetic over it. The camera pose and intrinsics in every sidecar let a reader compute whatever in-picture test they want* |
 
-**The accounting rules that follow, stated so a consumer cannot get them wrong:**
+**As built**, the per-vehicle summary above is not composed: the world truth track carries
+`render_state` and `render_reason` for every SUMO vehicle at every SUMO frame of the window
+([`06`](06_Truth_And_Annotation.md) §8.3), and the run manifest carries `render_admitted` and
+`render_released` rows per rendering and the `not_drawn` spans on each closed interval (§4.1, §12.7).
+Together they hold every field above that stands.
 
-- A `simulated_only` vehicle contributes to any denominator computed over **behaviour** — how many
-  vehicles executed a pattern, base rates of behaviour in the world.
-- It contributes **zero** to any denominator computed over **imagery** — per-sensor prevalence, and the
-  imagery-side denominator of doc 20 §2.5. A vehicle that was never rendered is not something the
-  imagery ever had a chance to contain. *(This is a rule about which of our own numbers is the
-  honest one, not about what any consumer would be charged for.)*
-- `observed_union_s` and the per-sensor `observed_spans` are the honest denominators. `sumo_span_s` is
-  not.
+**The accounting rules — which denominators a vehicle counts in, and which numbers are "the honest
+ones" — are withdrawn 2026-10-05 by the owner's ruling.** They told a reader how to count; the record
+says what happened and a reader counts as they see fit. What remains are facts about why a vehicle
+went undrawn:
+
 - Inside a window CARLA was attached for and with no limit, a vehicle goes undrawn for exactly two
   causes: its type has no measured body (`no_blueprint`, `unknown_extent`), or the server refused its
   spawn (`spawn_failed`). Neither is a choice about which vehicles to draw, so no consumer has to treat
@@ -1564,7 +1567,7 @@ window:
   is not in its image and is not observed by it; one partly beyond it is marked `partly`, may be drawn
   without its far parts, and is observed by the usual tests where they find it.
 - A vehicle with `render_state = partially_rendered` has a behavioural interval that is only partly
-  evidenced; an interval clipped to `rendered_spans ∩ observed_spans` is the supervisable part.
+  drawn; the manifest's `not_drawn` spans on the interval say which part.
 
 ### 4.6 Validation, failure, versioning
 
@@ -1769,13 +1772,13 @@ Each rule states where it is enforced today. The compiler's checks are [`07`](07
 | V3.2 | *Retired.* The clipped OSM's digest differs | — | The OSM is not carried (§5.1 finding 2); the network fingerprint of V3.4 is the binding |
 | V3.3 | The network is in another frame: its `convBoundary`, projection or `netOffset` against the package and its OpenDRIVE | **refuse** | At compile, checks 3, 4 and 5; at run start, the session's frame check |
 | V3.4 | The network the scenario runs is not the world package's, by canonical fingerprint | **refuse** | At compile, check 1 against the specification, and D7.32 for what is written; at run start, `ScenarioNetworkCheck` on the network the `.sumocfg` loads ([`03`](03_CoSimulation_Runtime.md) D3.28) |
-| V3.5 | `blueprint_set_digest` differs | **refuse** | At compile, checks 14 and 15 bind every type to the catalogue's measured body. At run start, not built: the session records the catalogue it loaded and does not compare it with the lock |
-| V3.6 | `catalogue_digest` differs, set digest matches | **warn**, naming every moved entry | Not built |
+| V3.5 | `blueprint_set_digest` differs | **refuse** | At compile, checks 14 and 15 bind every type to the catalogue's measured body. At run start, by the session's compile-lock check (`ScenarioLockCheck`): the catalogue the session loads must carry the lock's `catalogue_digest`, naming both digests on refusal, and a changed blueprint set changes that digest; `blueprint_set_digest` itself is not read separately |
+| V3.6 | `catalogue_digest` differs, set digest matches | **warn**, naming every moved entry | As built the session **refuses** any `catalogue_digest` other than the lock's (V3.5), so this softer tier does not exist: a moved entry means a recompile |
 | V3.7 | The areas of interest differ, everything else matches | **warn** | Not built. An area edit republishes the world package's table without a rebuild and without moving the network fingerprint (07 D7.28); a recompile re-resolves every area the supervision names (check 20) |
 | V3.8 | `content_build_id` differs, all digests match | **warn** | Not built |
 | V3.9 | `sumo_step_s` is not a whole multiple of the run's fixed delta | **refuse** | `C6`: the run's, not the package's |
 | V3.10 | A file the lock lists is absent, or its SHA-256 is not the lock's | **refuse** | At run start, by the session's compile-lock check, for every file the lock lists, and a file the configuration loads that the lock does not list; the supervision plan's own digests against the files the run loads too ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29) |
-| V3.11 | The epoch is absent, or `epoch_block_sha256` does not match the epoch as carried | **refuse** | At compile, check 33: no lock is written without an epoch. At run start the session validates the epoch it is handed (`SolarEpoch`) — the lock is a file it can read one from (`run_sumo_drive.py --epoch <scenario_id>.lock.json`) — and does not compare the digest |
+| V3.11 | The epoch is absent, or `epoch_block_sha256` does not match the epoch as carried | **refuse** | At compile, check 33: no lock is written without an epoch. At run start the session validates the epoch it is handed (`SolarEpoch`) — the lock is a file it can read one from (`run_sumo_drive.py --epoch <scenario_id>.lock.json`) — and its compile-lock check refuses an epoch whose digest is not the lock's `epoch_block_sha256`, naming both |
 | V3.12 | The epoch fails a `C9` V9.* rule | **refuse** | At compile, checks 33 and 34, through the session's own `SolarEpoch`; at run start, `SolarEpoch` again |
 | V3.13 | The world reports no sun and `illumination.require_sun` is true | **refuse** | At run start, by the session; `run_sumo_drive.py --no-sun-required` is `require_sun: false` |
 | V3.14 | The world's origin longitude differs from the lock's | already **refuse** by V3.1 and V3.3 | Restated because the sun's position is computed from the world's origin (§11.3) |
@@ -3334,36 +3337,38 @@ sets.
 ### 10.7 Label quality versus model performance — the ruling, field by field
 
 An association-quality block names fields of two kinds: some describe **how good our label is**, the
-rest describe **how well a model matched it**. Only the first kind is ours — and the first kind needs no
-model at all. Every field this contract keeps is computable from truth and the rendered frame alone,
-before any consumer exists.
+rest describe **how well a model matched it**. Neither kind is ours past the measured numbers: the
+second needs a model, and the first, as doc 20 §7.6 framed it, needs pass marks.
 
 > **D4.28 — a quality field survives in the corpus if and only if it is computable from this system's
-> own truth and imagery with no model output as an input. Such fields attach to the *label*, per
-> `(sensor_id, tick, vehicle)`, in the `TRUTH` root — not to an assignment, because there are no
-> assignments here.**
+> own truth and imagery with no model output as an input, and is a measurement with no pass mark.
+> Such fields attach to the *label*, per `(sensor_id, tick, vehicle)`, in the `TRUTH` root — not to an
+> assignment, because there are no assignments here.** Amended 2026-10-05 by the owner's ruling
+> ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b): the block is cut to the measured fields — `occlusion`, `occlusion_level`,
+> `occlusion_samples`, `apparent_width_px`, `apparent_height_px`, `truncation` and the range. `visible_signature`,
+> `label_crowding`, `nearest_label_px` and `supervision_transfer_ambiguous` are withdrawn: each was a
+> word or a count decided by a threshold nobody valued.
 
 | Association-quality field | Ruling | The form it takes here |
 |---|---|---|
 | `occlusion_at_assignment` | **Label quality — kept.** Computed by the occlusion measurement already built ([doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md)) from our own render, with no detector in sight | `occlusion` on the per-image label record. A label on a 90 %-hidden vehicle is a weak label, and the corpus says which ones they are |
-| `signature_at_assignment` | **Label quality — kept.** `visible_signature` ([`08`](08_Collection_And_EPoL.md) §5.8) is derived from our own imagery and our own lamp state | `visible_signature` on the label record. At night a box may enclose two lamps and no vehicle; that is a fact about the label |
-| `truth_density` | **Label quality — kept, in truth-only form.** Defined as "truth vehicles inside the detection's gate", it needs a detection; the quantity that makes it useful does not — how crowded this label is by *other labels* | `label_crowding` — the number of other truth vehicles whose projected boxes fall within a declared radius of this one — and `nearest_label_px`, the distance to the closest. Both from truth projections only. The radius is a declared parameter, valued in [`10`](10_Scale_And_Performance.md) |
+| `signature_at_assignment` | **Withdrawn 2026-10-05.** `visible_signature` was a word decided by a lamp-on threshold ([`08`](08_Collection_And_EPoL.md) §5.8, withdrawn) | not produced. The box, the recorded sun and, once recorded, the commanded light state are what a consumer reads |
+| `truth_density` | **Withdrawn 2026-10-05.** `label_crowding` and `nearest_label_px` counted neighbours within "a declared radius" nobody valued; the distances are derivable from the boxes in the record. As decided: **Label quality — kept, in truth-only form.** Defined as "truth vehicles inside the detection's gate", it needs a detection; the quantity that makes it useful does not — how crowded this label is by *other labels* | `label_crowding` — the number of other truth vehicles whose projected boxes fall within a declared radius of this one — and `nearest_label_px`, the distance to the closest. Both from truth projections only. The radius is a declared parameter, valued in [`10`](10_Scale_And_Performance.md) |
 | `margin` — distance to the next-best truth candidate for a detection | **Split.** The margin itself needs a detection and is model performance: **not produced.** What makes a margin small is a property of the labels — two of them are close together | subsumed by `nearest_label_px`. How separable two labels are is ours; how well something resolved them is not |
-| `association_ambiguous` | **Label quality — kept, in truth-only form.** It is almost truth-only already: it fires when *a second truth entity* is within the gate | `supervision_transfer_ambiguous` — true when `label_crowding > 0` within the declared radius **and** the neighbouring labels carry different supervision. That is exactly the case in which any transfer rule, run by anyone, could put the wrong supervision on a target, and it is decidable from truth alone |
+| `association_ambiguous` | **Withdrawn 2026-10-05.** `supervision_transfer_ambiguous` was a flag on `label_crowding`, itself withdrawn. As decided: **Label quality — kept, in truth-only form.** It is almost truth-only already: it fires when *a second truth entity* is within the gate | `supervision_transfer_ambiguous` — true when `label_crowding > 0` within the declared radius **and** the neighbouring labels carry different supervision. That is exactly the case in which any transfer rule, run by anyone, could put the wrong supervision on a target, and it is decidable from truth alone |
 | `association_quality` — the gate residual | **Model performance — not produced.** A residual between a detection and a label is a statement about the detection | not produced. A consumer computing it has the label-quality block to interpret it against, which is the whole reason the block exists |
 | `residual_px`, `residual_norm` | **Model performance** | not produced |
 | `assigned_fraction`, `dominant_truth_fraction`, `switch_count` | **Model performance.** All three are properties of a track | not produced |
 
 **Apparent size and truncation** are not association fields at all: they are per-label
-descriptors of what the corpus contains, they stay, and `C2` §4.5's `observed_spans[]` is their
-per-vehicle counterpart over time.
+descriptors of what the corpus contains, measured, and they stay.
 
 The net effect is that the requirement doc 20 §7.6 actually raised — *"the association quality per
 assignment should be recorded, so a mis-associated label is findable later rather than being an
 unexplained hard example"* — is met **better** on this side of the line than on the other. A consumer
-who finds a hard example looks the label up and reads that it was crowded by two differently-supervised
-neighbours at 4 px separation under `visible_signature = lamps`. The example stops being unexplained,
-and nobody measured a model to get there.
+who finds a hard example looks the label up, reads its occlusion and apparent size, and computes from
+the neighbouring boxes in the same record how crowded it was. The example stops being unexplained, and
+nobody measured a model to get there; the pipeline wrote numbers and no word about them.
 
 **`D4.28` is unaffected by the live mode and is confirmed here in one line:** every field it keeps is
 computable from our own truth and our own render before any consumer exists, so the label-quality block
@@ -3751,19 +3756,19 @@ own is refused and recorded, and never fails our run.
 | V8.1 | The `OBSERVATION` root contains no field listed in §10.4's right-hand column | refuse to publish the handover |
 | V8.2 | Every truth event carries `source="truth"` on its container (`CotWriter.cs:34`), a `CARLA-TRUTH-` uid (`:134`), `how="m-g"` (`:136`) and `ce`/`le` of exactly `0.0` (`:145-146`); the truth writer never mints a uid with any other prefix | refuse to publish the truth root. The check is on *our* writer, which is what makes truth self-identifying in the first place; nothing here inspects anything incoming |
 | V8.3 | The handover exposes no identifier by which a consumer's track could be joined to truth; the documented rule (§10.6) names position and time and nothing else | assertion at corpus build. The rule is about what the handover exposes, not about an assignment, because no assignment is performed here |
-| V8.4 | Every truth event in the `TRUTH` root carries the label-quality block of §10.7 — `occlusion`, `visible_signature`, `label_crowding`, `nearest_label_px`, `supervision_transfer_ambiguous` | refuse to publish. The quality attaches to the label rather than to an assignment, which is where it is computable without a model |
-| V8.5 | Prevalence is reported per sensor **and** unioned, never as one unlabelled number | refuse to publish a corpus summary without both |
-| V8.6 | A corpus summary reports supervision prevalence **per solar bin** as well as per sensor. The bin edges are a declared parameter, valued in [`10`](10_Scale_And_Performance.md); solar elevation is the binning variable, because it is what an electro-optical sensor actually experiences | refuse to publish a summary without it. This is the check that makes an illumination–supervision correlation visible **in the corpus's own description** (§10.4a) |
+| V8.4 | Every truth event in the `TRUTH` root for a vehicle in the picture with a paired depth frame carries the measured block of §10.7 — `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_width_px`, `apparent_height_px` — and never a word about them (amended 2026-10-05) | refuse to publish. The quality attaches to the label rather than to an assignment, which is where it is computable without a model |
+| V8.5 | **Withdrawn 2026-10-05 by the owner's ruling.** No prevalence is computed ([`06`](06_Truth_And_Annotation.md) §5.3) | — |
+| V8.6 | **Withdrawn 2026-10-05 by the owner's ruling.** No prevalence is computed, per bin or otherwise; the compiler's association statistic over the author's declarations ([`07`](07_Scenario_Authoring.md) check 41) is what stands. As decided: A corpus summary reports supervision prevalence **per solar bin** as well as per sensor. The bin edges are a declared parameter, valued in [`10`](10_Scale_And_Performance.md); solar elevation is the binning variable, because it is what an electro-optical sensor actually experiences | refuse to publish a summary without it. This is the check that makes an illumination–supervision correlation visible **in the corpus's own description** (§10.4a) |
 | V8.7 | The `OBSERVATION` root contains `advancing`, `rate`, `illumination_band`, `illumination_band_elevation`, any `illumination.*` field, any residual, or any field read from the run manifest | refuse to publish — §10.4a's excluded list, and test 4 of `D4.20` |
 | V8.8 | Every field in the observation root's `solar` and `epoch` blocks appears in §10.4a's "in `OBSERVATION`: yes" list | refuse to publish. An allow-list, not a deny-list: a new field stays out until the contract admits it |
-| V8.9 | The corpus manifest declares every partition whose truth is not released, and every capture window, sensor and vehicle the corpus does not cover | refuse to publish. An undeclared omission is indistinguishable from data loss |
+| V8.9 | **Withdrawn 2026-10-05 by the owner's ruling**, for the statement of what the corpus "does not cover": that was a roll-up over withdrawn words. What stands is factual and elsewhere: the release records every held-back partition's manifest digest ([`08`](08_Collection_And_EPoL.md) D8.17), and the closed run manifest names every planned triple once | — |
 | V8.10 | The observation writer's build carries no reference to any truth type (`D4.16` property 1) | fail the build, not the run |
 | V8.11 | Every stream record carries the identity keys of `C4` — `sensor_id` and `tick` always, with `sim_time_s` and `run_id` on every record. A record that cannot be named is not emitted | refuse to emit, and fail the run at that tick. The alternative is a consumer holding pixels it cannot place |
 | V8.12 | `seq` increases by exactly one per `(stream_kind, sensor_id)` over a stream's life, and `dropped_cumulative` is non-decreasing and equals the count of skipped `seq` values | assertion in the emitter (L2) |
 | V8.13 | No envelope field is derived from truth, supervision or any scene content, and the envelope writer's build carries no reference to any truth type | fail the build, not the run — the same kind of check as V8.10 |
 | V8.14 | An observation **stream** record satisfies V8.1, V8.7 and V8.8 unchanged, checked **at the emitter** rather than inherited from the corpus writer | refuse to open the stream. A field that is unsafe in a corpus is unsafe on a wire |
 | V8.15 | A truth stream is opened in a live handover only when the choice to open it was explicitly recorded, in the run manifest and in the `C10` run record | refuse to open the stream. Off by default; on by record (L7) |
-| V8.16 | Every dropped frame is counted, every dropped `(sensor_id, tick)` appears in coverage as *covered but not delivered*, and the two counts agree | a run whose counters and coverage disagree is marked invalid — one of them is wrong and neither can then be trusted |
+| V8.16 | **Withdrawn 2026-10-05 by the owner's ruling**, with the coverage record it compared against ([`08`](08_Collection_And_EPoL.md) §10.1). What stands: every dropped frame is counted per sensor and the count is a closeout gate at 0 (`capture.recorder_dropped`, [`12`](12_Operator_Control_Surface.md) §7.2) | — |
 | V8.17 | A `stream_close` is written for every stream that was opened, with `not_delivered_recorded` true | assertion. If the process was killed there is no close record, and its absence is the signal — the expected ending of a live run (§12.7). The `C10` run record on disk is what a reader consults either way |
 | V8.18 | Every transcript row carries `received_tick`, `source_id`, `content_type`, `byte_count` and `sha256`, and `source_id` is one of the configured peers | refuse the row and record the refusal. **Never stop the run** — a malformed arrival from outside is not a fault in the capture |
 | V8.19 | Every transcript blob's digest and length match its row | mark the transcript untrusted at corpus build rather than shipping it silently |
@@ -4493,11 +4498,11 @@ this block exists so that a reader of a closed run does not have to.
 | Field | Type | Req. | Meaning |
 |---|---|---|---|
 | `roots[]` | array | yes | `{ root, location, root_version, frame_count, byte_count, manifest_digest }`. A root that was not written appears with `frame_count: 0`, never by omission |
-| `sensors[]` | array | yes | `{ sensor_id, frames_written, frames_emitted, frames_dropped, observed_union_s }` — the first from the recorder, the middle two from the stream close records (`C8` §10.9.2), the last from `C2` §4.5. **`frames_written` counts writes the writer completed**, never captures it accepted (§12.7 rule W3) |
+| `sensors[]` | array | yes | `{ sensor_id, frames_written, frames_emitted, frames_dropped }` — the first from the recorder, the other two from the stream close records (`C8` §10.9.2); `observed_union_s` is withdrawn with `C2` §4.5's spans (2026-10-05). **`frames_written` counts writes the writer completed**, never captures it accepted (§12.7 rule W3) |
 | `windows[]` | array | yes | `{ window_index, begin_s, end_s, civil_begin, civil_end, capture_ticks, achieved_ticks_per_wall_s, closed }` — from `C9` §11.8.1 and [`12`](12_Operator_Control_Surface.md) §7.1's clock ratio. **`closed: false`** is legal and means the run ended inside that window |
-| `supervision` | object | yes | `{ instances, intervals_closed, intervals_open_at_end, prevalence_units_reported[] }` — counts only, from the truth manifest. **No prevalence figure is a gate**, because a corpus with few positives is not a defective corpus. `intervals_open_at_end` is non-zero for any run stopped mid-interval and is a fact, not a defect |
+| `supervision` | object | yes | `{ instances, intervals_closed, intervals_open_at_end }` — counts only, from the truth manifest; `prevalence_units_reported[]` is withdrawn 2026-10-05, since no prevalence is computed. `intervals_open_at_end` is non-zero for any run stopped mid-interval and is a fact, not a defect |
 | `transcript` | object | yes | `{ present, sources[], rows, bytes, truncated, released }` — **reported, never a gate** (§10.10 rule 4). A run whose far end said nothing is a perfectly ordinary run |
-| `declared_omissions[]` | array | yes | Every omission the corpus manifest declares (V8.9), echoed so a caller sees them without opening the manifest |
+| `declared_omissions[]` | array | yes | Every held-back partition, by its manifest digest ([`08`](08_Collection_And_EPoL.md) D8.17); the wider statement of omissions is withdrawn with V8.9 |
 
 #### 12.4.2 Worked example
 
@@ -4560,9 +4565,7 @@ verdict.
                    "civil_begin": "2026-03-21T23:00:00+03:30",
                    "civil_end": "2026-03-21T23:30:00+03:30",
                    "capture_ticks": 5201, "achieved_ticks_per_wall_s": 4.9, "closed": false } ],
-    "supervision": { "instances": 7, "intervals_closed": 6, "intervals_open_at_end": 3,
-                     "prevalence_units_reported": ["per_vehicle", "per_interval",
-                                                   "per_observed_second"] },
+    "supervision": { "instances": 7, "intervals_closed": 6, "intervals_open_at_end": 3 },
     "transcript": { "present": true, "sources": ["dt-stage-a"], "rows": 24110,
                     "bytes": 52104933, "truncated": false, "released": false },
     "declared_omissions": [] },
@@ -4632,16 +4635,15 @@ absence would let a corpus be misread:
 | Every participant was drawn throughout each open annotated interval | `04` `D4.6` | fail |
 | `render_states[]` covers every SUMO vehicle, and no participant ended un-rendered with an open interval | `04` V2.6, V2.7 | fail |
 | Neither side stalled | `04` `D4.12`, `C6` §8.5 | fail |
-| `corpus_eligible` | `04` `C9` §11.8 | fail |
+| `corpus_eligible` | `04` `C9` §11.8 | fail. The check is factual (an epoch declared, the sun bound and present, the audit within tolerance); its name is under the owner's review as a verdict word |
 | The solar residual stayed in tolerance, and the audit was not skipped | `04` `C9` §11.8.2 | fail |
 | The observation root contains nothing from §10.4's right-hand column | `04` V8.1, V8.7, V8.8 | fail |
-| Every declared omission is declared | `04` V8.9 | fail |
-| Drop counters and coverage agree | `04` V8.16 | fail |
 | `Dropped` is zero on every channel | `10` `D10.7` | fail |
 | The clock ratio was recorded | `12` §7.2 | fail |
 | Corpus-affecting events — collisions, teleports, emergency stops, reconciliation refusals | `01` | warn |
 | Lamp gaps (`lamp_gaps[]` non-empty) | `04` `C1` V1.18 | warn |
-| A supervision–illumination correlation was reported per solar bin | `04` V8.6 | fail |
+
+Three gates this list once required are withdrawn 2026-10-05 by the owner's ruling: V8.6 (prevalence per solar bin), V8.9 (the statement of omissions) and V8.16 (drop counters against coverage). Each compared the data against a roll-up over withdrawn words.
 
 **`corpus_eligible` keeps its own meaning and is not restated as a verdict.** `C9` §11.8 defines it as a
 statement about the epoch and the sun — *"the single field a corpus builder filters on"* — and it appears
@@ -5087,7 +5089,9 @@ Stated as properties needed, not as requests.
 
 Each carries the options and a recommendation; none is decided here.
 
-1. **Where the catalogue's class list comes from.** `C1` requires `classes[]` to be curated — measured
+1. *Superseded by [`13`](13_Work_Breakdown.md) §13 decision 3:* derive the classes from the sweep, allow a
+   validated override, and correct `VehicleParameters.json` at the next content build; the catalogue is
+   built that way. **Where the catalogue's class list comes from.** `C1` requires `classes[]` to be curated — measured
    necessity, since `base_type` is wrong for 7 of 17 blueprints and `special_type` is empty for all 17.
    But the sweep generates the catalogue, and a sweep cannot curate. Options: (a) a hand-maintained
    `classes` fragment merged by the sweep, which reintroduces a hand-maintained file that doc 20 §5.6
@@ -5107,14 +5111,19 @@ Each carries the options and a recommendation; none is decided here.
    the digests the lock already records.
 3. *Withdrawn 2026-09-30.* Whether the render cap was a count or a budget: there is no render cap, and
    every vehicle SUMO has in a window is drawn (`C2` §4.2).
-4. **What `render_state` should say about a vehicle SUMO teleported.** The shipped configs set
+4. *Superseded by [`03`](03_CoSimulation_Runtime.md) D3.14 as built:* the session refuses a positive or
+   absent `time-to-teleport` and every other teleport trigger unless the run accepts teleporting
+   (`TeleportingCheck`, `SumoDistributionEditCheck`), and `collision.action` is held to `warn`; across a
+   discontinuity the body is snapped to the new position. **What `render_state` should say about a vehicle SUMO teleported.** The shipped configs set
    `<time-to-teleport value="-1"/>`, forbidding it, with the comment that a teleport is a vehicle
    jumping position that nothing downstream can reproduce faithfully. If a scenario ever raises it,
    a rendered vehicle jumps. Options: a fourth `render_state` value; a per-rendering flag; forbid
    teleporting in `C3` validation. **Recommend forbidding it** — `time-to-teleport` must be `-1` for a
    corpus-eligible run — with a flag for diagnostic runs that marks the run not corpus-eligible, by
    analogy with `render_uses_vtype_colour`.
-5. **Whether the annotation state must be readable across processes.** Doc 20 decision 11 leaves this
+5. *Superseded by [`06`](06_Truth_And_Annotation.md) D6.41 as built:* the supervision in force is held on
+   the server and carried on every world-observer snapshot, so a recorder in any process reads the same
+   state. **Whether the annotation state must be readable across processes.** Doc 20 decision 11 leaves this
    open and says it must be decided before multi-camera capture, not after. `C2`'s observability
    accounting is per sensor and `C4`'s `sensor_id` rule assumes several sensors, so this plan pushes
    towards the decision. Options: publish the annotation state on a world actor the way staging bounds
@@ -5122,7 +5131,9 @@ Each carries the options and a recommendation; none is decided here.
    process. **Recommend publishing it**, because the second option's failure mode is silent — a
    recorder in another process reads an empty registry and writes `unlabelled` on every vehicle — and
    because `C5` is building the actor-plus-RPC-pair pattern anyway.
-6. **Whether a SUMO-driven actor should be given a non-zero physics velocity anyway.** `D4.13` fixes
+6. *Superseded by [`03`](03_CoSimulation_Runtime.md) D3.5 as built:* `set_actor_target_velocity` on a body
+   whose physics is off writes the engine's velocity, so a pose-applied body reports SUMO's own speed to
+   every reader of `GetVelocity()`. **Whether a SUMO-driven actor should be given a non-zero physics velocity anyway.** `D4.13` fixes
    the truth record, but other consumers read the engine's velocity directly — the traffic manager's
    collision stage, and the arrival and occlusion gating of
    [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). The traffic manager is locked out, so the
@@ -5165,7 +5176,7 @@ Each carries the options and a recommendation; none is decided here.
     `night_lighting_required`. **Recommend the current warn-and-record**, with the manifest's
     `lamp_gaps[]` as the filter a corpus builder applies — but if [`11`](11_Time_And_Illumination.md)
     decides illumination is a declared stratifier, the third option becomes the consistent one.
-12. **Whether a supervision–illumination correlation should block a corpus or only be reported.**
+12. *Moot 2026-10-05: V8.6 is withdrawn and no prevalence is computed; the compiler's association check over the author's declarations warns and never refuses ([`07`](07_Scenario_Authoring.md) check 41).* **Whether a supervision–illumination correlation should block a corpus or only be reported.**
     `C8` V8.6 requires prevalence per solar bin and refuses a corpus summary without it, but does not
     refuse on the correlation itself. This is a question about the corpus describing itself honestly,
     not about anything downstream: a corpus whose supervision is separable on illumination is defective
@@ -5175,7 +5186,7 @@ Each carries the options and a recommendation; none is decided here.
     now**, because the bin edges themselves are not yet valued
     ([`10`](10_Scale_And_Performance.md)) and a threshold over undecided bins would be noise. Revisit
     once one corpus exists to measure the natural correlation on.
-13. **Where the label-quality radius of `D4.28` is fixed, and whether `label_crowding` is per sensor or
+13. *Moot 2026-10-05: `label_crowding` and `nearest_label_px` are withdrawn (D4.28 as amended).* **Where the label-quality radius of `D4.28` is fixed, and whether `label_crowding` is per sensor or
     per frame.** `C8` §10.7 names `label_crowding` and `nearest_label_px` and declares the radius a
     parameter without valuing it, as this section does with every number. Two things are genuinely
     open. First, the radius is in pixels and apparent size varies across a frame by a large factor at
