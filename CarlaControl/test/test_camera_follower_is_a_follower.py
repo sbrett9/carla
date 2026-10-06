@@ -38,6 +38,7 @@ import pygame  # noqa: E402  (the follower's window needs it, so it is here if t
 from carlacontrol.ChannelDescription import ChannelDescription  # noqa: E402
 from carlacontrol.FollowerWindow import FollowerWindow  # noqa: E402
 from carlacontrol.FrameStallWatch import FrameStallWatch  # noqa: E402
+from carlacontrol.OrbitSensorController import OrbitSensorController  # noqa: E402
 from carlacontrol.StareAim import StareAim  # noqa: E402
 
 # What a viewer may call. Anything else on the world or the client is a failure.
@@ -122,6 +123,29 @@ class _Actor(_Recording):
         self.callback = None
         self.destroyed = False
         self.moves: list[tuple[object, bool]] = []
+        # The circles the server was given (`set_orbit`), and whether the server flies orbits at
+        # all: False stands for a server built before it carried the orbit mover.
+        self.orbits: list[dict] = []
+        # (enabled, after the camera was destroyed) per `set_orbit_enabled`.
+        self.orbit_switches: list[tuple[bool, bool]] = []
+        self.flies_orbits = True
+
+    def set_orbit(self, centre, radius, altitude, period, *, clockwise=True, start_angle=0.0,
+                  pitch=None, enabled=True) -> None:
+        self._record("set_orbit")
+        if not self.flies_orbits:
+            # The shim's carlanet.OrbitNotOnServerError is a RuntimeError with these words.
+            raise RuntimeError(
+                "this server cannot fly an orbit: it binds no set_orbit, so it was built before the "
+                "Carla plugin carried the orbit mover")
+        self.orbits.append({"centre": (centre.x, centre.y, centre.z), "radius": radius,
+                            "altitude": altitude, "period": period, "clockwise": clockwise,
+                            "start_angle": start_angle, "pitch": pitch, "enabled": enabled,
+                            "after_destroy": self.destroyed})
+
+    def set_orbit_enabled(self, enabled: bool) -> None:
+        self._record("set_orbit_enabled")
+        self.orbit_switches.append((enabled, self.destroyed))
 
     def listen(self, callback) -> None:
         self._record("listen")
@@ -160,6 +184,8 @@ class _World(_Recording):
                        _Actor(calls, 8, "vehicle.audi.a2"),
                        _Actor(calls, 9, "sensor.camera.rgb")]
         self.refuse_spawn = False
+        # False: a server built before it carried the orbit mover, which binds no set_orbit.
+        self.flies_orbits = True
 
     def get_blueprint_library(self) -> _Library:
         self._record("get_blueprint_library")
@@ -170,6 +196,7 @@ class _World(_Recording):
         if self.refuse_spawn:
             raise RuntimeError("spawn refused")
         actor = _Actor(self._calls, 100 + len(self.spawned), blueprint.id)
+        actor.flies_orbits = self.flies_orbits
         self.spawned.append(actor)
         self.spawn_transforms.append(transform)
         return actor
@@ -342,7 +369,9 @@ def test_the_only_actor_destroyed_is_the_followers_own_camera(channel):
     assert session.window.closed
 
 
-def test_the_orbit_stops_before_its_camera_is_destroyed():
+def test_the_orbit_is_the_servers_given_once_and_turned_off_before_its_camera_is_destroyed():
+    # The server flies the orbit: the follower gives it the circle once as the camera is placed,
+    # sends no pose while the picture shows, and turns the orbit off before the camera goes.
     session = _Session(AN_ORBIT)
     for _ in range(5):
         session.step(lambda: time.sleep(0.03))
@@ -350,12 +379,15 @@ def test_the_orbit_stops_before_its_camera_is_destroyed():
     session.run()
 
     assert session.follower.orbit is not None
-    assert session.follower.orbit._thread is None
-    assert session.camera.moves, "the orbit never moved the camera"
-    assert not any(after_destroy for _, after_destroy in session.camera.moves)
+    assert len(session.camera.orbits) == 1 and session.camera.orbits[0]["enabled"]
+    assert session.camera.moves == [], "the follower moved the camera itself"
+    assert session.camera.orbit_switches == [(False, False)]
+    camera_calls = [name for who, name in session.calls if who == f"actor {session.camera.id}"]
+    assert camera_calls.index("set_orbit") < camera_calls.index("set_orbit_enabled") < \
+        camera_calls.index("destroy")
 
 
-def test_the_orbit_holds_the_boresight_on_its_centre():
+def test_the_circle_the_server_is_given_is_the_channels_with_the_boresight_on_its_centre():
     session = _Session(AN_ORBIT)
     for _ in range(5):
         session.step(lambda: time.sleep(0.03))
@@ -364,12 +396,35 @@ def test_the_orbit_holds_the_boresight_on_its_centre():
 
     spawn = session.world.spawn_transforms[0]
     assert (spawn.location.x, spawn.location.y, spawn.location.z) == pytest.approx((50.0, -80.0, 310.0))
-    for transform, _ in session.camera.moves:
-        x, y, z = transform.location.x, transform.location.y, transform.location.z
-        assert math.hypot(x - 50.0, y + 80.0) == pytest.approx(150.0)
-        assert z == pytest.approx(310.0)
-        assert transform.rotation.yaw == pytest.approx(math.degrees(math.atan2(-80.0 - y, 50.0 - x)))
-        assert transform.rotation.pitch == pytest.approx(-math.degrees(math.atan2(300.0, 150.0)))
+    [circle] = session.camera.orbits
+    assert circle["centre"] == pytest.approx((50.0, -80.0, 10.0))
+    assert (circle["radius"], circle["altitude"], circle["period"]) == (150.0, 300.0, 240.0)
+    assert (circle["clockwise"], circle["start_angle"], circle["pitch"]) == (True, 0.0, None)
+    # The pose rule the server flies, at the start angle: on the circle, at the centre's height plus
+    # the altitude, the boresight on the centre.
+    pose = OrbitSensorController.orbit_transform(50.0, -80.0, 10.0, 150.0, 300.0, 0.0)
+    x, y, z = pose.location.x, pose.location.y, pose.location.z
+    assert math.hypot(x - 50.0, y + 80.0) == pytest.approx(150.0)
+    assert z == pytest.approx(310.0)
+    assert pose.rotation.yaw == pytest.approx(math.degrees(math.atan2(-80.0 - y, 50.0 - x)))
+    assert pose.rotation.pitch == pytest.approx(-math.degrees(math.atan2(300.0, 150.0)))
+
+
+def test_a_server_that_cannot_fly_an_orbit_ends_the_follower_saying_so(caplog):
+    # A server built before the orbit mover refuses set_orbit; the follower says so and ends, rather
+    # than showing a camera that does not move, and nothing in the process flies it instead.
+    session = _Session(AN_ORBIT)
+    session.world.flies_orbits = False
+    session.frames(3)
+
+    with caplog.at_level(logging.ERROR):
+        assert session.run() == 1
+
+    assert "this server cannot fly an orbit" in caplog.text
+    assert "could not be started on the server" in caplog.text
+    assert session.camera.moves == [] and session.camera.orbits == []
+    assert session.camera.destroyed and session.window.closed
+    assert session.window.shown == []
 
 
 def test_a_stare_is_spawned_at_its_declared_pose_with_the_channels_optics():
@@ -498,7 +553,9 @@ def test_a_keyboard_interrupt_still_removes_the_camera():
 
     assert session.run() == 0
     assert session.camera.destroyed
-    assert session.follower.orbit._thread is None
+    # The server's orbit was turned off, before the camera went.
+    assert not session.follower.orbit.orbit_enabled
+    assert session.camera.orbit_switches == [(False, False)]
     assert session.window.closed
 
 

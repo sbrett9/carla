@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import sys
 from collections import namedtuple
 from pathlib import Path
@@ -54,6 +55,7 @@ from System import Enum  # noqa: E402
 
 from carlacontrol.CaptureSession import CaptureSession  # noqa: E402
 from carlacontrol.ChannelDescription import ChannelDescription  # noqa: E402
+from carlacontrol.OrbitSensorController import OrbitSensorController  # noqa: E402
 from carlacontrol.RunConfigurationValidator import RunConfigurationValidator  # noqa: E402
 from carlacontrol.RunResult import RunResult  # noqa: E402
 from carlacontrol.RunTerminationSequence import RunTerminationSequence  # noqa: E402
@@ -511,11 +513,44 @@ def test_an_orbit_measuring_occlusion_has_a_depth_camera_attached_to_its_camera(
     assert all(actor.destroyed for actor in server.actors)
 
 
-def test_an_orbit_s_depth_camera_takes_every_pose_its_camera_takes(layout, server):
-    # The orbit is advanced here by hand, a second's worth of angle on every step of the window, so
-    # that the moves checked do not depend on its wall-clock thread's timing; the thread's own
-    # moves come on top. After each move the depth camera stands where the camera stands, and no
-    # call ever moves the depth camera itself.
+def test_an_orbit_is_given_to_the_server_held_through_the_pre_roll_and_set_moving_as_the_window_opens(
+        layout, server):
+    # The circle goes to the server as the camera is placed, not moving, so the camera holds the
+    # pose it opens on through the pre-roll; one call sets it moving as the window opens; and nothing
+    # in the process sends the camera a pose, before the window or inside it.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    session = build(layout, server, document)
+    before_the_window: list[tuple[float, ...]] = []
+
+    def advanced(fake_session) -> None:
+        [rig] = session.channels
+        if fake_session.RenderedTimeSeconds <= fake_session.WindowOpensAtSeconds:
+            before_the_window.append(pose_of(rig.camera.transform))
+
+    server.on_advance = advanced
+    result = session.run()
+    assert result.outcome == "run_finished"
+    rgb, _depth = server.actors
+    opening = OrbitSensorController.orbit_transform(50.0, -80.0, 0.0, 200.0, 518.2, 0.0)
+    assert before_the_window and set(before_the_window) == {pose_of(opening)}
+    assert server.events.of("set_orbit") == [("set_orbit", rgb.id, False, 0.0)]
+    names = server.events.names()
+    assert names.index("set_orbit") < names.index("advance")
+    switched = [(i, event[2]) for i, event in enumerate(server.events.log)
+                if event[0] == "set_orbit_enabled"]
+    [(moving, set_moving), (stopped, set_stopped)] = switched
+    assert (set_moving, set_stopped) == (True, False)
+    assert names.index("start_recording") < moving < names.index("advance", moving)
+    assert stopped > names.index("stop_recording")
+    assert server.events.of("move") == []
+    assert server.events.of("get_orbit_state") == [], "the angle was asked of the server"
+
+
+def test_an_orbit_s_depth_camera_takes_every_pose_the_server_flies_its_camera_to(layout, server):
+    # Through the window the server flies the camera by the tick's delta on the simulation clock, as
+    # the plugin's orbit mover does; the depth camera, attached, stands where the camera stands at
+    # every frame, and no call from this process ever moves either camera.
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     session = build(layout, server, document)
@@ -525,7 +560,6 @@ def test_an_orbit_s_depth_camera_takes_every_pose_its_camera_takes(layout, serve
         [rig] = session.channels
         if rig.depth is None or not rig.orbit.orbit_enabled:
             return
-        rig.orbit.update_orbit(1.0)
         assert pose_of(rig.depth.transform) == pose_of(rig.camera.transform)
         agreed.append(pose_of(rig.camera.transform))
 
@@ -533,14 +567,34 @@ def test_an_orbit_s_depth_camera_takes_every_pose_its_camera_takes(layout, serve
     result = session.run()
     assert result.outcome == "run_finished"
     rgb, depth = server.actors
-    assert len(agreed) == 1800 and len(set(agreed)) > 1, "the orbit never swept"
-    moved = [event[1] for event in server.events.of("move")]
-    assert moved and set(moved) == {rgb.id}
+    assert len(agreed) == 1800 and len(set(agreed)) == 1800, "the orbit never swept"
+    assert server.events.of("move") == []
     # Every frame the client holds places both cameras at one pose, which is what the recorder's
     # pose check compares a depth capture against.
     held = [snapshot for snapshot in server.snapshots.values()
             if rgb.id in snapshot and depth.id in snapshot]
     assert held and all(pose_of(s[rgb.id]) == pose_of(s[depth.id]) for s in held)
+    # 1,800 simulated seconds of window at 240 s per revolution is seven and a half turns: the
+    # server's angle is pi, by the clock and not the wall, and the controller's prediction from the
+    # session's clock is the same angle without a call.
+    assert rgb.orbit["angle"] == pytest.approx(math.pi, abs=1e-6)
+    assert session.channels[0].orbit.current_angle() == pytest.approx(math.pi, abs=1e-6)
+
+
+def test_a_server_that_cannot_fly_an_orbit_refuses_the_run_at_preroll(layout, server):
+    # A server built before the orbit mover binds no set_orbit. The refusal comes as the camera is
+    # placed, not as the window opens, and nothing in the process flies the camera in its place.
+    server.flies_orbits = False
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    _, result = capture(layout, server, document)
+    assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
+    assert "channel ORBIT-1: its camera could not be placed" in result.detail
+    assert "this server cannot fly an orbit" in result.detail and "set_orbit" in result.detail
+    assert server.events.of("start_recording") == [] and server.events.of("move") == []
+    rgb, depth = server.actors
+    assert pose_of(rgb.transform) == pose_of(rgb.spawned_at)
+    assert rgb.destroyed and depth.destroyed
 
 
 def test_with_occlusion_off_an_orbit_carries_no_depth_camera(layout, server):

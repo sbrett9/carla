@@ -196,7 +196,6 @@ def main() -> int:
         logger=logger,
         sync=sync,
     )
-    orbit_sensor_controller.start_updater()
 
     # Recorder: the native (C#) FrameRecorder encodes frames in .NET off the GIL. If the
     # CarlaNet.Recording assembly is absent the recorder reports itself unavailable when toggled (the
@@ -319,7 +318,11 @@ def main() -> int:
         if worker_thread is not None:
             worker_thread.join(timeout=2.0)
 
-        orbit_sensor_controller.stop_updater()
+        # The server's orbit is turned off before the cameras go.
+        try:
+            orbit_sensor_controller.set_enabled(False)
+        except Exception as e:
+            logger.warn("Failed to stop the orbit during shutdown: %r", e)
 
         try:
             scenario.toggle_want(False)

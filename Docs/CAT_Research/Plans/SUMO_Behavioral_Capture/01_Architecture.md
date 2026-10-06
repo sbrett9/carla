@@ -32,6 +32,7 @@ cited is marked **inference**.
 | 10 — 2026-10-05 | §5.3, D1.7, D1.9: the server-held drive lease is built. The episode holds `FDriveLease`, taken and given back by RPC; the SUMO drive session takes it before SUMO starts and gives it back on every exit path; while it is held every other client's autopilot, vehicle-control, Ackermann and physics-control write is refused naming the holder; a second drive is refused at its claim; `break_drive_lease` ends a dead holder's lease, logged, since the RPC server gives no disconnect notice. D1.9's announcement is not built. |
 | 9 — 2026-10-05 | §2.3, §4.1, D1.10: `WorldSupervisionState` is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The session puts each change on the server (`update_supervision`), the plan and the absences on the episode and each lent body's supervision on its own record, and the world observer carries it on every snapshot after the render set. Both world-scoped facts D1.10 names are now published that way. |
 | 10 — 2026-10-05 | §2.3 maps the design's component names to the tree's (`SumoDriveSession`, `CoSimClock`, `SolarLease`, `SolarAudit`, `RenderSetManager`, `VehicleBodyPool`, `PoseConverter`, `VehicleLampMapping`, `TickBatch`). §3, §4.4.3, D1.21: under `advance` the session writes the sun every tick with `set_solar_epoch` and the engine's advance is off (11 D11.19). §2.3, §5.3, D1.7: the population lease is in-process today; the server-side rule is not built. |
+| 11 — 2026-10-05 | §4.4.3, §11, D1.30: the orbiting camera is flown by the server (issue #37, promoted into the plan by the owner). `UOrbitMoverComponent` advances the angle by each tick's delta on the simulation clock from a circle `set_orbit` sends once; the client's orbit thread, about fifty poses a second on the wall clock, is gone, so a capture's steady RPC load is D3.3's two round trips a tick. Written and tested offline; the plugin, LibCarla and the wheel await the owner's build. |
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
 ([03](03_CoSimulation_Runtime.md)), the wire-level shape of any contract
@@ -1196,7 +1197,9 @@ cheap. **The solar write path is outside the per-tick loop** — three RPCs at s
 date rollover, and nothing else. **The solar read path costs nothing** — it arrives on a stream the
 recorder is already consuming, so the check and the record are both free. **The light commands ride
 the batch that already exists**, so the per-tick round-trip count of [03 D3.3](03_CoSimulation_Runtime.md)
-is unchanged: one batch, one tick cue. **And the pacing gate is the same shape as the other three.** It
+is unchanged: one batch, one tick cue. **An orbiting camera adds nothing to it** (2026-10-05, issue #37,
+D1.30): the server flies it from a circle sent once (`set_orbit`), where the client's orbit thread sent
+about fifty poses a second outside that count. **And the pacing gate is the same shape as the other three.** It
 sits entirely inside `PlaybackClock`, is evaluated *before* the cue is issued rather than after, and
 touches nothing downstream — `ACT`, `SRV`, `REC` and every other participant in this diagram run
 identically whether the real-time factor is zero or positive, because pacing decides only *when* the next
@@ -1647,6 +1650,18 @@ fading, since `IsActorEstablished` returns true for any actor nobody has faded (
 `GetActorOpacity` returns 1.0 for the same reason (`CarlaClient.cs:1562`) — a property the truth
 producer's own comment states (`VehicleTelemetryService.cs:66-73`).
 
+**Gained: the orbit's fifty calls a second are gone (2026-10-05, issue #37).** The orbiting camera was
+driven from the client: a thread advanced the angle on the wall clock and pushed a pose to the server as
+a synchronous call about fifty times a second, measured to take the server's tick rate on a loaded world
+from 41.6 to 20.7 per second, and to turn the camera as far per captured frame as a synchronous run's
+pace was high. The server flies it now, from a circle sent once (`set_orbit`; `UOrbitMoverComponent`,
+advancing by each tick's delta on the simulation clock in `TG_PrePhysics`), so the orbit covers the
+declared angle per simulated second whatever the pace, the per-tick round trips are the two of
+[03 D3.3](03_CoSimulation_Runtime.md) and nothing beside them, and a camera's image, its header and the
+frame's snapshot agree on where it was. No capability is given up: the same keys, arguments and
+heads-up display drive it, and a server built before the mover is said plainly rather than orbited
+around by the client.
+
 **Gained: the ambient stationary distribution stops being truncated.** The .NET traffic manager's idle
 cull destroys any registered vehicle idle beyond 90 s, at a wall-clock-measured and therefore
 irreproducible moment — the mechanism, the thresholds and the reproducibility problem are set out in
@@ -1751,6 +1766,7 @@ on opacity.
 | D1.27 | **Live exercise is a property of the collection, not a fifth mode.** It changes no row of the mode matrix (§5.2) and no cell of the authority table (§4.1) beyond the pacing row D1.26 adds. Every mode of §5.1 can run against a stored corpus or live, unchanged (§5.6) |
 | D1.28 | **`DetectAndTrackStage` and `EPoLModelService` remain external and unowned by this architecture whether the exercise is live or offline.** The path to them is one-way out, batched or live (§4.6); any tracks or reports that come back are received as an opaque, tick-stamped transcript with its own provenance, recorded but never parsed for meaning and never fed into truth, supervision or the clock (§1.1, §2.4, §3.2, §3.3). This architecture specifies nothing about either external system's API, format, transport or latency, by design |
 | D1.29 | **Unattended regeneration needs no new architectural component.** `CaptureSession`'s stable identity and `RunManifestWriter`'s closed, machine-readable manifest (§2.3, §4.1) already give a non-interactive, parameterised, reproducible invocation a result an automated cadence can read to tell what was produced and whether it is fit to use (§2.7). The scheduler, and any model lifecycle around it, are outside this architecture entirely |
+| D1.30 | **A declared camera motion is advanced by the server on the world tick, from parameters sent once; the client sends no pose per frame** (2026-10-05, issue #37). An orbit is a function of simulated time, so the plugin's `UOrbitMoverComponent` flies it: `set_orbit` carries the circle, the mover advances the angle by each tick's delta on the simulation clock in `TG_PrePhysics` and sets the camera before the sensors capture and the world observer reports the frame, and the client predicts the angle from the same parameters and the simulated clock rather than asking. The per-tick round-trip count of [03 D3.3](03_CoSimulation_Runtime.md) is therefore the whole of a capture's steady RPC load; a client thread sending poses on the wall clock -- what the orbit was until this date -- both taxed the tick (§4.4.3) and made the camera's motion depend on the run's pace, which D1.3's record of the applied pose could show but not prevent |
 
 ## 13. Open questions
 

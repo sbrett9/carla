@@ -41,7 +41,9 @@ world (D1.12):
   prewarm -- is `refused_preroll`, closed `aborted_at_preroll`; `Window` is `run_stopped`, closed
   `fault:<type>`. A SUMO failure is such a refusal. Anything else raised is `internal_error`.
 * **Place the cameras**: each channel's RGB camera at its stare pose -- or at the pose its orbit
-  opens on, flown by `OrbitSensorController` from the window's opening -- with `sensor_tick` at the
+  opens on, the circle given to the server's orbit mover at once and held there, flown by the server
+  on the simulation clock from the window's opening (`OrbitSensorController`; nothing in this
+  process sends a pose per frame) -- with `sensor_tick` at the
   capture interval and the post-process profile set by name, spawned under the channel's
   `sensor_id` as its `role_name`, which the server refuses where a live camera in the world already
   holds it, so the run refuses at pre-roll; a single channel with no `sensor_id` takes the name the
@@ -80,7 +82,7 @@ world (D1.12):
   their run id, the session's illumination source and its render set -- so each sidecar lists the
   bodies its own frame rendered, named by SUMO vehicle, and none of the bodies parked out of sight
   between loans, and, under a draw distance, marks every vehicle its camera did not draw. An orbit
-  starts to sweep as the window opens.
+  is set moving on the server as the window opens, one call, and sweeps on the simulation clock.
 * **Advance** until the window's end, the scenario's end, a stop, a loud condition under an
   unattended caller, or write headroom running out (check 46).
 * **Terminate** through `RunTerminationSequence`: drain the recorders, take the closing snapshot and
@@ -729,18 +731,25 @@ class CaptureSession:
         if effective.value("occlusion.enabled"):
             self._attach_depth_camera(rig, library, tick)
         if description.pattern == "orbit":
-            rig.orbit = OrbitSensorController(rig.camera, world=None, logger=self.logger)
+            rig.orbit = OrbitSensorController(
+                rig.camera, world=None, logger=self.logger,
+                clock=lambda: float(self.session.RenderedTimeSeconds))
             rig.orbit.set_orbit_params(center_x=description.orbit_centre_x_m,
                                        center_y=description.orbit_centre_y_m,
                                        center_z=description.orbit_centre_z_m,
                                        radius=description.orbit_radius_m,
                                        altitude=description.orbit_altitude_m,
-                                       speed=description.orbit_period_s)
+                                       speed=description.orbit_period_s,
+                                       angle=0.0)
+            # The circle goes to the server now, not moving: the camera was spawned at the pose it
+            # opens on and the server holds it there until the window opens (`_set_orbits_moving`),
+            # so the view the window's first frame is written from is the one whose readiness is
+            # witnessed. A server built before it flew orbits refuses here, at pre-roll, rather than
+            # as the window opens; nothing in this process flies the camera in its place.
+            rig.orbit.hold_on_server()
             self.termination.add_step(RELEASE_WORLD, f"stop orbit {rig.sensor_id}",
-                                      rig.orbit.stop_updater, CAMERA_TIMEOUT_S, ORDER_ORBIT)
-            # Held at the pose it opens on until the window opens (`_set_orbits_moving`): the view
-            # the window's first frame is written from is the one whose readiness is witnessed.
-            rig.orbit.start_updater()
+                                      lambda: rig.orbit.set_enabled(False), CAMERA_TIMEOUT_S,
+                                      ORDER_ORBIT)
 
     def _attach_depth_camera(self, rig: ChannelRig, library: Any, tick: float) -> None:
         """Spawn the depth camera occlusion is measured against, attached to the channel's camera.

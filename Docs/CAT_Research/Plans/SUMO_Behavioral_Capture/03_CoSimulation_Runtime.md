@@ -66,6 +66,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §2.7, D3.29: the compile-lock check reads the lock's `dry_run` block and refuses, once the files, the catalogue, the epoch and the plan agree with the lock, a scenario whose compile skipped its SUMO-only run or whose lock records none, naming the scenario and the lock's reason, unless the run accepts it (`AcceptSkippedDryRun`; `run_sumo_drive.py --accept-skipped-dry-run`; `run_capture` `scenario.accept_skipped_dry_run`, which refuses offline first as check 54). The report carries a `dry run` line either way and the run manifest's opening row says whether the run happened and whether a skipped one was accepted. All four shipped locks record a completed run. |
 | 2026-10-05 | Corrected against the tree: §1's components carry the names the code has (`SolarLease`, `SolarAudit`, `VehicleLampMapping`, `HeadlightRule`, `VehicleBodyPool`, `TickBatch`, `SumoStepRecord`, `SumoRoadNetwork`, `CoSimStopCause`); the subscription is nine variables (§8.3); `sumo-gui` is staged and run (§2.6); the interval binder takes the bound plan (§2.7). |
 | 2026-10-05 | §10, D3.13: the drive lease is built. The episode holds `FDriveLease`, taken by `take_drive_lease` and given back by `release_drive_lease`; while it is held every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` is refused for every actor, direct and in a batch, naming the holder. The session takes it before SUMO starts, as `<holder> (process <pid> on <machine>)`, and gives it back after the world's settings on every exit path; a lease another client holds refuses the start at `Authority` naming the holder, with SUMO never launched. `break_drive_lease` ends a dead holder's lease, logged, since rpclib gives no disconnect notice; the per-actor mark and the solar cover are not built, the latter for want of a per-connection identity. The traffic tools refuse naming the holder; a server without the lease is recorded `NOT HELD`. |
+| 2026-10-05 | §9.5.1: an orbit is flown by the server (issue #37, promoted into the plan by the owner). The circle goes to the plugin's orbit mover (`set_orbit`) as the camera is placed, held, and is set moving as the window opens; the mover advances the angle by each tick's delta on the simulation clock in `TG_PrePhysics`, before the sensors capture and the world observer reports the frame. The client's orbit thread, which sent a pose about fifty times a second on the wall clock beside D3.3's two round trips, is gone. Written and tested offline; the plugin awaits a build. |
 
 ---
 
@@ -3303,7 +3304,10 @@ on or after the step the tiles were answered in for, and leaving out the blocks 
 cover (`SessionFrameVehicles`); a view whose tiles stop being in starts its picture again. The wait begins once every capture camera holds the pose the window opens on, because
 the tiles' figures cover every registered view and a camera that moves between its frames never reads
 settled: a stare at a point or a pose from the prewarm's first step; an orbit, which is held at the
-pose it opens on through the prewarm and sweeps from the window's opening; and a stare aimed at the
+pose it opens on through the prewarm -- the circle given to the server's orbit mover as the camera is
+placed, not moving -- and sweeps from the window's opening, flown by the server on the simulation clock
+from that circle (`set_orbit`, issue #37; the client sends no pose per frame, so D3.3's two round trips
+a tick are the whole of it); and a stare aimed at the
 rendered traffic, which starts over the centre of the world's staging bounds (`get_staging_bounds`),
 follows the traffic through the prewarm until one SUMO step and the picture's 120-tick ceiling before
 the window opens — seven one-second steps at the defaults — and holds from there

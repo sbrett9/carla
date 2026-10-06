@@ -554,11 +554,22 @@ def test_an_orbit_holds_the_pose_it_opens_on_until_the_window_opens(layout):
             camera.spawned_at.location.z) == pytest.approx(
         (opening.location.x, opening.location.y, opening.location.z))
     assert camera.spawned_at.rotation.pitch == pytest.approx(opening.rotation.pitch)
+    # The server flies the orbit: the circle goes to it held, before the pre-roll's first step, and
+    # is set moving once the recorders have started; nothing in the process ever moves the camera.
     names = server.events.names()
-    moves = [i for i, event in enumerate(server.events.log) if event[0] == "move"]
-    assert moves and min(moves) > names.index("start_recording"), \
-        "the orbit moved before the window opened"
-    assert session.channels[0].orbit.orbit_enabled
+    assert server.events.of("move") == []
+    [(_, _, held_moving, start_angle)] = server.events.of("set_orbit")
+    assert (held_moving, start_angle) == (False, 0.0)
+    assert names.index("set_orbit") < names.index("advance")
+    moving = [i for i, event in enumerate(server.events.log)
+              if event[0] == "set_orbit_enabled" and event[2]]
+    assert moving and min(moving) > names.index("start_recording"), \
+        "the orbit was set moving before the window opened"
+    # And turned off by the termination, after the recorders drained, before the camera went.
+    assert not session.channels[0].orbit.orbit_enabled
+    stopped = [i for i, event in enumerate(server.events.log)
+               if event[0] == "set_orbit_enabled" and not event[2]]
+    assert names.index("stop_recording") < min(stopped) < names.index("destroy")
     held = result.produced["cameras"][0]["held_through_the_pre_roll"]
     assert held["angle_deg"] == 0.0 and held["sweeps_from"] == "the window's opening"
 
