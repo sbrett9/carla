@@ -45,6 +45,7 @@ the real scenario artifacts. No code changed, no build run.
 | 37 · 2026-10-05 | The observability accounting is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (§5; D6.11, D6.22, D6.23, D6.25 withdrawn; D6.26, D6.27, D6.39 amended). The manifest sketch loses its observability, site-observability, prevalence, render-accounting and reconciliation blocks and its prevalence check (§8.4); no manifest summary document is planned. The sun's achieved state is in both exports with no rule based on prevalence (§10.2, §10.3). §13 names what 11 still owes. |
 | 38 · 2026-10-05 | The SUMO-against-CARLA divergence is a run-level measurement, as the owner ruled, written where a reader finds it: `bridge_divergence` on the manifest's `manifest_closed` row, the same figures in the run result, and two closeout gates with limits from 39 measured drives, `bridge.position_divergence` at 0.01 m and `bridge.velocity_divergence` at 0.01 m/s, run-configuration fields (§4.3, §8.4, D6.10 as built; question 7 closed). D6.10's four per-capture sidecar fields are withdrawn; `heading_separation` is defined once, in §4.3, and the body-heading-against-SUMO-angle difference of §8.2 is named as a designed quantity and not it. An independent test holds the pose convention to hand-worked numbers. The vehicle lights are driven and the rule is on the manifest's opening row (`vehicle_lights`); per-vehicle state in the truth comes later (question 11). Authors see which bodies' headlights, brake lights and turn signals light up, in the skill's generated `references/vehicles.md` and the resolution report's vehicle section; as measured, none of the shipped bodies do. |
 | 39 · 2026-10-05 | A still is written with the truth of its own frame or not at all, as the owner ruled ("close the door"; §8.2). The recorder holds the client's snapshots open while it records (`CarlaClient.HoldSnapshotFrames`, `SnapshotHold`) and releases each frame once an image of a later frame has been prepared, less a margin of four; the client serves a frame exactly or not at all, keeps sixteen frames with no hold open and never more than 256. A still whose own frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`), reported by `NativeRecorder` and the run result, and gated at zero by the closeout (`capture.frame_unpaired[<sensor>]`, [12](12_Operator_Control_Surface.md) §7.2). `telemetry_tick` is gone from the sidecar and the PNG's `carla:capture`; the sidecar audit no longer counts truth from a neighbouring frame. Built and tested against a stand-in server; the live check is the owner's. |
+| 40 · 2026-10-05 | The two exports are withdrawn by the owner's ruling (§10.3, D6.15): imagery and truth stay side by side in one capture folder, with no export step, no separate imagery folder, no held-back partition and no validator over an imagery folder. §10.2 is reduced to what the collection contains and where each thing is written; §10's opening and §10.1's per-tick row follow. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and the supervision-transfer rule of §10.1 is published and not applied here. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -3483,12 +3484,12 @@ rule read from two directions.
 ## 10. What the corpus contains, the transfer rule it publishes, and the anti-leak boundary
 
 This pipeline does not *perform* the association of detector tracks to truth, and writes no export for a
-scoring step. Both are removed. What survives — and survives in full — is the part that was always
-about our own data: the format in which truth is emitted, the rule by which supervision would be
-carried onto detector tracks, the partition of the corpus into a model-readable half and a withheld
-half, and the label leaks that partition exists to close — the three measured in §2.4 and the fourth
-subtler one beside them. The render set is not among them, because every vehicle SUMO has is drawn
-(§10.4).
+scoring step. Both are removed. What survives is the part that was always about our own data: the
+format in which truth is emitted, and the rule by which supervision would be carried onto detector
+tracks (§10.1). The partition of the collection into a model-readable half and a withheld half is
+withdrawn 2026-10-05 by the owner's ruling (§10.3, D6.15): imagery and truth stay side by side in one
+capture folder, and §10.2 says what the folder holds and where. The render set is not a leak, because
+every vehicle SUMO has is drawn (§10.4).
 
 ### 10.1 The format guarantee, and the transfer rule this pipeline publishes but does not apply
 
@@ -3500,7 +3501,7 @@ is a property of the artifact, and it is met by things §4, §5, §7 and §8 alr
 
 | Guarantee | Delivered by |
 |---|---|
-| **Per tick** — every truth record is stamped with the simulation tick it describes, and the recorder pairs each capture with the truth of its own frame rather than a neighbour's | §8.2; `FrameRecorder.cs:183` captures into the encoding job rather than reading at write time |
+| **Per tick** — every truth record is stamped with the simulation tick it describes, and the recorder writes each still with the truth of its own frame or writes no still (2026-10-05) | §8.2; `FrameRecorder`, `SnapshotHistory` |
 | **Positioned** — geodetic position in the same frame as the pixels, plus `hae` and `hae_dtm`, for every rendered vehicle, and for every unrendered one in the world truth track | §4.2, §8.3 |
 | **Timed** — interval bounds as ticks, with all three onsets (`declared`, `committed`, `observed`) and a `closed_by` that distinguishes a behavioural end from a capture end | §3.3, §3.4 |
 | **Boxed** — the dimensions of the **thing that was rendered**, not the `vType`'s declared dimensions, together with the sensor pose and full pinhole intrinsics needed to project them (`CotWriter.cs:101-124`) | §4.2, §8.2 |
@@ -3540,57 +3541,51 @@ supervision is stored per interval rather than per entity. Rule 4 is why interva
 not a flag on each frame. The rule is the justification for half of §8.1's schema; deleting it would
 leave that schema looking arbitrary.
 
-### 10.2 What the corpus contains, and which of it a model may read
+### 10.2 What the collection contains, and where each thing is written
 
-The corpus contains everything below. The question the table answers is narrower and is entirely about
-**our data**: which fields go into the model-readable partition of §10.3, and in what role.
+Everything the collection holds, and the file that holds it. The column that once said which of it a
+training export carried is removed with the two exports (2026-10-05, the owner's ruling, §10.3): what a
+recipient reads of the folder is the recipient's business.
 
-| What the corpus contains | In the training export | In the full-truth export |
-|---|---|---|
-| Imagery (PNG), with its `carla:capture` and `carla:solar` chunks | **yes — the model input** | yes |
-| Two- and three-dimensional boxes and class for every rendered vehicle, and the modal mask where an instance-segmentation channel ran — the per-image label set [08 §5.1](08_Collection_And_EPoL.md) specifies | **yes — the label** | yes |
-| Three-valued supervision, **per image and attached to the box** — the state, the labels in force, and the phase at that instant | **yes — the label** (`D6.38`) | yes |
-| The pattern-instance structure itself: participants, phase sequences, interval bounds, series and slot membership | **no** — joinable only through identifiers the export withholds; the consumer assembles supervision onto **its own** tracks through the published transfer rule (§10.1) | yes |
-| The vocabulary that defines the terms: the core, and every author namespace with its definitions, `broader` links, `contrast_with` and `hard_negative_for` (§8.7) | **yes — it is what makes the label readable.** These fields say what a term *means*, never which subject carries it | yes |
-| A term's **pointer** fields: `exemplar_instances[]`, and `counterfactual` whose `kind` is `instance`, `cohort` or `series` | **no** (`D6.37`) — they name subjects of this scenario by the very identifiers the row below withholds | yes |
-| `instance_id`, `series_id`, `slot_key`, `entity_id`, `sumo_id`, `actor_id` | **no** — build-time join keys only; they do not travel with an example | yes |
-| Truth positions, `hae`, `hae_dtm`, truth velocity, network state (edge, lane, lane position, stop state) | **no** | yes |
-| `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_*_px` | **no** — may *filter* which examples are included, never travels as a feature | yes |
-| `<_aoi>` derived area relations | **no** | yes (stratification, auditing) |
-| `role_name`, `provenance`, `vtype_id`, `producer`, `pose_source`, `kinematics_source` | **no** | yes |
-| The bridge's divergence, on the manifest's closing row and in the run result | **no** | yes (corpus QA) |
-| Render-set membership, admission and release instants, refused vehicle types | **no** | yes (corpus QA) |
-| `_solar` achieved sun angles and the declared civil instant | **yes** — a fielded system knows the time and its own location, so the sun is a covariate it is entitled to; no rule based on prevalence conditions it (the gate that did is withdrawn 2026-10-05, below) | yes (auditing) |
-| `_solar` residual, policy, anchor tick | **no** | yes (corpus QA, replay verification §7.3) |
-| *Observability outcomes, spans, coverage and prevalence* | *withdrawn 2026-10-05 by the owner's ruling (§5): nothing computes them, so neither export carries them* | — |
-| The supervision plan and the run manifest themselves | **no** — compile-time and audit artifacts | yes |
-| *Detector tracks, and supervision transferred onto them* | *not produced here at all — §10.1 rule, assembled downstream* | *not ours* |
+| What the collection contains | Where it is written |
+|---|---|
+| Imagery (PNG), with its `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor` text chunks and no other (held by a test) | the still |
+| Every vehicle the frame drew, named by its SUMO vehicle: position, `hae`, `hae_dtm`, speed and course, the body's dimensions, `in_frame` and apparent size, and occlusion where it was measured or in one word why it was not; under a draw distance, `beyond_draw_distance` and `camera_range_m` | the truth sidecar beside the still (§8.2) |
+| Three-valued supervision per drawn SUMO vehicle -- the state, the instances in force with their labels, phase and role -- and the world's absences in force | the truth sidecar (§8.2) |
+| The pattern-instance structure: participants, phase sequences, interval bounds, series and slot membership, and every interval as it opened and closed | the supervision plan and the run manifest (§8.1, §8.4) |
+| The vocabulary that defines the terms, with its version and digest | the plan; the version and digest on every supervised sidecar (§8.7) |
+| `sumo_id`, `vtype_id`, `admitted_tick`, `actor_id`, `role_name` | the truth sidecar |
+| Every SUMO vehicle at every SUMO frame of the window, drawn or not | the world truth track (§8.3) |
+| The sun's achieved state and its band | `_solar` on the sidecar and `carla:solar` on the still |
+| The illumination declaration and the audit's residual | `_illumination` on the sidecar and `carla:illumination` on the still |
+| The camera's pose and intrinsics | the sidecar's platform track and `carla:sensor` on the still |
+| The bridge's divergence over the run | the manifest's closing row and the run result (§4.3) |
+| Render-set membership, admissions and releases, refused vehicle types | the run manifest (§8.4) |
+| *Per-image label records, `<_aoi>` area relations, `producer`, `pose_source`, `kinematics_source`* | *written by nothing* |
+| *Observability outcomes, spans, coverage and prevalence* | *withdrawn 2026-10-05 by the owner's ruling (§5)* |
+| *Detector tracks, and supervision transferred onto them* | *not produced here; the rule is published (§10.1)* |
 
-The rule behind the table: **truth may define the target and may filter which examples are included,
-and may never travel with an example as something the model can read.** Anything that did would let a
-model learn how the corpus was constructed instead of what the imagery shows — which makes the corpus
-useless for its stated purpose regardless of what anyone measures on it afterwards.
-
-**Illumination is the one row where that rule does not settle the question by itself, and it is worth
-being explicit about why.** Every other withheld field is withheld because a fielded system could not
-obtain it: nothing in the field knows an `instance_id`, a truth position, an occlusion fraction or
-the tick our pipeline admitted a vehicle. **A fielded system does know the time and its own location**, and
-can compute the solar geometry from them exactly as we do. Sun elevation is therefore not privileged
-information — it is a covariate the deployed system is entitled to, and withholding it makes the corpus
-*less* representative rather than safer. That is the brief's own position (§3a, standing constraint),
-and this section adopts it.
-
-**The sun's achieved state is in both exports, and no rule based on prevalence conditions it.** This
-section once gated solar state out of the training export unless `prevalence_by_illumination` showed
-annotated mass in more than one band; that gate is withdrawn 2026-10-05 by the owner's ruling (D6.25),
-because the quantity it rested on is a count over a judgement and is not computed (§5.3). What stands
-against the time-of-day confound is authoring: §9.3 rule 5, which the compiler checks over the author's
-declarations and warns on ([07](07_Scenario_Authoring.md) check 41), and the remedy it names, a second
-capture window in another band, which [11](11_Time_And_Illumination.md) and
-[12](12_Operator_Control_Surface.md) make cheap. Whether a collection's labels follow its light is a reader's
-question to put to the declared labels and the recorded sun, both of which every export carries.
+**The sun's achieved state is on the still and the sidecar alike, and no rule based on prevalence
+conditions it.** This section once gated solar state out of a training export unless
+`prevalence_by_illumination` showed annotated mass in more than one band; that gate is withdrawn
+2026-10-05 by the owner's ruling (D6.25), because the quantity it rested on is a count over a judgement
+and is not computed (§5.3). What stands against the time-of-day confound is authoring: §9.3 rule 5,
+which the compiler checks over the author's declarations and warns on ([07](07_Scenario_Authoring.md)
+check 41), and the remedy it names, a second capture window in another band, which
+[11](11_Time_And_Illumination.md) and [12](12_Operator_Control_Surface.md) make cheap. Whether a
+collection's labels follow its light is a reader's question to put to the declared labels and the
+recorded sun, both of which the folder carries.
 
 ### 10.3 The two exports, and why the split survives the scope narrowing
+
+**Withdrawn 2026-10-05 by the owner's ruling.** There is no export step and no second folder: imagery
+and truth stay side by side in one capture folder, as the recorder writes them, with no separate
+imagery folder, no held-back partition and no validator over an imagery folder. What stands: the PNG
+carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test
+(`FrameRecorderSupervisionTests`), and the truth sidecar sits beside it; §10.2 says where each thing is
+written; the transfer rule of §10.1 is published and not applied here (D6.15 withdrawn,
+[08](08_Collection_And_EPoL.md) D8.17 withdrawn, [04](04_Contracts.md) D4.26 as amended). The text
+below is kept as written.
 
 **The split survives, as a held-back partition of our own data.** It was worth asking whether it
 should, because "training versus evaluation" would justify it on a basis — evaluating a model — that
@@ -3788,7 +3783,7 @@ owner acts on it rather than rediscovers it.
 | **D6.12** | **[20 decision 14](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) does not apply to this mode, and SUMO's own distribution edits are governed instead.** Teleports (all three options) are forbidden; `collision.action` is constrained to `warn` (amended 2026-10-05 by the owner's ruling, from `warn` or `none`: the record of collisions must always exist, as [13](13_Work_Breakdown.md) §13 decision 5 settles — record it, mark the span, never stop — and under `none` SUMO skips the check, so a run could not say whether any collision happened, where under `warn` it changes nothing about the traffic and only registers the event); `max-depart-delay` skips are always recorded and are a hard failure when they discard a plan subject; arrivals, emergency stops and insertion backlog are recorded; an unseeded run and `random-depart-offset` are forbidden. `lanechange.duration` must be above zero (§6); the compiler writes 3 s ([04](04_Contracts.md) D4.42). **Built at session start (2026-10-02):** every teleport trigger is refused unless the run accepts teleporting explicitly, as `time-to-teleport` already was; a collision action other than `warn` — `none` and `ignore-accidents` among them since 2026-10-05 — a positive `random-depart-offset` and `random` are refused with no acceptance; the scale, the cap on vehicles running and `max-depart-delay` are recorded, and the run report states every one as it ran. **Built at compile time (2026-10-05), as the owner ruled:** the hard failure for a plan subject. SUMO's insertion and its discards are deterministic for one configuration and seed, so the scenario compiler runs the compiled files in SUMO alone over the whole span and refuses the scenario when a vehicle the plan names -- an instance's participant or a series' realised slot -- is discarded or still waiting at the end ([07](07_Scenario_Authoring.md) check 59), and the lock records that the run happened. **Built in the binder (2026-10-05):** a plan subject SUMO gives up inserting closes its intervals `never_inserted` and makes the advance that showed it refuse at the window stage, naming the vehicle. A `lanechange.duration` of zero is recorded on the report, not refused |
 | **D6.13** | **`entity_id` defaults to the SUMO vehicle id**, which closes [20 §4.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s cross-run identity gap for authored trips at no cost (§7.1) |
 | **D6.14** | **An annotation may never be attached to a flow member by ordinal.** `<flow id>.<n>` is reproducible only while SUMO runs open-loop, which the accepted pose-application mode is and the actuated shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) is not. The manifest records which actuation strategy ran (§7.2) |
-| **D6.15** | **The corpus is written as two separate artifacts by a corpus export step: a `training export` and a `full-truth export`**, and a downstream trainer is given a path only to the first. Truth may define the target and may filter which examples are included; it may never travel with an example as a field the model can read (§10.2, §10.3). **The split survives the scope narrowing of [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md) as a held-back partition of our own data: of *fields*, not a held-out test set of examples, which is a downstream team's choice to make.** It was never a measurement, so nothing about it depended on scoring; what changed is that the second artifact is named for what it contains rather than for what somebody might do with it, and that no component here writes, reads or checks a model's output |
+| **D6.15** | **Withdrawn 2026-10-05 by the owner's ruling.** Imagery and truth stay side by side in one capture folder; there is no export step, no separate imagery folder, no held-back partition and no validator over an imagery folder. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and the supervision-transfer rule of §10.1 is published and not applied here. As decided: **The corpus is written as two separate artifacts by a corpus export step: a `training export` and a `full-truth export`**, and a downstream trainer is given a path only to the first. Truth may define the target and may filter which examples are included; it may never travel with an example as a field the model can read (§10.2, §10.3). **The split survives the scope narrowing of [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md) as a held-back partition of our own data: of *fields*, not a held-out test set of examples, which is a downstream team's choice to make.** It was never a measurement, so nothing about it depended on scoring; what changed is that the second artifact is named for what it contains rather than for what somebody might do with it, and that no component here writes, reads or checks a model's output |
 | **D6.16** | **Withdrawn 2026-09-30.** There is no render cap: every vehicle SUMO has is drawn, so scene density cannot depend on the label and no span is withheld from the training export (§10.4) |
 | **D6.17** | **Four artifacts, one writer each**: the supervision plan (compile time), the capture truth sidecar (per camera per capture), the world truth track (per run, every SUMO vehicle), and the run supervision manifest (per session, authoritative). The world truth track is new and is what keeps the base rate from being computed over a render-filtered population (§8) |
 | **D6.18** | **The two label leaks in the existing producer are defects and are fixed wherever that code produces ground truth**, including the standalone CARLA-free path: `special_type = "marked"` (`SumoCotBridge.py:321-322`) and the anomaly-to-`u` affiliation mapping. This is a narrow amendment to [01 D1.18](01_Architecture.md)'s "retained unchanged" — unchanged in role, corrected in these two places (§2.4, §8.3, §9.1). **Both are fixed in the standalone path (2026-09-29).** `special_type` means the kind of vehicle and nothing else. SUMO reports no kind, and **the kind comes from the vehicle catalogue (owner's ruling, 2026-10-02)**: a vehicle whose body's blueprint a catalogue class draws carries that class's `cot_special_type`, empty where the class curates none, whatever the blueprint itself declares; a blueprint no class draws keeps the kind it declares. The capture sidecar and the live pull of the process running the drive take it from the client the session drives through, which the session hands its catalogue's table as it starts; a reader on another client is handed none and reports the declared kind. The standalone producer, given the catalogue, writes the kind for the blueprint each vehicle type names, and without one writes it empty (§2.4, §4.2, §8.3). **`base_type` follows the catalogue's `cot_base_type` by the same rule (owner's ruling, 2026-10-05)**, in the capture sidecar, the live pull, the callsign built from it, the world truth track and the standalone producer; a blueprint no class draws keeps the base type it declares, from its wheel count where it declares none, and in the world truth track and the standalone producer a type naming none of the catalogue's blueprints takes its SUMO vehicle class's. A planted vehicle carries the kinds of its blueprint like any other: the author's marking never goes in `special_type`. A legacy labels file's `u` is withheld. **This reconciles with `8d3eafc5d`**, which made the XML and CSV the truth sidecar carrying the whole record: the marking leaves the field that means something else, not the sidecar. Both files carry it in their own `marked` field (`1`/`0`), which is not a CoT contract field — a CSV column as before, and a `_carla` attribute the XML gained with this fix, since measured before it the XML carried the marking only through `special_type`. The datagram feed carries neither. A compiled scenario marks nothing there; its labels are its `*.supervision.json`, joined to the sidecar by vehicle id, so no information is lost (§8.3) |
