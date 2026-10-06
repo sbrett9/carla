@@ -495,6 +495,9 @@ class CaptureSession:
             pacing_window_s=float(effective.value("pacing.window_s")),
             sumo_home=effective.value("sumo.home"),
             allow_sumo_version_mismatch=bool(effective.value("sumo.allow_version_mismatch")),
+            # Check 54 has already refused a skipped dry run the run does not accept; the session is
+            # told the same so its own refusal agrees and its report records the acceptance.
+            accept_skipped_dry_run=bool(effective.value("scenario.accept_skipped_dry_run")),
             draw_distance_m=effective.value("capture.draw_distance_m"),
             **self._render_set_arguments(effective),
             # Every capture run writes it, at every SUMO frame inside the window: a base rate is taken
@@ -611,6 +614,8 @@ class CaptureSession:
         if lock["compiled"]:
             self.logger.info("routed by: %s", lock["routed_by"])
             self.logger.info("compiled for: %s", lock["compiled_for"])
+            (self.logger.warning if lock["skipped_dry_run_accepted"] else self.logger.info)(
+                "dry run: %s", lock["dry_run"])
         teleporting = checks["teleporting"]
         (self.logger.warning if teleporting["enabled"] else self.logger.info)(
             "teleporting: %s", teleporting["statement"])

@@ -163,6 +163,10 @@ _CHECKS: tuple[RunCheck, ...] = (
              _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(48, OFFLINE, "The catalogue at paths.catalogue is the one the scenario was compiled "
              "against", _R, RUN_CAPTURE, "RunConfigurationValidator"),
+    RunCheck(54, OFFLINE, "The scenario lock records that its compile ran the scenario in SUMO alone "
+             "(the compiler's check 59), or scenario.accept_skipped_dry_run accepts that it did not",
+             _R, RUN_CAPTURE, "RunConfigurationValidator; the session refuses the same lock before "
+             "SUMO is started"),
     RunCheck(51, OFFLINE, "The prewarm leaves every camera, at the pose it holds as the window "
              "opens, enough ticks after its tiles are first asked about to render two frames at "
              "least ten ticks apart: the fewest its picture can be witnessed settled on", _R,

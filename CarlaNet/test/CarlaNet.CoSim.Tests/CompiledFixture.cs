@@ -144,6 +144,20 @@ internal sealed class CompiledFixture : IDisposable
                     ["mismatch_accepted"] = false,
                 },
             },
+            // The compiler's SUMO-only run, as SumoDryRun.lock_record writes it: every vehicle entered.
+            ["dry_run"] = new JsonObject
+            {
+                ["ran"] = true,
+                ["sumo_release"] = RoutedBy,
+                ["begin_s"] = 0.0,
+                ["end_s"] = 60.0,
+                ["vehicles"] = new JsonObject
+                {
+                    ["loaded"] = 4, ["inserted"] = 4, ["discarded"] = 0, ["waiting_at_end"] = 0,
+                },
+                ["planned_vehicles"] = new JsonObject { ["total"] = 1, ["inserted"] = 1 },
+                ["collisions"] = 0,
+            },
             ["epoch"] = JsonNode.Parse(epoch.CanonicalJson),
             ["epoch_block_sha256"] = epoch.Digest,
         };

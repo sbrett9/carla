@@ -53,7 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-dry-run", action="store_true",
                         help="skip the SUMO-only run that refuses a planned vehicle SUMO never "
                              "inserts (check 59), for quick iteration on a draft; the lock records "
-                             "that it was skipped")
+                             "that it was skipped, and a capture run refuses the scenario unless "
+                             "it accepts that (run check 54)")
     parser.add_argument("--write-checks", type=Path, metavar="PATH",
                         help="write checks.json, generated from the compiler's check catalogue")
     parser.add_argument("--write-schema", type=Path, metavar="PATH",

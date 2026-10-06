@@ -48,6 +48,7 @@ from RunCaptureFixture import (  # noqa: E402
     SCENARIO_ID,
     Layout,
     run_document,
+    write_scenario_package,
 )
 from System import Enum  # noqa: E402
 
@@ -684,13 +685,48 @@ def test_the_compile_lock_and_teleporting_reach_the_result_and_the_closeout(layo
         "compiled": True, "lock_path": server.session.Report.CompileLock.ExpectedLockPath,
         "statement": str(server.session.Report.CompileLock),
         "routed_by": server.session.Report.CompileLock.RoutedByText,
-        "compiled_for": server.session.Report.CompileLock.WorldText}
+        "compiled_for": server.session.Report.CompileLock.WorldText,
+        "dry_run": server.session.Report.CompileLock.DryRunText,
+        "skipped_dry_run_accepted": False}
     assert session["teleporting"] == {"enabled": False, "accepted": False, "seconds": -1.0,
                                       "declared": "-1", "statement": "disabled (time-to-teleport '-1')"}
     text = caplog.text
     assert "compile lock: gardnerville_fixture, compiled by" in text
     assert "routed by duarouter 1.27.0" in text
+    assert "dry run: ran with SUMO 1.27.0" in text
     assert "teleporting: disabled (time-to-teleport '-1')" in text
+
+
+def test_a_skipped_dry_run_is_refused_offline_before_anything_is_started_unless_accepted(layout, server,
+                                                                                         caplog):
+    skipped = {"ran": False, "reason": "skipped at the author's request: nothing established that "
+                                       "every vehicle the plan names enters the run"}
+    write_scenario_package(layout.scenario_root, dry_run=skipped)
+
+    # Refused by check 54 with no session started: the session's own refusal never has to run.
+    _, result = capture(layout, server)
+    assert result.outcome == "refused_offline"
+    assert result.refusals[0]["check"] == 54
+    assert "skipped its SUMO-only run" in result.refusals[0]["message"]
+    assert server.events.of("start_sumo_drive") == []
+
+    # Accepted, the session is told so, and the acceptance is said louder than an ordinary lock.
+    caplog.set_level("INFO")
+    server.compile_lock = FakeCompileLock().accept_skipped_dry_run(skipped["reason"])
+    _, result = capture(layout, server, overrides=["scenario.accept_skipped_dry_run=true"])
+    assert result.outcome == "run_finished"
+    assert started_with(server)["accept_skipped_dry_run"] is True
+    lock = result.produced["session"]["compile_lock"]
+    assert lock["skipped_dry_run_accepted"] is True
+    assert lock["dry_run"].startswith("SKIPPED at the compile (skipped at the author's request")
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(m.startswith("dry run: SKIPPED at the compile") for m in warnings)
+    assert result.launch_echo["scenario"]["dry_run"]["skipped_accepted"] is True
+
+
+def test_by_default_the_session_is_told_to_accept_no_skipped_dry_run(layout, server):
+    capture(layout, server)
+    assert started_with(server)["accept_skipped_dry_run"] is False
 
 
 def test_an_uncompiled_scenario_and_an_accepted_teleport_are_said_louder(layout, server, caplog):

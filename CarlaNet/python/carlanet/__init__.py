@@ -2217,7 +2217,8 @@ class World:
                          epoch=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
                          sumo_home=None, allow_sumo_version_mismatch=False, sumo_gui=False,
-                         allow_teleporting=False, sumo_answer_timeout_s=60.0,
+                         allow_teleporting=False, accept_skipped_dry_run=False,
+                         sumo_answer_timeout_s=60.0,
                          vehicle_lamps=True, headlight_on_below_deg=3.0,
                          headlight_off_above_deg=6.0, draw_distance_m=None,
                          render_set="all", region_centre=None, region_radius_m=None,
@@ -2417,6 +2418,16 @@ class World:
         uncompiled one. `session.Report.CompileLock` says which, and for a compiled scenario the
         SUMO release that routed it and the world it was compiled for.
 
+        The lock also says whether the compiler ran the scenario in SUMO alone before writing it
+        (its check 59), which is what finds a vehicle the supervision plan names that never enters
+        the simulation. The session refuses, before SUMO is started, a lock that says the run was
+        skipped (`compile_scenario.py --skip-dry-run`) or records none -- a lock written before the
+        compiler ran the check -- naming the scenario and the lock's reason, because a capture that
+        started would find the same fault only when SUMO dropped the vehicle, hours of rendering in.
+        `accept_skipped_dry_run` runs anyway, and `session.Report.CompileLock.DryRunText` records
+        that the skipped run was accepted; where the run happened it accepts nothing, and the text
+        says what the run found.
+
         The session also refuses a scenario whose configuration lets SUMO teleport a blocked vehicle:
         a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
         as the scenario compiler writes. `allow_teleporting` runs anyway, and
@@ -2577,6 +2588,7 @@ class World:
         if sumo_gui:
             options.SumoGui = True
         options.AllowTeleporting = bool(allow_teleporting)
+        options.AcceptSkippedDryRun = bool(accept_skipped_dry_run)
         options.SumoAnswerTimeoutSeconds = float(sumo_answer_timeout_s)
         options.VehicleLampsDriven = bool(vehicle_lamps)
         options.HeadlightOnBelowDegrees = float(headlight_on_below_deg)

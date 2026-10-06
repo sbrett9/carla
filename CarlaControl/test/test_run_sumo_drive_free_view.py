@@ -303,6 +303,14 @@ def test_no_draw_distance_is_handed_to_the_session_unless_one_is_given(drive, mo
     assert world.drive_arguments["draw_distance_m"] == 400.0
 
 
+def test_a_skipped_dry_run_is_accepted_only_when_asked_for(drive, monkeypatch, tmp_path):
+    # Off by default: the session refuses a lock whose compile skipped its SUMO-only run.
+    world = _run_main(drive, monkeypatch, tmp_path)
+    assert world.drive_arguments["accept_skipped_dry_run"] is False
+    world = _run_main(drive, monkeypatch, tmp_path, "--accept-skipped-dry-run")
+    assert world.drive_arguments["accept_skipped_dry_run"] is True
+
+
 def test_collision_detail_is_off_unless_asked_for_and_only_binds_a_printer(drive, monkeypatch, tmp_path):
     # Off by default: the report prints the count, and nothing is called per collision.
     world = _run_main(drive, monkeypatch, tmp_path)

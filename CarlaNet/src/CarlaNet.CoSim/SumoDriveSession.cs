@@ -697,10 +697,11 @@ public sealed class SumoDriveSession : IDisposable
         ScenarioNetworkCheck.Require(options.ScenarioPath, options.WorldPackagePath);
 
         // Whether the files SUMO would run are the ones the scenario's compile lock binds, compiled
-        // against this catalogue and this epoch -- or, with no lock beside them, that the scenario is
-        // an uncompiled one, which runs and is reported as such.
+        // against this catalogue and this epoch, and whether the compiler ran them in SUMO alone before
+        // writing them -- or, with no lock beside them, that the scenario is an uncompiled one, which
+        // runs and is reported as such.
         ScenarioLockCheck compiled = ScenarioLockCheck.Require(options.ScenarioPath, catalogue,
-                                                               options.Epoch);
+                                                               options.Epoch, options.AcceptSkippedDryRun);
 
         // And whether SUMO would teleport a blocked vehicle, which the interpolation would render as a
         // body dragged along its route.

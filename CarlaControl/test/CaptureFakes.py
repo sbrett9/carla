@@ -379,6 +379,18 @@ class FakeCompileLock:
                              else "not recorded: an uncompiled scenario")
         self.WorldText = ("Gardnerville_Fixture.cwp, map Gardnerville_Fixture" if compiled
                           else "not recorded: an uncompiled scenario")
+        self.DryRunRan = compiled
+        self.SkippedDryRunAccepted = False
+        self.DryRunText = ("ran with SUMO 1.27.0 over 86400 s: 1 vehicles loaded, 1 inserted, 0 "
+                           "discarded, 0 waiting at the end; 0 of 0 planned vehicles inserted; 0 "
+                           "collisions" if compiled else "not recorded: an uncompiled scenario")
+
+    def accept_skipped_dry_run(self, reason: str) -> FakeCompileLock:
+        """The lock of a compile that skipped its SUMO-only run, which the session accepted."""
+        self.DryRunRan = False
+        self.SkippedDryRunAccepted = True
+        self.DryRunText = f"SKIPPED at the compile ({reason}), accepted explicitly"
+        return self
 
     def __str__(self) -> str:
         return ("gardnerville_fixture, compiled by carlacontrol.ScenarioCompiler; configuration, "
