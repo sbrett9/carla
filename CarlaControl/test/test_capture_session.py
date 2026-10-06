@@ -74,9 +74,10 @@ def server() -> FakeServer:
     return FakeServer()
 
 
-def capture(layout: Layout, server: FakeServer, document: dict | None = None, overrides=(), *,
-            answer=lambda _prompt: "no", terminal=False, free=10**13, validate_only=False,
-            termination=None, profile_path=None):
+def build(layout: Layout, server: FakeServer, document: dict | None = None, overrides=(), *,
+          answer=lambda _prompt: "no", terminal=False, free=10**13, termination=None,
+          profile_path=None) -> CaptureSession:
+    """A run ready to launch against the stand-ins, not yet launched."""
     run_path = layout.root / "fixture.run.json"
     run_path.write_text(json.dumps(document if document is not None else run_document()),
                         encoding="utf-8")
@@ -89,7 +90,20 @@ def capture(layout: Layout, server: FakeServer, document: dict | None = None, ov
         monitor=SessionMonitor(stream=io.StringIO(), is_terminal=False),
         answer=answer, stdin_is_terminal=lambda: terminal, session_id=SESSION_ID)
     server.result_path = layout.runs_root / SESSION_ID / "run.result.json"
+    return session
+
+
+def capture(layout: Layout, server: FakeServer, document: dict | None = None, overrides=(), *,
+            answer=lambda _prompt: "no", terminal=False, free=10**13, validate_only=False,
+            termination=None, profile_path=None):
+    session = build(layout, server, document, overrides, answer=answer, terminal=terminal,
+                    free=free, termination=termination, profile_path=profile_path)
     return session, session.run(validate_only=validate_only)
+
+
+def pose_of(transform) -> tuple[float, ...]:
+    location, rotation = transform.location, transform.rotation
+    return location.x, location.y, location.z, rotation.pitch, rotation.yaw
 
 
 def started_with(server: FakeServer) -> dict:
@@ -332,6 +346,13 @@ def test_a_stare_measuring_occlusion_has_a_depth_camera_at_its_pose(layout, serv
     assert depth.transform.location.x == rgb.transform.location.x
     [start] = server.events.of("start_recording")
     assert start[4]["depth_camera"] is depth
+    # Attached to the camera, rigidly and at the camera's own pose, so one move carries both.
+    assert server.events.of("spawn")[1] == ("spawn", "sensor.camera.depth", depth.id, rgb.id)
+    assert depth.attachment_type == carlanet.AttachmentType.Rigid
+    assert pose_of(depth.spawned_at) == pose_of(rgb.spawned_at)
+    # And it leaves the world before the camera it is attached to.
+    destroyed = [event[2] for event in server.events.of("destroy")]
+    assert destroyed.index(depth.id) < destroyed.index(rgb.id)
 
 
 def test_recording_starts_when_the_window_opens_not_during_the_prewarm(layout, server):
@@ -410,7 +431,59 @@ def test_a_sensor_id_another_client_s_camera_holds_refuses_at_preroll(layout, se
     assert server.events.of("start_recording") == []
 
 
-def test_an_orbit_is_flown_and_carries_no_depth_camera(layout, server):
+def test_an_orbit_measuring_occlusion_has_a_depth_camera_attached_to_its_camera(layout, server):
+    # Occlusion is on by default, and an orbit gets it as a stare does: a depth camera spawned
+    # attached to the channel's camera, and the recorder started with it.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    session, result = capture(layout, server, document)
+    assert result.outcome == "run_finished"
+    rgb, depth = server.actors
+    assert (rgb.type_id, depth.type_id) == ("sensor.camera.rgb", "sensor.camera.depth")
+    assert server.events.of("spawn")[1] == ("spawn", "sensor.camera.depth", depth.id, rgb.id)
+    assert depth.attachment_type == carlanet.AttachmentType.Rigid
+    assert depth.attributes["max_range"] == "20000.0"
+    assert depth.attributes["fov"] == rgb.attributes["fov"]
+    assert pose_of(depth.spawned_at) == pose_of(rgb.spawned_at)
+    [start] = server.events.of("start_recording")
+    assert start[4]["depth_camera"] is depth
+    assert session.channels[0].orbit is not None
+    assert all(actor.destroyed for actor in server.actors)
+
+
+def test_an_orbit_s_depth_camera_takes_every_pose_its_camera_takes(layout, server):
+    # The orbit is advanced here by hand, a second's worth of angle on every step of the window, so
+    # that the moves checked do not depend on its wall-clock thread's timing; the thread's own
+    # moves come on top. After each move the depth camera stands where the camera stands, and no
+    # call ever moves the depth camera itself.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    session = build(layout, server, document)
+    agreed: list[tuple[float, ...]] = []
+
+    def advanced(_fake_session) -> None:
+        [rig] = session.channels
+        if rig.depth is None or not rig.orbit.orbit_enabled:
+            return
+        rig.orbit.update_orbit(1.0)
+        assert pose_of(rig.depth.transform) == pose_of(rig.camera.transform)
+        agreed.append(pose_of(rig.camera.transform))
+
+    server.on_advance = advanced
+    result = session.run()
+    assert result.outcome == "run_finished"
+    rgb, depth = server.actors
+    assert len(agreed) == 1800 and len(set(agreed)) > 1, "the orbit never swept"
+    moved = [event[1] for event in server.events.of("move")]
+    assert moved and set(moved) == {rgb.id}
+    # Every frame the client holds places both cameras at one pose, which is what the recorder's
+    # pose check compares a depth capture against.
+    held = [snapshot for snapshot in server.snapshots.values()
+            if rgb.id in snapshot and depth.id in snapshot]
+    assert held and all(pose_of(s[rgb.id]) == pose_of(s[depth.id]) for s in held)
+
+
+def test_with_occlusion_off_an_orbit_carries_no_depth_camera(layout, server):
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     session, result = capture(layout, server, document, ["occlusion.enabled=false"])
@@ -419,6 +492,21 @@ def test_an_orbit_is_flown_and_carries_no_depth_camera(layout, server):
     [start] = server.events.of("start_recording")
     assert start[4]["depth_camera"] is None
     assert session.channels[0].orbit is not None
+
+
+def test_a_depth_camera_the_server_will_not_attach_refuses_at_preroll(layout, server):
+    server.spawn_raises["sensor.camera.depth"] = RuntimeError(
+        "unable to attach actor: parent actor not found")
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    _, result = capture(layout, server, document)
+    assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
+    assert "channel ORBIT-1: its camera could not be placed" in result.detail
+    assert "parent actor not found" in result.detail
+    assert server.events.of("start_recording") == []
+    # The camera that was placed leaves the world with the refusal.
+    [rgb] = server.actors
+    assert rgb.type_id == "sensor.camera.rgb" and rgb.destroyed
 
 
 # -- how a run ends ---------------------------------------------------------------------------------
