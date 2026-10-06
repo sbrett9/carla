@@ -31,6 +31,7 @@ Findings set. Every external claim is cited.
 | 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
 | 2026-10-02 | §2.4, §3.5: every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none. A client names each camera as it chooses, used as given or refused, never rewritten; one it does not name is `CARLA-SENSOR-<camera id>`. A name is unique within a process and, set as the camera's `role_name`, visible to every client, so one another camera in the world holds is refused. The uid is unchanged. |
 | 2026-10-05 | §2.4, §3.5: a camera name is short and plain -- 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or `Southeast_1700m_orbit` -- and no other character; the free-move camera can be named too. |
+| 2026-10-05 | §3.2, §3.3: occlusion is measured on an orbit as on a stare, as the owner ruled. `run_capture` spawns each channel's depth camera attached to its RGB camera, rigidly at the camera's own pose, so one move carries both and the recorder's pose check compares poses set by one call; an orbit's captures carry occlusion and apparent size, where `run_capture` refused occlusion on an orbit before. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -635,7 +636,15 @@ A "camera" in this rig is three co-posed sensors, of which the first is the prod
 
 The depth camera **must** be held at the RGB camera's pose and field of view: `OcclusionEstimator`
 refuses a pair whose poses have drifted (`OcclusionEstimator.cs:161-172`), and `SensorRig` already moves
-them together for that reason (`SensorRig.py:100-125, 186-189`).
+them together for that reason (`SensorRig.py:100-125, 186-189`). `run_capture` holds it there by
+construction: each channel's depth camera is spawned attached to its RGB camera, a rigid attachment at
+the camera's own pose (`CaptureSession._attach_depth_camera`), so one move of the RGB camera carries
+both and nothing moves the depth camera itself; the server reports an attached sensor's world pose on
+every snapshot and in every image header, which is what the recorder's depth pose check reads. That
+holds for a stare moved through the prewarm and for an orbit flown through the window alike, so an
+orbit's captures carry the occlusion and apparent-size fields a stare's do; until 2026-10-05
+`run_capture` refused occlusion on an orbit, on a reason from before the rig moved its cameras in one
+batch ([`12`](12_Operator_Control_Surface.md) check 47).
 
 On the third: doc 12 §1 rejected segmentation cameras *as a source of bounding-box truth*, because
 Cesium photoreal tiles are not CARLA actors and every building, tree and terrain pixel falls into
@@ -662,7 +671,7 @@ channels recording one run of one world.
 | Pattern | Motion | What it is for | State |
 |---|---|---|---|
 | **Stare** | fixed pose, fixed boresight | persistent coverage of a declared area of interest; the only pattern that gives an unbroken observed span over a long interval | supported today by simply not enabling orbit |
-| **Orbit** | circular ground track, boresight held on a centre | the existing EO collection idiom; gives look-angle diversity over one site | built — `OrbitSensorController` (`OrbitSensorController.py:250-277`), updated on its own 50 Hz thread (`:96-100`) |
+| **Orbit** | circular ground track, boresight held on a centre | the existing EO collection idiom; gives look-angle diversity over one site | built — `OrbitSensorController` (`OrbitSensorController.py:250-277`), updated on its own 50 Hz thread (`:96-100`); under `run_capture` it carries its depth camera attached and measures occlusion as a stare does (§3.2) |
 | **Transit** | a commanded waypoint track | covering several sites in one pass; every site gets a short, bounded observation | **not built**; `PyGameSensorController` is interactive only |
 
 A capture session mixes them. The recommended default for a corpus is **one orbiting primary plus one
