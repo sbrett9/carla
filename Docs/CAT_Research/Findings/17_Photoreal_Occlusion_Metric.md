@@ -3,6 +3,9 @@
 **Date:** 2026-07-10 · **Status:** the depth-based measurement and the arrival gate are BUILT
 (2026-08-17, §12); pixel-exact differencing and the live sweep in §10 are still ahead.
 **Datum:** ellipsoidal WGS84 (HAE), bare-earth referenced — `project_datum_decision`.
+**Revisions:** `2026-10-05` — §12.1: the measurement has no switch. `--no-occlusion` and `run_capture`'s
+`occlusion.enabled` are removed by the owner's ruling; every recording camera carries a depth camera and
+every recorder is started with it.
 **Relates to:** [09_Telemetry_CoT_Contract.md](09_Telemetry_CoT_Contract.md) (the per-vehicle truth block this
 extends), [16_Sensor_Pose_In_Recordings.md](16_Sensor_Pose_In_Recordings.md) (the camera pose/intrinsics an
 occlusion test needs), [08_Layer_Architecture.md](08_Layer_Architecture.md) (the toggleable photoreal layer),
@@ -306,8 +309,11 @@ Occlusion is measured for **telemetered vehicles only**, and only on recorded ca
 property of the (vehicle, camera) pair, and the live UDP feed has no camera.
 
 **Cost.** The measurement takes its own subscription to the depth camera's stream, so recording with
-occlusion doubles that camera's stream traffic. It is off unless a depth camera is handed to the
-recorder, and `--no-occlusion` turns it off for a run that does not want it.
+occlusion doubles that camera's stream traffic. It is made wherever a camera records: every recording
+camera carries a depth camera attached to it -- `run_SCTMV.py`'s rig, every `run_capture` channel and
+`run_sumo_drive.py`'s fixed camera -- and the recorder is started with it. `--no-occlusion`, and the
+`occlusion.enabled` field `run_capture` had, were removed on 2026-10-05 by the owner's ruling; nothing
+turns the measurement off, and a recorder handed no depth camera says so as a warning.
 
 **Translucency remains the documented approximation** (§9). A mid-fade vehicle occluding another is
 counted as whatever the depth capture shows of it, which depends on how far the dithered dissolve has

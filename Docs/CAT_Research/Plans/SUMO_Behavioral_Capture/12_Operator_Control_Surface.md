@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — The occlusion measurement is always on, in every capture path, with no switch, as the owner ruled ("I can't fathom why disabling it was ever considered"). `occlusion.enabled` is no longer a field and `run_SCTMV.py --no-occlusion` is no longer an option; every channel of `run_capture` and the fixed camera of `run_sumo_drive.py` carry a depth camera attached to the camera, with the camera's image size, field of view and sensor tick and `occlusion.depth_max_range_m`, and every recorder is started with it (§4, §5.1, §5.2, §6.3, §7.2, §9.6, D12.13). The check scenario's run file loses its `occlusion` block. What stays session-fixed is how the measurement is made: `occlusion.margin_m`, `occlusion.samples`, `occlusion.depth_max_range_m`.
 `2026-10-05` — Withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the planned "per-interval observability, prevalence in all three units" and the gate `render_accounting.intervals_rendered` (§7.1, §7.2); the coverage record and the "unoccluded denominator" it served (§1.5, §5.1, §7.1, §7.4.2, §7.6.2). The occlusion estimator stays session-fixed because turning it off mid-run changes what the measured fields of later captures mean.
 `2026-10-05` — Corrected against the code: the session drives vehicle lamps by default and `run_capture` offers no field for them (§4.4, §5.2, check 14); the run manifest and its supervision rows exist (§3.9, §3.10.3); `capture_rgb` is not a field of the schema (§5.2); the Windows distribution's four parity breaks are fixed and its launcher is still unbuilt (§10).
 `2026-10-05` — Occlusion is measured on an orbit as on a stare, as the owner ruled. Every channel measuring occlusion gets a depth camera spawned attached to its camera, rigidly and at the camera's own pose, so one move carries both and the two are never captured a frame apart; the orbit's recorder is started with it, so its captures carry per-vehicle occlusion and apparent size. Check 47 no longer refuses occlusion on an orbit; its reason cited the measurement from before the rig moved its cameras in one batch (§5.2 `capture_depth`, `occlusion.enabled`; §6.2 check 47; §6.3).
@@ -303,7 +304,7 @@ argument list would have to express.
 | **Seeds** | Four of them, separately | [`07`](07_Scenario_Authoring.md) D7.11 |
 | **Supervision and export roots** | Two roots, one writer each | [`08`](08_Collection_And_EPoL.md) D8.17 |
 | **Telemetry sinks** | Whether, where, and on which thread | [`10`](10_Scale_And_Performance.md) D10.11; [`08`](08_Collection_And_EPoL.md) D8.23 |
-| **Occlusion estimator** | On/off, margin, sample density | [`08`](08_Collection_And_EPoL.md) §5.4, open question 1 |
+| **Occlusion estimator** | Margin and sample density; always on, with no switch (2026-10-05) | [`08`](08_Collection_And_EPoL.md) §5.4, open question 1 |
 | **Radiometry** | Which post-process profile each channel spawns with, and the digest of the one the server actually loaded | [`08`](08_Collection_And_EPoL.md) §2.9, D8.27, D8.28 |
 | **Pacing** | As fast as the machine allows, or against a wall clock at a stated factor | [`08`](08_Collection_And_EPoL.md) §11.1; this section for expression |
 | **Handover and transcript** | Whether frames leave the process live, on which channels, and whether what comes back is recorded | [`08`](08_Collection_And_EPoL.md) §11.2, §11.3; [`02`](02_Use_Cases.md) UC-8 |
@@ -1149,10 +1150,15 @@ Named descriptively, because "static" and "dynamic" do not say what is at stake.
 
 The dividing line between Session-fixed and Run-mutable is one question: **would a consumer reading
 the corpus be wrong if this changed and they did not know?** If yes, it is Session-fixed. The
-occlusion estimator is the instructive case: it looks like a toggle (it is one today, implicitly, via
-`--no-occlusion` at `:542-552`), but an absent `occlusion` attribute means "this camera cannot say",
-not "not occluded" ([`08`](08_Collection_And_EPoL.md) §5.4) — so turning it off mid-run would leave a
-reader unable to tell a capture measured as unoccluded from one never measured. Session-fixed.
+occlusion estimator is the instructive case: it looked like a toggle (it was one, via `--no-occlusion`
+in the front end and `occlusion.enabled` here, until 2026-10-05), but an absent `occlusion` attribute
+means "this camera cannot say", not "not occluded" ([`08`](08_Collection_And_EPoL.md) §5.4) — so
+turning it off mid-run would leave a reader unable to tell a capture measured as unoccluded from one
+never measured. Session-fixed. Since 2026-10-05 it is no toggle at all, by the owner's ruling: occlusion
+is measured in every capture path, every recording camera carries a depth camera, and nothing turns the
+measurement off. What is Session-fixed is how it is measured — `occlusion.margin_m`, `occlusion.samples`
+and `occlusion.depth_max_range_m` — for the same reason: a margin or a sample density changed mid-run
+changes what the later captures' fractions mean.
 
 **Bound covers a sibling section's ruling as well as an artifact's value**, and three rows depend on
 that: `synchronous` is Bound by [`10`](10_Scale_And_Performance.md) D10.10, `telemetry.on_tick_thread`
@@ -1275,7 +1281,7 @@ other field.
 | `pattern` | `stare` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
 | `capture_rgb` | *not a field*: every channel records RGB, so the schema has nothing to switch | — | [`08`](08_Collection_And_EPoL.md) D8.2 |
-| `capture_depth` | *not offered*: the recorder writes no depth imagery; a depth camera is spawned attached to the channel's camera, a stare's or an orbit's, only to measure occlusion (`occlusion.enabled`) | — | D8.2 |
+| `capture_depth` | *not offered*: the recorder writes no depth imagery; a depth camera is spawned attached to every channel's camera, a stare's or an orbit's, to measure occlusion, and there is no switch to leave it out (the owner's ruling of 2026-10-05) | — | D8.2 |
 | `capture_segmentation` | *not offered*: the recorder writes no segmentation | — | [`08`](08_Collection_And_EPoL.md) OQ2 |
 | `depth_max_range_m` | *not offered per channel*: `occlusion.depth_max_range_m`, one range for every depth camera | — | `:274-285`; and see §1.5's divergent second default |
 | `sensor_tick` | *not a field*: `1 / capture_hz` on every camera, so a camera renders only the frames the recorder keeps | Session-fixed | `ActorBlueprintFunctionLibrary.cpp:248`; check 10 holds by construction |
@@ -1300,8 +1306,9 @@ picture. An orbit circles its centre at `orbit_radius_m`, `orbit_altitude_m` abo
 `orbit_centre_z_m`, with the boresight held on the centre. It is held at the pose it opens on — angle
 zero, east of the centre, where `OrbitSensorController` starts — through the pre-roll, so the view its
 first capture is written from is the one whose readiness is waited on (§6.3), and it sweeps from the
-window's opening. Where occlusion is measured, each pattern's camera carries a depth camera spawned
-attached to it (`spawn_actor` with `attach_to`, a rigid attachment at the camera's own pose): the
+window's opening. Each pattern's camera carries a depth camera spawned attached to it (`spawn_actor`
+with `attach_to`, a rigid attachment at the camera's own pose), with the camera's image size, field of
+view and `sensor_tick` and the range `occlusion.depth_max_range_m` gives: the
 server keeps an attached actor at its pose relative to its parent and reports its world pose on every
 snapshot and in every image header, so one move of the camera carries both -- a stare's through the
 prewarm, an orbit's through the window -- and the recorder's depth pose check compares two poses that
@@ -1384,9 +1391,9 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 |---|---|---|---|
 | `telemetry.enabled`, `telemetry.host`, `telemetry.port`, `telemetry.ttl`, `telemetry.rate_hz`, `telemetry.stale_s`, `telemetry.affiliation`, `telemetry.truth_endpoint` | *not offered*: `run_capture` starts no Cursor-on-Target feed; each capture's truth is its sidecar | — | `:465-484` |
 | `telemetry.on_tick_thread` | `false`, and not a field | **Bound** | [`10`](10_Scale_And_Performance.md) D10.11 |
-| `occlusion.enabled` | `true` | Session-fixed — **not** run-mutable (§5.1). Measured on every channel, a stare and an orbit alike, against a depth camera attached to the channel's camera (§5.2 `capture_depth`); until 2026-10-05 an orbit with it on was refused (check 47) on a reason from before the rig moved its cameras in one batch | `:542-552`; [`08`](08_Collection_And_EPoL.md) D8.19 |
-| `occlusion.margin_m`, `occlusion.samples` | `1.0`, `24` | Session-fixed | `:553-569`; [`08`](08_Collection_And_EPoL.md) OQ1 |
-| `occlusion.depth_max_range_m` | `20000.0` | Session-fixed | `:274-285`; the depth camera's `max_range` |
+| `occlusion.enabled` | *not a field*: occlusion is measured on every channel, a stare and an orbit alike, against a depth camera attached to the channel's camera (§5.2 `capture_depth`), and nothing turns it off, as the owner ruled on 2026-10-05; until then a `true`-by-default switch, and until the same day an orbit with it on was refused (check 47) on a reason from before the rig moved its cameras in one batch | — | §5.1; [`08`](08_Collection_And_EPoL.md) §3.2, D8.2 |
+| `occlusion.margin_m`, `occlusion.samples` | `1.0`, `24` | Session-fixed (§5.1): how the measurement is made, not whether | `:553-569`; [`08`](08_Collection_And_EPoL.md) OQ1 |
+| `occlusion.depth_max_range_m` | `20000.0` | Session-fixed; the depth camera's `max_range`, on every channel's and on `run_sumo_drive.py`'s cameras alike (§9.6) | `:274-285` |
 
 #### The bridge: what the world did with the poses it was commanded
 
@@ -1737,8 +1744,8 @@ prewarm tick — is `refused_preroll`, closed `aborted_at_preroll`; `Window` is 
 `detail` names the stage. Anything else raised — a dropped CARLA connection among them, which the
 session does not wrap — is `internal_error`. The session restores everything it took on every exit
 path, so a start that failed leaves the world as it was found. Then `CaptureSession` places the
-cameras — an orbit at the pose it opens on, held there, and where occlusion is measured a depth
-camera attached to each channel's camera (§5.2) — ticks the prewarm through the session with
+cameras — an orbit at the pose it opens on, held there, and a depth camera attached to each
+channel's camera (§5.2) — ticks the prewarm through the session with
 nothing recording — moving each stare aimed at the rendered traffic after every step until its hold,
 and recording the point it resolved to there (§5.2) — and waits inside the prewarm for every
 channel's view to be ready ([`03`](03_CoSimulation_Runtime.md) §9.5.1, check 50). After each step it
@@ -2015,7 +2022,8 @@ supervision was not to be had, threshold 0; skipped from a recorder built before
 [`06`](06_Truth_And_Annotation.md) §8.2), `capture.sensor_pose_header_disagreed[<sensor>]` (captures
 whose image header placed the camera elsewhere than the snapshot of their own frame, threshold 0;
 §9.6), `capture.depth_pose_header_disagreed[<sensor>]` (the same for the depth captures occlusion is
-measured against, threshold 0; skipped for a channel with no depth camera), `clock.ratio_recorded`,
+measured against, threshold 0; skipped only where a channel's recorder was given no depth camera, which
+`run_capture` never does), `clock.ratio_recorded`,
 `pacing.achieved_factor` under
 `wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
 skipped where the policy binds no sun), `bridge.position_divergence` and `bridge.velocity_divergence`
@@ -2431,6 +2439,15 @@ The viewer's camera is still a camera in the world, so `run_free_move_camera.py 
 refuses a name a live camera in the world holds; unnamed, the server names it `Camera_<n>`. Its depth
 camera is given no name, so the server names it too.
 
+**The fixed camera measures occlusion too (2026-10-05).** Until then the drive's fixed camera was
+recorded with no depth camera, so its captures carried no occlusion while the flown camera's did. Now
+the drive spawns a depth camera attached to the fixed camera (`spawn_depth_camera`) -- a rigid
+attachment at the identity pose, as `run_capture` spawns a channel's -- with the camera's image size,
+field of view and `sensor_tick` and the run configuration's `occlusion.depth_max_range_m`, read from the
+field table so a drive and a capture run measure to one range, and starts the recorder with it. The
+depth camera is destroyed before the camera it is attached to. There is no option to leave it out, on
+either view.
+
 **What another process reads during a drive (2026-10-01).** The drive's render set is carried on every
 world-observer snapshot ([`03`](03_CoSimulation_Runtime.md) §8.9, D3.39), so the truth any other
 process reads -- `world.get_vehicle_telemetry()`, the CoT feed `run_SCTMV.py` toggles with Y,
@@ -2789,7 +2806,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Built: `pacing.min_achieved_factor` has no default under `pacing.mode: wall_clock` and is not a field under `as_available`. `solar.vehicle_lights` was specified as the second case -- default `off`, no default in a window whose sun falls below −6° -- and is not offered: the session drives every body's lights by one rule, on by default, and the manifest's opening row records the rule each run ran under (§4.4, §4.5), so there is no choice left to a field. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |
 | **D12.11** | **Seeds have no nondeterministic default.** Today `--seed` defaults to `None`, documented "nondeterministic" (`:310-316`), which is incompatible with reproducing a run from its record. `random` is still available and resolves to a drawn value that is then recorded (§5.2) |
 | **D12.12** | **The solar state is read back from the world and recorded before the first capture, and a disagreement with what was requested refuses the run.** Today `WorldBuilder.py:238-247` logs what it asked for and never reads back, and a world with no CesiumSunSky produces a warning and a run that continues (`:244-245`) (§4.5, §6.2 checks 23 and 31) |
-| **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator is Session-fixed rather than Run-mutable for exactly this reason, although it is a runtime toggle today. **Bound** reads *fixed by an artifact, or by a ruling in a sibling section that this surface expresses rather than re-offers*, which is what `synchronous` (D10.10), `telemetry.on_tick_thread` (D10.11) and the external-chain drop policy ([`08`](08_Collection_And_EPoL.md) §11.3) all need. **There is no fifth class**: `caller` and `on_warning.*` are Session-fixed by the governing question, and `caller_label` and `expect.*` are recorded in the lock as launch provenance rather than given a class of their own (§5.1, §5.2) |
+| **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator was the instructive case: Session-fixed rather than Run-mutable for exactly this reason while it was a toggle; since 2026-10-05 it is no toggle at all -- measured on every channel, with no switch -- and its margin, sample density and depth range are the Session-fixed fields (§5.1). **Bound** reads *fixed by an artifact, or by a ruling in a sibling section that this surface expresses rather than re-offers*, which is what `synchronous` (D10.10), `telemetry.on_tick_thread` (D10.11) and the external-chain drop policy ([`08`](08_Collection_And_EPoL.md) §11.3) all need. **There is no fifth class**: `caller` and `on_warning.*` are Session-fixed by the governing question, and `caller_label` and `expect.*` are recorded in the lock as launch provenance rather than given a class of their own (§5.1, §5.2) |
 | **D12.14** | **The live monitor displays only fields the manifest also carries, read from the same source.** A monitor that computes its own numbers can disagree with the record, and the operator believes the screen (§7.1) |
 | **D12.15** | **One condition interrupts the operator in every run, and nothing else does:** a non-zero `Dropped` on any channel; a live run adds the achieved real-time factor falling below its floor (§7.4.1). A participant in an open annotated interval is always drawn, because every vehicle SUMO has is drawn, so it is a gate record rather than an interruption (§7.2). Everything else is a column (§7.1) |
 | **D12.16** | **This surface publishes gate records and never an aggregate verdict.** Each record names what the check observed, the threshold it compared against and whether it met it; nothing rolls them into a single field saying the corpus is fit, because fitness is relative to a purpose the caller never told us ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3d). The records are **appended to the manifest as they change**, so a run stopped at minute nine has already published everything it knew at minute nine, and the closeout is a rendering rather than the moment they come into existence. A record that did not meet its threshold deletes nothing and hides nothing (§7.2, §3.10.3) |

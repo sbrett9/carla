@@ -34,6 +34,7 @@ Findings set. Every external claim is cited.
 | 2026-10-05 | §3.2, §3.3: occlusion is measured on an orbit as on a stare, as the owner ruled. `run_capture` spawns each channel's depth camera attached to its RGB camera, rigidly at the camera's own pose, so one move carries both and the recorder's pose check compares poses set by one call; an orbit's captures carry occlusion and apparent size, where `run_capture` refused occlusion on an orbit before. |
 | 2026-10-05 | §2.4, §2.5, §2.7: every vehicle record of a capture says where its box fell against the picture, `in_frame`, with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; where the five occlusion fields are absent, `occlusion_unmeasured` says why in one word. The owner ruled that an absent fraction was being read as "not hidden". The projection is separated from the depth sampling and runs for every capture. |
 | 2026-10-05 | §2.4, §3.5: the server issues camera names and refuses duplicates, as the owner ruled. A camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, never reset by a world reload and never reused; a name a live camera holds is refused at spawn, case aside, and a client cannot claim `Camera_<digits>`. Every client reads the name back from the spawned camera for its files, callsign and recorder; the client-side check across the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras. The plugin change awaits a build. |
+| 2026-10-05 | §2.5, §3.2, D8.2: the occlusion measurement is always on, in every capture path, with no switch, as the owner ruled. Every channel of `run_capture` and the fixed camera of `run_sumo_drive.py` carry a depth camera attached to the camera -- the camera's image size, field of view and sensor tick, and the run configuration's depth range -- and every recorder is started with it; `occlusion.enabled` and `run_SCTMV.py --no-occlusion` are removed. The depth camera is no longer optional in the channel. |
 | 2026-10-05 | The judgement text is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the label record is cut to geometry and happened facts (§5.1); `visible_signature`, `lit_face_px`, `shadow_px`, `observability_level`, the separation fields and the in-frame flags go (§5.7, §5.8, §8.3, §8.4, §8.6, §8.7); `coverage.jsonl`, the five levels and prevalence go (§10.1, §10.2); §10.5 keeps the recorded-sun strata and the date sweep and loses its probes; the fitness probe goes (§12); §13, §14, §16 follow. D8.15, D8.16, D8.19, D8.25, D8.33, D8.34, D8.36, D8.38 withdrawn; D8.2 and D8.17 amended. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
@@ -385,6 +386,17 @@ intrinsics and says, per vehicle, why it measured nothing where it did not (`Occ
 `MatchTo` says which way a pairing failed. The five failure buckets are still counted on the recorder;
 each vehicle record now carries the one that applied to it.
 
+**The measurement is on in every capture path, with no switch (2026-10-05).** By the owner's ruling.
+`run_capture` spawns a depth camera attached to every channel's
+camera and starts every recorder with it; `run_sumo_drive.py`'s fixed camera carries one the same way,
+where before it recorded with none and its captures carried no occlusion; the flown camera's rig always
+had one. `occlusion.enabled` is gone from the run configuration and `--no-occlusion` from
+`run_SCTMV.py`; a run file or an override naming the field is refused as naming a field the schema does
+not have. What a run may set is how the measurement is made -- `occlusion.margin_m`,
+`occlusion.samples` and `occlusion.depth_max_range_m` -- and every depth camera is spawned with its
+camera's image size, field of view and `sensor_tick` and that one range. A recorder handed no depth
+camera says so as a warning, since its captures then carry no occlusion.
+
 ### 2.6 The arrival gate is built, and is inert by default
 
 Doc 17 §12.2's arrival gate is client-side: `CarlaClient` records each `set_actor_fade` it sends and
@@ -658,20 +670,22 @@ A "camera" in this rig is three co-posed sensors, of which the first is the prod
 | Sensor | Role | Required? |
 |---|---|---|
 | `sensor.camera.rgb` | the imagery — the only product a consumer ever sees | yes |
-| `sensor.camera.depth` | the occlusion measurement (doc 17 §12.1) and, with it, the honest observability accounting | yes for a corpus; optional for a live exercise |
+| `sensor.camera.depth` | the occlusion measurement (doc 17 §12.1) | yes: every recording camera carries one, attached to it, and nothing turns the measurement off (2026-10-05) |
 | `sensor.camera.instance_segmentation` | modal (visible-region) vehicle masks, the doc 17 §5.2 upgrade | optional |
 
 The depth camera **must** be held at the RGB camera's pose and field of view: `OcclusionEstimator`
 refuses a pair whose poses have drifted (`OcclusionEstimator.cs:161-172`), and `SensorRig` already moves
 them together for that reason (`SensorRig.py:100-125, 186-189`). `run_capture` holds it there by
-construction: each channel's depth camera is spawned attached to its RGB camera, a rigid attachment at
+construction: every channel's depth camera is spawned attached to its RGB camera, a rigid attachment at
 the camera's own pose (`CaptureSession._attach_depth_camera`), so one move of the RGB camera carries
 both and nothing moves the depth camera itself; the server reports an attached sensor's world pose on
 every snapshot and in every image header, which is what the recorder's depth pose check reads. That
 holds for a stare moved through the prewarm and for an orbit flown through the window alike, so an
 orbit's captures carry the occlusion and apparent-size fields a stare's do; until 2026-10-05
 `run_capture` refused occlusion on an orbit, on a reason from before the rig moved its cameras in one
-batch ([`12`](12_Operator_Control_Surface.md) check 47).
+batch ([`12`](12_Operator_Control_Surface.md) check 47). `run_sumo_drive.py`'s fixed camera carries its
+depth camera the same way (`spawn_depth_camera`). Every channel has one, and so does every camera the
+drive records from: the measurement has no switch since 2026-10-05 (§2.5).
 
 On the third: doc 12 §1 rejected segmentation cameras *as a source of bounding-box truth*, because
 Cesium photoreal tiles are not CARLA actors and every building, tree and terrain pixel falls into
@@ -3391,7 +3405,7 @@ with this one:**
 | # | Decision |
 |---|---|
 | **D8.1** | **The corpus and the live exercise are one chain with two ends.** Everything from photons to the handover record is shared; they differ only in transport, pacing and what illumination is for. **The handover is defined as a record, never as a directory**, so one contract serves both products and a consumer writes one reader. It is a property of the chain and not of a detect-and-track *stage*, because there is no such stage here (§1, §7.2) |
-| **D8.2** | **The unit of collection is a channel, not a camera** — `(sensor_id, rgb, depth?, seg?)`, co-posed. The depth camera is for the occlusion measurement (doc 17; `occlusion`, `occlusion_samples` and apparent size on every vehicle in the picture), and its captures are **truth artifacts** (§3.2, §7.4). Amended 2026-10-05: it no longer serves an observability accounting, which is withdrawn (§10.2) |
+| **D8.2** | **The unit of collection is a channel, not a camera** — `(sensor_id, rgb, depth, seg?)`, co-posed. The depth camera is for the occlusion measurement (doc 17; `occlusion`, `occlusion_samples` and apparent size on every vehicle in the picture), is always present -- attached to the channel's camera, with no switch to leave it out (2026-10-05) -- and its captures are **truth artifacts** (§3.2, §7.4). Amended 2026-10-05: it no longer serves an observability accounting, which is withdrawn (§10.2) |
 | **D8.3** | **Multi-camera decision, part one — where world-scoped state lives: published to the server, taking doc 20 decision 11's first branch, and specifically on the world-observer snapshot** — tick-stamped, lock-free, snapshot-swapped, zero-RPC, in the manner `_solar` already is (`CarlaClient.cs:169, 1855, 1991`). Consistent with [`01_Architecture.md`](01_Architecture.md) D1.10. **Correctness must not depend on which process a recorder runs in** (§3.4) |
 | **D8.3a** | **Multi-camera decision, part two — how many processes: one, by default.** Doc 20 §7.3's premise that a second camera needs a second client process is wrong: a recorder already opens two streams (`FrameRecorder.cs:112-113, 125-126`), the transport holds an unbounded list (`CarlaClient.cs:1748-1754`), and the limit is the shim's `World._recorder` field over a `Client` that returns a fresh `World` per call (`carlanet/__init__.py:1908, 1924, 2285, 2295`). One process gives every channel the same world-observer snapshot, so a per-camera `<_supervision>` **or `_solar`** disagreement at one tick becomes impossible rather than merely prohibited. Moving a channel out is then a throughput decision, not a correctness one (§2.2, §3.4) |
 | **D8.4** | **A capture session identity is assigned once and handed to every channel**; the per-recorder wall-clock fallback (`FrameRecorder.cs:98-103`) survives only for a single-channel run. **A stable `sensor_id` is required and validated unique** for any multi-channel session. Nothing is ever paired across channels by filename; the tick is the join key (§3.5) |
