@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 37 | 2026-10-05. `C4`: the server issues camera names and refuses duplicates, as the owner ruled (§6.1, §6.3). A camera spawned with no `role_name`, or its blueprint's default, is `Camera_<n>` from a counter held on the server for its lifetime, never reset by a world reload and never reused; a client-given name a live camera holds is refused at spawn, case aside, and so is a client-given `Camera_<digits>`. Every client reads the name back from the spawned camera and uses it for the files, the callsign and the recorder; the client-side sweep of the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<actor id>` stays the platform track's uid, and is an unnamed camera's name only on a server built before it named cameras, which the shim detects and says. The plugin change awaits a build |
 | 36 | 2026-10-05. `C3`: the lock's `dry_run` block is in the lock table (§5.3) — the compiler's SUMO-only run of the scenario, `ran` with its release and counts, or the reason `--skip-dry-run` skipped it — and V3.16 is the rule a run holds it to: a lock whose `ran` is false, or with no block, is refused by `run_capture` check 54 offline and by the session's compile-lock check before SUMO is started, unless the run accepts it (`scenario.accept_skipped_dry_run`; `AcceptSkippedDryRun`, `run_sumo_drive.py --accept-skipped-dry-run`), and the acceptance is on the run report and the manifest's opening row ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29; [`12`](12_Operator_Control_Surface.md) §6.2 check 54) |
 | 35 | 2026-10-05. `C10`: the world truth track flushes its rows once for each SUMO frame, when the frame's every row is written, and whatever it still holds as it closes, rather than after every row, as the owner ruled: it is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. W2 states the flush per frame as the track's rule. Every row is still a whole line, so the prefix stays valid, and a kill loses at most the frame being written (§12.7) |
 | 34 | 2026-10-05. `C10`: the run manifest carries supervision (§12.7). The writer is one of the interval binder's sinks: it writes the plan the compile lock binds as `instance`, `series` and `cohort` rows after `manifest_opened`, each interval as it opens and closes, named by its `(instance_id, participant, phase)` triple with its declared, committed and observed onsets and its `closed_by`, and each seam defect the binder finds; `manifest_closed` lists the intervals still open, which the binder closes after it, and those never opened, so a closed manifest names every triple the plan declares. `open_at_interruption` is not written: a reader infers it from a manifest with no terminal row. `diff_run_manifests.py` compares two runs' manifests by their triples and exits non-zero on a difference ([`06`](06_Truth_And_Annotation.md) D6.8). The closing-record gate reads a terminal row of any length |
@@ -1849,7 +1850,7 @@ is keyed on.
 | `actor_id` | The CARLA server at spawn | spawn → destroy | **No** | sidecar `_carla@actor_id`; CoT `uid` as `CARLA-TRUTH-<actor_id>` (`CotWriter.cs:134`) |
 | `entity_id` | The author | The scenario | **Yes** | spawn attribute `capture:entity_id`; sidecar `_carla@entity_id` |
 | `instance_id` | The annotation compiler, deterministically from `scenario_id` + authored instance name | The scenario | **Yes** | annotation set; sidecar `<_supervision><annotation instance=…>` |
-| `sensor_id` | The operator, in the collection configuration; `CARLA-SENSOR-<actor id>` where none is given | The capture session | **Yes, once authored** | the camera's name: every capture's file name begins with it, the platform event's `contact/callsign` in the sidecar and `callsign` in the `carla:sensor` PNG chunk, and the camera's `role_name` on the server |
+| `sensor_id` | The operator, in the collection configuration; the CARLA server, `Camera_<n>`, where none is given | The capture session | **Yes, once authored** | the camera's name: every capture's file name begins with it, the platform event's `contact/callsign` in the sidecar and `callsign` in the `carla:sensor` PNG chunk, and the camera's `role_name` on the server, which issues the name and refuses a duplicate |
 
 **`sensor_id` today.** The shim defaults it to `platform_uid or f"CARLA-SENSOR-{camera.id}"`
 (`CarlaNet/python/carlanet/__init__.py:1910`; doc 20 §6.3 cites `:1818`, re-resolved here), and a
@@ -1870,15 +1871,30 @@ named as the capture's cameras are; its depth camera takes no name. A name is sh
 the rule before it starts. Every capture is written as
 `<sensor_id>_<local capture time>` (`CameraName.StillStem`), which was `SCTMV_<local capture time>`
 whatever camera took it, and the platform event's callsign is the `sensor_id`, which defaulted to
-`OVERWATCH` for every camera given none, so two cameras' telemetry collided on it. A camera given no
-name is `CARLA-SENSOR-<actor id>`, unique on its server. The camera is spawned with the name as its
-`role_name`, so any client reading the world's actors sees it: a name another camera in the world
-holds is refused at spawn, and two recorders in one process cannot hold one name. The platform
-event's uid stays `CARLA-SENSOR-<actor id>` unless `platform_uid` is given. CoT keeps the two apart
-by design — the uid a machine identity, the callsign the label a person reads — and the actor id is
-unique on the server with no client having to agree it with another, while a reader that knows the
-platform event by its `CARLA-SENSOR-` prefix keeps working. What the uid does not give is stability
-across runs; the name now does, in the callsign and in every file name.
+`OVERWATCH` for every camera given none, so two cameras' telemetry collided on it. The camera is
+spawned with the name as its `role_name`, so any client reading the world's actors sees it, and two
+recorders in one process cannot hold one name. The platform event's uid stays
+`CARLA-SENSOR-<actor id>` unless `platform_uid` is given. CoT keeps the two apart by design — the uid
+a machine identity, the callsign the label a person reads — and the actor id is unique on the server
+with no client having to agree it with another, while a reader that knows the platform event by its
+`CARLA-SENSOR-` prefix keeps working. What the uid does not give is stability across runs; the name
+now does, in the callsign and in every file name.
+
+**The server issues the names and refuses the duplicates (2026-10-05, the owner's ruling).** A camera
+spawned with no `role_name`, or with the one its blueprint carries by default, is named `Camera_<n>`
+by the server (`CarlaServer.cpp`, `FPimpl::SettleCameraName`) from a counter held on the server for
+its lifetime, not on the episode, so a world reload resets nothing and no number is issued twice
+while the server runs; only an unnamed camera takes a number. A client-given name a live camera
+holds, in any case, is refused at spawn with the holder named, and so is a client-given name of the
+server's form, `Camera_<digits>`, which no client may claim. Both spawn RPCs and the batch spawn
+command go through the one check. Every client reads the name back from the spawned actor's
+`role_name` (`CameraName.Of`, `world.camera_name`) and uses it everywhere the name is used — the
+files, the callsign, the recorder — so every process holds the same name for one camera. Before this
+the uniqueness check was the client's, reading the actor list before it spawned, which two clients
+could both pass in the same tick; that check (`HolderAmong`) is removed. `CARLA-SENSOR-<actor id>`
+is an unnamed camera's name only on a server built before it named cameras, which hands the camera
+back with its blueprint's role name; the shim detects this (`CameraName.NamedByServer`) and says so
+once on stderr.
 
 ### 6.2 Cardinality, and the one that surprises people
 
@@ -1938,7 +1954,7 @@ encode anything about a particular object, which is the structural fact `C8` §1
 | `sumo_vehicle_id` | `[A-Za-z0-9_-]+(\.[0-9]+)?` | SUMO appends `.N` to a flow id to name the vehicles it generates (measured: `<flow id="corridor_d0_p0_h0">` yields `corridor_d0_p0_h0.0`). A flow or trip id containing `.` therefore makes the suffix ambiguous, and the existing bridge already splits on the last `.` to recover the flow (`CarlaControl/src/carlacontrol/SumoCotBridge.py:329`). **A flow, trip or vehicle id must not contain `.`** |
 | `entity_id` | `[a-z][a-z0-9_]{0,63}` | Referenced by annotations and by name-convention shorthand |
 | `instance_id` | `[a-z][a-z0-9_]{0,63}` | Derived deterministically, so no counter and no timestamp |
-| `sensor_id` | `[A-Za-z0-9_-]{1,63}`, not a Windows device name (CON, PRN, AUX, NUL, COM0–9, LPT0–9), not a role name the server gives sensors (`front`, `back`, `left`, `right`, `front_left`, `front_right`, `back_left`, `back_right`), and not `CARLA-SENSOR-<digits>`, all in any case | It is the camera's name, so it begins every capture's file name, names the channel's directory and is the platform track's callsign. Short and plain, as the owner asked on 2026-10-05 — `Overwatch_1`, `Southeast_1700m_orbit`, `NapOfEarth_2` — which is the same file name on Windows and Linux, the same PNG text and the same callsign, so a name is used as given or refused, never rewritten. A device name would name a directory Windows will not make; every sensor spawned without a name carries `front`; the default form is reserved for cameras given no name. The rule every camera name meets (`CameraName`); the run configuration's schema states the characters. Unique within a session without regard to case |
+| `sensor_id` | `[A-Za-z0-9_-]{1,63}`, not a Windows device name (CON, PRN, AUX, NUL, COM0–9, LPT0–9), not a role name the server gives sensors (`front`, `back`, `left`, `right`, `front_left`, `front_right`, `back_left`, `back_right`), not the server's own form `Camera_<digits>`, and not `CARLA-SENSOR-<digits>`, all in any case | It is the camera's name, so it begins every capture's file name, names the channel's directory and is the platform track's callsign. Short and plain, as the owner asked on 2026-10-05 — `Overwatch_1`, `Southeast_1700m_orbit`, `NapOfEarth_2` — which is the same file name on Windows and Linux, the same PNG text and the same callsign, so a name is used as given or refused, never rewritten. A device name would name a directory Windows will not make; a camera spawned without a name carries `front` until the server names it; `Camera_<n>` is what the server names it, and only the server issues one; the default form is every platform track's uid. The rule a client-given name meets (`CameraName.Problem`); a name a camera holds, the server's included, meets `CameraName.HeldProblem`; the run configuration's schema states the characters. Unique within a session without regard to case, and on the server among live cameras, which refuses a duplicate |
 
 ### 6.4 Spawn attributes, and the verification of doc 20 §4.5
 

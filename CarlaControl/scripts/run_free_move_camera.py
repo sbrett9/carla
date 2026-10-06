@@ -28,10 +28,9 @@ above the world's origin, as run_SCTMV.py takes it, so a start pose copies acros
 
 `--camera-name` names the picture camera as it is created -- Overwatch_1, NapOfEarth_2: 1 to 63
 ASCII letters, digits, underscores and hyphens -- so it is told apart from every other camera in the
-world. The name is set as the camera's role_name, which every client reads, and a name another camera
-in the world already holds is refused. Without one the camera is CARLA-SENSOR-<camera id>. The depth
-camera takes no name: it keeps the role name the server gives every sensor spawned without one, which
-no camera may be named.
+world. The name is set as the camera's role_name, which every client reads, and the server refuses a
+name a live camera in the world already holds. Without one the server names the camera Camera_<n>.
+The depth camera is given no name, so the server names it too.
 
     python run_free_move_camera.py --x 500 --y -1300 --z 1200 --camera-name NapOfEarth_2
 """
@@ -82,8 +81,9 @@ def parse_args() -> argparse.Namespace:
     camera.add_argument("--camera-name", type=CameraName.argument, default=None, metavar="NAME",
                         help="the picture camera's name, given as it is created, such as "
                              "Overwatch_1 or NapOfEarth_2: 1 to 63 characters, each an ASCII "
-                             "letter, digit, underscore or hyphen. Refused where another camera in "
-                             "the world holds it. Default: CARLA-SENSOR-<camera id>")
+                             "letter, digit, underscore or hyphen. The server refuses it where a "
+                             "live camera in the world holds it. Default: the name the server "
+                             "gives the camera, Camera_<n>")
     args = parser.parse_args()
     # The rig delivers frames as they arrive rather than on ticks of its own, because this viewer
     # never ticks; the heads-up display reads a sun rate it never sets.
@@ -105,7 +105,8 @@ def main() -> int:
     try:
         rig = SensorRig(world=world, args=args, client=client)
     except ValueError as refused:
-        # The name the camera was to be created under: another camera in the world holds it.
+        # The name the camera was to be created under, refused by the server: a live camera in the
+        # world holds it.
         logger.error("--camera-name: %s", refused)
         return 2
     controller = PyGameSensorController(rig, world, rig.get_initial_pose(), speed=args.speed)

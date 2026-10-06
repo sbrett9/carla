@@ -4,8 +4,8 @@ Every capture is named after its camera, `<camera name>_<local capture time>`, a
 platform track carries the name as its callsign, so cameras sharing a world are told apart in their
 files and their telemetry. `--camera-name` -- `--platform-callsign` is its older spelling -- names the
 camera `SensorRig` spawns, and `NativeRecorder` records under it. Its default used to be OVERWATCH,
-which every camera given no name shared; it is now no name at all, and the camera is then its
-default, `CARLA-SENSOR-<camera id>`. The world and the recorder are stood in for.
+which every camera given no name shared; it is now no name at all, and the server then names the
+camera `Camera_<n>`, which the rig reads back. The world and the recorder are stood in for.
 """
 from __future__ import annotations
 
@@ -45,6 +45,7 @@ def test_the_older_spelling_names_the_camera_too():
                                               ("Overwatch.1", "holds '.'"),
                                               ("CON", "keeps for a device"),
                                               ("front", "role name the server gives sensors"),
+                                              ("Camera_1", "which a client cannot claim"),
                                               ("CARLA-SENSOR-12", "another camera's name")])
 def test_a_name_the_rule_refuses_is_refused_at_the_command_line(capsys, name, reason):
     with pytest.raises(SystemExit) as exited:
@@ -120,8 +121,11 @@ class _SpawningWorld:
         return SimpleNamespace(find=_Blueprint)
 
     def spawn_actor(self, blueprint, _transform) -> _Camera:
+        # The server names every camera spawned without a name, the depth camera included.
         self.spawned.append((blueprint.id, None))
-        return _Camera(100 + len(self.spawned))
+        camera = _Camera(100 + len(self.spawned))
+        self.names[camera.id] = f"Camera_{len(self.spawned)}"
+        return camera
 
     def spawn_camera(self, blueprint, transform, name=None) -> _Camera:
         camera = self.spawn_actor(blueprint, transform)
@@ -131,7 +135,8 @@ class _SpawningWorld:
         return camera
 
     def camera_name(self, camera) -> str:
-        return self.names.get(camera.id, f"CARLA-SENSOR-{camera.id}")
+        """The name the camera holds on the server, as the shim reads it back."""
+        return self.names[camera.id]
 
     def get_spectator(self) -> _Camera:
         return _Camera(0)
@@ -149,9 +154,9 @@ def test_the_rig_s_camera_is_spawned_under_the_name_given_and_its_depth_camera_u
     assert rig.camera_name == "DECK-I25"
 
 
-def test_a_rig_given_no_name_leaves_its_camera_its_default():
+def test_a_rig_given_no_name_takes_the_name_the_server_gives_its_camera():
     # run_free_move_camera.py's arguments carry no name at all.
     world = _SpawningWorld()
     rig = SensorRig(world, _rig_settings())
     assert world.spawned[0] == ("sensor.camera.rgb", None)
-    assert rig.camera_name == f"CARLA-SENSOR-{rig.camera.id}"
+    assert rig.camera_name == "Camera_1"

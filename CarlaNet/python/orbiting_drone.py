@@ -71,10 +71,11 @@ rec.add_argument("--camera-name", default=None, metavar="NAME",
                  help="the drone camera's name, given as it is created, such as Overwatch_1 or "
                       "Southeast_1700m_orbit: 1 to 63 characters, each an ASCII letter, digit, "
                       "underscore or hyphen, and not a Windows device name, a stock sensor role "
-                      "name (front, back, ...), CARLA-SENSOR-<number> or a name another camera in "
-                      "the world holds. Every capture is written as <NAME>_<local capture "
-                      "time>.png and .xml, and it is the callsign of the camera's platform track. "
-                      "Default: CARLA-SENSOR-<camera id>.")
+                      "name (front, back, ...), the server's own Camera_<number>, "
+                      "CARLA-SENSOR-<number> or a name a live camera in the world holds, which the "
+                      "server refuses. Every capture is written as <NAME>_<local capture time>.png "
+                      "and .xml, and it is the callsign of the camera's platform track. Default: "
+                      "the name the server gives the camera, Camera_<n>.")
 
 args = ap.parse_args()
 
@@ -307,8 +308,8 @@ def main() -> int:
     pitch = math.degrees(math.atan2(dz, horizontal_dist))
     yaw = math.degrees(math.atan2(dy, dx))
 
-    # Spawned under its name, which every client reads as the camera's role_name; every capture is
-    # named after it.
+    # Spawned under its name as the camera's role_name, or named by the server; the name is read back
+    # from the camera, and every capture is named after it.
     camera = world.spawn_camera(bp, make_tf(cam_x, cam_y, cam_z, pitch, yaw), name=args.camera_name)
     print(f"spawned orbital drone camera {world.camera_name(camera)} id={camera.id}")
     print(f"orbit center: ({center_x:.1f}, {center_y:.1f}) at altitude {cam_altitude * FT_PER_M:.0f} ft")

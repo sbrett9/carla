@@ -49,8 +49,9 @@ class NativeRecorder:
                   platform_type, platform_affiliation, camera_name, platform_uid,
                   scenario, scenario_id, seed, occlusion, occlusion_margin, occlusion_samples.
                   `camera_name` (`--camera-name`) is the name every capture is written under and
-                  the platform track's callsign; None records under the name the camera was
-                  spawned with, or its default, CARLA-SENSOR-<camera id>.
+                  the platform track's callsign: the name the camera was spawned under, which the
+                  shim refuses to record under any other; None records under the name the camera
+                  holds on the server -- the one it was spawned under, or the server's Camera_<n>.
             run_id: Identifier grouping every capture of this run
             depth_camera: Depth camera held at the recorded camera's pose. When given (and
                   --no-occlusion was not passed) each capture also records how much of each

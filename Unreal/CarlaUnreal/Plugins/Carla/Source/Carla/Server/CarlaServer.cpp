@@ -141,6 +141,106 @@ static TArray<AActor *> GetRoadSurfaceActors(UWorld *World)
   return Result;
 }
 
+// -- Camera names -------------------------------------------------------------
+//
+// Every camera has a name, carried as its role_name. Every still a client records from the camera and
+// its truth sidecar are named after it, and it is the callsign of the camera's platform track in every
+// sidecar, so two cameras in one world must never hold one name. The server issues the names and
+// refuses the duplicates: a client that checked the actor list before it spawned could be passed by
+// two clients in the same tick. A camera spawned with no role_name, or with the one its blueprint
+// carries by default, is named Camera_<n> from a counter held for the server's lifetime (FPimpl), so a
+// number is never issued twice while the server runs, whatever world is loaded; a client-given name of
+// that form is refused, and so is one a live camera already holds, compared without regard to case,
+// because a Windows file system holds Deck and deck as one file name.
+
+/// The blueprints whose names the server issues.
+static const char CameraBlueprintPrefix[] = "sensor.camera.";
+
+/// What every name the server issues begins with.
+static const TCHAR *const ServerCameraNamePrefix = TEXT("Camera_");
+
+static bool IsCameraDescription(const carla::rpc::ActorDescription &Description)
+{
+  return Description.id.compare(0, sizeof(CameraBlueprintPrefix) - 1, CameraBlueprintPrefix) == 0;
+}
+
+/// The description's role_name attribute, or null where it carries none.
+static carla::rpc::ActorAttributeValue *FindRoleNameAttribute(carla::rpc::ActorDescription &Description)
+{
+  for (carla::rpc::ActorAttributeValue &Attribute : Description.attributes)
+  {
+    if (Attribute.id == "role_name")
+    {
+      return &Attribute;
+    }
+  }
+  return nullptr;
+}
+
+/// The role_name a blueprint carries when its client sets none: the first value the server recommends
+/// for it, which is the value its definition is sent with (carla/rpc/ActorAttribute.h). Empty where
+/// the definition is not found or recommends none.
+static FString BlueprintDefaultRoleName(const TArray<FActorDefinition> &Definitions, uint32 UId)
+{
+  for (const FActorDefinition &Definition : Definitions)
+  {
+    if (Definition.UId != UId)
+    {
+      continue;
+    }
+    for (const FActorVariation &Variation : Definition.Variations)
+    {
+      if (Variation.Id == TEXT("role_name") && Variation.RecommendedValues.Num() > 0)
+      {
+        return Variation.RecommendedValues[0];
+      }
+    }
+  }
+  return FString();
+}
+
+/// Whether Name has the form the server gives every camera it names, Camera_<digits>, in any case.
+static bool IsServerIssuedCameraName(const FString &Name)
+{
+  const int32 PrefixLength = FCString::Strlen(ServerCameraNamePrefix);
+  if (Name.Len() <= PrefixLength || !Name.StartsWith(ServerCameraNamePrefix, ESearchCase::IgnoreCase))
+  {
+    return false;
+  }
+  for (int32 Index = PrefixLength; Index < Name.Len(); ++Index)
+  {
+    if (!FChar::IsDigit(Name[Index]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// The live camera whose role_name is Name, compared without regard to case, or null.
+static const FCarlaActor *FindCameraHoldingName(const FActorRegistry &Registry, const FString &Name)
+{
+  for (const auto &Named : Registry)
+  {
+    const FCarlaActor *View = Named.Value.Get();
+    if (View == nullptr || View->GetActorInfo() == nullptr)
+    {
+      continue;
+    }
+    const FActorDescription &Description = View->GetActorInfo()->Description;
+    if (!Description.Id.StartsWith(TEXT("sensor.camera.")))
+    {
+      continue;
+    }
+    const FActorAttribute *Held = Description.Variations.Find(TEXT("role_name"));
+    if (Held != nullptr && Held->Value.Equals(Name, ESearchCase::IgnoreCase))
+    {
+      return View;
+    }
+  }
+  return nullptr;
+}
+
 // =============================================================================
 // -- FCarlaServer::FPimpl -----------------------------------------------
 // =============================================================================
@@ -179,10 +279,65 @@ public:
 
   std::atomic_size_t TickCuesReceived { 0u };
 
+  /// How many cameras the server has named since it started: the n of the last Camera_<n> issued.
+  /// Held here, not on the episode, so a world reload resets nothing and no number is issued twice
+  /// while the server runs.
+  uint64 CamerasNamed { 0u };
+
+  /// Settles a camera's role_name before it is spawned: names a camera given no name, or its
+  /// blueprint's default, Camera_<n>; refuses a client-given name of that form, or one a live camera
+  /// holds. Returns the refusal, or empty where the description may be spawned as it now reads. A
+  /// description that is not a camera's is left as it is. Needs the episode.
+  FString SettleCameraName(carla::rpc::ActorDescription &Description);
+
 private:
 
   void BindActions();
 };
+
+FString FCarlaServer::FPimpl::SettleCameraName(carla::rpc::ActorDescription &Description)
+{
+  if (!IsCameraDescription(Description))
+  {
+    return FString();
+  }
+  carla::rpc::ActorAttributeValue *RoleName = FindRoleNameAttribute(Description);
+  const FString Given = RoleName != nullptr ? carla::rpc::ToFString(RoleName->value) : FString();
+  if (Given.IsEmpty() || Given == BlueprintDefaultRoleName(Episode->GetActorDefinitions(), Description.uid))
+  {
+    const FString Issued = FString::Printf(TEXT("%s%llu"), ServerCameraNamePrefix, ++CamerasNamed);
+    if (RoleName != nullptr)
+    {
+      RoleName->value = carla::rpc::FromFString(Issued);
+    }
+    else
+    {
+      carla::rpc::ActorAttributeValue Attribute;
+      Attribute.id = "role_name";
+      Attribute.type = carla::rpc::ActorAttributeType::String;
+      Attribute.value = carla::rpc::FromFString(Issued);
+      Description.attributes.push_back(Attribute);
+    }
+    UE_LOG(LogCarlaServer, Log, TEXT("camera %s named %s"), *carla::rpc::ToFString(Description.id), *Issued);
+    return FString();
+  }
+  if (IsServerIssuedCameraName(Given))
+  {
+    return FString::Printf(
+        TEXT("camera name '%s' has the form the server gives every camera spawned without one, %s<n>, "
+             "which a client cannot claim; choose another, such as Overwatch_1"),
+        *Given, ServerCameraNamePrefix);
+  }
+  const FCarlaActor *Holder = FindCameraHoldingName(Episode->GetActorRegistry(), Given);
+  if (Holder != nullptr)
+  {
+    return FString::Printf(
+        TEXT("camera name '%s' is already held in this world by camera %u (%s): two cameras under one "
+             "name would write files of one name and report under one callsign; choose another"),
+        *Given, Holder->GetActorId(), *Holder->GetActorInfo()->Description.Id);
+  }
+  return FString();
+}
 
 // =============================================================================
 // -- Define helper macros -----------------------------------------------------
@@ -1438,6 +1593,13 @@ void FCarlaServer::FPimpl::BindActions()
   {
     REQUIRE_CARLA_EPISODE();
 
+    // A camera's name is the server's to issue and to keep unique; the actor returned carries it.
+    const FString NameRefusal = SettleCameraName(Description);
+    if (!NameRefusal.IsEmpty())
+    {
+      RESPOND_ERROR_FSTRING(NameRefusal);
+    }
+
     auto Result = Episode->SpawnActorWithInfo(Transform, std::move(Description));
 
     if (Result.Key != EActorSpawnResultStatus::Success)
@@ -1462,6 +1624,12 @@ void FCarlaServer::FPimpl::BindActions()
       cr::AttachmentType InAttachmentType) -> R<cr::Actor>
   {
     REQUIRE_CARLA_EPISODE();
+
+    const FString NameRefusal = SettleCameraName(Description);
+    if (!NameRefusal.IsEmpty())
+    {
+      RESPOND_ERROR_FSTRING(NameRefusal);
+    }
 
     auto Result = Episode->SpawnActorWithInfo(Transform, std::move(Description));
     if (Result.Key != EActorSpawnResultStatus::Success)

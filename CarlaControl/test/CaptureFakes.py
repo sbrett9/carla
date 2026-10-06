@@ -17,13 +17,15 @@ pose record per vehicle per tick, from `FakeServer.traffic_at`. The records carr
 of `CarlaNet.CoSim.AdmissionPass` and `CoSimPoseRecord`; the tests that read the real types hold
 the names equal.
 
-A camera is spawned under a name as the shim spawns it (`spawn_camera`): the name set as its
-`role_name`, and refused where a camera in the world already holds it, in any case --
-`FakeServer.cameras_of_other_clients` stands for the cameras other clients spawned; without one it is
-named `CARLA-SENSOR-<actor id>`, and `camera_name` answers either. An actor spawned attached to
-another (`spawn_actor(..., attach_to=)`) holds its parent's world pose from then on, as the server
-reports an attached actor's pose on its snapshot, and stays where it was, detached, when its parent
-is destroyed.
+A camera is named as the server names it: one spawned under a name (`spawn_camera`) carries it as its
+`role_name`, and the spawn is refused where a live camera in the world already holds it, in any case
+-- `FakeServer.cameras_of_other_clients` stands for the cameras other clients spawned; one spawned
+with none, the depth cameras included, is `Camera_<n>` from a counter the server keeps, and
+`camera_name` reads either back from the actor. `FakeServer.names_cameras = False` stands for a
+server built before it named cameras, which leaves an unnamed camera its blueprint's role name. An
+actor spawned attached to another (`spawn_actor(..., attach_to=)`) holds its parent's world pose from
+then on, as the server reports an attached actor's pose on its snapshot, and stays where it was,
+detached, when its parent is destroyed.
 
 Every tick of a step advances the server's frame counter and its wall clock, and a camera being
 listened to is handed an image on each frame its `sensor_tick` renders, from its spawn frame on --
@@ -41,9 +43,16 @@ that; `get_actors` gives each vehicle the box `FakeServer.vehicle_extent` descri
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from carlacontrol.CameraName import CameraName  # noqa: E402  (needs the path above)
 
 RGB_ATTRIBUTES = {"image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile",
                   "role_name"}
@@ -693,6 +702,30 @@ class FakeWorld:
         refused = self.server.spawn_raises.get(blueprint.id)
         if refused is not None:
             raise refused
+        # The server settles a camera's role_name before it spawns it (CarlaServer.cpp,
+        # SettleCameraName): a camera given no name, or its blueprint's default, is Camera_<n>; a
+        # client-given name a live camera holds, or one of the server's form, is refused.
+        if blueprint.id.startswith("sensor.camera."):
+            given = blueprint.values.get("role_name", "")
+            if given in ("", "front"):
+                if self.server.names_cameras:
+                    self.server.cameras_named += 1
+                    blueprint.values["role_name"] = f"Camera_{self.server.cameras_named}"
+            elif given[len("Camera_"):].isdigit() and given.upper().startswith("CAMERA_"):
+                raise RuntimeError(f"camera name '{given}' has the form the server gives every camera "
+                                   "spawned without one, Camera_<n>, which a client cannot claim; "
+                                   "choose another, such as Overwatch_1")
+            else:
+                held = dict(self.server.cameras_of_other_clients)
+                held.update({actor.id: actor.attributes["role_name"] for actor in self.server.actors
+                             if not actor.destroyed and actor.type_id.startswith("sensor.camera.")
+                             and "role_name" in actor.attributes})
+                for holder, taken in held.items():
+                    if taken.upper() == given.upper():
+                        raise RuntimeError(f"camera name '{given}' is already held in this world by "
+                                           f"camera {holder} (sensor.camera.rgb): two cameras under "
+                                           "one name would write files of one name and report under "
+                                           "one callsign; choose another")
         parent = None
         if attach_to is not None:
             parent = next((actor for actor in self.server.actors
@@ -709,21 +742,26 @@ class FakeWorld:
 
     def spawn_camera(self, blueprint: FakeBlueprint, transform: Any,
                      name: str | None = None) -> FakeActor:
+        # As the shim spawns a camera: the rule's refusal of a chosen name before the round trip, the
+        # name sent as the role_name, the server's refusal said as a ValueError, and the name the
+        # server settled read back from the actor.
         if name is not None:
-            held = dict(self.server.cameras_of_other_clients)
-            held.update({actor.id: actor.attributes["role_name"] for actor in self.server.actors
-                         if not actor.destroyed and "role_name" in actor.attributes})
-            for holder, taken in held.items():
-                if taken.upper() == name.upper():
-                    raise ValueError(f"camera name '{name}' is already held in this world by "
-                                     f"camera {holder} (sensor.camera.rgb)")
+            problem = CameraName.problem(name)
+            if problem is not None:
+                raise ValueError(problem)
             blueprint.set_attribute("role_name", name)
-        camera = self.spawn_actor(blueprint, transform)
-        self.server.camera_names[camera.id] = name or f"CARLA-SENSOR-{camera.id}"
-        return camera
+        try:
+            return self.spawn_actor(blueprint, transform)
+        except Exception as refused:
+            if name is not None and "camera name '" in str(refused):
+                raise ValueError(str(refused)) from None
+            raise
 
     def camera_name(self, camera) -> str:
-        return self.server.camera_names.get(camera.id, f"CARLA-SENSOR-{camera.id}")
+        held = camera.attributes.get("role_name")
+        if held is not None and CameraName.held_problem(held, camera.id) is None:
+            return held
+        return f"CARLA-SENSOR-{camera.id}"
 
     def start_sumo_drive(self, scenario, world_package, catalogue, **kwargs):
         self.server.events.add("start_sumo_drive", scenario, world_package, catalogue, kwargs)
@@ -763,9 +801,11 @@ class FakeServer:
         self.sun: dict | None = {"solar_time": 12.0}
         self.scenario_end_s = scenario_end_s
         self.actors: list[FakeActor] = []
-        # The names this client's cameras were spawned under, and the cameras of other clients
-        # holding a name in the world, by actor id.
-        self.camera_names: dict[int, str] = {}
+        # Whether the server names the cameras spawned without a name (False: a server built before
+        # it did), how many it has named, and the cameras of other clients holding a name in the
+        # world, by actor id.
+        self.names_cameras = True
+        self.cameras_named = 0
         self.cameras_of_other_clients: dict[int, str] = {}
         self.recorders: list[FakeRecorder] = []
         self.session: FakeSession | None = None

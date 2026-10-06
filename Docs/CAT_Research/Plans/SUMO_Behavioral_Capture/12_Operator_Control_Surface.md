@@ -10,6 +10,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 **Revisions:**
 `2026-10-05` — Occlusion is measured on an orbit as on a stare, as the owner ruled. Every channel measuring occlusion gets a depth camera spawned attached to its camera, rigidly and at the camera's own pose, so one move carries both and the two are never captured a frame apart; the orbit's recorder is started with it, so its captures carry per-vehicle occlusion and apparent size. Check 47 no longer refuses occlusion on an orbit; its reason cited the measurement from before the rig moved its cameras in one batch (§5.2 `capture_depth`, `occlusion.enabled`; §6.2 check 47; §6.3).
 `2026-10-05` — §5.2, §6.2 check 54, §6.2.1: a run refuses a scenario whose compile skipped its SUMO-only run (the compiler's check 59) or whose lock records none, offline and before anything is spawned, unless `scenario.accept_skipped_dry_run` is true; the echo then states the acceptance, the session is told it and records it on its report, and `run_sumo_drive.py --accept-skipped-dry-run` is the drive's form of it ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29). All four shipped locks record a completed run.
+`2026-10-05` — The server issues camera names and refuses duplicates, as the owner ruled (§5.2, §9.6). A camera spawned without a name -- a single channel with no `sensor_id`, a front end given no `--camera-name`, every depth camera -- is `Camera_<n>` from a counter the server keeps for its lifetime; a `sensor_id` or `--camera-name` a live camera in the world holds is refused by the server at the spawn, case aside, and a client cannot give `Camera_<digits>`. Every front end reads the name back from the spawned camera for its directory, its files and its callsign. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras, which the shim says once on stderr.
 `2026-10-05` — §7.2: the closeout gates `capture.supervision_unpaired[<sensor>]`, a channel's captures of a frame a supervision plan was in force on that were written with `supervision="unknown"`, at zero, skipped from a recorder built before it counted them; the channel's closeout line states the supervision paired and unknown, and the free view's status shows an unknown count as it climbs ([`06`](06_Truth_And_Annotation.md) §8.2).
 `2026-10-05` — `run_capture` writes the run manifest, `truth/manifest.jsonl` under the capture directory beside the world truth track (`truth/world_truth_track.csv`), and names both in its result's `produced`; it closes the manifest with its `closed_by` before it reads its closing gates, so `supervision.manifest_closing_record` is measured: met where the manifest's last complete row is `manifest_closed` (§3.10.3, §7.2). `run_sumo_drive.py --run-manifest PATH` writes one for a drive (§9.6).
 `2026-10-05` — How much a run prints about collisions is a switch, off by default: `collision_detail` (`--collision-detail on`) in `run_capture`, and `run_sumo_drive.py --collision-detail`. Off, the session's report prints the count; on, each collision is printed as it ends and the report lists every collision and every collision warning SUMO wrote. Printing only: every collision is recorded either way (§5.2, §9.6).
@@ -1240,7 +1241,7 @@ other field.
 | Toggle | Default | Class | Source |
 |---|---|---|---|
 | `capture.channels` | **—**: one object per channel, at least one | Session-fixed; every channel is recorded | the rows below are each object's fields |
-| `sensor_id` | **—** when more than one channel; a single channel without one is `CARLA-SENSOR-<camera id>` | Session-fixed. The camera's name, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens. The channel's directory, the first part of every capture's file name and the platform track's callsign, spawned as the camera's `role_name` | [`08`](08_Collection_And_EPoL.md) D8.4; [`04`](04_Contracts.md) §6.3 for the grammar |
+| `sensor_id` | **—** when more than one channel; a single channel without one takes the name the server gives its camera, `Camera_<n>` | Session-fixed. The camera's name, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens, and not the server's own `Camera_<digits>`. The channel's directory, the first part of every capture's file name and the platform track's callsign, spawned as the camera's `role_name`, which the server refuses where a live camera holds it | [`08`](08_Collection_And_EPoL.md) D8.4; [`04`](04_Contracts.md) §6.3 for the grammar |
 | `pattern` | `stare` | Session-fixed | [`08`](08_Collection_And_EPoL.md) §3.3 |
 | `fov` / `width` / `height` | `90.0` / `1280` / `720` | Session-fixed | today's `:236, :272-273` |
 | `capture_rgb` | `true` | Bound — a channel without it is not a channel | [`08`](08_Collection_And_EPoL.md) D8.2 |
@@ -2380,9 +2381,9 @@ fixed camera's are written. It is `carlacontrol.FreeView` for the window and
 `carlacontrol.SpanRecorder` for the key. `run_free_move_camera.py` stays the separate viewer that
 records nothing, and `run_capture` offers no flown camera: a capture run's camera track is declared.
 The viewer's camera is still a camera in the world, so `run_free_move_camera.py --camera-name`
-(2026-10-05) names it as it is created, under the rule every camera name meets, and refuses a name
-another camera in the world holds; unnamed, it is `CARLA-SENSOR-<camera id>`. Its depth camera takes
-no name.
+(2026-10-05) names it as it is created, under the rule every camera name meets, and the server
+refuses a name a live camera in the world holds; unnamed, the server names it `Camera_<n>`. Its depth
+camera is given no name, so the server names it too.
 
 **What another process reads during a drive (2026-10-01).** The drive's render set is carried on every
 world-observer snapshot ([`03`](03_CoSimulation_Runtime.md) §8.9, D3.39), so the truth any other
@@ -2400,7 +2401,7 @@ processes list every vehicle actor as they did before and the drive's own captur
 | `--flight-speed` | `60.0` | the free camera's starting speed, m/s; the mouse wheel changes it |
 | `--width`, `--height`, `--fov` | fixed `1920`, `1080`, `60`; free `1280`, `720`, `90` | the camera's image, which is also the window's size; a value given applies to either view |
 | `--record-dir` | `Build/captures` | a free view writes each span to a folder of its own under it |
-| `--camera-name` | none: `CARLA-SENSOR-<camera id>` | the camera's name, fixed or free, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens. Every capture is `<name>_<local capture time>`, a span's folder `<name>-<UTC>`, and the platform track's callsign is it. Refused before the drive starts where the rule refuses it, and at the spawn where another camera in the world holds it |
+| `--camera-name` | none: the server names the camera `Camera_<n>` | the camera's name, fixed or free, such as `Overwatch_1`: 1 to 63 ASCII letters, digits, underscores and hyphens, and not the server's own `Camera_<digits>`. Every capture is `<name>_<local capture time>`, a span's folder `<name>-<UTC>`, and the platform track's callsign is it. Refused before the drive starts where the rule refuses it, and by the server at the spawn where a live camera in the world holds it; the name is read back from the spawned camera |
 | `--no-record` | off | a free view opens and flies, and F records nothing |
 
 `--camera-standoff`, `--camera-yaw` and `--camera-aim` are the fixed camera's and do nothing in a
@@ -2425,7 +2426,7 @@ before then F is refused with the instant it opens — and a span starts only on
 photoreal tiles are in. Each span is written to `<record-dir>/<camera name>-<UTC>`, the
 UTC instant as `yyyymmddThhmmssZ` with a numbered suffix for a second span begun in the same second,
 so a folder names the camera -- the name `--camera-name` gave it, which its sidecars carry as the
-platform track's callsign, or `CARLA-SENSOR-<camera id>` -- and the instant it began; the stills
+platform track's callsign, or the server's `Camera_<n>` -- and the instant it began; the stills
 inside are named after the camera too, `<camera name>_<local capture time>`.
 `SpanRecorder.span_directory` is the one place the folder's name is made.
 Every span of one drive carries the drive's run id (`run-<UTC>`, logged at start), so the spans can

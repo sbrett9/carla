@@ -41,9 +41,10 @@ world (D1.12):
 * **Place the cameras**: each channel's RGB camera at its stare pose -- or at the pose its orbit
   opens on, flown by `OrbitSensorController` from the window's opening -- with `sensor_tick` at the
   capture interval and the post-process profile set by name, spawned under the channel's
-  `sensor_id` as its `role_name`, so a name another camera in the world already holds refuses at
-  pre-roll; a single channel with no `sensor_id` is named `CARLA-SENSOR-<actor id>`. That name is
-  the channel's directory, the first part of every still's file name in it and the callsign of its
+  `sensor_id` as its `role_name`, which the server refuses where a live camera in the world already
+  holds it, so the run refuses at pre-roll; a single channel with no `sensor_id` takes the name the
+  server gives its camera, `Camera_<n>`, read back from the spawned camera. That name is the
+  channel's directory, the first part of every still's file name in it and the callsign of its
   platform track. And, where occlusion is measured, a depth camera attached to the channel's camera,
   rigidly and at its pose, for a stare and an orbit alike: one move of the camera carries both, so
   the two are never captured a frame apart -- not a stare's through the prewarm, not an orbit's
@@ -693,11 +694,11 @@ class CaptureSession:
         rgb.set_attribute("sensor_tick", str(tick))
         rgb.set_attribute("post_process_profile", str(values["post_process_profile"]))
         transform = self._start_transform(rig)
-        # Spawned under the channel's sensor_id, which every client then reads as the camera's
-        # role_name, so a name another camera in the world holds is refused here. A channel with none
-        # -- a single channel may go unnamed -- is its camera's default, CARLA-SENSOR-<actor id>. That
-        # name is the channel's from here: its directory, every still in it and its platform track's
-        # callsign carry it.
+        # Spawned under the channel's sensor_id as the camera's role_name, which the server refuses
+        # where a live camera in the world holds it, so the spawn raises here. A channel with none --
+        # a single channel may go unnamed -- is named by the server, Camera_<n>. Either way the name
+        # is read back from the spawned camera, as every client reads it, and is the channel's from
+        # here: its directory, every still in it and its platform track's callsign carry it.
         rig.camera = rig.world.spawn_camera(rgb, transform, name=description.sensor_id)
         rig.sensor_id = rig.world.camera_name(rig.camera)
         if self.session.RunManifest is not None:
