@@ -18,6 +18,13 @@ namespace CarlaNet.Recording;
 /// the actor id stays in the extras, where it says which body drew the vehicle on this frame. A record
 /// with no vehicle named is written exactly as before.
 ///
+/// <para>Every vehicle record a recorder wrote says where the vehicle's box fell against the picture,
+/// <c>in_frame</c> (<see cref="InFrame"/>), and how large it appears there, <c>apparent_width_px</c> and
+/// <c>apparent_height_px</c>, from the box's projection alone. The five occlusion attributes are written
+/// only where occlusion was measured; where it was not, <c>occlusion_unmeasured</c> says why in one word
+/// (<see cref="OcclusionUnmeasured"/>), so a reader never mistakes an absent fraction for an unhidden
+/// vehicle. A record no camera projected -- the live pull's -- carries none of these.</para>
+///
 /// <para>A capture whose image was rendered under a draw distance says so on its container
 /// (<c>draw_distance_m</c>), and every vehicle the distance kept out of the image, wholly or in part,
 /// carries <c>beyond_draw_distance</c> and the <c>camera_range_m</c> it rests on in its extras: it is in
@@ -257,25 +264,47 @@ public static class CotWriter
             {
                 w.WriteAttributeString("heading_deg", F(r.HeadingDeg, "0.0"));
             }
+            // Where this vehicle's box fell against the picture -- wholly in it, partly, outside it, or
+            // with a corner at or behind the lens -- read off the box's projection, which needs no
+            // depth capture. Written for every vehicle a recorder projected, so a record with no
+            // occlusion is never read as a vehicle the image shows unhidden; absent only on a record
+            // no camera projected, which is the live pull's.
+            bool projected = r.InFrame is not null;
+            if (r.InFrame is { } where)
+            {
+                w.WriteAttributeString("in_frame", BoxProjector.SidecarValue(where));
+            }
             // How much of this vehicle the camera cannot see, and that fraction as a coarse band, so
             // a consumer drawing training boxes can drop the hidden ones and label the partials.
             // Written only when it was measured: an absent attribute means unknown, which is not the
-            // same claim as "nothing is in the way".
-            if (!double.IsNaN(r.Occlusion))
+            // same claim as "nothing is in the way", and occlusion_unmeasured below says why.
+            bool measured = !double.IsNaN(r.Occlusion);
+            if (measured)
             {
                 w.WriteAttributeString("occlusion", F(r.Occlusion, "0.000"));
                 w.WriteAttributeString("occlusion_level",
                                        r.OcclusionLevel.ToString(CultureInfo.InvariantCulture));
                 // What the fraction rests on. A vehicle far enough away to cover a few pixels yields
                 // a few samples, and can then only report coarse values however many decimals it is
-                // written to, so a consumer needs these to know how much to trust it — and to drop
-                // boxes too small to be worth drawing at all, occluded or not.
+                // written to, so a consumer needs these to know how much to trust it.
                 w.WriteAttributeString("occlusion_samples",
                                        r.OcclusionSamples.ToString(CultureInfo.InvariantCulture));
+            }
+            // How large the vehicle appears, from the projection alone, so it is written wherever the
+            // box has a footprint -- a vehicle outside the picture included -- and beside a measured
+            // occlusion as it always was.
+            if (measured || (projected && r.InFrame != InFrame.BehindCamera))
+            {
                 w.WriteAttributeString("apparent_width_px",
                                        r.ApparentWidthPx.ToString(CultureInfo.InvariantCulture));
                 w.WriteAttributeString("apparent_height_px",
                                        r.ApparentHeightPx.ToString(CultureInfo.InvariantCulture));
+            }
+            // Why there is no occlusion, where there is none: the recorder's own state, in one word,
+            // and never written beside a measurement.
+            if (!measured && r.OcclusionUnmeasured is { } unmeasured)
+            {
+                w.WriteAttributeString("occlusion_unmeasured", UnmeasuredOcclusion.SidecarValue(unmeasured));
             }
             // Kept out of this image by the draw distance, wholly or in part, and how far from the
             // camera it stood: in the world and in the truth, and not a vehicle this image shows.
