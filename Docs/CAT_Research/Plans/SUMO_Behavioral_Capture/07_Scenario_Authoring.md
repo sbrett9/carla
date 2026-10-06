@@ -84,6 +84,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-05 | The supervision check (§3.4.3): a six-minute scenario on the Arapahoe world, generated and compiled into `Import/` with a run configuration beside it, carrying an annotated dwell anchored to its stop, an annotated transit with a phase past the kerb, and a nominal stop that is the dwell's matched negative, in two capture windows in two illumination bands. No series or absence: the Arapahoe package publishes no area. The Arapahoe dwell is recompiled against its world rebuilt the same day, its network fingerprint unchanged, so the two scenarios bind one network copy. |
 | 2026-10-05 | A capture run refuses a lock whose compile skipped its SUMO-only run, or that records none, before anything is started, as the owner ruled (§5.2 check 59, §5.4): `run_capture` check 54 offline and the co-simulation session before SUMO starts, naming the scenario and the lock's reason, unless the run accepts it in writing (`scenario.accept_skipped_dry_run`; `run_sumo_drive.py --accept-skipped-dry-run`), which the echo, the run report and the manifest record. `--skip-dry-run` stays for drafting; all four shipped locks record a completed run. |
 | 2026-10-05 | Corrected against the tree: the world package carries `map.net.xml`, the catalogue (`6037e3bb…`, nineteen bodies) and the network fingerprint exist (§2 bundle table); Bahonar is compiled against that catalogue (§3.4.1); the Arapahoe dwell is compiled against the ramp-meter world `ffe490b1…` (§3.4.2); the skill is at 1.5.0 (§8.2). |
+| 2026-10-05 | Labels follow vehicles, by the owner's ruling ([`06`](06_Truth_And_Annotation.md) §3.5): the `absences[]` block is gone from the specification and its schema, a term declares `applies_to` as `entity` or `cohort` and no `realisation`, and a series compiles to one slot per occasion a vehicle realises, each naming its vehicle; a skipped occasion writes no trip and no row (§3.4.1, §3.6, §5.1, §5.2). Check 19 refuses an instance with no participant and tells the author the two ways to convey an omission; checks 45, 50 and 56 no longer speak of an absence; check 48 keeps the skip. Check 42 states each window's lowest sun elevation and its band in the resolution report and concludes nothing, with no warning and no verdict word (§2.9, §5.2, §9.7); check 41's report names the bands where one state alone occurs and where both do, and no "usable subset" (§5.6). The core is at version 3 (§8.3) and the skill at 1.6.0 (§8.2). All four shipped scenarios are recompiled: every plan's vocabulary digest, and the lock's, changes; Bahonar's two place-labelling terms are gone and its no-show is the rota's skip alone; the traffic files do not change. |
 | 2026-10-05 | Authors see which bodies' lights work, as the owner ruled: the skill gains `references/vehicles.md`, generated from the vehicle catalogue by `compile_scenario.py --write-vehicles-reference` and held equal to it by a test, listing every class and body with its dimensions and whether its headlights, brake lights and turn signals light up from the catalogue's optical pass; the resolution report's vehicle types carry the same per body and its Markdown renders them (§5.3, §8.3). Information only: nothing refuses or warns on it. As measured, no shipped body shows any of the three lit. |
 
 ---
@@ -545,9 +546,11 @@ code doc 11 specifies, and each readable without a running server.
    names, so the supervision plan and the statistic read one table. Doc 11 is their definition and
    [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.7 and §5.1 name them from it (§12
    question 13).
-3. **The night viability verdict.** D11.7: night capture is not viable, and no window whose sun is below
-   −6° may be declared corpus-eligible. Any time of day stays authorable — a night window still yields
-   complete behavioural truth — so check 42 **warns and never refuses**, naming the verdict.
+3. **What light a window is under.** D11.7 says why night capture is not viable; what the compiler does
+   with that is state a fact and conclude nothing. Any time of day stays authorable — a night window
+   still yields complete behavioural truth — so check 42 writes each window's lowest sun elevation and
+   the band it falls in into the resolution report, **neither a warning nor a refusal**, and what to
+   make of it is the author's (the charter's §4b).
 4. **Whose job the date is.** The session writes the date with every clock — at window open, and under
    `advance` for every tick — under the effective date rule of [`04`](04_Contracts.md) `C6` G11
    (D11.2, D11.19); nothing waits on the engine to roll a date. A window's sun is therefore written on
@@ -655,7 +658,7 @@ It would be easy to under-credit this. Read honestly, the current surface has fo
 any replacement that loses them is worse.
 
 - **Full expressive power.** The Bahonar scenario's guard rota is a triple loop over days, shifts and
-  sixteen towers, with one iteration deliberately skipped to plant an absence
+  sixteen towers, with one iteration deliberately skipped to leave a posting unmanned
   (`make_bahonar_scenario.py:230-242`). That is a program. Expressing it as data would mean either
   610 hand-written entries or inventing a loop construct in a configuration format, which is how
   configuration formats become bad programming languages.
@@ -817,9 +820,11 @@ followers, labelled `coordinated_group_transit` and `destination_off_pattern` at
 probe, `standoff_dwell_at_access_point` at `port_gate`; the perimeter shadow,
 `perimeter_transit_off_cadence`; the stay-behind, `arrival_without_departure` at `ferry_terminal` — each
 interval opening at its vehicle's departure; the guard rota read as the nominal series `tower_relief`,
-labelled `tower_posting`, eight-hour slots each sited at its tower's area; the no-show as the absence
-`pi_tower_relief_d4_h7_t3_unmanned`, labelled `post_unmanned`, a vacancy from 2026-10-03T07:00:00+03:30
-to 15:00 at `tower_03` with its counter-evidence of 335 realised slots in 336; the 21 hauls nominal,
+labelled `tower_posting`, 335 eight-hour slots each a guard's and each sited at its tower's area; the
+no-show as the rota's one skip — the posting at tower 3 from 2026-10-03T07:00:00+03:30 to 15:00 writes no
+trip and no row, because a label follows a vehicle and there is none ([`06`](06_Truth_And_Annotation.md)
+§3.5, the owner's ruling of 2026-10-05; whether to re-author it with a deviating vehicle is the owner's);
+the 21 hauls nominal,
 `routine_freight_haul`; and the 98 ferry flows an annotated cohort, `cleared_gate_transit`. The CoT
 display affiliation per type the shipped labels carried is not in the specification: it is a run
 display convention ([`06`](06_Truth_And_Annotation.md) §9.1), and `sumo_cot_telemetry.py` reads only a
@@ -827,8 +832,9 @@ display convention ([`06`](06_Truth_And_Annotation.md) §9.1), and `sumo_cot_tel
 
 **What it reproduces.** *Measured,* `test_bahonar_generator.py`: every entry of the shipped scenario
 inside the run comes back with the same id, roads, stops and local time — 335 postings, 21 hauls, the
-nine planted vehicles, every flow window cut to the run — and the absence sits at the tower, instant
-and length of the shipped labels' described gap. *Measured* in the resolution report: all 613 entries
+nine planted vehicles, every flow window cut to the run — and the skip falls at the tower, instant and
+length of the shipped labels' described gap, with no row anywhere for it. *Measured* in the resolution
+report: all 613 entries
 carry their second and their civil time, where the shipped 610 carried none.
 
 **Measured in SUMO,** 2026-09-29, the specification compiled with the one body the catalogue lacks
@@ -971,8 +977,8 @@ waits, is an interval anchored `phase:1` to `phase:2`; and a van stops at the sa
 car, from 254 s to 274 s, nominal under `check:brief_kerb_stop`, whose `hard_negative_for` names the dwell.
 The epoch, 07:26:00 Mountain Daylight Time on 29 September 2026, puts the two capture windows in two
 illumination bands: `dwell_golden` opens at 07:27:00 under a 5.69° sun and `stop_day` at 07:30:00 under a
-6.26° one. The Arapahoe package publishes no area of interest, so the check declares no series and no
-absence: a slot is sited at an area (check 20) and none can be invented. The compile's dry run inserts all
+6.26° one. The Arapahoe package publishes no area of interest, so the check declares no series: a slot
+is sited at an area (check 20) and none can be invented. The compile's dry run inserts all
 133 vehicles, the three planned ones on their declared seconds, with no collision, in 2.5 s.
 
 Beside it the generator writes `Arapahoe_I25_SupervisionCheck.run.json`, a run configuration capturing
@@ -1015,7 +1021,7 @@ actors[]           id, type, depart, from/to/via[] or route[] or phases[], stops
 rotas[]            days x civil clocks x subjects, with a skip list        §3.5.1
 lane_closures[]    id, place, lanes[], notify[], begin, end                D7.37, check 55
 vocabulary         { import[], namespaces[] }                              06 §3.8, checks 18, 45, 46
-supervision        instances[], cohorts[], series[], absences[]            §3.6
+supervision        instances[], cohorts[], series[]                        §3.6
                    an interval: a civil begin with end or duration, or an anchor   check 58
 capture_windows[]  CANDIDATE windows, in civil time                        §3.5.2
 ```
@@ -1140,14 +1146,14 @@ output, and against the specification generator that replaced it (§3.4.1):*
 | Civil-hour-to-seconds arithmetic sites | **16** (`make_bahonar_scenario.py`, `grep '\* HOUR\|\* DAY'`) | **0** |
 | Emitted entries whose civil meaning is recoverable from the artifact | **0 of 610** (only from the `_h7_` substring in an id) | **613 of 613**, each with its second and civil time in the report |
 | The guard rota — 335 entries | a triple loop with a `continue`, `:232-242` | one `rotas[]` block with one `skip` entry carrying its reason |
-| The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` whose `because` is a field, reported in §5.3, and the slot an absence names (§3.6) |
+| The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` whose `because` is a field, reported in §5.3; it writes no trip and no supervision row ([`06`](06_Truth_And_Annotation.md) §3.5) |
 | `SHIFT_HOURS = [7, 15, 23]` (`:164`) | a constant multiplied out at `:233`, `:188`, `:204` | the literal text `"at": ["07:00", "15:00", "23:00"]` |
 | `FERRY_HOURS = [6, 8, …, 18]` (`:163`) | multiplied out at `:252` | flows per civil day, `"d3 08:00"`..`"d3 08:12"`: a rota's template is an actor, so a sailing's pulse is two flows the generator writes |
 | The diurnal rates, `[(0,6,20), (6,10,180), …]` (`:169`) | multiplied out at `:175`, `:179` | flow windows `"d1 06:00"`..`"d1 10:00"`, cut to the run at its edges |
 | The perimeter shadow, `6*DAY + 2*HOUR + 30*60` (`:285`) | three multiplications | `"d6 02:30"` |
 | The stay-behind, `1*DAY + 8*HOUR` (`:293`) | two multiplications | `"d1 08:00"` |
 | The probe's per-day offset, `day * 137` (`:275`) | arithmetic, and the resulting instant is stated nowhere | `{"at": "d2 11:00", "plus": 274}` — and the report states that it resolved to **2026-10-01T11:04:34+03:30**, and d5's to **2026-10-04T11:11:25+03:30** (`test_bahonar_generator.py`; under a midnight epoch, `test_civil_time_resolver.py`) |
-| The annotation's own interval, `"begin_s"/"end_s"` (`:371-377`) | seconds in a file with no epoch | the absence's vacancy, **2026-10-03T07:00:00+03:30** to **15:00**, resolved against the same epoch as the traffic |
+| The annotation's own interval, `"begin_s"/"end_s"` (`:371-377`) | seconds in a file with no epoch | the skip's occasion, **2026-10-03T07:00:00+03:30** to **15:00** in the resolution report, resolved against the same epoch as the traffic; no supervision row carries it |
 
 The generator does not disappear and is not meant to. Bahonar's sixteen tower positions still come
 from a survey and still need a program to project them onto edges. What changes is that the program
@@ -1221,8 +1227,7 @@ An author writes supervision in the specification's `supervision` block, and the
 |---|---|
 | `instances[]` — `annotated` or `nominal`, with `labels`, `participants` (actor and role), `intervals` (participant, phase, and either a civil begin with an end or a duration, or an `anchor`), `aoi_refs`, `parameters`, `hard_negative_for`, `counterfactual` | a pattern instance, id `<scenario_id>/<name>`, with its participants and its intervals — each with its resolved anchor or null, and its declared seconds and civil time — its parameters as written, and — when nominal — its terms' `hard_negative_for` |
 | `cohorts[]` — a flow, `annotated` whole-life or `unlabelled`, with `parameters` | a cohort row with its parameters; `nominal` (check 49) and intervals (check 23) refuse |
-| `series[]` — a rota read as a recurring series, with the members' role, the slot length, each subject's area, the members' state, `parameters` and `hard_negative_for` | a series with one slot per occasion, realised by the rota's entry or unrealised where the rota skips; each realised member is an entity in the declared state. The row carries its parameters and, when nominal, its terms' `hard_negative_for` |
-| `absences[]` — a skipped rota occasion, annotated, with `parameters` | an instance with `realisation: absent`, no participant, one `vacancy` interval over the slot, its `expected` route in edges and its site — the lane and position of the subject's place, null where that place names no one lane position — and the series' realised count as counter-evidence |
+| `series[]` — a rota read as a recurring series, with the members' role, the slot length, each subject's area, the members' state, `parameters` and `hard_negative_for` | a series with one slot per occasion a vehicle realises, each naming its vehicle (`entity_id`); each member is an entity in the declared state. An occasion the rota skips has no slot: there is no vehicle for a label to follow ([`06`](06_Truth_And_Annotation.md) §3.5). The row carries its parameters and, when nominal, its terms' `hard_negative_for` |
 
 **A row says nothing its terms do not define.** `parameters` on any row are keys its labels' terms declare
 in `parameters{}`, each value of the declared type (check 56): it is the one channel an author has for
@@ -1253,7 +1258,10 @@ bounds are compared with a capture window (check 38), so an interval with no dec
 where it falls is the run's to record.
 
 Every actor not in an instance or a series, and every flow not in `cohorts`, is written explicitly as
-`unlabelled`: absence of an element must not stand for an asserted negative (06 §3.1). The set of rows is
+`unlabelled`: a missing element must not stand for an asserted negative (06 §3.1). Every row is a
+vehicle's or a flow's; nothing is written for an empty place, and an author who wants a planted omission
+in the record labels the vehicle that deviates or states the intent as a note at scenario level (06
+§3.5). The set of rows is
 fixed at compile time; the runtime may only bind them (06 §3.6). The plan carries the resolved,
 import-flattened vocabulary with its digest, and the digests of the route file, the network, the
 configuration and — `additional_digest`, null where there is none — the lane closures' additional file
@@ -1656,7 +1664,7 @@ place index, area table and solar frame — and the vehicle catalogue. Nothing e
 | `<scenario_id>.sumocfg` | the run configuration: the network and route files, `begin` 0, `end` and `step-length` in plain seconds with the epoch restated as a comment above them, the SUMO seed, and the processing options that decide how the traffic moves — `time-to-teleport` −1, `max-depart-delay` 900, `collision.action` warn, `lanechange.duration` 3 |
 | `<scenario_id>.add.xml` | written only when the specification declares `lane_closures`: one rerouter per closure, its lanes closed to all but `authority` for the closure's window, times in plain seconds; the configuration names it in `additional-files`. The route file cannot carry a closure (D7.37) |
 | `<MapName>.net.xml` | the world package's own network, **byte for byte**, so the network SUMO runs is the world's; nothing about it is scenario-specific |
-| `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, each row's parameters and each nominal row's `hard_negative_for`, each absence's expected route and site, the vocabulary resolved with its digest, and the digests of the route file, network, configuration and additional file it was compiled against — `additional_digest` the same SHA-256 the lock records for the additional file, null where there is none |
+| `<scenario_id>.supervision.json` | the supervision plan (§3.6), in the form of [`06`](06_Truth_And_Annotation.md) §8.1: instance ids `<scenario_id>/<name>`, intervals in seconds and civil time, every entity and cohort explicit, each row's parameters and each nominal row's `hard_negative_for`, each series' slots naming their vehicles, the vocabulary resolved with its digest, and the digests of the route file, network, configuration and additional file it was compiled against — `additional_digest` the same SHA-256 the lock records for the additional file, null where there is none |
 | `<scenario_id>.resolution.json`, `.resolution.md` | **what it resolved** — §5.3 |
 | `<scenario_id>.lock.json` | the `scenario_id`; the specification's name and digest; the compiler and its version; the four files — routes, configuration, network, supervision plan — and the lane closures' additional file where there is one, each with its SHA-256; the world binding (map name, network fingerprint, netconvert argument vector and version, OpenDRIVE and OSM digests, origin, georeference); the catalogue's id and digests; the vocabulary's core version, namespaces and digest; the traffic — SUMO seed, step, end, processing options, the `duarouter` release that routed it, the world's converter, how the two stand by release number and whether a mismatch was accepted (check 6); the dry run — whether it ran, the SUMO release, the vehicles loaded, inserted, discarded and still waiting, the planned vehicles inserted, the collisions (check 59); **the epoch verbatim and its digest, the authored illumination default, the candidate windows with their civil dates and times, the ephemeris, and the illumination–label association statistic** (§5.6) |
 
@@ -1717,7 +1725,7 @@ the same ids and outcomes.
 | 6 | The SUMO release routing the scenario is the one that built the world, compared by release number with the co-simulation session's own function (`CarlaNet.Sumo.SumoReleaseCheck`, reached through `SumoInstallation.release_check`) | `world.json` `NetconvertVersion` and the installation `duarouter` runs from | **refuse**, naming both releases, the installation and the rule that found it; **warn** when the mismatch is accepted with `--allow-sumo-version-mismatch`, and the lock records the acceptance (`traffic.routed_by.release_agreement`, `mismatch_accepted`); **warn** when the package records no converter | A different `duarouter` release can route the same demand differently, so the traffic would not be the world's — the same rule the session refuses a run by ([`03`](03_CoSimulation_Runtime.md) §2.6). *Measured:* `SUMO_HOME` on this machine is an external **1.27.1** while the repository stages **1.27.0**; `compile_scenario.py` routes with the staged installation unless `--sumo-home` names another |
 | **References** ||||
 | 7 | Every declared place resolves, and to exactly one thing where one is needed; every lane a closure names is on its edge | the resolver, §4.2 | **refuse**, with candidates | An authored place that silently becomes a different place |
-| 8 | Every reference names what the specification declares: places, instants, rotas, series, flows, counterfactuals — an instance's, an absence's, and a term's naming a series, cohort or instance — and a term's `exemplar_instances`, each an instance or absence of this scenario by its authored name | the specification | **refuse** | A typo becoming a valid-looking identifier, and an exemplar that is prose rather than a reference ([`06`](06_Truth_And_Annotation.md) §3.8). An exemplar written as a plan's id, `<scenario_id>/<name>`, is refused with the name to use: a sweep's members carry their own scenario ids |
+| 8 | Every reference names what the specification declares: places, instants, rotas, series, flows, counterfactuals — an instance's, and a term's naming a series, cohort or instance — and a term's `exemplar_instances`, each an instance of this scenario by its authored name | the specification | **refuse** | A typo becoming a valid-looking identifier, and an exemplar that is prose rather than a reference ([`06`](06_Truth_And_Annotation.md) §3.8). An exemplar written as a plan's id, `<scenario_id>/<name>`, is refused with the name to use: a sweep's members carry their own scenario ids |
 | 54 | Every actor, rota entry, flow, lane closure and capture window id is unique | the specification | **refuse** | Two vehicles SUMO would read as one, or a window cited ambiguously |
 | 9 | Every stop position lies within its lane's length | `map.net.xml` | **refuse** | A dwell clamped to somewhere other than where it was authored — `write_dwell_routes` clamps silently (`SumoScenarioBuilder.py:533`) |
 | 10 | Every vehicle's class may drive every edge of its route | lane `allow`/`disallow`, before routing and on the routed edges | **refuse**, naming the class and the edges | The fenced-network fragmentation the skill records |
@@ -1733,18 +1741,18 @@ the same ids and outcomes.
 | 17 | A vehicle class draws from more than one body | the specification | **warn** | Appearance becoming the label: every member of the class is the same car |
 | **Annotation** ||||
 | 18 | Every label is a declared term and every role but `subject` a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary | the vocabulary block | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2), or a label no consumer can read |
-| 45 | Every label's `applies_to` includes the subject kind, and its `realisation` the instance's | the vocabulary | **refuse** | A per-member term on a `<flow>`, or an absence term on a vehicle. This is how [`06`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret |
+| 45 | Every label's `applies_to` includes the subject kind: a vehicle (`entity`), or every vehicle of a flow (`cohort`) | the vocabulary | **refuse** | A per-member term on a `<flow>`, or a whole-flow term on one vehicle. This is how [`06`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret; there is no place-shaped kind (06 §3.5) |
 | 46 | Every namespace appearing in a label, role, phase or area kind was declared in `vocabulary.namespaces[]` or imported | the specification | **refuse** | A term resolving against a namespace that travels in nobody's bundle (06 §8.7) |
-| 56 | Every key in an instance's, absence's, series' or cohort's `parameters` is declared in the `parameters{}` of one of its labels' terms, and its value is of the declared type; two labels declaring one key agree on its type and unit | the vocabulary | **refuse**, naming the key, the value, the declaring term and the type it declares | A magnitude no consumer can read: `group_size` in one scenario and `n_vehicles` in another, or a count written as a fraction ([`06`](06_Truth_And_Annotation.md) §3.8). A parameter is the author's structured metadata, carried in the one channel that defines it, so there is no free-form map beside it |
+| 56 | Every key in an instance's, series' or cohort's `parameters` is declared in the `parameters{}` of one of its labels' terms, and its value is of the declared type; two labels declaring one key agree on its type and unit | the vocabulary | **refuse**, naming the key, the value, the declaring term and the type it declares | A magnitude no consumer can read: `group_size` in one scenario and `n_vehicles` in another, or a count written as a fraction ([`06`](06_Truth_And_Annotation.md) §3.8). A parameter is the author's structured metadata, carried in the one channel that defines it, so there is no free-form map beside it |
 | 57 | A nominal instance's or series' `hard_negative_for` is the set its labels' terms declare, which the plan copies onto the row; an author may restate it exactly and may not vary it, and no subject that is not nominal declares one | the vocabulary | **refuse** | A matched negative on which the record and its term disagree. The term is the authority and the row a projection of it ([`06`](06_Truth_And_Annotation.md) §3.9(d)) |
-| 19 | Every participant names a declared actor | the specification | **refuse** | An instance with a participant that never exists |
+| 19 | Every participant names a declared actor, and every instance has a participant | the specification | **refuse**, telling an author of an instance about no vehicle the two ways to convey an omission | An instance with a participant that never exists, or a label with no vehicle to follow ([`06`](06_Truth_And_Annotation.md) §3.5) |
 | 20 | Every `aoi_ref`, and every slot's area, names an area in the world's area table | `areas.resolved.json` | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
 | 21 | Instance ids are `<scenario_id>/<name>`, deterministic and unique | the specification | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
 | 58 | Every interval is declared by a civil `begin` or by an `anchor`, not both; an anchor names its participant's departure, one of its stops or one of its `phases[]`, by an index the actor has, and its end comes after its start; only an entity's interval is anchored | the participant's resolved stops and compiled route | **refuse**, naming the event, the participant and how many stops or phases it has | An interval bound to an event its vehicle never has, so it never opens; a bound declared twice; a phase asserted over a flow's members ([`06`](06_Truth_And_Annotation.md) §3.2, §3.3) |
 | 22 | No annotated interval begins before its participant departs | the resolved departures | **warn** | An interval no vehicle could have been in. Its end is not checked: only the run knows when a vehicle arrives |
 | 23 | A **cohort** carries only a whole-life annotation, never an interval | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A phase asserted over a generator, whose member count is not known until the run |
 | 49 | No cohort is `nominal` | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A negative asserted of vehicles nobody authored one by one |
-| 50 | A one-participant instance names its participant `subject`; the phase `vacancy` is never authored | [`06`](06_Truth_And_Annotation.md) §3.7 | **refuse** | A consumer guessing which track an instance is about, or a spelling the absence writer owns |
+| 50 | A one-participant instance names its participant `subject` | [`06`](06_Truth_And_Annotation.md) §3.7 | **refuse** | A consumer guessing which track an instance is about |
 | 24 | Some subject is `nominal` when any is `annotated` | the plan | **warn** | The missing hard negatives of doc 20 §2.7 |
 | **Areas** ||||
 | 25 | Area ids unique, rings closed and non-self-intersecting, `radius_m > 0` | [`04`](04_Contracts.md) C5 V5.1–V5.4 | **refuse** — carried out by `AreaOfInterestSource` when the world is built; the compiler reads only a table the world build validated | Undefined containment tests |
@@ -1756,14 +1764,14 @@ the same ids and outcomes.
 | 34 | `utc_offset_hours` is a whole number of quarter hours in `[−12, +14]` | the specification, through `SolarEpoch` | **refuse** | An offset no civil zone uses, one the engine's zone would clamp without a word, or an integer-hours representation creeping in. **Iran is +03:30** and the sizing scenario's site is in it; *read,* `SunSky->TimeZone` is a `double` (`CesiumSunSky.cpp:571`) ([`04`](04_Contracts.md) V9.3) |
 | 35 | *Retired.* The zone name's offset against `utc_offset_hours` | — | — | `time_zone_id` is carried and never resolved ([`04`](04_Contracts.md) §11.3, [`11`](11_Time_And_Illumination.md) D11.1); a check resolving it would make a compile's verdict depend on the host's zone database, and this machine has none (§9.6) |
 | 47 | Every authored time is in an accepted form, names its day on a multi-day run, and carries the epoch's offset when absolute | §4.5 | **refuse** | A clock-shaped literal that is really an offset — SUMO's `H:M:S` trap of §1.4 |
-| 48 | Every rota expands to entries, and every skip matches exactly one occasion and says why | the rota | **refuse** | An absence that was never planted |
+| 48 | Every rota expands to entries, and every skip matches exactly one occasion and says why | the rota | **refuse** | A skip that removes nothing, so the schedule runs complete where its author meant a gap |
 | 37 | Every resolved departure, stop `until` and interval begin lies in `[0, end]` | §4.5 | **refuse**, stating the epoch instant and the civil time | An instant that silently falls outside the run. *Measured,* the margin on the sizing scenario is 45 minutes: latest departure 602 100 s against `<end value="604800"/>` |
 | 36 | A capture window's civil date and the date its sun is written with | the epoch's `calendar_advances` and the policy, through `DeclaredSun` | **warn** when they differ, naming both | A window rendered under another date's seasonal sun without notice. The session writes the date (§2.9 item 4), so a difference is a declared choice — a held calendar, or a freeze holding the date — and the warning makes it visible |
 | 38 | Every capture window lies inside the run and cuts no declared supervision interval | the specification and the supervision plan | **refuse**, naming the instance | The delegation doc 10 makes to this section: "at authoring time, `07`'s validator rejects a `capture_windows[]` entry that cuts a declared interval, naming the instance" (`10_Scale_And_Performance.md:504`). A partially observed positive teaches a truncated pattern. Only declared bounds are compared: an interval anchored to a stop's arrival or a later phase declares no start ([`06`](06_Truth_And_Annotation.md) D6.4), and where it falls is recorded by the run |
 | 39 | The illumination default is present and accepted by `CarlaNet.CoSim.IlluminationPolicy`; under `advance`, each window's arc is named | the specification | **refuse** when absent or malformed; **warn** per window under `advance`, with the elevation at its open and close | A window authored as a controlled constant that is not one, and a `rate` silently ignored because the policy is a freeze. The units are sun-clock seconds per **simulated** second (§2.9 item 5) |
 | 40 | The declared offset is within an hour of the zone the world's georeference configures | `epoch.utc_offset_hours` vs `solar.json` `engine_time_zone_hours` (§2.10) | **warn** past 1.0 h, naming both ([`04`](04_Contracts.md) V9.13); the difference is reported for every scenario | A declared offset that is not this place's. *Measured:* the Bahonar origin's `lon / 15` is **3.745377 h**, **14 min 43 s** from Iran's +03:30 — at the equinox the difference between a sun above the horizon at 06:00 (**+1.74°**) and one below it (**−1.53°**). The session writes the declared offset as the sun's zone ([`04`](04_Contracts.md) D4.19), so a difference of that size moves no sun at run time |
-| 42 | A window whose sun reaches below −6° is named as not corpus-eligible | [`11`](11_Time_And_Illumination.md) D11.7, through `WindowSun` | **warn, never refuse**, naming the elevation and the verdict. An author may capture any regime deliberately; the warning exists so nobody captures one *accidentally* | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December — deep night on every date |
-| 41 | The illumination–label association over the declared windows, and over the span | the resolved instants, the supervision plan and the declared sun | **warn, always, and never refuse** | §5.6. *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`, and two hours are **100 % annotated**. In a pattern of life this correlation exists by construction; the failure is discovering it after training |
+| 42 | Every window's lowest sun elevation over its span, and the band that elevation falls in, are stated in the resolution report (`capture_windows[].sun_lowest`) | the declared sun, through `WindowSun` and the band table | **a fact in the report, never a finding**: no warning, no refusal and no verdict word (the charter's §4b). An author reads what light the window is under and decides; nobody captures a regime without knowing it | Doc 10 recommends a **23:00** window on the sizing scenario (`10_Scale_And_Performance.md:175`). *Measured,* sun elevation at that instant at the Bahonar origin is **−59.6°** at the equinox, **−38.1°** in June, **−79.5°** in December, which the report states as it is |
+| 41 | The illumination–label association over the declared windows, and over the span | the resolved instants, the supervision plan and the declared sun | **warn, always, and never refuse**; the report carries counts, ratios and bands, and no word that judges them | §5.6. *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`, and two hours are **100 % annotated**. In a pattern of life this correlation exists by construction; the failure is discovering it after training |
 | 43 | A sweep holds illumination while it varies behaviour, varies only illumination when it says so, and names a crossed design; a counterfactual pair shares its base's epoch, windows and illumination unless displaced in time | the sweep (§7.2) | **refuse**; **warn** for a factorial design, naming its cells | §7.4. A behaviour sweep whose members were captured under different light is not a comparison |
 | **Emission** ||||
 | 29 | The route file is departure-sorted | the file, before it is written | **refuse** (a compiler bug if it fires) | *Carried forward,* the skill: SUMO drops out-of-order entries with only a warning |
@@ -1875,7 +1883,7 @@ flowchart TD
   P6 --> P7
 
   subgraph ANN["4 · Supervision"]
-    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>parameters and hard negatives fit their terms · 56, 57<br/>participants, areas, ids · 19, 20, 21<br/>intervals declared once, anchors their vehicles have · 58<br/>cohorts, reserved words · 23, 49, 50<br/>series, absences, counterfactuals, exemplars · 8, 20"] -->|refused| R4(["REFUSE"])
+    P7["vocabulary: declared, resolving, namespaced · 18, 46<br/>labels fit their subject · 45<br/>parameters and hard negatives fit their terms · 56, 57<br/>participants, areas, ids · 19, 20, 21<br/>intervals declared once, anchors their vehicles have · 58<br/>cohorts, the reserved role · 23, 49, 50<br/>series, counterfactuals, exemplars · 8, 20"] -->|refused| R4(["REFUSE"])
     P7 --> P8["intervals vs departures · 22<br/>interval past the run · 31<br/>hard negatives present · 24<br/>referenced areas' warnings · 27, 28"] --> W4[/"WARN"/]
   end
 
@@ -2045,10 +2053,12 @@ scenario-wide picture §5.6.1 measured. For each:
    decimals, with the counts it was computed from — so a reader can see when it rests on two entries. It
    is *undefined*, not zero, when the entries carry one state only. *Measured:* fed §5.6.1's published
    contingency table, the computation returns **0.600** (`test_illumination_label_association.py`).
-3. **Every degenerate band** — a band in which the annotated rate is 0 or 1 — named explicitly, because
-   there the band determines the label and no amount of statistical care recovers a comparison.
-4. **The usable subset**: the bands in which both occur. This is the only stratum from which an
-   illumination-controlled comparison can be drawn.
+3. **Every band in which one state alone occurs** — the annotated rate is 0 or 1 there, so the band
+   determines the label and no amount of statistical care recovers a comparison — named explicitly
+   (`degenerate_bands`).
+4. **Every band in which both states occur** (`mixed_bands`), named the same way. The report says
+   which bands these are and nothing about what they are good for: that is the consumer's reading of
+   the numbers, not the pipeline's (the charter's §4b).
 5. **The remedies**, because a warning that offers nothing is one a reader learns to skip: a
    `displaced`-in-time counterfactual (§7.3), which puts the same annotation in a second band; a
    `nominal` twin inside the annotated band, doc 20 §2.7's hard negative; and a capture window in a
@@ -2401,7 +2411,7 @@ Three further reasons are specific to this pipeline:
 | **Silent on time entirely** | **The epoch conventions** — §8.2.1 |
 | **Silent on illumination entirely** | **The illumination guidance** — §8.2.2 |
 
-`SKILL.md` 1.5.0 carries: the network as an input, the specification and `compile_scenario.py`, the
+`SKILL.md` 1.6.0 carries: the network as an input, the specification and `compile_scenario.py`, the
 epoch conventions of §8.2.1, the place forms, the rota, the supervision channel and the vocabulary's
 layering, the illumination guidance of §8.2.2, sweeps with counterfactual pairs, the fence as the
 world's type map (§9.8), route phases and the point, gateway and movement places, and — beside it — the
@@ -2638,19 +2648,19 @@ saving is carried by it, and `time_zone_id` is carried for a reader and never re
 [`04`](04_Contracts.md) §11.3). So the absence of a database limits nothing, and `tzdata` is not a
 dependency of `CarlaControl`. A site's civil offset for a given date is the author's to declare (§8.2.1).
 
-### 9.7 The night viability verdict
+### 9.7 What light a window is under
 
-§2.9 item 3. Doc 11 has given it: **D11.7 — night capture is not viable, and no window whose sun is
-below −6° may be declared corpus-eligible.** The limit is not exposure; at those instants the scene
+§2.9 item 3. Doc 11 says why night capture is not viable (**D11.7**): at those instants the scene
 contains no light source at all and the photoreal surfaces carry baked daytime radiance
 ([`11`](11_Time_And_Illumination.md) §5).
 
-Check 42 carries it into authoring as a warning that names the window's lowest declared elevation and
-the verdict, and never a refusal: any time of day stays authorable, a night window still yields complete
-behavioural truth and a full sidecar, and the choice of what to capture is the user's
-([`13`](13_Work_Breakdown.md) §13 decision 1). Doc 10's recommended **23:00** window at the sizing site
-(`10_Scale_And_Performance.md:175`) is −38° to −80° below the horizon on every date (§5.6.2), so it
-warns there on every date.
+Check 42 carries the fact into authoring and no verdict with it: the resolution report states each
+window's lowest declared sun elevation over its span and the band it falls in
+(`capture_windows[].sun_lowest`), and the compiler neither warns nor refuses on it. Any time of day
+stays authorable, a night window still yields complete behavioural truth and a full sidecar, and the
+choice of what to capture is the user's ([`13`](13_Work_Breakdown.md) §13 decision 1), made knowing
+the number. Doc 10's recommended **23:00** window at the sizing site (`10_Scale_And_Performance.md:175`)
+is −38° to −80° below the horizon on every date (§5.6.2), and the report says so.
 
 *Read,* the obvious mechanism for headlights at dusk is absent under SUMO drive: the only sun-driven
 headlight rule in the tree is `VehicleLightStage.cs:228-236`, a .NET traffic-manager stage, and the
