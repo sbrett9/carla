@@ -32,7 +32,10 @@ namespace CarlaNet.CoSim;
 /// the caller handed over verbatim (<c>run</c>) -- the run's and the session's identity, the channels --
 /// beside what the session established itself: the scenario's files and digests from its compile lock,
 /// the supervision plan and its vocabulary, the SUMO settings the session checked and runs under, the
-/// clock, the render set, and the epoch and illumination declared (doc 04 C9 §11.8).</description></item>
+/// clock, the render set, the rule the vehicle lights follow (<c>vehicle_lights</c>: whether they are
+/// driven, the sun elevations the headlights switch at and which elevation they read, and that brake
+/// lights and turn signals follow SUMO's signals; doc 11 D11.9), and the epoch and illumination declared
+/// (doc 04 C9 §11.8).</description></item>
 /// <item><term><c>instance</c>, <c>series</c>, <c>cohort</c></term><description>Next, where the compile
 /// lock binds a supervision plan: each of its pattern instances, recurring series and cohorts as declared
 /// -- identity, supervision state, labels and parameters, an instance's participants with their roles and
@@ -67,9 +70,19 @@ namespace CarlaNet.CoSim;
 /// <c>scenario_finished</c>, <c>caller_stopped</c> or <c>run_stopped</c> with its stage and cause -- with
 /// the caller's own reason where it gave one, what the manifest holds, the intervals still open
 /// (<c>open_intervals</c>) and the word the binder closes them with after this row
-/// (<c>open_intervals_close_as</c>), and the plan's intervals nothing in the run opened or closed
-/// (<c>never_opened</c>).</description></item>
+/// (<c>open_intervals_close_as</c>), the plan's intervals nothing in the run opened or closed
+/// (<c>never_opened</c>), and how far the world departed from what the bridge commanded over the whole
+/// run (<c>bridge_divergence</c>, doc 06 §4.3).</description></item>
 /// </list>
+///
+/// <para><b>The bridge's divergence is a run-level figure.</b> The session compares every pose and
+/// velocity it writes against what the world reports for the body on the same tick
+/// (<see cref="PoseDivergence"/>); the terminal row carries the run's totals -- the comparisons taken,
+/// the vehicle-ticks nothing read back, the worst and mean position in metres, the worst yaw, pitch and
+/// roll in degrees, the worst and mean velocity in metres per second against the mean commanded speed,
+/// and the vehicle and instant of the worst position and the worst velocity. A capture's sidecar carries
+/// none of it, as the owner ruled (2026-10-05): a convention that is wrong is wrong on every vehicle of
+/// every frame, and one figure for the run says so.</para>
 ///
 /// <para><b>Closed by its caller, or by the session's end.</b> A caller that reads the run's closing gates
 /// before it disposes the session closes the manifest first (<see cref="Close"/>), so the gate reads the
@@ -112,6 +125,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     private const string IntervalOpenedRow = "interval_opened";
     private const string IntervalClosedRow = "interval_closed";
     private const string DefectRow = "supervision_defect";
+
+    /// <summary>What the opening row names as the source of a vehicle's brake lights and turn signals.</summary>
+    private const string SumoSignalsSource = "sumo_signals";
 
     private static readonly JsonWriterOptions JsonOptions = new()
     {
@@ -751,6 +767,8 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             WriteNumberOrNull(json, "draw_distance_m", _options.DrawDistanceMetres);
             json.WriteEndObject();
 
+            WriteVehicleLights(json);
+
             json.WriteStartObject("solar");
             json.WritePropertyName("epoch");
             if (epoch is null)
@@ -775,6 +793,36 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
             json.WriteString("world_truth_track", _options.WorldTruthTrackPath);
         });
+    }
+
+    /// <summary>
+    /// The rule the vehicle lights follow for the whole run: whether the session drives them at all; the
+    /// sun elevations the headlights come on below and go off above, read against the geometric elevation
+    /// the world reports (<see cref="HeadlightRule"/>, doc 11 D11.9); and that brake lights and turn signals
+    /// follow the signals SUMO reports for each vehicle (<see cref="VehicleLampMapping"/>, D11.8).
+    /// </summary>
+    /// <remarks>
+    /// Written from the options the session runs under, which are the values its headlight rule was built
+    /// from before the manifest was opened. The rule runs only on a sun the session bound and audits
+    /// (<see cref="SumoDriveSession"/>, <c>HeadlightsForThisTick</c>): under a policy that leaves the sun
+    /// alone <c>headlights_follow_sun</c> is false and every headlight stays off, while brake lights and
+    /// turn signals still follow SUMO. Where the lights are not driven at all every body keeps the lights it
+    /// was spawned with, and the elevations and the signal source are written null. Per-vehicle light state
+    /// is not in the truth record; this row is where a reader learns what rule the imagery's lights follow.
+    /// </remarks>
+    private void WriteVehicleLights(Utf8JsonWriter json)
+    {
+        bool driven = _options.VehicleLampsDriven;
+        bool followSun = driven && _options.Illumination is { BindsTheSun: true };
+        json.WriteStartObject("vehicle_lights");
+        json.WriteBoolean("driven", driven);
+        json.WriteBoolean("headlights_follow_sun", followSun);
+        WriteNumberOrNull(json, "headlights_on_below_deg", driven ? _options.HeadlightOnBelowDegrees : null);
+        WriteNumberOrNull(json, "headlights_off_above_deg", driven ? _options.HeadlightOffAboveDegrees : null);
+        json.WriteString("headlights_elevation", driven ? SolarElevationKinds.Name(SolarElevationKind.Geometric) : null);
+        json.WriteString("brake_lights", driven ? SumoSignalsSource : null);
+        json.WriteString("turn_signals", driven ? SumoSignalsSource : null);
+        json.WriteEndObject();
     }
 
     private static void WriteIllumination(Utf8JsonWriter json, IlluminationPolicy? policy)
@@ -995,6 +1043,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                 json.WriteNumber("still_in_render_set", _held.Count);
                 json.WriteNumber("events", Events);
                 WriteSupervisionAtClose(json, ended);
+                WriteDivergenceAtClose(json);
                 json.WriteNumber("rows_before", Rows);
                 json.WriteString("closed_wall_utc",
                                  DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
@@ -1052,6 +1101,60 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         }
 
         json.WriteEndArray();
+    }
+
+    /// <summary>
+    /// What the terminal row says of the difference between what the bridge commanded and what the world
+    /// applied, over the whole run (06 §4.3): the comparisons taken and the vehicle-ticks nothing read back;
+    /// the worst and mean position, metres; the worst yaw, pitch and roll, degrees; the worst and mean
+    /// velocity, metres per second, with the mean commanded speed they are read against; and the SUMO
+    /// vehicle, instant, tick and body of the worst position and of the worst velocity.
+    /// </summary>
+    /// <remarks>
+    /// Read from the session's report, which accumulates every comparison the session takes
+    /// (<see cref="CoSimRunReport.AddDivergence"/>), so the block is the same whether the caller closes the
+    /// manifest or the session's end does. A run that compared nothing writes zero samples and null for
+    /// both worst cases; with vehicle-ticks that nothing read back beside them, that is a run that measured
+    /// nothing while writing poses, which a reader must not take for a run that measured zero.
+    /// </remarks>
+    private void WriteDivergenceAtClose(Utf8JsonWriter json)
+    {
+        CoSimRunReport report = _report;
+        json.WriteStartObject("bridge_divergence");
+        json.WriteNumber("samples", report.DivergenceSamples);
+        json.WriteNumber("vehicle_ticks_with_no_read_back", report.VehicleTicksWithNoReadBack);
+        json.WriteNumber("worst_position_m", report.WorstPositionDivergenceMetres);
+        json.WriteNumber("mean_position_m", report.MeanPositionDivergenceMetres);
+        json.WriteNumber("worst_yaw_deg", report.WorstYawDivergenceDegrees);
+        json.WriteNumber("worst_pitch_deg", report.WorstPitchDivergenceDegrees);
+        json.WriteNumber("worst_roll_deg", report.WorstRollDivergenceDegrees);
+        json.WriteNumber("worst_velocity_m_per_s", report.WorstVelocityDivergenceMetresPerSecond);
+        json.WriteNumber("mean_velocity_m_per_s", report.MeanVelocityDivergenceMetresPerSecond);
+        json.WriteNumber("mean_commanded_speed_m_per_s", report.MeanCommandedSpeedMetresPerSecond);
+        WriteWorstDivergence(json, "worst_position_on", report.WorstDivergence);
+        WriteWorstDivergence(json, "worst_velocity_on", report.WorstVelocityDivergence);
+        json.WriteEndObject();
+    }
+
+    /// <summary>
+    /// The vehicle and instant one worst figure was measured on: SUMO's id for the vehicle, the simulated
+    /// instant on TraCI's clock the pose was computed for, the session's tick and the body it was written to.
+    /// </summary>
+    private static void WriteWorstDivergence(Utf8JsonWriter json, string name, PoseDivergence? worst)
+    {
+        json.WritePropertyName(name);
+        if (worst is not { } sample)
+        {
+            json.WriteNullValue();
+            return;
+        }
+
+        json.WriteStartObject();
+        json.WriteString("sumo_id", sample.VehicleId);
+        json.WriteNumber("sim_time_s", Rendered(sample.SimulatedTimeSeconds));
+        json.WriteNumber("tick", sample.TickIndex);
+        json.WriteNumber("actor_id", sample.Actor);
+        json.WriteEndObject();
     }
 
     /// <summary>The row an interval is: its instance, its participant and its phase (06 D6.8).</summary>

@@ -28,6 +28,8 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `capture.depth_pose_header_disagreed` | the same for the depth captures occlusion is measured against, threshold 0 | measured where the channel has a depth camera |
 | `clock.ratio_recorded` | whether the session's achieved real-time factor exists | measured |
 | `pacing.achieved_factor` | under `wall_clock`, the achieved factor against `min_achieved_factor` | measured |
+| `bridge.position_divergence` | the largest distance between a pose the bridge commanded and the one the world applied to the body on the same tick, metres, over the whole run, against `bridge.position_divergence_limit_m` (06 §4.3) | measured where a vehicle-tick was compared; skipped where none was, stating the vehicle-ticks nothing read back |
+| `bridge.velocity_divergence` | the largest difference between a velocity the bridge commanded and the one the world reported for the body, metres per second, against `bridge.velocity_divergence_limit_m_per_s` | the same |
 | `solar.applied_equals_confirmed` | the audit's worst angle between the world's sun and the declared one, against its tolerance | measured where the policy binds the sun |
 | `launch.warnings_adjudicated` | warnings raised with no adjudication, threshold 0 | measured |
 | `capture.captured_minus_written` | -- | skipped: the recorder counts no capture accepted into its queue |
@@ -62,6 +64,10 @@ SKIPPED = {
 }
 MANIFEST_CLOSING_RECORD = "supervision.manifest_closing_record"
 MANIFEST_CLOSED_ROW = "manifest_closed"
+POSITION_DIVERGENCE = "bridge.position_divergence"
+VELOCITY_DIVERGENCE = "bridge.velocity_divergence"
+POSITION_DIVERGENCE_LIMIT = "bridge.position_divergence_limit_m"
+VELOCITY_DIVERGENCE_LIMIT = "bridge.velocity_divergence_limit_m_per_s"
 # The first read of a manifest's end: enough for its last complete row, unless that row lists the open
 # intervals of a large plan, when the read grows.
 MANIFEST_TAIL_BYTES = 65536
@@ -229,11 +235,41 @@ class RunCloseoutReport:
             "tolerance_deg": float(audit.ToleranceDegrees),
             "tolerance_s": float(audit.ToleranceSeconds),
             "audited_ticks": int(audit.AuditedTicks)}
+        snapshot["divergence"] = self._divergence(report)
         return snapshot
 
     @staticmethod
     def _number(value: Any) -> float | None:
         return None if value is None else float(value)
+
+    @classmethod
+    def _divergence(cls, report: Any) -> dict:
+        """How far the world departed from what the bridge commanded, over the run so far: the figures
+        the session's report accumulates from its comparison of every pose and velocity written against
+        what the world reported for the body on the same tick (06 §4.3), as the run manifest's closing
+        row writes them. The worst position and the worst velocity each name the SUMO vehicle, the
+        instant on TraCI's clock, the tick and the body they were measured on, or None where nothing
+        was compared."""
+        return {"samples": int(report.DivergenceSamples),
+                "vehicle_ticks_with_no_read_back": int(report.VehicleTicksWithNoReadBack),
+                "worst_position_m": float(report.WorstPositionDivergenceMetres),
+                "mean_position_m": float(report.MeanPositionDivergenceMetres),
+                "worst_yaw_deg": float(report.WorstYawDivergenceDegrees),
+                "worst_pitch_deg": float(report.WorstPitchDivergenceDegrees),
+                "worst_roll_deg": float(report.WorstRollDivergenceDegrees),
+                "worst_velocity_m_per_s": float(report.WorstVelocityDivergenceMetresPerSecond),
+                "mean_velocity_m_per_s": float(report.MeanVelocityDivergenceMetresPerSecond),
+                "mean_commanded_speed_m_per_s": float(report.MeanCommandedSpeedMetresPerSecond),
+                "worst_position_on": cls._worst_on(report.WorstDivergence),
+                "worst_velocity_on": cls._worst_on(report.WorstVelocityDivergence)}
+
+    @staticmethod
+    def _worst_on(sample: Any) -> dict | None:
+        if sample is None:
+            return None
+        return {"sumo_id": str(sample.VehicleId),
+                "sim_time_s": round(float(sample.SimulatedTimeSeconds), 6),
+                "tick": int(sample.TickIndex), "actor_id": int(sample.Actor)}
 
     @classmethod
     def _illumination(cls, session: Any) -> dict | None:
@@ -386,6 +422,7 @@ class RunCloseoutReport:
             gates.append(self._gate("solar.applied_equals_confirmed", "the world's sun is the "
                                     "declared one: worst angle, degrees", "04 C9 §11.8.2",
                                     audit["worst_angle_deg"], audit["tolerance_deg"], "at_most"))
+        gates.extend(self._divergence_gates(snapshot.get("divergence")))
         gates.append(self._gate("launch.warnings_adjudicated", "warnings raised with no "
                                 "adjudication", "12 §6.4", unadjudicated_warnings, 0, "equals"))
         closing_name = "the run manifest ends with its terminal row"
@@ -401,6 +438,33 @@ class RunCloseoutReport:
         for gate_id, (name, reason) in SKIPPED.items():
             gates.append(self._skipped(gate_id, name, reason))
         return gates
+
+    def _divergence_gates(self, divergence: dict | None) -> list[dict]:
+        """The two gates on the bridge's divergence: the worst position and the worst velocity over the
+        whole run, each against its limit from the run configuration. A run that compared nothing --
+        no body driven, or none the world reported -- skips both, saying how many vehicle-ticks were
+        written and read back by nothing, so a run that measured nothing never reads as one that
+        measured zero."""
+        position_name = ("the largest distance between a pose the bridge commanded and the one the "
+                         "world applied, metres")
+        velocity_name = ("the largest difference between a velocity the bridge commanded and the one "
+                         "the world reported, metres per second")
+        if divergence is None:
+            reason = "the session has not started"
+            return [self._skipped(POSITION_DIVERGENCE, position_name, reason),
+                    self._skipped(VELOCITY_DIVERGENCE, velocity_name, reason)]
+        if divergence["samples"] == 0:
+            unread = divergence["vehicle_ticks_with_no_read_back"]
+            reason = (f"no vehicle-tick was compared: {unread} were written and read back by nothing"
+                      if unread else "no vehicle-tick was compared: no body was driven")
+            return [self._skipped(POSITION_DIVERGENCE, position_name, reason),
+                    self._skipped(VELOCITY_DIVERGENCE, velocity_name, reason)]
+        return [self._gate(POSITION_DIVERGENCE, position_name, "06 §4.3",
+                           divergence["worst_position_m"],
+                           self.effective.value(POSITION_DIVERGENCE_LIMIT), "at_most"),
+                self._gate(VELOCITY_DIVERGENCE, velocity_name, "06 §4.3",
+                           divergence["worst_velocity_m_per_s"],
+                           self.effective.value(VELOCITY_DIVERGENCE_LIMIT), "at_most")]
 
     @staticmethod
     def _gate(gate_id: str, name: str, owner: str, observed: Any, threshold: Any,
@@ -475,6 +539,19 @@ class RunCloseoutReport:
                             f"({refused})" if refused is not None
                             else ", rendering only: vehicles beyond it from a camera are in the "
                                  "truth and marked in that camera's sidecars"))
+        divergence = snapshot.get("divergence")
+        if divergence is not None and divergence["samples"]:
+            worst = divergence["worst_position_on"]
+            fastest = divergence["worst_velocity_on"]
+            lines.append(f"  bridge divergence: worst position {divergence['worst_position_m']:.6f} m "
+                         f"on {worst['sumo_id']} at t={worst['sim_time_s']:g} s, mean "
+                         f"{divergence['mean_position_m']:.6f} m over {divergence['samples']} "
+                         f"vehicle-ticks; worst velocity {divergence['worst_velocity_m_per_s']:.6f} m/s "
+                         f"on {fastest['sumo_id']} at t={fastest['sim_time_s']:g} s, mean "
+                         f"{divergence['mean_velocity_m_per_s']:.6f} m/s against a mean commanded "
+                         f"{divergence['mean_commanded_speed_m_per_s']:.3f} m/s"
+                         + (f"; {divergence['vehicle_ticks_with_no_read_back']} vehicle-ticks read "
+                            "back by nothing" if divergence["vehicle_ticks_with_no_read_back"] else ""))
         readiness = snapshot.get("readiness")
         for view in (readiness or {}).get("channels", []):
             lines.append(f"  view {view['sensor_id']}: {describe_view(view)}")

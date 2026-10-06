@@ -72,6 +72,30 @@ LAMP_NAMES: tuple[str, ...] = tuple(name for name, _ in LAMP_BITS)
 # must never be confused with `unlit`, which is a measurement that the lamp changed nothing.
 LAMP_VERDICTS = frozenset({"lit", "unlit", "unknown"})
 
+# The lights the co-simulation session drives, as an author reads them, and the lamps each one is made
+# of: the headlights the session switches on by the sun (`Position | LowBeam`, doc 11 D11.9), and the
+# brake lights and turn signals it writes from SUMO's signals (D11.8). What an author needs to know is
+# whether each lights up on a body, which is read from the optical pass's verdict on those lamps.
+LIGHT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("headlights", ("low_beam", "position")),
+    ("brake_lights", ("brake",)),
+    ("turn_signals", ("left_blinker", "right_blinker")),
+)
+
+LIGHT_NAMES: tuple[str, ...] = tuple(name for name, _ in LIGHT_GROUPS)
+
+
+def light_verdict(capability: Mapping[str, str] | None, lamps: tuple[str, ...]) -> str:
+    """One word for whether a light made of `lamps` lights up on a body, from the optical pass's
+    verdict on each: `lit` where every lamp lit, `unlit` where every lamp was measured and changed
+    nothing, `unknown` where none was measured, and otherwise each lamp's own verdict, so a light
+    whose lamps disagree is never summed to one word that is wrong for half of it."""
+    verdicts = {lamp: (capability or {}).get(lamp, "unknown") for lamp in lamps}
+    distinct = set(verdicts.values())
+    if len(distinct) == 1:
+        return distinct.pop()
+    return ", ".join(f"{lamp} {verdict}" for lamp, verdict in verdicts.items())
+
 
 class UnrenderableVehicleTypeError(LookupError):
     """A vehicle type whose rendered extent the catalogue cannot supply.
@@ -163,8 +187,10 @@ class VehicleCatalogue:
         self.content_build_id: str = document.get("content_build_id", "")
         self._extents: dict[str, VehicleExtent] = {}
         self._failed: dict[str, str] = {}
+        self._lamp_capabilities: dict[str, Mapping[str, str] | None] = {}
         for entry in document.get("vehicles", []):
             blueprint_id = entry["blueprint_id"]
+            self._lamp_capabilities[blueprint_id] = entry.get("lamp_capability")
             if entry.get("measurement") != "measured":
                 self._failed[blueprint_id] = entry.get("measurement_note", "measurement failed")
                 continue
@@ -237,6 +263,19 @@ class VehicleCatalogue:
         declaration keeps it.
         """
         return self._special_types.get(blueprint_id)
+
+    def lights_of(self, blueprint_id: str) -> dict[str, str]:
+        """Whether a body's headlights, brake lights and turn signals light up, by light, from the
+        optical pass's verdict on the lamps each is made of (`LIGHT_GROUPS`): `lit`, `unlit`,
+        `unknown`, or each lamp's own verdict where they disagree. A blueprint the catalogue does not
+        hold, or one swept before the pass measured lamps, is `unknown` throughout.
+
+        Information for an author and for the resolution report; nothing is refused or warned on it.
+        The session drives the lights by the same rule on every body, so a body whose lights are
+        `unlit` is commanded and shows nothing.
+        """
+        capability = self._lamp_capabilities.get(blueprint_id)
+        return {light: light_verdict(capability, lamps) for light, lamps in LIGHT_GROUPS}
 
     def extent_of(self, blueprint_id: str) -> VehicleExtent:
         """The measured extent of one blueprint, by its CARLA definition id."""

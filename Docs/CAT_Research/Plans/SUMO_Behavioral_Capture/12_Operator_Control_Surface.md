@@ -13,6 +13,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 `2026-10-05` — Occlusion is measured on an orbit as on a stare, as the owner ruled. Every channel measuring occlusion gets a depth camera spawned attached to its camera, rigidly and at the camera's own pose, so one move carries both and the two are never captured a frame apart; the orbit's recorder is started with it, so its captures carry per-vehicle occlusion and apparent size. Check 47 no longer refuses occlusion on an orbit; its reason cited the measurement from before the rig moved its cameras in one batch (§5.2 `capture_depth`, `occlusion.enabled`; §6.2 check 47; §6.3).
 `2026-10-05` — §5.2, §6.2 check 54, §6.2.1: a run refuses a scenario whose compile skipped its SUMO-only run (the compiler's check 59) or whose lock records none, offline and before anything is spawned, unless `scenario.accept_skipped_dry_run` is true; the echo then states the acceptance, the session is told it and records it on its report, and `run_sumo_drive.py --accept-skipped-dry-run` is the drive's form of it ([`03`](03_CoSimulation_Runtime.md) §2.7, D3.29). All four shipped locks record a completed run.
 `2026-10-05` — The server issues camera names and refuses duplicates, as the owner ruled (§5.2, §9.6). A camera spawned without a name -- a single channel with no `sensor_id`, a front end given no `--camera-name`, every depth camera -- is `Camera_<n>` from a counter the server keeps for its lifetime; a `sensor_id` or `--camera-name` a live camera in the world holds is refused by the server at the spawn, case aside, and a client cannot give `Camera_<digits>`. Every front end reads the name back from the spawned camera for its directory, its files and its callsign. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras, which the shim says once on stderr.
+`2026-10-05` — §7.2: the closeout gates `bridge.position_divergence` and `bridge.velocity_divergence`, the run's worst commanded-against-applied position and velocity from the session's report against the new session-fixed fields `bridge.position_divergence_limit_m` (0.01 m) and `bridge.velocity_divergence_limit_m_per_s` (0.01 m/s), chosen from 39 measured drives (§5.2); the figures are written whole into the result's `last_snapshot.divergence` and printed on the closeout, and the gates are skipped, with the vehicle-ticks nothing read back, where nothing was compared ([`06`](06_Truth_And_Annotation.md) §4.3, D6.10). §4.4 corrected: the session drives every body's lights by one rule, and the manifest's opening row records it as `vehicle_lights` (§4.5); `solar.vehicle_lights` stays unoffered and check 14 unbuilt because there is no field to check.
 `2026-10-05` — §7.2: the closeout gates `capture.supervision_unpaired[<sensor>]`, a channel's captures of a frame a supervision plan was in force on that were written with `supervision="unknown"`, at zero, skipped from a recorder built before it counted them; the channel's closeout line states the supervision paired and unknown, and the free view's status shows an unknown count as it climbs ([`06`](06_Truth_And_Annotation.md) §8.2).
 `2026-10-05` — `run_capture` writes the run manifest, `truth/manifest.jsonl` under the capture directory beside the world truth track (`truth/world_truth_track.csv`), and names both in its result's `produced`; it closes the manifest with its `closed_by` before it reads its closing gates, so `supervision.manifest_closing_record` is measured: met where the manifest's last complete row is `manifest_closed` (§3.10.3, §7.2). `run_sumo_drive.py --run-manifest PATH` writes one for a drive (§9.6).
 `2026-10-05` — How much a run prints about collisions is a switch, off by default: `collision_detail` (`--collision-detail on`) in `run_capture`, and `run_sumo_drive.py --collision-detail`. Off, the session's report prints the count; on, each collision is printed as it ends and the report lists every collision and every collision warning SUMO wrote. Printing only: every collision is recorded either way (§5.2, §9.6).
@@ -1057,18 +1058,19 @@ policy fails:
 `freeze_at_window_start` is the recommended value because a window is meant to be one lighting
 condition; it is recommended, not silent.
 
-**Vehicle lights are driven and not offered as a field.** The session drives every rendered body's
-lamps by default (`SumoDriveSessionOptions.VehicleLampsDriven`): brake lights and indicators from
-SUMO's signals, headlights on below +3° and off above +6° of the reported sun
-([`11`](11_Time_And_Illumination.md) D11.9, `HeadlightRule`). `run_sumo_drive.py --no-vehicle-lamps`
-switches them off as a control condition. The run configuration has no `solar.vehicle_lights` field, so
-a `run_capture` run drives them under the session's default and records nothing about it, and check 14
-has no field to compare; no truth file states a vehicle's lamp state. Whether the commanded lamp state
-is recorded, and where, is with the owner. When the field exists it is a conditional requirement:
-default `on`, and no default in a window whose sun falls below −6°, so that a dark corpus with unlit
-vehicles and a dark corpus with lit ones are both deliberate choices. *Inference, labelled:* brake and indicator state
-is the most detectable vehicle signature available to a night EO detector, so the choice plausibly
-dominates a night corpus's usefulness; it belongs to whoever captures the first night window.
+**Vehicle lights are driven by one rule, and the rule is recorded, not offered as a field.** The
+session drives every rendered body's lights (`SumoDriveSessionOptions.VehicleLampsDriven`, on by
+default; [`11`](11_Time_And_Illumination.md) §6.2, §6.3, D11.8, D11.9): headlights on below +3° and off
+above +6° of the geometric sun elevation the world reports, brake lights and turn signals from the
+signals SUMO reports for each vehicle. `run_capture` offers no `solar.vehicle_lights` field, so check
+14 has nothing to compare; what a reader of the collection needs is the record, and the run manifest's
+opening row carries it as `vehicle_lights` -- whether driven, both elevations, which elevation they read, and the
+signal source (§4.5). Per-vehicle light state in the truth record comes later, by the owner's ruling
+(2026-10-05). Whether a body's lights *show* is the catalogue's statement, not the run's: the authoring
+skill's `references/vehicles.md` and the resolution report's vehicle section list, per class and body,
+whether headlights, brake lights and turn signals light up, and as measured no shipped body shows any
+of the three lit. *Inference, labelled:* brake and indicator state is the most detectable vehicle
+signature available to a night EO detector, so night imagery wants bodies whose lights show.
 
 ### 4.5 What reaches the manifest
 
@@ -1096,6 +1098,26 @@ that the intent took effect:
 surface reads `get_solar_state()` after applying, at the first cued tick, and records what the world
 actually reports — which costs no RPC (`CarlaClient.cs:1991`). A disagreement between `applied` and
 what was requested is a refusal at launch (§6 check 13), not a line in a log.
+
+**As built (2026-10-05), the vehicle lights on the manifest.** The sketch's one word, `vehicle_lights`,
+is a block of its own on the manifest's opening row, beside `solar`:
+
+```jsonc
+"vehicle_lights": {
+  "driven": true,
+  "headlights_follow_sun": true,
+  "headlights_on_below_deg": 3.0, "headlights_off_above_deg": 6.0,
+  "headlights_elevation": "geometric",
+  "brake_lights": "sumo_signals", "turn_signals": "sumo_signals"
+}
+```
+
+`headlights_follow_sun` is true only where the policy binds the sun: the rule runs on a sun the session
+bound and audits, so under `ignore` every headlight stays off while brake lights and turn signals still
+follow SUMO. With the lights not driven, `driven` and `headlights_follow_sun` are `false` and every
+other field `null`: every body keeps the lights it was spawned with. The elevations are the run's own
+(`SumoDriveSessionOptions`), so a run that set other thresholds records them; an inverted band is
+refused before any manifest is opened.
 
 ### 4.6 What this section needs from `11_Time_And_Illumination.md`
 
@@ -1354,7 +1376,7 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 | `solar.require_sun` | `null` | Session-fixed; `null` means required | check 23 |
 | `solar.note` | `null` | Session-fixed | [`04`](04_Contracts.md) C9 §11.5 |
 | `scenario.epoch` | **—**: the scenario lock | **Bound** | §4.3, D12.9 |
-| `solar.vehicle_lights` | *not offered*: the session drives lamps under its own default (`on`), and `run_capture` has no field to state it | — | §4.4 |
+| `solar.vehicle_lights` | *not offered as a run field*: the session drives every body's lights by one rule, on by default, and the run manifest's opening row records it (`vehicle_lights`) | — | §4.4; [`11`](11_Time_And_Illumination.md) §6.3, D11.9 |
 
 #### Telemetry and occlusion
 
@@ -1365,6 +1387,13 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 | `occlusion.enabled` | `true` | Session-fixed — **not** run-mutable (§5.1). Measured on every channel, a stare and an orbit alike, against a depth camera attached to the channel's camera (§5.2 `capture_depth`); until 2026-10-05 an orbit with it on was refused (check 47) on a reason from before the rig moved its cameras in one batch | `:542-552`; [`08`](08_Collection_And_EPoL.md) D8.19 |
 | `occlusion.margin_m`, `occlusion.samples` | `1.0`, `24` | Session-fixed | `:553-569`; [`08`](08_Collection_And_EPoL.md) OQ1 |
 | `occlusion.depth_max_range_m` | `20000.0` | Session-fixed | `:274-285`; the depth camera's `max_range` |
+
+#### The bridge: what the world did with the poses it was commanded
+
+| Toggle | Default | Class | Source |
+|---|---|---|---|
+| `bridge.position_divergence_limit_m` | `0.01` | Session-fixed | the limit the closeout gate `bridge.position_divergence` holds the run's worst commanded-against-applied position to (§7.2; [`06`](06_Truth_And_Annotation.md) §4.3). Measured over 39 drives on Arapahoe and Bahonar the worst was 0.0004 m, the single-precision wire's rounding; a read-back a frame behind the write is one tick's travel, 0.75 m at 15 m/s |
+| `bridge.velocity_divergence_limit_m_per_s` | `0.01` | Session-fixed | the limit the gate `bridge.velocity_divergence` holds the worst commanded-against-reported velocity to. Measured worst 0.000006 m/s where the velocity reached the body; a body that reports none is short by its whole speed, 21.8 m/s in the control run that sent none |
 
 #### Roots, seeds, the machine, diagnostics
 
@@ -1564,7 +1593,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 11 | offline | `run_capture` | RunConfigurationValidator |
 | 12 | offline | `run_capture` | RunConfigurationValidator |
 | 13 | offline | `run_capture` | ScenarioEpoch, which reads the epoch with the session's SolarEpoch |
-| 14 | offline | **not built** | the session drives vehicle lamps under its own default and the run configuration offers no field to state it, so there is nothing to compare |
+| 14 | offline | **not built** | the session drives the lights by one rule with no run field to state; the rule is recorded on the manifest's opening row rather than checked against a field |
 | 15 | offline | `run_capture` | RunConfigurationValidator |
 | 16 | resolution | `run_capture` | RunConfiguration; the refusal names post_process_profile, the field that exists |
 | 17 | offline | **not built** | the recorder writes each capture's image and sidecar into one directory; the two-root split is stage K's and no writer makes it |
@@ -1965,7 +1994,8 @@ rendering of the manifest, never a second computation, for the same reason the m
 | **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and is counted per sensor |
 | **Launch provenance** | caller, caller label, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | `launch.warnings_adjudicated` — observed warnings with no adjudication, threshold 0; an attended run's pre-roll warning that nobody adjudicated in writing misses it (§6.4.2), and otherwise only a bug in §6.4 can |
 | **Supervision** | instances, intervals opened and closed, intervals open at the end and never opened, defects — the terminal row's counts; the per-interval observability and prevalence once planned here are withdrawn 2026-10-05 | `supervision.manifest_closing_record` — observed: present or absent. A run killed with no chance to flush has none, and this record is what says so |
-| **Corpus-affecting events** | SUMO collisions, teleports, emergency stops, reconciliation refusals | recorded, not compared — [`01`](01_Architecture.md) OQ6 |
+| **The bridge** | what the world did with the poses the bridge commanded, over the whole run: comparisons taken, vehicle-ticks nothing read back, worst and mean position, worst yaw, pitch and roll, worst and mean velocity against the mean commanded speed, the vehicle and instant of each worst ([`06`](06_Truth_And_Annotation.md) §4.3) | `bridge.position_divergence` — observed the worst position, metres, threshold `bridge.position_divergence_limit_m`. `bridge.velocity_divergence` — observed the worst velocity, metres per second, threshold `bridge.velocity_divergence_limit_m_per_s`. Both skipped, naming the vehicle-ticks written and read back by nothing, where no vehicle-tick was compared |
+| **Corpus-affecting events** | SUMO collisions, teleports, emergency stops | recorded, not compared — [`01`](01_Architecture.md) OQ6 |
 
 **A gate record that did not meet its threshold deletes nothing, hides nothing and downgrades
 nothing.** The corpus exists, the record says what was observed and against what, and what to do about
@@ -1988,10 +2018,17 @@ whose image header placed the camera elsewhere than the snapshot of their own fr
 measured against, threshold 0; skipped for a channel with no depth camera), `clock.ratio_recorded`,
 `pacing.achieved_factor` under
 `wall_clock`, `solar.applied_equals_confirmed` (the solar audit's worst angle against its tolerance;
-skipped where the policy binds no sun), `launch.warnings_adjudicated` and
+skipped where the policy binds no sun), `bridge.position_divergence` and `bridge.velocity_divergence`
+(the run's worst commanded-against-applied position and velocity, from the session's report, against
+`bridge.position_divergence_limit_m` and `bridge.velocity_divergence_limit_m_per_s`, 0.01 m and
+0.01 m/s by default; skipped, naming the vehicle-ticks written and read back by nothing, where no
+vehicle-tick was compared; [`06`](06_Truth_And_Annotation.md) §4.3), `launch.warnings_adjudicated` and
 `supervision.manifest_closing_record` (whether the run manifest's last complete row is its terminal
 row, `manifest_closed`; [`04`](04_Contracts.md) §12.7, D4.36). `run_capture` closes the manifest
-before it reads the gate, which is skipped only for a run that writes no manifest. Two are recorded as
+before it reads the gate, which is skipped only for a run that writes no manifest. The divergence
+figures the two gates read are also written whole into the result, as
+`produced.session.last_snapshot.divergence`, the same figures the manifest's closing row carries as
+`bridge_divergence`, and printed on the closeout. Two are recorded as
 `skipped`, each with its reason, so that *not measured* never reads as *met*:
 `capture.captured_minus_written` and `radiometry.profile_digest_present`. A record carries `id`,
 `name`, `owner`, `status` (`evaluated` or `skipped`), `observed`, `threshold`, `comparison` and `met`.
@@ -2749,7 +2786,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.7** | **The solar policy has no tool default: the scenario states it, and a run takes it or overrides it with the override recorded.** A frozen run and an unconfigured run are byte-identical, so absence is made impossible rather than defaulted ([`00`](00_Overview.md) §6). The failure modes of an unstated policy are asymmetric: a run that wanted constant illumination and got an advancing sun records a small, correct, self-describing variation, while a run that wanted changing light and got a frozen one records a physically impossible constant that nothing flags. `freeze_at_window_start` is the recommended value, not a silent one (§4.3, §4.4) |
 | **D12.8** | **Under `advance`, `rate` is pinned to 1.0 and is not operator-settable**, because the session writes each tick's own instant ([`11`](11_Time_And_Illumination.md) D11.19) and [`01`](01_Architecture.md) D1.1/D1.13 make one tick exactly `world_delta_s` of simulated time — so 1.0 is the only value under which one sun-second is one scenario-second. `accelerated` (any other rate) is **refused for a capture run and retained in the interactive path**, where it is useful and harmless (§4.3) |
 | **D12.9** | **The solar epoch is a binding, not a choice.** It comes from the scenario package and an operator override of it is a refusal, for the same reason the world digest is: a scenario asserting 23:00 rendered at 12:00 is a self-contradicting corpus, and the surface must not be able to express the request (§4.3) |
-| **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Built: `pacing.min_achieved_factor` has no default under `pacing.mode: wall_clock` and is not a field under `as_available`. Specified for when vehicle lamps exist: `solar.vehicle_lights` defaults to `off`, but in a window whose sun elevation falls below −6° it has no default and the run is refused until it is stated. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |
+| **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Built: `pacing.min_achieved_factor` has no default under `pacing.mode: wall_clock` and is not a field under `as_available`. `solar.vehicle_lights` was specified as the second case -- default `off`, no default in a window whose sun falls below −6° -- and is not offered: the session drives every body's lights by one rule, on by default, and the manifest's opening row records the rule each run ran under (§4.4, §4.5), so there is no choice left to a field. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |
 | **D12.11** | **Seeds have no nondeterministic default.** Today `--seed` defaults to `None`, documented "nondeterministic" (`:310-316`), which is incompatible with reproducing a run from its record. `random` is still available and resolves to a drawn value that is then recorded (§5.2) |
 | **D12.12** | **The solar state is read back from the world and recorded before the first capture, and a disagreement with what was requested refuses the run.** Today `WorldBuilder.py:238-247` logs what it asked for and never reads back, and a world with no CesiumSunSky produces a warning and a run that continues (`:244-245`) (§4.5, §6.2 checks 23 and 31) |
 | **D12.13** | **Four mutability classes — Bound, Session-fixed, Degradation-only, Run-mutable — decided by one question: would a consumer reading the corpus be wrong if this changed and they did not know?** The occlusion estimator is Session-fixed rather than Run-mutable for exactly this reason, although it is a runtime toggle today. **Bound** reads *fixed by an artifact, or by a ruling in a sibling section that this surface expresses rather than re-offers*, which is what `synchronous` (D10.10), `telemetry.on_tick_thread` (D10.11) and the external-chain drop policy ([`08`](08_Collection_And_EPoL.md) §11.3) all need. **There is no fifth class**: `caller` and `on_warning.*` are Session-fixed by the governing question, and `caller_label` and `expect.*` are recorded in the lock as launch provenance rather than given a class of their own (§5.1, §5.2) |

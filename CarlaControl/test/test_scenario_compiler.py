@@ -29,7 +29,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ScenarioWorldFixture import EPOCH, NETWORK, ScenarioWorldFixture  # noqa: E402
+from ScenarioWorldFixture import CATALOGUE, EPOCH, NETWORK, ScenarioWorldFixture  # noqa: E402
 
 import carlanet  # noqa: E402, F401  -- loads the CarlaNet assemblies the next import names
 from CarlaNet.Types.Supervision import CoreVocabulary  # noqa: E402
@@ -43,6 +43,7 @@ from carlacontrol.ScenarioCompiler import SKIPPED_DRY_RUN, ScenarioCompiler  # n
 from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
 from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
 from carlacontrol.SumoDryRun import SumoDryRun  # noqa: E402
+from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -181,6 +182,27 @@ def test_a_lane_change_takes_three_seconds_and_the_lock_and_the_report_say_so(wo
     report = result.files["resolution_md"].read_text(encoding="utf-8")
     assert "| `lanechange.duration` | 3 |" in report
     assert "| `time-to-teleport` | -1 |" in report
+
+
+def test_the_report_states_each_body_s_lights_beside_its_dimensions(world, installation, tmp_path):
+    """The resolution report's vehicle section carries, per type and body, whether the body's
+    headlights, brake lights and turn signals light up, from the catalogue's optical pass. Information
+    for the author; a body whose lights are unlit refuses nothing and warns nothing."""
+    result = compile_spec(world, installation, tmp_path)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    types = result.report["vehicle_types"]["types"]
+    assert types
+    catalogue = VehicleCatalogue.load(CATALOGUE)
+    for type_id, body in types.items():
+        assert set(body["lights"]) == {"headlights", "brake_lights", "turn_signals"}, type_id
+        assert body["lights"] == catalogue.lights_of(body["blueprint"])
+    report = result.files["resolution_md"].read_text(encoding="utf-8")
+    assert "## Vehicle types" in report
+    first_type, first = next(iter(types.items()))
+    assert (f"| {first_type} | {first['blueprint']} | {first['length_m']:.3f} | "
+            f"{first['body_width_m']:.3f} | {first['height_m']:.3f} | {first['lights']['headlights']} | "
+            f"{first['lights']['brake_lights']} | {first['lights']['turn_signals']} |") in report
+    assert all(f.check_id != 14 for f in result.findings.findings)
 
 
 def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path):

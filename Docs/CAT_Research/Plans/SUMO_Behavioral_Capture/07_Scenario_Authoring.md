@@ -84,6 +84,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-05 | The supervision check (§3.4.3): a six-minute scenario on the Arapahoe world, generated and compiled into `Import/` with a run configuration beside it, carrying an annotated dwell anchored to its stop, an annotated transit with a phase past the kerb, and a nominal stop that is the dwell's matched negative, in two capture windows in two illumination bands. No series or absence: the Arapahoe package publishes no area. The Arapahoe dwell is recompiled against its world rebuilt the same day, its network fingerprint unchanged, so the two scenarios bind one network copy. |
 | 2026-10-05 | A capture run refuses a lock whose compile skipped its SUMO-only run, or that records none, before anything is started, as the owner ruled (§5.2 check 59, §5.4): `run_capture` check 54 offline and the co-simulation session before SUMO starts, naming the scenario and the lock's reason, unless the run accepts it in writing (`scenario.accept_skipped_dry_run`; `run_sumo_drive.py --accept-skipped-dry-run`), which the echo, the run report and the manifest record. `--skip-dry-run` stays for drafting; all four shipped locks record a completed run. |
 | 2026-10-05 | Corrected against the tree: the world package carries `map.net.xml`, the catalogue (`6037e3bb…`, nineteen bodies) and the network fingerprint exist (§2 bundle table); Bahonar is compiled against that catalogue (§3.4.1); the Arapahoe dwell is compiled against the ramp-meter world `ffe490b1…` (§3.4.2); the skill is at 1.5.0 (§8.2). |
+| 2026-10-05 | Authors see which bodies' lights work, as the owner ruled: the skill gains `references/vehicles.md`, generated from the vehicle catalogue by `compile_scenario.py --write-vehicles-reference` and held equal to it by a test, listing every class and body with its dimensions and whether its headlights, brake lights and turn signals light up from the catalogue's optical pass; the resolution report's vehicle types carry the same per body and its Markdown renders them (§5.3, §8.3). Information only: nothing refuses or warns on it. As measured, no shipped body shows any of the three lit. |
 
 ---
 
@@ -1818,8 +1819,10 @@ states:
 - **every rota**, its entry count, and every skip with its civil time and its `because`;
 - **every route**, its authored endpoints, the edge sequence `duarouter` produced, its length and
   free-flow duration, and its departure — authored form, seconds and civil time — or a flow's window;
-- **every vehicle type**, the body it binds with its measured box, each class's bodies, and the mix's
-  normalised probabilities;
+- **every vehicle type**, the body it binds with its measured box and whether that body's headlights,
+  brake lights and turn signals light up (from the catalogue's optical pass; information only, nothing
+  refuses or warns on it), each class's bodies, and the mix's normalised probabilities; the Markdown
+  renders them as a vehicle-types table;
 - **every supervision instance**, its participants and roles, its labels, and its intervals in seconds
   and civil time; every annotated cohort; every series;
 - **what the dry run found** (check 59): every planned vehicle's declared departure, when SUMO inserted
@@ -2473,6 +2476,7 @@ shipped beside the skill, versioned with it:
 | `vocabulary.json` | the term document a label resolves against: the closed core and every author namespace the scenario declares or imports | generated per compiled scenario and carried in its supervision plan with its digest. The core is generated from the enumerations in `CarlaNet.Types.Supervision`, read through `carlanet` by `AnnotationVocabulary` at core version 2 ([`06`](06_Truth_And_Annotation.md) §3.7) | per scenario, in the plan; not beside the skill |
 | `examples/` | one minimal specification, one with every kind of supervision and a sweep pairing its annotated actor `nominal`, `absent` and `displaced` — each with its recorded resolution report or sweep index — on the compiler's fixture world; the one generated from a program is the Gardnerville orbit in `Import/`, written and compiled by `make_sumo_scenario.py` | written for the fixture world, and the generator | **yes** |
 | `references/gotchas.md`, `resolution.md`, `time.md`, `illumination.md` | the gotchas with their enforcement sites; the place and instant forms; the epoch and civil-time conventions; the illumination guidance, with doc 11's six bands | §6, §4, §3.5.1, §5.6 | **yes** |
+| `references/vehicles.md` | every class and body of the measured vehicle catalogue with its dimensions and whether its headlights, brake lights and turn signals light up, from the catalogue's optical pass; information only, as the owner ruled (2026-10-05) | `VehicleReference`, written by `compile_scenario.py --write-vehicles-reference` from `CarlaControl/catalogue/vehicles.catalogue.json`; a test holds the shipped file equal to the generated one | **yes** (2026-10-05) |
 | `examples/epoch/` | one whole-hour, one daylight-saving and one **+03:30** offset, each with its recorded resolution report | §3.5.1 | **yes**; the +03:30 one declared on the Colorado fixture world, where checks 40 and 42 warn |
 
 The place index, the area table and the solar frame are **not** in the skill — they are per-world and

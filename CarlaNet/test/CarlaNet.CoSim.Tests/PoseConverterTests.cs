@@ -88,6 +88,77 @@ public sealed class PoseConverterTests
     }
 
     [Fact]
+    public void TheBodySCentreSitsHalfALengthBehindTheBumperWithTheNorthingNegatedAndTheYawTheSumoAngleLessNinety()
+    {
+        // The pose convention checked against numbers worked out by hand, none of them from the
+        // converter: the figures below are the arithmetic written out, and the test fails if the
+        // converter's result departs from them, so a wrong reference point, a wrong frame or a wrong
+        // yaw cannot pass by agreeing with itself (06 §4.3). The bumper round-trip test above cannot
+        // catch any of the three, because it undoes the shift with the converter's own quantities.
+        //
+        // The body: five metres long, its box centre half a metre behind the actor origin and 0.8 m
+        // above it, no sideways offset. SUMO puts its front bumper at (40 E, 60 N) heading 30 degrees
+        // clockwise from north.
+        var body = new VehicleExtent("vehicle.test.sedan", 5.0, 2.0, 1.6, (-0.5, 0.0, 0.8));
+        const double BumperEast = 40.0;
+        const double BumperNorth = 60.0;
+        const double SumoAngle = 30.0;
+
+        // By hand. A heading of 30 degrees clockwise from north is the unit vector (sin 30, cos 30)
+        // = (0.5, 0.8660254037844386) in SUMO's east-north frame. The body's centre is half the
+        // length, 2.5 m, back along it from the bumper:
+        //   east  40 - 2.5 * 0.5                = 38.75
+        //   north 60 - 2.5 * 0.8660254037844386 = 57.8349364905389
+        // CARLA's y is negated north, so the centre is (38.75, -57.8349364905389). The actor origin is
+        // 0.5 m ahead of the centre along the heading, 2.0 m behind the bumper:
+        //   east  40 - 2.0 * 0.5                = 39.0
+        //   north 60 - 2.0 * 0.8660254037844386 = 58.267949192431125   ->  y = -58.267949192431125
+        // and the yaw is the SUMO angle less ninety, -60 degrees, whose cosine and sine are 0.5 and
+        // -0.8660254037844386: the same heading, east and negated north, as CARLA's forward vector.
+        const double CentreX = 38.75;
+        const double CentreY = -57.8349364905389;
+        const double OriginX = 39.0;
+        const double OriginY = -58.267949192431125;
+        const double Yaw = -60.0;
+        const double CosYaw = 0.5;
+        const double SinYaw = -0.8660254037844386;
+
+        var converter = new PoseConverter(FlatSurface());
+        VehiclePose pose = converter.Convert("v", body, BumperEast, BumperNorth, SumoAngle, 0.0)!.Value;
+
+        Assert.Equal(Yaw, pose.YawDegrees, 9);
+        Assert.Equal(OriginX, pose.X, 9);
+        Assert.Equal(OriginY, pose.Y, 9);
+
+        // The body's centre is the origin carried by the box centre's offset, turned by the hand-worked
+        // yaw: half a length behind the bumper, along the heading.
+        double centreX = pose.X + (body.BoxCentreMetres.X * CosYaw) - (body.BoxCentreMetres.Y * SinYaw);
+        double centreY = pose.Y + (body.BoxCentreMetres.X * SinYaw) + (body.BoxCentreMetres.Y * CosYaw);
+        Assert.Equal(CentreX, centreX, 9);
+        Assert.Equal(CentreY, centreY, 9);
+
+        // From the centre, the bumper is half a length away and all of it is ahead along the heading.
+        double toBumperX = BumperEast - centreX;
+        double toBumperY = -BumperNorth - centreY;
+        Assert.Equal(body.LengthMetres / 2.0, Math.Sqrt((toBumperX * toBumperX) + (toBumperY * toBumperY)), 9);
+        Assert.Equal(body.LengthMetres / 2.0, (toBumperX * CosYaw) + (toBumperY * SinYaw), 9);
+
+        // Each wrong convention puts the centre somewhere these numbers are not, by the residual 06 §4.3
+        // names for it, so the assertions above can tell them apart. The bumper taken as the centre: half
+        // a length, 2.5 m. The northing not negated: the centre mirrored to y = +57.8349364905389, which
+        // is 115.6698729810778 m away. A yaw of the SUMO angle itself: the centre swung a quarter turn
+        // about the bumper, 2.5 * sqrt 2 = 3.5355339059327378 m away.
+        Assert.Equal(2.5, Math.Sqrt(Math.Pow(BumperEast - CentreX, 2) + Math.Pow(-BumperNorth - CentreY, 2)), 9);
+        const double MirroredCentreY = 57.8349364905389;
+        Assert.Equal(115.6698729810778, Math.Abs(MirroredCentreY - centreY), 9);
+        double wrongRadians = SumoAngle * (Math.PI / 180.0);
+        double wrongCentreX = BumperEast - (2.5 * Math.Cos(wrongRadians));
+        double wrongCentreY = -BumperNorth - (2.5 * Math.Sin(wrongRadians));
+        Assert.Equal(3.5355339059327378,
+                     Math.Sqrt(Math.Pow(wrongCentreX - centreX, 2) + Math.Pow(wrongCentreY - centreY, 2)), 9);
+    }
+
+    [Fact]
     public void AVehicleOutsideTheWorldSGroundSurfaceGetsNoPose()
     {
         var converter = new PoseConverter(FlatSurface());

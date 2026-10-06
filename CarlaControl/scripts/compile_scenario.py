@@ -13,7 +13,10 @@ compiles every member of a sweep into its own directory and writes `<sweep_id>.s
 
 `--write-checks`, `--write-schema` and `--write-sweep-schema` publish `checks.json`,
 `scenario.schema.json` and `sweep.schema.json`, generated from the compiler itself, for the authoring
-skill (`07_Scenario_Authoring.md` §8.3, §8.5).
+skill (`07_Scenario_Authoring.md` §8.3, §8.5); `--write-vehicles-reference` publishes
+`references/vehicles.md`, the classes and bodies of the measured vehicle catalogue (`--catalogue`,
+this repository's by default) with whether each body's headlights, brake lights and turn signals
+light up.
 
 The SUMO that routes the scenario is the one this repository stages (`Build/sumo-install`) unless
 `--sumo-home` names another. A release other than the one that converted the world is refused (check
@@ -35,8 +38,11 @@ from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
 from carlacontrol.ScenarioSchema import ScenarioSchema  # noqa: E402
 from carlacontrol.ScenarioSweep import ScenarioSweep  # noqa: E402
 from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
+from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
+from carlacontrol.VehicleReference import VehicleReference  # noqa: E402
 
 STAGED_SUMO = _REPO / "Build" / "sumo-install"
+SHIPPED_CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,6 +67,12 @@ def parse_args() -> argparse.Namespace:
                         help="write scenario.schema.json, the compiler's own schema")
     parser.add_argument("--write-sweep-schema", type=Path, metavar="PATH",
                         help="write sweep.schema.json, the schema a sweep is checked against")
+    parser.add_argument("--write-vehicles-reference", type=Path, metavar="PATH",
+                        help="write references/vehicles.md, the catalogue's classes and bodies with "
+                             "whether each body's headlights, brake lights and turn signals light up")
+    parser.add_argument("--catalogue", type=Path, default=SHIPPED_CATALOGUE,
+                        help="the measured vehicle catalogue the vehicles reference is written from "
+                             "(default: CarlaControl/catalogue/vehicles.catalogue.json)")
     parser.add_argument("--sweep", type=Path, metavar="PATH",
                         help="compile the members of a <Sweep>.sweep.json instead of one scenario")
     return parser.parse_args()
@@ -75,8 +87,12 @@ def main() -> int:
         logging.info("wrote %s", ScenarioSchema.write(args.write_schema))
     if args.write_sweep_schema:
         logging.info("wrote %s", ScenarioSweep.write_schema(args.write_sweep_schema))
+    if args.write_vehicles_reference:
+        logging.info("wrote %s", VehicleReference.write(args.write_vehicles_reference,
+                                                        VehicleCatalogue.load(args.catalogue)))
     if args.specification is None and args.sweep is None:
-        return 0 if (args.write_checks or args.write_schema or args.write_sweep_schema) else 2
+        return 0 if (args.write_checks or args.write_schema or args.write_sweep_schema
+                     or args.write_vehicles_reference) else 2
     if args.out_dir is None:
         logging.error("--out-dir is required to compile")
         return 2

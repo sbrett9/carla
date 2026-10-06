@@ -188,6 +188,31 @@ def test_every_run_writes_its_manifest_beside_the_track_and_closes_it_before_its
     assert (closing["status"], closing["observed"], closing["met"]) == ("evaluated", True, True)
 
 
+def test_the_run_result_carries_the_bridge_divergence_and_its_two_gates(layout, server):
+    # The same figures the manifest's closing row writes, read from the session's report, and the
+    # two gates on them at the run configuration's limits.
+    _, result = capture(layout, server)
+    assert result.outcome == "run_finished"
+    divergence = result.produced["session"]["last_snapshot"]["divergence"]
+    assert divergence["samples"] > 0 and divergence["vehicle_ticks_with_no_read_back"] == 0
+    assert divergence["worst_position_m"] == 0.0001
+    assert divergence["worst_velocity_m_per_s"] == 0.000006
+    assert divergence["worst_position_on"]["sumo_id"] == "flow.0"
+    gates = {g["id"]: g for g in result.produced["gates"]}
+    position, velocity = gates["bridge.position_divergence"], gates["bridge.velocity_divergence"]
+    assert (position["observed"], position["threshold"], position["met"]) == (0.0001, 0.01, True)
+    assert (velocity["observed"], velocity["threshold"], velocity["met"]) == (0.000006, 0.01, True)
+    written = RunResult.read(result.path)
+    assert written["produced"]["session"]["last_snapshot"]["divergence"] == divergence
+
+
+def test_a_divergence_limit_set_on_the_run_reaches_its_gate(layout, server):
+    _, result = capture(layout, server, overrides=["bridge.position_divergence_limit_m=0.00005"])
+    assert result.outcome == "run_finished"
+    position = next(g for g in result.produced["gates"] if g["id"] == "bridge.position_divergence")
+    assert (position["observed"], position["threshold"], position["met"]) == (0.0001, 0.00005, False)
+
+
 def test_every_admission_pass_is_asked_for_and_poses_only_where_a_stare_aims_at_traffic(
         layout, server):
     capture(layout, server)

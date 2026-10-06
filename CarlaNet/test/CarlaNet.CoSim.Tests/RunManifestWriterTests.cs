@@ -89,6 +89,18 @@ public sealed class RunManifestWriterTests : IDisposable
         Assert.Equal(20, opened.GetProperty("clock").GetProperty("world_ticks_per_sumo_step").GetInt32());
         Assert.False(opened.GetProperty("solar").GetProperty("epoch_declared").GetBoolean());
 
+        // The rule the vehicle lights follow, at its defaults: driven, headlights on below +3 and off above
+        // +6 degrees of the geometric sun, brake lights and turn signals from SUMO's signals. No policy binds
+        // a sun here, so the headlights follow none and stay off.
+        JsonElement lights = opened.GetProperty("vehicle_lights");
+        Assert.True(lights.GetProperty("driven").GetBoolean());
+        Assert.False(lights.GetProperty("headlights_follow_sun").GetBoolean());
+        Assert.Equal(HeadlightRule.DefaultOnBelowDegrees, lights.GetProperty("headlights_on_below_deg").GetDouble());
+        Assert.Equal(HeadlightRule.DefaultOffAboveDegrees, lights.GetProperty("headlights_off_above_deg").GetDouble());
+        Assert.Equal("geometric", lights.GetProperty("headlights_elevation").GetString());
+        Assert.Equal("sumo_signals", lights.GetProperty("brake_lights").GetString());
+        Assert.Equal("sumo_signals", lights.GetProperty("turn_signals").GetString());
+
         // An admission for each vehicle, at the clock its departure was listed at, a step after SUMO's own
         // stamp, resolved on the frame stamped with that instant; no world, so no body drew either.
         List<JsonElement> admitted = [.. rows.Where(row => Kind(row) == "render_admitted")];
@@ -126,6 +138,162 @@ public sealed class RunManifestWriterTests : IDisposable
         Assert.Equal(2, closed.GetProperty("render_admitted").GetInt64());
         Assert.Equal(2, closed.GetProperty("render_released").GetInt64());
         Assert.Equal(rows.Count - 1, closed.GetProperty("rows_before").GetInt64());
+
+        // No world, so nothing was compared: zero samples and no worst case, never a zero that reads as
+        // a measurement.
+        JsonElement divergence = closed.GetProperty("bridge_divergence");
+        Assert.Equal(0, divergence.GetProperty("samples").GetInt64());
+        Assert.Equal(0, divergence.GetProperty("vehicle_ticks_with_no_read_back").GetInt64());
+        Assert.Equal(JsonValueKind.Null, divergence.GetProperty("worst_position_on").ValueKind);
+        Assert.Equal(JsonValueKind.Null, divergence.GetProperty("worst_velocity_on").ValueKind);
+    }
+
+    [RequiresSumoFact]
+    public void TheOpeningRowStatesTheRuleTheVehicleLightsFollowOrThatTheyAreNotDriven()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        // Driven, at thresholds of the run's own.
+        string driven = Path.Combine(_directory, "driven.jsonl");
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        options.RunManifestPath = driven;
+        options.HeadlightOnBelowDegrees = 2.5;
+        options.HeadlightOffAboveDegrees = 7.0;
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.Advance();
+        }
+
+        JsonElement lights = ReadRows(File.ReadAllText(driven))[0].GetProperty("vehicle_lights");
+        Assert.True(lights.GetProperty("driven").GetBoolean());
+        Assert.False(lights.GetProperty("headlights_follow_sun").GetBoolean());
+        Assert.Equal(2.5, lights.GetProperty("headlights_on_below_deg").GetDouble());
+        Assert.Equal(7.0, lights.GetProperty("headlights_off_above_deg").GetDouble());
+        Assert.Equal("geometric", lights.GetProperty("headlights_elevation").GetString());
+        Assert.Equal("sumo_signals", lights.GetProperty("brake_lights").GetString());
+        Assert.Equal("sumo_signals", lights.GetProperty("turn_signals").GetString());
+
+        // Not driven: every body keeps the lights it was spawned with, and the row says there is no rule.
+        string undriven = Path.Combine(_directory, "undriven.jsonl");
+        SumoDriveSessionOptions off = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        off.RunManifestPath = undriven;
+        off.VehicleLampsDriven = false;
+        using (SumoDriveSession session = SumoDriveSession.Start(off))
+        {
+            session.Advance();
+        }
+
+        JsonElement none = ReadRows(File.ReadAllText(undriven))[0].GetProperty("vehicle_lights");
+        Assert.False(none.GetProperty("driven").GetBoolean());
+        Assert.False(none.GetProperty("headlights_follow_sun").GetBoolean());
+        foreach (string field in new[] { "headlights_on_below_deg", "headlights_off_above_deg", "headlights_elevation",
+                                         "brake_lights", "turn_signals" })
+        {
+            Assert.Equal(JsonValueKind.Null, none.GetProperty(field).ValueKind);
+        }
+
+        // An inverted band is refused before any manifest is opened, so a manifest never states one.
+        string refused = Path.Combine(_directory, "refused.jsonl");
+        SumoDriveSessionOptions inverted = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        inverted.RunManifestPath = refused;
+        inverted.HeadlightOnBelowDegrees = 6.0;
+        inverted.HeadlightOffAboveDegrees = 3.0;
+        Assert.Throws<CoSimSessionRefusedException>(() => SumoDriveSession.Start(inverted).Dispose());
+        Assert.False(File.Exists(refused));
+    }
+
+    [RequiresSumoFact]
+    public void TheTerminalRowCarriesTheBridgeDivergenceTheRunMeasuredAndNamesItsWorstVehicle()
+    {
+        // Three worlds: one that applies every pose exactly, one half a metre out on every body, and one
+        // whose bodies report no velocity. The terminal row has to carry each run's own figures, equal to
+        // the session report's, and name the vehicle and instant the worst was measured on.
+        foreach ((string name, RecordedWorld carla) in new (string, RecordedWorld)[]
+                 {
+                     ("exact", new RecordedWorld()),
+                     ("drifted", new RecordedWorld { TransformDrift = new CarlaNet.Types.Geom.Location(0.5f, 0f, 0f) }),
+                     ("no-velocity", new RecordedWorld { ReportsNoKinematicVelocity = true }),
+                 })
+        {
+            using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+            carla.Loaded = world.AsLoaded();
+            string manifest = Path.Combine(_directory, $"{name}.jsonl");
+            var options = new SumoDriveSessionOptions(
+                CoSimFixtures.RightAngleTurnScenario, world.PackagePath, CoSimFixtures.VehicleCatalogue,
+                "test://" + Guid.NewGuid().ToString("n"))
+            {
+                World = carla,
+                Epoch = SolarLeaseTests.PortEpoch(),
+                Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+                RunManifestPath = manifest,
+            };
+
+            CoSimRunReport report;
+            using (SumoDriveSession session = SumoDriveSession.Start(options))
+            {
+                for (int step = 0; step < 200 && session.Advance(); step++)
+                {
+                }
+
+                report = session.Report;
+            }
+
+            JsonElement closed = ReadRows(File.ReadAllText(manifest))[^1];
+            Assert.Equal(RunManifestWriter.ClosedRow, Kind(closed));
+            JsonElement divergence = closed.GetProperty("bridge_divergence");
+            _output.WriteLine($"{name}: {divergence.GetRawText()}");
+
+            // The block is the report's figures, and the report compared something.
+            Assert.True(report.DivergenceSamples > 0, $"{name}: nothing was compared");
+            Assert.Equal(report.DivergenceSamples, divergence.GetProperty("samples").GetInt64());
+            Assert.Equal(report.VehicleTicksWithNoReadBack, divergence.GetProperty("vehicle_ticks_with_no_read_back").GetInt64());
+            Assert.Equal(report.WorstPositionDivergenceMetres, divergence.GetProperty("worst_position_m").GetDouble());
+            Assert.Equal(report.MeanPositionDivergenceMetres, divergence.GetProperty("mean_position_m").GetDouble());
+            Assert.Equal(report.WorstYawDivergenceDegrees, divergence.GetProperty("worst_yaw_deg").GetDouble());
+            Assert.Equal(report.WorstPitchDivergenceDegrees, divergence.GetProperty("worst_pitch_deg").GetDouble());
+            Assert.Equal(report.WorstRollDivergenceDegrees, divergence.GetProperty("worst_roll_deg").GetDouble());
+            Assert.Equal(report.WorstVelocityDivergenceMetresPerSecond, divergence.GetProperty("worst_velocity_m_per_s").GetDouble());
+            Assert.Equal(report.MeanVelocityDivergenceMetresPerSecond, divergence.GetProperty("mean_velocity_m_per_s").GetDouble());
+            Assert.Equal(report.MeanCommandedSpeedMetresPerSecond, divergence.GetProperty("mean_commanded_speed_m_per_s").GetDouble());
+
+            // The worst position and the worst velocity each name the vehicle, the instant on TraCI's
+            // clock, the tick and the body the report holds for them.
+            foreach ((string field, PoseDivergence? worst) in new[]
+                     {
+                         ("worst_position_on", report.WorstDivergence),
+                         ("worst_velocity_on", report.WorstVelocityDivergence),
+                     })
+            {
+                PoseDivergence sample = worst!.Value;
+                JsonElement on = divergence.GetProperty(field);
+                Assert.Equal(sample.VehicleId, on.GetProperty("sumo_id").GetString());
+                Assert.Equal(Math.Round(sample.SimulatedTimeSeconds, 6), on.GetProperty("sim_time_s").GetDouble());
+                Assert.Equal(sample.TickIndex, on.GetProperty("tick").GetInt64());
+                Assert.Equal(sample.Actor, on.GetProperty("actor_id").GetUInt32());
+                Assert.NotEmpty(sample.VehicleId);
+            }
+
+            // And the figures say what each world did.
+            double worstPosition = divergence.GetProperty("worst_position_m").GetDouble();
+            double meanVelocity = divergence.GetProperty("mean_velocity_m_per_s").GetDouble();
+            double meanCommanded = divergence.GetProperty("mean_commanded_speed_m_per_s").GetDouble();
+            Assert.True(meanCommanded > 5.0, $"{name}: mean commanded {meanCommanded} m/s");
+            switch (name)
+            {
+                case "exact":
+                    Assert.True(worstPosition < 1e-3, $"worst {worstPosition} m");
+                    Assert.True(meanVelocity < 1e-4, $"mean velocity {meanVelocity} m/s");
+                    break;
+                case "drifted":
+                    Assert.Equal(0.5, worstPosition, 3);
+                    Assert.True(meanVelocity < 1e-4, $"mean velocity {meanVelocity} m/s");
+                    break;
+                default:
+                    Assert.True(worstPosition < 1e-3, $"worst {worstPosition} m");
+                    Assert.Equal(meanCommanded, meanVelocity, 6);
+                    break;
+            }
+        }
     }
 
     [RequiresSumoFact]
@@ -211,6 +379,11 @@ public sealed class RunManifestWriterTests : IDisposable
                      rows[0].GetProperty("solar").GetProperty("illumination_in_force").GetProperty("policy").GetString());
         Assert.Equal(SolarLeaseTests.PortEpoch().Digest,
                      rows[0].GetProperty("solar").GetProperty("epoch_block_sha256").GetString());
+
+        // A policy that binds the sun: the headlights follow it, which is what the drive's own report says.
+        JsonElement lights = rows[0].GetProperty("vehicle_lights");
+        Assert.True(lights.GetProperty("driven").GetBoolean());
+        Assert.True(lights.GetProperty("headlights_follow_sun").GetBoolean());
     }
 
     [RequiresSumoFact]

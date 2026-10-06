@@ -352,6 +352,94 @@ def test_an_unadjudicated_warning_is_a_gate_not_met(layout):
     assert gate(report.gates(report.snapshot(), 1), "launch.warnings_adjudicated")["met"] is False
 
 
+def test_the_bridge_divergence_reaches_the_snapshot_the_closeout_and_both_gates_at_their_limits(layout):
+    report, session, _ = closeout(layout)
+    session.Advance()
+    snapshot = report.snapshot()
+    divergence = snapshot["divergence"]
+    # Seven rendered vehicles over twenty ticks, each compared once per tick.
+    assert divergence["samples"] == 140 and divergence["vehicle_ticks_with_no_read_back"] == 0
+    assert (divergence["worst_position_m"], divergence["mean_position_m"]) == (0.0001, 0.00002)
+    assert (divergence["worst_yaw_deg"], divergence["worst_pitch_deg"],
+            divergence["worst_roll_deg"]) == (0.0001, 0.0001, 0.0001)
+    assert (divergence["worst_velocity_m_per_s"], divergence["mean_velocity_m_per_s"],
+            divergence["mean_commanded_speed_m_per_s"]) == (0.000006, 0.000001, 15.2)
+    assert divergence["worst_position_on"] == {"sumo_id": "flow.0", "sim_time_s": 25201.0,
+                                               "tick": 20, "actor_id": 11}
+    assert divergence["worst_velocity_on"]["sumo_id"] == "flow.1"
+
+    gates = report.gates(snapshot, 0)
+    position = gate(gates, "bridge.position_divergence")
+    velocity = gate(gates, "bridge.velocity_divergence")
+    assert (position["observed"], position["threshold"], position["comparison"],
+            position["met"]) == (0.0001, 0.01, "at_most", True)
+    assert (velocity["observed"], velocity["threshold"], velocity["comparison"],
+            velocity["met"]) == (0.000006, 0.01, "at_most", True)
+    assert position["owner"] == velocity["owner"] == "06 §4.3"
+
+    text = RunCloseoutReport.render(snapshot, gates)
+    assert ("bridge divergence: worst position 0.000100 m on flow.0 at t=25201 s, mean 0.000020 m "
+            "over 140 vehicle-ticks; worst velocity 0.000006 m/s on flow.1") in text
+    assert "mean 0.000001 m/s against a mean commanded 15.200 m/s" in text
+    assert "read back by nothing" not in text
+
+
+def test_a_body_out_of_place_or_reporting_no_velocity_misses_its_divergence_gate(layout):
+    report, session, _ = closeout(layout)
+    session.Advance()
+    # Half a metre out on position: the characteristic residual of a wrong reference point. The
+    # velocity gate is untouched by it.
+    session.Report.WorstPositionDivergenceMetres = 0.5
+    gates = report.gates(report.snapshot(), 0)
+    assert (gate(gates, "bridge.position_divergence")["observed"],
+            gate(gates, "bridge.position_divergence")["met"]) == (0.5, False)
+    assert gate(gates, "bridge.velocity_divergence")["met"] is True
+    # Bodies that report no velocity: the gap is the whole commanded speed.
+    session.Report.WorstVelocityDivergenceMetresPerSecond = 21.8
+    session.Report.VehicleTicksWithNoReadBack = 3
+    snapshot = report.snapshot()
+    gates = report.gates(snapshot, 0)
+    assert (gate(gates, "bridge.velocity_divergence")["observed"],
+            gate(gates, "bridge.velocity_divergence")["met"]) == (21.8, False)
+    assert "; 3 vehicle-ticks read back by nothing" in RunCloseoutReport.render(snapshot, gates)
+
+
+def test_the_divergence_limits_are_run_configuration_fields(layout):
+    report, session, _ = closeout(layout, ["bridge.position_divergence_limit_m=1.0",
+                                           "bridge.velocity_divergence_limit_m_per_s=25"])
+    session.Advance()
+    session.Report.WorstPositionDivergenceMetres = 0.5
+    session.Report.WorstVelocityDivergenceMetresPerSecond = 21.8
+    gates = report.gates(report.snapshot(), 0)
+    position = gate(gates, "bridge.position_divergence")
+    velocity = gate(gates, "bridge.velocity_divergence")
+    assert (position["threshold"], position["met"]) == (1.0, True)
+    assert (velocity["threshold"], velocity["met"]) == (25.0, True)
+
+
+def test_a_run_that_compared_nothing_skips_both_divergence_gates_rather_than_meeting_them(layout):
+    report, session, _ = closeout(layout)
+    # Before the first step nothing has been compared, and no body was driven.
+    snapshot = report.snapshot()
+    assert snapshot["divergence"]["samples"] == 0
+    assert snapshot["divergence"]["worst_position_on"] is None
+    for gate_id in ("bridge.position_divergence", "bridge.velocity_divergence"):
+        record = gate(report.gates(snapshot, 0), gate_id)
+        assert (record["status"], record["met"]) == ("skipped", None)
+        assert record["skip_reason"] == "no vehicle-tick was compared: no body was driven"
+    # Poses written and read back by nothing: still nothing compared, and the reason says how many.
+    session.Report.VehicleTicksWithNoReadBack = 40
+    record = gate(report.gates(report.snapshot(), 0), "bridge.position_divergence")
+    assert record["status"] == "skipped"
+    assert record["skip_reason"] == "no vehicle-tick was compared: 40 were written and read back by nothing"
+    assert "bridge divergence" not in RunCloseoutReport.render(snapshot, [])
+    # Before the session is attached there is no report to read, and the gates say so.
+    detached = RunCloseoutReport(report.effective)
+    for gate_id in ("bridge.position_divergence", "bridge.velocity_divergence"):
+        record = gate(detached.gates(detached.snapshot(), 0), gate_id)
+        assert (record["status"], record["skip_reason"]) == ("skipped", "the session has not started")
+
+
 def test_no_gate_is_an_aggregate(layout):
     report, session, _ = closeout(layout)
     session.Advance()

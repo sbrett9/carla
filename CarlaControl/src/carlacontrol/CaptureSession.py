@@ -1131,7 +1131,8 @@ class CaptureSession:
             "session": {**self.session_facts, **(snapshot["scenario_checks"] or {}),
                         "last_snapshot": {
                             key: snapshot[key] for key in ("pacing", "render", "admission",
-                                                           "illumination", "solar_audit")
+                                                           "illumination", "solar_audit",
+                                                           "divergence")
                             if key in snapshot}},
             "preroll_achieved_factor": self.preroll_pace,
             "recorder_run_id": self.session_id,

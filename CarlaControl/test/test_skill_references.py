@@ -32,8 +32,9 @@ def reference_texts() -> dict[str, str]:
     return {path.name: path.read_text(encoding="utf-8") for path in sorted(REFERENCES.glob("*.md"))}
 
 
-def test_the_four_references_the_plan_names_are_there():
-    assert set(reference_texts()) == {"gotchas.md", "resolution.md", "time.md", "illumination.md"}
+def test_the_five_references_the_plan_names_are_there():
+    assert set(reference_texts()) == {"gotchas.md", "resolution.md", "time.md", "illumination.md",
+                                      "vehicles.md"}
 
 
 def test_every_cited_site_exists():

@@ -292,6 +292,20 @@ _FIELDS: tuple[RunField, ...] = (
        help="How finely each vehicle's outline is sampled."),
     _F("occlusion.depth_max_range_m", _POSITIVE, 20000.0, SESSION_FIXED,
        help="The depth camera's range, metres. A surface beyond it reads as sky."),
+    # -- the bridge: what the world did with the poses it was commanded ------------------------------
+    _F("bridge.position_divergence_limit_m", _POSITIVE, 0.01, SESSION_FIXED,
+       help="The closeout gate bridge.position_divergence: the largest distance, metres, between a "
+            "pose the bridge commanded and the one the world applied to the body on the same tick "
+            "that the gate accepts over the whole run. Measured over 39 drives on Arapahoe and "
+            "Bahonar the worst was 0.0004 m, the single-precision wire's rounding; a read-back "
+            "lagging the write by a frame is one tick's travel, 0.75 m at 15 m/s, and a wrong "
+            "reference point half a body length."),
+    _F("bridge.velocity_divergence_limit_m_per_s", _POSITIVE, 0.01, SESSION_FIXED,
+       help="The closeout gate bridge.velocity_divergence: the largest difference, metres per "
+            "second, between a velocity the bridge commanded and the one the world reported for the "
+            "body that the gate accepts over the whole run. Measured over the same drives the worst "
+            "was 0.000006 m/s; a body that reports no velocity is short by its whole speed, 21.8 m/s "
+            "in the control run that sent none."),
     # -- pacing ------------------------------------------------------------------------------------
     _F("pacing.mode", {"type": "string", "enum": ["as_available", "wall_clock"]},
        "as_available", SESSION_FIXED,
