@@ -57,7 +57,20 @@ namespace s11n {
       /// session has bound a supervision plan -- and always with RenderSetCarried, whose block size
       /// counts it, so a reader that knows the render set and not this flag finds the actors and the
       /// render set as before and skips the supervision unread.
-      SupervisionCarried = (0x1 << 5)
+      SupervisionCarried = (0x1 << 5),
+      /// Every vehicle's VehicleData carries the lights commanded on for it on this frame
+      /// (detail::VehicleData::light_state). Set on every snapshot from a server that fills the field,
+      /// lights or no lights, because it says what the field means rather than what it holds: zero is
+      /// every light off, and a server built before it leaves the same bytes zero, so a reader that
+      /// finds this flag clear knows nothing of any vehicle's lights and writes none.
+      VehicleLightStateCarried = (0x1 << 6),
+      /// A pose source block follows the supervision block, or the render set's entries where there is
+      /// no supervision block, inside the render set block (see PoseSourceEntryState). Set only on a
+      /// snapshot that carries one -- once a co-simulation session has declared the frames its SUMO
+      /// steps fall on, or named a body whose pose follows none -- and always with RenderSetCarried,
+      /// whose block size counts it, so a reader that knows neither this flag nor the block finds the
+      /// actors, the render set and the supervision as before.
+      PoseSourceCarried = (0x1 << 7)
     };
 
     /// How one body in the render set block is held.
@@ -74,9 +87,10 @@ namespace s11n {
     ///     uint16 n, then n bytes  the vehicle the body is lent to, UTF-8; empty if parked
     ///     uint16 n, then n bytes  that vehicle's declared type, UTF-8; empty if parked
     ///   the supervision block, where simulation_state carries SupervisionCarried
+    ///   the pose source block, where simulation_state carries PoseSourceCarried
     ///
-    /// The block is written whenever either part is carried, so a world whose session has bound a
-    /// supervision plan and lent no body yet carries it with no entries.
+    /// The block is written whenever any part is carried, so a world whose session has bound a
+    /// supervision plan, or declared its SUMO step, and lent no body yet carries it with no entries.
     ///
     /// A pooled body is an ordinary vehicle actor, and between loans it stands parked out of sight
     /// below the ground, so the actor array alone says neither which vehicles a frame drew nor who
@@ -120,6 +134,37 @@ namespace s11n {
       Annotated = 1u,
       /// Executing no target pattern: an authored negative.
       Nominal   = 2u
+    };
+
+    /// Where the pose a lent body is drawn at on a frame came from, in the pose source block.
+    ///
+    /// The block follows the supervision block, or the render set's last entry where there is none,
+    /// when simulation_state carries PoseSourceCarried, inside the render set block's size,
+    /// little-endian and unpadded:
+    ///
+    ///   uint32 size              bytes after this field, to the end of the pose source block
+    ///   uint32 ticks_per_step    world ticks per SUMO step; 0 where no session has declared its step
+    ///   uint64 step_frame        a frame a SUMO step falls on; 0 where ticks_per_step is 0
+    ///   uint32 count             entries that follow, one per lent body whose pose follows no step
+    ///   count entries, each:
+    ///     uint32 actor_id         a body the render set names lent
+    ///     uint8  state            a PoseSourceEntryState
+    ///
+    /// A co-simulation session poses its bodies every world tick from SUMO steps a whole number of
+    /// ticks apart: on the tick a step falls on a body stands where SUMO put it, and on every other it
+    /// stands between two steps. So the session declares the step once (update_pose_source), and the
+    /// server carries it on every snapshot: any reader takes a frame f at or after step_frame to show
+    /// SUMO's own step where (f - step_frame) is a multiple of ticks_per_step and an interpolated pose
+    /// otherwise, at no cost per tick. A body whose pose follows neither on a frame is named by the
+    /// session as its case begins and ends, and carried as an entry while it lasts: one held where the
+    /// session could not place it, or one placed at SUMO's own later step across a discontinuity. A lent
+    /// body with no entry follows the step; an actor the render set does not name lent has no pose
+    /// source at all.
+    enum class PoseSourceEntryState : uint8_t {
+      /// Standing where SUMO put it at one of its steps, whichever frame it is.
+      Simulated = 1u,
+      /// Left where its last pose put it, because the session could not place it on this frame.
+      Held      = 2u
     };
 
 #pragma pack(push, 1)

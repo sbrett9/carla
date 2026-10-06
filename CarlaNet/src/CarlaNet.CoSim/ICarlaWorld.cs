@@ -193,6 +193,29 @@ public interface ICarlaWorld
     SupervisionWrite WriteSupervision(SupervisionChange change);
 
     /// <summary>
+    /// Put a change to the pose source on the server: the SUMO step the session poses its bodies from,
+    /// and the lent bodies whose pose follows no step; answer what the server made of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The server carries the step and every body named on each world-observer snapshot from the
+    /// next frame on, inside the render set block, so every client of the world reads where each lent
+    /// body's pose on a frame came from -- SUMO's own step on a frame the step falls on, interpolated on
+    /// every other, or what the body was named -- with that frame's number, and none holds it in its own
+    /// process. A body's name is held on the server's record of its loan: a body not lent is not given
+    /// one, and one given back or handed to another vehicle loses it.</para>
+    ///
+    /// <para>One round trip as the first tick is cued, declaring the step, and after that only on a tick
+    /// whose named bodies changed -- after <see cref="WriteRenderSet"/> and before that tick's cue, so the
+    /// frame the change is drawn in is the first to carry it -- and one withdrawing it all as the session
+    /// ends. Nothing per tick.</para>
+    ///
+    /// <para>A server built before it carried a pose source refuses the call, and says why. The session
+    /// records the refusal and sends nothing more; the run goes on, and no reader is told where any pose
+    /// came from.</para>
+    /// </remarks>
+    PoseSourceWrite WritePoseSource(PoseSourceChange change);
+
+    /// <summary>
     /// Set how far from a camera the named bodies are drawn, in metres, zero for no limit; answer what
     /// the server made of it.
     /// </summary>

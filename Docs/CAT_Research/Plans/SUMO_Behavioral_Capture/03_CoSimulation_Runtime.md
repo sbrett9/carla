@@ -72,7 +72,7 @@ advancement policy, the headlight predicate),
 | 2026-10-06 | §9.5.1: the three pre-roll refusals of 2026-10-06 on the Arapahoe check stare are explained against the run that passed the day before. The vehicle mask's zero was right -- SUMO run offline puts no vehicle's box or shadow in the frame before t = 65.55 s, and the projection is held equal to the occlusion estimate's -- and the tiles never went out, so the 0.53–0.69 at the ceiling is the renderer settling a freshly spawned camera's view, judged over the camera's 2nd to 13th frames where the passing run was judged over its 72nd and 73rd. Across the four runs to hand the residual orders by the camera's frame count and not by the ticks since its tiles, which the one Bahonar run had been read the other way; inference only, decided by one warm stare with `capture.capture_hz` the only thing varied, the owner's to run. The ceiling and the tolerance stand. The run result keeps every comparison with the camera's frame count on either side and the camera's pose source, and a refusal at the ceiling lists the judged residuals in order. |
 | 2026-10-06 | §9.5.1: the owner's ruling -- the picture's ceiling is counted in the camera's own frames since its tiles came in, 60 by default (30 s at 2 Hz), as the session-fixed field `capture.picture_ceiling_frames`, and the 0.5-level limit is the session-fixed field `capture.picture_tolerance_levels`, unchanged in value; the ten-tick span stays a constant. Measured on the Arapahoe check stare under a running session, the worst block fell 2.63 to 0.62 gray levels over the camera's 4th to 13th frames, heading under 0.5 around its 15th, past the 120 ticks that are twelve frames at 2 Hz. Check 51 asks the prewarm for the ceiling's frames at the capture rate plus the span (31.5 s at the defaults) and refuses a ceiling too small to hold one comparison; a stare aimed at the traffic holds for one SUMO step and the ceiling, 32 s at the defaults. |
 | 2026-10-06 | §2.7: the `supervision plan` line quoted for Bahonar is the recompiled plan's, which carries the guard who parks elsewhere instead of relieving tower 3 as a sixth annotated instance and the `bahonar` namespace at version 2 ([`06`](06_Truth_And_Annotation.md) §3.5). |
-
+| 2026-10-06 | §8.9, D3.44: where each lent body's drawn pose came from is held on the server, as the owner ruled, so a recorder in any process writes the same `pose_source`. The session declares its SUMO step once (`update_pose_source`: ticks per step, falling on the frame the next cue produces) and names a body only as it becomes held -- not posed on the tick -- or placed at SUMO's later step across a discontinuity, and as that ends; the world observer carries the step and the named bodies in the render set block behind `PoseSourceCarried`, and any reader resolves a frame's pose source from its number. Nothing is sent per tick. A frame that comes back out of step is counted and the step declared again at the next step; a server that refuses is recorded and told nothing more. Each vehicle's commanded light state rides in its own record, behind `VehicleLightStateCarried`. The plugin and LibCarla change awaits a build. |
 ---
 
 ## 0. What this section does not cover
@@ -2873,6 +2873,66 @@ rows, a window opening mid-dwell, a dropped subject refused at the window stage;
 world, the entry observed on its committed frame, the stop on its standstill and the dweller's annotation
 put to the server).
 
+**And where each lent body's drawn pose came from (the owner's ruling of 2026-10-06, D3.44).** A truth
+record of a SUMO vehicle in the picture says whether its body stood at SUMO's own step on the frame
+(`simulated`), between two steps (`interpolated`), or where its last pose put it (`held`), and a recorder
+in any process must write the same word, so it is put on the server beside the render set
+([`08`](08_Collection_And_EPoL.md) §6.4).
+
+- **What the session puts, and when.** `SumoDriveSession.NameThePoseSource`, after `NameTheSupervision`
+  in the same drain. The SUMO step is `CoSimClock.WorldTicksPerSumoStep` world ticks and the interpolation
+  fraction is zero on the first of them, so the session declares the step once, on the first tick of the
+  first step it renders, and the server takes the frame that tick's cue produces as a step frame. After
+  that a body is named only as its case begins or ends: a body the server holds lent that the tick did not
+  pose stands where its last pose put it, `held` (a pose refused for missing ground, or a vehicle missing
+  from SUMO's step); a body whose step was discontinuous (`LaneInterpolationCase.Discontinuous`) is placed
+  at SUMO's later frame on every tick of the step, `simulated`; a body whose case ended is named cleared.
+  `CheckTheStep` holds every frame a tick returns against the step declared, and one that comes back out
+  of step -- another client ticked the world -- is counted (`CoSimRunReport.PoseSourceFramesOutOfStep`)
+  and the step declared again at the next step's first tick; the frames between carry the old step. On
+  disposal the session withdraws the step and every name.
+- **What the server holds.** `update_pose_source(declare_step, ticks_per_step, simulated_ids, held_ids,
+  cleared_ids)` (`CarlaServer.cpp`, contract in [`04`](04_Contracts.md) §8.3c) holds the step on the
+  episode (`FSumoStepPhase`: ticks per step and the frame after the one in progress) and each body's name on
+  its render set record (`FRenderSetMembership::PoseSource`), gives a body not lent none, and answers how
+  many it found. `update_render_set` clears a body's name as it parks the body or lends it to another
+  vehicle, since the name was that loan's. A withdrawal (`declare_step` with zero ticks) carries nothing
+  else.
+- **What the snapshot carries.** While a step is declared, the render set block carries a pose source
+  block after the supervision block, or after the entries where there is none, flagged `PoseSourceCarried`
+  (`EpisodeStateSerializer::PoseSourceEntryState` gives the layout): ticks per step, the step frame, and an
+  actor id and a state, 5 bytes, per named lent body. The render set block's size counts it, so every
+  earlier reader skips it. The client reads it (`EpisodeStateLayout.ReadPoseSource`) and resolves each lent
+  body's pose source for the frame as it parses the frame (`ObservedPoseSource.ForLentBody`,
+  `ActorSnapshot.PoseSource`): a named body's name, and otherwise `simulated` where the frame is a whole
+  number of steps from the step frame, `interpolated` where it is not; nothing for an actor no session
+  lent, or a frame before the step was declared.
+- **The cost.** One round trip as the first tick is cued, one on a tick whose named bodies changed, one
+  on disposal, and none on any other; `CoSimRunReport.PoseSourceUpdates` and `PoseSourceStepDeclarations`
+  count them. Measured over the test fixtures: one change in a 400-step drive at one tick per step, one in
+  3000 ticks at twenty, four over a drive in which a body was held for 45 body-frames.
+- **A server that refuses.** One built before this has no such call. The session records the refusal
+  (`CoSimRunReport.PoseSourceRefused`, printed in its report and in the run's closeout) and sends nothing
+  more; the run goes on, and every capture writes no `pose_source` and says `pose_source="unknown"`.
+- **And the lights.** Each vehicle's commanded light state is not in the block: the world observer puts
+  it in the vehicle's own record (`VehicleData::light_state`, the four bytes the union left unused, so an
+  actor stays 119 bytes) and says so with `VehicleLightStateCarried` on every snapshot. Zero is every light
+  off, which a server built before it also leaves there, so the flag and not the value tells a reader
+  whether it has a reading.
+
+**Exercised by** `SumoDriveSessionPoseSourceTests` (the step declared once before the first cue and every
+frame at one tick per step `simulated`; at twenty ticks per step one frame in twenty a step frame and each
+body's published source what the session did on that tick, the discontinuous step included; a body held
+on exactly the frames the session did not pose it, named on a change; a frame out of step counted and the
+step declared again at the next step; a refusing server asked once and the run going on; everything
+withdrawn on disposal), `SumoDriveSessionFailureTests` (a dropped connection naming the step among what
+it could not give back), `EpisodeStatePoseSourceTests` (the block after the supervision and the actors
+after both; one tick per step and twenty; named bodies; an older server; a truncated or unknown block
+refused with the actors still read; a vehicle's lights read only from a snapshot that says it carries
+them) and `LiveTruthLightsAndPoseSourceTests` (through a stand-in server, a recorder in another process
+writing each vehicle's lights and pose source from its frame's snapshot, neither outside the picture, and
+both unknown from an older server).
+
 ---
 
 ## 9. Tick, clock and sun ownership
@@ -4630,7 +4690,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.41** | **A draw distance is an optional performance control, off by default, and rendering only.** Where one is set, each pooled body is given it once -- the maximum draw distance of every mesh and lamp of the body and of what is attached to it, by `set_actors_max_draw_distance` before the cue of the tick it is first drawn in -- so no camera draws a body beyond it, while every vehicle keeps its body, its pose, its naming and its truth. Each frame's render set records the distance it was drawn under, and the recorder marks, in each camera's sidecar, every vehicle wholly or partly beyond it. A server without the call refuses it once; the run goes on drawing every body at any range and says so (§8.3.3). It is recommended for no scenario. |
 | **D3.42** | **A limit on which vehicles get a body is an optional performance control, off by default.** The default policy draws every vehicle SUMO has (D3.38's rule); a circle, the registered cameras' footprints and a capacity under any policy may be chosen in its place. A vehicle outside the chosen limit is simulated by SUMO and has no body, no frame, no render set entry and no truth record; the report states the policy and counts what it left out, and its releases say why each track ended. Every vehicle stays subscribed, so one inside the limit is drawn exactly where and as it would be with none, inserted vehicles from SUMO's first frame. No limit is a default, a recommendation or a sizing rule (§8.3.2). |
 | **D3.43** | **The supervision in force is held on the server, beside the render set, for every reader** (owner's ruling, 2026-10-05) — the session puts each change (per body drawing a supervised vehicle, its state and instances in force; one bound plan with its vocabulary version and digest, and nothing for the world besides the plan) in one `update_supervision` after the render set's and before the tick cue of the frame it is drawn in; the server holds a body's on its record only while it is lent and drops it when the body is given back or handed on, and holds the plan's identity on the episode; the world observer carries all of it on every snapshot inside the render set block. An unlabelled vehicle has no row; no reader takes supervision from an in-process source; a world no session supervises is unchanged; a server that refuses is recorded and told nothing more (§8.9). **The binder is built (2026-10-05):** the session builds it from the plan its lock binds and tells it every frame after the caller's observers; what it states is put in force from the frame at its instant and never before the window, and a plan subject SUMO drops makes the advance refuse |
-
+| **D3.44** | **Where each lent body's drawn pose came from is held on the server, declared once and named on a change** (owner's ruling, 2026-10-06) — the session declares its SUMO step once (`update_pose_source`, the step falling on the frame the next cue produces) and names a body only as it becomes held or placed at SUMO's later step across a discontinuity, and as that ends; the world observer carries the step and the names in the render set block behind `PoseSourceCarried`, and any reader resolves a frame's `simulated` or `interpolated` from its number. Nothing is sent per tick; a frame out of step is counted and the step declared again; a server that refuses is recorded and told nothing more (§8.9) |
 ---
 
 ## 15. Open questions

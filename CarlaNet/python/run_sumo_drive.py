@@ -846,6 +846,16 @@ def report_captures(recorder) -> None:
         (logger.warning if unknown else logger.info)(
             "supervision        %s captures carry their frame's supervision, %s say it was unknown",
             recorder.SupervisionPaired, unknown)
+    # Each vehicle in the picture carries its lights and, drawn by the drive, its pose source from its
+    # frame's snapshot; a capture whose snapshot carried neither -- a server built before it did -- says
+    # so and carries none, which is truth missing, and is said louder. A recorder built before it counted
+    # none.
+    lights_unknown = getattr(recorder, "LightsUnknown", None)
+    if lights_unknown is not None:
+        poses_unknown = recorder.PoseSourceUnknown
+        (logger.warning if lights_unknown or poses_unknown else logger.info)(
+            "lights, poses      %s captures say their vehicles' lights were unknown, %s say their "
+            "pose source was", lights_unknown, poses_unknown)
     if recorder.ChecksSensorPose:
         # A capture is placed where its frame's snapshot holds the camera, and its image header is
         # checked against that. A header that disagreed is a server stamping the image's pose after

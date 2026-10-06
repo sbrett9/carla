@@ -27,6 +27,13 @@ Every vehicle record in the picture (`wholly` or `partly`) must carry its box --
 `<_box3d frame="geodetic">` of eight corners -- and no record outside the picture or behind the lens may
 carry any of it, `camera_range_m` beside `beyond_draw_distance` apart.
 
+Every vehicle record in the picture must also carry its `lights` -- the lights commanded on for it in
+words, or `none` -- and every SUMO vehicle record in it its `pose_source` -- `simulated`, `interpolated`
+or `held` -- unless its sidecar says `lights="unknown"` or `pose_source="unknown"`, because the snapshot of
+its frame did not carry them; those sidecars are counted, not faulted, as the run's closeout gates them.
+Either on a record outside the picture, a `pose_source` on a record naming no SUMO vehicle, and a word
+outside the recorder's are defects.
+
 Any of those is a defect and the exit status is 1. A capture of traffic-manager traffic carries no
 SUMO id by design: pass `--traffic-manager` and only the ground band, the uid and the in-picture
 checks apply.
@@ -88,7 +95,7 @@ def main() -> int:
     if defects:
         return 1
     logging.info("every vehicle record stands on the ground, says whether it is in the picture, carries "
-                 "its box where it is"
+                 "its box, lights and pose source where it is"
                  + (" and names one SUMO vehicle under one uid" if not args.traffic_manager else "")
                  + (", and carries its supervision" if result.had_plan else ""))
     return 0

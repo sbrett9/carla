@@ -50,6 +50,7 @@ the real scenario artifacts. No code changed, no build run.
 | 41 · 2026-10-06 | Bahonar's planted omission is carried by a vehicle that deviates, as the owner ruled (§3.5, §9.1, §9.2, §9.4). The guard schedule still skips the posting at tower 3 on day 4 at 07:00, which writes no trip and no row; the guard who should have taken it, `offpost_d4_h7_t3`, departs the apron on schedule as the guards do, parks for the eight-hour shift on a dead-end airside road between the air base's western aprons, and returns. It is the `subject` of the annotated instance `pi_posting_not_taken_up_d4`, labeled with the new term `bahonar:posting_not_taken_up`, whose parameters name the tower and the shift it was due at, its interval anchored to its stop. The namespace is at version 2; the term's counterfactual is `bahonar:tower_posting`, whose `hard_negative_for` now names it, since the postings differ from it only in where the guard parks. The plan has 27 instances, 6 of them annotated, and 366 entities; its vocabulary digest is `9b05590f…`. |
 | 42 · 2026-10-06 | §3.5: one way to convey a planted omission, as the owner ruled: label the vehicle that deviates. The note at scenario level is no longer offered; the skip's `because` is the reason for the skip, and a legacy `anomaly_notes` is carried for old datasets only. |
 | 43 · 2026-10-06 | §8.2: a vehicle in the picture carries its box on its record in the capture truth sidecar, as the owner ruled: `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg` and `roll_deg` in `_carla`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, each converted as the record's own point is. A vehicle outside the picture or behind the lens carries none, there is no separate label file per image, and the sidecar audit holds both. `pose_source` and the commanded lamps are not written: no snapshot carries either. |
+| 44 · 2026-10-06 | §8.2, open question 11: a vehicle in the picture also carries `lights`, the lights commanded on for it in words, and a SUMO vehicle in the picture `pose_source` -- `simulated`, `interpolated` or `held` -- as the owner ruled, both from the world-observer snapshot of the capture's own frame, so a recorder in any process writes the same. The world observer carries each vehicle's light state in its record, and the session declares its SUMO step to the server once and names a body only as it is held or placed at SUMO's later step; any reader resolves the frame's pose source from its number. A capture whose snapshot carried neither -- a server built before it did -- says `lights="unknown"` or `pose_source="unknown"` and writes none, counted and gated at zero by the closeout; the audit holds the rest. `pose_source` is no longer the planned producer field of the §8.2 example. The plugin and LibCarla change awaits a build. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1671,7 +1672,7 @@ is inert (`CarlaServer.cpp:611-612`). Two things remain with 11 and the owner:
 | Still owed | Why this section needs it |
 |---|---|
 | **Whether the photoreal tileset renders usefully under a sub-horizon sun** | *Inference, not measured:* Cesium 3D Tiles carry baked daylight photography, so a night render darkens textures whose own shadows were captured at the imaging time of day. If that makes night imagery unrepresentative rather than merely dark it is a fact about the world, and this section would record it per capture if asked |
-| **Whether the commanded lamp state is recorded** | The lamps are driven ([11](11_Time_And_Illumination.md) D11.9, `HeadlightRule`), and no truth file states a vehicle's lamp state. If recorded it is a happened fact: the state commanded for that frame, in the `_carla` block beside the other SUMO-sourced state, never supervision. Open question 11 |
+| **Whether the commanded lamp state is recorded** | Recorded since 2026-10-06, as the owner ruled: `lights` on every vehicle in the picture, the state commanded for that frame, a happened fact, in the `_carla` block beside the other SUMO-sourced state, never supervision (§8.2). Open question 11 |
 
 ---
 
@@ -2169,8 +2170,9 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
            occlusion is absent, and, under a draw distance, beyond_draw_distance and
            camera_range_m; on a vehicle in the picture, pitch_deg, roll_deg, box_px,
            box_oriented_px, truncation and camera_range_m, with a <_box3d> beside _carla
-           (2026-10-06, below). WRITTEN BY NOTHING: producer, entity_id,
-           provenance, kinematics_source, pose_source, render_state, the sumo_* network state,
+           (2026-10-06, below), and lights and, on a SUMO vehicle, pose_source, from the
+           snapshot of the capture's own frame (2026-10-06, below). WRITTEN BY NOTHING: producer,
+           entity_id, provenance, kinematics_source, render_state, the sumo_* network state,
            the vtype dimensions and the four separations of 4.3 (D6.10). The SUMO-against-CARLA
            difference is measured every tick and only its worst and mean reach the log; where it
            is written, and whether it has a limit, is with the owner. -->
@@ -2183,7 +2185,7 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
 
               producer="reconciled"
               entity_id="guard_d4_h15_t3" sumo_id="guard_d4_h15_t3" provenance="sumo_scheduled"
-              kinematics_source="sumo" pose_source="carla"
+              kinematics_source="sumo" lights="none" pose_source="simulated"
               render_state="rendered" admitted_tick="1015259"
               sumo_edge="26413459" sumo_lane="26413459_0" sumo_lane_pos_m="58.90"
               sumo_stop_state="3"
@@ -2277,8 +2279,10 @@ Notes, each carrying a decision:
 - **`_carla` keeps its name even when the source is SUMO**, exactly as the standalone bridge already
   does (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, "The `_carla` detail block name is kept even
   though the source is SUMO, so the two producers are directly comparable"). What is added is
-  `producer`, `pose_source` and `kinematics_source`, so a consumer can tell *which* producer supplied
-  *which* field rather than inferring it from the block name.
+  `producer` and `kinematics_source`, so a consumer can tell *which* producer supplied *which* field
+  rather than inferring it from the block name. `pose_source` is not that: written since 2026-10-06, it
+  says where a SUMO vehicle's drawn pose came from, `simulated`, `interpolated` or `held`
+  ([08](08_Collection_And_EPoL.md) §6.4).
 - **`speed="0.00"` on a parked guard is now true**, not an artifact. It reads identically to the
   teleport defect it used to be, which is why `kinematics_source="sumo"` is not optional cosmetics: it
   is the only thing distinguishing a genuinely stationary vehicle from a broken one.
@@ -2561,11 +2565,25 @@ apart where the draw distance reached it; a record no camera projected, the live
 the PNG carries none. `TruthSidecarAudit` holds every vehicle in the picture to the whole box and every
 other to none of it; pointed at the Arapahoe check capture of 2026-10-06
 (`cap-20261006-171114-1747f6`), written before this, it reports all 472 records in the picture as
-lacking it. Two of the ruled fields are not written, because the truth state is the server's and no
-snapshot carries them: **`pose_source`** -- where the frame falls in its SUMO step, and which bodies the
-session held, are known only inside the session ([08](08_Collection_And_EPoL.md) §6.4 states what the
-server would have to carry) -- and **the commanded lamps**, which the snapshot's per-vehicle state does
-not hold ([08](08_Collection_And_EPoL.md) §5.1).
+lacking it.
+
+**And its lights and its pose source (the owner's ruling of 2026-10-06).** A vehicle in the picture also
+carries `lights`, the lights commanded on for it on the frame, in words in CARLA's order or `none`
+(`position low_beam brake left_blinker`), and a SUMO vehicle in the picture `pose_source`: `simulated`
+where it stands at SUMO's own step, `interpolated` between two, `held` where the session could not place
+it. Both are the server's truth, read from the snapshot of the capture's own frame, so a recorder in any
+process writes the same: the world observer carries each vehicle's light state in its record, behind
+`VehicleLightStateCarried`; the session declares its SUMO step to the server once and names a body only
+as it becomes held or placed at SUMO's later step across a discontinuity, carried in the render set block
+behind `PoseSourceCarried`, and every reader resolves the frame's pose source from its number
+([08](08_Collection_And_EPoL.md) §5.1, §6.4; `ObservedPoseSource`, `VehicleLights`, `PoseSources`). A
+vehicle outside the picture carries neither. Neither is guessed: a capture whose snapshot did not carry
+one -- a server built before it did, or one that refused the session's pose source -- writes it on no
+record and says `lights="unknown"` or `pose_source="unknown"` on its container, counted per channel
+(`FrameRecorder.LightsUnknown`, `PoseSourceUnknown`) and gated at zero by the closeout.
+`TruthSidecarAudit` holds every other vehicle in the picture to them and every vehicle outside it to
+neither. The plugin and LibCarla change awaits a build; until it is in, every capture says both are
+unknown.
 
 ### 8.3 The world truth track
 
@@ -3515,7 +3533,8 @@ recipient reads of the folder is the recipient's business.
 | The camera's pose and intrinsics | the sidecar's platform track and `carla:sensor` on the still |
 | The bridge's divergence over the run | the manifest's closing row and the run result (§4.3) |
 | Render-set membership, admissions and releases, refused vehicle types | the run manifest (§8.4) |
-| *Per-image label records, `<_aoi>` area relations, `producer`, `pose_source`, `kinematics_source`* | *written by nothing* |
+| Each vehicle's commanded lights and, for a SUMO vehicle, its pose source, in the picture | the truth sidecar (§8.2, since 2026-10-06) |
+| *Per-image label records, `<_aoi>` area relations, `producer`, `kinematics_source`* | *written by nothing* |
 | *Observability outcomes, spans, coverage and prevalence* | *withdrawn 2026-10-05 by the owner's ruling (§5)* |
 | *Detector tracks, and supervision transferred onto them* | *not produced here; the rule is published (§10.1)* |
 
@@ -3872,7 +3891,9 @@ owner acts on it rather than rediscovers it.
     later; until then a reader has the rule, the sun on every capture, and the catalogue's statement
     of which bodies' lights show at all -- as measured, none of the shipped bodies show headlights,
     brake lights or turn signals lit, which the authoring skill's `references/vehicles.md` and the
-    resolution report's vehicle section now state per body.
+    resolution report's vehicle section now state per body. **As ruled on 2026-10-06, it is in the
+    truth:** every vehicle in the picture carries `lights`, the state commanded on its frame, from the
+    world-observer snapshot of that frame (§8.2) -- what was commanded, not what a body shows.
 12. **Whether the illumination bands should stay [11](11_Time_And_Illumination.md) §4.4's.** Which
     bands exist is settled — doc 11's six, defined there — and this section, the core vocabulary and
     the scenario compiler all use them. Whether they are the right cut points for this imagery and this

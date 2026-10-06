@@ -211,8 +211,8 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
             shutdown = Assert.Throws<AggregateException>(session.Dispose);
         }
 
-        // What only the server could hold is named, each with the connection's own failure inside it;
-        // what is this process's own was given back regardless.
+        // What only the server could hold is named, each with the connection's own failure inside it --
+        // the SUMO step declared to it among them -- and what is this process's own was given back regardless.
         foreach (Exception failure in shutdown.InnerExceptions)
         {
             _output.WriteLine(failure.Message);
@@ -220,7 +220,8 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         }
 
         Assert.Equal(
-            ["Could not give back the world's sun", "Could not destroy the bodies the session spawned",
+            ["Could not give back the world's sun", "Could not withdraw the pose source put to the server",
+             "Could not destroy the bodies the session spawned",
              "Could not draw the rendering layers again", "Could not give back the world's settings",
              "Could not give back the world's drive lease"],
             shutdown.InnerExceptions.Select(failure => failure.Message.Split(':')[0]));

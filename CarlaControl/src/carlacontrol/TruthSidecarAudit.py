@@ -46,6 +46,19 @@ carry the first. The audit reads that the fields are there, not what they hold: 
 encloses the box's corners, or a corner agrees with the record's point, is the writer's to hold, and its
 tests do.
 
+**And the lights and the pose source of every vehicle in the picture.** A vehicle in the picture also
+carries, from the world-observer snapshot of the capture's own frame, as the owner ruled on 2026-10-06:
+`lights`, the lights commanded on for it in CARLA's words or `none`, and, where it names its SUMO
+vehicle, `pose_source` -- `simulated`, `interpolated` or `held`. A sidecar whose frame's snapshot did not
+carry one -- a server built before it did, or one that refused the session's pose source -- says
+`lights="unknown"` or `pose_source="unknown"` on its container and its records carry none, which is
+counted and not faulted here: the run's closeout gates it. Otherwise a record in the picture without its
+lights, a SUMO vehicle record in the picture without its pose source, either on a record outside the
+picture, a `pose_source` on a record naming no SUMO vehicle, and a word outside the recorder's are each a
+defect. A capture made before the recorder wrote them is shown to carry the first. The audit reads the
+words, not whether they are right: which lamps were commanded on, and which ticks fell on a SUMO step, is
+the server's and the session's, and their tests hold it.
+
 **A uid that changes vehicle is seen even where no record names one.** With SUMO ids on the records,
 a uid carrying two of them over the capture is counted directly. Without them, a uid seen on the
 road, then below the ground band, then on the road again is a body that was given back and lent again
@@ -99,6 +112,15 @@ BOX_ATTRIBUTES = ("box_px", "box_oriented_px", "truncation", "pitch_deg", "roll_
 BOX3D_FRAME = "geodetic"
 BOX3D_CORNERS = 8
 
+# The words a vehicle's `lights` holds, as the recorder writes them (`CarlaNet.Recording.VehicleLights`):
+# one per light on, or `none`, and `bit<n>` for a light CARLA declares and no word names.
+LIGHT_WORDS = ("position", "low_beam", "high_beam", "brake", "right_blinker", "left_blinker", "reverse",
+               "fog", "interior", "special1", "special2")
+NO_LIGHT = "none"
+
+# Where a SUMO vehicle's drawn pose came from, as the recorder writes it (`CarlaNet.Recording.PoseSources`).
+POSE_SOURCES = ("simulated", "interpolated", "held")
+
 
 @dataclass(frozen=True)
 class VehicleRecord:
@@ -126,6 +148,12 @@ class VehicleRecord:
     box_attributes: frozenset[str] = frozenset()
     beyond_draw_distance: str | None = None
     box3d_corners: int | None = None
+    # Its lights and pose source, None where it carries none, and whether its sidecar said its frame's
+    # snapshot did not carry them.
+    lights: str | None = None
+    pose_source: str | None = None
+    in_lights_unknown_sidecar: bool = False
+    in_pose_source_unknown_sidecar: bool = False
 
 
 @dataclass
@@ -161,6 +189,14 @@ class SidecarAuditResult:
     records_with_unknown_reason: list[VehicleRecord] = field(default_factory=list)
     records_in_picture_without_box: list[VehicleRecord] = field(default_factory=list)
     records_outside_picture_with_box: list[VehicleRecord] = field(default_factory=list)
+    sidecars_lights_unknown: int = 0
+    sidecars_pose_source_unknown: int = 0
+    records_in_picture_without_lights: list[VehicleRecord] = field(default_factory=list)
+    records_in_picture_without_pose_source: list[VehicleRecord] = field(default_factory=list)
+    records_outside_picture_with_lights_or_pose_source: list[VehicleRecord] = field(default_factory=list)
+    records_with_pose_source_and_no_sumo_id: list[VehicleRecord] = field(default_factory=list)
+    records_with_unknown_lights: list[VehicleRecord] = field(default_factory=list)
+    records_with_unknown_pose_source: list[VehicleRecord] = field(default_factory=list)
 
     @property
     def had_plan(self) -> bool:
@@ -240,13 +276,31 @@ class SidecarAuditResult:
         if self.records_outside_picture_with_box:
             found.append(f"{len(self.records_outside_picture_with_box)} vehicle record(s) outside the picture "
                          "carry box fields or a <_box3d>")
+        if self.records_in_picture_without_lights:
+            found.append(f"{len(self.records_in_picture_without_lights)} vehicle record(s) in the picture carry "
+                         "no lights, in sidecars that do not say their lights were unknown")
+        if self.records_in_picture_without_pose_source:
+            found.append(f"{len(self.records_in_picture_without_pose_source)} SUMO vehicle record(s) in the "
+                         "picture carry no pose_source, in sidecars that do not say it was unknown")
+        if self.records_outside_picture_with_lights_or_pose_source:
+            found.append(f"{len(self.records_outside_picture_with_lights_or_pose_source)} vehicle record(s) "
+                         "outside the picture carry lights or a pose_source")
+        if self.records_with_pose_source_and_no_sumo_id:
+            found.append(f"{len(self.records_with_pose_source_and_no_sumo_id)} vehicle record(s) naming no SUMO "
+                         "vehicle carry a pose_source")
+        if self.records_with_unknown_lights:
+            found.append(f"{len(self.records_with_unknown_lights)} vehicle record(s) carry lights in words other "
+                         f"than {', '.join(LIGHT_WORDS)}, bit<n> or {NO_LIGHT}")
+        if self.records_with_unknown_pose_source:
+            found.append(f"{len(self.records_with_unknown_pose_source)} vehicle record(s) carry a pose_source "
+                         f"other than {', '.join(POSE_SOURCES)}")
         return found
 
 
 class TruthSidecarAudit:
     """Counts parked bodies listed as vehicles, records with no, or no stable, SUMO identity, records
-    that do not say whether their vehicle is in the picture or why its occlusion is absent, and boxes
-    missing from a vehicle in the picture or written on one outside it."""
+    that do not say whether their vehicle is in the picture or why its occlusion is absent, and boxes,
+    lights and pose sources missing from a vehicle in the picture or written on one outside it."""
 
     def __init__(self, margin_m: float = DEFAULT_MARGIN_M, floor_hae: float | None = None) -> None:
         self.margin_m = float(margin_m)
@@ -285,8 +339,13 @@ class TruthSidecarAudit:
             elif vehicles == "unknown":
                 result.sidecars_listing_unknown += 1
             supervised = self._supervision(path, root, result)
+            # What the frame's snapshot did not carry, which the sidecar says once on its container.
+            lights_unknown = root.get("lights") == "unknown"
+            pose_source_unknown = root.get("pose_source") == "unknown"
+            result.sidecars_lights_unknown += lights_unknown
+            result.sidecars_pose_source_unknown += pose_source_unknown
             result.records.extend(self._records(path, root, None if tick is None else int(tick),
-                                                supervised))
+                                                supervised, lights_unknown, pose_source_unknown))
 
         self._band(result)
         uid_to_sumo: dict[str, set[str]] = defaultdict(set)
@@ -298,6 +357,7 @@ class TruthSidecarAudit:
             self._check_supervision(record, result)
             self._check_in_frame(record, result)
             self._check_box(record, result)
+            self._check_lights_and_pose_source(record, result)
             if record.sumo_id is None:
                 result.without_sumo_id.append(record)
                 continue
@@ -379,6 +439,36 @@ class TruthSidecarAudit:
                 result.records_outside_picture_with_box.append(record)
 
     @staticmethod
+    def _check_lights_and_pose_source(record: VehicleRecord, result: SidecarAuditResult) -> None:
+        """Hold a record in the picture to carrying its lights, and its pose source where it names its SUMO
+        vehicle, unless its sidecar said its frame's snapshot did not carry them; one outside the picture to
+        carrying neither; and both to the recorder's words. A record saying nothing of its place, or a place
+        outside the recorder's words, is faulted for that and not held to either."""
+        if record.lights is not None and not TruthSidecarAudit._light_words(record.lights):
+            result.records_with_unknown_lights.append(record)
+        if record.pose_source is not None and record.pose_source not in POSE_SOURCES:
+            result.records_with_unknown_pose_source.append(record)
+        if record.pose_source is not None and record.sumo_id is None:
+            result.records_with_pose_source_and_no_sumo_id.append(record)
+        if record.in_frame in IN_PICTURE:
+            if record.lights is None and not record.in_lights_unknown_sidecar:
+                result.records_in_picture_without_lights.append(record)
+            if (record.pose_source is None and record.sumo_id is not None
+                    and not record.in_pose_source_unknown_sidecar):
+                result.records_in_picture_without_pose_source.append(record)
+        elif record.in_frame in IN_FRAME_VALUES:
+            if record.lights is not None or record.pose_source is not None:
+                result.records_outside_picture_with_lights_or_pose_source.append(record)
+
+    @staticmethod
+    def _light_words(lights: str) -> bool:
+        """Whether a `lights` value is `none`, or lights each named by a word the recorder writes."""
+        words = lights.split(" ")
+        if words == [NO_LIGHT]:
+            return True
+        return all(word in LIGHT_WORDS or (word.startswith("bit") and word[3:].isdigit()) for word in words)
+
+    @staticmethod
     def _lent_again_after_parking(result: SidecarAuditResult) -> list[str]:
         """The uids seen on the road, below the ground band, then on the road again, in tick order."""
         if result.floor_hae is None:
@@ -402,8 +492,8 @@ class TruthSidecarAudit:
             result.floor_hae = min(moving) - self.margin_m
 
     @staticmethod
-    def _records(path: Path, root: ET.Element, tick: int | None,
-                 supervised: bool = False) -> Iterable[VehicleRecord]:
+    def _records(path: Path, root: ET.Element, tick: int | None, supervised: bool = False,
+                 lights_unknown: bool = False, pose_source_unknown: bool = False) -> Iterable[VehicleRecord]:
         """The vehicle events of one sidecar: those carrying the `_carla` truth extras, which the
         collection platform's event does not."""
         for event in root.iter("event"):
@@ -427,7 +517,11 @@ class TruthSidecarAudit:
                 occlusion_unmeasured=extras.get("occlusion_unmeasured"),
                 box_attributes=frozenset(name for name in BOX_ATTRIBUTES if name in extras.attrib),
                 beyond_draw_distance=extras.get("beyond_draw_distance"),
-                box3d_corners=None if box3d is None else TruthSidecarAudit._whole_corners(box3d))
+                box3d_corners=None if box3d is None else TruthSidecarAudit._whole_corners(box3d),
+                lights=extras.get("lights"),
+                pose_source=extras.get("pose_source"),
+                in_lights_unknown_sidecar=lights_unknown,
+                in_pose_source_unknown_sidecar=pose_source_unknown)
 
     @staticmethod
     def _whole_corners(box3d: ET.Element) -> int:
@@ -483,6 +577,19 @@ class TruthSidecarAudit:
         lines.append(f"  boxes: whole on {in_picture - len(result.records_in_picture_without_box)} of "
                      f"{in_picture} records in the picture; on records outside it: "
                      f"{len(result.records_outside_picture_with_box)}")
+        lit = sum(1 for record in result.records if record.in_frame in IN_PICTURE and record.lights is not None)
+        sources = defaultdict(int)
+        for record in result.records:
+            if record.in_frame in IN_PICTURE and record.pose_source is not None:
+                sources[record.pose_source] += 1
+        lines.append(f"  lights: on {lit} of {in_picture} records in the picture; sidecars saying their lights "
+                     f"were unknown: {result.sidecars_lights_unknown}; missing elsewhere: "
+                     f"{len(result.records_in_picture_without_lights)}")
+        lines.append("  pose source in the picture: "
+                     + (", ".join(f"{source} {sources[source]}" for source in POSE_SOURCES if sources[source])
+                        or "none written")
+                     + f"; sidecars saying it was unknown: {result.sidecars_pose_source_unknown}; SUMO records "
+                       f"missing it elsewhere: {len(result.records_in_picture_without_pose_source)}")
         if result.had_plan:
             states = defaultdict(int)
             for record in result.records:

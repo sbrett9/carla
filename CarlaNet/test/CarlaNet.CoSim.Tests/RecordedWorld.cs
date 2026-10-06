@@ -2,6 +2,7 @@ using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
 using CarlaNet.Types.Rpc.Lighting;
+using CarlaNet.Types.Streaming;
 using CarlaNet.Types.Supervision;
 
 using ActorId = uint;
@@ -56,6 +57,11 @@ internal class RecordedWorld : ICarlaWorld
     private readonly Dictionary<ulong, PublishedSupervision> _publishedSupervision = [];
     private readonly List<(SupervisionChange Change, long AtTick)> _supervisionWrites = [];
     private SupervisionPlanIdentity? _planHeld;
+    private readonly Dictionary<ActorId, PoseSource> _poseNamed = [];
+    private readonly Dictionary<ulong, ObservedPoseSource> _publishedPoseSource = [];
+    private readonly List<(PoseSourceChange Change, long AtTick)> _poseSourceWrites = [];
+    private uint _ticksPerStep;
+    private ulong _stepFrame;
     private readonly List<(IReadOnlyList<ActorId> Bodies, double Metres, long AtTick)> _drawDistanceWrites = [];
     private readonly Dictionary<ActorId, double> _drawDistances = [];
     private readonly Dictionary<ActorId, CameraOptics> _cameras = [];
@@ -121,6 +127,12 @@ internal class RecordedWorld : ICarlaWorld
 
     /// <summary>Set to stop the world producing frames, as a stalled server does.</summary>
     public bool ProducesFrames { get; set; } = true;
+
+    /// <summary>
+    /// Set to have another client tick the world once, straight after the session's tick produces this
+    /// frame: the world then produces a frame the session did not cue, and every later frame is one on.
+    /// </summary>
+    public ulong? AnotherClientTicksAfterFrame { get; set; }
 
     /// <summary>Set to have the next tick throw, as a dropped connection does.</summary>
     public Exception? ThrowOnTick { get; set; }
@@ -272,6 +284,31 @@ internal class RecordedWorld : ICarlaWorld
 
     /// <summary>Bodies the world holds a supervision row for right now.</summary>
     public int SupervisedBodies => _supervisionHeld.Count;
+
+    /// <summary>
+    /// Set to have the world refuse every change to the pose source with this message, as a server built
+    /// before it carried a pose source does: it has no such call.
+    /// </summary>
+    public string? RefusesPoseSource { get; set; }
+
+    /// <summary>
+    /// Every change to the pose source put to the world, copied as it arrived, with the tick the world was
+    /// on -- the session's index of the tick it was put for.
+    /// </summary>
+    public IReadOnlyList<(PoseSourceChange Change, long AtTick)> PoseSourceWrites => _poseSourceWrites;
+
+    /// <summary>
+    /// The pose source the world-observer snapshot of a frame carried, as the server publishes it: the
+    /// declared step and every lent body named, as they stood when the frame was produced. Null for a
+    /// frame the world did not produce, or one produced while no step was declared and no body named.
+    /// </summary>
+    public ObservedPoseSource? PublishedPoseSourceOf(ulong frame) => _publishedPoseSource.GetValueOrDefault(frame);
+
+    /// <summary>World ticks per SUMO step the world holds declared right now; zero for none.</summary>
+    public uint StepDeclared => _ticksPerStep;
+
+    /// <summary>Bodies the world holds a pose source name for right now.</summary>
+    public int PoseNamedBodies => _poseNamed.Count;
 
     /// <inheritdoc/>
     public LoadedWorld DescribeLoadedWorld()
@@ -503,8 +540,9 @@ internal class RecordedWorld : ICarlaWorld
 
             _namedLent.Remove(actor);
             _namedParked.Add(actor);
-            // A body given back loses the supervision of the vehicle it drew.
+            // A body given back loses the supervision of the vehicle it drew, and its loan's pose source.
             _supervisionHeld.Remove(actor);
+            _poseNamed.Remove(actor);
             found++;
         }
 
@@ -520,8 +558,10 @@ internal class RecordedWorld : ICarlaWorld
             ulong admitted = sameVehicle ? held.AdmittedFrame : next;
             if (!sameVehicle)
             {
-                // Handed to another vehicle: what was asserted of the last one is not about this one.
+                // Handed to another vehicle: what was asserted of the last one is not about this one, and
+                // where its pose came from was the last loan's.
                 _supervisionHeld.Remove(body.Actor);
+                _poseNamed.Remove(body.Actor);
             }
 
             _namedParked.Remove(body.Actor);
@@ -601,6 +641,73 @@ internal class RecordedWorld : ICarlaWorld
         }
 
         return new SupervisionWrite(applied, null);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Held as the server holds it: the step falling on the next frame the world produces, which is the
+    /// tick count after the next tick; each body's name on its loan and only while it is named lent; and a
+    /// withdrawal dropping everything. A withdrawal naming bodies is refused here too, with its words.
+    /// </remarks>
+    public PoseSourceWrite WritePoseSource(PoseSourceChange change)
+    {
+        Connected(nameof(WritePoseSource));
+        // A copy, because the session reuses its lists from one change to the next.
+        _poseSourceWrites.Add((change with
+        {
+            Simulated = [.. change.Simulated],
+            Held = [.. change.Held],
+            Cleared = [.. change.Cleared],
+        }, Ticks));
+        if (RefusesPoseSource is { } refusal)
+        {
+            return new PoseSourceWrite(0, refusal);
+        }
+
+        if (change.IsWithdrawal)
+        {
+            if (change.Simulated.Count + change.Held.Count + change.Cleared.Count > 0)
+            {
+                return new PoseSourceWrite(
+                    0, "update_pose_source: a withdrawal withdraws every body's pose source and carries nothing else");
+            }
+
+            _ticksPerStep = 0;
+            _stepFrame = 0;
+            _poseNamed.Clear();
+            return new PoseSourceWrite(0, null);
+        }
+
+        if (change.DeclareStep)
+        {
+            _ticksPerStep = change.TicksPerStep;
+            _stepFrame = (ulong)Ticks + 1;
+        }
+
+        int applied = 0;
+        foreach (ActorId actor in change.Cleared)
+        {
+            if (_actors.ContainsKey(actor))
+            {
+                _poseNamed.Remove(actor);
+                applied++;
+            }
+        }
+
+        foreach ((IReadOnlyList<ActorId> bodies, PoseSource source) in
+                 new[] { (change.Simulated, PoseSource.Simulated), (change.Held, PoseSource.Held) })
+        {
+            foreach (ActorId actor in bodies)
+            {
+                if (_actors.ContainsKey(actor) && _namedLent.ContainsKey(actor))
+                {
+                    _poseNamed[actor] = source;
+                    applied++;
+                }
+            }
+        }
+
+        return new PoseSourceWrite(applied, null);
     }
 
     /// <inheritdoc/>
@@ -731,9 +838,23 @@ internal class RecordedWorld : ICarlaWorld
                     _supervisionHeld.Where(pair => _namedLent.ContainsKey(pair.Key))
                         .ToDictionary(pair => pair.Key, pair => pair.Value));
             }
+
+            // And the pose source, while a step is declared or a body named: only lent bodies carry a name.
+            Dictionary<ActorId, PoseSource> poseNamed = _poseNamed.Where(pair => _namedLent.ContainsKey(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            if (_ticksPerStep > 0 || poseNamed.Count > 0)
+            {
+                _publishedPoseSource[(ulong)Ticks] = new ObservedPoseSource(_ticksPerStep, _stepFrame, poseNamed);
+            }
         }
 
-        return ProducesFrames ? (ulong)Ticks : null;
+        ulong? produced = ProducesFrames ? (ulong)Ticks : null;
+        if (produced is { } frame && frame == AnotherClientTicksAfterFrame)
+        {
+            Ticks++;
+        }
+
+        return produced;
     }
 
     /// <inheritdoc/>

@@ -32,6 +32,13 @@ namespace CarlaNet.Recording;
 /// <c>_carla</c> holding the box's eight corners. A vehicle outside the picture or behind the lens
 /// carries none of them, the range apart where the draw distance reached it.</para>
 ///
+/// <para>A vehicle in the picture also carries, from the world-observer snapshot of the capture's own frame,
+/// as the owner ruled on 2026-10-06: <c>lights</c>, the lights commanded on for it in words
+/// (<see cref="VehicleLights"/>), and, where a SUMO drive lent it a body, <c>pose_source</c> -- <c>simulated</c>,
+/// <c>interpolated</c> or <c>held</c> (<see cref="PoseSources"/>). Neither is guessed: where the snapshot did not
+/// carry one, every record in the picture goes without it and the container says <c>lights="unknown"</c> or
+/// <c>pose_source="unknown"</c>. A vehicle outside the picture carries neither.</para>
+///
 /// <para>A capture whose image was rendered under a draw distance says so on its container
 /// (<c>draw_distance_m</c>), and every vehicle the distance kept out of the image, wholly or in part,
 /// carries <c>beyond_draw_distance</c> and the <c>camera_range_m</c> it rests on in its extras: it is in
@@ -106,6 +113,16 @@ public static class CotWriter
         // what its labels mean; or that a plan was in force and this frame's supervision is unknown.
         // Absent, no plan was in force. Every other supervision fact is a vehicle's, on its event.
         supervision.WriteContainerAttributes(w);
+
+        // That a vehicle in the picture carries no lights, or a drawn SUMO vehicle in it no pose source,
+        // because the snapshot of this frame did not carry them: a server built before it did, or a
+        // session whose pose source the server refused. Said once here, so a record without them is not
+        // read as one whose lights were off or whose pose came from nowhere. Absent, every vehicle in the
+        // picture carries both that applies to it.
+        if (LightsUnknown(recs))
+            w.WriteAttributeString("lights", "unknown");
+        if (PoseSourceUnknown(recs))
+            w.WriteAttributeString("pose_source", "unknown");
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame. A
@@ -266,7 +283,8 @@ public static class CotWriter
             // A vehicle whose box fell in the picture carries its box, and no other vehicle does, as the
             // owner ruled: the record of a vehicle outside the picture or behind the lens is written as
             // before, and so is every record no camera projected.
-            CaptureBox? box = r.InFrame is InFrame.Wholly or InFrame.Partly ? r.Box : null;
+            bool inPicture = r.InFrame is InFrame.Wholly or InFrame.Partly;
+            CaptureBox? box = inPicture ? r.Box : null;
             // The body's tilt from its transform, beside the heading it points along.
             if (box is not null)
             {
@@ -320,6 +338,18 @@ public static class CotWriter
                 w.WriteAttributeString("box_oriented_px",
                                        string.Join(' ', box.Oriented.Select(c => $"{F(c.U, "0.00")} {F(c.V, "0.00")}")));
                 w.WriteAttributeString("truncation", F(box.Truncation, "0.000"));
+            }
+            // What a vehicle in the picture shows besides its box, as the owner ruled on 2026-10-06, from
+            // the snapshot of the capture's own frame: the lights commanded on for it, in words, and where
+            // its drawn pose came from. Each is left out where that snapshot did not carry it, and the
+            // container says so; neither is written for a vehicle outside the picture.
+            if (inPicture && r.Lights is { } lights)
+            {
+                w.WriteAttributeString("lights", VehicleLights.SidecarValue(lights));
+            }
+            if (inPicture && r.PoseSource is { } poseSource)
+            {
+                w.WriteAttributeString("pose_source", PoseSources.SidecarValue(poseSource));
             }
             // Why there is no occlusion, where there is none: the recorder's own state, in one word,
             // and never written beside a measurement.
@@ -392,6 +422,21 @@ public static class CotWriter
         w.WriteEndElement(); // events
         w.WriteEndDocument();
     }
+
+    /// <summary>
+    /// Whether a vehicle of the capture in the picture goes without its lights, because the snapshot of the
+    /// capture's frame did not carry them: the capture's container then says <c>lights="unknown"</c>.
+    /// </summary>
+    public static bool LightsUnknown(IReadOnlyList<VehicleTelemetry> recs) =>
+        recs.Any(r => (r.InFrame is InFrame.Wholly or InFrame.Partly) && r.Lights is null);
+
+    /// <summary>
+    /// Whether a drawn SUMO vehicle of the capture in the picture goes without its pose source, because the
+    /// snapshot of the capture's frame did not carry one: the capture's container then says
+    /// <c>pose_source="unknown"</c>.
+    /// </summary>
+    public static bool PoseSourceUnknown(IReadOnlyList<VehicleTelemetry> recs) =>
+        recs.Any(r => (r.InFrame is InFrame.Wholly or InFrame.Partly) && r.Rendered is not null && r.PoseSource is null);
 
     // CoT timestamp: ISO-8601 UTC, millisecond precision, trailing 'Z'.
     private static string Iso(DateTime dt) =>

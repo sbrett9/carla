@@ -41,6 +41,35 @@ public sealed class ActorSnapshot
     internal byte[] TypeDependentState { get; init; } = [];
 
     /// <summary>
+    /// Whether the snapshot this came from said every vehicle's state carries its lights
+    /// (<see cref="EpisodeStateLayout.VehicleLightStateCarried"/>). False for one from a server built
+    /// before it, whose bytes there are zero and are no reading.
+    /// </summary>
+    public bool LightStateCarried { get; init; }
+
+    /// <summary>
+    /// Where the pose this actor was drawn at on the snapshot's frame came from, where a co-simulation
+    /// session lent it as a body and the snapshot carried a pose source (<see cref="ObservedPoseSource"/>):
+    /// SUMO's own step, interpolated between two, or held. Null for an actor no session lent, and for
+    /// every actor of a snapshot that carried no pose source.
+    /// </summary>
+    public PoseSource? PoseSource { get; init; }
+
+    /// <summary>
+    /// The lights commanded on for this vehicle on the snapshot's frame, from the <c>light_state</c> of
+    /// its <c>VehicleData</c> at offset 30 of the type-dependent union; null where the snapshot did not
+    /// say it carries them (<see cref="LightStateCarried"/>), so an older server's zero is never read as
+    /// every light off. Only meaningful for a vehicle actor.
+    /// </summary>
+    public VehicleLightStateFlags? CommandedLights()
+    {
+        ReadOnlySpan<byte> s = TypeDependentState;
+        if (!LightStateCarried || s.Length < 34)
+            return null;
+        return (VehicleLightStateFlags)BinaryPrimitives.ReadUInt32LittleEndian(s[30..]);
+    }
+
+    /// <summary>
     /// Decode the <c>VehicleData</c> branch of the type-dependent union
     /// (carla/sensor/data/ActorDynamicState.h, <c>#pragma pack(1)</c>). Only meaningful
     /// when this snapshot is a vehicle actor. Byte offsets within <see cref="TypeDependentState"/>:
@@ -50,6 +79,8 @@ public sealed class ActorSnapshot
     ///   <item><c>speed_limit</c> f32 @ 19</item>
     ///   <item><c>traffic_light_state</c> u8 @ 23</item>
     ///   <item><c>has_traffic_light</c> bool @ 24</item>
+    ///   <item><c>traffic_light_id</c> u32 @ 25, <c>failure_state</c> u8 @ 29</item>
+    ///   <item><c>light_state</c> u32 @ 30 (<see cref="CommandedLights"/>)</item>
     /// </list>
     /// Returns Green / 0 / false when the union is too short (not-yet-populated snapshot).
     /// </summary>
@@ -200,6 +231,13 @@ public sealed class CarlaClient : IAsyncDisposable
     // change.
     private volatile ObservedSupervision _supervision = ObservedSupervision.None;
     private long _supervisionBlocksUnreadable;
+
+    // The pose source from the latest world-observer snapshot: the frames a co-simulation session's SUMO
+    // steps fall on, and every lent body whose pose followed no step. None until a session declares its
+    // step. Held on the server, so every client reads the same pose source for a frame; replaced whole
+    // on the observer thread, the same instance kept while the block's bytes do not change.
+    private volatile ObservedPoseSource _poseSource = ObservedPoseSource.None;
+    private long _poseSourceBlocksUnreadable;
 
     // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
     // set_actor_fade writes straight to render state server-side and has no read-back, so the client
@@ -1833,6 +1871,46 @@ public sealed class CarlaClient : IAsyncDisposable
         return _rpc.CallAsync<uint>("update_supervision", update);
     }
 
+    /// <summary>
+    /// Tell the server where the pose each of a co-simulation session's lent bodies is drawn at comes
+    /// from: the SUMO step the session poses them from, declared once, and the bodies whose pose follows
+    /// no step, named as their case begins and ends. The world observer carries both on each snapshot
+    /// from the next frame on (<see cref="GetCachedPoseSource"/>), so every client of the world, in any
+    /// process, reads the same pose source for the same frame, and nothing is sent per tick. Answers how
+    /// many of the named bodies the server found, and lent where they were named simulated or held.
+    /// </summary>
+    /// <param name="declareStep">
+    /// Declare the step: <paramref name="ticksPerStep"/> world ticks per SUMO step, a step falling on the
+    /// frame the next tick cue produces. With <paramref name="ticksPerStep"/> zero it withdraws the step
+    /// and every body's name, and carries nothing else.
+    /// </param>
+    /// <param name="ticksPerStep">World ticks per SUMO step; read only where the step is declared.</param>
+    /// <param name="simulatedIds">Bodies standing where SUMO put them at one of its steps, whichever frame it is.</param>
+    /// <param name="heldIds">Bodies left where their last pose put them, because the session could not place them.</param>
+    /// <param name="clearedIds">Bodies that follow the step again.</param>
+    /// <remarks>
+    /// <para>Sent before the tick cue of the frame the change is drawn in, after the render set: a body's
+    /// name is held on the server's record of its loan, so a body not lent is not given one, and one given
+    /// back or handed to another vehicle loses it. A server built before it carried a pose source refuses
+    /// the call, with an error naming it.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">A withdrawal that names bodies. It is refused before it is sent.</exception>
+    public Task<uint> UpdatePoseSourceAsync(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> simulatedIds,
+                                            IReadOnlyList<ActorId> heldIds, IReadOnlyList<ActorId> clearedIds)
+    {
+        ArgumentNullException.ThrowIfNull(simulatedIds);
+        ArgumentNullException.ThrowIfNull(heldIds);
+        ArgumentNullException.ThrowIfNull(clearedIds);
+        if (declareStep && ticksPerStep == 0 && (simulatedIds.Count + heldIds.Count + clearedIds.Count) > 0)
+        {
+            throw new ArgumentException(
+                "A withdrawal withdraws every body's pose source and names no body: "
+                + $"{simulatedIds.Count} simulated, {heldIds.Count} held and {clearedIds.Count} cleared were given.");
+        }
+
+        return _rpc.CallAsync<uint>("update_pose_source", declareStep, ticksPerStep, simulatedIds, heldIds, clearedIds);
+    }
+
     /// <summary>Why the server would refuse a supervision change, or null where it would take it.</summary>
     private static string? SupervisionUpdateProblem(SupervisionUpdate update)
     {
@@ -2363,7 +2441,7 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             double platformTs = 0;
             float deltaS = 0;
-            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS, out var frameActors,
+            ParseEpisodeState(frame.Payload.Span, frame.Header.Frame, out platformTs, out deltaS, out var frameActors,
                               out var frameRenderSet, out var frameSupervision);
             // Retained before the gate is pulsed, so a tick-cue waiter woken by this frame can read
             // the frame's own actors straight away -- and the render set and the supervision the same
@@ -2395,7 +2473,8 @@ public sealed class CarlaClient : IAsyncDisposable
         catch (Exception ex) { _log?.LogWarning(ex, "World observer parse error"); }
     }
 
-    private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds,
+    private void ParseEpisodeState(ReadOnlySpan<byte> payload, ulong frameNumber, out double platformTimestamp,
+                                   out float deltaSeconds,
                                    out Dictionary<ActorId, ActorSnapshot>? frameActors,
                                    out ObservedRenderSet frameRenderSet,
                                    out ObservedSupervision frameSupervision)
@@ -2451,6 +2530,24 @@ public sealed class CarlaClient : IAsyncDisposable
             frameSupervision = ObservedSupervision.Unreadable;
         }
         _supervision = frameSupervision;
+        // The pose source, where a co-simulation session has declared its SUMO step: a block that cannot
+        // be read is counted and read as unreadable, which gives no body a pose source, and the frame's
+        // actors are read all the same.
+        ObservedPoseSource framePoseSource;
+        try
+        {
+            framePoseSource = EpisodeStateLayout.ReadPoseSource(payload, _poseSource);
+        }
+        catch (InvalidDataException ex)
+        {
+            Interlocked.Increment(ref _poseSourceBlocksUnreadable);
+            _log?.LogWarning(ex, "World observer pose source unreadable");
+            framePoseSource = ObservedPoseSource.Unreadable;
+        }
+        _poseSource = framePoseSource;
+        // Whether every vehicle's state carries its lights: a server built before it leaves the bytes
+        // zero, which would read as every light off.
+        bool lightsCarried = EpisodeStateLayout.CarriesVehicleLightState(payload);
         const int ActorSize  = 119;
         var actors = payload[EpisodeStateLayout.ActorsOffset(payload)..];
         int count  = actors.Length / ActorSize;
@@ -2489,7 +2586,11 @@ public sealed class CarlaClient : IAsyncDisposable
                 Velocity        = new Vector3D(vx, vy, vz),
                 AngularVelocity = new Vector3D(avx, avy, avz),
                 Acceleration    = new Vector3D(ax, ay, az),
-                TypeDependentState = a[65..119].ToArray()
+                TypeDependentState = a[65..119].ToArray(),
+                LightStateCarried = lightsCarried,
+                // Resolved here, with the frame's own number and its own render set, so the snapshot
+                // of a frame says where each lent body's pose on that frame came from.
+                PoseSource = framePoseSource.ForLentBody(frameRenderSet, id, frameNumber),
             };
             _actorCache[id] = snapshot;
             frameActors[id] = snapshot;
@@ -2695,6 +2796,22 @@ public sealed class CarlaClient : IAsyncDisposable
     /// differently from this client.
     /// </summary>
     public long SupervisionBlocksUnreadable => Interlocked.Read(ref _supervisionBlocksUnreadable);
+
+    /// <summary>
+    /// The pose source the latest world-observer snapshot carried: the frames a co-simulation session's
+    /// SUMO steps fall on, and every lent body whose pose followed no step.
+    /// <see cref="ObservedPoseSource.None"/> before the first snapshot, and whenever no session has
+    /// declared its step. Each actor of a frame already carries its own, resolved with that frame's
+    /// number and render set (<see cref="ActorSnapshot.PoseSource"/>), which is how a recorder reads it.
+    /// </summary>
+    public ObservedPoseSource GetCachedPoseSource() => _poseSource;
+
+    /// <summary>
+    /// World-observer snapshots whose pose source block could not be read, each read as
+    /// <see cref="ObservedPoseSource.Unreadable"/>. Nonzero only where the server lays the block out
+    /// differently from this client.
+    /// </summary>
+    public long PoseSourceBlocksUnreadable => Interlocked.Read(ref _poseSourceBlocksUnreadable);
 
     // Decode VehicleControl from the cached TypeDependentState union.
     // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)

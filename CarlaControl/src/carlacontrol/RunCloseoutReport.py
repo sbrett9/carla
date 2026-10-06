@@ -8,7 +8,8 @@ the wait for each channel's view before the window opened (`ViewReadinessGate`) 
 recorder (`FrameRecorder`: captures written, captures dropped, stills dropped for want of their own
 frame's truth, illumination
 pairing, captures written without a solar block, render-set pairing, supervision pairing, occlusion
-pairing, where each capture's pose came from, and the vehicles it marked beyond the draw distance) -- never at
+pairing, where each capture's pose came from, the vehicles it marked beyond the draw distance, and the
+captures whose vehicles in the picture went without their lights or pose source) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
 the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
 the run result carries the last one taken. Nothing here measures anything of its own.
@@ -26,6 +27,8 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 (11 §8.4) | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
 | `capture.supervision_unpaired` | captures written with `supervision="unknown"` -- a plan was in force and the supervision of the capture's own frame was not to be had -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
+| `capture.lights_unknown` | captures written with `lights="unknown"` -- a vehicle in the picture went without its lights because the snapshot of the capture's own frame did not carry them, as from a server built before it did -- threshold 0 (08 §5.1) | measured; skipped from a recorder built before it counted them |
+| `capture.pose_source_unknown` | captures written with `pose_source="unknown"` -- a drawn SUMO vehicle in the picture went without its pose source because the snapshot of the capture's own frame did not carry one -- threshold 0 (08 §5.1) | measured; skipped from a recorder built before it counted them |
 | `capture.sensor_pose_header_disagreed` | captures whose image header placed the camera elsewhere than their own frame's snapshot, threshold 0 | measured |
 | `capture.depth_pose_header_disagreed` | the same for the depth captures occlusion is measured against, threshold 0 | measured where the channel has a depth camera |
 | `clock.ratio_recorded` | whether the session's achieved real-time factor exists | measured |
@@ -222,6 +225,9 @@ class RunCloseoutReport:
                               "draw_distance_in_force_m": self._number(session.DrawDistanceMetres),
                               "draw_distance_refused": None if report.DrawDistanceRefused is None
                               else str(report.DrawDistanceRefused),
+                              # Why the server refused the session's pose source, where it did -- a server
+                              # built before it carried one -- which the run goes on without.
+                              "pose_source_refused": self._refusal(report, "PoseSourceRefused"),
                               "render_set": str(report.RenderSetPolicy),
                               "render_set_limits": bool(report.RenderSetLimits),
                               "vehicle_passes_outside_the_policy":
@@ -243,6 +249,13 @@ class RunCloseoutReport:
     @staticmethod
     def _number(value: Any) -> float | None:
         return None if value is None else float(value)
+
+    @staticmethod
+    def _refusal(report: Any, name: str) -> str | None:
+        """A server's refusal the report names, in its words; None where it refused nothing, or the report
+        was built before it recorded that refusal."""
+        refusal = getattr(report, name, None)
+        return None if refusal is None else str(refusal)
 
     @classmethod
     def _divergence(cls, report: Any) -> dict:
@@ -298,6 +311,7 @@ class RunCloseoutReport:
                  "illumination_paired": None, "illumination_unpaired": None,
                  "solar_block_missing": None, "render_set_paired": None, "render_set_unpaired": None,
                  "supervision_paired": None, "supervision_unpaired": None,
+                 "lights_unknown": None, "pose_source_unknown": None,
                  "occlusion_measured": None, "occlusion_unmatched": None,
                  "sensor_pose_from_snapshot": None, "sensor_pose_header_disagreed": None,
                  "sensor_pose_from_header": None,
@@ -327,6 +341,11 @@ class RunCloseoutReport:
         # before it wrote such stills beside a neighbouring frame's truth and counted nothing here.
         if hasattr(recorder, "FrameUnpaired"):
             entry["frame_unpaired"] = int(recorder.FrameUnpaired)
+        # Counted by a recorder that writes each vehicle's lights and pose source from its frame's snapshot;
+        # one built before it carries neither, and its gates are skipped rather than read as met.
+        if hasattr(recorder, "LightsUnknown"):
+            entry.update({"lights_unknown": int(recorder.LightsUnknown),
+                          "pose_source_unknown": int(recorder.PoseSourceUnknown)})
         if recorder.ChecksSensorPose:
             entry.update({"sensor_pose_from_snapshot": int(recorder.SensorPoseFromSnapshot),
                           "sensor_pose_header_disagreed": int(recorder.SensorPoseHeaderDisagreed),
@@ -406,6 +425,20 @@ class RunCloseoutReport:
             else:
                 gates.append(self._gate(supervision_gate, supervision_name, "06 §8.2",
                                         channel["supervision_unpaired"], 0, "equals"))
+            # A capture whose frame's snapshot did not carry what a vehicle in the picture shows -- its
+            # lights, or where a SUMO vehicle's drawn pose came from -- written without it rather than with
+            # a guess: a server built before it carried them, or one that refused the session's pose source.
+            for field, name in (("lights_unknown", "captures written with a vehicle in the picture whose "
+                                                   "lights their own frame's snapshot did not carry"),
+                                ("pose_source_unknown", "captures written with a drawn SUMO vehicle in the "
+                                                        "picture whose pose source their own frame's "
+                                                        "snapshot did not carry")):
+                field_gate = f"capture.{field}[{channel['sensor_id']}]"
+                if channel[field] is None:
+                    gates.append(self._skipped(field_gate, name,
+                                               "the recorder was built before it wrote lights and pose sources"))
+                else:
+                    gates.append(self._gate(field_gate, name, "08 §5.1", channel[field], 0, "equals"))
             # A capture whose image header placed the camera somewhere the snapshot of its own frame
             # did not. The snapshot's pose is the one written, so the still is placed right, but the
             # server stamped the header after the frame, and a corpus has to know it was.
@@ -557,6 +590,9 @@ class RunCloseoutReport:
                             f"({refused})" if refused is not None
                             else ", rendering only: vehicles beyond it from a camera are in the "
                                  "truth and marked in that camera's sidecars"))
+        if render is not None and render.get("pose_source_refused") is not None:
+            lines.append(f"  pose source: refused by the server, so no capture says where a vehicle's pose "
+                         f"came from ({render['pose_source_refused']})")
         divergence = snapshot.get("divergence")
         if divergence is not None and divergence["samples"]:
             worst = divergence["worst_position_on"]
@@ -585,6 +621,9 @@ class RunCloseoutReport:
                          + (f", supervision {channel['supervision_paired']} paired "
                             f"{channel['supervision_unpaired']} unknown"
                             if channel.get("supervision_unpaired") is not None else "")
+                         + (f", lights unknown {channel['lights_unknown']}, pose source unknown "
+                            f"{channel['pose_source_unknown']}"
+                            if channel.get("lights_unknown") is not None else "")
                          + f"  -> {channel['directory']}")
             if channel.get("draw_distance_captures"):
                 lines.append(f"    under the draw distance {channel['draw_distance_captures']} "

@@ -15,6 +15,7 @@
 #include "Carla/Weather/Weather.h"
 #include "Carla/Game/DriveLease.h"
 #include "Carla/Game/FrameData.h"
+#include "Carla/Game/SumoStepPhase.h"
 #include "Carla/Game/WorldSupervisionState.h"
 #include "Carla/Sensor/SensorManager.h"
 
@@ -338,6 +339,13 @@ public:
 
   FWorldSupervisionState &GetWorldSupervision() { return WorldSupervision; }
 
+  /// The frames a co-simulation session's SUMO steps fall on, as the session declared them, which the
+  /// world observer carries on every snapshot while a step is declared (update_pose_source). Ends with
+  /// the episode.
+  const FSumoStepPhase &GetSumoStepPhase() const { return SumoStepPhase; }
+
+  FSumoStepPhase &GetSumoStepPhase() { return SumoStepPhase; }
+
   /// The drive lease on this world: which client, if any, is the traffic that drives its vehicles
   /// (take_drive_lease). While it is held every vehicle-control RPC is refused for every actor,
   /// naming the holder. Ends with the episode.
@@ -424,6 +432,8 @@ private:
   FSensorManager SensorManager;
 
   FWorldSupervisionState WorldSupervision;
+
+  FSumoStepPhase SumoStepPhase;
 
   FDriveLease DriveLease;
 };

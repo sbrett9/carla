@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 44 | 2026-10-06. `C6`, `C8`: each vehicle in the picture carries its commanded lights and, a SUMO vehicle, where its drawn pose came from, both from the snapshot of the capture's own frame, as the owner ruled (§8.3c, `D4.48`). `update_pose_source` joins `update_render_set` and `update_supervision`: the session declares its SUMO step once and names a body only as it is held or placed at SUMO's later step, and the world observer carries both in the render set block behind `PoseSourceCarried` (`0x80`), so any reader resolves `simulated` or `interpolated` from the frame number; each vehicle's light state is `VehicleData::light_state`, behind `VehicleLightStateCarried` (`0x40`), the per-actor size unchanged. From a server that carries neither, the sidecar says `lights="unknown"` or `pose_source="unknown"` and writes none. The plugin and LibCarla change awaits a build. |
 | 43 | 2026-10-05. Labels follow vehicles, by the owner's ruling ([`06`](06_Truth_And_Annotation.md) §3.5): `C6` §8.3b's `update_supervision` loses `absences_opened` and `absences_closed` and the snapshot's supervision block its absence count and absences; `C8` §10.6's *Supervised* row loses the world-scoped `<_supervision>`; `C3`'s plan completions lose an absence's site. `C9`: `corpus_eligible` is renamed `sun_matched_declaration` on the `solar_window_end` row (§11.6-§11.8, D4.24, §12.5, V10.4), a fact — an epoch declared, the sun bound and present, the audit within tolerance — carrying no verdict in its name, as the owner agreed. |
 | 42 | 2026-10-05. The two-folder split is dropped by the owner's ruling: imagery and truth sit side by side in one capture folder, with no separate imagery folder, no held-back partition and no validator over an imagery folder. `D4.26` and `D4.16` amended, the `C8` table row and §10.5 point 2 follow, `C10`'s and §14's references to the roots amended. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and model output is neither produced nor consumed here. |
 | 41 | 2026-10-05. `C7`: the world's drive lease, held on the server (§9.3a, `D4.47`). A SUMO drive session takes it before SUMO starts with `take_drive_lease(holder)` and gives it back with `release_drive_lease`; while any client holds it the server refuses every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` for every actor, direct and in a batch, naming the holder, so a traffic manager or a second drive in any process is refused. `break_drive_lease` ends a dead holder's lease, logged; `get_drive_lease` names the holder. §9.1's traffic-manager row states it. |
@@ -2629,6 +2630,70 @@ rows by actor, and `ForVehicles(renderSet)` for every drawn vehicle's state by S
 unlabelled included. `CarlaClient` keeps it with the frame's actors and render set in `SnapshotHistory`;
 a recorder takes all three at once with `GetSnapshotFrame(frame, out served, out renderSet, out supervision)`.
 
+### 8.3c Where a body's pose came from, and a vehicle's lights, at a tick: the RPC and the snapshot
+
+The owner ruled on 2026-10-06 that each vehicle record in the picture carries the lights commanded on for
+the vehicle on the capture's frame, and, for a SUMO vehicle, whether its drawn pose on the frame is SUMO's
+own step, interpolated between two, or held where the session could not place it; and, by the ruling of
+2026-10-05 above, from the server, so every recorder writes the same for one frame. Both follow §8.3b's
+contract: whole state on every snapshot, nothing per tick, a server built before them read as carrying
+neither. They are [`03`](03_CoSimulation_Runtime.md) D3.44 and [`08`](08_Collection_And_EPoL.md) §5.1, §6.4.
+
+> **D4.48 — where each lent body's drawn pose came from is held on the server as the SUMO step, declared
+> once, and the bodies whose pose follows no step, named on a change; each vehicle's commanded lights ride
+> in its own record. Any reader resolves a frame's pose source from its number; nothing is sent per tick;
+> a world no session drives, and a reader built before either, reads as before.**
+
+**The call.** `update_pose_source(declare_step: bool, ticks_per_step: uint32, simulated_ids: uint32[],
+held_ids: uint32[], cleared_ids: uint32[]) -> uint32`, a synchronous RPC (`CarlaServer.cpp`), sent after
+`update_supervision` and before the tick cue of the frame it is drawn in:
+
+| Argument | Meaning |
+|---|---|
+| `declare_step` | Declare the step: `ticks_per_step` world ticks per SUMO step, a step falling on the frame after the one in progress -- the frame `tick_cue` answers with. With `ticks_per_step` zero it **withdraws** the step and every body's name, and the call carries nothing else |
+| `ticks_per_step` | Read only where the step is declared |
+| `simulated_ids` | Bodies standing where SUMO put them at one of its steps on every frame of the step being drawn: placed at SUMO's later frame across a discontinuity |
+| `held_ids` | Bodies left where their last pose put them, because the session could not place them |
+| `cleared_ids` | Bodies that follow the step again |
+
+The answer is how many of the named bodies were found, and lent where named simulated or held. The step is
+held on the episode (`FSumoStepPhase`) and a body's name on its render set record
+(`FRenderSetMembership::PoseSource`), so a body not lent is given none, `update_render_set` drops it when it
+parks the body or lends it to another vehicle, and a map load starts with none. **Refused, with nothing
+changed**: a withdrawal naming bodies. A server built before the call refuses it, and the session records
+the refusal (`CoSimRunReport.PoseSourceRefused`) and sends nothing more.
+
+**The block.** While a step is declared or a body named, the render set block carries a pose source block
+after the supervision block, or after its last entry where there is none, flagged `PoseSourceCarried`
+(`0x80`), little-endian and unpadded (`EpisodeStateSerializer::PoseSourceEntryState`):
+
+| Field | Size | Meaning |
+|---|---|---|
+| `size` | uint32 | Bytes after this field to the end of the pose source block |
+| `ticks_per_step` | uint32 | World ticks per SUMO step; 0 where no step is declared |
+| `step_frame` | uint64 | A frame a SUMO step falls on; 0 where none is declared |
+| entry count | uint32 | One entry per lent body whose pose follows no step |
+| each entry | uint32 actor id, uint8 state (`1` simulated, `2` held) | |
+
+A reader resolves a lent body's pose source on frame `f` as its entry's state where it has one, and
+otherwise `simulated` where `f ≥ step_frame` and `(f − step_frame) mod ticks_per_step = 0`, `interpolated`
+where `f ≥ step_frame` and it is not, and none before `step_frame`; an actor the frame's render set does not
+name lent has none (`ObservedPoseSource.ForLentBody`). At one tick per step every frame is `simulated`; at
+twenty, one frame in twenty.
+
+**The light state.** Each vehicle's `VehicleData` carries `light_state`, a uint32 of
+`rpc::VehicleLightState` flags (`Position 0x1` ... `Special2 0x400`), at offset 30 of the 54-byte
+type-dependent union, which leaves `ActorDynamicState` at 119 bytes. Every snapshot from a server that fills
+it says so with `VehicleLightStateCarried` (`0x40`), because zero is every light off and a server built
+before it leaves the same bytes zero: a reader that finds the flag clear has no reading
+(`ActorSnapshot.CommandedLights` answers null) and the sidecar writes no `lights`.
+
+**Where it is written.** The sidecar's `_carla` block, on a vehicle in the picture (`in_frame` of `wholly`
+or `partly`) and no other: `lights`, the lights on in words in the flags' order -- `position`, `low_beam`,
+`high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`,
+`special2` -- or `none`; and, on a SUMO vehicle, `pose_source`. A capture whose frame's snapshot carried
+neither says `lights="unknown"` or `pose_source="unknown"` on `<events>`, as `supervision="unknown"` does.
+
 ### 8.4 What every participant must not do
 
 | Forbidden | Why |
@@ -5134,7 +5199,7 @@ Stated as properties needed, not as requests.
 | **D4.45** | **A draw distance is an optional performance control, off by default, and changes no admission.** Every vehicle keeps its body, its pose and its truth; a camera does not draw a body farther than the distance from it, and that camera's sidecar marks such a vehicle `beyond_draw_distance` (`wholly` or `partly`), so it is never counted as observed by that camera (§4.2, §4.5; [`06`](06_Truth_And_Annotation.md) §8.2) |
 | **D4.46** | **The supervision in force is held on the server and carried on every world-observer snapshot after the render set's entries; no client holds it** (owner's ruling, 2026-10-05). One writer, the session, puts each change in one `update_supervision` after the render set's and before the tick cue; a body's supervision is held only while it is lent, an unlabelled vehicle has no row, and the block rides inside the render set block's size, so a reader built before it skips it and a world no session supervises is laid out as before (§8.3b) |
 | **D4.47** | **One traffic system per world, held on the server as the drive lease** (owner's ruling, 2026-10-05: a second traffic client, SUMO-driven or not, is refused outright). The SUMO drive session takes it before SUMO starts with `take_drive_lease`, as `<holder> (process <pid> on <machine>)`, and releases it with `release_drive_lease` on every exit path; while any client holds it the server refuses every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` for every actor, direct and in a batch, naming the holder. A second drive is refused at its claim; a traffic manager's control frame is refused and it says so once. `break_drive_lease` ends a dead holder's lease, logged, since the RPC server gives no disconnect notice. A server built before it refuses the claim and the run report says `NOT HELD` (§9.3a) |
-
+| **D4.48** | **Where each lent body's drawn pose came from is held on the server, and each vehicle's commanded lights ride in its own record** (owner's ruling, 2026-10-06). The session declares its SUMO step once with `update_pose_source` and names a body only as it is held or placed at SUMO's later step, and as that ends; the world observer carries both in the render set block behind `PoseSourceCarried`, and every reader resolves a frame's `simulated` or `interpolated` from its number. `VehicleData::light_state` carries each vehicle's lights behind `VehicleLightStateCarried`, the snapshot's per-actor size unchanged. A server built before either is read as carrying neither, and the sidecar says so (§8.3c) |
 ---
 
 ## 16. Open questions

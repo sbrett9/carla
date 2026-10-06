@@ -101,6 +101,7 @@ public sealed class FrameRecorder : IDisposable
     private long _solarBlockMissing;
     private long _drawDistanceCaptures, _beyondDrawDistance, _partlyBeyondDrawDistance;
     private long _supervisionPaired, _supervisionUnpaired;
+    private long _lightsUnknown, _poseSourceUnknown;
 
     /// <summary>
     /// How long a capture waits for the declaration of its own frame when it arrives before the
@@ -185,6 +186,21 @@ public sealed class FrameRecorder : IDisposable
     /// carries none, never a neighbouring frame's, so a run's closeout holds it at zero.
     /// </summary>
     public long SupervisionUnpaired => Interlocked.Read(ref _supervisionUnpaired);
+
+    /// <summary>
+    /// Captures written with <c>lights="unknown"</c>: a vehicle in the picture went without its lights
+    /// because the snapshot of the capture's own frame did not carry them -- a server built before it
+    /// did. No light is guessed, so a run's closeout holds this at zero.
+    /// </summary>
+    public long LightsUnknown => Interlocked.Read(ref _lightsUnknown);
+
+    /// <summary>
+    /// Captures written with <c>pose_source="unknown"</c>: a drawn SUMO vehicle in the picture went without
+    /// its pose source because the snapshot of the capture's own frame did not carry one -- a server built
+    /// before it did, or one that refused the session's -- or the frame came before the session declared
+    /// its step. No pose source is guessed, so a run's closeout holds this at zero.
+    /// </summary>
+    public long PoseSourceUnknown => Interlocked.Read(ref _poseSourceUnknown);
 
     /// <summary>
     /// Captures whose image was rendered under a draw distance, and whose sidecar therefore states it
@@ -695,6 +711,12 @@ public sealed class FrameRecorder : IDisposable
                     // right for the frame and wrong for the run: counted, so it is never silent.
                     if (!SolarMetadata.HasData(job.Solar))
                         Interlocked.Increment(ref _solarBlockMissing);
+                    // Likewise a capture whose vehicles in the picture go without what the frame's
+                    // snapshot did not carry: right for the frame, and counted for the run.
+                    if (CotWriter.LightsUnknown(job.Telemetry))
+                        Interlocked.Increment(ref _lightsUnknown);
+                    if (CotWriter.PoseSourceUnknown(job.Telemetry))
+                        Interlocked.Increment(ref _poseSourceUnknown);
                     Interlocked.Increment(ref _saved);
                 }
                 catch (Exception ex)
