@@ -190,14 +190,12 @@ def test_a_stare_with_nowhere_to_look_is_refused(layout):
     assert "somewhere to look" in only(findings, 47).message
 
 
-def test_an_orbit_measuring_occlusion_is_accepted(layout):
+def test_an_orbit_is_accepted(layout):
     # Occlusion is measured on an orbit as on a stare: the depth camera is attached to the channel's
-    # camera and moves with it, so check 47 has nothing to refuse, with occlusion on or off.
+    # camera and moves with it, so check 47 has nothing to refuse about it.
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     *_, findings, _, _ = offline(layout, document)
-    assert findings.findings == []
-    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false"])
     assert findings.findings == []
     # And its other refusals stand: an orbit still needs its centre.
     centreless = {key: value for key, value in AN_ORBIT.items() if key != "orbit_centre_x_m"}
@@ -357,11 +355,9 @@ def test_a_draw_distance_short_of_an_orbit_s_centre_is_refused(layout):
     # An orbit flies 200 m out and 518.2 m up: 555.5 m from its centre.
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
-    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false",
-                                                              "capture.draw_distance_m=550"])
+    *_, findings, _, _ = offline(layout, document, overrides=["capture.draw_distance_m=550"])
     assert "555.5 m" in only(findings, 52).message
-    *_, findings, _, _ = offline(layout, document, overrides=["occlusion.enabled=false",
-                                                              "capture.draw_distance_m=560"])
+    *_, findings, _, _ = offline(layout, document, overrides=["capture.draw_distance_m=560"])
     assert findings.findings == []
 
 
@@ -701,20 +697,23 @@ def test_a_camera_attribute_the_build_lacks_is_refused_by_name(layout):
     assert "post_process_profile" in only(findings, 24).message
 
 
-def test_the_depth_camera_is_checked_only_when_occlusion_is_measured(layout):
+def test_the_depth_camera_is_checked_for_every_run(layout):
+    # Every channel gets a depth camera, so the blueprint it is spawned from is checked against the
+    # server on every run, and a server with no depth camera at all is refused.
     world = _World(depth=_World.DEPTH - {"max_range"})
     assert "max_range" in only(server(layout, world), 24).message
-    assert 24 not in checks(server(layout, world, overrides=["occlusion.enabled=false"]))
+    missing = _World()
+    missing.library = _Library([b for b in missing.library if b.id != "sensor.camera.depth"])
+    assert "no sensor.camera.depth blueprint" in only(server(layout, missing), 24).message
 
 
 def test_the_depth_camera_is_checked_for_an_orbit_as_for_a_stare(layout):
-    # An orbit measuring occlusion gets a depth camera too, so the blueprint it is spawned from is
-    # checked against the server for a run whose only channel is an orbit.
+    # An orbit gets a depth camera too, so the blueprint it is spawned from is checked against the
+    # server for a run whose only channel is an orbit.
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     world = _World(depth=_World.DEPTH - {"max_range"})
     assert "max_range" in only(server(layout, world, document), 24).message
-    assert 24 not in checks(server(layout, world, document, overrides=["occlusion.enabled=false"]))
 
 
 def test_a_vehicle_blueprint_the_server_lacks_is_refused(layout):

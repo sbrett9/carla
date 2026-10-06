@@ -545,10 +545,10 @@ def test_the_cameras_are_listened_to_until_the_recorders_take_them(layout):
 
 def test_an_orbit_holds_the_pose_it_opens_on_until_the_window_opens(layout):
     server = FakeServer()
-    session, result = capture(layout, server, channels=[AN_ORBIT],
-                              overrides=["occlusion.enabled=false"])
+    session, result = capture(layout, server, channels=[AN_ORBIT])
     assert result.outcome == "run_finished"
-    [camera] = server.actors
+    # The orbit's depth camera is attached to its camera and takes no move of its own.
+    [camera] = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
     opening = OrbitSensorController.orbit_transform(50.0, -80.0, 0.0, 200.0, 518.2, 0.0)
     assert (camera.spawned_at.location.x, camera.spawned_at.location.y,
             camera.spawned_at.location.z) == pytest.approx(

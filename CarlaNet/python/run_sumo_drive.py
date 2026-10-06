@@ -113,6 +113,14 @@ One thing happens between the session starting and the recorder starting: the ca
 vehicles rather than at the middle of the world, because a corridor scenario puts its traffic nowhere
 near that middle.
 
+Every capture measures, per vehicle, how much of it the camera cannot see. The fixed camera carries a
+depth camera attached to it, rigidly and at the camera's own pose, with the camera's image size, field
+of view and sensor tick and the capture run's depth range (`occlusion.depth_max_range_m`, 20 km), and
+the recorder is started with it; the flown camera's rig carries its own. There is no switch to turn
+the measurement off, and nothing in this process moves a depth camera itself: the server keeps an
+attached actor at its pose relative to its parent. The depth camera leaves the world before the
+camera it is attached to.
+
 The first frames of a run whose camera looks somewhere Cesium has not streamed yet carry imagery
 that is still arriving -- an unattended capture has nobody watching the view fill in, where an
 operator flying the camera does. What that costs, and why the number of ticks it takes is not a
@@ -765,6 +773,45 @@ def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
     return camera
 
 
+def spawn_depth_camera(world, args: argparse.Namespace, camera, range_m: float):
+    """The depth camera the fixed camera's occlusion is measured against, attached to the camera.
+
+    A rigid attachment at the identity pose, as `CaptureSession._attach_depth_camera` spawns a
+    channel's: the server keeps an attached actor at its pose relative to its parent and reports its
+    world pose on every snapshot and in every image header, so the camera's pose is the depth
+    camera's by construction and the recorder's depth pose check compares two poses nothing set
+    apart. It takes the camera's image size, field of view and sensor tick, so its captures pair with
+    the camera's frame for frame, and the capture run's one depth range, so occlusion is measured as
+    far as a capture run's is rather than to the depth camera's stock 1000 m. Destroyed before the
+    camera it is attached to.
+    """
+    blueprint = world.get_blueprint_library().find("sensor.camera.depth")
+    blueprint.set_attribute("image_size_x", str(args.width))
+    blueprint.set_attribute("image_size_y", str(args.height))
+    if blueprint.has_attribute("fov"):
+        blueprint.set_attribute("fov", str(args.fov))
+    if blueprint.has_attribute("sensor_tick") and args.record_hz > 0:
+        blueprint.set_attribute("sensor_tick", str(1.0 / args.record_hz))
+    if blueprint.has_attribute("max_range"):
+        blueprint.set_attribute("max_range", str(range_m))
+    else:
+        logger.warning("the server's depth camera has no max_range attribute, so occlusion is "
+                       "measured to its built-in range and no farther")
+    depth = world.spawn_actor(blueprint, carla.Transform(), attach_to=camera,
+                              attachment_type=carla.AttachmentType.Rigid)
+    logger.info("depth camera %s attached to camera %s, range %g m", depth.id, camera.id, range_m)
+    return depth
+
+
+def depth_range_m() -> float:
+    """The capture run's one depth range, `occlusion.depth_max_range_m`, read from the run
+    configuration's field table so a drive and a capture run measure occlusion to one range."""
+    use_carlacontrol()
+    from carlacontrol.RunConfiguration import RunConfiguration
+
+    return float(RunConfiguration.field("occlusion.depth_max_range_m").default)
+
+
 def report_captures(recorder) -> None:
     """Say what a recorder wrote. Read once it has flushed, so the counts are its run's and not a
     moment's."""
@@ -829,8 +876,8 @@ def report_captures(recorder) -> None:
 def use_carlacontrol() -> None:
     """Put this repository's CarlaControl sources ahead of any installed copy.
 
-    Only the free view needs them, and pygame with them: a drive with a fixed camera imports
-    neither.
+    The free view needs them, and pygame with them; a drive with a fixed camera imports only the run
+    configuration's field table, for the depth range its depth camera is spawned with.
     """
     source = os.path.join(_REPO, "CarlaControl", "src")
     if source not in sys.path:
@@ -917,12 +964,10 @@ class FreeViewParts:
         use_carlacontrol()
         from carlacontrol.FreeView import FreeView
         from carlacontrol.PyGameSensorController import PyGameSensorController
-        from carlacontrol.RunConfiguration import RunConfiguration
         from carlacontrol.SensorRig import SensorRig
 
-        settings = free_view_settings(
-            args, world_centre(world), SensorRig.FT_PER_M,
-            RunConfiguration.field("occlusion.depth_max_range_m").default)
+        settings = free_view_settings(args, world_centre(world), SensorRig.FT_PER_M,
+                                      depth_range_m())
         # Spawned with the world already the session's, so every frame either camera delivers is of
         # a tick the session issued.
         self.rig = SensorRig(world=world, args=settings, client=client)
@@ -1033,6 +1078,7 @@ def main() -> int:
     logger.info("server %s, map %s", client.get_server_version(), world.get_map().name)
 
     camera = None
+    depth = None
     session = None
     recorder = None
     free = FreeViewParts()
@@ -1168,6 +1214,7 @@ def main() -> int:
                     centre = aim.centre()
                     logger.info("aimed at %d rendered vehicles", aim.count)
             camera = spawn_camera(world, args, centre)
+            depth = spawn_depth_camera(world, args, camera, depth_range_m())
             if session.RunManifest is not None:
                 session.RunManifest.PlaceSensor(world.camera_name(camera), camera.id)
             if args.render_set == "cameras":
@@ -1194,8 +1241,10 @@ def main() -> int:
             # on the tick that rendered it, so a still's illumination is traceable to what this run
             # said it should be. And it lists the bodies its own frame rendered, each by the SUMO
             # vehicle it rendered, rather than every vehicle actor: the bodies parked between loans
-            # stand below the ground and are no vehicle anyone could see.
+            # stand below the ground and are no vehicle anyone could see. Each vehicle's occlusion
+            # is measured against the depth camera attached to the camera.
             recorder = world.start_recording(camera, args.record_dir, args.record_hz, fov=args.fov,
+                                             depth_camera=depth,
                                              illumination=session.Illumination,
                                              render_set=session.RenderSet)
             if recorder is None:
@@ -1267,6 +1316,12 @@ def main() -> int:
             logger.error("could not stop the recorder: %r", failure)
         if recorder is not None:
             report_captures(recorder)
+        if depth is not None:
+            # The depth camera leaves the world before the camera it is attached to.
+            try:
+                depth.destroy()
+            except Exception as failure:
+                logger.error("could not destroy the depth camera: %r", failure)
         if camera is not None:
             try:
                 # A session following the camera stops before the camera leaves the world.

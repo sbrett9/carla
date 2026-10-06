@@ -47,8 +47,9 @@ world (D1.12):
   holds it, so the run refuses at pre-roll; a single channel with no `sensor_id` takes the name the
   server gives its camera, `Camera_<n>`, read back from the spawned camera. That name is the
   channel's directory, the first part of every still's file name in it and the callsign of its
-  platform track. And, where occlusion is measured, a depth camera attached to the channel's camera,
-  rigidly and at its pose, for a stare and an orbit alike: one move of the camera carries both, so
+  platform track. And a depth camera attached to the channel's camera, rigidly and at its pose, for
+  a stare and an orbit alike -- occlusion is measured on every channel, and nothing turns it off
+  (the owner's ruling of 2026-10-05): one move of the camera carries both, so
   the two are never captured a frame apart -- not a stare's through the prewarm, not an orbit's
   through the window -- and the server reports the depth camera's world pose on its snapshot and in
   its image header, which is what the recorder's depth pose check reads. The cameras
@@ -726,8 +727,7 @@ class CaptureSession:
             rig.followed = True
         self.logger.info("channel %s: camera %s at %s", rig.sensor_id, rig.camera.id,
                          self._describe(transform))
-        if effective.value("occlusion.enabled"):
-            self._attach_depth_camera(rig, library, tick)
+        self._attach_depth_camera(rig, library, tick)
         if description.pattern == "orbit":
             rig.orbit = OrbitSensorController(rig.camera, world=None, logger=self.logger)
             rig.orbit.set_orbit_params(center_x=description.orbit_centre_x_m,
@@ -744,6 +744,10 @@ class CaptureSession:
 
     def _attach_depth_camera(self, rig: ChannelRig, library: Any, tick: float) -> None:
         """Spawn the depth camera occlusion is measured against, attached to the channel's camera.
+
+        Every channel gets one: occlusion is measured wherever a camera records, and nothing turns
+        it off (the owner's ruling of 2026-10-05). The depth camera takes the camera's image size,
+        field of view and sensor tick, so its captures pair with the camera's frame for frame.
 
         The attachment is rigid and the depth camera's pose relative to its parent the identity, so
         it holds the camera's pose and view by construction and one move of the camera carries
@@ -859,8 +863,8 @@ class CaptureSession:
                                carla.Rotation(pitch=aim.pitch_deg, yaw=aim.yaw_deg, roll=0.0))
 
     def _move(self, rig: ChannelRig, aim: StareAim) -> None:
-        """Put a stare's camera at a new pose. Its depth camera, where it has one, is attached to
-        the camera and goes with it in the same call (`_attach_depth_camera`)."""
+        """Put a stare's camera at a new pose. Its depth camera is attached to the camera and goes
+        with it in the same call (`_attach_depth_camera`)."""
         transform = self._transform_of(aim)
         rig.camera.set_transform(transform)
         rig.pose = transform
