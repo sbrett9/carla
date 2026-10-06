@@ -31,6 +31,7 @@ Findings set. Every external claim is cited.
 | 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
 | 2026-10-02 | §2.4, §3.5: every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none. A client names each camera as it chooses, used as given or refused, never rewritten; one it does not name is `CARLA-SENSOR-<camera id>`. A name is unique within a process and, set as the camera's `role_name`, visible to every client, so one another camera in the world holds is refused. The uid is unchanged. |
 | 2026-10-05 | §2.4, §3.5: a camera name is short and plain -- 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or `Southeast_1700m_orbit` -- and no other character; the free-move camera can be named too. |
+| 2026-10-05 | §2.4, §2.5, §2.7: every vehicle record of a capture says where its box fell against the picture, `in_frame`, with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; where the five occlusion fields are absent, `occlusion_unmeasured` says why in one word. The owner ruled that an absent fraction was being read as "not hidden". The projection is separated from the depth sampling and runs for every capture. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -326,9 +327,18 @@ captures written before 2026-10-02 carry `SCTMV` where the name is, whatever cam
   `point/lat,lon,hae`, `track/course,speed`, `contact/callsign` and a `_carla` extras block
   (`:130-198`).
 
-Occlusion rides that extras block when it was measured: `occlusion`, `occlusion_level`,
-`occlusion_samples`, `apparent_width_px`, `apparent_height_px`, all absent when unmeasured
-(`CotWriter.cs:178-193`).
+Every vehicle's extras block says where its bounding box fell against this capture's picture,
+`in_frame` -- `wholly`, `partly`, `none` or `behind_camera`, from the box's eight corners projected
+through the camera from the capture's own pose with the picture's size and field of view
+(`BoxProjector`) -- and carries `apparent_width_px` and `apparent_height_px` wherever the box has a
+footprint, with or without a depth camera (2026-10-05). Occlusion rides the block where it was
+measured: `occlusion`, `occlusion_level`, `occlusion_samples`, only ever on a vehicle wholly or partly
+in the picture; where they are absent, `occlusion_unmeasured` says why in one word -- `behind_camera`,
+`outside_frame`, `beyond_draw_distance`, `no_depth_camera`, `no_depth_capture`, `depth_out_of_step`,
+`depth_pose_mismatch`, `beyond_depth_range` or `no_sample` -- and never beside a measurement
+(`CotWriter.cs`, [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). Before 2026-10-05 the five
+occlusion fields were simply absent when unmeasured, in six different situations, and nothing said
+which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect.
 
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
 RunId, ScenarioId, Seed)` (`CaptureMetadata.cs:24-29`) is taken from the very sensor frame that
@@ -359,6 +369,15 @@ if the two cameras are not co-located and co-boresighted** within tolerances
 render, and the apparent-size figures are computed by projecting the *true* box
 (`CotWriter.cs:189-192`); neither reads a pixel's brightness. §12.1 leans on this to keep the re-scoped
 experiment from multiplying into a matrix.
+
+**The projection is its own step, and runs for every capture (2026-10-05).** `BoxProjector` projects
+each vehicle's box through the capture's pinhole -- the camera pose of the capture's own frame, the
+picture's size and the field of view the recording was started with -- and says where it fell
+(`in_frame`) and how large it appears, whether or not a depth camera is attached;
+`OcclusionEstimator.Sample` lays its sampling grid over that projection in the depth capture's own
+intrinsics and says, per vehicle, why it measured nothing where it did not (`OcclusionUnmeasured`), and
+`MatchTo` says which way a pairing failed. The five failure buckets are still counted on the recorder;
+each vehicle record now carries the one that applied to it.
 
 ### 2.6 The arrival gate is built, and is inert by default
 
@@ -400,7 +419,10 @@ than telemetry: it is not part of the CoT contract and is not serialized to the 
 
 So the oriented 3D box for every telemetered vehicle, frame-coherent with the pixels, already exists in
 memory at write time. **Per-image labelling is a serialisation change plus a projection, not a new
-measurement.** That is the same conclusion doc 12 §2 reached, and it is still true.
+measurement.** That is the same conclusion doc 12 §2 reached, and it is still true. Since 2026-10-05
+the projection itself runs for every record of every capture (`BoxProjector.Mark`, §2.5), and what is
+written of it is where the box fell (`in_frame`) and its apparent size; the projected rectangle's
+pixel coordinates are computed and not yet serialised.
 
 ### 2.8 What does not exist — corrected
 
@@ -1489,8 +1511,10 @@ One label record per (sensor, tick, vehicle). Fields, with provenance.
 | `box2d_amodal_obb` | oriented 2D box, the hull of the projected corners | projection — doc 12 §4.3 |
 | `box2d_amodal_aabb` | axis-aligned, for plain YOLO | projection |
 | `box2d_modal` | visible-region box | needs instance segmentation (§3.2); absent otherwise |
-| `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured (`CotWriter.cs:178-193`) |
-| `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | measured (`CotWriter.cs:189-192`) |
+| `in_frame` | where the box fell against the picture: `wholly`, `partly`, `none`, `behind_camera` | **written on every record since 2026-10-05**, from the projection (`BoxProjector`, §2.4) |
+| `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured, written only where measured (`CotWriter.cs`) |
+| `occlusion_unmeasured` | why the three above are absent, in one word | **written since 2026-10-05** wherever they are absent, never beside them (§2.4) |
+| `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | from the projection, written wherever the box has a footprint (`CotWriter.cs`) |
 | `opacity` | **constant 1.0 under the default**, since nothing fades (§2.6). Retained so a later fade mode is not a schema change | computed, unserialised (`VehicleTelemetry.cs:59-63`) |
 | `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | derivable from the recorded pose |
 | `truncation` | fraction of the amodal box outside the frame | derivable from the projection |

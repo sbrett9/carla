@@ -39,6 +39,14 @@
 > declares. Owner's rulings of 2026-10-02 (`special_type`) and 2026-10-05 (`base_type`), recorded as
 > [06 D6.18](../Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md).
 
+> **Revision (2026-10-05):** Every vehicle record of a recorded sidecar says where the vehicle's box
+> fell against that capture's picture, `in_frame`, and carries its apparent size wherever the box has a
+> footprint, from the box's projection alone; where the five occlusion fields are absent,
+> `occlusion_unmeasured` says why in one word (§5.1). The owner ruled that an absent fraction was being
+> read as "not hidden", and that a truth field carries only what was declared, what happened, or a
+> measurement from the frame's geometry by a fixed published method with no pass mark. The live pull
+> and the live feed, which have no camera, are unchanged.
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -145,28 +153,41 @@ body's `role_name` is `sumo`, the authority that drives it
 ([04 D4.9](../Plans/SUMO_Behavioral_Capture/04_Contracts.md)); traffic-manager traffic reads
 `autopilot`.
 
-### 5.1 Occlusion (recorded captures only)
+### 5.1 In the picture, apparent size and occlusion (recorded captures only)
 
-| Attribute | Meaning |
-|---|---|
-| `occlusion` | Fraction of the vehicle's silhouette hidden from **this capture's camera** by anything nearer — photoreal buildings and trees, terrain relief, other vehicles — 0 (wholly visible) to 1 (wholly hidden). |
-| `occlusion_level` | The same value as a coarse band: `0` wholly visible · `1` up to 30 % · `2` 30–60 % · `3` 60–90 % · `4` over 90 % (the bands the amodal-segmentation datasets report against). |
-| `occlusion_samples` | How many points across the vehicle's outline the fraction was measured over. |
-| `apparent_width_px`, `apparent_height_px` | How large the vehicle appears in the frame — its full projected footprint, including any part outside the frame. |
+| Attribute | Written | Meaning |
+|---|---|---|
+| `in_frame` | on every vehicle record a recorder writes | Where the vehicle's bounding box fell against **this capture's picture**, from its eight corners projected through the camera's pinhole (the capture's camera pose, the picture's width and height, and the horizontal field of view the recorder was started with): `wholly` -- every corner inside the picture; `partly` -- the corners' rectangle crosses an edge; `none` -- the rectangle lies wholly outside; `behind_camera` -- a corner is at or behind the lens, so the box has no projection. The only lines it is read against are the picture's edges and the camera's near plane (0.1 m). |
+| `apparent_width_px`, `apparent_height_px` | wherever the box has a footprint: every place but `behind_camera` | How large the vehicle appears in the picture -- its full projected footprint, including any part outside the picture. From the projection alone; needs no depth capture. |
+| `occlusion` | where occlusion was measured | Fraction of the vehicle's silhouette hidden from this capture's camera by anything nearer — photoreal buildings and trees, terrain relief, other vehicles — 0 (wholly visible) to 1 (wholly hidden). |
+| `occlusion_level` | with `occlusion` | The same value as a coarse band: `0` wholly visible · `1` up to 30 % · `2` 30–60 % · `3` 60–90 % · `4` over 90 % (the bands the amodal-segmentation datasets report against). |
+| `occlusion_samples` | with `occlusion` | How many points across the vehicle's outline the fraction was measured over. |
+| `occlusion_unmeasured` | where `occlusion` is absent, and never beside it | Why, in one word: `behind_camera` · `outside_frame` · `beyond_draw_distance` (§5.3) · `no_depth_camera` (the recorder was started without one) · `no_depth_capture` (the depth camera delivered none to pair the frame with) · `depth_out_of_step` (every depth capture held was of another instant) · `depth_pose_mismatch` (the depth capture of the instant was taken from another pose) · `beyond_depth_range` (every sampled point of the vehicle lies at or beyond the range the depth camera reports over, where its readings saturate) · `no_sample` (no ray of the sampling grid over the box's pixel rectangle met the box: a vehicle narrower than a pixel, or a box with no extent). |
+
+**One reason, the one nearest the vehicle where several hold:** the vehicle's own geometry against
+the picture first (`behind_camera`, `outside_frame`), the draw distance it was drawn under next, then
+what the depth camera delivered for the whole capture, and last what its sampling met. So in a capture
+with no depth camera a vehicle outside the picture says `outside_frame` and one in the picture says
+`no_depth_camera`. Occlusion fields are present only on a vehicle whose `in_frame` is `wholly` or
+`partly`; a `partly` vehicle is measured over the part of it in the picture.
 
 **Read the fraction against the sample count.** A vehicle far enough away to cover a few pixels yields
 a few samples, and can then only report coarse values — a half, a third — however many decimal places
 it is written to. Measured at ~1.1 km with a 90° camera, vehicles are about 3 px long and every
 reported fraction is a simple ratio, where vehicles inside 150 m give fine-grained values. The
-apparent size is also the natural gate for whether a box is worth drawing at all: a three-pixel
-vehicle is a poor training example whether or not anything is in front of it.
+apparent size is written so a consumer can read a fraction against the size it was measured over; the
+sidecar applies no size cutoff of its own.
 
-Occlusion is **camera-relative** — a property of the (vehicle, sensor) pair, not of the vehicle — so
-it is only emitted in the recorded sidecar, where the frame already carries a sensor pose (16), and
-never on the live UDP feed, which has no camera. Both attributes are **absent when it was not
-measured** (no depth capture paired with the frame, or the vehicle projects outside it); an absent
-attribute means *unknown*, which is not the same claim as "nothing is in the way". Measurement and
-tuning: [17_Photoreal_Occlusion_Metric.md](17_Photoreal_Occlusion_Metric.md).
+All of these are **camera-relative** — properties of the (vehicle, sensor) pair, not of the vehicle —
+so they are emitted only in the recorded sidecar, where the frame already carries a sensor pose (16),
+and never on the live UDP feed or the live pull, which have no camera. A record no camera projected
+carries none of them. Before 2026-10-05 the five occlusion fields were simply absent in six different
+situations and nothing said which; a sidecar from before then carries no `in_frame`, which
+`audit_truth_sidecars.py` reports as a defect, as it does occlusion fields on a vehicle whose
+`in_frame` says the picture has no view of it, a record with neither occlusion nor a reason, and a
+reason beside a measurement. Measurement and tuning:
+[17_Photoreal_Occlusion_Metric.md](17_Photoreal_Occlusion_Metric.md); the projection is
+`CarlaNet.Recording.BoxProjector`, the sampling `OcclusionEstimator.Sample`.
 
 ### 5.2 Which vehicles are reported
 
@@ -230,9 +251,10 @@ The renderer culls each primitive by the nearest point of its bounding sphere, s
 the vehicle the same way, by the sphere around its box, from the camera pose of the capture's own
 frame; the mark is taken at the server's default `r.ViewDistanceScale`, 1, which multiplies every draw
 distance. **A vehicle marked `wholly` is listed but was not seen**: a consumer building image labels
-drops it, and its occlusion attributes are absent, which here as in §5.1 means unmeasured, because the
-depth capture did not draw it either. One marked `partly` is drawn, perhaps without its far parts,
-and measured as usual. Like occlusion, the mark is camera-relative -- the same vehicle on the same
+drops it, and its occlusion attributes are absent with `occlusion_unmeasured="beyond_draw_distance"`
+(§5.1), because the depth capture did not draw it either; its `in_frame` still says where its box fell
+against the picture, and a vehicle outside the picture or behind the lens says that instead. One marked
+`partly` is drawn, perhaps without its far parts, and measured as usual. Like occlusion, the mark is camera-relative -- the same vehicle on the same
 frame may be drawn by a nearer camera -- so it is written only in the recorded sidecar and never on
 the live pull or the UDP feed, which have no camera.
 
