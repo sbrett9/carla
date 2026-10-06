@@ -351,7 +351,7 @@ class FakeCompileLock:
                            "discarded, 0 waiting at the end; 0 of 0 planned vehicles inserted; 0 "
                            "collisions" if compiled else "not recorded: an uncompiled scenario")
 
-    def accept_skipped_dry_run(self, reason: str) -> "FakeCompileLock":
+    def accept_skipped_dry_run(self, reason: str) -> FakeCompileLock:
         """The lock of a compile that skipped its SUMO-only run, which the session accepted."""
         self.DryRunRan = False
         self.SkippedDryRunAccepted = True
