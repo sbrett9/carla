@@ -63,6 +63,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §2.7, §9.7, D3.29: the compile-lock check binds the lane closures' additional file and the supervision plan. The plan is refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not those of the route file, configuration, additional file and network the run loads; once bound it is handed to the session on the run report. A lock that names no plan runs without one. |
 | 2026-10-05 | §8.9, D3.43: the supervision in force is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The binder states it per SUMO vehicle (`SumoDriveSession.Supervision`); the session puts each change for the body drawing the vehicle in one `update_supervision` after the render set's and before the tick cue; the server holds a body's on its record while it is lent and the plan and absences on the episode; the world observer carries it on every snapshot inside the render set block, where a reader built before it skips it. An unlabelled vehicle costs nothing. Written; the plugin awaits a build. |
 | 2026-10-05 | §8.9, §9.7, D3.43: the interval binder is built. The session builds one from the plan its compile lock binds and tells it of every SUMO frame and every rendered frame after the caller's observers; it opens and closes the plan's intervals on SUMO's events at TraCI's clock, states each vehicle's supervision and each absence on the session's table from the frame at its instant and never before the window, reads back once the plan subjects SUMO already has when the session opens, and refuses the advance that shows SUMO dropped a plan subject. Each rendered frame now carries the pose written to each body it drew, from which the binder takes a stopping body's speed; an observer that writes intervals is handed them as they open and close. |
+| 2026-10-05 | §2.7, D3.29: the compile-lock check reads the lock's `dry_run` block and refuses, once the files, the catalogue, the epoch and the plan agree with the lock, a scenario whose compile skipped its SUMO-only run or whose lock records none, naming the scenario and the lock's reason, unless the run accepts it (`AcceptSkippedDryRun`; `run_sumo_drive.py --accept-skipped-dry-run`; `run_capture` `scenario.accept_skipped_dry_run`, which refuses offline first as check 54). The report carries a `dry run` line either way and the run manifest's opening row says whether the run happened and whether a skipped one was accepted. All four shipped locks record a completed run. |
 
 ---
 
@@ -543,13 +544,34 @@ slots (1 unrealised), 248 cohorts (98 annotated), 365 entities; vocabulary core 
 e3571085…`. A lock that names no plan binds no supervision, and the line says so; every lock the compiler
 writes names one, since every compile writes a plan.
 
+**A compile that skipped its SUMO-only run is refused, unless the run accepts it (2026-10-05).** The
+compiler runs the files it writes in SUMO alone over the scenario's whole span and refuses a scenario in
+which a vehicle the supervision plan names never enters the simulation ([`07`](07_Scenario_Authoring.md)
+check 59); the lock's `dry_run` block records that it ran, with the SUMO release and the counts, or that
+`--skip-dry-run` skipped it, with the reason (`ScenarioLock.DryRun`, `LockedDryRun`). Once the files, the
+catalogue, the epoch and the plan agree with the lock, the check refuses a lock that says `ran: false`,
+and a lock with no `dry_run` block at all — one written before the compiler ran the check — naming the
+scenario and the lock's reason, unless `SumoDriveSessionOptions.AcceptSkippedDryRun` is set
+(`run_sumo_drive.py --accept-skipped-dry-run`; `run_capture` `scenario.accept_skipped_dry_run`, whose
+check 54 refuses the same lock offline, before anything is acquired): a capture that started would find
+the same fault only when SUMO dropped the vehicle, hours of rendering in. The refusal is a separate one
+from the two above, since a recompile without `--skip-dry-run` is its remedy. A lock whose `dry_run.ran`
+is not a boolean is refused whole, as a lock that lacks a compared field. The report's `dry run` line
+says what the lock records either way — `ran with SUMO 1.27.0 over 2220 s: 775 vehicles loaded, 775
+inserted, 0 discarded, 0 waiting at the end; 0 of 0 planned vehicles inserted; 0 collisions`, or
+`SKIPPED at the compile (<reason>), accepted explicitly`, or `NOT RECORDED: the lock was written before
+the compiler ran one, accepted explicitly` — and the run manifest's opening row carries `dry_run_ran`
+and `skipped_dry_run_accepted` in its `scenario` block. Acceptance accepts nothing where the lock says
+the run happened, and nothing of an uncompiled scenario, which has no lock to record one.
+
 **On every run** the report carries the outcome (`CoSimRunReport.CompileLock`, the `compile lock`
 line): for a compiled scenario its id and compiler, the routing tool and release against the world
-converter the compiler compared it with (`routed by`), and the world the lock records
-(`compiled for`: package, map, network fingerprint, OpenDRIVE digest, converter). The routing release
+converter the compiler compared it with (`routed by`), the world the lock records
+(`compiled for`: package, map, network fingerprint, OpenDRIVE digest, converter), and the compile's
+SUMO-only run (`dry run`). The routing release
 and the world identity are recorded, not compared; the world is compared by the checks that read the
-package (§7.2) and the loaded world (§7.2, D3.26). `run_sumo_drive.py` logs the line, at warning level
-for an uncompiled scenario.
+package (§7.2) and the loaded world (§7.2, D3.26). `run_sumo_drive.py` logs the lines, at warning level
+for an uncompiled scenario and for an accepted skipped run.
 
 **No lock is not a refusal.** A scenario a generator writes directly as SUMO files has none, and it
 runs; the report records it as uncompiled, so its run cannot be mistaken for a compiled scenario's. Its
@@ -569,12 +591,16 @@ describes, not who wrote the lock. So does a plan edited with its vocabulary's d
 lock rewritten to match.
 
 **Exercised by** `ScenarioLockCheckTests` (a compiled copy of the fixture scenario with each file, the
-catalogue, the epoch, the lock and the plan varied, and with a lane closures' file; the three shipped
-scenarios against their locks, the tree's catalogue and their own epochs, each plan bound),
+catalogue, the epoch, the lock and the plan varied, and with a lane closures' file; a lock whose dry run
+was skipped, one with no `dry_run` block and one whose `ran` is no boolean, each refused and the first
+two accepted; the three shipped
+scenarios against their locks, the tree's catalogue and their own epochs, each plan bound, and every
+shipped lock recording a completed dry run),
 `SupervisionPlanTests` (the reader, [`06`](06_Truth_And_Annotation.md) §8.1) and
 `SumoDriveSessionLockTests` (a compiled scenario run and its lock on the report, with and without a
-plan, an uncompiled one run and said to be, and a disagreement with the lock or the plan refused with
-SUMO never launched and the world untouched). Each was seen failing against a wrong implementation: one
+plan, an uncompiled one run and said to be, a disagreement with the lock or the plan refused with
+SUMO never launched and the world untouched, and a skipped dry run refused the same way then accepted,
+run, and recorded on the report and the manifest). Each was seen failing against a wrong implementation: one
 that never refuses; one that looks for the lock under another name; one that refuses a scenario with no
 lock; one that compares the epoch when none is declared; one that names only the first disagreement;
 one that skips each of the three file digests in turn; one that reads route files under one name only;
@@ -4314,7 +4340,7 @@ unreachable server holds (§11.2).
 
 | Stage | Where in the sequence | What the refusals are | What it had taken, all given back |
 |---|---|---|---|
-| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4); SUMO's other edits to its population — the other teleport triggers, the collision action, a random departure offset and `random` (§11.5, §11.6) | nothing |
+| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock, the compile's SUMO-only run included (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4); SUMO's other edits to its population — the other teleport triggers, the collision action, a random departure offset and `random` (§11.5, §11.6) | nothing |
 | `Launch` | SUMO started on the scenario; the world's clock and layers taken; no lease | SUMO could not load the scenario; the world would not hold synchronous mode at the delta asked; the SUMO step, the delta and the capture rate do not divide; the connection failed while the clock or the layers were written | SUMO, the world's settings, the layers |
 | `Authority` | the population lease | another holds it, named (`PopulationAuthorityHeldException.HeldBy`) | as above |
 | `PreRoll` | the lease held, before the window opens: in `Start`, and in `Advance` on a prewarm tick (§9.5) | from `Start`, SUMO failing or not answering during the fast-forward or the step of lookahead, the sun refused, read back other than written, or disagreeing with the declaration for the window's opening, or the connection failing while the sun is bound; from `Advance`, any `Window` refusal raised on a prewarm tick | from `Start`, as above plus the lease, the sun and any bodies; from `Advance`, the caller disposes the session |
@@ -4453,7 +4479,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's — the grids by the SHA-1 the server computes when the record is set (`get_bare_earth_digest`), never by fetching them — the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). An admitted package's grids are handed to the session's client for its truth telemetry, which takes them only where the server's digests match. |
 | **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |
 | **D3.28** | **A session refuses a scenario whose network is not the one the world package carries**, compared by canonical fingerprint (`NetworkFingerprint`, the parsed graph rather than the bytes) and settled before SUMO is started, naming both networks and both fingerprints. It also refuses a package whose carried network does not fingerprint as the `NetworkFingerprint` its manifest records. The scenario's network is read the way SUMO reads the configuration. There is no override: a scenario for another network is compiled against this world's package, and the compiler writes the package's own network beside the configuration (§7.2). |
-| **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). **Since 2026-10-05** the lane closures' additional file is compared with the lock too, and the supervision plan the lock names is read beside the configuration, refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not the files the run loads, and handed to the session on the run report; a lock that names no plan runs without one, and one that names a missing plan is refused |
+| **D3.29** | **A session refuses a compiled scenario that is not the one its compile lock binds**, before SUMO is started: the configuration, the route file and the network by SHA-256 of their bytes, the catalogue by its declared digest, and the epoch by `SolarEpoch.Digest` where the session declares one, every disagreement named in one refusal. A scenario with no `<stem>.lock.json` beside it runs and is recorded as uncompiled. The lock's routing release and world identity are recorded on every compiled run's report, not compared (§2.7). **Since 2026-10-05** the lane closures' additional file is compared with the lock too, and the supervision plan the lock names is read beside the configuration, refused where its digest is not the lock's, where it cannot be read into the session's plan types, or where its own digests are not the files the run loads, and handed to the session on the run report; a lock that names no plan runs without one, and one that names a missing plan is refused. **Since 2026-10-05** a lock whose `dry_run` block says the compile skipped its SUMO-only run, or that has no such block, is refused once the files agree, naming the scenario and the lock's reason, unless the run accepts it (`AcceptSkippedDryRun`); the report's `dry run` line and the manifest's opening row record the acceptance, and nothing is accepted where the run happened |
 | **D3.30** | **Every refusal a session raises carries the stage it was raised at** — `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`, named by what the session had taken — so a caller maps it onto an outcome without reading the message. A SUMO failure while SUMO is started, fast-forwarded or stepped is such a refusal, quoting SUMO's console; so is a failure of the connection to the CARLA server — a socket closed or reset, or a call left unanswered past the client's timeout — at the stage it happens in, with the connection's failure as its inner exception. A failure of one side also names the side (`Cause`), and a refusal from `Advance` stops the run for good and is recorded on the report with the last complete frame. Every other exception passes through unwrapped (§11.10). |
 | **D3.31** | **Each admission pass is published as it is made**, once per SUMO step: the population SUMO has, the vehicles rendered after the pass, those admitted and released at it, and the running total of admissions, and under an optional limit the eligible, the drawn and the shed, as an immutable `AdmissionPass` replaced whole on `CoSimRunReport.LastAdmissionPass` and handed to `OnAdmissionPass` (§8.8). |
 | **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |
