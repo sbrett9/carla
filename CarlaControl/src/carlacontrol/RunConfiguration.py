@@ -387,12 +387,13 @@ _CHANNEL_HELP = {
     "sensor_id": "The channel's camera's name, such as Overwatch_1 or Southeast_1700m_orbit: 1 to "
                  "63 characters, each an ASCII letter, digit, underscore or hyphen, and not a "
                  "Windows device name (CON, NUL, COM1, ...), a stock sensor role name (front, back, "
-                 "left, right, ...) or CARLA-SENSOR-<number>. Required when there is more than one "
-                 "channel, and unique among them, case aside. It names the channel's capture "
-                 "directory, begins every still's file name (<sensor_id>_<local capture time>) and "
-                 "is the platform track's callsign; refused at pre-roll where a camera in the world "
-                 "already holds it. A single channel without one is named "
-                 "CARLA-SENSOR-<camera actor id>.",
+                 "left, right, ...), the server's own Camera_<number> or CARLA-SENSOR-<number>. "
+                 "Required when there is more than one channel, and unique among them, case aside. "
+                 "It names the channel's capture directory, begins every still's file name "
+                 "(<sensor_id>_<local capture time>) and is the platform track's callsign; the "
+                 "server refuses it at pre-roll where a live camera in the world already holds it. "
+                 "A single channel without one takes the name the server gives its camera, "
+                 "Camera_<n>.",
     "pattern": "stare holds one pose; orbit circles a centre with the view held on it.",
     "fov": "Horizontal field of view, degrees.",
     "width": "Picture width, pixels.",
@@ -432,7 +433,7 @@ _CHANNEL_HELP = {
 
 # The characters a ChannelDescription text field may hold, where the schema can state them: a
 # sensor_id is a camera name. What the characters allow and the rule still refuses -- a device name,
-# a stock sensor role name, another camera's default -- is check 11's.
+# a stock sensor role name, the server's own form, another camera's default -- is check 11's.
 _CHANNEL_PATTERNS = {"sensor_id": CameraName.PATTERN}
 
 # Channel fields this schema adds to ChannelDescription's, until the description carries them

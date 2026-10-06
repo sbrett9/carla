@@ -76,8 +76,8 @@ class SpanRecorder:
         """
         Args:
             record_dir: Where each span's folder is made.
-            sensor_id: The camera's name -- the one it was spawned under, or its default
-                `CARLA-SENSOR-<camera id>` -- which opens every span folder's name.
+            sensor_id: The camera's name as the server holds it -- the one it was spawned under,
+                or the server's `Camera_<n>` -- which opens every span folder's name.
             record_hz: Captures per second, which is also how often the tiles are asked about
                 while a span records.
             start_recording: Starts the native recorder into the directory given and returns its

@@ -373,12 +373,13 @@ def test_each_channel_s_camera_is_spawned_under_its_sensor_id_for_every_client_t
     capture(layout, server, document)
     rgb = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
     assert [camera.attributes["role_name"] for camera in rgb] == ["OVERWATCH-1", "OVERWATCH-2"]
-    # The depth camera rides its channel's camera and holds no name of its own.
-    assert all("role_name" not in actor.attributes for actor in server.actors
-               if actor.type_id == "sensor.camera.depth")
+    # The depth camera rides its channel's camera; given no name of its own, the server names it.
+    assert [actor.attributes["role_name"] for actor in server.actors
+            if actor.type_id == "sensor.camera.depth"] == ["Camera_1", "Camera_2"]
 
 
-def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, server):
+def test_a_single_channel_with_no_sensor_id_takes_the_name_the_server_gives_its_camera(layout,
+                                                                                       server):
     document = run_document()
     unnamed = dict(A_STARE)
     unnamed.pop("sensor_id")
@@ -386,7 +387,9 @@ def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, se
     session, result = capture(layout, server, document)
     assert result.outcome == "run_finished"
     [camera] = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
-    name = f"CARLA-SENSOR-{camera.id}"
+    # The server's name, read back from the spawned camera: the first camera the server named.
+    name = "Camera_1"
+    assert camera.attributes["role_name"] == name
     [start] = server.events.of("start_recording")
     assert start[2] == layout.capture_root / SESSION_ID / name
     assert start[4]["camera_name"] == name
@@ -400,14 +403,45 @@ def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, se
     assert (placed["sensor_id"], placed["camera_actor_id"]) == (name, camera.id)
 
 
-def test_a_sensor_id_another_client_s_camera_holds_refuses_at_preroll(layout, server):
-    # Another client's camera in the same world was spawned under the name, in another case.
+def test_a_single_channel_with_no_sensor_id_on_a_server_that_names_no_cameras_is_its_default(
+        layout, server):
+    # A server built before it named cameras hands the camera back with its blueprint's role name.
+    server.names_cameras = False
+    document = run_document()
+    unnamed = dict(A_STARE)
+    unnamed.pop("sensor_id")
+    document["capture"]["channels"] = [unnamed]
+    session, result = capture(layout, server, document)
+    assert result.outcome == "run_finished"
+    [camera] = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    assert "role_name" not in camera.attributes
+    name = f"CARLA-SENSOR-{camera.id}"
+    [start] = server.events.of("start_recording")
+    assert start[2] == layout.capture_root / SESSION_ID / name
+    assert start[4]["camera_name"] == name
+    assert [rig.sensor_id for rig in session.channels] == [name]
+
+
+def test_a_sensor_id_another_client_s_camera_holds_is_refused_by_the_server_at_preroll(layout,
+                                                                                       server):
+    # Another client's camera in the same world was spawned under the name, in another case; the
+    # server refuses the spawn, and the session reports the server's reason.
     server.cameras_of_other_clients = {7: "overwatch-1"}
     _, result = capture(layout, server)
     assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
     assert "channel OVERWATCH-1: its camera could not be placed" in result.detail
     assert "already held in this world by camera 7" in result.detail
     assert server.events.of("start_recording") == []
+
+
+def test_two_channels_named_alike_in_different_cases_are_refused_before_the_server_is_reached(
+        layout, server):
+    document = run_document()
+    document["capture"]["channels"] = [A_STARE, dict(A_STARE, sensor_id="overwatch-1",
+                                                     stare_bearing_deg=90.0)]
+    _, result = capture(layout, server, document)
+    assert result.outcome == "refused_offline"
+    assert server.events.of("spawn") == []
 
 
 def test_an_orbit_is_flown_and_carries_no_depth_camera(layout, server):

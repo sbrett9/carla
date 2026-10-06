@@ -1,10 +1,10 @@
-"""The free-move camera is named as it is created, and keeps its default when it is not.
+"""The free-move camera is named as it is created, and takes the server's name when it is not.
 
 `CarlaControl/scripts/run_free_move_camera.py` records nothing, but its picture camera is a camera in
 the world like any other, and `--camera-name` names it as it is spawned: the name is set as its
-role_name, which every client reads, and one another camera in the world holds is refused before
-the window opens. Without one it is `CARLA-SENSOR-<camera id>`. Its depth camera takes no name. The
-world and the window are stood in for.
+role_name, which every client reads, and the server refuses one a live camera in the world holds,
+before the window opens. Without one the server names it `Camera_<n>`. Its depth camera is given no
+name. The world and the window are stood in for.
 """
 from __future__ import annotations
 
@@ -41,7 +41,8 @@ def test_the_camera_has_no_name_unless_one_is_given(viewer, monkeypatch):
         "NapOfEarth_2"
 
 
-@pytest.mark.parametrize("name", ["Nap Of Earth", "nap.2", "CON", "front", "CARLA-SENSOR-9"])
+@pytest.mark.parametrize("name", ["Nap Of Earth", "nap.2", "CON", "front", "Camera_9",
+                                  "CARLA-SENSOR-9"])
 def test_a_name_outside_the_rule_is_refused_before_anything_starts(viewer, monkeypatch, capsys,
                                                                   name):
     with pytest.raises(SystemExit) as exited:
@@ -88,22 +89,32 @@ class _World:
         return SimpleNamespace(find=_Blueprint)
 
     def spawn_actor(self, blueprint, _transform) -> _Camera:
-        self.spawned.append((blueprint.id, blueprint.values.get("role_name")))
-        return _Camera(100 + len(self.spawned))
-
-    def spawn_camera(self, blueprint, transform, name=None) -> _Camera:
-        if name is not None and self.held is not None and name.upper() == self.held.upper():
-            raise ValueError(f"camera name '{name}' is already held in this world by camera 7 "
-                             "(sensor.camera.rgb)")
-        if name is not None:
-            blueprint.set_attribute("role_name", name)
-        camera = self.spawn_actor(blueprint, transform)
-        if name is not None:
-            self.names[camera.id] = name
+        # The server names every camera spawned without a name, the depth camera included, and
+        # refuses one a live camera holds.
+        given = blueprint.values.get("role_name")
+        if given is not None and self.held is not None and given.upper() == self.held.upper():
+            raise RuntimeError(f"camera name '{given}' is already held in this world by camera 7 "
+                               "(sensor.camera.rgb): two cameras under one name would write files "
+                               "of one name and report under one callsign; choose another")
+        self.spawned.append((blueprint.id, given))
+        camera = _Camera(100 + len(self.spawned))
+        self.names[camera.id] = given or f"Camera_{len(self.spawned)}"
         return camera
 
+    def spawn_camera(self, blueprint, transform, name=None) -> _Camera:
+        # As the shim spawns a camera: the server's refusal said as a ValueError.
+        if name is not None:
+            blueprint.set_attribute("role_name", name)
+        try:
+            return self.spawn_actor(blueprint, transform)
+        except Exception as refused:
+            if name is not None and "camera name '" in str(refused):
+                raise ValueError(str(refused)) from None
+            raise
+
     def camera_name(self, camera) -> str:
-        return self.names.get(camera.id, f"CARLA-SENSOR-{camera.id}")
+        """The name the camera holds on the server, as the shim reads it back."""
+        return self.names[camera.id]
 
     def get_spectator(self) -> _Camera:
         return _Camera(0)
@@ -117,11 +128,11 @@ def test_the_picture_camera_is_created_under_its_name_and_the_depth_camera_under
     assert rig.camera_name == "NapOfEarth_2"
 
 
-def test_an_unnamed_picture_camera_keeps_its_default(viewer, monkeypatch):
+def test_an_unnamed_picture_camera_takes_the_name_the_server_gives_it(viewer, monkeypatch):
     world = _World()
     rig = viewer.SensorRig(world, _arguments(viewer, monkeypatch))
     assert world.spawned[0] == ("sensor.camera.rgb", None)
-    assert rig.camera_name == f"CARLA-SENSOR-{rig.camera.id}"
+    assert rig.camera_name == "Camera_1"
 
 
 def test_a_name_another_camera_holds_ends_the_viewer_before_its_window_opens(viewer, monkeypatch,
