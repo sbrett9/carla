@@ -44,6 +44,7 @@ from carlacontrol.RunConfigurationFindings import (
     RunConfigurationRefusedError,
 )
 from carlacontrol.ScenarioSchema import ScenarioSchema
+from carlacontrol.ViewReadiness import PICTURE_CEILING_FRAMES, PICTURE_TOLERANCE_LEVELS
 
 RUN_CONFIGURATION_VERSION = 1
 
@@ -228,6 +229,17 @@ _FIELDS: tuple[RunField, ...] = (
     _F("capture.capture_hz", _POSITIVE, 2.0, SESSION_FIXED,
        help="Captures per simulated second, on every channel. One capture must be a whole number "
             "of world ticks."),
+    _F("capture.picture_ceiling_frames", _POSITIVE_INTEGER, PICTURE_CEILING_FRAMES, SESSION_FIXED,
+       help="How many of its own frames a camera has, from its photoreal tiles being in, to settle "
+            "its picture before the run is refused at pre-roll (03 §9.5.1, check 50): 60 is 30 s at "
+            "2 Hz. Counted in the camera's frames, not ticks, because what the renderer settles "
+            "advances once per frame the camera draws. The prewarm must hold this many frames at "
+            "the capture rate and the ten-tick comparison span (check 51)."),
+    _F("capture.picture_tolerance_levels", _POSITIVE, PICTURE_TOLERANCE_LEVELS, SESSION_FIXED,
+       help="The gray levels by which a camera's frame may differ from its frame at least ten ticks "
+            "earlier, in its worst 80-pixel block that no rendered vehicle covers, and count as "
+            "settled (03 §9.5.1). Measured over 27 placements; recorded in the lock, so a run that "
+            "loosens it says so."),
     _F("capture.road_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated road surface. Hidden by default: it is a flat ribbon over the "
             "photogrammetry of the real road, so drawn it is an artefact in every frame."),
@@ -429,10 +441,12 @@ _CHANNEL_HELP = {
     "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the centre "
                             "of the vehicles the session rendered on the last frame before the "
                             "camera holds for the window; the camera follows it through the "
-                            "prewarm until one SUMO step and 120 ticks before the window opens "
-                            "(7 s at the defaults), then holds the pose it resolves to while its "
-                            "view becomes ready and for the whole window, and the run result "
-                            "records that point. Needs a prewarm of at least one SUMO step.",
+                            "prewarm until one SUMO step and the picture's ceiling before the "
+                            "window opens (32 s at the defaults: capture.picture_ceiling_frames "
+                            "at the capture rate and the ten-tick span, in whole steps), then "
+                            "holds the pose it resolves to while its view becomes ready and for "
+                            "the whole window, and the run result records that point. Needs a "
+                            "prewarm of at least one SUMO step.",
     "stare_altitude_m": "Stare: height above the point, metres.",
     "stare_standoff_m": "Stare: horizontal distance back from the point, metres; 0 looks "
                         "straight down.",

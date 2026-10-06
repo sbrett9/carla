@@ -242,6 +242,13 @@ class EffectiveRunConfiguration:
         """The simulated second the session fast-forwards SUMO to, and the first frame it renders."""
         return self.window.begin_s - self.prewarm_s
 
+    @property
+    def ticks_per_frame(self) -> int:
+        """World ticks per capture on every channel, which is each camera's own frame period: one
+        capture is a whole number of them (check 9)."""
+        return max(1, round(1.0 / (float(self.value("capture.capture_hz"))
+                                   * float(self.value("capture.world_delta_s")))))
+
     # -- the record -------------------------------------------------------------------------------------
 
     def to_document(self) -> dict:

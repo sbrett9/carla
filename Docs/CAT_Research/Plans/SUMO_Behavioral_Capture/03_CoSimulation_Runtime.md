@@ -70,6 +70,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §10, D3.13: the drive lease is built. The episode holds `FDriveLease`, taken by `take_drive_lease` and given back by `release_drive_lease`; while it is held every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` is refused for every actor, direct and in a batch, naming the holder. The session takes it before SUMO starts, as `<holder> (process <pid> on <machine>)`, and gives it back after the world's settings on every exit path; a lease another client holds refuses the start at `Authority` naming the holder, with SUMO never launched. `break_drive_lease` ends a dead holder's lease, logged, since rpclib gives no disconnect notice; the per-actor mark and the solar cover are not built, the latter for want of a per-connection identity. The traffic tools refuse naming the holder; a server without the lease is recorded `NOT HELD`. |
 | 2026-10-05 | §9.5.1: an orbit is flown by the server (issue #37, promoted into the plan by the owner). The circle goes to the plugin's orbit mover (`set_orbit`) as the camera is placed, held, and is set moving as the window opens; the mover advances the angle by each tick's delta on the simulation clock in `TG_PrePhysics`, before the sensors capture and the world observer reports the frame. The client's orbit thread, which sent a pose about fifty times a second on the wall clock beside D3.3's two round trips, is gone. Written and tested offline; the plugin awaits a build. |
 | 2026-10-06 | §9.5.1: the three pre-roll refusals of 2026-10-06 on the Arapahoe check stare are explained against the run that passed the day before. The vehicle mask's zero was right -- SUMO run offline puts no vehicle's box or shadow in the frame before t = 65.55 s, and the projection is held equal to the occlusion estimate's -- and the tiles never went out, so the 0.53–0.69 at the ceiling is the renderer settling a freshly spawned camera's view, judged over the camera's 2nd to 13th frames where the passing run was judged over its 72nd and 73rd. Across the four runs to hand the residual orders by the camera's frame count and not by the ticks since its tiles, which the one Bahonar run had been read the other way; inference only, decided by one warm stare with `capture.capture_hz` the only thing varied, the owner's to run. The ceiling and the tolerance stand. The run result keeps every comparison with the camera's frame count on either side and the camera's pose source, and a refusal at the ceiling lists the judged residuals in order. |
+| 2026-10-06 | §9.5.1: the owner's ruling -- the picture's ceiling is counted in the camera's own frames since its tiles came in, 60 by default (30 s at 2 Hz), as the session-fixed field `capture.picture_ceiling_frames`, and the 0.5-level limit is the session-fixed field `capture.picture_tolerance_levels`, unchanged in value; the ten-tick span stays a constant. Measured on the Arapahoe check stare under a running session, the worst block fell 2.63 to 0.62 gray levels over the camera's 4th to 13th frames, heading under 0.5 around its 15th, past the 120 ticks that are twelve frames at 2 Hz. Check 51 asks the prewarm for the ceiling's frames at the capture rate plus the span (31.5 s at the defaults) and refuses a ceiling too small to hold one comparison; a stare aimed at the traffic holds for one SUMO step and the ceiling, 32 s at the defaults. |
 
 ---
 
@@ -3240,9 +3241,14 @@ settled when the camera's frame differs from its newest frame at least ten ticks
 0.5 grey levels in its worst 80-pixel block that no rendered vehicle covers in either frame; only the
 camera can say this. Each stage has a ceiling in the unit it progresses in, and a ceiling only fails
 the run: 90 s of wall clock for the tiles, above the 60 s request timeout so a stalled request shows
-first as a failed tile, and 120 ticks for the picture. Neither is a count a caller supplies. The span
-and the picture's ceiling were first written as ten and 120 of the camera's frames, and the vehicles
-were not left out; the next paragraphs give the measurement that changed both.
+first as a failed tile, and for the picture a number of the camera's own frames from its tiles being
+in — `capture.picture_ceiling_frames`, 60 by default, 30 s at 2 Hz. The tiles' ceiling is not a count
+a caller supplies; the picture's ceiling and its tolerance (`capture.picture_tolerance_levels`, 0.5)
+are session-fixed fields of the run configuration ([`12`](12_Operator_Control_Surface.md) §5.2), so
+either can be changed for a run without a code change, and the lock records them. The span and the
+picture's ceiling were first written as ten and 120 of the camera's frames with no vehicle left out,
+then as ten and 120 ticks; the next paragraphs give the measurements that changed them and the ruling
+that set the ceiling as it is.
 
 **Traffic in view, and the unit the picture settles in.** Measured on Bahonar (2026-09-30), two runs of
 one stare — (−1400, −600) from 450 m, straight down, 1280×720 at 2 Hz, synchronous at 0.05 s, the
@@ -3268,7 +3274,8 @@ in ticks, where the placements measured them, since frames and ticks were the sa
 is compared with the camera's newest frame at least ten ticks before it — at 2 Hz the frame before it,
 at 20 Hz the frame ten before it, the rule as measured — and the ceiling is 120 ticks from the tiles
 being in: at 2 Hz, the frames of 6 s, twelve comparisons. The run with no traffic would have met it at
-its seventh frame, 60 ticks after the tiles, by the same inference.
+its seventh frame, 60 ticks after the tiles, by the same inference. The span stands; the ceiling in
+ticks was overturned by the measurements of 2026-10-06 below.
 
 **What a rendered vehicle covers is left out, in either frame of a comparison.** Each body the
 session's render set says a frame drew (§8.9) is posed where the client's snapshot of exactly that
@@ -3318,6 +3325,27 @@ its two frames and whether the camera was posed from the snapshot (`comparison_h
 `camera_frames`, `camera_from_snapshot`), and a refusal at the ceiling lists the judged residuals in
 order, so the next refusal shows its trend without a probe.
 
+**The ruling of 2026-10-06: the ceiling is counted in the camera's frames.** The refusal of that
+day's check-series run, judged under a running session, gives the series the record was built to show:
+its tiles in 3 ticks after the wait began, and the worst block at 2.63, 1.90, 2.04, 1.53, 1.15, 0.94,
+0.76, 0.73, 0.73 and 0.62 gray levels from the camera's 4th to its 13th frame, falling by about a tenth
+of a level a frame at the end and so heading under 0.5 around its 15th or 16th — three or four frames
+past the 120-tick ceiling, which at 2 Hz is twelve frames. The picture converges by the camera's own
+frames, not by ticks, and the owner ruled that the ceiling is counted in them: a number of frames the
+camera has drawn since its tiles came in, **60 by default** (30 s at 2 Hz), as the session-fixed field
+`capture.picture_ceiling_frames`. The 0.5-level limit stands in value, as the session-fixed field
+`capture.picture_tolerance_levels`, so a limit found too strict on a live run can be changed without a
+code change and the lock records what was used; the ten-tick span stands as a constant. The refusal
+names the ceiling in frames (`its picture did not settle within 60 of its frames after its tiles were in
+at frame …`), the run result records `picture_ceiling_frames` and `picture_tolerance_levels` beside
+each comparison's `camera_frames`, and the echo states both. Check 51 asks the prewarm for the ceiling's
+frames at the channel's capture rate plus the ten-tick span — 610 ticks after the tiles are first asked
+about, 31.5 s at the defaults with the step of the first ask — rather than for two frames, and refuses a
+ceiling too small to hold one comparison at that rate (fewer than two frames at 2 Hz, eleven at 20 Hz);
+a stare aimed at the traffic holds for one SUMO step and that many ticks, in whole steps, 32 s at the
+defaults. The 2-against-20 Hz probe above keeps its purpose: it would show how many frames the picture
+needs at each rate, which the ceiling in frames now allows for.
+
 **What the server reports.** `get_view_readiness(actor_id)` reads the tilesets' state as of the end of
 the last tick. The camera counts only once `ACesiumSensorViewPublisher` has written its view on that
 tick, because a tileset with no view for the camera selects nothing for it and reads fully loaded. For
@@ -3346,8 +3374,9 @@ placed, not moving -- and sweeps from the window's opening, flown by the server 
 from that circle (`set_orbit`, issue #37; the client sends no pose per frame, so D3.3's two round trips
 a tick are the whole of it); and a stare aimed at the
 rendered traffic, which starts over the centre of the world's staging bounds (`get_staging_bounds`),
-follows the traffic through the prewarm until one SUMO step and the picture's 120-tick ceiling before
-the window opens — seven one-second steps at the defaults — and holds from there
+follows the traffic through the prewarm until one SUMO step and the picture's ceiling — its frames at
+the capture rate and the ten-tick span — before the window opens, 32 one-second steps at the defaults,
+and holds from there
 ([`12`](12_Operator_Control_Surface.md) §5.2, D12.37).
 
 **A view not ready by the window's opening refuses the run at `PreRoll`, and the window is not
@@ -3358,10 +3387,10 @@ reasons. SUMO has been fast-forwarded to the prewarm's first instant before the 
 be taken back to start earlier ([`10`](10_Scale_And_Performance.md) D10.2). And a window opened later
 than declared is not the window D3.21 binds the sun for. So a
 ceiling reached, or a view not ready when the window opens, ends the run `refused_preroll`, naming the
-channel, the witness and where it stood; a prewarm too short for the camera to render two frames ten
-ticks apart after its tiles are first asked about is refused before anything starts (check 51). The
-measured need sits far inside the default: cold tiles in after 30–124 ticks and the picture within 39
-ticks of them, against 6,000 ticks of prewarm.
+channel, the witness and where it stood; a prewarm too short for the camera to draw the picture
+ceiling's frames at its capture rate, and the ten-tick span, after its tiles are first asked about is
+refused before anything starts (check 51): 31.5 s at the defaults, 32.5 s for a stare following the
+traffic, against 300 s of prewarm; cold tiles are in after 30–124 ticks.
 
 **What is recorded, and what is not.** The run result carries, per channel, the ticks and the wall
 clock until the tiles were in — to within one SUMO step, the interval they are asked at — the ticks

@@ -167,10 +167,11 @@ _CHECKS: tuple[RunCheck, ...] = (
              "(the compiler's check 59), or scenario.accept_skipped_dry_run accepts that it did not",
              _R, RUN_CAPTURE, "RunConfigurationValidator; the session refuses the same lock before "
              "SUMO is started"),
-    RunCheck(51, OFFLINE, "The prewarm leaves every camera, at the pose it holds as the window "
-             "opens, enough ticks after its tiles are first asked about to render two frames at "
-             "least ten ticks apart: the fewest its picture can be witnessed settled on", _R,
-             RUN_CAPTURE, "RunConfigurationValidator"),
+    RunCheck(51, OFFLINE, "The picture's ceiling, capture.picture_ceiling_frames, holds at least "
+             "one comparison at the capture rate, and the prewarm leaves every camera, at the pose "
+             "it holds as the window opens, enough ticks after its tiles are first asked about to "
+             "draw the ceiling's frames at that rate and the ten-tick span a frame is compared "
+             "across", _R, RUN_CAPTURE, "RunConfigurationValidator"),
     # -- the server --------------------------------------------------------------------------
     RunCheck(22, SERVER, "The loaded world is the world package's", (), SESSION,
              "SumoDriveSession.Start, LoadedWorldCheck, before SUMO is started"),

@@ -6,8 +6,11 @@ says the tiles are in -- the camera published on the last tick, every visible ti
 0.5 grey levels of its frame ten or more ticks earlier in its worst judged 80-pixel block, counting
 only frames rendered once the tiles were in, and leaving out every block a rendered vehicle covers in
 either frame. The wait lives in the prewarm and ticks with it; a ceiling -- 90 s of wall clock for the
-tiles, 120 ticks for the picture -- or a view not ready as the window opens refuses at pre-roll,
-naming the channel and the witness, and the window's first frame is not moved.
+tiles; for the picture, `capture.picture_ceiling_frames` of the camera's own frames from its tiles
+being in, 60 by default -- or a view not ready as the window opens refuses at pre-roll, naming the
+channel and the witness, and the window's first frame is not moved. The ceiling and the limit,
+`capture.picture_tolerance_levels`, are the run configuration's, so a test that moves either does so
+with an override and not a constant.
 
 The stand-in server numbers its frames from 1000 and the camera is spawned on that frame; with a
 one-second SUMO step of twenty 0.05 s ticks and a 2 Hz capture, the camera renders every tenth frame,
@@ -50,6 +53,7 @@ from RunCaptureFixture import A_STARE, AN_ORBIT, Layout, run_document  # noqa: E
 from System.Collections.Generic import List  # noqa: E402
 
 from carlacontrol.CaptureSession import CaptureSession  # noqa: E402
+from carlacontrol.LaunchEcho import LaunchEcho  # noqa: E402
 from carlacontrol.OrbitSensorController import OrbitSensorController  # noqa: E402
 from carlacontrol.RunCloseoutReport import RunCloseoutReport  # noqa: E402
 from carlacontrol.RunConfigurationValidator import RunConfigurationValidator  # noqa: E402
@@ -294,8 +298,9 @@ def test_the_result_records_how_each_view_became_ready(layout):
     _, result = capture(layout, server)
     readiness = result.produced["readiness"]
     assert (readiness["tiles_ceiling_s"], readiness["picture_span_ticks"],
-            readiness["picture_ceiling_ticks"], readiness["picture_min_judged_share"],
-            readiness["vehicle_margin_px"]) == (90.0, 10, 120, 0.5, 4)
+            readiness["picture_ceiling_frames"], readiness["picture_tolerance_levels"],
+            readiness["picture_min_judged_share"],
+            readiness["vehicle_margin_px"]) == (90.0, 10, 60, 0.5, 0.5, 4)
     assert readiness["wait_began"] == {"sim_time_s": FIRST_PREWARM_S, "ticks": 0}
     assert readiness["per_capture"].startswith("not recorded")
     view = the_view(result)
@@ -311,8 +316,8 @@ def test_the_result_records_how_each_view_became_ready(layout):
         "scenario": "s", "window_name": "w", "sim_time_s": None, "window": {},
         "channels": [], "readiness": readiness}, [])
     assert "view OVERWATCH-1: tiles in at frame 1100 after 100 ticks, 0.5 s; picture settled at " \
-           "frame 1110, 10 ticks after its tiles, worst judged block 0.00 grey levels with 100% " \
-           "of its blocks judged" in text
+           "frame 1110, its frame 2 since its tiles (10 ticks), worst judged block 0.00 grey " \
+           "levels with 100% of its blocks judged" in text
 
 
 def test_the_echo_says_the_wait_will_happen(layout):
@@ -321,9 +326,30 @@ def test_the_echo_says_the_wait_will_happen(layout):
     readiness = result.launch_echo["readiness"]
     assert readiness["waits"] is True
     assert (readiness["from_s"], readiness["until_s"]) == (FIRST_PREWARM_S, BEGIN_S)
-    assert (readiness["tiles_ceiling_s"], readiness["picture_ceiling_ticks"]) == (90.0, 120)
+    # The ceiling in the camera's frames, and what they come to at the capture rate.
+    assert (readiness["tiles_ceiling_s"], readiness["picture_ceiling_frames"],
+            readiness["picture_ceiling_s"], readiness["picture_tolerance_levels"]) == \
+        (90.0, 60, 30.0, 0.5)
+    assert "within 0.5 gray levels" in readiness["picture"]
     assert "check 50" in readiness["not_ready"] and "not moved" in readiness["not_ready"]
     assert readiness["vehicles"].startswith("excluded")
+    assert ("readiness   every view's tiles (ceiling 90 s) and picture (ceiling 60 of the camera's "
+            "frames, 30 s at 2 Hz, settled within 0.5 gray levels), from t=24,900 to t=25,200"
+            in LaunchEcho(result.launch_echo).render())
+
+
+def test_the_echo_states_a_ceiling_and_a_limit_the_run_configuration_changed(layout):
+    server = FakeServer()
+    _, result = capture(layout, server, overrides=["capture.picture_ceiling_frames=12",
+                                                   "capture.picture_tolerance_levels=1.5",
+                                                   "capture.capture_hz=10"])
+    readiness = result.launch_echo["readiness"]
+    # Twelve frames at 10 Hz are 24 ticks: 1.2 s, where the same twelve at 2 Hz would be 6 s.
+    assert (readiness["picture_ceiling_frames"], readiness["picture_ceiling_s"],
+            readiness["picture_tolerance_levels"]) == (12, 1.2, 1.5)
+    assert "within 1.5 gray levels" in readiness["picture"]
+    assert result.produced["readiness"]["picture_ceiling_frames"] == 12
+    assert result.produced["readiness"]["picture_tolerance_levels"] == 1.5
 
 
 # -- a view that is not ready ----------------------------------------------------------------------
@@ -359,16 +385,56 @@ def test_the_tiles_ceiling_refuses_naming_the_tiles_witness(layout):
 
 
 def test_the_picture_ceiling_refuses_naming_the_picture_witness(layout):
-    # Tiles in from the first step, on frame 1020; every frame differs from the one before. Frames
-    # up to 1140, 120 ticks on, are compared; frame 1150 is past the ceiling, in the eighth step.
+    # Tiles in from the first step, on frame 1020; every frame differs from the one before. The
+    # camera's 60 frames from its tiles being in are 1020 to 1610, 30 s at 2 Hz; the 60th, judged
+    # unsettled, is the ceiling, reached in the 31st step. 59 comparisons were made.
     server = FakeServer()
     server.picture_at = lambda _camera, frame: (frame // FRAMES_PER_CAPTURE) * 7 % 256
     _, result = capture(layout, server)
     refused_by_check_50(server, result)
-    assert "picture did not settle within 120 ticks of its tiles being in at frame 1020" \
+    assert "picture did not settle within 60 of its frames after its tiles were in at frame 1020" \
         in result.detail
-    assert "frame 1140 differs from frame 1130, 10 ticks earlier" in result.detail
-    assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 8.0
+    assert "frame 1610 differs from frame 1600, 10 ticks earlier" in result.detail
+    assert "against 0.5" in result.detail
+    assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 31.0
+    assert the_view(result)["comparisons"]["made"] == 59
+
+
+def test_the_ceiling_is_the_run_configuration_s_and_counts_the_camera_s_frames(layout):
+    # The same drifting picture under a ceiling of twelve frames: at 2 Hz the twelfth frame from
+    # the tiles is 1130, 110 ticks on, in the seventh step; at 10 Hz, where the camera renders every
+    # other tick, it is frame 1042, 22 ticks on, in the third step. The ceiling moves with the
+    # camera's frames and not with the ticks.
+    server = FakeServer()
+    server.picture_at = lambda _camera, frame: frame * 7 % 256
+    _, result = capture(layout, server, overrides=["capture.picture_ceiling_frames=12"])
+    refused_by_check_50(server, result)
+    assert "did not settle within 12 of its frames after its tiles were in at frame 1020" \
+        in result.detail
+    assert "frame 1130 differs from frame 1120, 10 ticks earlier" in result.detail
+    assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 7.0
+    faster = FakeServer()
+    faster.picture_at = lambda _camera, frame: frame * 7 % 256
+    _, result = capture(layout, faster, overrides=["capture.picture_ceiling_frames=12",
+                                                   "capture.capture_hz=10"])
+    refused_by_check_50(faster, result)
+    assert "did not settle within 12 of its frames after its tiles were in at frame 1020" \
+        in result.detail
+    assert "frame 1042 differs from frame 1032, 10 ticks earlier" in result.detail
+    assert faster.session.RenderedTimeSeconds == FIRST_PREWARM_S + 3.0
+
+
+def test_the_limit_is_the_run_configuration_s(layout):
+    # The camera's k-th frame is 128 + (k mod 3) grey, so the comparisons read 2, 1, 1, 2, ... and
+    # never reach 0.5; a limit of 1 is met by the first comparison that reads 1, the camera's
+    # fourth frame against its third, at frame 1040.
+    server = FakeServer()
+    server.picture_at = lambda _camera, frame: 128 + camera_frame(frame) % 3
+    _, result = capture(layout, server, overrides=["capture.picture_tolerance_levels=1"])
+    assert result.outcome == "run_finished"
+    picture = the_view(result)["picture"]
+    assert (picture["settled_at_frame"], picture["compared_with_frame"],
+            picture["residual_levels"], picture["camera_frames"]) == (1040, 1030, 1.0, [4, 3])
 
 
 def test_the_record_keeps_every_comparison_with_the_camera_s_own_frame_count(layout):
@@ -396,17 +462,17 @@ def test_the_record_keeps_every_comparison_with_the_camera_s_own_frame_count(lay
 
 def test_the_refusal_lists_every_judged_comparison_against_the_camera_s_frames(layout):
     # The camera's k-th frame is 128 + (k mod 3) grey, so the comparisons read 2, 1, 1, 2, 1, 1, ...
-    # and never settle. The refusal lists them all, from the camera's third frame (1030, against its
-    # second) to its fourteenth (1140, the last inside the ceiling), so the trend can be read from
-    # the log alone.
+    # and never settle. Under a ceiling of twelve frames from the tiles (1020 to 1130) the refusal
+    # lists them all, from the camera's third frame (1030, against its second) to its thirteenth
+    # (1130, the ceiling), so the trend can be read from the log alone.
     server = FakeServer()
     server.picture_at = lambda _camera, frame: 128 + camera_frame(frame) % 3
-    _, result = capture(layout, server)
+    _, result = capture(layout, server, overrides=["capture.picture_ceiling_frames=12"])
     refused_by_check_50(server, result)
-    assert ("the 12 judged comparisons read 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, "
-            "2.00, 1.00, 1.00 grey levels in order, from the camera's frame 3 to its frame 14"
+    assert ("the 11 judged comparisons read 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, "
+            "2.00, 1.00 grey levels in order, from the camera's frame 3 to its frame 13"
             in result.detail)
-    assert len(the_view(result)["comparison_history"]) == 12
+    assert len(the_view(result)["comparison_history"]) == 11
 
 
 def test_the_span_is_ten_ticks_whatever_the_capture_rate(layout):
@@ -536,7 +602,9 @@ def test_a_view_too_full_of_vehicles_to_judge_is_refused_naming_that(layout):
     refused_by_check_50(server, result)
     assert "rendered vehicles covered 5 of its 8 80-pixel blocks" in result.detail
     assert "leaving 38% of the view to judge against the 50% the witness needs" in result.detail
-    assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 8.0
+    # The ceiling counts the camera's frames whether or not they could be judged: the 60th from
+    # the tiles, frame 1610, is in the 31st step.
+    assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 31.0
     comparisons = the_view(result)["comparisons"]
     assert comparisons["judged"] == 0 and comparisons["too_few_blocks"] == comparisons["made"]
 
@@ -638,17 +706,40 @@ def test_an_orbit_holds_the_pose_it_opens_on_until_the_window_opens(layout):
     assert held["angle_deg"] == 0.0 and held["sweeps_from"] == "the window's opening"
 
 
-@pytest.mark.parametrize(("prewarm", "outcome"), [("1", "refused_offline"),
-                                                  ("2", "run_finished")])
-def test_a_prewarm_too_short_to_compare_two_frames_is_refused_offline(layout, prewarm, outcome):
-    # After the first step, a camera rendering every ten ticks may need nineteen more for two
-    # frames ten ticks apart: one second leaves none, two leave twenty.
+@pytest.mark.parametrize(("prewarm", "ceiling", "outcome", "needed"), [
+    ("31", 60, "refused_offline", "at least 31.5 s"), ("32", 60, "run_finished", None),
+    ("2", 2, "refused_offline", "at least 2.5 s"), ("3", 2, "run_finished", None)])
+def test_a_prewarm_too_short_for_the_ceiling_s_frames_and_the_span_is_refused_offline(
+        layout, prewarm, ceiling, outcome, needed):
+    # After the first step, the ceiling's frames at one every ten ticks and the ten-tick span: 610
+    # ticks for 60 frames, which 31 s leave 600 of and 32 s 620; 30 for a ceiling of two frames,
+    # which 2 s leave 20 of and 3 s 40.
     server = FakeServer()
-    _, result = capture(layout, server, overrides=[f"capture.prewarm_s={prewarm}"])
+    _, result = capture(layout, server, overrides=[f"capture.prewarm_s={prewarm}",
+                                                   f"capture.picture_ceiling_frames={ceiling}"])
     assert result.outcome == outcome
     if outcome == "refused_offline":
-        assert result.refusals[0]["check"] == 51 and server.clients == []
-        assert "at least 1.95 s" in result.refusals[0]["message"]
+        [refusal] = result.refusals
+        assert (refusal["check"], refusal["subject"]) == (51, "capture.prewarm_s")
+        assert server.clients == []
+        assert f"{ceiling} frames at one every 10 ticks" in refusal["message"]
+        assert needed in refusal["message"]
+
+
+@pytest.mark.parametrize(("hz", "ceiling", "first_judged"), [("2", 1, 2), ("20", 10, 11)])
+def test_a_ceiling_too_small_to_hold_a_comparison_is_refused_offline(layout, hz, ceiling,
+                                                                    first_judged):
+    # A frame is judged against the camera's frame at least ten ticks before it, also rendered
+    # since the tiles: the second frame at 2 Hz, the eleventh at 20 Hz. A ceiling below that holds
+    # no comparison, so every run would be refused at pre-roll; it is refused here instead.
+    server = FakeServer()
+    _, result = capture(layout, server, overrides=[f"capture.capture_hz={hz}",
+                                                   f"capture.picture_ceiling_frames={ceiling}"])
+    assert result.outcome == "refused_offline" and server.clients == []
+    [refusal] = result.refusals
+    assert (refusal["check"], refusal["subject"]) == (51, "capture.picture_ceiling_frames")
+    assert f"first possible on its frame {first_judged} since the tiles" in refusal["message"]
+    assert f"at least {first_judged} frames" in refusal["message"]
 
 
 def test_the_monitor_shows_each_view_until_the_recorders_start():
