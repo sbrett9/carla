@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — Withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the planned "per-interval observability, prevalence in all three units" and the gate `render_accounting.intervals_rendered` (§7.1, §7.2); the coverage record and the "unoccluded denominator" it served (§1.5, §5.1, §7.1, §7.4.2, §7.6.2). The occlusion estimator stays session-fixed because turning it off mid-run changes what the measured fields of later captures mean.
 `2026-10-05` — Corrected against the code: the session drives vehicle lamps by default and `run_capture` offers no field for them (§4.4, §5.2, check 14); the run manifest and its supervision rows exist (§3.9, §3.10.3); `capture_rgb` is not a field of the schema (§5.2); the Windows distribution's four parity breaks are fixed and its launcher is still unbuilt (§10).
 `2026-10-05` — §7.2: the closeout gates `capture.supervision_unpaired[<sensor>]`, a channel's captures of a frame a supervision plan was in force on that were written with `supervision="unknown"`, at zero, skipped from a recorder built before it counted them; the channel's closeout line states the supervision paired and unknown, and the free view's status shows an unknown count as it climbs ([`06`](06_Truth_And_Annotation.md) §8.2).
 `2026-10-05` — `run_capture` writes the run manifest, `truth/manifest.jsonl` under the capture directory beside the world truth track (`truth/world_truth_track.csv`), and names both in its result's `produced`; it closes the manifest with its `closed_by` before it reads its closing gates, so `supervision.manifest_closing_record` is measured: met where the manifest's last complete row is `manifest_closed` (§3.10.3, §7.2). `run_sumo_drive.py --run-manifest PATH` writes one for a drive (§9.6).
@@ -231,7 +232,7 @@ consumer is driven by something other than this parser. **Today that never happe
 is latent.** It stops being latent the instant a second front end exists, which is precisely what this
 section proposes. `depth_max_range` is the sharpest case: the same run would measure depth to 20 km
 through one front end and 1 km through the other, and the second silently caps the occlusion
-measurement that [`08`](08_Collection_And_EPoL.md) D8.19's denominator depends on.
+measurement every capture's sidecar carries ([`08`](08_Collection_And_EPoL.md) §2.5).
 
 ### 1.6 The trigger case, measured: every run overwrites the sun to noon
 
@@ -1124,9 +1125,9 @@ Named descriptively, because "static" and "dynamic" do not say what is at stake.
 The dividing line between Session-fixed and Run-mutable is one question: **would a consumer reading
 the corpus be wrong if this changed and they did not know?** If yes, it is Session-fixed. The
 occlusion estimator is the instructive case: it looks like a toggle (it is one today, implicitly, via
-`--no-occlusion` at `:542-552`), but [`08`](08_Collection_And_EPoL.md) D8.19 makes a capture whose
-occlusion could not be paired *excluded from the unoccluded denominator entirely* — so turning it off
-mid-run silently changes the meaning of the denominator. Session-fixed.
+`--no-occlusion` at `:542-552`), but an absent `occlusion` attribute means "this camera cannot say",
+not "not occluded" ([`08`](08_Collection_And_EPoL.md) §5.4) — so turning it off mid-run would leave a
+reader unable to tell a capture measured as unoccluded from one never measured. Session-fixed.
 
 **Bound covers a sibling section's ruling as well as an artifact's value**, and three rows depend on
 that: `synchronous` is Bound by [`10`](10_Scale_And_Performance.md) D10.10, `telemetry.on_tick_thread`
@@ -1877,7 +1878,7 @@ truth manifest flushed t=371 238 (2 s ago)   instances 7   intervals open 2
 | **Achieved ticks per wall-second and the clock ratio** | Recorded nowhere today; recoverable only by differencing PNG metadata against file timestamps | [`10`](10_Scale_And_Performance.md) D10.12 |
 | `population / rendered` | How many vehicles SUMO has and how many bodies the frame drew. By default every vehicle SUMO has is drawn, so they differ only by a vehicle SUMO has just inserted, drawn from the frame SUMO first reports it in, one SUMO step after the pass that admits it ([`03`](03_CoSimulation_Runtime.md) D3.6), and by a vehicle of a type with no measured body. Under an optional render-set limit the row names the limit and adds how many vehicles passed it, how many it held and how many a capacity declined; the vehicles outside it are not in CARLA | `render_states[]` ([`04`](04_Contracts.md) §4.5) |
 | **Frames written and `Dropped`, per channel** | `FrameRecorder.Dropped` is incremented at `FrameRecorder.cs:184` and has **no reader anywhere in the tree** | [`10`](10_Scale_And_Performance.md) D10.7 |
-| Occlusion pairing successes and failures | An unpaired capture is excluded from the unoccluded denominator entirely | [`08`](08_Collection_And_EPoL.md) D8.19 |
+| Occlusion pairing successes and failures | An unpaired capture carries no occlusion fields, which a reader must not read as unoccluded | [`08`](08_Collection_And_EPoL.md) §5.4 |
 | Manifest last-flush tick | The manifest is written incrementally; a stalled writer is a silent loss of supervision | [`06`](06_Truth_And_Annotation.md) §8.4 |
 
 **One condition is loud** — it interrupts rather than appearing in a column, because it means the
@@ -1885,11 +1886,13 @@ corpus is no longer what was asked for: the **recorder's** `Dropped` becomes non
 [`10`](10_Scale_And_Performance.md) D10.7. §7.4 names the second, unrelated drop counter that a live
 run introduces and explains why it is not loud, and adds a second loud condition for a live run only.
 A participant in an open annotated interval is not a loud condition: by default every vehicle SUMO
-has is drawn, so a participant always is ([`04`](04_Contracts.md) D4.6), and §7.2's
-`render_accounting.intervals_rendered` records it. Under an optional render-set limit a run chose, a
+has is drawn, so a participant always is ([`04`](04_Contracts.md) D4.6), and the run manifest's
+`not_drawn` spans on each closed interval record any frame it was not
+([`06`](06_Truth_And_Annotation.md) §8.4). Under an optional render-set limit a run chose, a
 participant can be left out; that is not loud either, because the run chose it and the echo said so
 before anything was acquired, and it is recorded the same way, with the closeout's render-set lines
-counting what the limit left out ([`04`](04_Contracts.md) D4.44).
+counting what the limit left out ([`04`](04_Contracts.md) D4.44). The gate
+`render_accounting.intervals_rendered` this paragraph once cited is withdrawn (2026-10-05, §7.2).
 
 **As built** (`SessionMonitor`, `RunCloseoutReport`), the panel shows the simulated time, the window's
 progress, the newest frame's declared civil instant, declared sun elevation and policy — read from the
@@ -1942,13 +1945,13 @@ rendering of the manifest, never a second computation, for the same reason the m
 | **What was asked for** | the effective configuration, with every field that came from an override or a non-default layer flagged | — |
 | **What ran** | window in simulated and civil time; the end declared, the end reached and `closed_by`; achieved ticks per wall-second per window; wall-clock elapsed | `clock.ratio_recorded` — observed: windows with a recorded ratio; threshold: all of them |
 | **Capture** | per channel: captured, written, `Dropped`, capture rate including any degradation step, occlusion pairing | `capture.recorder_dropped` — observed `Dropped`, threshold 0 (D10.7). `capture.captured_minus_written` — observed the difference, threshold 0, which is non-zero exactly when a kill left frames in the encode queue (§3.10.2). `capture.rate_changes_recorded` — observed rate changes carrying a record, threshold: all |
-| **Render accounting** | simulated / rendered / never rendered; admissions and releases; vehicle types refused a body, by reason (`no_blueprint`, `unknown_extent`) | `render_accounting.intervals_rendered` — observed annotated intervals never rendered, threshold 0 |
+| **Render set** | admissions and releases as the manifest's rows; vehicle types refused a body, by reason (`no_blueprint`, `unknown_extent`); the `not_drawn` spans on each closed interval | **no gate.** `render_accounting.intervals_rendered` is withdrawn 2026-10-05 by the owner's ruling: what a participant's undrawn spans are worth is the reader's question, and the spans are in the manifest as happened facts |
 | **Solar** | requested policy, epoch, applied state, confirmed state, closing state | `solar.applied_equals_confirmed` — observed the difference, threshold 0 |
 | **Radiometry** | per channel: the profile asked for and the digest of the profile the server loaded | `radiometry.profile_digest_present` — observed channels carrying a digest, threshold: all ([`08`](08_Collection_And_EPoL.md) D8.28) |
 | **Pacing** | requested mode and real-time factor; achieved factor per window | `pacing.factor_recorded` — under `wall_clock`, observed: recorded or not. `pacing.achieved_factor` — observed the achieved factor, threshold `min_achieved_factor` |
-| **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and the coverage record already carries it as *covered but not delivered* |
+| **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and is counted per sensor |
 | **Launch provenance** | caller, caller label, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | `launch.warnings_adjudicated` — observed warnings with no adjudication, threshold 0; an attended run's pre-roll warning that nobody adjudicated in writing misses it (§6.4.2), and otherwise only a bug in §6.4 can |
-| **Supervision** | instances, intervals, per-interval observability, prevalence in all three units | `supervision.manifest_closing_record` — observed: present or absent. A run killed with no chance to flush has none, and this record is what says so |
+| **Supervision** | instances, intervals opened and closed, intervals open at the end and never opened, defects — the terminal row's counts; the per-interval observability and prevalence once planned here are withdrawn 2026-10-05 | `supervision.manifest_closing_record` — observed: present or absent. A run killed with no chance to flush has none, and this record is what says so |
 | **Corpus-affecting events** | SUMO collisions, teleports, emergency stops, reconciliation refusals | recorded, not compared — [`01`](01_Architecture.md) OQ6 |
 
 **A gate record that did not meet its threshold deletes nothing, hides nothing and downgrades
@@ -2060,7 +2063,7 @@ They count different losses and they have different verdicts.
 |---|---|---|
 | What was lost | a frame that never reached disk | a frame that reached disk but not the consumer |
 | Where | the encode queue's `DropWrite` channel, counter incremented at `FrameRecorder.cs:184-185` (declared at `:46`), which §7.3 measures as having **no reader anywhere in the tree** | the handover socket's drop-oldest queue, per sensor ([`08`](08_Collection_And_EPoL.md) §11.3) |
-| What it does to the corpus | **a hole.** The imagery is short and the coverage record says the camera saw something that no file holds | **nothing.** The corpus is complete; the coverage record marks that `(sensor, tick)` *covered but not delivered* |
+| What it does to the corpus | **a hole.** The imagery is short: the recorder's count says a frame was captured that no file holds | **nothing.** The corpus is complete; the handover counter records the drop per sensor |
 | Verdict | **loud** — §7.1's loud condition, and D10.7 makes a non-zero value a gate record that misses its threshold | **a counted column.** [`08`](08_Collection_And_EPoL.md) §11.3 rules it the correct behaviour, so interrupting on it would be interrupting on the design working |
 
 A single "dropped" figure would be a number that is neither: non-zero on a healthy live run, and unable
@@ -2154,7 +2157,6 @@ session nothing at all.
 | How many frames have been written? | the manifest's per-channel `written` | artifact |
 | How many were captured but not yet written? | the manifest's per-channel `captured`; the difference is what a kill would lose | artifact |
 | How many annotated intervals have closed? | the manifest's supervision block ([`06`](06_Truth_And_Annotation.md) §8.4) | artifact |
-| How much of a declared area has been covered? | the coverage record ([`08`](08_Collection_And_EPoL.md)) | artifact |
 | Which gate records do not currently meet their threshold? | the manifest's gate records (§7.2) | artifact |
 | Is the run still alive, and did it stop? | the manifest's last append instant; then `RunResult` appearing, or not appearing (§3.10.2) | artifact |
 

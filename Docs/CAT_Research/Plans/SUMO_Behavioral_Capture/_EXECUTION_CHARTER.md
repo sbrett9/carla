@@ -144,6 +144,35 @@ data a consumer needed.
 
 **When a check and a person disagree, the person is right and the check is the thing that changes.**
 
+## 4b. What a truth file may carry
+
+Approved by the owner on 2026-10-05. It is the test every field of a truth sidecar, the world truth
+track, the run manifest and any later export is held to, and [`06`](06_Truth_And_Annotation.md) §5 and
+[`08`](08_Collection_And_EPoL.md) §5 are read under it.
+
+> A truth file may carry a value only if it is one of these: (1) declared: what the scenario author or
+> the run's operator stated; (2) happened: what the simulators did or the world held on that frame;
+> (3) measured: a quantity taken from the frame's own geometry by one fixed, published method that has
+> no pass mark. A truth file never carries a word or flag that depends on a pass mark we chose ("big
+> enough", "visible enough", "lit enough", "covered enough", "usable"), a count, percentage or summary
+> built from such words, or anything produced by running or fitting a model. The dividing line: checks
+> that compare what we produced against what was declared are correctness and stay; checks that compare
+> it against what a model would need are appropriateness and never exist here. The rule governs what
+> the pipeline writes; an author's labels pass through unjudged, and the author is accountable for them.
+> Scoring of any model is the model developer's work and outside this effort.
+
+| Kind | Examples already written |
+|---|---|
+| **Declared** | the supervision plan's labels and intervals, the capture window, the epoch, a draw distance, the render-set limit a run chose |
+| **Happened** | positions, speeds and headings; SUMO's events; `render_state` and `render_reason`; admission and release instants; the sun the world held; `beyond_draw_distance` against the declared distance |
+| **Measured** | `occlusion`, `occlusion_samples`, `apparent_width_px`, `apparent_height_px`, `camera_range_m` |
+
+Whether a fixed grouping of a measured number with published edges (`occlusion_level`,
+`illumination_band`) and the names `corpus_eligible` and "usable subset" stand under the rule is with
+the owner. Under this rule the observability outcomes, coverage, prevalence, the fitness probe and the
+leakage probe of the plan's earlier text are withdrawn; the documents that carried them say so at the
+place each stood.
+
 ## 5. Definition of done
 
 A stage item is done when **all** of these hold. "It works on my machine" is not on the list.
