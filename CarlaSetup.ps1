@@ -783,7 +783,7 @@ Write-Host "  `$env:SUMO_HOME = '$sumoInstall'"
 
 $vibeueDir  = Join-Path $RepoRoot 'Unreal\CarlaUnreal\Plugins\VibeUE'
 $vibeueRepo = 'git@github.com:sbrett9/VibeUE.git'
-$vibeuePin  = '379373709e68ce7f2c4e3a26ff931f703d87b817'
+$vibeuePin  = 'ea12a7b02fefa918dcbb086bbc078042009da488'
 # Non-interactive ssh so a fresh/batch run never blocks on the github.com host-key prompt
 # ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no auto-accepts the key
 # without prompting; UserKnownHostsFile=/dev/null is omitted here because it is not reliable across

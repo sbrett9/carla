@@ -365,7 +365,7 @@ echo "  export SUMO_HOME=$sumo_install"
 # exact commit; fetched over SSH using a key from --vibeue-ssh-key=<path> or $VIBEUE_SSH_KEY.
 vibeue_dir="$workspace_path/Unreal/CarlaUnreal/Plugins/VibeUE"
 vibeue_repo="git@github.com:sbrett9/VibeUE.git"
-vibeue_pin="379373709e68ce7f2c4e3a26ff931f703d87b817"
+vibeue_pin="ea12a7b02fefa918dcbb086bbc078042009da488"
 vibeue_key="${vibeue_ssh_key:-${VIBEUE_SSH_KEY:-}}"
 if [ -d "$vibeue_dir/.git" ]; then
     # Non-interactive ssh (with the deploy key when present) so a fresh container/batch run never
