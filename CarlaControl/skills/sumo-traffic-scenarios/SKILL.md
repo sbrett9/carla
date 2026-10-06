@@ -148,7 +148,9 @@ file cannot carry it. `make_arapahoe_scenario.py` closes five of I-25's six nort
 minutes this way.
 
 `make_bahonar_scenario.py` is the worked pattern of life: a week scheduled in civil clocks under a
-07:00 epoch, a guard rota whose one skip leaves the no-show's posting unmanned, five annotated instances,
+07:00 epoch, a guard rota whose one skip leaves the no-show's posting unmanned, six annotated instances
+(one of them the guard who should have taken that posting and parks elsewhere for the shift, so the
+omission is carried by the vehicle that deviates),
 a nominal series over the rota whose slots are the 335 postings a guard realises, each sited at the
 world's areas of interest
 (`Import/<Name>.aoi.geojson`, published into the package), and three named mixes.

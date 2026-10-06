@@ -3,12 +3,12 @@
   "plan_id": "Shahid_Bahonar_Port_PatternOfLife",
   "spec_version": 1,
   "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
-  "routes_digest": "75d800404a046bccceaf48c012439a514effeab259ce0c427c3d698b1aa00928",
+  "routes_digest": "4ffd77d313bdbc31155687848847572a7ce6b8c5c37b781cdf51ed48113e1710",
   "network_digest": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
   "config_digest": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f",
   "additional_digest": null,
   "vocabulary_version": 3,
-  "vocabulary_digest": "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7",
+  "vocabulary_digest": "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355",
   "vocabulary": {
     "core": {
       "vocabulary_version": 3,
@@ -78,7 +78,7 @@
     "namespaces": [
       {
         "namespace": "bahonar",
-        "version": 1,
+        "version": 2,
         "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
         "terms": [
           {
@@ -166,6 +166,29 @@
             "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its dwell is still open when the scenario ends."
           },
           {
+            "term": "bahonar:posting_not_taken_up",
+            "since": 2,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "definition": "A guard due to relieve a tower departs on schedule but parks elsewhere for the shift; the tower it was due at goes unmanned.",
+            "parameters": {
+              "expected_tower": {
+                "type": "string",
+                "definition": "the tower the guard was due to relieve, as the id of its area of interest"
+              },
+              "expected_shift_start": {
+                "type": "string",
+                "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"
+              }
+            },
+            "counterfactual": {
+              "kind": "term",
+              "ref": "bahonar:tower_posting"
+            }
+          },
+          {
             "term": "bahonar:tower_posting",
             "since": 1,
             "status": "active",
@@ -175,7 +198,8 @@
             "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
             "hard_negative_for": [
               "bahonar:standoff_dwell_at_access_point",
-              "bahonar:arrival_without_departure"
+              "bahonar:arrival_without_departure",
+              "bahonar:posting_not_taken_up"
             ]
           },
           {
@@ -525,6 +549,50 @@
           "declared_end_s": 604800.0,
           "declared_end_civil": "2026-10-06T07:00:00+03:30",
           "declared_duration_s": null
+        }
+      ]
+    },
+    {
+      "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4",
+      "supervision": "annotated",
+      "labels": [
+        "bahonar:posting_not_taken_up"
+      ],
+      "parameters": {
+        "expected_tower": "tower_03",
+        "expected_shift_start": "2026-10-03T07:00:00+03:30"
+      },
+      "hard_negative_for": null,
+      "counterfactual": null,
+      "aoi_refs": [],
+      "participants": [
+        {
+          "entity_id": "offpost_d4_h7_t3",
+          "role": "subject",
+          "sumo_id": "offpost_d4_h7_t3"
+        }
+      ],
+      "intervals": [
+        {
+          "entity_id": "offpost_d4_h7_t3",
+          "phase": "dwell",
+          "anchor": {
+            "start": {
+              "event": "stop:0",
+              "lane": "-441624290#0_0",
+              "end_pos_m": 70.0
+            },
+            "end": {
+              "event": "stop_end:0",
+              "lane": "-441624290#0_0",
+              "end_pos_m": 70.0
+            }
+          },
+          "declared_start_s": null,
+          "declared_start_civil": null,
+          "declared_end_s": null,
+          "declared_end_civil": null,
+          "declared_duration_s": 28800.0
         }
       ]
     },
@@ -1004,7 +1072,8 @@
       "parameters": {},
       "hard_negative_for": [
         "bahonar:standoff_dwell_at_access_point",
-        "bahonar:arrival_without_departure"
+        "bahonar:arrival_without_departure",
+        "bahonar:posting_not_taken_up"
       ],
       "slots": [
         {
@@ -8959,6 +9028,15 @@
       ],
       "refs": [
         "Shahid_Bahonar_Port_PatternOfLife/haul_d6_2"
+      ]
+    },
+    {
+      "entity_id": "offpost_d4_h7_t3",
+      "supervision": [
+        "annotated"
+      ],
+      "refs": [
+        "Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4"
       ]
     },
     {

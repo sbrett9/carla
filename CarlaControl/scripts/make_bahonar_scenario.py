@@ -11,7 +11,9 @@ the sixteen towers and relieved every eight hours, and routine air-freight hauls
 the port. That baseline exists so that six planted anomalies stand out against it, each a different
 kind of deviation a detector would have to catch:
 
-  * guard no-show -- one tower is left unmanned for a shift (a gap in a perfect cadence);
+  * posting not taken up -- the guard due to relieve one tower sets out on time and parks elsewhere
+    inside the wire for the shift, so the tower is left unmanned (a gap in a perfect cadence, carried
+    by the vehicle that leaves it);
   * escort-to-drydock -- a high-value air-freight shipment gets a dense military escort from the
     apron to the drydock, where the routine haul never goes (excess, formation, and a spike in a
     normally quiet corner -- one event chain, both signatures);
@@ -53,16 +55,19 @@ is a civilian car, the escort is military jeeps -- so no vehicle type is carried
 alone except where the difference is the behaviour itself: the perimeter shadow's crawl, and the
 stay-behind, a civilian car cleared into the port.
 
-**Supervision** goes to the supervision plan and nowhere else: the five vehicle anomalies as pattern
-instances, the guard postings and the air-freight hauls as nominal hard negatives, and the ferry
-pulses as a cleared-gate cohort. The guard no-show is a skip in the rota and nothing more: the posting
-it removes writes no trip and no supervision row, because a label follows a vehicle and there is none
-(`06_Truth_And_Annotation.md` §3.5, the owner's ruling of 2026-10-05); whether to re-author it with a
-vehicle that deviates is the owner's. The terms are the scenario's own, in namespace `bahonar` (06
-§9.4). A slot and an instance are sited at the world's areas of interest,
-`Import/Shahid_Bahonar_Port.aoi.geojson`.
+**Supervision** goes to the supervision plan and nowhere else: the six anomalies as pattern instances,
+the guard postings and the air-freight hauls as nominal hard negatives, and the ferry pulses as a
+cleared-gate cohort. A label follows a vehicle (`06_Truth_And_Annotation.md` §3.5, the owner's ruling
+of 2026-10-05), so the omission is carried by the vehicle that deviates, as the owner ruled on
+2026-10-06: the guard schedule skips the posting, which writes no trip and no row, and the guard who
+should have taken it is a planted vehicle of the guards' own type that departs the apron at the shift
+change, parks for the shift on the airside spur between the western aprons and returns, labeled
+`bahonar:posting_not_taken_up` with the tower and the shift it was due at. The terms are the
+scenario's own, in namespace `bahonar` (06 §9.4). A slot and an instance are sited at the world's
+areas of interest, `Import/Shahid_Bahonar_Port.aoi.geojson`.
 Each anomaly's interval is anchored to the event of its vehicle that commits it: the escort's and the
-shadow's transits to their departures, each probe's standoff and the stay-behind's dwell to their stop.
+shadow's transits to their departures, each probe's standoff, the stay-behind's dwell and the guard's
+parked shift to their stop.
 
 Usage:
     python make_bahonar_scenario.py [--days 7] [--out-dir ../../Import]
@@ -75,6 +80,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
@@ -158,6 +164,11 @@ PLACE_EDGES = {
 STOPS = {
     "port_gate_standoff": ("-431672573#2_0", 30.0),
     "ferry_berth": ("900954912#2_0", 20.0),
+    # A dead-end airside road between the air base's two western aprons, beside the main taxiway,
+    # which no scheduled route drives: where the guard who does not take up a posting parks for the
+    # shift instead, in the open, under 400 m from the guards' base, where a camera over the base
+    # can see it.
+    "west_apron_spur": ("-441624290#0_0", 70.0),
 }
 
 # Civilian corridor through-movements. The public corridor is fragmented and effectively one-way in
@@ -191,8 +202,10 @@ CORRIDOR_WINDOWS = [(0, 6, 20), (6, 10, 180), (10, 16, 120), (16, 20, 200), (20,
 # corridor and, half an hour later, releases one out.
 FERRY_HOURS = [6, 8, 10, 12, 14, 16, 18]
 FERRY_PULSE_PER_HOUR = 600
-# Airfield shift changes: base traffic surges through the gate, and a guard is posted at every tower.
+# Airfield shift changes: base traffic surges through the gate, and a guard is posted at every tower
+# for the shift.
 SHIFT_CLOCKS = ["07:00", "15:00", "23:00"]
+SHIFT_LENGTH = "8h"
 SHIFT_SURGE_PER_HOUR = 240
 # Light air-freight runs from the apron to the port, a few a day.
 HAUL_HOURS = [9, 13, 17]
@@ -207,6 +220,8 @@ PROBE_JITTER_S = 137          # per day, so the two probes are not at one clock 
 PROBE_DWELL = "5m"
 SHADOW_DEPARTS = "d6 02:30"
 STAYBEHIND_DEPARTS = "d1 08:00"
+# The guard who does not take up the skipped posting departs at its shift change and parks here.
+OFF_POST_PLACE = "west_apron_spur"
 
 # Each vehicle kind: its catalogue bodies (a list; JEEP_BODIES for the one jeep body; or
 # CIVILIAN_CAR_CLASS for the catalogue's civilian cars), its SUMO vehicle class, its own driving
@@ -260,7 +275,7 @@ AT_THE_STOP = {"start": "stop:0", "end": "stop_end:0"}
 # The scenario's own vocabulary (06_Truth_And_Annotation.md §9.4): its terms, roles and area kinds.
 VOCABULARY = {"namespaces": [{
     "namespace": "bahonar",
-    "version": 1,
+    "version": 2,
     "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
     "terms": [
         {"term": "bahonar:coordinated_group_transit", "since": 1, "status": "active",
@@ -295,12 +310,29 @@ VOCABULARY = {"namespaces": [{
          "applies_to": ["entity"],
          "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its "
                        "dwell is still open when the scenario ends."},
+        {"term": "bahonar:posting_not_taken_up", "since": 2, "status": "active",
+         "applies_to": ["entity"],
+         "definition": "A guard due to relieve a tower departs on schedule but parks elsewhere for "
+                       "the shift; the tower it was due at goes unmanned.",
+         "parameters": {
+             "expected_tower": {"type": "string",
+                                "definition": "the tower the guard was due to relieve, as the id "
+                                              "of its area of interest"},
+             "expected_shift_start": {"type": "string",
+                                      "definition": "the civil date and time, with its UTC offset, "
+                                                    "at which the shift it was due to take up "
+                                                    "began"}},
+         "counterfactual": {"kind": "term", "ref": "bahonar:tower_posting"}},
+        # A tower posting is the matched negative for the dwell-shaped terms, and for the posting
+        # not taken up above all: the same guard type, departing the same base at the same shift
+        # change and parked for the same eight hours, at the tower rather than elsewhere.
         {"term": "bahonar:tower_posting", "since": 1, "status": "active",
          "applies_to": ["entity"],
          "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked "
                        "dwell, in a legitimate place, for a legitimate reason.",
          "hard_negative_for": ["bahonar:standoff_dwell_at_access_point",
-                               "bahonar:arrival_without_departure"]},
+                               "bahonar:arrival_without_departure",
+                               "bahonar:posting_not_taken_up"]},
         {"term": "bahonar:routine_freight_haul", "since": 1, "status": "active",
          "applies_to": ["entity"],
          "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
@@ -345,8 +377,9 @@ class BahonarPatternOfLifeSpecification:
                 f"{self.days} day(s) of pattern of life at Shahid Bahonar Port from 07:00 on "
                 "29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, "
                 "a guard at each of sixteen towers relieved every eight hours and routine "
-                "air-freight hauls, with a guard no-show, an escort to the drydock, two gate "
-                "probes, a perimeter shadow and a ferry stay-behind planted against it. Written by "
+                "air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, "
+                "an escort to the drydock, two gate probes, a perimeter shadow and a ferry "
+                "stay-behind planted against it. Written by "
                 "CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this."),
             "world": {"package": self._relative(world_package, base),
                       "network_fingerprint": network_fingerprint},
@@ -491,7 +524,9 @@ class BahonarPatternOfLifeSpecification:
         shift, off the running lane, so at any hour a guard stands at every post and the shift
         change is a wave of arrivals and departures across the fence. The no-show is one occasion
         the rota skips: that tower stands unmanned for a shift while the other fifteen are
-        relieved as usual. The skip writes no trip and no supervision row (06 §3.5)."""
+        relieved as usual. The skip writes no trip and no supervision row (06 §3.5); the guard who
+        should have taken the posting is a planted vehicle (`anomalies`), and the label is that
+        vehicle's."""
         rota = {
             "id": "guard_posting",
             "days": f"0..{self.days - 1}",
@@ -499,19 +534,38 @@ class BahonarPatternOfLifeSpecification:
             "subjects": {"place_set": "guard_towers"},
             "id_pattern": "guard_d{day}_h{hour}_t{subject_index}",
             "template": {"type": "guard", "from": "apron", "to": "apron", "via": ["$subject"],
-                         "stops": [{"place": "$subject", "duration": "8h", "parking": True}],
+                         "stops": [{"place": "$subject", "duration": SHIFT_LENGTH,
+                                    "parking": True}],
                          "depart_lane": "best", "depart_speed": "max",
                          "arrival_speed": "current"},
         }
         if self.no_show_in_run:
-            rota["skip"] = [{"day": self.no_show_day, "at": f"{self.no_show_hour:02d}:00",
+            rota["skip"] = [{"day": self.no_show_day, "at": self.no_show_clock,
                              "subject_index": self.no_show_tower,
-                             "because": "the guard no-show: this post is not manned this shift"}]
+                             "because": f"the guard due here this shift, {self.off_post_id}, parks "
+                                        "elsewhere: this post is not manned"}]
         return rota
 
     @property
     def no_show_in_run(self) -> bool:
         return self.no_show_day < self.days
+
+    @property
+    def no_show_clock(self) -> str:
+        return f"{self.no_show_hour:02d}:00"
+
+    @property
+    def off_post_id(self) -> str:
+        """The guard who should have taken the skipped posting, named for the occasion it leaves."""
+        return f"offpost_d{self.no_show_day}_h{self.no_show_hour}_t{self.no_show_tower}"
+
+    @property
+    def no_show_shift_start(self) -> str:
+        """The civil instant the skipped posting's shift begins, written as the epoch writes one:
+        day `d` is the epoch's civil date plus `d` days, since the calendar advances at midnight."""
+        midnight = datetime.fromisoformat(EPOCH["civil_datetime"]).replace(hour=0, minute=0,
+                                                                            second=0)
+        return (midnight + timedelta(days=self.no_show_day, hours=self.no_show_hour)).isoformat()
 
     def hauls(self) -> list[dict]:
         """Light air-freight runs from the apron to the port, a few a day."""
@@ -539,7 +593,8 @@ class BahonarPatternOfLifeSpecification:
         return self.in_run(int(day), clock)
 
     def anomalies(self) -> list[dict]:
-        """The anomalies that are vehicles; the guard no-show is a skip in the rota, with no row."""
+        """The planted vehicles: every anomaly is a vehicle's, the posting the schedule skips
+        included."""
         out = []
         # Escort-to-drydock: five military jeeps from the apron to the drydock in tight formation.
         for index, escort in enumerate(self.escort_ids()):
@@ -562,6 +617,15 @@ class BahonarPatternOfLifeSpecification:
             out.append(self._actor("staybehind", "port_car", {"instant": "staybehind_departs"},
                                    "corridor_east_in", "ferry",
                                    stops=[{"place": "ferry_berth", "until": {"instant": "run_end"},
+                                           "parking": True}]))
+        # Posting not taken up: the guard due at the skipped posting departs the apron at its shift
+        # change, as every guard does, parks for the shift elsewhere inside the wire, and returns;
+        # the schedule writes no posting there, so the tower stands unmanned.
+        if self.no_show_in_run:
+            out.append(self._actor(self.off_post_id, "guard",
+                                   f"d{self.no_show_day} {self.no_show_clock}", "apron", "apron",
+                                   via=[OFF_POST_PLACE],
+                                   stops=[{"place": OFF_POST_PLACE, "duration": SHIFT_LENGTH,
                                            "parking": True}]))
         return out
 
@@ -618,6 +682,12 @@ class BahonarPatternOfLifeSpecification:
             instances.append(self._subject_instance(
                 "pi_ferry_stay_behind_d1", "staybehind", "bahonar:arrival_without_departure",
                 "dwell", AT_THE_STOP, ["ferry_terminal"], {}))
+        if self.no_show_in_run:
+            instances.append(self._subject_instance(
+                f"pi_posting_not_taken_up_d{self.no_show_day}", self.off_post_id,
+                "bahonar:posting_not_taken_up", "dwell", AT_THE_STOP, [],
+                {"expected_tower": f"tower_{self.no_show_tower:02d}",
+                 "expected_shift_start": self.no_show_shift_start}))
         for haul in self.hauls():
             instances.append({"name": haul["id"], "supervision": "nominal",
                               "labels": ["bahonar:routine_freight_haul"],
@@ -628,7 +698,7 @@ class BahonarPatternOfLifeSpecification:
                          "labels": ["bahonar:cleared_gate_transit"]}
                         for flow in self.ferry_flows()],
             "series": [{"series_id": "tower_relief", "rota": "guard_posting",
-                        "member_role": "bahonar:guard", "slot_length": "8h",
+                        "member_role": "bahonar:guard", "slot_length": SHIFT_LENGTH,
                         "slot_aoi_refs": {tower: tower for tower in self.towers()},
                         "supervision": "nominal", "labels": ["bahonar:tower_posting"]}],
         }
@@ -671,7 +741,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-show-day", type=int, default=4,
                         help="day on which one tower is left unmanned for a shift (default 4)")
     parser.add_argument("--no-show-hour", type=int, default=7,
-                        help="shift hour (7, 15 or 23) whose guard fails to appear (default 7)")
+                        help="shift hour (7, 15 or 23) whose guard parks elsewhere instead of "
+                             "relieving the tower (default 7)")
     parser.add_argument("--no-show-tower", type=int, default=3,
                         help="which tower, 0-15, is left unmanned (default 3)")
     parser.add_argument("--step-length", type=float, default=1.0,

@@ -86,6 +86,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-05 | Corrected against the tree: the world package carries `map.net.xml`, the catalogue (`6037e3bb…`, nineteen bodies) and the network fingerprint exist (§2 bundle table); Bahonar is compiled against that catalogue (§3.4.1); the Arapahoe dwell is compiled against the ramp-meter world `ffe490b1…` (§3.4.2); the skill is at 1.5.0 (§8.2). |
 | 2026-10-05 | Labels follow vehicles, by the owner's ruling ([`06`](06_Truth_And_Annotation.md) §3.5): the `absences[]` block is gone from the specification and its schema, a term declares `applies_to` as `entity` or `cohort` and no `realisation`, and a series compiles to one slot per occasion a vehicle realises, each naming its vehicle; a skipped occasion writes no trip and no row (§3.4.1, §3.6, §5.1, §5.2). Check 19 refuses an instance with no participant and tells the author the two ways to convey an omission; checks 45, 50 and 56 no longer speak of an absence; check 48 keeps the skip. Check 42 states each window's lowest sun elevation and its band in the resolution report and concludes nothing, with no warning and no verdict word (§2.9, §5.2, §9.7); check 41's report names the bands where one state alone occurs and where both do, and no "usable subset" (§5.6). The core is at version 3 (§8.3) and the skill at 1.6.0 (§8.2). All four shipped scenarios are recompiled: every plan's vocabulary digest, and the lock's, changes; Bahonar's two place-labelling terms are gone and its no-show is the rota's skip alone; the traffic files do not change. |
 | 2026-10-05 | Authors see which bodies' lights work, as the owner ruled: the skill gains `references/vehicles.md`, generated from the vehicle catalogue by `compile_scenario.py --write-vehicles-reference` and held equal to it by a test, listing every class and body with its dimensions and whether its headlights, brake lights and turn signals light up from the catalogue's optical pass; the resolution report's vehicle types carry the same per body and its Markdown renders them (§5.3, §8.3). Information only: nothing refuses or warns on it. As measured, no shipped body shows any of the three lit. |
+| 2026-10-06 | Bahonar's no-show is carried by the vehicle that deviates, as the owner ruled ([`06`](06_Truth_And_Annotation.md) §3.5; §3.4.1). The guard schedule keeps its skip; the guard who should have relieved tower 3 on day 4 at 07:00 is a planted `guard`, `offpost_d4_h7_t3`, that departs the apron with the shift, parks for eight hours at `west_apron_spur`, a dead-end airside road between the air base's western aprons, and returns, labeled `bahonar:posting_not_taken_up` with `expected_tower` and `expected_shift_start` and anchored to its stop. The namespace is at version 2 with nine terms, and `tower_posting` is the new term's matched negative and counterfactual. Recompiled: 366 vehicles, all 366 planned vehicles inserted in the dry run, 27 instances, vocabulary digest `9b05590f…`; five military shift-out flows after the new vehicle take the other of their two routes, the seeded draw of each flow's mix member having moved by one. |
 
 ---
 
@@ -789,8 +790,10 @@ resolves each under the epoch, and nothing moves in local time. The run is seven
 to `d7 07:00`. A daily rhythm is written for every civil day the run touches and cut to the run, so what
 the shipped scenario held before 07:00 on day 0 — the pre-dawn corridor windows and the 06:00 sailing —
 is not written, and day 7 before 07:00 is. The result is 335 guard postings (the first departs at
-t = 0), 21 hauls, the nine planted vehicles, 108 corridor windows, 49 sailings as 98 flows and 42 shift
-surges: 248 flows and 365 vehicles, where the shipped scenario had 245 and 365.
+t = 0), 21 hauls, the ten planted vehicles, 108 corridor windows, 49 sailings as 98 flows and 42 shift
+surges: 248 flows and 366 vehicles, where the shipped scenario had 245 and 365 -- the tenth planted
+vehicle is the guard who parks elsewhere instead of relieving tower 3, which the shipped scenario
+left as a gap.
 
 **Bodies.** Each class names catalogue bodies and the compiler sizes it from their measurements (§2.6):
 
@@ -814,18 +817,38 @@ and is one, and the escort drives as a military jeep — its shipped `maxSpeed` 
 jeeps' 33 is not kept, and *measured* its peak on the corridor is 30.6 m/s. The flows draw three named
 mixes with the shipped shares (D7.34).
 
-**Supervision**, in namespace `bahonar` at version 1 with the ten terms and three roles of
-[`06`](06_Truth_And_Annotation.md) §9.4 and the four area kinds its areas use: five annotated instances — the escort, lead and four
+**Supervision**, in namespace `bahonar` at version 2 with the nine terms and three roles of
+[`06`](06_Truth_And_Annotation.md) §9.4 and the four area kinds its areas use: six annotated instances — the escort, lead and four
 followers, labelled `coordinated_group_transit` and `destination_off_pattern` at `drydock`; each gate
 probe, `standoff_dwell_at_access_point` at `port_gate`; the perimeter shadow,
-`perimeter_transit_off_cadence`; the stay-behind, `arrival_without_departure` at `ferry_terminal` — each
-interval opening at its vehicle's departure; the guard rota read as the nominal series `tower_relief`,
+`perimeter_transit_off_cadence`; the stay-behind, `arrival_without_departure` at `ferry_terminal`; the
+guard who should have relieved tower 3, `posting_not_taken_up` — each interval anchored to the event of
+its vehicle that commits it; the guard rota read as the nominal series `tower_relief`,
 labelled `tower_posting`, 335 eight-hour slots each a guard's and each sited at its tower's area; the
 no-show as the rota's one skip — the posting at tower 3 from 2026-10-03T07:00:00+03:30 to 15:00 writes no
 trip and no row, because a label follows a vehicle and there is none ([`06`](06_Truth_And_Annotation.md)
-§3.5, the owner's ruling of 2026-10-05; whether to re-author it with a deviating vehicle is the owner's);
-the 21 hauls nominal,
-`routine_freight_haul`; and the 98 ferry flows an annotated cohort, `cleared_gate_transit`. The CoT
+§3.5, the owner's ruling of 2026-10-05) — and its omission carried by the vehicle that deviates, as the
+owner ruled on 2026-10-06 (below); the 21 hauls nominal,
+`routine_freight_haul`; and the 98 ferry flows an annotated cohort, `cleared_gate_transit`.
+
+**The posting not taken up.** The guard due at tower 3 on day 4 at 07:00 is the planted vehicle
+`offpost_d4_h7_t3`: type `guard`, from and to `apron`, departing `d4 07:00` with the schedule's
+`departLane="best" departSpeed="max" arrivalSpeed="current"`, so it differs from the fifteen guards
+leaving with it only in where it goes. It parks for `8h` at `west_apron_spur` (lane `-441624290#0_0` at
+70 m), a dead-end airside road between the air base's two western aprons, beside the main taxiway:
+inside the wire, admitted to `army`, not a tower, not the fence line nor where another planted vehicle
+stops or ends, driven by no scheduled route, and under 400 m from the guards' base, where a camera over
+the base can see it. The routed route drives past tower 3's turnoff, around the north perimeter, into
+the spur and back, and never enters tower 3's road `26413459`. The instance
+`pi_posting_not_taken_up_d4` names it `subject` and labels it `bahonar:posting_not_taken_up` ("A guard
+due to relieve a tower departs on schedule but parks elsewhere for the shift; the tower it was due at
+goes unmanned."), with `expected_tower` `tower_03` and `expected_shift_start`
+`2026-10-03T07:00:00+03:30`, both declared strings (check 56); its interval is its stop, `stop:0` to
+`stop_end:0`, declaring 28 800 s and no start. The term's counterfactual is `tower_posting`, and
+`tower_posting`'s `hard_negative_for` names it, because a posting is the same guard leaving the same
+base at the same shift change and parking for the same eight hours, at the tower. A label on the
+skipped posting itself is refused (check 19): it is no vehicle. The schedule's skip names the vehicle
+in its `because`. The CoT
 display affiliation per type the shipped labels carried is not in the specification: it is a run
 display convention ([`06`](06_Truth_And_Annotation.md) §9.1), and `sumo_cot_telemetry.py` reads only a
 `.labels.json`, which a compiled scenario does not write.
@@ -833,8 +856,9 @@ display convention ([`06`](06_Truth_And_Annotation.md) §9.1), and `sumo_cot_tel
 **What it reproduces.** *Measured,* `test_bahonar_generator.py`: every entry of the shipped scenario
 inside the run comes back with the same id, roads, stops and local time — 335 postings, 21 hauls, the
 nine planted vehicles, every flow window cut to the run — and the skip falls at the tower, instant and
-length of the shipped labels' described gap, with no row anywhere for it. *Measured* in the resolution
-report: all 613 entries
+length of the shipped labels' described gap, with no row anywhere for it, while the guard who leaves
+the gap departs at its instant and parks for its length elsewhere. *Measured* in the resolution
+report: all 614 entries
 carry their second and their civil time, where the shipped 610 carried none.
 
 **Measured in SUMO,** 2026-09-29, the specification compiled with the one body the catalogue lacks
@@ -863,6 +887,16 @@ against the package (`test_bahonar_generator.py`). A catalogue that also measure
 the jeep classes to it when the generator is next run. A compiled scenario's lock binds the catalogue
 digest, and the session refuses another, so every compiled scenario — Gardnerville's too — is
 recompiled after the catalogue is republished.
+
+**Recompiled on 2026-10-06** with the posting not taken up. *Measured* in the compile's SUMO-only run
+over the week, 112 s: 69 246 vehicles loaded and 69 246 inserted, none discarded or waiting at the
+end, no collision, and all 366 planned vehicles inserted, `offpost_d4_h7_t3` at 07:00:00 on day 4 with
+no wait. The vocabulary digest is `9b05590f…`. The new vehicle shifts the seeded draws that come after
+it in the route file: `duarouter` routes each flow with one member of its mix, chosen at random, so
+five of the military shift-out flows after it (`shift_out_d4_h7`, `shift_out_d4_h15`,
+`shift_out_d5_h15`, `shift_out_d5_h23`, `shift_out_d6_h23`) now take the other of the two routes
+from the base to the north freeway spur. Every other entry, the sumocfg and the network are
+unchanged.
 
 ### 3.4.2 The Arapahoe underpass dwell, as built
 
@@ -1144,9 +1178,9 @@ output, and against the specification generator that replaced it (§3.4.1):*
 | | The SUMO-XML generator | The specification generator |
 |---|---|---|
 | Civil-hour-to-seconds arithmetic sites | **16** (`make_bahonar_scenario.py`, `grep '\* HOUR\|\* DAY'`) | **0** |
-| Emitted entries whose civil meaning is recoverable from the artifact | **0 of 610** (only from the `_h7_` substring in an id) | **613 of 613**, each with its second and civil time in the report |
+| Emitted entries whose civil meaning is recoverable from the artifact | **0 of 610** (only from the `_h7_` substring in an id) | **614 of 614**, each with its second and civil time in the report |
 | The guard rota — 335 entries | a triple loop with a `continue`, `:232-242` | one `rotas[]` block with one `skip` entry carrying its reason |
-| The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` whose `because` is a field, reported in §5.3; it writes no trip and no supervision row ([`06`](06_Truth_And_Annotation.md) §3.5) |
+| The no-show anomaly | a `continue` and a comment (`:236`) | a `skip` whose `because` is a field, reported in §5.3; it writes no trip and no supervision row ([`06`](06_Truth_And_Annotation.md) §3.5), and the guard who should have taken the posting is a planted vehicle that parks elsewhere and carries the label (§3.4.1) |
 | `SHIFT_HOURS = [7, 15, 23]` (`:164`) | a constant multiplied out at `:233`, `:188`, `:204` | the literal text `"at": ["07:00", "15:00", "23:00"]` |
 | `FERRY_HOURS = [6, 8, …, 18]` (`:163`) | multiplied out at `:252` | flows per civil day, `"d3 08:00"`..`"d3 08:12"`: a rota's template is an actor, so a sailing's pulse is two flows the generator writes |
 | The diurnal rates, `[(0,6,20), (6,10,180), …]` (`:169`) | multiplied out at `:175`, `:179` | flow windows `"d1 06:00"`..`"d1 10:00"`, cut to the run at its edges |

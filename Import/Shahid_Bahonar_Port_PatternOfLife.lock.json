@@ -4,7 +4,7 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "2ed0e942c0b97199e60ddbe2eb2259097110ede819eeff716fc7cfb4a003a2cf",
+  "specification_sha256": "841afe55e6bf262ec6b3b3ec7827b28e279cd29e6f38cace8a1d302cb87cc61e",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "1.0.0"
@@ -12,7 +12,7 @@
   "files": {
     "routes": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
-      "sha256": "75d800404a046bccceaf48c012439a514effeab259ce0c427c3d698b1aa00928"
+      "sha256": "4ffd77d313bdbc31155687848847572a7ce6b8c5c37b781cdf51ed48113e1710"
     },
     "config": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
@@ -24,7 +24,7 @@
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-      "sha256": "292b3909573bec7ec8cf5c66dc1e0f532c940955088e7c19b26f6e03989a2302"
+      "sha256": "ccec6c9c68c21e2485e495db1123201d5f685a209ddc9b9181c7f3be96293cbf"
     }
   },
   "world": {
@@ -82,10 +82,10 @@
     "namespaces": [
       {
         "namespace": "bahonar",
-        "version": 1
+        "version": 2
       }
     ],
-    "vocabulary_digest": "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7"
+    "vocabulary_digest": "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355"
   },
   "traffic": {
     "sumo_seed": 42,
@@ -111,14 +111,14 @@
     "begin_s": 0.0,
     "end_s": 604800.0,
     "vehicles": {
-      "loaded": 69245,
-      "inserted": 69245,
+      "loaded": 69246,
+      "inserted": 69246,
       "discarded": 0,
       "waiting_at_end": 0
     },
     "planned_vehicles": {
-      "total": 365,
-      "inserted": 365
+      "total": 366,
+      "inserted": 366
     },
     "collisions": 0
   },
@@ -143,10 +143,10 @@
     "normalized_mutual_information": 0.142,
     "bands": {
       "day": {
-        "annotated": 85,
+        "annotated": 86,
         "nominal": 244,
         "unlabelled": 73,
-        "total": 402
+        "total": 403
       },
       "golden": {
         "annotated": 7,
@@ -173,6 +173,6 @@
         "total": 169
       }
     },
-    "entries": 613
+    "entries": 614
   }
 }

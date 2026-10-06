@@ -2,7 +2,7 @@
   "spec_version": 1,
   "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
   "scenario_name": "Shahid Bahonar Port pattern of life",
-  "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard no-show, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
+  "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
   "world": {
     "package": "../Build/world-packages/Shahid_Bahonar_Port.cwp",
     "network_fingerprint": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f"
@@ -289,6 +289,10 @@
     "ferry_berth": {
       "lane": "900954912#2_0",
       "offset_m": 20.0
+    },
+    "west_apron_spur": {
+      "lane": "-441624290#0_0",
+      "offset_m": 70.0
     },
     "tower_00": {
       "lane": "-26413411_0",
@@ -3492,6 +3496,26 @@
           "parking": true
         }
       ]
+    },
+    {
+      "id": "offpost_d4_h7_t3",
+      "type": "guard",
+      "depart": "d4 07:00",
+      "from": "apron",
+      "to": "apron",
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current",
+      "via": [
+        "west_apron_spur"
+      ],
+      "stops": [
+        {
+          "place": "west_apron_spur",
+          "duration": "8h",
+          "parking": true
+        }
+      ]
     }
   ],
   "rotas": [
@@ -3530,7 +3554,7 @@
           "day": 4,
           "at": "07:00",
           "subject_index": 3,
-          "because": "the guard no-show: this post is not manned this shift"
+          "because": "the guard due here this shift, offpost_d4_h7_t3, parks elsewhere: this post is not manned"
         }
       ]
     }
@@ -3539,7 +3563,7 @@
     "namespaces": [
       {
         "namespace": "bahonar",
-        "version": 1,
+        "version": 2,
         "authority": "Shahid Bahonar Port pattern of life; CarlaControl/scripts/make_bahonar_scenario.py",
         "terms": [
           {
@@ -3627,6 +3651,29 @@
             "definition": "A vehicle arrives with a ferry sailing's traffic and never leaves; its dwell is still open when the scenario ends."
           },
           {
+            "term": "bahonar:posting_not_taken_up",
+            "since": 2,
+            "status": "active",
+            "applies_to": [
+              "entity"
+            ],
+            "definition": "A guard due to relieve a tower departs on schedule but parks elsewhere for the shift; the tower it was due at goes unmanned.",
+            "parameters": {
+              "expected_tower": {
+                "type": "string",
+                "definition": "the tower the guard was due to relieve, as the id of its area of interest"
+              },
+              "expected_shift_start": {
+                "type": "string",
+                "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"
+              }
+            },
+            "counterfactual": {
+              "kind": "term",
+              "ref": "bahonar:tower_posting"
+            }
+          },
+          {
             "term": "bahonar:tower_posting",
             "since": 1,
             "status": "active",
@@ -3636,7 +3683,8 @@
             "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
             "hard_negative_for": [
               "bahonar:standoff_dwell_at_access_point",
-              "bahonar:arrival_without_departure"
+              "bahonar:arrival_without_departure",
+              "bahonar:posting_not_taken_up"
             ]
           },
           {
@@ -3882,6 +3930,33 @@
         "aoi_refs": [
           "ferry_terminal"
         ]
+      },
+      {
+        "name": "pi_posting_not_taken_up_d4",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:posting_not_taken_up"
+        ],
+        "participants": [
+          {
+            "actor": "offpost_d4_h7_t3",
+            "role": "subject"
+          }
+        ],
+        "intervals": [
+          {
+            "participant": "offpost_d4_h7_t3",
+            "phase": "dwell",
+            "anchor": {
+              "start": "stop:0",
+              "end": "stop_end:0"
+            }
+          }
+        ],
+        "parameters": {
+          "expected_tower": "tower_03",
+          "expected_shift_start": "2026-10-03T07:00:00+03:30"
+        }
       },
       {
         "name": "haul_d0_0",
