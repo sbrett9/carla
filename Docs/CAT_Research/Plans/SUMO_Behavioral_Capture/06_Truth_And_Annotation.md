@@ -39,6 +39,7 @@ the real scenario artifacts. No code changed, no build run.
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
 | 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
 | 33 · 2026-10-05 | The world truth track's rows are flushed once for each SUMO frame, when the frame's every row is written, and not after each row, as the owner ruled: the track is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. Every row is still a whole line, so a track cut off is still the rows before the cut, and a kill loses at most the frame being written (§8.3, [04](04_Contracts.md) C10 §12.7 W2). |
+| 34 · 2026-10-05 | The SUMO-against-CARLA divergence is a run-level measurement, as the owner ruled, written where a reader finds it: `bridge_divergence` on the manifest's `manifest_closed` row, the same figures in the run result, and two closeout gates with limits from 39 measured drives, `bridge.position_divergence` at 0.01 m and `bridge.velocity_divergence` at 0.01 m/s, run-configuration fields (§4.3, §8.4, D6.10 as built; question 7 closed). D6.10's four per-capture sidecar fields are withdrawn; `heading_separation` is defined once, in §4.3, and the body-heading-against-SUMO-angle difference of §8.2 is named as a designed quantity and not it. An independent test holds the pose convention to hand-worked numbers. The vehicle lights are driven and the rule is on the manifest's opening row (`vehicle_lights`); per-vehicle state in the truth comes later (question 11). Authors see which bodies' headlights, brake lights and turn signals light up, in the skill's generated `references/vehicles.md` and the resolution report's vehicle section; as measured, none of the shipped bodies do. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1435,39 +1436,54 @@ make the record agree with itself by construction and destroy the oracle.
 
 ### 4.3 Reconciliation, and the discrepancies that must be reported
 
-The reconciler joins on `sumo_id`, per captured tick. Four quantities fall out of the join, and none
-of them may be silently absorbed.
+The bridge commands a pose and a velocity for every rendered vehicle on every world tick, and the world
+observer reports what the body became on the same tick. The difference between the two is **the one
+measurement that catches a pose-convention error**: a reference point, a frame or a yaw that is wrong
+produces plausible imagery with every bounding box wrong by half a car length, and the truth stays
+self-consistent, so nothing else finds it. Three quantities fall out of the comparison, and none of them
+may be silently absorbed.
 
 | Quantity | Computed as | What a non-zero value means |
 |---|---|---|
-| `pose_separation_m` | horizontal distance between the SUMO-commanded position and the CARLA applied position, both in CARLA-local metres | Under pose application it should be at the numeric floor. Anything larger is a **seam defect**, and the three pose conventions the team brief names — CARLA's Y negated, yaw = `sumoAngle - 90`, and SUMO's front-bumper reference against CARLA's body centre — each produce a *characteristic* residual. A constant offset of half the vehicle length along the heading is the bumper shift; a residual that mirrors about the X axis is the Y negation |
-| `heading_separation_deg` | commanded yaw minus applied yaw | A constant 90 degrees is the yaw convention; anything else is a drape-induced or clamp-induced rotation |
-| `speed_separation_mps` | SUMO speed minus the speed implied by successive CARLA positions | Under pose application this is the interpolation error of [01 D1.13](01_Architecture.md); under the actuated shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) it is the **control tracking error**, which is the whole point of that shape |
-| `dimension_separation_m` | `vType` length/width minus the spawned blueprint's | The car-following model ran on one set of dimensions and the imagery shows another. [04](04_Contracts.md) owns the tolerance |
-| `solar_time_residual_s`, `sun_elevation_residual_deg` | the declared civil time for this tick, converted to the world's solar clock, minus the achieved `solar_time`; and the sun elevation that conversion implies minus the achieved `sun_elevation_deg` | **The sun was not set from the scenario.** Unlike the four above, this one is not a seam defect between two producers — it is a gap between what the scenario asserts and what the pixels show, and §4.5 gives it its own treatment because its failure signatures are diagnostic rather than numeric noise |
+| position divergence, metres | straight-line separation between the commanded position and the one the world applied, both in CARLA-local metres, vertical included | Under pose application it is at the numeric floor: the pose is computed in double and the wire carries float, measured at 0.000045-0.000403 m at worst over 39 drives on Arapahoe and Bahonar. Anything larger is a **seam defect**, and each of the three pose conventions the team brief names produces a *characteristic* residual. A constant offset of half the vehicle length along the heading is the bumper shift; a residual that mirrors about the X axis is the Y negation; one tick's travel on every moving vehicle and none on a stationary one is a read-back lagging the write by a frame; a hundred times the pose is metres at one end and centimetres at the other; a residual on one vehicle alone is a body that did not take the write |
+| `heading_separation`, degrees | shortest-arc separation between the commanded yaw and the applied yaw, with pitch and roll beside it | A constant 90 degrees is the yaw convention; anything else is a drape-induced or clamp-induced rotation. **Defined here and nowhere else.** The difference between a body's heading and SUMO's reported angle (`heading_deg` against `sumo_angle_deg` in the sidecar, §8.2) is a designed quantity -- the path's heading against SUMO's back-to-front chord -- and is not this separation and not a defect |
+| velocity divergence, metres per second | length of the difference between the commanded velocity vector and the one the world reported for the body, read against the mean commanded speed | The reported velocity is the one the truth telemetry, the recorder and radar read, so this bounds how far the truth record's speed is from SUMO's. Equal to the commanded speed on every moving vehicle is nothing reaching the body -- a bridge that sent none, or a server built without the kinematic-velocity change (measured: 21.8 m/s in the control run that sent none against 0.000006 m/s where it did); twice the speed, or the speed on one axis, is a sign or an axis wrong between pose and velocity |
+| `solar_time_residual_s`, `sun_elevation_residual_deg` | the declared civil time for this tick, converted to the world's solar clock, minus the achieved `solar_time`; and the sun elevation that conversion implies minus the achieved `sun_elevation_deg` | **The sun was not set from the scenario.** Unlike the three above, this one is not a seam defect between two producers -- it is a gap between what the scenario asserts and what the pixels show, and §4.5 gives it its own treatment because its failure signatures are diagnostic rather than numeric noise |
 
-**The residual is a free test oracle, and it is the reason to keep both producers rather than
-collapsing to one.** [01 §4.2](01_Architecture.md) makes the same point from the architecture side.
-The concrete value here is that a pose convention bug is otherwise invisible: the imagery looks
-plausible, the truth is self-consistent, and every bounding box is wrong by half a car length. A
-residual with a reported distribution catches it on the first capture.
+A dimension comparison is not taken at run time: the compiler holds a vehicle type's `length` and
+`height` to the measured body within 0.01 m ([07](07_Scenario_Authoring.md) check 15), so the body
+SUMO reserved space for and the body CARLA draws are the same one before the run starts.
 
-Practical requirements on the reconciler:
+**As built, and the owner's ruling (2026-10-05): a run-level measurement, written where a reader finds
+it.** The session takes the comparison per rendered vehicle per world tick (`PoseDivergence.Between`,
+`SumoDriveSession.MeasureDivergence`): free, because the world observer streams every actor's transform
+and velocity every tick whether or not anything reads them. The session's report accumulates the
+samples taken, the vehicle-ticks nothing read back, the worst and mean position, the worst yaw, pitch
+and roll, the worst and mean velocity against the mean commanded speed, and the vehicle and instant of
+the worst position and the worst velocity. Those figures go to three places, and to no capture's
+sidecar: **the run manifest's terminal row**, as `bridge_divergence` on `manifest_closed` (§8.4); **the
+run result**, as `produced.session.last_snapshot.divergence`, the same figures read from the same
+report; and **two closeout gates**, `bridge.position_divergence` and `bridge.velocity_divergence`
+([12](12_Operator_Control_Surface.md) §7.2), the worst position against
+`bridge.position_divergence_limit_m` and the worst velocity against
+`bridge.velocity_divergence_limit_m_per_s`, session-fixed run-configuration fields defaulting to
+0.01 m and 0.01 m/s. The limits sit twenty-five times above the worst position measured and over a
+thousand times above the worst velocity, and below the smallest fault either catches: one tick's
+travel at walking pace is 0.05 m, and a body short its whole speed is short by metres per second. A run
+that compared nothing -- no body driven, or none the world reported -- skips both gates naming the
+vehicle-ticks written and read back by nothing, so *not measured* never reads as *met*. The convention
+itself has an independent check: a test puts a body of known length at a known SUMO position and angle
+through `PoseConverter` and holds the result to numbers worked out by hand -- the centre half a length
+behind the bumper along the heading, the northing negated, the yaw the SUMO angle less ninety -- which
+the bumper round-trip test cannot do, since it undoes the shift with the converter's own quantities.
 
-- **It runs on the capture path, not offline.** Both inputs exist only at that instant; the CARLA side
-  is already captured into the encoding job beside the telemetry (`FrameRecorder.cs:183`), and the
-  SUMO snapshot must be captured into the same job at the same point, for the same reason doc 20 §7.3
-  gives: the workers encode asynchronously while the world keeps ticking, so anything read at write
-  time describes a later state.
-- **Both sides are stamped with the tick they describe**, and the reconciler refuses to join two
-  snapshots of different ticks rather than joining them approximately. `OcclusionEstimator` already
-  sets this precedent: it pairs depth to colour by simulation frame number and **refuses the pair
-  outright** if the cameras have drifted, on the stated grounds that silently mismeasuring is worse
-  than reporting nothing ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md)). The same
-  stance applies here.
-- **A refusal is recorded, not swallowed.** `FrameRecorder` already counts what it could not do —
-  `OcclusionUnmatched`, `OcclusionNoDepthCaptures`, `OcclusionDepthOutOfStep`, `OcclusionDepthWrongPose`
-  (`FrameRecorder.cs:56-69`). Reconciliation refusals take the same shape and reach the manifest.
+The per-capture fields D6.10 once named -- `pose_separation_m`, `heading_separation_deg`,
+`speed_separation_mps` and `dimension_separation_m` on every vehicle of every sidecar -- are
+**withdrawn by the owner's ruling**: a convention that is wrong is wrong on every vehicle of every
+frame, one figure for the run says so, and a reconciler running inside the capture path with its own
+refusals was machinery the measurement does not need. `FrameRecorder`'s precedent of counting what it
+could not do stands for the recorder's own pairings (§8.2); the divergence has no refusal to count,
+because a body nothing reported is itself one of its figures.
 
 ### 4.4 Three vehicle states, and what truth says about each
 
@@ -2383,9 +2399,9 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
               render_state="rendered" admitted_tick="1015259"
               sumo_edge="26413459" sumo_lane="26413459_0" sumo_lane_pos_m="58.90"
               sumo_stop_state="3"
-              vtype_id="guard" vtype_length_m="4.80" vtype_width_m="2.00"
-              pose_separation_m="0.02" heading_separation_deg="0.10"
-              speed_separation_mps="0.00" dimension_separation_m="0.56"/>
+              vtype_id="guard" vtype_length_m="4.80" vtype_width_m="2.00"/>
+      <!-- no per-vehicle divergence fields: the bridge's divergence is one figure for the run, on
+           the manifest's closing row and in the run result (§4.3, D6.10 as ruled 2026-10-05) -->
 
       <!-- asserted by the author; never derived. The assertion is in `state`; the <annotation>
            child says WHICH authored ordinary behaviour this is, and what it is a negative for. -->
@@ -2536,8 +2552,8 @@ SUMO drive the SUMO-keyed uid and callsign, and `sumo_id`, `vtype_id` and `admit
 first drawn for it. They come from the session's render set (`SumoDriveSession.RenderSet`) handed to
 the recorder (`start_recording(render_set=...)`; `run_sumo_drive.py` and `run_capture` both pass it).
 `producer`, `entity_id`, `provenance`, the two source attributes, `render_state`, network state,
-`vtype` dimensions and the separations wait for the reconciler, and `role_name` is still the pooled
-body's spawn attribute, not the flow id.
+`vtype` dimensions wait for a writer, the separations are withdrawn from the sidecar (§4.3, D6.10 as
+ruled), and `role_name` is still the pooled body's spawn attribute, not the flow id.
 
 **As built (2026-10-01):** the spawn attribute is `sumo` on every pooled body, the authority class
 [`04`](04_Contracts.md) D4.9 gives a SUMO-driven vehicle — before, it was the blueprint's default,
@@ -2562,8 +2578,10 @@ pull and a recorder in another process carry `heading_deg` and not SUMO's angle,
 not told. The bumper is SUMO's position exactly, so positional truth is unchanged. While moving, the
 body's heading is within 10.3° (Gardnerville) and 10.9° (Arapahoe) of SUMO's angle at the 99th
 percentile: SUMO's angle is the chord from the vehicle's back to its front, and over 300 s of Arapahoe
-it steps by more than 15° 363 times where the path heading does 18 times. This is the `heading_separation_deg`
-the reconciler above will report; until it exists, the two angles side by side are the record of it.
+it steps by more than 15° 363 times where the path heading does 18 times. The two angles side by side
+are the record of that difference. It is a designed quantity, not a defect, and it is **not** §4.3's
+`heading_separation`, which is the commanded yaw against the yaw the world applied and is measured at
+the numeric floor.
 
 **As built (2026-10-02): the optional draw distance, marked per camera.** Where a run sets a draw
 distance ([03](03_CoSimulation_Runtime.md) §8.3.3, D3.41), each frame's render set records the distance
@@ -2850,7 +2868,10 @@ and every instant is TraCI's clock for the SUMO frame it describes:
   the session established itself: the compile lock's digests, the supervision plan's id, digest and
   counts, its vocabulary's version, digest and author namespaces, the SUMO settings checked at start
   (the collision action, every teleport trigger, the departure and seeding options, the scale and the
-  insertion limits), the clock, the render set, and [04](04_Contracts.md) C9's epoch verbatim with its
+  insertion limits), the clock, the render set, the rule the vehicle lights follow (`vehicle_lights`:
+  whether they are driven, the sun elevations the headlights come on below and go off above and that
+  they read the geometric elevation, and that brake lights and turn signals follow SUMO's signals;
+  [11](11_Time_And_Illumination.md) §6.3), and [04](04_Contracts.md) C9's epoch verbatim with its
   digest, the illumination declared and in force, `epoch_honoured` and `advance_mechanism`;
 - `sensor_placed`, for each camera as it is placed, under the name its captures carry;
 - `render_admitted`, at the instant of the pass that admitted the vehicle, with why
@@ -2864,7 +2885,11 @@ and every instant is TraCI's clock for the SUMO frame it describes:
   reported at the window's first and last capture tick, with its band, and at the end §11.8.2's
   residual and `corpus_eligible`;
 - `manifest_closed`, last: `ended` (`scenario_finished`, `caller_stopped`, or `run_stopped` with its
-  stage and cause), the caller's own reason, and what the manifest holds.
+  stage and cause), the caller's own reason, what the manifest holds, and `bridge_divergence`: the
+  comparisons of commanded against applied pose the session took, the vehicle-ticks nothing read back,
+  the worst and mean position in metres, the worst yaw, pitch and roll in degrees, the worst and mean
+  velocity in metres per second against the mean commanded speed, and for the worst position and the
+  worst velocity the SUMO vehicle, its instant on TraCI's clock, the tick and the body (§4.3).
 
 `run_capture` closes the manifest, giving its `closed_by`, before it reads its closing gates, so
 `supervision.manifest_closing_record` is measured; the session's end closes a manifest its caller did
@@ -3142,14 +3167,23 @@ which is still each recorder's count and its gate. The gate records stay in the 
 
   "corpus_affecting_events": {
     "depart_skipped": [], "teleports": [], "collisions": [],
-    "emergency_stops": [ { "sumo_id": "corridor_d3_p0_h10.221", "tick": 5905180 } ],
-    "reconciliation_refusals": { "tick_mismatch": 0, "pose_out_of_tolerance": 0 }
+    "emergency_stops": [ { "sumo_id": "corridor_d3_p0_h10.221", "tick": 5905180 } ]
   },
 
-  "reconciliation": {
-    "pose_separation_m":      { "p50": 0.01, "p95": 0.04, "max": 0.11 },
-    "heading_separation_deg": { "p50": 0.08, "p95": 0.22, "max": 0.91 },
-    "dimension_separation_m": { "p50": 0.31, "p95": 0.72, "max": 1.20 }
+  // as built, on manifest_closed: what the world did with the poses the bridge commanded, over the
+  // whole run (§4.3). One figure for the run, no per-capture field and no refusal to count: a body
+  // nothing reported is vehicle_ticks_with_no_read_back. The figures are the live check of
+  // 2026-10-05 on Arapahoe.
+  "bridge_divergence": {
+    "samples": 135064, "vehicle_ticks_with_no_read_back": 0,
+    "worst_position_m": 0.000102, "mean_position_m": 0.000019,
+    "worst_yaw_deg": 0.0001, "worst_pitch_deg": 0.0001, "worst_roll_deg": 0.0001,
+    "worst_velocity_m_per_s": 0.000006, "mean_velocity_m_per_s": 0.000001,
+    "mean_commanded_speed_m_per_s": 16.059,
+    "worst_position_on": { "sumo_id": "briarwood_boulevard_to_i25_south.5", "sim_time_s": 860.65,
+                           "tick": 13, "actor_id": 177 },
+    "worst_velocity_on": { "sumo_id": "i25_north_through.770", "sim_time_s": 864.6,
+                           "tick": 92, "actor_id": 242 }
   }
 }
 ```
@@ -3626,7 +3660,7 @@ is a property of the artifact, and it is met by things §4, §5, §7 and §8 alr
 
 | Guarantee | Delivered by |
 |---|---|
-| **Per tick** — every truth record is stamped with the simulation tick it describes, and the reconciler refuses to join two snapshots of different ticks rather than joining them approximately | §4.3; `FrameRecorder.cs:183` captures into the encoding job rather than reading at write time |
+| **Per tick** — every truth record is stamped with the simulation tick it describes, and the recorder pairs each capture with the truth of its own frame rather than a neighbour's | §8.2; `FrameRecorder.cs:183` captures into the encoding job rather than reading at write time |
 | **Positioned** — geodetic position in the same frame as the pixels, plus `hae` and `hae_dtm`, for every rendered vehicle, and for every unrendered one in the world truth track | §4.2, §8.3 |
 | **Timed** — interval bounds as ticks, with all three onsets (`declared`, `committed`, `observed`) and a `closed_by` that distinguishes a behavioural end from a capture end | §3.3, §3.4 |
 | **Boxed** — the dimensions of the **thing that was rendered**, not the `vType`'s declared dimensions, together with the sensor pose and full pinhole intrinsics needed to project them (`CotWriter.cs:101-124`) | §4.2, §8.2 |
@@ -3684,7 +3718,7 @@ The corpus contains everything below. The question the table answers is narrower
 | `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_*_px` | **no** — may *filter* which examples are included, never travels as a feature | yes |
 | `<_aoi>` derived area relations | **no** | yes (stratification, auditing) |
 | `role_name`, `provenance`, `vtype_id`, `producer`, `pose_source`, `kinematics_source` | **no** | yes |
-| `pose_separation_m` and the other reconciliation residuals | **no** | yes (corpus QA) |
+| The bridge's divergence, on the manifest's closing row and in the run result | **no** | yes (corpus QA) |
 | Render-set membership, admission and release instants, refused vehicle types | **no** | yes (corpus QA) |
 | `_solar` achieved sun angles and the declared civil instant | **conditionally — see the gate below** | yes (stratification, auditing) |
 | `_solar` residual, policy, anchor tick | **no** | yes (corpus QA, replay verification §7.3) |
@@ -3887,7 +3921,7 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 |---|---|
 | [01](01_Architecture.md) | `RenderedVehicleRegistry` records an **admission tick and a release tick per vehicle**, exposed to the manifest (already D1.14) — this is what §5.1's `not_rendered` boundary keys on, and it replaces the arrival/opacity notion that fade used to supply (§4.4). `RenderSetSelector` admits every vehicle SUMO has inside a capture window and reads no supervision, so render-set membership is independent of the label (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10), and since 2026-10-05 is held on the server and carried on every world-observer snapshot (D6.41) |
 | [03](03_CoSimulation_Runtime.md) | The SUMO snapshot used for reconciliation is of the **same tick** as the frame, and is captured into the encoding job rather than read at write time (§4.3) |
-| [04](04_Contracts.md) | `scenario_id`, `session_id` and a stable `sensor_id` are supplied, not derived from a start instant (§7.1). The `vType`-to-blueprint dimension tolerance, so `dimension_separation_m` has a threshold |
+| [04](04_Contracts.md) | `scenario_id`, `session_id` and a stable `sensor_id` are supplied, not derived from a start instant (§7.1). The `vType`-to-blueprint dimension tolerance, held at compile time ([07](07_Scenario_Authoring.md) check 15), so no dimension comparison is taken at run time |
 | [07](07_Scenario_Authoring.md) | The supervision file is emitted by the builder beside the routes, an unrealised slot is emitted rather than discarded (§2.2, §3.5), and the confounder rules of §9.3 are enforced at authoring |
 | [08](08_Collection_And_EPoL.md) | The **training export** and the **full-truth export** are separate artifacts with separate paths, and a downstream trainer is given a path only to the first (§10.3). The five-step transfer rule of §10.1 is published in the corpus documentation, and **nothing in this plan applies it** — confirm that 08 does not assign the association to any component inside the pipeline boundary |
 | [09](09_Toolchain_And_Packaging.md) | Session start can read SUMO's effective configuration in order to validate §6.2 |
@@ -3923,7 +3957,7 @@ owner acts on it rather than rediscovers it.
 | **D6.7** | **An area of interest is a hard prerequisite for an absence**, not a later tier as in [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). An absence with no area cannot be expressed, and its observability is computed over the site, including the vehicles that *were* observed there (§3.5, §5.2) |
 | **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of [20 decision 3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and is a regression test (§3.6). **As built (2026-10-05):** the plan's types expose no writer — sealed records made only by reading the plan, with private constructors, no setter and only immutable collections, held to that by a test over every type the plan reaches — and a session binds the plan the lock names to the files it runs (§8.1). The binder holds one record per interval of the plan and states only copies of the plan's rows (§3.3); a test runs one scenario three ways -- at another SUMO step, and with its window opening mid-run -- and finds the same triples, the plan's own, with the times differing. **As built (2026-10-05), the diff:** the run manifest writes every interval as the binder opens and closes it and names every triple the plan declares, and `CarlaControl/scripts/diff_run_manifests.py` compares two runs' manifests by those triples, exiting non-zero on any difference (§8.4); it passes on the manifests of the three runs above and fails on one altered to name a phase its plan does not declare. |
 | **D6.9** | **Truth authority is settled field by field, not producer by producer.** CARLA is authoritative for pose, height, bounding box and everything camera-relative; SUMO is authoritative for kinematics, existence in the simulation and network state. Neither producer is discarded and the reconciled record can recover both (§4.2) |
-| **D6.10** | **The SUMO-to-CARLA disagreement is recorded, never absorbed.** `pose_separation_m`, `heading_separation_deg`, `speed_separation_mps` and `dimension_separation_m` per vehicle per captured tick, summarised in the manifest. It is the only mechanism that catches a pose-convention error, which otherwise produces plausible imagery and bounding boxes wrong by half a car length (§4.3) |
+| **D6.10** | **The SUMO-to-CARLA disagreement is recorded, never absorbed.** It is the only mechanism that catches a pose-convention error, which otherwise produces plausible imagery and bounding boxes wrong by half a car length (§4.3). **As built and as ruled (2026-10-05): a run-level measurement.** The session compares every commanded pose and velocity with what the world applied on the same tick, and the run's figures -- samples, vehicle-ticks nothing read back, worst and mean position, worst yaw, pitch and roll, worst and mean velocity against the mean commanded speed, and the vehicle and instant of each worst -- are written on the manifest's `manifest_closed` row as `bridge_divergence`, in the run result, and as two closeout gates with limits, `bridge.position_divergence` (0.01 m) and `bridge.velocity_divergence` (0.01 m/s), set from the measured distribution. The four per-capture fields this decision once named, `pose_separation_m`, `heading_separation_deg`, `speed_separation_mps` and `dimension_separation_m`, are withdrawn: no sidecar carries them. `heading_separation` is defined once, in §4.3. An independent test holds the pose convention to numbers worked out by hand |
 | **D6.11** | **Observability has five outcomes, and `not_rendered` is not one of the corpus's contents.** `out_of_frame` and `occluded` are collection-geometry facts and are honest content, reported as coverage; `not_rendered` is a corpus-construction artifact, is **reported as an exclusion** and is not counted among the intervals the corpus holds, because it is a row in the plan with no pixels behind it. The boundary between them is the **rendered span**, bounded by the recorded admission and release instants of D6.19, never by opacity or an arrival latch (§5.1) |
 | **D6.12** | **[20 decision 14](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) does not apply to this mode, and SUMO's own distribution edits are governed instead.** Teleports (all three options) are forbidden; `collision.action` is constrained to `warn` (amended 2026-10-05 by the owner's ruling, from `warn` or `none`: the record of collisions must always exist, as [13](13_Work_Breakdown.md) §13 decision 5 settles — record it, mark the span, never stop — and under `none` SUMO skips the check, so a run could not say whether any collision happened, where under `warn` it changes nothing about the traffic and only registers the event); `max-depart-delay` skips are always recorded and are a hard failure when they discard a plan subject; arrivals, emergency stops and insertion backlog are recorded; an unseeded run and `random-depart-offset` are forbidden. `lanechange.duration` must be above zero (§6); the compiler writes 3 s ([04](04_Contracts.md) D4.42). **Built at session start (2026-10-02):** every teleport trigger is refused unless the run accepts teleporting explicitly, as `time-to-teleport` already was; a collision action other than `warn` — `none` and `ignore-accidents` among them since 2026-10-05 — a positive `random-depart-offset` and `random` are refused with no acceptance; the scale, the cap on vehicles running and `max-depart-delay` are recorded, and the run report states every one as it ran. **Built at compile time (2026-10-05), as the owner ruled:** the hard failure for a plan subject. SUMO's insertion and its discards are deterministic for one configuration and seed, so the scenario compiler runs the compiled files in SUMO alone over the whole span and refuses the scenario when a vehicle the plan names -- an instance's participant or a series' realised slot -- is discarded or still waiting at the end ([07](07_Scenario_Authoring.md) check 59), and the lock records that the run happened. **Built in the binder (2026-10-05):** a plan subject SUMO gives up inserting closes its intervals `never_inserted` and makes the advance that showed it refuse at the window stage, naming the vehicle. A `lanechange.duration` of zero is recorded on the report, not refused |
 | **D6.13** | **`entity_id` defaults to the SUMO vehicle id**, which closes [20 §4.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s cross-run identity gap for authored trips at no cost (§7.1) |
@@ -4012,11 +4046,14 @@ owner acts on it rather than rediscovers it.
    **The residual risk is bounded by D6.2**: an accidental positive can only sit in the corpus as
    `unlabelled`, which asserts nothing, so a consumer that files it as a negative has violated the
    three-valued contract rather than been misled by it.
-7. **Whether the reconciliation residual should gate a capture or only annotate it.** A pose
-   separation beyond tolerance means the bounding boxes are wrong. Refusing the capture loses data;
-   recording it and moving on ships a corrupted example. Recommendation: refuse above a hard
-   threshold, record between a soft and hard threshold, and set both from the first measured
-   distribution rather than by guess.
+7. **CLOSED (2026-10-05) -- the divergence gates the run, not a capture, and the limits are from the
+   measured distribution.** A pose separation beyond tolerance means the bounding boxes are wrong, on
+   every vehicle of every frame, so there is no capture to refuse and keep the rest: the worst position
+   and the worst velocity over the run are closeout gates (§4.3, D6.10), each against a limit the run
+   configuration carries, 0.01 m and 0.01 m/s by default, chosen from 39 measured drives (worst
+   0.000403 m and 0.000006 m/s) with the smallest fault either catches well above them. A gate not
+   met deletes nothing and hides nothing, as every gate ([12](12_Operator_Control_Surface.md) §7.2);
+   the reader has the figures, the vehicle and the instant.
 8. **Whether truncated intervals — `closed_by = capture_window_end` or `render_released` — are usable
    training examples at all.** Doc 20's question 3 with new causes. Every vehicle SUMO has is drawn
    inside a window, so a body is released mid-behaviour only when the window closes on it — a committed
@@ -4049,6 +4086,17 @@ owner acts on it rather than rediscovers it.
     drive them. Recommendation: if they are driven, record the state per vehicle in the `_carla` block
     with `kinematics_source="sumo"`'s sibling provenance; if they are not, record that fact once in the
     manifest so a corpus's night imagery is not silently missing its strongest cue.
+    **As built and as ruled (2026-10-05): the lights are driven, and the rule is in the manifest; the
+    per-vehicle state is not yet in the truth.** The session drives every rendered body's lights
+    ([11](11_Time_And_Illumination.md) §6.2, §6.3, D11.8, D11.9): headlights on below +3° and off
+    above +6° of the geometric sun the world reports, brake lights and turn signals from SUMO's
+    signals. The manifest's opening row records the rule each run ran under (`vehicle_lights`: whether
+    driven, both elevations, which elevation, and the signal source), so a collection's night imagery
+    says what its lights follow. The owner ruled that per-vehicle light state in the truth record comes
+    later; until then a reader has the rule, the sun on every capture, and the catalogue's statement
+    of which bodies' lights show at all -- as measured, none of the shipped bodies show headlights,
+    brake lights or turn signals lit, which the authoring skill's `references/vehicles.md` and the
+    resolution report's vehicle section now state per body.
 12. **Whether the illumination bands should stay [11](11_Time_And_Illumination.md) §4.4's.** Which
     bands exist is settled — doc 11's six, defined there — and this section, the core vocabulary and
     the scenario compiler all use them. Whether they are the right cut points for this imagery and this

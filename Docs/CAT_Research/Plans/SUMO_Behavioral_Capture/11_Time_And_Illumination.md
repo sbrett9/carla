@@ -2,8 +2,9 @@
 
 **Status:** Plan. The epoch, the per-window sun binding, the session's per-frame write of an advancing
 sun, the asserted policy, the per-tick solar audit, the per-frame record and every capture's
-illumination band are built in `CarlaNet.CoSim`, `CarlaNet.Recording` and `CarlaNet.Types`; the night
-work and the lamps are not. Claims about existing behaviour are cited to `path:line`; measurements
+illumination band are built in `CarlaNet.CoSim`, `CarlaNet.Recording` and `CarlaNet.Types`, and so are
+the vehicle lights, with the rule each run ran under on the run manifest's opening row; the night work
+is not, and per-vehicle light state is not yet in the truth. Claims about existing behaviour are cited to `path:line`; measurements
 say how they were taken; inferences are labelled.
 **Scope:** The mapping from a scenario's simulated seconds to a civil date, time and zone; how the
 solar clock is driven during a capture window; the freeze-versus-advance policy; what is actually
@@ -19,6 +20,7 @@ possible. Assumes familiarity with the fork but not with the conversation that p
 | 2026-09-28 | §8.3: a sun absent from a snapshot after binding stops the run as built, and the shutdown does not fail for it. |
 | 2026-09-30 | The render cap (128, hard 192) is removed: never measured, since M2 never ran, and the scenario is the arbiter of population. Every vehicle SUMO has is drawn and a heavier scenario runs slower, never thinner, so lamp-command and solar-sweep costs are stated on the whole live population from [`10`](10_Scale_And_Performance.md) §4.8.1's map-wide measurements (§6.6, §9, D11.11). |
 | 2026-10-02 | The bands are built: one table in `CarlaNet.Types` (`IlluminationBands`), read by Python through `carlanet`. Every capture's `<_solar>` and `carla:solar` carry `illumination_band`, cut from the achieved sun's refraction-corrected elevation where the block carries it, and `illumination_band_elevation` naming the elevation used; an elevation that is not a sun's has none. A capture written without a solar block is counted per recorder and gated at zero at closeout (§4.4, §8.2-§8.4, F8). |
+| 2026-10-05 | The vehicle lights are driven (§6.2, §6.3, D11.8, D11.9 as built): headlights by `HeadlightRule` from the geometric sun elevation the world reports, on below +3° and off above +6° by default, brake lights and turn signals from SUMO's signals. The rule each run ran under is on the run manifest's opening row as `vehicle_lights`, as the owner ruled; per-vehicle light state in the truth record comes later (§8.2). The catalogue's optical pass is shown to authors: the skill's generated `references/vehicles.md` and the resolution report state per class and body whether headlights, brake lights and turn signals light up, and as measured no shipped body shows any lit. |
 
 Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
 epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
@@ -1023,6 +1025,25 @@ to a heuristic:
 `headlights_driven` is recorded per window (§4.4) so a consumer knows whether the headlight state in
 a frame is a real signal or a constant.
 
+**As built (2026-10-05).** The rule is `HeadlightRule` (`CarlaNet/src/CarlaNet.CoSim/HeadlightRule.cs`),
+built by the session from `SumoDriveSessionOptions.HeadlightOnBelowDegrees` and
+`HeadlightOffAboveDegrees` (+3 and +6 by default) when `VehicleLampsDriven` is set, which it is by
+default; an empty or inverted band is refused before the session starts. It reads **the geometric
+elevation** the world reports on each snapshot, `sun_elevation_deg`, not the refraction-corrected one
+(F13; question 7): the lights in the imagery and the sun in the record come from one source, and under
+a frozen sun the rule is decided once. Under an advancing sun a tick's lights are written before its
+frame renders, so they follow the sun the previous frame reported, a twentieth of a second earlier. A
+window opening inside the band starts with the headlights off. The brake lights and turn signals come
+from `VehicleLampMapping` (§6.2, D11.8), written on a loan, on a change of SUMO's signals and darkened on
+release. **The rule each run ran under is on the run manifest's opening row**, as the owner ruled, as
+`vehicle_lights`: `driven`, `headlights_on_below_deg`, `headlights_off_above_deg`,
+`headlights_elevation` (`geometric`), `brake_lights` and `turn_signals` (`sumo_signals`), all but
+`driven` null where the lights are not driven ([`12`](12_Operator_Control_Surface.md) §4.5). Per-vehicle
+light state in the truth record comes later, by the same ruling. Whether a light *shows* on a body is
+the catalogue's statement: its optical pass measured every body's lights, and as measured no shipped body
+shows headlights, brake lights or turn signals lit; the authoring skill's generated
+`references/vehicles.md` and the resolution report's vehicle section state it per class and body.
+
 ### 6.4 Whether it is worth doing at all
 
 For an EO capture at altitude, honestly:
@@ -1291,7 +1312,9 @@ at Gardnerville: `declared_civil` 10:01:00.05, `<_solar>` holding 10:01:00.001 (
 10.0167 h), `residual_clock_s` −0.049.
 
 A run that declared nothing writes no `<_illumination>` at all. Of the two §4.4 fields that depend on
-the lamps and the band, `headlights_asserted` is not written, because the headlight rule is not built.
+the lamps and the band, `headlights_asserted` is not written: the headlight rule is built and driven
+(§6.3), and the rule each run ran under is on the run manifest's opening row as `vehicle_lights`, but
+per-vehicle light state in the truth record comes later, by the owner's ruling of 2026-10-05.
 `illumination_band` is written, and with the achieved sun rather than the declaration: on `<_solar>`
 and in `carla:solar`, after the attributes those always carried, because the band comes from the sun
 the frame was lit by and never from the time the run declared ([`06`](06_Truth_And_Annotation.md)

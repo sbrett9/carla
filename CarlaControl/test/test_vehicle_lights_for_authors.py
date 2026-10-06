@@ -3,7 +3,7 @@ resolution report's vehicle section, per class and body, whether headlights, bra
 signals light up, read from the catalogue's optical pass (`lamp_capability`).
 
 Information only (the owner's ruling, 2026-10-05): the co-simulation session drives every body's lights
-by one rule, and a body whose lamps are `unlit` is commanded and shows nothing, so an author choosing a
+by one rule, and a body whose lights are `unlit` is commanded and shows nothing, so an author choosing a
 body for a night scenario needs the verdict in front of them. Nothing refuses or warns on it. The
 reference is generated from the catalogue and the shipped file is held equal to it, as `checks.json`
 and the schemas are (`07_Scenario_Authoring.md` §8.3).

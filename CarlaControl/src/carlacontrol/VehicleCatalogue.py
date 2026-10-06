@@ -271,7 +271,7 @@ class VehicleCatalogue:
         hold, or one swept before the pass measured lamps, is `unknown` throughout.
 
         Information for an author and for the resolution report; nothing is refused or warned on it.
-        The session drives the lights by the same rule on every body, so a body whose lamps are
+        The session drives the lights by the same rule on every body, so a body whose lights are
         `unlit` is commanded and shows nothing.
         """
         capability = self._lamp_capabilities.get(blueprint_id)
