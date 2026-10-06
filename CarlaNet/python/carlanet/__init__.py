@@ -531,6 +531,13 @@ def _sync(task):
     return task.GetAwaiter().GetResult()
 
 
+def _names_no_such_function(failure):
+    """Whether a server answered that it binds no function of that name: a server built before the
+    call existed. rpclib's words, and CarlaNet's own server's."""
+    text = str(getattr(failure, "Message", None) or failure)
+    return "could not find function" in text or "unknown method" in text
+
+
 def _to_cs_geo(p):
     """Coerce a Python (lat, lon[, alt]) tuple / object to a C# GeoLocation."""
     if isinstance(p, GeoLocation):
@@ -1723,6 +1730,39 @@ class World:
         return {"min_x": float(vals[0]), "min_y": float(vals[1]),
                 "max_x": float(vals[2]), "max_y": float(vals[3]), "margin": float(vals[4])}
 
+    def drive_lease_holder(self):
+        """Who holds the world's drive lease, or None while nobody does.
+
+        The drive lease is the server-held claim to be the one traffic system that drives the
+        world's vehicles; a SUMO drive session takes it before SUMO starts. While a holder has it the
+        server refuses `set_autopilot(True)`, vehicle control, Ackermann control and physics control
+        for every actor and every client, naming the holder, so a traffic tool asks here before it
+        spawns anything and says who to stop. A server built before it carried the lease answers
+        None: nothing on such a server stops another traffic system."""
+        try:
+            holder = _sync(self._client.GetDriveLeaseHolderAsync())
+        except Exception as failure:
+            if _names_no_such_function(failure):
+                return None
+            raise
+        return None if holder is None else str(holder)
+
+    def break_drive_lease(self):
+        """End whatever drive lease is held on the world, from any client, and return the holder
+        whose lease was ended, or None where none was held.
+
+        The recovery for a drive that died without releasing its lease: the server gives no notice
+        of a disconnect, so such a lease is held until the world is reloaded or this is called. The
+        server logs it as a warning naming the holder, so a lease broken under a live drive is on
+        the record. A server built before it carried the lease answers None."""
+        try:
+            broken = _sync(self._client.BreakDriveLeaseAsync())
+        except Exception as failure:
+            if _names_no_such_function(failure):
+                return None
+            raise
+        return None if broken is None else str(broken)
+
     def get_cesium_origin(self):
         """Cesium georeference origin as (latitude, longitude, height_m). The true elevation
         of a local point at Unreal Z is height_m + Z."""
@@ -2480,13 +2520,26 @@ class World:
         the run stops as for any other SUMO failure and everything is given back. It must exceed the
         slowest step the scenario produces -- measured steps are milliseconds -- and be positive.
 
+        The session takes the world's drive lease on the server before SUMO starts, as
+        "<holder> (process <pid> on <machine>)". While it holds it the server refuses every other
+        traffic system's control writes -- `set_autopilot(True)`, vehicle, Ackermann and physics
+        control, direct or in a batch -- for every actor and every client, naming the holder, so a
+        traffic manager in any process moves nothing and a second drive session is refused at its own
+        claim. `session.Drive` is the hold; `session.Report.DriveLeaseHolder` the name. A server built
+        before it carried the lease refuses the claim: the run goes on, `session.Report.DriveLeaseRefused`
+        carries the server's words, and nothing on that server stops another traffic system. The lease
+        is given back when the session is disposed; a drive that dies without disposing leaves it held
+        until the world is reloaded or `world.break_drive_lease()` ends it.
+
         Every refusal -- from this call or from `session.Advance()` -- is a
         `CarlaNet.CoSim.CoSimSessionRefusedException` (a held population is its subclass
-        `PopulationAuthorityHeldException`, with `HeldBy`; a failed solar audit is
+        `PopulationAuthorityHeldException`, with `HeldBy`, whether the process-local lease or the
+        server's drive lease refused it; a failed solar audit is
         `SolarAuditFailedException`) whose `Stage` says how far the session had got, and whose
-        `StageName` gives it as text: 'Validation' (nothing started or written), 'Launch' (SUMO started
-        and the world's clock and layers taken; no lease), 'Authority' (the lease is held by another),
-        'PreRoll' (the lease taken, before the window opens: the fast-forward, the sun's binding and
+        `StageName` gives it as text: 'Validation' (nothing started or written), 'Authority' (a lease
+        is held by another; taken before SUMO starts, so nothing started or written), 'Launch' (the
+        leases taken, SUMO started and the world's clock and layers taken),
+        'PreRoll' (before the window opens: the fast-forward, the sun's binding and
         its read-back, and a prewarm tick) or 'Window' (from `Advance`, from the window's opening on).
         A SUMO failure is such a refusal too, quoting what SUMO last wrote to its console, and so is a
         failure of the connection to this CARLA server -- a dropped socket, or a call such as the tick

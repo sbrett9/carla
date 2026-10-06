@@ -27,27 +27,31 @@ public enum CoSimSessionStage
     Validation = 0,
 
     /// <summary>
-    /// Refused after SUMO was started on the scenario and the world's clock and rendering layers were
-    /// taken, and before the population lease: SUMO could not load the scenario, the world would not
-    /// hold synchronous mode at the delta asked of it, the SUMO step, the world's delta and the capture
+    /// Refused after the leases were taken and SUMO was started on the scenario, with the world's
+    /// clock and rendering layers taken: SUMO could not load the scenario, the world would not hold
+    /// synchronous mode at the delta asked of it, the SUMO step, the world's delta and the capture
     /// rate do not divide, or the connection to the server failed while the clock or the layers were
-    /// written. SUMO has been stopped and the world's clock and layers given back, or named on the
-    /// refusal where only the unreachable server could hold them.
+    /// written. SUMO has been stopped, the world's clock and layers given back, or named on the
+    /// refusal where only the unreachable server could hold them, and both leases given back.
     /// </summary>
     Launch = 1,
 
     /// <summary>
-    /// Refused because something else holds the world's population, which the refusal names. SUMO has
-    /// been stopped and the world's clock and layers given back.
+    /// Refused because something else holds the world's population, which the refusal names: in this
+    /// process, through <see cref="WorldDriveAuthority"/>, or on the server, as the world's drive lease
+    /// another client holds. Taken before SUMO is started, so SUMO has not been started and nothing on
+    /// the server has been written. Also the stage of a connection that failed while the drive lease
+    /// was being taken.
     /// </summary>
     Authority = 2,
 
     /// <summary>
-    /// Refused after the population lease was taken and before the window opened. From
+    /// Refused after the leases were taken, SUMO started and the clock validated, and before the
+    /// window opened. From
     /// <see cref="SumoDriveSession.Start"/>: SUMO failing or not answering during its fast-forward or the
     /// step of lookahead after it, the world's sun refusing the binding, reading back other than it was
     /// written, or disagreeing with the declaration at the window's opening instant, or the connection to
-    /// the server failing while the sun is bound -- and the lease,
+    /// the server failing while the sun is bound -- and the leases,
     /// the sun, the bodies, the layers, the clock and SUMO have all been given back. From
     /// <see cref="SumoDriveSession.Advance"/>: any of the <see cref="Window"/> refusals raised on a tick
     /// of the prewarm, rendered before the window-open instant -- and the caller disposes the session,

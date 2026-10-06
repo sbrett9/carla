@@ -221,7 +221,8 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
 
         Assert.Equal(
             ["Could not give back the world's sun", "Could not destroy the bodies the session spawned",
-             "Could not draw the rendering layers again", "Could not give back the world's settings"],
+             "Could not draw the rendering layers again", "Could not give back the world's settings",
+             "Could not give back the world's drive lease"],
             shutdown.InnerExceptions.Select(failure => failure.Message.Split(':')[0]));
         Assert.Null(WorldDriveAuthority.ForWorld(options.WorldKey).CurrentHolder);
         Assert.True(SpinUntil(() => console.Any(line => line.Contains("TraCI requested termination"))),
@@ -246,11 +247,11 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         Assert.Same(dropped, refused.InnerException);
         Assert.Contains("taking the world's clock and rendering layers", refused.Message);
 
-        // The clock was taken before the connection dropped and cannot be given back over it; that is
-        // named, and SUMO -- this process's own -- was stopped regardless.
-        Exception settings = Assert.Single(refused.GiveBackFailures);
-        Assert.StartsWith("Could not give back the world's settings", settings.Message);
-        Assert.Same(dropped, settings.InnerException);
+        // The clock and the drive lease were taken before the connection dropped and cannot be given
+        // back over it; both are named, and SUMO -- this process's own -- was stopped regardless.
+        Assert.Equal(["Could not give back the world's settings", "Could not give back the world's drive lease"],
+                     refused.GiveBackFailures.Select(failure => failure.Message.Split(':')[0]));
+        Assert.All(refused.GiveBackFailures, failure => Assert.Same(dropped, failure.InnerException));
         Assert.True(SpinUntil(() => console.Any(line => line.Contains("TraCI requested termination"))),
                     "SUMO was not stopped");
         Assert.Null(WorldDriveAuthority.ForWorld(options.WorldKey).CurrentHolder);
@@ -272,7 +273,8 @@ public sealed class SumoDriveSessionFailureTests : IDisposable
         Assert.Equal(CoSimSessionStage.PreRoll, refused.Stage);
         Assert.Equal(CoSimStopCause.WorldConnectionLost, refused.Cause);
         Assert.Same(dropped, refused.InnerException);
-        Assert.Equal(["Could not draw the rendering layers again", "Could not give back the world's settings"],
+        Assert.Equal(["Could not draw the rendering layers again", "Could not give back the world's settings",
+                      "Could not give back the world's drive lease"],
                      refused.GiveBackFailures.Select(failure => failure.Message.Split(':')[0]));
         Assert.Null(WorldDriveAuthority.ForWorld(options.WorldKey).CurrentHolder);
         Assert.True(SpinUntil(() => console.Any(line => line.Contains("TraCI requested termination"))),

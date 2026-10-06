@@ -1094,6 +1094,16 @@ def main() -> int:
         if session is None:
             return 1
 
+        # Whether the server holds the drive lease for this run. Without it nothing on the server
+        # stops a traffic manager or a second drive putting vehicles into the capture; the run report
+        # says so, and so does the console, which an operator reads first.
+        if session.Report.DriveLeaseRefused is not None:
+            logger.warning("drive lease NOT HELD: this server has no drive lease, so nothing on it "
+                           "stops another traffic system driving vehicles into this run (the server "
+                           "said: %s)", session.Report.DriveLeaseRefused)
+        else:
+            logger.info("drive lease: held as %s", session.Report.DriveLeaseHolder)
+
         # What the session launched -- which installation, and which of its binaries -- and how that
         # binary stood against the world's converter, as the session established it. An accepted
         # mismatch and an unchecked world both ran, and both are said louder than a match.
@@ -1234,6 +1244,17 @@ def main() -> int:
                          "cause is vTypes with no carla:blueprint parameter, which are simulated and "
                          "never given a body.")
         return 0
+    except CoSimSessionRefusedException as refused:
+        # Refused before the first tick -- at the start, or on a prewarm step -- with everything the
+        # session took given back. A world another drive holds gets its own line: the holder is who
+        # to stop, and one SUMO drive is the only traffic system a world admits.
+        holder = getattr(refused, "HeldBy", None)
+        if holder is not None:
+            logger.error("\nrefused: %s holds this world's drive lease. Stop that drive, or run "
+                         "against a different world; where the drive is gone and did not release "
+                         "the lease, world.break_drive_lease() ends it.", holder)
+        logger.error("the session refused at %s: %s", refused.StageName, refused.Message)
+        return 1
     finally:
         # Order matters on the way out: stop tapping the cameras, take them out of the world, then
         # let the session give back the bodies, the population lease and the world's clock. The

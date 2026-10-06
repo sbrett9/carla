@@ -27,6 +27,7 @@
 #include "Carla/Actor/ActorSupervision.h"
 #include "Carla/Actor/CarlaActor.h"
 #include "Carla/Actor/RenderSetMembership.h"
+#include "Carla/Game/DriveLease.h"
 #include "Carla/Game/WorldSupervisionState.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
@@ -366,6 +367,26 @@ FString FCarlaServer::FPimpl::SettleCameraName(carla::rpc::ActorDescription &Des
     if (!GameMode) \
     { \
       RESPOND_ERROR("unable to find CARLA game mode"); \
+    }
+
+/// The refusal a vehicle-control RPC answers while a client holds the world's drive lease
+/// (take_drive_lease): the call, and who holds it, so the refused client can say who to stop.
+static FString DriveLeaseRefusal(const TCHAR *Call, const FDriveLease &Lease)
+{
+  return FString::Printf(
+      TEXT("%s: refused while %s holds the drive lease on this world; no other traffic drives a "
+           "vehicle here until the holder releases it (release_drive_lease), the world is reloaded, "
+           "or the lease is broken (break_drive_lease)"),
+      Call,
+      *carla::rpc::ToFString(Lease.Holder));
+}
+
+/// Refuse the call while a drive lease is held. After REQUIRE_CARLA_EPISODE().
+#define REQUIRE_NO_DRIVE_LEASE(call) \
+    if (Episode->GetDriveLease().IsHeld()) \
+    { \
+      const FString DriveLeaseRefused = DriveLeaseRefusal(TEXT(call), Episode->GetDriveLease()); \
+      RESPOND_ERROR_FSTRING(DriveLeaseRefused); \
     }
 
 carla::rpc::ResponseError RespondError(
@@ -1957,6 +1978,101 @@ void FCarlaServer::FPimpl::BindActions()
     return Applied;
   };
 
+  // Take the drive lease on this world: the claim to be the one traffic system that drives its
+  // vehicles. Held on the episode, so a map load ends it. While it is held, set_actor_autopilot
+  // (enabling), apply_control_to_vehicle, apply_ackermann_control_to_vehicle and
+  // apply_physics_control -- direct and in a batch -- are refused for every actor, naming the
+  // holder, so a traffic manager started against this server moves nothing and a second drive
+  // session is refused here, before it starts anything. A SUMO drive session takes it before SUMO is
+  // started and gives it back on every exit path. Refused while any holder has it, the same name
+  // included: two sessions under one name are still two sessions.
+  //
+  // The RPC server gives no notice of a client disconnecting, so a holder that dies without
+  // releasing leaves the lease held until the world is reloaded or break_drive_lease is called.
+  BIND_SYNC(take_drive_lease) << [this](const std::string &holder) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    if (holder.empty())
+    {
+      RESPOND_ERROR("take_drive_lease: the holder names itself, so a refusal can say who to stop");
+    }
+    FDriveLease &Lease = Episode->GetDriveLease();
+    if (Lease.IsHeld())
+    {
+      const FString Refusal = FString::Printf(
+          TEXT("take_drive_lease: refused; %s holds the drive lease on this world since frame %llu, "
+               "and no other traffic may drive its vehicles until that holder releases it, the world "
+               "is reloaded, or the lease is broken (break_drive_lease)"),
+          *cr::ToFString(Lease.Holder),
+          static_cast<unsigned long long>(Lease.TakenFrame));
+      RESPOND_ERROR_FSTRING(Refusal);
+    }
+    Lease.Holder = holder;
+    Lease.TakenFrame = FCarlaEngine::GetFrameCounter();
+    UE_LOG(LogCarlaServer, Log, TEXT("drive lease taken by %s on frame %llu"),
+        *cr::ToFString(holder), static_cast<unsigned long long>(Lease.TakenFrame));
+    return R<void>::Success();
+  };
+
+  // Give the drive lease back. Only its holder may, named as it named itself when it took it, so a
+  // client that did not take the lease cannot end another's drive by mistake; a client that has lost
+  // its holder's name uses break_drive_lease and is logged doing so.
+  BIND_SYNC(release_drive_lease) << [this](const std::string &holder) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FDriveLease &Lease = Episode->GetDriveLease();
+    if (!Lease.IsHeld())
+    {
+      RESPOND_ERROR("release_drive_lease: no drive lease is held on this world");
+    }
+    if (Lease.Holder != holder)
+    {
+      const FString Refusal = FString::Printf(
+          TEXT("release_drive_lease: refused; the drive lease is held by %s, not by %s, and only its "
+               "holder gives it back (break_drive_lease ends it from anywhere, and is logged)"),
+          *cr::ToFString(Lease.Holder),
+          *cr::ToFString(holder));
+      RESPOND_ERROR_FSTRING(Refusal);
+    }
+    UE_LOG(LogCarlaServer, Log, TEXT("drive lease released by %s"), *cr::ToFString(holder));
+    Lease = FDriveLease();
+    return R<void>::Success();
+  };
+
+  // End whatever drive lease is held, from any client: the recovery for a holder that died without
+  // releasing, since the RPC server gives no notice of a disconnect. Logged as a warning naming the
+  // holder whose lease was ended, so a lease broken under a live drive is on the record. Answers the
+  // holder's name, or an empty string where none was held.
+  BIND_SYNC(break_drive_lease) << [this]() -> R<std::string>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FDriveLease &Lease = Episode->GetDriveLease();
+    const std::string Broken = Lease.Holder;
+    if (Lease.IsHeld())
+    {
+      UE_LOG(LogCarlaServer, Warning,
+          TEXT("drive lease BROKEN: the lease %s took on frame %llu was ended by break_drive_lease, "
+               "not released by its holder; if that holder is still driving, its traffic now shares "
+               "the world with whoever drives next"),
+          *cr::ToFString(Broken), static_cast<unsigned long long>(Lease.TakenFrame));
+      Lease = FDriveLease();
+    }
+    else
+    {
+      UE_LOG(LogCarlaServer, Log, TEXT("break_drive_lease: no drive lease was held"));
+    }
+    return Broken;
+  };
+
+  // Who holds the drive lease on this world: the holder's name, or an empty string while nobody
+  // does. A traffic tool asks before it spawns anything, so it is refused before its first vehicle
+  // rather than at its hundredth control write.
+  BIND_SYNC(get_drive_lease) << [this]() -> R<std::string>
+  {
+    REQUIRE_CARLA_EPISODE();
+    return Episode->GetDriveLease().Holder;
+  };
+
   // Set how far from a camera the actors named are drawn: the max draw distance of every primitive
   // component of each actor and of every actor attached to it, and of their light components, so
   // nothing of a body farther than that from a view is rendered in that view, the light its lamps
@@ -2577,6 +2693,7 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
       cr::VehiclePhysicsControl PhysicsControl) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    REQUIRE_NO_DRIVE_LEASE("apply_physics_control");
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {
@@ -2885,11 +3002,17 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
 
   // ~~ Apply control ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+  // The vehicle-control calls, and set_actor_autopilot below, are refused for every actor while a
+  // client holds the drive lease (take_drive_lease): the .NET traffic manager drives through
+  // apply_control_to_vehicle in a batch, so refusing the autopilot flag alone would not stop it. The
+  // batch forms call these same lambdas, so the refusal reaches them too.
+
   BIND_SYNC(apply_control_to_vehicle) << [this](
       cr::ActorId ActorId,
       cr::VehicleControl Control) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    REQUIRE_NO_DRIVE_LEASE("apply_control_to_vehicle");
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {
@@ -2915,6 +3038,7 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
       cr::VehicleAckermannControl Control) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    REQUIRE_NO_DRIVE_LEASE("apply_ackermann_control_to_vehicle");
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {
@@ -3125,11 +3249,18 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
     return R<void>::Success();
   };
 
+  // Enabling the autopilot is refused for every actor while a drive lease is held; disabling it is
+  // not, so a traffic tool shutting down while a drive holds the world can still take its vehicles
+  // off the autopilot before it destroys them.
   BIND_SYNC(set_actor_autopilot) << [this](
       cr::ActorId ActorId,
       bool bEnabled) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    if (bEnabled)
+    {
+      REQUIRE_NO_DRIVE_LEASE("set_actor_autopilot");
+    }
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {

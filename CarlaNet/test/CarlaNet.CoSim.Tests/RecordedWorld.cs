@@ -84,6 +84,24 @@ internal class RecordedWorld : ICarlaWorld
     /// <summary>How many times the settings were written.</summary>
     public List<EpisodeSettings> SettingsWrites { get; } = [];
 
+    /// <summary>
+    /// Who holds the world's drive lease, as the server holds it on the episode: null while nobody
+    /// does. Set before a session starts to stand for another client's drive holding the world.
+    /// </summary>
+    public string? DriveLeaseHolder { get; set; }
+
+    /// <summary>
+    /// Set to have the world refuse every claim on the drive lease with this message and name no
+    /// holder, as a server built before it carried the lease does: it has no such call.
+    /// </summary>
+    public string? RefusesDriveLease { get; set; }
+
+    /// <summary>Every claim on the drive lease, by the name it was made under, in order.</summary>
+    public List<string> DriveLeaseClaims { get; } = [];
+
+    /// <summary>Every release of the drive lease, by the name it was made under, in order.</summary>
+    public List<string> DriveLeaseReleases { get; } = [];
+
     /// <summary>Every batch, in the order it was applied.</summary>
     public IReadOnlyList<IReadOnlyList<Command>> Batches => _batches;
 
@@ -304,6 +322,55 @@ internal class RecordedWorld : ICarlaWorld
     {
         Connected(nameof(AdoptCatalogueBaseTypes));
         BaseTypeAdoptions.Add((new Dictionary<string, string>(baseTypes), Descriptions));
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Granted as the server grants it: to the first claim while nobody holds it, and refused naming
+    /// the holder while anybody does, the same name included.
+    /// </remarks>
+    public DriveLeaseWrite TakeDriveLease(string holder)
+    {
+        Connected(nameof(TakeDriveLease));
+        DriveLeaseClaims.Add(holder);
+        if (RefusesDriveLease is { } refusal)
+        {
+            return new DriveLeaseWrite(null, refusal);
+        }
+
+        if (DriveLeaseHolder is { } held)
+        {
+            return new DriveLeaseWrite(
+                held, $"take_drive_lease: refused; {held} holds the drive lease on this world");
+        }
+
+        DriveLeaseHolder = holder;
+        return new DriveLeaseWrite(null, null);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Released as the server releases it: by its holder, and by nobody else.</remarks>
+    public string? ReleaseDriveLease(string holder)
+    {
+        Connected(nameof(ReleaseDriveLease));
+        DriveLeaseReleases.Add(holder);
+        if (RefusesDriveLease is { } refusal)
+        {
+            return refusal;
+        }
+
+        if (DriveLeaseHolder is null)
+        {
+            return "release_drive_lease: no drive lease is held on this world";
+        }
+
+        if (DriveLeaseHolder != holder)
+        {
+            return $"release_drive_lease: refused; the drive lease is held by {DriveLeaseHolder}, not by {holder}";
+        }
+
+        DriveLeaseHolder = null;
+        return null;
     }
 
     /// <inheritdoc/>

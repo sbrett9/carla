@@ -515,17 +515,16 @@ public sealed class SumoDriveSessionTests
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
 
-        // Something else holds the world's population, which is refused after the session has
-        // already taken the world's clock.
+        // Something else holds the world's population. The leases are taken before SUMO is started
+        // and before the world's clock or layers are touched, so the refusal writes nothing at all.
         using PopulationLease ambient = WorldDriveAuthority.ForWorld(options.WorldKey)
             .Acquire(PopulationMode.TrafficManagerAmbient, "TrafficController on the same world");
 
         Assert.Throws<PopulationAuthorityHeldException>(() => SumoDriveSession.Start(options));
         Assert.Equal(before, carla.Settings);
-
-        // The layers were written before the population was refused, so they too are given back.
-        Assert.Equal(4, carla.LayerWrites.Count);
-        Assert.All(carla.LayerWrites.Skip(2), write => Assert.True(write.Visible));
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.LayerWrites);
+        Assert.Empty(carla.DriveLeaseClaims);
     }
 
     [RequiresSumoFact]

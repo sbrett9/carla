@@ -65,6 +65,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §8.9, §9.7, D3.43: the interval binder is built. The session builds one from the plan its compile lock binds and tells it of every SUMO frame and every rendered frame after the caller's observers; it opens and closes the plan's intervals on SUMO's events at TraCI's clock, states each vehicle's supervision and each absence on the session's table from the frame at its instant and never before the window, reads back once the plan subjects SUMO already has when the session opens, and refuses the advance that shows SUMO dropped a plan subject. Each rendered frame now carries the pose written to each body it drew, from which the binder takes a stopping body's speed; an observer that writes intervals is handed them as they open and close. |
 | 2026-10-05 | §2.7, D3.29: the compile-lock check reads the lock's `dry_run` block and refuses, once the files, the catalogue, the epoch and the plan agree with the lock, a scenario whose compile skipped its SUMO-only run or whose lock records none, naming the scenario and the lock's reason, unless the run accepts it (`AcceptSkippedDryRun`; `run_sumo_drive.py --accept-skipped-dry-run`; `run_capture` `scenario.accept_skipped_dry_run`, which refuses offline first as check 54). The report carries a `dry run` line either way and the run manifest's opening row says whether the run happened and whether a skipped one was accepted. All four shipped locks record a completed run. |
 | 2026-10-05 | Corrected against the tree: §1's components carry the names the code has (`SolarLease`, `SolarAudit`, `VehicleLampMapping`, `HeadlightRule`, `VehicleBodyPool`, `TickBatch`, `SumoStepRecord`, `SumoRoadNetwork`, `CoSimStopCause`); the subscription is nine variables (§8.3); `sumo-gui` is staged and run (§2.6); the interval binder takes the bound plan (§2.7). |
+| 2026-10-05 | §10, D3.13: the drive lease is built. The episode holds `FDriveLease`, taken by `take_drive_lease` and given back by `release_drive_lease`; while it is held every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` is refused for every actor, direct and in a batch, naming the holder. The session takes it before SUMO starts, as `<holder> (process <pid> on <machine>)`, and gives it back after the world's settings on every exit path; a lease another client holds refuses the start at `Authority` naming the holder, with SUMO never launched. `break_drive_lease` ends a dead holder's lease, logged, since rpclib gives no disconnect notice; the per-actor mark and the solar cover are not built, the latter for want of a per-connection identity. The traffic tools refuse naming the holder; a server without the lease is recorded `NOT HELD`. |
 
 ---
 
@@ -797,10 +798,11 @@ on the HUD at `:580`), and a capture session must not be able to change a record
 corpus mid-run. Two things make it fixed. The capture launcher constructs no interactive display at
 all — `PygameInterface` is built only by `run_SCTMV.py:172`, `:198`, which a capture session does not
 run ([`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)) — so there is no `L` key to
-press. And `set_layer_visible` must join the set of RPCs the episode drive-mode flag refuses to a
-client without the drive lease, on exactly the argument §10.2 mechanism (4) makes for the solar
-calls: what the imagery contains is world-scoped state that a capture records, so exactly one
-component may write it. Today that RPC has no ownership check at all (`CarlaServer.cpp:697`).
+press. And `set_layer_visible` would join the RPCs refused to a client without the drive lease, on
+exactly the argument §10.2 mechanism (4) makes for the solar calls: what the imagery contains is
+world-scoped state that a capture records, so exactly one component may write it. Not built: that
+RPC has no ownership check, and refusing it to anyone but the lease holder needs a per-connection
+identity the server's handlers do not have (§10.2).
 
 **Suppression is at the session, not at the source — do not change world generation.** Signals reach
 a world because `SignInjector` writes the missing `<signal>` elements into the `.xodr`
@@ -2735,9 +2737,9 @@ snapshot as [`08`](08_Collection_And_EPoL.md) D8.3 asks of every one, and it is 
   connection — leaves its parked bodies named parked, which is still what they are, out of sight below
   the ground, and its lent bodies named for the vehicle each last drew, standing where it left them. An
   actor no session named, such as traffic-manager traffic started afterwards, is never left out. There
-  is no server-side session to tie it to instead: the population lease is process-scoped
-  (`WorldDriveAuthority`), and §10.2's episode-held mechanisms are not built. The per-actor record is
-  where §10.2 mechanism (1) would keep its bridge-owned mark; the lockout itself is still not built.
+  is no server-side session to tie it to instead. The world's drive lease (§10.2) is server-held but
+  world-wide, not per actor: it says who may drive vehicles, not which body is whose, and it too ends
+  with the episode or with `break_drive_lease` rather than with a session the server never sees.
 - **A server that refuses.** One built before this has no such call and answers it with an error. The
   session records the refusal (`CoSimRunReport.RenderSetRefused`, printed in its report) and names
   nothing more; its own recorded truth is cut to its render set in process either way, and only other
@@ -3666,44 +3668,101 @@ forbids.
 
 ### 10.2 The lockout
 
-> **D3.13 — Two mechanisms, because they cover different attackers.**
+> **D3.13 — Two mechanisms, because they cover different attackers.** Built 2026-10-05 as a
+> world-wide, server-held drive lease and a process-local lease; the per-actor mark and the solar
+> cover of the first design are not built, and this section states what is.
 
-**(1) Per-actor control authority, server-side.** An actor admitted to a SUMO-drive render set is
-marked *bridge-owned* in the episode. While an actor is bridge-owned, `set_actor_autopilot`,
-`apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and
-`apply_physics_control` return `ECarlaServerResponse` errors for it. This is the mechanism that
-actually matters, because the .NET traffic manager drives through `ApplyControlToVehicle`, not
-through the autopilot flag — a lock on `set_actor_autopilot` alone would not stop it.
+**(1) and (2) together: a world-wide drive lease, server-side.** The episode holds one `FDriveLease`
+(`Carla/Game/DriveLease.h`, `UCarlaEpisode::GetDriveLease`): the holder's name and the frame it was
+taken on, empty while nobody holds it. Four `BIND_SYNC` calls in `CarlaServer.cpp`, strings only, in
+the staging-bounds shape:
 
-**(2) An episode-level drive-mode flag, server-side.** While the episode is in SUMO-drive mode,
-`set_actor_autopilot(id, true)` is refused for **any** actor, including one no bridge owns. This is
-what stops a second process — another `run_SCTMV.py`, a stray notebook — from starting ambient
-traffic against the same server. Set by an RPC the session owns; cleared on session end and on
-client disconnect.
+| Call | Answer | Refused when |
+|---|---|---|
+| `take_drive_lease(holder)` | `R<void>` | the name is empty; any holder has it, the same name included -- naming the holder and the frame it was taken on |
+| `release_drive_lease(holder)` | `R<void>` | nothing is held; held under another name -- naming the holder |
+| `break_drive_lease()` | `R<std::string>`, the holder whose lease was ended, empty where none | never; logged as a `Warning` naming the holder and its frame |
+| `get_drive_lease()` | `R<std::string>`, the holder, empty while free | never |
 
-**(3) A client-side lease, for a legible error.** `CarlaClient` refuses `get_trafficmanager` and
-`SetActorAutopilotAsync` while a `SumoDriveSession` holds the lease, throwing at the call site rather
-than letting the operator discover the refusal from a server log. This is ergonomics, not security:
-it makes the failure obvious in the same process. It must never be the only mechanism.
+While the lease is held, `set_actor_autopilot(id, true)`, `apply_control_to_vehicle`,
+`apply_ackermann_control_to_vehicle` and `apply_physics_control` are refused for **every** actor and
+**every** client with `"<call>: refused while <holder> holds the drive lease on this world; no other
+traffic drives a vehicle here until the holder releases it (release_drive_lease), the world is
+reloaded, or the lease is broken (break_drive_lease)"` (`REQUIRE_NO_DRIVE_LEASE`). The batch forms
+(`ApplyVehicleControl`, `ApplyVehicleAckermannControl`, `ApplyVehiclePhysicsControl`, `SetAutopilot`)
+call the same lambdas, so the refusal reaches them too; this is what stops the .NET traffic manager,
+which drives through `apply_control_to_vehicle` in a batch. Disabling the autopilot is not refused, so
+a traffic tool shutting down under a drive can take its vehicles off the autopilot before destroying
+them. The drive itself writes poses with `ApplyTransform` and `ApplyTargetVelocity` and uses none of
+the refused calls, so the refusal needs no per-actor mark and no per-connection identity: the first
+design's bridge-owned mark per actor is not built, because the world-wide refusal covers it.
 
-**(4) The same episode flag covers the sun.** While the episode is in SUMO-drive mode,
-`set_solar_time`, `set_solar_date`, `set_solar_epoch` and `set_time_advance` are refused for any client that does not
-hold the drive lease. Today there is **no ownership check on these at all** — they are plain
-`BIND_SYNC` handlers that any connected client can call (`CarlaServer.cpp:614`, `:625`, `:661`) — so a
-stray notebook can move the sun under a capture in progress and nothing would notice except the audit
-(§9.4). This is the same argument as mechanism (2), applied to the world's other global: illumination
-is world-scoped, a capture's illumination is a recorded fact about the corpus, and exactly one
-component may write it (D3.18). The audit remains in place regardless, because a lockout that is
-newly written is not yet a lockout that is proven.
+The session takes the lease **before SUMO is started**, after the process-local population lease and
+before the world's clock and layers, as `"<holder> (process <pid> on <machine>)"`
+(`DriveLease.Take`, `SumoDriveSession.Begin`), so a claim the server refuses costs no SUMO process and
+writes nothing: it is a `PopulationAuthorityHeldException` at `Authority` with `HeldBy` the holder the
+server names, read back with `get_drive_lease` rather than parsed out of the refusal. A second
+`run_sumo_drive.py` or `run_capture` against the same server is refused there, whatever the first was
+started by. The lease is given back on every exit path after the world's settings, so nothing admitted
+by the release finds a world still carrying the run's bodies or clock; a refused release is one of the
+shutdown's named failures. `CoSimRunReport.DriveLeaseHolder` names the lease; `SumoDriveSession.Drive`
+is the hold.
 
-This also answers `_TEAM_BRIEF.md` §6 contract 4 (physics and control authority per actor): authority
-is explicit, server-held, per-actor, and there is exactly one way to hand it over — release the actor
-back to the pool. Mechanism (4) extends the same idea from per-actor authority to world-scoped
-authority.
+**Release when the holder dies.** rpclib offers no disconnect notification -- `server_session` closes
+the socket on EOF with no callback -- and its `this_session()` id is a thread-local set on its worker
+thread, which the sync handlers never see: `Server.h` posts them to the game thread. So the lease ends
+with the episode (a world reload) or with `break_drive_lease`, which any client may call and which the
+server logs loudly; `world.break_drive_lease()` in the shim. A lease cannot be reaped on disconnect
+without a change to rpclib or to `Server.h`'s `WrapSyncCall`, which could capture `this_session().id()`
+on the worker thread and carry it into the posted task.
 
-**Not lost:** the .NET traffic manager and the OpenSCENARIO executor are untouched outside a
-SUMO-drive session. The lockout is scoped to the session's lifetime and to the episode flag, both of
-which clear on exit.
+**(3) A client-side lease, for a legible error.** `WorldDriveAuthority` and `PopulationLease` refuse a
+second mode started from the same process, naming the first; taken beside the drive lease. Ergonomics,
+as before, and not the only mechanism.
+
+**(4) The same flag covering the sun: not built.** `set_solar_time`, `set_solar_date`,
+`set_solar_epoch`, `set_time_advance` and `set_layer_visible` stay open to every client, because
+refusing them to "anyone but the lease holder" needs the server to know which connection a call came
+from, and no handler has that (above). The audit (§9.4) remains what notices a sun moved under a
+capture. A per-connection identity would make this a small change; until then D3.24's "joins the RPCs
+the episode drive-mode flag refuses" is not in force.
+
+**Surfaced.** The .NET traffic manager, which discards batch responses, says once -- not only under
+`CARLANET_TM_DEBUG` -- when a control frame is refused for the lease
+(`TrafficManagerLocal.WarnIfLockedOut`). `TrafficController.enable` asks `world.drive_lease_holder()`
+before it spawns and refuses naming the holder; a spawn whose autopilot the server refuses switches
+traffic off naming the holder (`carlacontrol.DriveLease`, which reads the refusal by the same mark the
+traffic manager does). `run_SCTMV.py` says at start when a drive holds the world;
+`generate_traffic_carlanet.py` is refused before it spawns, exit 1; `run_sumo_drive.py` prints a refused
+start with the holder and says whether the lease is held; `run_capture` concludes `refused_authority`
+with the holder, and its session facts carry `drive_lease`.
+
+**A server without the lease.** One built before it carried the calls refuses the claim with rpclib's
+"could not find function" (`CarlaRpcException.NamesNoSuchFunction`). The session goes on, as it does
+for a render set the server cannot carry, and the report says `drive lease NOT HELD` with the server's
+words (`CoSimRunReport.DriveLeaseRefused`); `run_sumo_drive.py` and `run_capture` warn. On such a
+server nothing stops another traffic system, and the run says so.
+
+**Not lost:** the .NET traffic manager and the OpenSCENARIO executor are untouched outside a SUMO-drive
+session: the refusals are in force only while a lease is held, and the lease ends with the session,
+the episode or `break_drive_lease`.
+
+**Exercised by** `DriveLeaseRpcTests` (the four calls against a stand-in server, the void envelope,
+rpclib's and the stand-in's words for a missing call), `CarlaClientWorldTests` (a claim granted,
+refused with the holder read back, and unavailable; a release refused), `DriveLeaseTests` (the hold,
+its release once, the refusal naming the holder, a server without the lease, a refused release),
+`SumoDriveSessionDriveLeaseTests` (taken before SUMO starts under the holder's name with its process;
+held through the run; given back after the settings; a lease another client holds refused at
+`Authority` with SUMO never launched and nothing written; a second session refused while the first
+holds; a server without the lease run with the lockout declared not held; a start refused after the
+lease giving it back; a connection dropped at the claim; a refused release among the shutdown's
+failures), `DriveLeaseLockoutTests` (the traffic manager's one-shot warning), and on the Python side
+`test_drive_lease_lockout` (the refusal recognised and its holder named by the traffic manager's mark;
+the shim's reads; `TrafficController` refusing, and switching off on a refused autopilot;
+`generate_traffic_carlanet.py` refused before it spawns) and `test_capture_session` (a server-held
+refusal concluded `refused_authority` with the holder; the facts' `drive_lease` held and not held).
+Only a live run shows the server refusing a real traffic manager's control frame, a second drive
+process refused at its claim, and `break_drive_lease` ending a dead holder's lease.
 
 ---
 
@@ -4207,7 +4266,7 @@ a capture of it says what it was measured against.
 | Cause | How it shows | What the session does |
 |---|---|---|
 | Wrong epoch arithmetic — an offset applied in the wrong direction, a zone the world kept at `longitude / 15` | constant offset from the window's opening | fault at the on-demand read-back, **before the first tick** |
-| A second client wrote the sun | step change mid-window | fault. **Nothing prevents this today** — the solar RPCs have no ownership check — which is why D3.13's fourth mechanism extends the episode drive-mode flag to cover them (§10.2) |
+| A second client wrote the sun | step change mid-window | fault. **Nothing prevents this** — the solar RPCs have no ownership check, and D3.13's fourth mechanism is not built: refusing them to anyone but the lease holder needs a per-connection identity the RPC server's handlers do not have (§10.2) |
 | The engine's advance left on, or switched on by another client | the advancing flag, and a clock moved between writes | fault on the first tick: the session sets it off, and the flag is compared exactly |
 | A date a whole day out | `solar_time` correct, `solar_day` wrong | caught by auditing the **date** with the clock as one instant; under `advance` the session writes the date with every frame |
 | No sun at all | zeros | caught earlier and harder by D3.22 |
@@ -4346,10 +4405,10 @@ unreachable server holds (§11.2).
 
 | Stage | Where in the sequence | What the refusals are | What it had taken, all given back |
 |---|---|---|---|
-| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock, the compile's SUMO-only run included (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4); SUMO's other edits to its population — the other teleport triggers, the collision action, a random departure offset and `random` (§11.5, §11.6) | nothing |
-| `Launch` | SUMO started on the scenario; the world's clock and layers taken; no lease | SUMO could not load the scenario; the world would not hold synchronous mode at the delta asked; the SUMO step, the delta and the capture rate do not divide; the connection failed while the clock or the layers were written | SUMO, the world's settings, the layers |
-| `Authority` | the population lease | another holds it, named (`PopulationAuthorityHeldException.HeldBy`) | as above |
-| `PreRoll` | the lease held, before the window opens: in `Start`, and in `Advance` on a prewarm tick (§9.5) | from `Start`, SUMO failing or not answering during the fast-forward or the step of lookahead, the sun refused, read back other than written, or disagreeing with the declaration for the window's opening, or the connection failing while the sun is bound; from `Advance`, any `Window` refusal raised on a prewarm tick | from `Start`, as above plus the lease, the sun and any bodies; from `Advance`, the caller disposes the session |
+| `Validation` | before SUMO is started and before anything on the server is written | the declarations (policy, epoch, pace, the ways to advance the world, the bound on SUMO's answers); the package, its drape and its frame (§7.2); the catalogue; the loaded world (read, not written; D3.26), or the connection failing while it is read; the SUMO installation and its release (§2.6); the scenario's network (§7.2) and compile lock (§2.7); `time-to-teleport` (§11.6); `ignore-route-errors` (§11.4); SUMO's other edits to its population — the other teleport triggers, the collision action, a random departure offset and `random` (§11.5, §11.6) | nothing |
+| `Authority` | the leases, before SUMO is started: the process-local population lease, then the world's drive lease on the server (§10.2) | another holds either, named (`PopulationAuthorityHeldException.HeldBy`); the connection failing while the drive lease is taken | nothing: SUMO not started, nothing written |
+| `Launch` | both leases held; SUMO started on the scenario; the world's clock and layers taken | SUMO could not load the scenario; the world would not hold synchronous mode at the delta asked; the SUMO step, the delta and the capture rate do not divide; the connection failed while the clock or the layers were written | SUMO, the world's settings, the layers, both leases |
+| `PreRoll` | the leases held and the clock validated, before the window opens: in `Start`, and in `Advance` on a prewarm tick (§9.5) | from `Start`, SUMO failing or not answering during the fast-forward or the step of lookahead, the sun refused, read back other than written, or disagreeing with the declaration for the window's opening, or the connection failing while the sun is bound; from `Advance`, any `Window` refusal raised on a prewarm tick | from `Start`, as above plus the sun and any bodies; from `Advance`, the caller disposes the session |
 | `Window` | from `Advance`, on a tick at or after the window's opening instant | the world produced no frame; the connection failed or a call on it, the tick cue among them, went unanswered; the sun disagreed on a tick, was absent from its snapshot or refused a frame's write; the server has no blueprint for a body the pool needs; SUMO failed, died or stopped answering mid-run | the caller disposes the session, which gives back everything it can reach |
 
 The frame check (§7.2) reads nothing but the package, so it runs before SUMO is started, with the other
@@ -4439,7 +4498,7 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | L4 | The CARLA-free SUMO→CoT path | **preserved, untouched** | `SumoCotBridge` and `sumo_cot_telemetry.py` stay a supported product; the bridge does not replace them (D3.1) |
 | L5 | Vehicle fade / staging dissolve | **not used in this mode — and it is already off by default in the working tree** | `--fade` carries `default=False` (`CarlaControlArgumentParser.py:318-328`); the mechanism is untouched and still available to any other client. Nothing needs dissolving: every vehicle SUMO has is drawn, so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it, timed by the lookahead, and its admission and release instants are recorded (§8.4, §8.5). |
 | L5b | **Gained:** the per-frame client RPC budget the fade used to consume | **headroom** | Removing one blocking RPC per vehicle per reconcile — *"the heaviest load this client puts on the server's per-frame RPC budget"* (`CarlaControlArgumentParser.py:318-328`) — is what lets the per-tick write be a single `apply_batch` with no variable tail (§3.3). A capability table should record a gain as carefully as a loss. |
-| L6 | The .NET traffic manager and the OpenSCENARIO executor | **preserved outside this mode** | locked out only for the session's lifetime (D3.13); clears on exit and on disconnect |
+| L6 | The .NET traffic manager and the OpenSCENARIO executor | **preserved outside this mode** | locked out only while the drive lease is held (D3.13); clears on exit, on a world reload and on `break_drive_lease` -- not on disconnect, which the RPC server gives no notice of |
 | L6b | Rendered traffic-light and sign actors | **not rendered in this mode, by decision** | D3.24, and the reason is the imagery: the available meshes are limited and are frequently misaligned against the photoreal, so a rendered signal is an object in frame that does not correspond to the world the photoreal shows (`_TEAM_BRIEF.md` §3e). **The behaviour they govern is not lost** — SUMO's `tlLogic` programs and right-of-way rows still run and its vehicles still obey them, and that behaviour is exactly what the pose stream carries (§3.4). The sensor streams do not change either: generated lights and signs in this fork are **sensor-invisible by design**, returning nothing to semantic lidar or radar, so what is withdrawn is the RGB mesh and the human view of it. The world build is untouched — the actors are hidden, not removed — so any other mode renders them as before. |
 | L7 | Suspension travel | **lost** | none. Bounded, deliberate, confined to this mode. |
 | L8 | Wheel rotation and steer angle | **lost** | none *today* — and note per G8 that steer angle is already unavailable in this port regardless of mode, so the marginal loss is wheel spin |
@@ -4470,7 +4529,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.10** | **A vehicle admitted to the render set appears at full opacity; a released one disappears.** No dissolve, no per-vehicle opacity RPC, no fade state published. Every vehicle SUMO has is drawn (§8.3) unless an optional limit is chosen, so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it -- and under a limit also where the limit admits and releases it, as abruptly (§8.3.2) — the scenario's own events, timed by §8.4's lookahead — rather than at a transition a fade would paper over. The arrival gate needs no replacement: with no fade record, `IsActorEstablished` is `true` and the truth gate is inert (`CarlaClient.cs:1571`; `VehicleTelemetryService.cs:66-73`). `VehicleTelemetry.Opacity` is a constant 1.0 in this mode. What is still required is the **recorded admission and release instant** per vehicle. |
 | **D3.11** | In a SUMO-drive session **SUMO is the only removal authority**. The bridge translates removals; it never originates one. This resolves [issue #18](https://github.com/sbrett9/carla/issues/18) for this mode by deleting both of its deciders rather than adding a third. |
 | **D3.12** | `SumoDriveSession` owns the advance of simulated time on both sides. `R = Δs/Δw` must be a positive integer; the session refuses to start otherwise. Neither side can outrun the other, because the loop is serial and the world clock is simulated. |
-| **D3.13** | The lockout is **four mechanisms**: per-actor server-side control authority (the one that actually stops the .NET TM, which drives via `ApplyControlToVehicle`), an episode-level drive-mode flag that refuses `set_actor_autopilot` for *any* actor (the one that stops a second process), a client-side lease for a legible error at the call site, and the same episode flag refusing **`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`** to anyone but the lease holder — because illumination is world-scoped state that a capture records, and today those RPCs have no ownership check whatever. |
+| **D3.13** | The lockout is a **server-held, world-wide drive lease** and a process-local lease. Built 2026-10-05: the episode holds `FDriveLease`; `take_drive_lease` / `release_drive_lease` / `break_drive_lease` / `get_drive_lease`; while it is held `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` are refused for *every* actor and *every* client, direct and in a batch, naming the holder — which stops the .NET TM, which drives via `ApplyControlToVehicle`, and a second process alike. The session takes it before SUMO starts; a lease another client holds refuses the start at `Authority` naming the holder. The first design's per-actor mark is not built, since the world-wide refusal covers it; the solar cover (`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`, and `set_layer_visible`) is not built, because refusing them to anyone but the holder needs a per-connection identity no handler has. Released by the holder, by a world reload, or by `break_drive_lease`, logged; rpclib gives no disconnect notice. A server without the lease is recorded on the run report as `NOT HELD`. |
 | **D3.14** | A session refuses to start against a configuration whose `time-to-teleport` enables teleporting — a positive value, or none, which SUMO takes as 300 s; measured, `0` disables it as `-1` does (§11.6) — unless the run accepts it explicitly, which the report records; and carries a non-overridable runtime jump detector that releases and re-admits rather than interpolating across a discontinuity. Every other teleport trigger — `time-to-teleport.highways`, `.disconnected` (on from 0), `.bidi`, `.railsignal-deadlock` and a vehicle type's own — is refused under the same acceptance (2026-10-02, §11.6). |
 | **D3.15** | Any fault that makes the truth record unreliable — SUMO connection loss, a world-tick timeout — **stops the run**. It does not degrade, does not restart `sumo`, and does not keep ticking a frozen pose buffer. |
 | **D3.17** | **Vehicle light state rides the existing per-tick `apply_batch`** as `SetVehicleLightStateCommand` (variant **18**), emitted when a body is lent and on a change, and `None` when it is given back, with the last written flags held client-side because the getter is an RPC and the snapshot carries no light state. **Built** (§3.5.3). Brake and indicator bits come from SUMO's `VAR_SIGNALS`, read at zero extra cost in the subscription the bridge already makes; `Position` and `LowBeam` come from sun elevation, because **SUMO has no headlight model at all** (§3.5.1). Measured batching cost: mean 14.44 / p90 31 / max 47 extra commands in one of the 20 sub-step batches per SUMO step — **0.72 amortised per tick, and zero extra RPCs**. |
@@ -4480,7 +4539,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.21** | **The sun is bound for the window's opening instant** — its first captured frame, `WindowOpensAtSimulatedSecond`, or the first rendered frame's where none is given — after the SUMO fast-forward and before the first world tick, and `set_time_advance(false, 0)` is issued **after** the clock is written, under every policy. A frozen sun is pinned there and holds through a render prewarm; under `advance` the sun is anchored there and written for every frame, prewarm frames included, at that frame's own instant. The fast-forward itself cannot move the sun — in synchronous mode no tick cue means no actor tick, so the controller never runs (§9.5) — but that is a property of the tick loop, not of the sun, and the audit is what keeps it true if the loop ever changes. A refusal raised on a prewarm tick is at `PreRoll`, from the window's opening on at `Window` (§11.10). |
 | **D3.22** | **A session refuses to start when the world reports no sun**, unless the run declares `require_sun: false`. Presence is probed with an on-demand `get_solar_state` and the return value of `set_solar_epoch`, never with the cached read, which is paired to the last tick and so predates the write (§9.4). A sun that goes away after it was bound stops the run at the next tick's audit, and the shutdown does not fail for the sun it can no longer give back (§11.7). |
 | **D3.23** | **A `SolarDisagreement` has the same consequence as a `TickFault`**: stop, park the render set, close the step record with `terminated: solar-state-disagreement`, fail the run. Same governing principle as D3.15 — a run that cannot produce honest truth must stop, not degrade. |
-| **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` joins the RPCs the episode drive-mode flag refuses to a client without the drive lease (§10.2 mechanism 4). Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
+| **D3.24** | **A SUMO-drive session renders neither the generated road surface nor the traffic-light and sign actors, and writes no traffic-light state.** No `SetTrafficLightStateCommand` in any batch, no traffic-light RPC, no `tlLogic` subscription. The `road` and `signals` layers are each written once at session start with `set_layer_visible` (`CarlaClient.cs:1077-1078` → `CarlaServer.cpp:697`; the `road` arm at `:729-738`, the `signals` arm at `:739-751` → `TrafficLightManager.cpp:618-628`), **fixed for the session's lifetime** with an operator override per layer that is a session-start decision and not a toggle, and given back on every exit path by `LayerVisibilityLease`. The run report records what was in frame. `set_layer_visible` would join the RPCs refused to a client without the drive lease (§10.2 mechanism 4), which is not built: it needs a per-connection identity. Suppression is at the session, not at the source: `SignInjector` and native `SpawnSignals` are untouched, because the world build is shared with other modes (§3.4). SUMO's `tlLogic` programs, its right-of-way rows and the actuated netconvert setting are unaffected, and its vehicles still obey them. Vehicle lamps are a separate mechanism and are unchanged (D3.17). |
 | **D3.25** | **Real-time pacing is a factor the session reads once at start**, 0 by default and unconstrained, applied immediately before every world tick cue against the absolute schedule `T0 + n·Δw/f` counted from the first cue, so an overrun is absorbed rather than accumulated and the SUMO fast-forward is never paced. The session times every cue, paced or not, and publishes the achieved factor per window of wall clock (default 5 s), for the whole run and for the worst window, with the slip behind schedule, on `CoSimRunReport.Pacing`. It never stops or slows a run for falling behind: the floor is undecided and the consumer-side response is `08` §11.3's (§9.9). |
 | **D3.26** | **A session given a world refuses a world package that does not describe the world the server has loaded, and a world that carries no bare-earth reference record**, before SUMO is started and before anything on the server is written: the record's drape flag, grid and both grids against the package's — the grids by the SHA-1 the server computes when the record is set (`get_bare_earth_digest`), never by fetching them — the georeference origin against the manifest's, and the served OpenDRIVE against the package's by normalised digest (§7.2). An admitted package's grids are handed to the session's client for its truth telemetry, which takes them only where the server's digests match. |
 | **D3.27** | **A session refuses to launch a SUMO whose release is not the converter the world package records**, compared by release number and settled before SUMO is started, naming both releases, the installation and the rule that found it. `AllowSumoVersionMismatch` accepts the difference. An accepted mismatch and a package that records no converter both run, and the run report names either; it carries the installation, its release and the rule that found it on every run. `run_sumo_drive.py` names the installation — the repository's pinned build first — rather than leaving it to `SUMO_HOME` (§2.6). |

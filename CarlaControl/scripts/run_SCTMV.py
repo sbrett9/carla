@@ -156,6 +156,13 @@ def main() -> int:
     traffic = TrafficController.create(world, client, tm, args)
     if not traffic.available:
         logger.warning("traffic unavailable: %s", traffic.reason)
+    # A SUMO drive holding the world's lease refuses this client's traffic at the server: said here,
+    # at start, as well as when T is pressed, so the operator is not left wondering why nothing moves.
+    holder = traffic.drive_lease_holder()
+    if holder is not None:
+        logger.warning("traffic locked out: %s holds this world's drive lease; the server refuses every "
+                       "other traffic system's autopilot and vehicle-control writes until it is released",
+                       holder)
 
     # Telemetry Controller
     run_id = f"run-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
