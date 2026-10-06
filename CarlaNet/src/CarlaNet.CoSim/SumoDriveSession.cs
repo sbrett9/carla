@@ -91,6 +91,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly LaneArcInterpolator _interpolator;
     private readonly SumoRoadNetwork _network;
     private readonly PopulationLease _lease;
+    private readonly DriveLease? _drive;
     private readonly WorldSettingsLease? _settings;
     private readonly LayerVisibilityLease? _layers;
     private readonly VehicleBodyPool? _pool;
@@ -175,6 +176,7 @@ public sealed class SumoDriveSession : IDisposable
                              RoadSurface roads,
                              VehicleCatalogue catalogue,
                              PopulationLease lease,
+                             DriveLease? drive,
                              WorldSettingsLease? settings,
                              LayerVisibilityLease? layers,
                              VehicleBodyPool? pool,
@@ -195,6 +197,7 @@ public sealed class SumoDriveSession : IDisposable
         _headlights = headlights;
         _network = network;
         _lease = lease;
+        _drive = drive;
         _settings = settings;
         _layers = layers;
         _pool = pool;
@@ -236,6 +239,8 @@ public sealed class SumoDriveSession : IDisposable
             SumoStepOverrideSeconds = options.SumoStepOverrideSeconds,
             Pacing = _pacer,
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
+            DriveLeaseHolder = drive?.Holder,
+            DriveLeaseRefused = drive?.Refusal,
             Epoch = options.Epoch,
             Illumination = options.Illumination,
             SumoSeed = seed,
@@ -339,6 +344,12 @@ public sealed class SumoDriveSession : IDisposable
     /// and what it was found holding. Null where the session binds no sun.
     /// </summary>
     public SolarLease? Sun => _sun;
+
+    /// <summary>
+    /// The session's hold on the world's drive lease: the name it was taken under, and whether the
+    /// server holds it for this run or refused it. Null where the session drives no world.
+    /// </summary>
+    public DriveLease? Drive => _drive;
 
     /// <summary>
     /// The comparison of the world's sun against the declared one, taken when the window opened and
@@ -539,8 +550,9 @@ public sealed class SumoDriveSession : IDisposable
     /// <summary>
     /// Start a session: check the world package is the loaded world's, check the SUMO it launches is
     /// the release that converted the world, check the scenario runs on the world package's network,
-    /// validate the clock, check that network is in the world's frame, take the population lease, and
-    /// buffer the one SUMO step of lookahead every sub-step pose is interpolated inside.
+    /// check that network is in the world's frame, take the population lease and the world's drive
+    /// lease, start SUMO, validate the clock, and buffer the one SUMO step of lookahead every sub-step
+    /// pose is interpolated inside.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
     /// The session renders a world and declares no illumination policy, or a policy that binds the
@@ -553,7 +565,8 @@ public sealed class SumoDriveSession : IDisposable
     /// the one it records; a compile lock beside the scenario binds other files, another catalogue or
     /// another epoch; the scenario lets SUMO teleport a blocked vehicle and that was not accepted; the
     /// clock does not divide, the world is asynchronous, the network is not in
-    /// the world's frame, something else already holds the world's population, or the world's sun
+    /// the world's frame, something else already holds the world's population -- in this process, or
+    /// on the server as the world's drive lease -- or the world's sun
     /// could not be bound; the scenario tells SUMO to carry on past a route it cannot follow; SUMO could
     /// not load the scenario or failed during its fast-forward; or the connection to the CARLA server
     /// failed. Its <see cref="CoSimSessionRefusedException.Stage"/> says how far the start had got, and
@@ -615,10 +628,18 @@ public sealed class SumoDriveSession : IDisposable
     private static string WhatTheStartWasDoing(CoSimSessionStage stage) => stage switch
     {
         CoSimSessionStage.Validation => "was checking the world the server has loaded",
+        CoSimSessionStage.Authority => "was taking the world's drive lease",
         CoSimSessionStage.Launch => "was taking the world's clock and rendering layers",
-        CoSimSessionStage.Authority => "was taking the population lease",
         _ => "was binding the world's sun, before the first tick",
     };
+
+    /// <summary>
+    /// The name the session takes the world's drive lease under: the holder the options name, with the
+    /// process and the machine, so the server's refusal of another client names something an operator
+    /// can find and stop.
+    /// </summary>
+    private static string DriveLeaseHolderName(SumoDriveSessionOptions options) =>
+        $"{options.Holder} (process {Environment.ProcessId} on {Environment.MachineName})";
 
     /// <summary>What a failed start gave back, as the sentence that ends its refusal.</summary>
     private static string GaveBack(IReadOnlyList<Exception> failures) =>
@@ -735,104 +756,124 @@ public sealed class SumoDriveSession : IDisposable
             extraArguments.Add(forced.ToString(CultureInfo.InvariantCulture));
         }
 
-        stage = CoSimSessionStage.Launch;
-        SumoConnection sumo = SumoConnection.Start(
-            installation,
-            options.ScenarioPath,
-            new SumoLaunchOptions
-            {
-                ExtraArguments = extraArguments,
-                Output = console.Add,
-                ReceiveTimeout = TimeSpan.FromSeconds(options.SumoAnswerTimeoutSeconds),
-                Gui = options.SumoGui,
-            });
-
-        WorldSettingsLease? settings = null;
-        LayerVisibilityLease? layers = null;
+        // Both leases before SUMO is started, so a world another traffic system holds is refused with
+        // nothing started and nothing written. The population lease is this process's own, and
+        // refuses a second mode started from the same harness; the drive lease is the server's, and
+        // refuses a second process -- another drive session, or a traffic manager -- whatever started
+        // it. The drive lease is the first thing written to the server, and the last given back.
+        stage = CoSimSessionStage.Authority;
+        PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
+            .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
+        DriveLease? drive = null;
         try
         {
-            // Take the world's clock before anything else is checked against it: the settings the
-            // session validates its own against have to be the ones the world is holding, not the
-            // ones the caller asked for.
-            settings = world is { } claimed
-                ? WorldSettingsLease.Take(claimed, options.WorldDeltaSeconds)
+            drive = world is { } driven
+                ? DriveLease.Take(driven, DriveLeaseHolderName(options))
                 : null;
 
-            // What is in frame, decided once and before anything is rendered. Both layers are a
-            // property of the corpus rather than of whoever launched the run, so the session writes
-            // them rather than trusting a launcher to: the generated road surface is a flat ribbon
-            // drawn over the photogrammetry of the real road, and the generated signals are meshes
-            // frequently misaligned against it. Hiding either is rendering-only -- the road keeps
-            // its collision and a hidden signal keeps its stop-line trigger -- so nothing here
-            // removes a surface to drive on. Nothing in this mode would notice if it did: a
-            // SUMO-driven body is teleported with its physics off.
-            layers = world is { } rendered
-                ? LayerVisibilityLease.Take(rendered, new Dictionary<string, bool>
+            stage = CoSimSessionStage.Launch;
+            SumoConnection sumo = SumoConnection.Start(
+                installation,
+                options.ScenarioPath,
+                new SumoLaunchOptions
                 {
-                    [LayerVisibilityLease.RoadLayer] = options.RoadLayerVisible,
-                    [LayerVisibilityLease.SignalLayer] = options.SignalLayerVisible,
-                })
-                : null;
+                    ExtraArguments = extraArguments,
+                    Output = console.Add,
+                    ReceiveTimeout = TimeSpan.FromSeconds(options.SumoAnswerTimeoutSeconds),
+                    Gui = options.SumoGui,
+                });
 
-            CoSimClock clock = CoSimClock.ForSession(
-                sumo.StepLength,
-                settings is { } held ? held.FixedDeltaSeconds : options.WorldDeltaSeconds,
-                options.CaptureRateHz,
-                settings is { } asked ? asked.Applied.SynchronousMode : options.WorldIsSynchronous);
-
-            // Settled as soon as SUMO's step is known, before anything is rendered: a track sampled
-            // between two SUMO frames would record states nobody simulated.
-            int trackSumoStepsPerSample = options.WorldTruthTrackPath is null
-                ? 1
-                : WorldTruthTrackWriter.SumoStepsPerSampleAt(options.WorldTruthTrackIntervalSeconds,
-                                                             clock.SumoStepSeconds);
-
-            stage = CoSimSessionStage.Authority;
-            PopulationLease lease = WorldDriveAuthority.ForWorld(options.WorldKey)
-                .Acquire(PopulationMode.SumoDrivenPlayback, options.Holder);
-
-            stage = CoSimSessionStage.PreRoll;
-            VehicleBodyPool? pool = null;
-            SumoDriveSession? session = null;
+            WorldSettingsLease? settings = null;
+            LayerVisibilityLease? layers = null;
             try
             {
-                pool = world is { } bodies
-                    ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
+                // Take the world's clock before anything else is checked against it: the settings the
+                // session validates its own against have to be the ones the world is holding, not the
+                // ones the caller asked for.
+                settings = world is { } claimed
+                    ? WorldSettingsLease.Take(claimed, options.WorldDeltaSeconds)
                     : null;
-                session = new SumoDriveSession(options, world, sumo, console, release, compiled,
-                                               teleporting, routeErrors, distributionEdits,
-                                               collisionHandling, laneChanges, headlights, clock,
-                                               network, ground, roads, catalogue, lease, settings, layers,
-                                               pool, (manifest.OriginLatitude, manifest.OriginLongitude),
-                                               seed, trackSumoStepsPerSample);
-                session.Prime();
-                session.BindTheSun();
-                return session;
+
+                // What is in frame, decided once and before anything is rendered. Both layers are a
+                // property of the corpus rather than of whoever launched the run, so the session writes
+                // them rather than trusting a launcher to: the generated road surface is a flat ribbon
+                // drawn over the photogrammetry of the real road, and the generated signals are meshes
+                // frequently misaligned against it. Hiding either is rendering-only -- the road keeps
+                // its collision and a hidden signal keeps its stop-line trigger -- so nothing here
+                // removes a surface to drive on. Nothing in this mode would notice if it did: a
+                // SUMO-driven body is teleported with its physics off.
+                layers = world is { } rendered
+                    ? LayerVisibilityLease.Take(rendered, new Dictionary<string, bool>
+                    {
+                        [LayerVisibilityLease.RoadLayer] = options.RoadLayerVisible,
+                        [LayerVisibilityLease.SignalLayer] = options.SignalLayerVisible,
+                    })
+                    : null;
+
+                CoSimClock clock = CoSimClock.ForSession(
+                    sumo.StepLength,
+                    settings is { } held ? held.FixedDeltaSeconds : options.WorldDeltaSeconds,
+                    options.CaptureRateHz,
+                    settings is { } asked ? asked.Applied.SynchronousMode : options.WorldIsSynchronous);
+
+                // Settled as soon as SUMO's step is known, before anything is rendered: a track sampled
+                // between two SUMO frames would record states nobody simulated.
+                int trackSumoStepsPerSample = options.WorldTruthTrackPath is null
+                    ? 1
+                    : WorldTruthTrackWriter.SumoStepsPerSampleAt(options.WorldTruthTrackIntervalSeconds,
+                                                                 clock.SumoStepSeconds);
+
+                stage = CoSimSessionStage.PreRoll;
+                VehicleBodyPool? pool = null;
+                SumoDriveSession? session = null;
+                try
+                {
+                    pool = world is { } bodies
+                        ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
+                        : null;
+                    session = new SumoDriveSession(options, world, sumo, console, release, compiled,
+                                                   teleporting, routeErrors, distributionEdits,
+                                                   collisionHandling, laneChanges, headlights, clock,
+                                                   network, ground, roads, catalogue, lease, drive,
+                                                   settings, layers, pool,
+                                                   (manifest.OriginLatitude, manifest.OriginLongitude),
+                                                   seed, trackSumoStepsPerSample);
+                    session.Prime();
+                    session.BindTheSun();
+                    return session;
+                }
+                catch
+                {
+                    // Each step is attempted whatever the one before it did: a server that dropped the
+                    // connection fails every step that writes to it, and none of those may stop the
+                    // leases from being given back below. A start refused writes no track: it rendered
+                    // nothing, and a track begun for it would read as a run cut off.
+                    Attempt(giveBack, "delete the world truth track", () => session?._track?.Discard());
+                    Attempt(giveBack, "delete the run manifest", () => session?._manifest?.Discard());
+                    Attempt(giveBack, "give back the world's sun", () => session?._sun?.Dispose());
+                    Attempt(giveBack, "destroy the bodies the session spawned", () => pool?.DestroyAll());
+                    throw;
+                }
             }
             catch
             {
-                // Each step is attempted whatever the one before it did: a server that dropped the
-                // connection fails every step that writes to it, and none of those may stop the lease
-                // -- this process's own -- from being given back. A start refused writes no track: it
-                // rendered nothing, and a track begun for it would read as a run cut off.
-                Attempt(giveBack, "delete the world truth track", () => session?._track?.Discard());
-                Attempt(giveBack, "delete the run manifest", () => session?._manifest?.Discard());
-                Attempt(giveBack, "give back the world's sun", () => session?._sun?.Dispose());
-                Attempt(giveBack, "destroy the bodies the session spawned", () => pool?.DestroyAll());
-                Attempt(giveBack, "give back the population lease", lease.Dispose);
+                // Everything this method changed, given back, in the reverse order it was taken. A
+                // session that failed to start must leave the world exactly as it found it: an operator
+                // whose editor is stranded in synchronous mode is waiting on a tick from a process that
+                // never started. Each step is attempted whatever the others did, so an unreachable
+                // server costs what only the server can hold and never the SUMO process.
+                Attempt(giveBack, "draw the rendering layers again", () => layers?.Dispose());
+                Attempt(giveBack, "give back the world's settings", () => settings?.Dispose());
+                Attempt(giveBack, "stop SUMO", sumo.Dispose);
                 throw;
             }
         }
         catch
         {
-            // Everything this method changed, given back, in the reverse order it was taken. A
-            // session that failed to start must leave the world exactly as it found it: an operator
-            // whose editor is stranded in synchronous mode is waiting on a tick from a process that
-            // never started. Each step is attempted whatever the others did, so an unreachable
-            // server costs what only the server can hold and never the SUMO process.
-            Attempt(giveBack, "draw the rendering layers again", () => layers?.Dispose());
-            Attempt(giveBack, "give back the world's settings", () => settings?.Dispose());
-            Attempt(giveBack, "stop SUMO", sumo.Dispose);
+            // The leases last, once the world is back as it was found: the drive lease held on the
+            // server, where only an unreachable server can keep it, and then this process's own.
+            Attempt(giveBack, "give back the world's drive lease", () => drive?.Dispose());
+            Attempt(giveBack, "give back the population lease", lease.Dispose);
             throw;
         }
     }
@@ -1056,6 +1097,9 @@ public sealed class SumoDriveSession : IDisposable
         Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
         Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
         Attempt(failures, "give back the world's settings", () => _settings?.Dispose());
+        // The drive lease once the world is back as it was found, so nothing another traffic system
+        // writes in the gap can reach a world still carrying this run's bodies or clock.
+        Attempt(failures, "give back the world's drive lease", () => _drive?.Dispose());
         Attempt(failures, "give back the population lease", _lease.Dispose);
         Attempt(failures, "stop SUMO", _sumo.Dispose);
 

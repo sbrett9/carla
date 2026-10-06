@@ -228,6 +228,104 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
         Assert.Contains("set_actors_max_draw_distance", written.Refusal);
     }
 
+    // R<void>'s success is [[false]]: an optional holding no error.
+    [MessagePackObject]
+    public record struct VoidSuccess([property: Key(0)] bool HasError);
+
+    [MessagePackObject]
+    public record struct VoidResponse([property: Key(0)] VoidSuccess Data);
+
+    /// <summary>
+    /// A server holding the drive lease as CarlaServer.cpp does: granted while nobody holds it,
+    /// refused naming the holder otherwise, released by the holder alone, read back by anyone.
+    /// </summary>
+    private void ServeTheDriveLease(string? heldBy)
+    {
+        string holder = heldBy ?? string.Empty;
+        _server!.RegisterHandler<string, VoidResponse>("take_drive_lease", claimant =>
+        {
+            if (holder.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"take_drive_lease: refused; {holder} holds the drive lease on this world since frame 3");
+            }
+
+            holder = claimant;
+            return new VoidResponse(new VoidSuccess(false));
+        });
+        _server.RegisterHandler<string, VoidResponse>("release_drive_lease", claimant =>
+        {
+            if (holder != claimant)
+            {
+                throw new InvalidOperationException(
+                    $"release_drive_lease: refused; the drive lease is held by {holder}, not by {claimant}");
+            }
+
+            holder = string.Empty;
+            return new VoidResponse(new VoidSuccess(false));
+        });
+        _server.RegisterHandler("get_drive_lease", () => Ok(holder));
+    }
+
+    [Fact]
+    public void A_Drive_Lease_Is_Taken_Under_Its_Name_And_Given_Back_Under_It()
+    {
+        ServeTheDriveLease(heldBy: null);
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        DriveLeaseWrite written = world.TakeDriveLease("a drive (process 41 on HOST)");
+
+        Assert.True(written.Taken);
+        Assert.False(written.HeldByAnother);
+        Assert.False(written.Unavailable);
+        Assert.Equal("a drive (process 41 on HOST)", _client!.GetDriveLeaseHolderAsync().GetAwaiter().GetResult());
+        Assert.Null(world.ReleaseDriveLease("a drive (process 41 on HOST)"));
+        Assert.Null(_client.GetDriveLeaseHolderAsync().GetAwaiter().GetResult());
+    }
+
+    [Fact]
+    public void A_Claim_On_A_Lease_Another_Holds_Is_Refused_With_That_Holder_Read_Back()
+    {
+        ServeTheDriveLease(heldBy: "another drive (process 7 on ELSEWHERE)");
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        DriveLeaseWrite written = world.TakeDriveLease("this drive");
+
+        Assert.False(written.Taken);
+        Assert.True(written.HeldByAnother);
+        Assert.False(written.Unavailable);
+        Assert.Equal("another drive (process 7 on ELSEWHERE)", written.HeldBy);
+        Assert.Contains("holds the drive lease", written.Refusal);
+    }
+
+    [Fact]
+    public void A_Server_Without_The_Drive_Lease_Is_A_Refusal_Naming_No_Holder()
+    {
+        // A server built before it carried the lease: the stand-in binds none of its calls, and
+        // answers each with an error as the CARLA server does.
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        DriveLeaseWrite written = world.TakeDriveLease("this drive");
+
+        Assert.False(written.Taken);
+        Assert.False(written.HeldByAnother);
+        Assert.True(written.Unavailable);
+        Assert.Null(written.HeldBy);
+        Assert.Contains("take_drive_lease", written.Refusal);
+    }
+
+    [Fact]
+    public void A_Release_Under_Another_Name_Is_Refused_In_The_Servers_Words()
+    {
+        ServeTheDriveLease(heldBy: "the drive");
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        string? refused = world.ReleaseDriveLease("somebody else");
+
+        Assert.NotNull(refused);
+        Assert.Contains("held by the drive, not by somebody else", refused);
+    }
+
     [Fact]
     public void A_Draw_Distance_That_Is_Not_Zero_Or_Positive_Is_Never_Sent()
     {

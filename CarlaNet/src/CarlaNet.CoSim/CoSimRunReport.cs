@@ -118,6 +118,21 @@ public sealed class CoSimRunReport
         new Dictionary<string, bool>();
 
     /// <summary>
+    /// The name the session took the world's drive lease under, which the server names in every
+    /// refusal it gives another traffic system while the run holds the world. Null where the session
+    /// drove no world.
+    /// </summary>
+    public string? DriveLeaseHolder { get; init; }
+
+    /// <summary>
+    /// Why the server granted no drive lease, in its words, or null where it holds one for the run or
+    /// the session drove no world. A server built before it carried the lease refuses the call; the
+    /// run goes on, and nothing on that server stops another traffic system driving vehicles into
+    /// the capture, so a run that reads this set was not protected.
+    /// </summary>
+    public string? DriveLeaseRefused { get; init; }
+
+    /// <summary>
     /// The SUMO step length the run was forced to, where an operator overrode the scenario's own.
     /// </summary>
     /// <remarks>
@@ -1077,6 +1092,15 @@ public sealed class CoSimRunReport
             text.AppendLine("layers             "
                             + string.Join(", ", LayerVisibility.OrderBy(entry => entry.Key)
                                 .Select(entry => $"{entry.Key} {(entry.Value ? "drawn" : "hidden")}")));
+        }
+
+        if (DriveLeaseHolder is { } holder)
+        {
+            text.AppendLine("drive lease        "
+                            + (DriveLeaseRefused is { } leaseRefused
+                                ? $"NOT HELD, so nothing on the server stopped another traffic system driving "
+                                  + $"vehicles into this run; the server refused it: {leaseRefused}"
+                                : $"held as {holder}; the server refused every other traffic system's control writes"));
         }
 
         AppendIllumination(text);

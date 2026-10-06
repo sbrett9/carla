@@ -51,6 +51,14 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
         Guard(nameof(AdoptCatalogueBaseTypes), () => _world.AdoptCatalogueBaseTypes(baseTypes));
 
     /// <inheritdoc/>
+    public DriveLeaseWrite TakeDriveLease(string holder) =>
+        Guard(nameof(TakeDriveLease), () => _world.TakeDriveLease(holder));
+
+    /// <inheritdoc/>
+    public string? ReleaseDriveLease(string holder) =>
+        Guard(nameof(ReleaseDriveLease), () => _world.ReleaseDriveLease(holder));
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() => Guard(nameof(ReadSettings), _world.ReadSettings);
 
     /// <inheritdoc/>

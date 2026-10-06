@@ -128,6 +128,59 @@ public sealed class CarlaClientWorld : ICarlaWorld
         _client.AdoptCatalogueBaseTypes(baseTypes);
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A server that refuses because another holder has the lease is answered with that holder, read
+    /// back from the server rather than parsed out of the refusal. A server that answers that it has
+    /// no such call -- one built before it carried the lease -- is answered as a refusal naming no
+    /// holder, so the session records it and goes on, as it does for the render set.
+    /// </remarks>
+    public DriveLeaseWrite TakeDriveLease(string holder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(holder);
+        try
+        {
+            _client.TakeDriveLeaseAsync(holder).GetAwaiter().GetResult();
+            return new DriveLeaseWrite(null, null);
+        }
+        catch (CarlaRpcException refused) when (refused.NamesNoSuchFunction)
+        {
+            return new DriveLeaseWrite(null, refused.Message);
+        }
+        catch (CarlaRpcException refused)
+        {
+            return new DriveLeaseWrite(ReadDriveLeaseHolder(), refused.Message);
+        }
+    }
+
+    /// <summary>Who the server says holds the drive lease, or null where it says nobody or cannot say.</summary>
+    private string? ReadDriveLeaseHolder()
+    {
+        try
+        {
+            return _client.GetDriveLeaseHolderAsync().GetAwaiter().GetResult();
+        }
+        catch (CarlaRpcException)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
+    public string? ReleaseDriveLease(string holder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(holder);
+        try
+        {
+            _client.ReleaseDriveLeaseAsync(holder).GetAwaiter().GetResult();
+            return null;
+        }
+        catch (CarlaRpcException refused)
+        {
+            return refused.Message;
+        }
+    }
+
+    /// <inheritdoc/>
     public EpisodeSettings ReadSettings() =>
         _client.GetEpisodeSettingsAsync().GetAwaiter().GetResult();
 

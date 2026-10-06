@@ -10,9 +10,9 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Twenty-one operations. The bridge asks which world is loaded, hands the world's truth
+/// <para>Twenty-three operations. The bridge asks which world is loaded, hands the world's truth
 /// telemetry the package's ground and the catalogue's base types and vehicle kinds once the package
-/// is established as that world's, places bodies,
+/// is established as that world's, takes and gives back the world's drive lease, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
 /// which parked, puts the supervision in force on the server, sets how far from a camera the bodies
 /// are drawn, reads back where the world says
@@ -91,6 +91,34 @@ public interface ICarlaWorld
     /// server, so nothing is given back.
     /// </remarks>
     void AdoptCatalogueBaseTypes(IReadOnlyDictionary<string, string> baseTypes);
+
+    /// <summary>
+    /// Take the world's drive lease under a name: the server-held claim to be the one traffic system
+    /// that drives the world's vehicles; answer what the server made of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>While the server holds the lease it refuses, for every actor and every client, each call
+    /// that would have another traffic system drive a vehicle -- the autopilot flag, vehicle control,
+    /// Ackermann control and physics control, direct or in a batch -- naming the holder. The session
+    /// takes it before SUMO is started, so a second drive session is refused before it starts anything
+    /// and a traffic manager started against the same server moves nothing.</para>
+    ///
+    /// <para>One round trip, at session start. A server that refuses because another holder has the
+    /// lease is answered with that holder named; one built before it carried the lease refuses the
+    /// call and names no holder, and the session records that the lockout is not in force and goes
+    /// on.</para>
+    /// </remarks>
+    DriveLeaseWrite TakeDriveLease(string holder);
+
+    /// <summary>
+    /// Give the world's drive lease back under the name it was taken with; answer why the server
+    /// refused, in its words, or <see langword="null"/> where it released the lease.
+    /// </summary>
+    /// <remarks>
+    /// Only the holder may release: a release under another name is refused and names the holder,
+    /// so a client that did not take the lease cannot end another's drive by mistake.
+    /// </remarks>
+    string? ReleaseDriveLease(string holder);
 
     /// <summary>The episode settings as the server currently holds them.</summary>
     EpisodeSettings ReadSettings();

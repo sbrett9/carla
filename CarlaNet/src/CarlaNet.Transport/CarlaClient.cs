@@ -1898,6 +1898,70 @@ public sealed class CarlaClient : IAsyncDisposable
         return _rpc.CallAsync<uint>("set_actors_max_draw_distance", actorIds, maxDrawDistanceMetres);
     }
 
+    /// <summary>
+    /// Take the drive lease on the world: the claim to be the one traffic system that drives its
+    /// vehicles. While a holder has it, the server refuses <c>set_actor_autopilot</c> (enabling),
+    /// <c>apply_control_to_vehicle</c>, <c>apply_ackermann_control_to_vehicle</c> and
+    /// <c>apply_physics_control</c>, direct and in a batch, for every actor and every client, naming
+    /// the holder; so a traffic manager started against the server moves nothing, and a second drive
+    /// session is refused here before it starts anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>Held on the server's episode, so a map load ends it, and refused while any holder has it,
+    /// the same name included. The server gives no notice of a client disconnecting, so a holder that
+    /// dies without <see cref="ReleaseDriveLeaseAsync"/> leaves the lease held until the world is
+    /// reloaded or <see cref="BreakDriveLeaseAsync"/> ends it.</para>
+    ///
+    /// <para>A server built before it carried the lease refuses the call with an error naming it
+    /// (<see cref="MsgPackRpc.CarlaRpcException.NamesNoSuchFunction"/>); nothing on such a server
+    /// stops another traffic system driving vehicles.</para>
+    /// </remarks>
+    /// <param name="holder">
+    /// Who is taking it, in words a refusal can print to the client it refuses: a component and
+    /// enough of a process to find and stop it.
+    /// </param>
+    /// <exception cref="MsgPackRpc.CarlaRpcException">Another holder has it, named in the message.</exception>
+    public Task TakeDriveLeaseAsync(string holder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(holder);
+        return _rpc.CallVoidAsync("take_drive_lease", holder);
+    }
+
+    /// <summary>
+    /// Give the drive lease back, as the holder that took it. Only the holder may: a client that did
+    /// not take the lease cannot end another's drive by mistake.
+    /// </summary>
+    /// <exception cref="MsgPackRpc.CarlaRpcException">
+    /// No lease is held, or it is held under another name, which the message gives.
+    /// </exception>
+    public Task ReleaseDriveLeaseAsync(string holder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(holder);
+        return _rpc.CallVoidAsync("release_drive_lease", holder);
+    }
+
+    /// <summary>
+    /// End whatever drive lease is held, from any client: the recovery for a holder that died without
+    /// releasing it. The server logs it as a warning naming the holder whose lease was ended. Answers
+    /// that holder's name, or null where none was held.
+    /// </summary>
+    public async Task<string?> BreakDriveLeaseAsync()
+    {
+        string broken = await _rpc.CallAsync<string>("break_drive_lease").ConfigureAwait(false);
+        return string.IsNullOrEmpty(broken) ? null : broken;
+    }
+
+    /// <summary>
+    /// Who holds the drive lease on the world, or null while nobody does. A traffic tool asks before
+    /// it spawns anything, so it is refused before its first vehicle rather than at its first control
+    /// write.
+    /// </summary>
+    public async Task<string?> GetDriveLeaseHolderAsync()
+    {
+        string holder = await _rpc.CallAsync<string>("get_drive_lease").ConfigureAwait(false);
+        return string.IsNullOrEmpty(holder) ? null : holder;
+    }
+
     // ── §8.8 Actor Transform and Physics ──────────────────────────────────────
 
     public Task SetActorLocationAsync(ActorId id, Location location)
