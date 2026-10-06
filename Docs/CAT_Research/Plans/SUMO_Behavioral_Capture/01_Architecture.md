@@ -27,6 +27,7 @@ cited is marked **inference**.
 | 6 — 2026-09-30 | §7, §9.2, §9.4, D1.14, §13: the render volume, the concurrent-actor cap and participant priority removed. The cap was never measured — M2 never ran — and the scenario is the arbiter of population: every vehicle SUMO has in a window is drawn, and a heavier scenario runs slower, never thinner. |
 | 7 — 2026-10-01 | D1.5, §2.3, §4.1, §4.2, §7, §8.2: a body is seated on the drape where its road is at grade and on its OpenDRIVE road's profile where the road is a structure — Z, pitch and roll by one weight from the road's departure from the drape at its reference line, blended between — and on the drape alone off every road. Measured live, the drape seated I-25's deck traffic on the ground beneath the deck; measured against the photoreal, the profile, built flat across from the carriageway's left edge, stands above a cambered road's outer lanes where the drape follows them. |
 | 8 — 2026-10-02 | §2.1: the converter keeps every OSM ramp meter out of junction joining and gives it a metering cycle read in the same invocation, converting an extract with meters twice and recording the second run; the package carries the meters' programme file as `map.tll.xml`. |
+| 10 — 2026-10-05 | §5.3, D1.7, D1.9: the server-held drive lease is built. The episode holds `FDriveLease`, taken and given back by RPC; the SUMO drive session takes it before SUMO starts and gives it back on every exit path; while it is held every other client's autopilot, vehicle-control, Ackermann and physics-control write is refused naming the holder; a second drive is refused at its claim; `break_drive_lease` ends a dead holder's lease, logged, since the RPC server gives no disconnect notice. D1.9's announcement is not built. |
 | 9 — 2026-10-05 | §2.3, §4.1, D1.10: `WorldSupervisionState` is held on the CARLA server, as the owner ruled -- "They have to be on the server. I do not want two clients ever having different truth state." The session puts each change on the server (`update_supervision`), the plan and the absences on the episode and each lent body's supervision on its own record, and the world observer carries it on every snapshot after the render set. Both world-scoped facts D1.10 names are now published that way. |
 
 **Out of scope, deliberately.** The per-tick mechanism of the co-simulation loop
@@ -879,20 +880,34 @@ playback mode. A component that cannot name a type cannot call it. This is cheap
 accidental case at compile time, but it does not stop a *different* component in the same process from
 starting ambient traffic, so it is not sufficient on its own.
 
-**Two — an exclusive, server-held lease.** `WorldDriveAuthority` grants **population authority** over a
-world to at most one holder, and names the mode in the grant. It is engine-held for the same reason
-staging bounds are: it must be visible to a client that did not create it, and must outlive the client
-that did (`StagingBounds.h`, `CarlaServer.cpp:808,828`). Acquisition is part of starting a session; a
-denied acquisition **fails the session start with the current holder named**. `TrafficController.enable`
-(`TrafficController.py:1096`) acquires it too, and fails the same way. Nothing takes the lease
-implicitly and nothing breaks it; it is released on clean shutdown and reaped when its holder's client
-disconnects.
+**Two — an exclusive, server-held lease.** Built 2026-10-05, in two parts. In the process,
+`WorldDriveAuthority` grants **population authority** over a world to at most one holder and names the
+mode in the grant; a second mode started from the same harness is refused there, naming the first. On
+the server, the episode holds a **drive lease** (`FDriveLease`, `CarlaEpisode.h`), taken by
+`take_drive_lease(holder)` and given back by `release_drive_lease(holder)`, for the same reason
+staging bounds are engine-held: it is visible to a client that did not create it, and it outlives the
+one that did. The SUMO drive session takes both before SUMO is started, the drive lease as
+`"<holder> (process <pid> on <machine>)"`; a lease another client holds **fails the session start at
+`Authority` with that holder named** (`PopulationAuthorityHeldException.HeldBy`), with SUMO never
+launched and nothing written. While the lease is held the server refuses `set_actor_autopilot`
+(enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and
+`apply_physics_control`, direct and in a batch, for every actor and every client, naming the holder --
+so the .NET traffic manager, which drives through `apply_control_to_vehicle`, moves nothing from any
+process, and says so once. `TrafficController.enable` asks `get_drive_lease` before it spawns anything
+and refuses naming the holder; `generate_traffic_carlanet.py` does the same. Nothing takes the lease
+implicitly. It is released on clean shutdown and ends with the episode on a world reload; the RPC
+server gives no notice of a client disconnecting and its sync handlers run on the game thread where
+its session id is not set, so a holder that dies without releasing leaves the lease held until the
+world is reloaded or `break_drive_lease` ends it, which the server logs as a warning naming the
+holder. A server built before it carried the lease refuses the claim; the session goes on and the run
+report says the lockout was not in force (`CoSimRunReport.DriveLeaseRefused`).
 
 **Three — mandatory announcement.** While a population-authority holder exists, any component that
 creates a vehicle actor must announce it to the holder. A storyboard entity that cannot be announced
 cannot be placed. This is what makes the conditional case of §5.2 safe rather than merely discouraged,
 and it is the mechanism by which the mirror of [23 §6.9](../../Findings/23_SUMO_Traffic_Integration.md)
-becomes a precondition rather than an aspiration.
+becomes a precondition rather than an aspiration. Not built: no component announces, and the storyboard
+executor is on another branch.
 
 Two capabilities are deliberately distinguished, because conflating them would forbid something worth
 having:
@@ -1686,9 +1701,9 @@ on opacity.
 | D1.4 | **Kinematic truth comes from SUMO.** The bridge writes SUMO's velocity to every body whose pose it writes, so `Actor.GetVelocity` on a pose-applied body reports SUMO's speed, measured equal to it in the truth sidecars ([03](03_CoSimulation_Runtime.md) §5.4); the record carries SUMO's speed and angle and says so (§4.3, §8.2) |
 | D1.5 | **A body is seated on the drape where its road is at grade and on its road where the road is a structure.** One weight, from how far the OpenDRIVE profile of the vehicle's own road departs from the drape at the road's reference line at the point its origin projects to, decides Z, pitch and roll alike: at grade the seat is the drape's exactly — the photoreal road across its whole width, crown and camber included, where the profile is the carriageway's left-edge height built flat across and stands above the outer lanes; on a structure Z and pitch are the profile's — the surface the engine builds its road mesh from, which alone knows a bridge deck and the road beneath it apart — and there is no roll; between, blended. A vehicle on no road — parked off its lane, or on an edge with no OpenDRIVE road — is seated on the drape alone. All of it in process with no RPC ([03](03_CoSimulation_Runtime.md) §7.5, D3.8). SUMO contributes no height and is never asked for one (§4.1, §8.2) |
 | D1.6 | **A `vType`'s colour never reaches a blueprint.** Appearance is drawn from the world's vehicle catalogue by the run seed; `vType` dimensions are respected because they change car-following behaviour, `vType` colour is display metadata and carrying it would make colour the label (§4.3). The same rule governs the light channel, which reopens the same hazard by a different route — see D1.24 |
-| D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. Ambient traffic and SUMO-driven playback both acquire it, so the lockout is a failed session start naming the current holder, never a runtime warning (§5.3) |
+| D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. **Built 2026-10-05** as the episode's drive lease (`FDriveLease`; `take_drive_lease`, `release_drive_lease`, `break_drive_lease`, `get_drive_lease`), beside the process-local `WorldDriveAuthority`. SUMO-driven playback takes both before SUMO starts; ambient traffic asks the server before it spawns. A second drive is refused at its claim and a traffic manager's every control write is refused while the lease is held, each naming the holder, so the lockout is a failed session start naming the current holder, never a runtime warning. Released by its holder, by a world reload, or by `break_drive_lease`, which is logged: the RPC server gives no disconnect notice (§5.3) |
 | D1.8 | **Motion authority is per actor and is distinct from population authority.** This is what lets storyboard execution coexist with an ambient mode, and what lets the actuated shape of §8.4 exist without contradicting D1.7 (§5.3) |
-| D1.9 | **While a population-authority holder exists, every vehicle any component creates must be announced to it.** A placement that cannot be announced is refused. This is what makes SUMO-plus-storyboard safe rather than merely discouraged (§5.2, §5.3) |
+| D1.9 | **While a population-authority holder exists, every vehicle any component creates must be announced to it.** A placement that cannot be announced is refused. This is what makes SUMO-plus-storyboard safe rather than merely discouraged (§5.2, §5.3). Not built: the drive lease refuses every other traffic system's control writes outright, and no component announces |
 | D1.10 | **World-scoped facts are published to the server, not held in a client process.** Two of them: supervision state and the render set, alongside drive authority and the area table which are world-scoped by construction. This resolves [20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) in favour of publication and dissolves both process-local registry failures of §3.1 together. Fade and arrival state are **not** published, because there is none to publish: `--fade` is off by default in the working tree and the arrival gate is inert with nothing fading, so no truth is lost and no replacement is owed (§3.1, §3.4). **Solar state is a third published world-scoped fact, and it is already implemented.** Eleven doubles ride the world-observer snapshot header (`WorldObserver.cpp:322-339`), the client exposes them as a lock-free tick-paired cache read with **no RPC** (`CarlaClient.cs:1850-1855`, `:1991`), and the recorder already consumes them (`FrameRecorder.cs:160-162`). This is the same mechanism [08 D8.3](08_Collection_And_EPoL.md) chose for the other two — and the precedent D8.3 cited for choosing it was `_solar` itself, so publishing solar state costs nothing and introduces nothing new (§4.1). **Both of the other two are now built on it.** The render set since 2026-10-01 ([03](03_CoSimulation_Runtime.md) D3.39), and supervision state since 2026-10-05, as the owner ruled: "They have to be on the server. I do not want two clients ever having different truth state." The session puts each supervision change on the server with `update_supervision`; the server holds the plan and the absences on the episode and each lent body's supervision on that actor's record; and the world observer carries it on every snapshot after the render set's entries, so no client holds truth of its own ([03](03_CoSimulation_Runtime.md) D3.43, [04](04_Contracts.md) §8.3b, [06](06_Truth_And_Annotation.md) D6.41) |
 | D1.11 | **This architecture designs no fade behaviour.** A vehicle admitted to the render set appears at full opacity and a released one disappears. `RenderedVehicleRegistry` owns existence, not appearance. What the capture records is the admission and release **tick**, which delimits the rendered span of D1.15; it is an instant, not a visual transition (§7, §8.2, §11) |
 | D1.12 | **The default deployment is one `CaptureSessionHost` process holding the clock, the bridge and every camera's recorder.** Extra camera processes are permitted and are tick followers. The shim's one-recorder-per-`World` limit (`carlanet/__init__.py:1908,1924`) is a defect to fix, not a reason to fan out (§3.4) |

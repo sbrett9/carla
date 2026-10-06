@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 36 | 2026-10-05. `C7`: the world's drive lease, held on the server (§9.3a, `D4.47`). A SUMO drive session takes it before SUMO starts with `take_drive_lease(holder)` and gives it back with `release_drive_lease`; while any client holds it the server refuses every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` for every actor, direct and in a batch, naming the holder, so a traffic manager or a second drive in any process is refused. `break_drive_lease` ends a dead holder's lease, logged; `get_drive_lease` names the holder. §9.1's traffic-manager row states it. |
 | 35 | 2026-10-05. `C10`: the world truth track flushes its rows once for each SUMO frame, when the frame's every row is written, and whatever it still holds as it closes, rather than after every row, as the owner ruled: it is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. W2 states the flush per frame as the track's rule. Every row is still a whole line, so the prefix stays valid, and a kill loses at most the frame being written (§12.7) |
 | 34 | 2026-10-05. `C10`: the run manifest carries supervision (§12.7). The writer is one of the interval binder's sinks: it writes the plan the compile lock binds as `instance`, `series` and `cohort` rows after `manifest_opened`, each interval as it opens and closes, named by its `(instance_id, participant, phase)` triple with its declared, committed and observed onsets and its `closed_by`, and each seam defect the binder finds; `manifest_closed` lists the intervals still open, which the binder closes after it, and those never opened, so a closed manifest names every triple the plan declares. `open_at_interruption` is not written: a reader infers it from a manifest with no terminal row. `diff_run_manifests.py` compares two runs' manifests by their triples and exits non-zero on a difference ([`06`](06_Truth_And_Annotation.md) D6.8). The closing-record gate reads a terminal row of any length |
 | 33 | 2026-10-05. `C8`: the truth sidecar carries each capture's supervision as built (§10.6's *Supervised* row): the plan and the vocabulary's version and digest on `<events>`, the world-scoped `<_supervision>` with its absences, and every rendered SUMO vehicle's `<_supervision state>`, `unlabelled` included, with its annotations -- the server's for the capture's own frame (§8.3b), or `supervision="unknown"` and none where that frame's is not to be had, counted and gated at zero. The PNG carries none. §12.8.4's first gap is closed for the state in force |
@@ -2682,7 +2683,7 @@ stop moving.
 | Property | State | Source |
 |---|---|---|
 | Rigid-body simulation | **disabled** | `set_actor_simulate_physics` (`CarlaNet.Transport/CarlaClient.cs:1530`) |
-| Traffic-manager registration | **never**; lockout is run-level, not a warning | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.4 |
+| Traffic-manager registration | **never**; the lockout is the world's drive lease, server-held, not a warning: while the session holds it the server refuses every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` for every actor, direct and in a batch, naming the holder (§9.3a) | [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.4; [`03`](03_CoSimulation_Runtime.md) §10.2 |
 | Storyboard control | **never** in this mode | |
 | Pose | written every world sub-step by the driver | `set_actor_transform` (`CarlaClient.cs:1497`) |
 | X, Y | SUMO's front bumper exactly, negated in Y, shifted back by the measured bumper-to-origin distance along the heading and by the bounding-box centre — **the exact formula and its catalogue dependency are `C1` §3.2** | [doc 23 §6.7](../../Findings/23_SUMO_Traffic_Integration.md), `D4.17` |
@@ -2751,6 +2752,46 @@ Doc 23 §6.9's scenario-coupling case — a storyboard entity inside SUMO traffi
 as: the storyboard entity is spawned with `role_name = "scenario"` and is **mirrored into** SUMO
 (`vehicle.add` plus `moveToXY(keepRoute=2)`) so ambient traffic yields to it, while SUMO never issues
 control for it. That is not a transfer; it is two authorities over two disjoint actor sets.
+
+### 9.3a The drive lease: the RPCs
+
+> **D4.47 — one traffic system per world, held on the server.** A SUMO drive session takes the world's
+> drive lease before SUMO starts, and while any client holds it the server refuses every other
+> client's control writes for every actor, naming the holder. Built 2026-10-05 ([`03`](03_CoSimulation_Runtime.md) §10.2, D3.13).
+
+Held on the episode (`FDriveLease`, `Carla/Game/DriveLease.h`): the holder's name as it named itself, and
+the frame it was taken on. Four synchronous RPCs, strings only, in the staging-bounds shape of
+[`05`](05_CarlaNet_Capability_Audit.md) §11 -- no msgpack struct, no LibCarla header:
+
+| Call | Arguments | Answer | Refused when |
+|---|---|---|---|
+| `take_drive_lease` | `holder: string` -- the session sends `"<Holder> (process <pid> on <machine>)"` | `R<void>` | the name is empty; any holder has it, the same name included: `take_drive_lease: refused; <holder> holds the drive lease on this world since frame <n>, ...` |
+| `release_drive_lease` | `holder: string`, the name it was taken under | `R<void>` | nothing is held; held under another name, which the refusal names |
+| `break_drive_lease` | none | `R<std::string>`: the holder whose lease was ended, empty where none was held | never; the server logs a `Warning` naming the holder and its frame |
+| `get_drive_lease` | none | `R<std::string>`: the holder, empty while nobody holds it | never |
+
+**What is refused while it is held.** `set_actor_autopilot(id, true)`, `apply_control_to_vehicle`,
+`apply_ackermann_control_to_vehicle` and `apply_physics_control`, for every actor and every client, each with
+`"<call>: refused while <holder> holds the drive lease on this world; no other traffic drives a vehicle here
+until the holder releases it (release_drive_lease), the world is reloaded, or the lease is broken
+(break_drive_lease)"`. The batch forms call the same lambdas, so a `CommandResponse` in `apply_batch` carries
+the same words; `"holds the drive lease on this world"` is the mark both the .NET traffic manager
+(`TrafficManagerLocal.DriveLeaseRefusalMark`) and `carlacontrol.DriveLease.REFUSAL_MARK` read it by, and a
+test holds the two equal. `set_actor_autopilot(id, false)` is not refused. Nothing the session itself
+writes -- `ApplyTransform`, `ApplyTargetVelocity`, `SetSimulatePhysics`, `SetEnableGravity`,
+`SetVehicleLightState`, `DestroyActor` -- is among them.
+
+**Client.** `CarlaClient.TakeDriveLeaseAsync` / `ReleaseDriveLeaseAsync` / `BreakDriveLeaseAsync` /
+`GetDriveLeaseHolderAsync`; `ICarlaWorld.TakeDriveLease` answers `DriveLeaseWrite` (taken, held by another
+with the holder read back with `get_drive_lease`, or unavailable), `ReleaseDriveLease` the refusal or null;
+`CarlaNet.CoSim.DriveLease` is the session's hold. The shim: `world.drive_lease_holder()` and
+`world.break_drive_lease()`.
+
+**Lifetime.** Ends with the episode, with its holder's release, or with `break_drive_lease`. The RPC server
+gives no notice of a disconnect, so a holder that dies without releasing leaves the lease held until one of
+those. **A server built before it** answers every one of the four with rpclib's `could not find function`;
+the session records it (`CoSimRunReport.DriveLeaseRefused`) and goes on, with the run report saying the lease
+was `NOT HELD`.
 
 ### 9.4 Vehicle light state
 
@@ -5061,6 +5102,7 @@ Stated as properties needed, not as requests.
 | **D4.44** | **A limit on which vehicles get a body is an optional performance control, off by default and recommended for no scenario.** With none every vehicle SUMO has in a window is drawn. A run may choose a circle, the registered cameras' footprints, or a capacity under any of them (`in_limit`, §4.2); a vehicle the limit leaves out is simulated, has no body and no imagery-side truth, and carries `outside_limit` in `render_states[]`; E5 and E6 release for it under new numbers, and the participant guarantee D4.6 holds only with no limit (§4.4). The limit is named in the run's configuration, said at launch and counted in its record |
 | **D4.45** | **A draw distance is an optional performance control, off by default, and changes no admission.** Every vehicle keeps its body, its pose and its truth; a camera does not draw a body farther than the distance from it, and that camera's sidecar marks such a vehicle `beyond_draw_distance` (`wholly` or `partly`), so it is never counted as observed by that camera (§4.2, §4.5; [`06`](06_Truth_And_Annotation.md) §8.2) |
 | **D4.46** | **The supervision in force is held on the server and carried on every world-observer snapshot after the render set's entries; no client holds it** (owner's ruling, 2026-10-05). One writer, the session, puts each change in one `update_supervision` after the render set's and before the tick cue; a body's supervision is held only while it is lent, an unlabelled vehicle has no row, and the block rides inside the render set block's size, so a reader built before it skips it and a world no session supervises is laid out as before (§8.3b) |
+| **D4.47** | **One traffic system per world, held on the server as the drive lease** (owner's ruling, 2026-10-05: a second traffic client, SUMO-driven or not, is refused outright). The SUMO drive session takes it before SUMO starts with `take_drive_lease`, as `<holder> (process <pid> on <machine>)`, and releases it with `release_drive_lease` on every exit path; while any client holds it the server refuses every other client's `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` for every actor, direct and in a batch, naming the holder. A second drive is refused at its claim; a traffic manager's control frame is refused and it says so once. `break_drive_lease` ends a dead holder's lease, logged, since the RPC server gives no disconnect notice. A server built before it refuses the claim and the run report says `NOT HELD` (§9.3a) |
 
 ---
 
