@@ -41,11 +41,20 @@ public class VehicleLightsTests
     }
 
     [Theory]
-    [InlineData(PoseSource.Simulated, "simulated")]
+    [InlineData(PoseSource.Sumo, "sumo")]
     [InlineData(PoseSource.Interpolated, "interpolated")]
-    [InlineData(PoseSource.Held, "held")]
+    [InlineData(PoseSource.Jump, "jump")]
+    [InlineData(PoseSource.Stale, "stale")]
     public void Each_Pose_Source_Has_Its_Word(PoseSource source, string word)
     {
         Assert.Equal(word, PoseSources.SidecarValue(source));
+    }
+
+    [Fact]
+    public void The_Four_Words_Are_The_Owner_s_And_Every_Pose_Source_Has_One()
+    {
+        // The owner's words of 2026-10-06, one per member, so a member added without its word fails here.
+        Assert.Equal(["sumo", "interpolated", "jump", "stale"],
+                     Enum.GetValues<PoseSource>().Select(PoseSources.SidecarValue));
     }
 }

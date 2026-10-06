@@ -199,10 +199,10 @@ public interface ICarlaWorld
     /// <remarks>
     /// <para>The server carries the step and every body named on each world-observer snapshot from the
     /// next frame on, inside the render set block, so every client of the world reads where each lent
-    /// body's pose on a frame came from -- SUMO's own step on a frame the step falls on, interpolated on
-    /// every other, or what the body was named -- with that frame's number, and none holds it in its own
-    /// process. A body's name is held on the server's record of its loan: a body not lent is not given
-    /// one, and one given back or handed to another vehicle loses it.</para>
+    /// body's pose on a frame came from -- sumo on a frame the step falls on, interpolated on every
+    /// other, or what the body was named, jump or stale -- with that frame's number, and none holds it in
+    /// its own process. A body's name is held on the server's record of its loan: a body not lent is not
+    /// given one, and one given back or handed to another vehicle loses it.</para>
     ///
     /// <para>One round trip as the first tick is cued, declaring the step, and after that only on a tick
     /// whose named bodies changed -- after <see cref="WriteRenderSet"/> and before that tick's cue, so the
@@ -211,7 +211,9 @@ public interface ICarlaWorld
     ///
     /// <para>A server built before it carried a pose source refuses the call, and says why. The session
     /// records the refusal and sends nothing more; the run goes on, and no reader is told where any pose
-    /// came from.</para>
+    /// came from. A server built before the jump state refuses a change for its jump list
+    /// (<see cref="PoseSourceWrite.KnowsNoJump"/>) and takes it <see cref="PoseSourceChange.WithoutJump"/>,
+    /// each jumping body named sumo; the session records that, and the run goes on.</para>
     /// </remarks>
     PoseSourceWrite WritePoseSource(PoseSourceChange change);
 

@@ -1,16 +1,25 @@
 namespace CarlaNet.Types.Streaming;
 
-/// <summary>Where the pose a lent body was drawn at on a frame came from.</summary>
+/// <summary>Where the pose a lent body was drawn at on a frame came from (the owner's words of 2026-10-06).</summary>
 public enum PoseSource : byte
 {
-    /// <summary>SUMO's own step: where SUMO put the vehicle at one of its steps.</summary>
-    Simulated = 1,
+    /// <summary>The frame falls on a SUMO step: the position is SUMO's own.</summary>
+    Sumo = 1,
 
-    /// <summary>Between two SUMO steps, interpolated along the lane by the co-simulation session.</summary>
+    /// <summary>A frame between two SUMO steps: the position is filled in along the lane by the session.</summary>
     Interpolated = 2,
 
-    /// <summary>Left where its last pose put it, because the session could not place it on the frame.</summary>
-    Held = 3,
+    /// <summary>
+    /// SUMO reported a step too far from the last to drive in one step: the body is shown at SUMO's later
+    /// position for every frame of that step, rather than slid along the lane.
+    /// </summary>
+    Jump = 3,
+
+    /// <summary>
+    /// The body could not be placed on the frame and stands where it was last drawn: its pose was refused
+    /// for want of ground under it, or its vehicle was missing from SUMO's next step.
+    /// </summary>
+    Stale = 4,
 }
 
 /// <summary>
@@ -25,11 +34,16 @@ public enum PoseSource : byte
 /// the frame number which of the two a frame shows: nothing is sent per tick, and every client of the
 /// world reads the same answer for the same frame (the owner's ruling of 2026-10-06).</para>
 ///
-/// <para><b>Named where it follows neither.</b> A body the session placed at SUMO's own later step across
-/// a discontinuity, or left where its last pose put it because it could not place it, is named to the
-/// server as its case begins and ends, and the snapshot carries it while it lasts. A lent body with no
-/// entry follows the step. An actor the same frame's render set does not name lent has no pose source:
-/// no session placed it.</para>
+/// <para><b>Named where it follows neither.</b> A body the session showed at SUMO's later position for
+/// every frame of a step too far from the last to drive in one step (<see cref="PoseSource.Jump"/>), or
+/// one standing where it was last drawn because it could not place it (<see cref="PoseSource.Stale"/>),
+/// is named to the server as its case begins and ends, and the snapshot carries it while it lasts. A lent
+/// body with no entry follows the step. An actor the same frame's render set does not name lent has no
+/// pose source: no session placed it.</para>
+///
+/// <para><b>From a server built before the jump state.</b> Such a server carries a jumping body as
+/// <see cref="PoseSource.Sumo"/>, the one name it has for it; the session that found it so says so on
+/// its run report. A state this reader does not know makes the block unreadable rather than guessed.</para>
 ///
 /// <para>A snapshot that carries no block -- no session has declared its step, or the server was built
 /// before it carried one -- reads as <see cref="None"/>, which answers no pose source for any body,
@@ -108,8 +122,8 @@ public sealed class ObservedPoseSource
 
     /// <summary>
     /// Where the pose a lent body was drawn at on <paramref name="frame"/> came from: the session's name
-    /// for it where it has one, and otherwise the step's -- <see cref="PoseSource.Simulated"/> on a frame
-    /// a step falls on, <see cref="PoseSource.Interpolated"/> on every other. <see langword="null"/> where
+    /// for it where it has one, and otherwise the step's -- <see cref="PoseSource.Sumo"/> on a frame a
+    /// step falls on, <see cref="PoseSource.Interpolated"/> on every other. <see langword="null"/> where
     /// the snapshot carried no block, or the body has no name and the step says nothing of the frame.
     /// </summary>
     /// <remarks>
@@ -130,7 +144,7 @@ public sealed class ObservedPoseSource
 
         return StepFallsOn(frame) switch
         {
-            true => PoseSource.Simulated,
+            true => PoseSource.Sumo,
             false => PoseSource.Interpolated,
             null => null,
         };
@@ -177,8 +191,9 @@ public sealed class ObservedPoseSource
             PoseSource source = state switch
             {
                 // EpisodeStateSerializer::PoseSourceEntryState.
-                1 => PoseSource.Simulated,
-                2 => PoseSource.Held,
+                1 => PoseSource.Sumo,
+                2 => PoseSource.Stale,
+                3 => PoseSource.Jump,
                 _ => throw new InvalidDataException(
                     $"The pose source block names actor {actorId} in state {state}, which this reader does "
                     + "not know: it is not read as following the step."),

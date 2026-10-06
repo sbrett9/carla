@@ -106,6 +106,76 @@ public sealed class CarlaClientWorldTests : IAsyncLifetime
     }
 
     [Fact]
+    public void A_Change_To_The_Pose_Source_Reaches_The_Server_With_Its_Jump_List_Sixth()
+    {
+        var put = new List<(bool Declare, uint TicksPerStep, uint[] Sumo, uint[] Stale, uint[] Cleared, uint[] Jump)>();
+        _server!.RegisterHandler<bool, uint, uint[], uint[], uint[], uint[], SuccessResponse<uint>>(
+            "update_pose_source", (declare, ticksPerStep, sumo, stale, cleared, jump) =>
+            {
+                put.Add((declare, ticksPerStep, sumo, stale, cleared, jump));
+                return Ok(3u);
+            });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        PoseSourceWrite written = world.WritePoseSource(new PoseSourceChange(true, 20, [], [8], [9], [7]));
+
+        Assert.True(written.Taken);
+        Assert.False(written.KnowsNoJump);
+        Assert.Equal(3, written.BodiesApplied);
+        (bool declare, uint ticksPerStep, uint[] sumo, uint[] stale, uint[] cleared, uint[] jump) = Assert.Single(put);
+        Assert.True(declare);
+        Assert.Equal(20u, ticksPerStep);
+        Assert.Empty(sumo);
+        Assert.Equal([8u], stale);
+        Assert.Equal([9u], cleared);
+        Assert.Equal([7u], jump);
+    }
+
+    [Fact]
+    public void A_Server_Built_Before_The_Jump_State_Refuses_The_Jump_List_For_Its_Count_And_Takes_The_Change_Without_It()
+    {
+        // The call as a server built before the jump state binds it: five arguments, no jump list.
+        var put = new List<(uint[] Sumo, uint[] Stale, uint[] Cleared)>();
+        _server!.RegisterHandler<bool, uint, uint[], uint[], uint[], SuccessResponse<uint>>(
+            "update_pose_source", (_, _, sumo, stale, cleared) =>
+            {
+                put.Add((sumo, stale, cleared));
+                return Ok((uint)(sumo.Length + stale.Length + cleared.Length));
+            });
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+        var change = new PoseSourceChange(false, 20, [], [8], [], [7]);
+
+        PoseSourceWrite refused = world.WritePoseSource(change);
+
+        Assert.False(refused.Taken);
+        Assert.True(refused.KnowsNoJump);
+        Assert.Contains("update_pose_source", refused.Refusal);
+        Assert.Empty(put);
+
+        // Sent without the jump list, the jumping body goes as sumo, the one name that server has for it.
+        PoseSourceWrite taken = world.WritePoseSource(change with { WithoutJump = true });
+
+        Assert.True(taken.Taken);
+        Assert.Equal(2, taken.BodiesApplied);
+        (uint[] sumo, uint[] stale, uint[] cleared) = Assert.Single(put);
+        Assert.Equal([7u], sumo);
+        Assert.Equal([8u], stale);
+        Assert.Empty(cleared);
+    }
+
+    [Fact]
+    public void A_Server_Without_The_Pose_Source_Call_Is_A_Refusal_That_Is_Not_Read_As_A_Server_Without_Jump()
+    {
+        CarlaClientWorld world = CarlaClientWorld.Attach(_client!, startWorldObserver: false);
+
+        PoseSourceWrite written = world.WritePoseSource(new PoseSourceChange(true, 1, [], [], [], []));
+
+        Assert.False(written.Taken);
+        Assert.False(written.KnowsNoJump);
+        Assert.Contains("update_pose_source", written.Refusal);
+    }
+
+    [Fact]
     public void A_Draw_Distance_Reaches_The_Server_As_The_Bodies_Named_And_A_Double_Of_Metres()
     {
         // The server binds (std::vector<uint32>, double): the ids as an array of unsigned integers and

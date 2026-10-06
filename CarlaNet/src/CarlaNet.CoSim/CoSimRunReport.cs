@@ -534,8 +534,8 @@ public sealed class CoSimRunReport
     /// <summary>
     /// Changes to the pose source put to the server: the SUMO step declared once, as the first tick is
     /// cued, and again only after a frame came back out of step; a body named as its pose stops or starts
-    /// following the step -- held where its pose was refused, placed at SUMO's own step across a
-    /// discontinuity; and one withdrawing it all as the session ends. None on any other tick.
+    /// following the step -- stale where its pose was refused, jump where SUMO's step was too far to drive
+    /// in one step; and one withdrawing it all as the session ends. None on any other tick.
     /// </summary>
     /// <remarks>
     /// The server carries the step and the named bodies on every world-observer snapshot, so every reader
@@ -572,6 +572,22 @@ public sealed class CoSimRunReport
     /// no pose source either, because a pose source is carried per lent body.
     /// </summary>
     public string? PoseSourceRefused { get; internal set; }
+
+    /// <summary>
+    /// The server's words where it refused the pose source call with a jump list for its number of
+    /// arguments -- a server built before the jump state -- or <see langword="null"/> where it took the
+    /// call with one, or none was sent. The session then sends every change without the jump list, and
+    /// such a server carries each jumping body as sumo, so every reader writes <c>sumo</c> for the frames of
+    /// a jump; the run goes on (<see cref="PoseSourceJumpsNamedSumo"/> counts them).
+    /// </summary>
+    public string? PoseSourceWithoutJump { get; internal set; }
+
+    /// <summary>
+    /// Bodies named sumo to a server built before the jump state where the session named them jump, summed
+    /// over the changes it took: each a body whose frames of one step every reader writes <c>sumo</c>
+    /// rather than <c>jump</c>. Zero on a server that takes the jump list.
+    /// </summary>
+    public long PoseSourceJumpsNamedSumo { get; internal set; }
 
     /// <summary>
     /// How far from a camera, in metres, the run asked for its bodies to be drawn -- the optional
@@ -1220,6 +1236,7 @@ public sealed class CoSimRunReport
         text.AppendLine($"pose source        {PoseSourceUpdates} change(s) put to the server, the step declared {PoseSourceStepDeclarations} time(s)"
                         + (PoseSourceFramesOutOfStep > 0 ? $", {PoseSourceFramesOutOfStep} frame(s) out of step" : string.Empty)
                         + (PoseSourceBodiesNotApplied > 0 ? $", {PoseSourceBodiesNotApplied} body(ies) not applied" : string.Empty)
+                        + (PoseSourceWithoutJump is { } withoutJump ? $"; the server knows no jump, so {PoseSourceJumpsNamedSumo} jump(s) were named sumo: {withoutJump}" : string.Empty)
                         + (PoseSourceRefused is { } poseSourceRefused ? $"; refused, so no reader is told where any pose came from: {poseSourceRefused}" : string.Empty));
         text.AppendLine($"draw distance      {DescribeDrawDistance()}");
         text.AppendLine("lamps              "

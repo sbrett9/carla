@@ -1948,32 +1948,39 @@ void FCarlaServer::FPimpl::BindActions()
   // session poses its bodies every world tick from SUMO steps a whole number of ticks apart, so it
   // declares the step once -- ticks_per_step, falling on the frame after the one in progress, which
   // is also the frame tick_cue answers with -- and every frame a whole number of steps after that one
-  // shows SUMO's own step, every other an interpolated pose. A body whose pose follows neither is named
-  // as its case begins and named cleared as it ends: one placed at SUMO's own step on every frame of a
-  // step across a discontinuity (simulated), one left where its last pose put it because the session
-  // could not place it (held). The world observer carries the step and every lent body named on every
-  // snapshot from the next frame on, so every client of the world reads the same pose source for the
-  // same frame, and nothing about it is kept in one client's process or sent per tick.
+  // shows SUMO's own position (sumo), every other one filled in along the lane (interpolated). A body
+  // whose pose follows neither is named as its case begins and named cleared as it ends: one shown at
+  // SUMO's later position for every frame of a step too far from the last to drive in one step (jump),
+  // one standing where it was last drawn because the session could not place it (stale). The world
+  // observer carries the step and every lent body named on every snapshot from the next frame on, so
+  // every client of the world reads the same pose source for the same frame, and nothing about it is
+  // kept in one client's process or sent per tick.
   //
   // declare_step with a ticks_per_step of zero withdraws everything: the step, and every body's name,
   // so the snapshot carries no pose source block again; it carries nothing else. A body's name is held
   // on its render set record and only while it is lent: a body not lent is not given one, and a body
   // given back or handed to another vehicle loses it (update_render_set). Cleared bodies are applied
-  // first, then simulated, then held. Everything is checked before anything is changed, so a refused
-  // change leaves what was held. Answers how many of the named bodies were found, and lent where they
-  // were named simulated or held.
+  // first, then sumo, then stale, then jump. A withdrawal naming any body is refused before anything is
+  // changed. Answers how many of the named bodies were found, and lent where they were named sumo,
+  // stale or jump.
+  //
+  // jump_ids is the sixth argument, after the five a server built before the jump state takes, so a
+  // client that finds this call refused for its argument count is talking to such a server: it sends
+  // the five, and names a jumping body sumo, the one name that server has for it.
   BIND_SYNC(update_pose_source) << [this](
       const bool declare_step,
       const uint32_t ticks_per_step,
-      const std::vector<FCarlaActor::IdType> &simulated_ids,
-      const std::vector<FCarlaActor::IdType> &held_ids,
-      const std::vector<FCarlaActor::IdType> &cleared_ids) -> R<uint32_t>
+      const std::vector<FCarlaActor::IdType> &sumo_ids,
+      const std::vector<FCarlaActor::IdType> &stale_ids,
+      const std::vector<FCarlaActor::IdType> &cleared_ids,
+      const std::vector<FCarlaActor::IdType> &jump_ids) -> R<uint32_t>
   {
     REQUIRE_CARLA_EPISODE();
     using EPoseSource = FRenderSetMembership::EPoseSource;
 
     const bool bWithdrawal = declare_step && ticks_per_step == 0u;
-    if (bWithdrawal && (!simulated_ids.empty() || !held_ids.empty() || !cleared_ids.empty()))
+    if (bWithdrawal &&
+        (!sumo_ids.empty() || !stale_ids.empty() || !cleared_ids.empty() || !jump_ids.empty()))
     {
       RESPOND_ERROR("update_pose_source: a withdrawal withdraws every body's pose source and carries nothing else");
     }
@@ -2006,7 +2013,7 @@ void FCarlaServer::FPimpl::BindActions()
     }
 
     uint32_t Found = 0u;
-    // Name each body found; a body named simulated or held only while the render set holds it lent.
+    // Name each body found; a body named sumo, stale or jump only while the render set holds it lent.
     auto NameEach = [this, &Found](const std::vector<FCarlaActor::IdType> &Ids, EPoseSource Source)
     {
       for (const FCarlaActor::IdType Id : Ids)
@@ -2028,8 +2035,9 @@ void FCarlaServer::FPimpl::BindActions()
       }
     };
     NameEach(cleared_ids, EPoseSource::FollowsStep);
-    NameEach(simulated_ids, EPoseSource::Simulated);
-    NameEach(held_ids, EPoseSource::Held);
+    NameEach(sumo_ids, EPoseSource::Sumo);
+    NameEach(stale_ids, EPoseSource::Stale);
+    NameEach(jump_ids, EPoseSource::Jump);
     return Found;
   };
 

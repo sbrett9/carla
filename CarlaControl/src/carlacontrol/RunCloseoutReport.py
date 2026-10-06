@@ -228,6 +228,10 @@ class RunCloseoutReport:
                               # Why the server refused the session's pose source, where it did -- a server
                               # built before it carried one -- which the run goes on without.
                               "pose_source_refused": self._refusal(report, "PoseSourceRefused"),
+                              # A server built before the jump state: its words, and the jumping bodies it
+                              # was sent as sumo, the one name it has for them, which the captures then say.
+                              "pose_source_without_jump": self._refusal(report, "PoseSourceWithoutJump"),
+                              "pose_source_jumps_named_sumo": int(getattr(report, "PoseSourceJumpsNamedSumo", 0)),
                               "render_set": str(report.RenderSetPolicy),
                               "render_set_limits": bool(report.RenderSetLimits),
                               "vehicle_passes_outside_the_policy":
@@ -593,6 +597,10 @@ class RunCloseoutReport:
         if render is not None and render.get("pose_source_refused") is not None:
             lines.append(f"  pose source: refused by the server, so no capture says where a vehicle's pose "
                          f"came from ({render['pose_source_refused']})")
+        if render is not None and render.get("pose_source_without_jump") is not None:
+            lines.append(f"  pose source: the server was built before the jump state, so "
+                         f"{render['pose_source_jumps_named_sumo']} jump(s) were sent and written as sumo "
+                         f"({render['pose_source_without_jump']})")
         divergence = snapshot.get("divergence")
         if divergence is not None and divergence["samples"]:
             worst = divergence["worst_position_on"]

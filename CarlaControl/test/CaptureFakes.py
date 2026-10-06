@@ -601,6 +601,8 @@ class _Report:
         self.DrawDistanceMetres = None
         self.DrawDistanceRefused = None
         self.PoseSourceRefused = None
+        self.PoseSourceWithoutJump = None
+        self.PoseSourceJumpsNamedSumo = 0
         self.RenderSetPolicy = "every vehicle SUMO has"
         self.RenderSetLimits = False
         self.RenderSetCapacity = None

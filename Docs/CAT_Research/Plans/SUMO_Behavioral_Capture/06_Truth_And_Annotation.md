@@ -51,6 +51,7 @@ the real scenario artifacts. No code changed, no build run.
 | 42 · 2026-10-06 | §3.5: one way to convey a planted omission, as the owner ruled: label the vehicle that deviates. The note at scenario level is no longer offered; the skip's `because` is the reason for the skip, and a legacy `anomaly_notes` is carried for old datasets only. |
 | 43 · 2026-10-06 | §8.2: a vehicle in the picture carries its box on its record in the capture truth sidecar, as the owner ruled: `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg` and `roll_deg` in `_carla`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, each converted as the record's own point is. A vehicle outside the picture or behind the lens carries none, there is no separate label file per image, and the sidecar audit holds both. `pose_source` and the commanded lamps are not written: no snapshot carries either. |
 | 44 · 2026-10-06 | §8.2, open question 11: a vehicle in the picture also carries `lights`, the lights commanded on for it in words, and a SUMO vehicle in the picture `pose_source` -- `simulated`, `interpolated` or `held` -- as the owner ruled, both from the world-observer snapshot of the capture's own frame, so a recorder in any process writes the same. The world observer carries each vehicle's light state in its record, and the session declares its SUMO step to the server once and names a body only as it is held or placed at SUMO's later step; any reader resolves the frame's pose source from its number. A capture whose snapshot carried neither -- a server built before it did -- says `lights="unknown"` or `pose_source="unknown"` and writes none, counted and gated at zero by the closeout; the audit holds the rest. `pose_source` is no longer the planned producer field of the §8.2 example. The plugin and LibCarla change awaits a build. |
+| 45 · 2026-10-06 | §8.2: `pose_source` is written in the owner's four words -- `sumo` where the frame falls on a SUMO step and the position is SUMO's own, `interpolated` on a frame between steps, `jump` where SUMO reported a step too far from the last to drive in one step and the body is shown at SUMO's later position for the frames of that step, and `stale` where the body could not be placed and stands where it was last drawn -- in place of `simulated`, `interpolated` and `held`. A jump, written `simulated` until now, is its own word. A run on a server built before the jump state writes a jump `sumo`, and its run report and closeout say how many. The audit holds the four words. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2185,7 +2186,7 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
 
               producer="reconciled"
               entity_id="guard_d4_h15_t3" sumo_id="guard_d4_h15_t3" provenance="sumo_scheduled"
-              kinematics_source="sumo" lights="none" pose_source="simulated"
+              kinematics_source="sumo" lights="none" pose_source="sumo"
               render_state="rendered" admitted_tick="1015259"
               sumo_edge="26413459" sumo_lane="26413459_0" sumo_lane_pos_m="58.90"
               sumo_stop_state="3"
@@ -2281,7 +2282,7 @@ Notes, each carrying a decision:
   though the source is SUMO, so the two producers are directly comparable"). What is added is
   `producer` and `kinematics_source`, so a consumer can tell *which* producer supplied *which* field
   rather than inferring it from the block name. `pose_source` is not that: written since 2026-10-06, it
-  says where a SUMO vehicle's drawn pose came from, `simulated`, `interpolated` or `held`
+  says where a SUMO vehicle's drawn pose came from, `sumo`, `interpolated`, `jump` or `stale`
   ([08](08_Collection_And_EPoL.md) §6.4).
 - **`speed="0.00"` on a parked guard is now true**, not an artifact. It reads identically to the
   teleport defect it used to be, which is why `kinematics_source="sumo"` is not optional cosmetics: it
@@ -2567,16 +2568,23 @@ other to none of it; pointed at the Arapahoe check capture of 2026-10-06
 (`cap-20261006-171114-1747f6`), written before this, it reports all 472 records in the picture as
 lacking it.
 
-**And its lights and its pose source (the owner's ruling of 2026-10-06).** A vehicle in the picture also
+**And its lights and its pose source (the owner's rulings of 2026-10-06).** A vehicle in the picture also
 carries `lights`, the lights commanded on for it on the frame, in words in CARLA's order or `none`
-(`position low_beam brake left_blinker`), and a SUMO vehicle in the picture `pose_source`: `simulated`
-where it stands at SUMO's own step, `interpolated` between two, `held` where the session could not place
-it. Both are the server's truth, read from the snapshot of the capture's own frame, so a recorder in any
-process writes the same: the world observer carries each vehicle's light state in its record, behind
+(`position low_beam brake left_blinker`), and a SUMO vehicle in the picture `pose_source`, in the owner's
+four words: `sumo` where the frame falls on a SUMO step and the position is SUMO's own; `interpolated` on a
+frame between SUMO steps, the position filled in along the lane; `jump` where SUMO reported a step too far
+from the last to drive in one step, the body shown at SUMO's later position for the frames of that step;
+`stale` where the body could not be placed on the frame and stands where it was last drawn. Both are the
+server's truth, read from the snapshot of the capture's own frame, so a recorder in any process writes the
+same: the world observer carries each vehicle's light state in its record, behind
 `VehicleLightStateCarried`; the session declares its SUMO step to the server once and names a body only
-as it becomes held or placed at SUMO's later step across a discontinuity, carried in the render set block
-behind `PoseSourceCarried`, and every reader resolves the frame's pose source from its number
-([08](08_Collection_And_EPoL.md) §5.1, §6.4; `ObservedPoseSource`, `VehicleLights`, `PoseSources`). A
+as it becomes a jump or stale and as that ends, carried in the render set block behind
+`PoseSourceCarried`, and every reader resolves the frame's pose source from its number
+([08](08_Collection_And_EPoL.md) §5.1, §6.4; `ObservedPoseSource`, `VehicleLights`, `PoseSources`). As
+built, a body is stale where its pose was refused for want of ground under it; a vehicle missing from
+SUMO's next step leaves the render set as that step begins, so no capture shows it at all. A server built
+before the jump state has no name for a jump but `sumo`: a run on one writes its jumps `sumo`, and the
+session's report and the run's closeout say so and how many ([03](03_CoSimulation_Runtime.md) §8.9). A
 vehicle outside the picture carries neither. Neither is guessed: a capture whose snapshot did not carry
 one -- a server built before it did, or one that refused the session's pose source -- writes it on no
 record and says `lights="unknown"` or `pose_source="unknown"` on its container, counted per channel

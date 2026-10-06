@@ -358,6 +358,26 @@ static size_t FWorldObserver_SupervisionRowSize(const FActorSupervision &Supervi
   return Size;
 }
 
+/// The state a lent body named as following no step is carried under in the pose source block
+/// (EpisodeStateSerializer::PoseSourceEntryState). A body that follows the step has no entry and is
+/// never asked about.
+static carla::sensor::s11n::EpisodeStateSerializer::PoseSourceEntryState FWorldObserver_PoseSourceEntryState(
+    const FRenderSetMembership::EPoseSource PoseSource)
+{
+  using PoseSourceEntryState = carla::sensor::s11n::EpisodeStateSerializer::PoseSourceEntryState;
+  switch (PoseSource)
+  {
+    case FRenderSetMembership::EPoseSource::Stale:
+      return PoseSourceEntryState::Stale;
+    case FRenderSetMembership::EPoseSource::Jump:
+      return PoseSourceEntryState::Jump;
+    case FRenderSetMembership::EPoseSource::Sumo:
+    case FRenderSetMembership::EPoseSource::FollowsStep:
+      break;
+  }
+  return PoseSourceEntryState::Sumo;
+}
+
 static carla::Buffer FWorldObserver_Serialize(
     carla::Buffer &&buffer,
     const UCarlaEpisode &Episode,
@@ -370,7 +390,6 @@ static carla::Buffer FWorldObserver_Serialize(
   using SimulationState = carla::sensor::s11n::EpisodeStateSerializer::SimulationState;
   using RenderSetEntryState = carla::sensor::s11n::EpisodeStateSerializer::RenderSetEntryState;
   using SupervisionEntryState = carla::sensor::s11n::EpisodeStateSerializer::SupervisionEntryState;
-  using PoseSourceEntryState = carla::sensor::s11n::EpisodeStateSerializer::PoseSourceEntryState;
   using ActorDynamicState = carla::sensor::data::ActorDynamicState;
 
 
@@ -624,9 +643,7 @@ static carla::Buffer FWorldObserver_Serialize(
       {
         const uint32_t PoseActorId = static_cast<uint32_t>(Body->GetActorId());
         const uint8_t PoseState = static_cast<uint8_t>(
-            Body->GetRenderSetMembership().PoseSource == FRenderSetMembership::EPoseSource::Held
-                ? PoseSourceEntryState::Held
-                : PoseSourceEntryState::Simulated);
+            FWorldObserver_PoseSourceEntryState(Body->GetRenderSetMembership().PoseSource));
         write_data(PoseActorId);
         write_data(PoseState);
       }

@@ -292,6 +292,14 @@ internal class RecordedWorld : ICarlaWorld
     public string? RefusesPoseSource { get; set; }
 
     /// <summary>
+    /// Set to have the world take the pose source only in the five arguments of a server built before the
+    /// jump state: a change with its jump list is refused for its count, with this message, and one sent
+    /// <see cref="PoseSourceChange.WithoutJump"/> is taken with each jumping body named sumo, the one name
+    /// such a server has for it.
+    /// </summary>
+    public string? KnowsNoJump { get; set; }
+
+    /// <summary>
     /// Every change to the pose source put to the world, copied as it arrived, with the tick the world was
     /// on -- the session's index of the tick it was put for.
     /// </summary>
@@ -655,18 +663,24 @@ internal class RecordedWorld : ICarlaWorld
         // A copy, because the session reuses its lists from one change to the next.
         _poseSourceWrites.Add((change with
         {
-            Simulated = [.. change.Simulated],
-            Held = [.. change.Held],
+            Sumo = [.. change.Sumo],
+            Stale = [.. change.Stale],
             Cleared = [.. change.Cleared],
+            Jump = [.. change.Jump],
         }, Ticks));
         if (RefusesPoseSource is { } refusal)
         {
             return new PoseSourceWrite(0, refusal);
         }
 
+        if (KnowsNoJump is { } wrongCount && !change.WithoutJump)
+        {
+            return new PoseSourceWrite(0, wrongCount, KnowsNoJump: true);
+        }
+
         if (change.IsWithdrawal)
         {
-            if (change.Simulated.Count + change.Held.Count + change.Cleared.Count > 0)
+            if (change.Sumo.Count + change.Stale.Count + change.Cleared.Count + change.Jump.Count > 0)
             {
                 return new PoseSourceWrite(
                     0, "update_pose_source: a withdrawal withdraws every body's pose source and carries nothing else");
@@ -694,8 +708,12 @@ internal class RecordedWorld : ICarlaWorld
             }
         }
 
+        // Sent without the jump list, a jumping body is named sumo, as a server built before the jump state
+        // carries it.
+        IReadOnlyList<ActorId> sumo = change.WithoutJump ? [.. change.Sumo, .. change.Jump] : change.Sumo;
+        IReadOnlyList<ActorId> jump = change.WithoutJump ? [] : change.Jump;
         foreach ((IReadOnlyList<ActorId> bodies, PoseSource source) in
-                 new[] { (change.Simulated, PoseSource.Simulated), (change.Held, PoseSource.Held) })
+                 new[] { (sumo, PoseSource.Sumo), (change.Stale, PoseSource.Stale), (jump, PoseSource.Jump) })
         {
             foreach (ActorId actor in bodies)
             {

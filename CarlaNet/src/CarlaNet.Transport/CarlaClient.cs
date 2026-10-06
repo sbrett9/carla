@@ -50,7 +50,7 @@ public sealed class ActorSnapshot
     /// <summary>
     /// Where the pose this actor was drawn at on the snapshot's frame came from, where a co-simulation
     /// session lent it as a body and the snapshot carried a pose source (<see cref="ObservedPoseSource"/>):
-    /// SUMO's own step, interpolated between two, or held. Null for an actor no session lent, and for
+    /// sumo, interpolated, jump or stale. Null for an actor no session lent, and for
     /// every actor of a snapshot that carried no pose source.
     /// </summary>
     public PoseSource? PoseSource { get; init; }
@@ -1877,7 +1877,7 @@ public sealed class CarlaClient : IAsyncDisposable
     /// no step, named as their case begins and ends. The world observer carries both on each snapshot
     /// from the next frame on (<see cref="GetCachedPoseSource"/>), so every client of the world, in any
     /// process, reads the same pose source for the same frame, and nothing is sent per tick. Answers how
-    /// many of the named bodies the server found, and lent where they were named simulated or held.
+    /// many of the named bodies the server found, and lent where they were named sumo, stale or jump.
     /// </summary>
     /// <param name="declareStep">
     /// Declare the step: <paramref name="ticksPerStep"/> world ticks per SUMO step, a step falling on the
@@ -1885,30 +1885,66 @@ public sealed class CarlaClient : IAsyncDisposable
     /// and every body's name, and carries nothing else.
     /// </param>
     /// <param name="ticksPerStep">World ticks per SUMO step; read only where the step is declared.</param>
-    /// <param name="simulatedIds">Bodies standing where SUMO put them at one of its steps, whichever frame it is.</param>
-    /// <param name="heldIds">Bodies left where their last pose put them, because the session could not place them.</param>
+    /// <param name="sumoIds">Bodies standing where SUMO put them at one of its steps, whichever frame it is.</param>
+    /// <param name="staleIds">Bodies standing where they were last drawn, because the session could not place them.</param>
     /// <param name="clearedIds">Bodies that follow the step again.</param>
+    /// <param name="jumpIds">
+    /// Bodies shown at SUMO's later position for every frame of a step too far from the last to drive in
+    /// one step.
+    /// </param>
     /// <remarks>
     /// <para>Sent before the tick cue of the frame the change is drawn in, after the render set: a body's
     /// name is held on the server's record of its loan, so a body not lent is not given one, and one given
     /// back or handed to another vehicle loses it. A server built before it carried a pose source refuses
     /// the call, with an error naming it.</para>
+    ///
+    /// <para>The jump list is the sixth argument. A server built before the jump state binds the call with
+    /// the first five and refuses six for their count (<see cref="CarlaRpcException.NamesWrongArgumentCount"/>);
+    /// <see cref="UpdatePoseSourceWithoutJumpAsync"/> sends it those five.</para>
     /// </remarks>
     /// <exception cref="ArgumentException">A withdrawal that names bodies. It is refused before it is sent.</exception>
-    public Task<uint> UpdatePoseSourceAsync(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> simulatedIds,
-                                            IReadOnlyList<ActorId> heldIds, IReadOnlyList<ActorId> clearedIds)
+    public Task<uint> UpdatePoseSourceAsync(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> sumoIds,
+                                            IReadOnlyList<ActorId> staleIds, IReadOnlyList<ActorId> clearedIds,
+                                            IReadOnlyList<ActorId> jumpIds)
     {
-        ArgumentNullException.ThrowIfNull(simulatedIds);
-        ArgumentNullException.ThrowIfNull(heldIds);
+        ArgumentNullException.ThrowIfNull(jumpIds);
+        RefuseAWithdrawalNamingBodies(declareStep, ticksPerStep, sumoIds, staleIds, clearedIds, jumpIds.Count);
+        return _rpc.CallAsync<uint>("update_pose_source", declareStep, ticksPerStep, sumoIds, staleIds, clearedIds,
+                                    jumpIds);
+    }
+
+    /// <summary>
+    /// <see cref="UpdatePoseSourceAsync"/> in the five arguments a server built before the jump state binds:
+    /// the same change with no jump list. Such a server has no name for a jumping body but sumo, so a caller
+    /// that would name one jump names it in <paramref name="sumoIds"/>.
+    /// </summary>
+    /// <param name="declareStep">As <see cref="UpdatePoseSourceAsync"/>.</param>
+    /// <param name="ticksPerStep">As <see cref="UpdatePoseSourceAsync"/>.</param>
+    /// <param name="sumoIds">Bodies standing where SUMO put them at one of its steps, whichever frame it is.</param>
+    /// <param name="staleIds">Bodies standing where they were last drawn, because the session could not place them.</param>
+    /// <param name="clearedIds">Bodies that follow the step again.</param>
+    /// <exception cref="ArgumentException">A withdrawal that names bodies. It is refused before it is sent.</exception>
+    public Task<uint> UpdatePoseSourceWithoutJumpAsync(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> sumoIds,
+                                                       IReadOnlyList<ActorId> staleIds, IReadOnlyList<ActorId> clearedIds)
+    {
+        RefuseAWithdrawalNamingBodies(declareStep, ticksPerStep, sumoIds, staleIds, clearedIds, 0);
+        return _rpc.CallAsync<uint>("update_pose_source", declareStep, ticksPerStep, sumoIds, staleIds, clearedIds);
+    }
+
+    /// <summary>Refuse, before it is sent, a pose source withdrawal that names any body.</summary>
+    private static void RefuseAWithdrawalNamingBodies(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> sumoIds,
+                                                      IReadOnlyList<ActorId> staleIds, IReadOnlyList<ActorId> clearedIds,
+                                                      int jumps)
+    {
+        ArgumentNullException.ThrowIfNull(sumoIds);
+        ArgumentNullException.ThrowIfNull(staleIds);
         ArgumentNullException.ThrowIfNull(clearedIds);
-        if (declareStep && ticksPerStep == 0 && (simulatedIds.Count + heldIds.Count + clearedIds.Count) > 0)
+        if (declareStep && ticksPerStep == 0 && (sumoIds.Count + staleIds.Count + clearedIds.Count + jumps) > 0)
         {
             throw new ArgumentException(
                 "A withdrawal withdraws every body's pose source and names no body: "
-                + $"{simulatedIds.Count} simulated, {heldIds.Count} held and {clearedIds.Count} cleared were given.");
+                + $"{sumoIds.Count} sumo, {staleIds.Count} stale, {jumps} jump and {clearedIds.Count} cleared were given.");
         }
-
-        return _rpc.CallAsync<uint>("update_pose_source", declareStep, ticksPerStep, simulatedIds, heldIds, clearedIds);
     }
 
     /// <summary>Why the server would refuse a supervision change, or null where it would take it.</summary>

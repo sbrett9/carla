@@ -7,7 +7,8 @@
 // A SUMO drive poses its bodies every world tick from SUMO steps a whole number of ticks apart. The
 // session declares the step once and names a body only as it stops or starts following it, and the
 // server carries both on every snapshot, so any reader takes from the frame number alone whether a body
-// stood at SUMO's own step or between two (the owner's ruling of 2026-10-06).
+// stood at SUMO's own position (sumo) or between two (interpolated), and from the entries which bodies were
+// a jump or stale (the owner's rulings of 2026-10-06).
 using System.Buffers.Binary;
 using CarlaNet.Sensors;
 using CarlaNet.Transport;
@@ -21,8 +22,9 @@ namespace CarlaNet.Tests.Sensors;
 public class EpisodeStatePoseSourceTests
 {
     private const int WideHeaderSize = 132;
-    private const byte NamedSimulated = 1;
-    private const byte NamedHeld = 2;
+    private const byte NamedSumo = 1;
+    private const byte NamedStale = 2;
+    private const byte NamedJump = 3;
 
     private static readonly Entry Escort = new(21, ObservedBodyState.Lent, 4180, "escort_0", "military_truck");
     private static readonly Entry Guard = new(22, ObservedBodyState.Lent, 4100, "guard_d4_h15_t3", "guard");
@@ -99,7 +101,7 @@ public class EpisodeStatePoseSourceTests
 
         for (ulong frame = 4181; frame < 4241; frame++)
         {
-            Assert.Equal(PoseSource.Simulated, source.Of(21, frame));
+            Assert.Equal(PoseSource.Sumo, source.Of(21, frame));
             Assert.True(source.StepFallsOn(frame));
         }
     }
@@ -111,12 +113,12 @@ public class EpisodeStatePoseSourceTests
 
         PoseSource?[] frames = [.. Enumerable.Range(0, 200).Select(offset => source.Of(22, 4181 + (ulong)offset))];
 
-        Assert.Equal(10, frames.Count(each => each == PoseSource.Simulated));
+        Assert.Equal(10, frames.Count(each => each == PoseSource.Sumo));
         Assert.Equal(190, frames.Count(each => each == PoseSource.Interpolated));
-        Assert.All(Enumerable.Range(0, 10), step => Assert.Equal(PoseSource.Simulated, frames[step * 20]));
+        Assert.All(Enumerable.Range(0, 10), step => Assert.Equal(PoseSource.Sumo, frames[step * 20]));
         Assert.Equal(PoseSource.Interpolated, source.Of(22, 4182));
         Assert.Equal(PoseSource.Interpolated, source.Of(22, 4200));
-        Assert.Equal(PoseSource.Simulated, source.Of(22, 4201));
+        Assert.Equal(PoseSource.Sumo, source.Of(22, 4201));
         // A frame before the step was declared is not one the step says anything about.
         Assert.Null(source.Of(22, 4180));
         Assert.Null(source.StepFallsOn(4161));
@@ -125,21 +127,34 @@ public class EpisodeStatePoseSourceTests
     [Fact]
     public void A_Body_The_Session_Named_Is_Read_As_Named_On_Every_Frame_And_The_Others_Follow_The_Step()
     {
-        // The escort left where its last pose put it, the guard placed at SUMO's later step across a
-        // discontinuity.
-        byte[] payload = Drive(20, 4181, (21, NamedHeld), (22, NamedSimulated));
+        // The escort stands where it was last drawn; the guard is shown at SUMO's later position for every
+        // frame of a step too far to drive in one, the step frame included.
+        byte[] payload = Drive(20, 4181, (21, NamedStale), (22, NamedJump));
         ObservedPoseSource source = EpisodeStateLayout.ReadPoseSource(payload);
         ObservedRenderSet renderSet = EpisodeStateLayout.ReadRenderSet(payload);
 
-        Assert.Equal(PoseSource.Held, source.Of(21, 4181));
-        Assert.Equal(PoseSource.Held, source.Of(21, 4190));
-        Assert.Equal(PoseSource.Simulated, source.Of(22, 4190));
+        Assert.Equal(PoseSource.Stale, source.Of(21, 4181));
+        Assert.Equal(PoseSource.Stale, source.Of(21, 4190));
+        Assert.Equal(PoseSource.Jump, source.Of(22, 4181));
+        Assert.Equal(PoseSource.Jump, source.Of(22, 4190));
         // An actor no entry names reads the step; joined to the render set, one it holds parked, or does
         // not name at all, has none, because no session placed it.
         Assert.Equal(PoseSource.Interpolated, source.Of(23, 4190));
         Assert.Null(source.ForLentBody(renderSet, 24, 4190));
         Assert.Null(source.ForLentBody(renderSet, 25, 4190));
-        Assert.Equal(PoseSource.Held, source.ForLentBody(renderSet, 21, 4190));
+        Assert.Equal(PoseSource.Stale, source.ForLentBody(renderSet, 21, 4190));
+    }
+
+    [Fact]
+    public void A_Server_Built_Before_The_Jump_State_Carries_A_Jumping_Body_As_Sumo_On_Every_Frame()
+    {
+        // Such a server's only name for a body shown at SUMO's later position is the first state, which
+        // reads sumo whatever frame it is, between steps as on one.
+        ObservedPoseSource source = EpisodeStateLayout.ReadPoseSource(Drive(20, 4181, (22, NamedSumo)));
+
+        Assert.Equal(PoseSource.Sumo, source.Of(22, 4181));
+        Assert.Equal(PoseSource.Sumo, source.Of(22, 4190));
+        Assert.Equal(PoseSource.Interpolated, source.Of(21, 4190));
     }
 
     [Fact]
@@ -147,7 +162,7 @@ public class EpisodeStatePoseSourceTests
     {
         byte[] supervision = SupervisionBlock([new Row(21, 1, new Annotation("plan/pi_escort", "transit", "lead", "x:y"))]);
         byte[] payload = PoseSourceSnapshot(
-            RenderSetWith([Escort, Guard], supervision, PoseSourceBlock(20, 4181, (21, NamedHeld))),
+            RenderSetWith([Escort, Guard], supervision, PoseSourceBlock(20, 4181, (21, NamedStale))),
             supervised: true, 21, 22);
         int block = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(WideHeaderSize));
 
@@ -156,7 +171,7 @@ public class EpisodeStatePoseSourceTests
         Assert.Equal([21u, 22u], data.Actors.Select(actor => actor.Id));
         Assert.Equal(2, data.Header.RenderSet.Count);
         Assert.True(data.Header.Supervision.IsCarried);
-        Assert.Equal(PoseSource.Held, data.Header.PoseSource.Of(21, 4200));
+        Assert.Equal(PoseSource.Stale, data.Header.PoseSource.Of(21, 4200));
         Assert.Equal(20u, data.Header.PoseSource.TicksPerStep);
         Assert.Equal(4181ul, data.Header.PoseSource.StepFrame);
         // And a reader that knows the supervision and not the pose source reads it as before.
@@ -178,7 +193,7 @@ public class EpisodeStatePoseSourceTests
     {
         ObservedPoseSource first = EpisodeStateLayout.ReadPoseSource(Drive(20, 4181));
         ObservedPoseSource again = EpisodeStateLayout.ReadPoseSource(Drive(20, 4181), first);
-        ObservedPoseSource changed = EpisodeStateLayout.ReadPoseSource(Drive(20, 4181, (21, NamedHeld)), first);
+        ObservedPoseSource changed = EpisodeStateLayout.ReadPoseSource(Drive(20, 4181, (21, NamedStale)), first);
 
         Assert.Same(first, again);
         Assert.NotSame(first, changed);
@@ -187,7 +202,7 @@ public class EpisodeStatePoseSourceTests
     [Fact]
     public void A_Truncated_Or_Unknown_Pose_Source_Is_Refused_And_The_Actors_Are_Still_Read()
     {
-        byte[] truncated = PoseSourceBlock(20, 4181, (21, NamedHeld));
+        byte[] truncated = PoseSourceBlock(20, 4181, (21, NamedStale));
         BinaryPrimitives.WriteUInt32LittleEndian(truncated.AsSpan(4 + 12), 2u);
         byte[] payload = PoseSourceSnapshot(RenderSetWith([Escort], truncated), supervised: false, 21, 22);
 
@@ -198,7 +213,7 @@ public class EpisodeStatePoseSourceTests
         Assert.Null(data.Header.PoseSource.Of(21, 4181));
 
         // A state this reader does not know is not read as following the step.
-        byte[] unknown = Drive(20, 4181, (21, 9));
+        byte[] unknown = Drive(20, 4181, (21, 4));
         Assert.Throws<InvalidDataException>(() => EpisodeStateLayout.ReadPoseSource(unknown));
     }
 

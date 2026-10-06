@@ -12,4 +12,13 @@ public sealed class CarlaRpcException(string message) : Exception(message)
     public bool NamesNoSuchFunction =>
         Message.Contains("could not find function", StringComparison.Ordinal)
         || Message.Contains("unknown method", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether the server answered that it binds the function with another number of arguments, which is
+    /// what a server built before the call gained an argument answers. rpclib says the function "was
+    /// called with an invalid number of arguments"; CarlaNet's own RPC server says "wrong argument count".
+    /// </summary>
+    public bool NamesWrongArgumentCount =>
+        Message.Contains("invalid number of arguments", StringComparison.Ordinal)
+        || Message.Contains("wrong argument count", StringComparison.Ordinal);
 }

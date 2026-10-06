@@ -29,6 +29,12 @@ internal static class CoSimFixtures
     /// </summary>
     public static string JamScenario => Fixture("Jam.sumocfg");
 
+    /// <summary>
+    /// The same cross with one vehicle whose stop ends in a jump to the next edge of its route: one SUMO
+    /// step further than any vehicle drives in one.
+    /// </summary>
+    public static string JumpScenario => Fixture("Jump.sumocfg");
+
     /// <summary>Every kind of supervised subject on the cross: a stop, a parking stay, a turn and a flow.</summary>
     public static string SupervisedRoutes => Fixture("Supervised.rou.xml");
 
