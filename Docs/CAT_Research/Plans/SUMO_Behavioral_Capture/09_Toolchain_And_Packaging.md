@@ -835,7 +835,7 @@ template (`12`).
   and `08`'s call), not embedded in code.
 - **The authoring skill — a bundle, not a single file, and it lives in the repository.** It is a
   bundle at `carla/CarlaControl/skills/sumo-traffic-scenarios/` (`SKILL.md` at `metadata.version`
-  1.6.0, about 41 KB; `checks.json`; `schemas/`, `references/` and `examples/`; about 257 KB in all,
+  1.7.0, about 48 KB; `checks.json`; `schemas/`, `references/` and `examples/`; about 230 KB in all,
   where it was a single 14 KB `SKILL.md` on 2026-09-18), beside the
   compiler [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) §8 says generates most of its
   contents, so generator and generated output sit under one directory and one licence and
