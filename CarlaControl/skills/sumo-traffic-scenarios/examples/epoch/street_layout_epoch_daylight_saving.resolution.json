@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch daylight saving",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_daylight_saving.scenario.json",
-    "specification_sha256": "8f7f4940fb8347306b8bfe901d0b0df4f87b60fb5ab1ebf81b6760b88b0e0f1b",
+    "specification_sha256": "7813a0feb4156c79a41af00ac694a29000d8277b36ed6de3594f0d480211c880",
     "spec_version": 1
   },
   "findings": [
@@ -210,7 +210,7 @@
     "georeference": "+proj=tmerc +lat_0=39.5 +lon_0=-104.9 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
       "version": "1.27.0",
-      "matched_by": "SUMO_HOME",
+      "matched_by": "explicit",
       "release_agreement": "SameRelease",
       "verdict": "the world was converted by 'Eclipse SUMO netconvert 1.27.0', the same release"
     }
@@ -466,7 +466,7 @@
     "scenario_name": "Street layout, epoch daylight saving",
     "spec_version": 1,
     "specification": "street_layout_epoch_daylight_saving.scenario.json",
-    "specification_sha256": "8f7f4940fb8347306b8bfe901d0b0df4f87b60fb5ab1ebf81b6760b88b0e0f1b",
+    "specification_sha256": "7813a0feb4156c79a41af00ac694a29000d8277b36ed6de3594f0d480211c880",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"

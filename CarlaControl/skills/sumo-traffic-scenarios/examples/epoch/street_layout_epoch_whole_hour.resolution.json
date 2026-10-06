@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch whole hour",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_whole_hour.scenario.json",
-    "specification_sha256": "ca9090d2211312f3a1104128494a775fd437a905a60a9627b47673678153f00d",
+    "specification_sha256": "c62207a1f451d400de2d929600184be1781de0461f52eb05b5a854564113ae7d",
     "spec_version": 1
   },
   "findings": [
@@ -210,7 +210,7 @@
     "georeference": "+proj=tmerc +lat_0=39.5 +lon_0=-104.9 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
       "version": "1.27.0",
-      "matched_by": "SUMO_HOME",
+      "matched_by": "explicit",
       "release_agreement": "SameRelease",
       "verdict": "the world was converted by 'Eclipse SUMO netconvert 1.27.0', the same release"
     }
@@ -466,7 +466,7 @@
     "scenario_name": "Street layout, epoch whole hour",
     "spec_version": 1,
     "specification": "street_layout_epoch_whole_hour.scenario.json",
-    "specification_sha256": "ca9090d2211312f3a1104128494a775fd437a905a60a9627b47673678153f00d",
+    "specification_sha256": "c62207a1f451d400de2d929600184be1781de0461f52eb05b5a854564113ae7d",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"

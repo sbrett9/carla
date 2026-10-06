@@ -265,7 +265,7 @@
   ],
   "findings": [],
   "base": "street_layout_probe.scenario.json",
-  "base_sha256": "65df143cf29f6e1862ed2bffd42364bedcbc0f2af67f4ed86a57a15b34ca255d",
+  "base_sha256": "b05d4f38c72f0f504422ddbe4f8df0c85855dcf12123074daa94f1089d02acc5",
   "pairing": "cross",
   "illumination": "hold",
   "axes": [],
