@@ -14,8 +14,9 @@ world (D1.12):
 * **Connect and check the server.**
 * **Start the session** (`world.start_sumo_drive`), which checks the loaded world is the package's
   and the scenario's files are the ones its compile lock digests, refuses a scenario that lets SUMO
-  teleport, starts the SUMO release that converted the world, takes the world's clock and the
-  population lease, hides the layers, fast-forwards SUMO to the prewarm's first instant, and binds
+  teleport, takes the population lease and the world's drive lease on the server, starts the SUMO
+  release that converted the world, takes the world's clock, hides the layers, fast-forwards SUMO
+  to the prewarm's first instant, and binds
   the sun for the window's opening -- `window_opens_at`, the window's begin, so a frozen sun is
   pinned there and the prewarm is lit by it. It is handed `on_admission_pass`, so every admission
   pass reaches `WindowAdmissions`, and -- only where a channel aims at the rendered traffic --
@@ -35,7 +36,8 @@ world (D1.12):
 * **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
   `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
   and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
-  population lease names (`HeldBy`); `PreRoll` -- from the start, or from an `Advance` of the
+  lease names (`HeldBy`) -- the process-local population lease, or the world's drive lease another
+  client holds on the server; `PreRoll` -- from the start, or from an `Advance` of the
   prewarm -- is `refused_preroll`, closed `aborted_at_preroll`; `Window` is `run_stopped`, closed
   `fault:<type>`. A SUMO failure is such a refusal. Anything else raised is `internal_error`.
 * **Place the cameras**: each channel's RGB camera at its stare pose -- or at the pose its orbit
@@ -620,6 +622,15 @@ class CaptureSession:
                  else "left as the world holds it; the run's lighting honours no epoch"}
         layers = report.LayerVisibility
         facts["layers"] = {str(key): bool(layers[key]) for key in layers.Keys}
+        # Whether the server holds the drive lease for this run: without it nothing on the server
+        # stops a traffic manager or a second drive putting vehicles into the capture.
+        refused = getattr(report, "DriveLeaseRefused", None)
+        facts["drive_lease"] = (
+            f"NOT HELD: this server has no drive lease, so nothing on it stops another traffic "
+            f"system driving vehicles into this run (the server said: {refused})"
+            if refused is not None
+            else f"held as {report.DriveLeaseHolder}; the server refuses every other traffic "
+                 "system's control writes")
         facts["render_set"] = (
             str(report.RenderSetPolicy) if not bool(report.RenderSetLimits)
             else f"{report.RenderSetPolicy}. An optional limit: a vehicle outside it is simulated by "

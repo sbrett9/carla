@@ -469,6 +469,33 @@ def test_a_held_population_lease_refuses_naming_the_holder(layout, server):
     assert result.authority_holder == "someone's traffic manager"
 
 
+def test_a_drive_lease_another_client_holds_on_the_server_refuses_naming_the_holder(layout, server):
+    # The server's refusal of the session's claim on the world's drive lease: another process's drive
+    # holds it. The same outcome and status as the process-local lease, with that holder named.
+    server.start_raises = PopulationAuthorityHeldException(
+        PopulationMode.SumoDrivenPlayback, "run_sumo_drive.py (process 7 on ELSEWHERE)",
+        "take_drive_lease: refused; run_sumo_drive.py (process 7 on ELSEWHERE) holds the drive lease "
+        "on this world since frame 3")
+    _, result = capture(layout, server)
+    assert (result.outcome, result.exit_status) == ("refused_authority", 4)
+    assert result.authority_holder == "run_sumo_drive.py (process 7 on ELSEWHERE)"
+    assert "run_sumo_drive.py (process 7 on ELSEWHERE)" in result.detail
+    assert server.events.of("spawn") == []
+
+
+def test_the_session_facts_say_whether_the_drive_lease_is_held(layout, server):
+    session, _ = capture(layout, server)
+    assert session.session_facts["drive_lease"].startswith("held as run_capture (process 41 on HOST)")
+
+
+def test_a_server_without_the_drive_lease_is_said_not_held_in_the_facts(layout, server):
+    server.drive_lease_refused = "rpclib: server could not find function 'take_drive_lease' with argument count 2."
+    session, result = capture(layout, server)
+    assert result.outcome == "run_finished"
+    assert session.session_facts["drive_lease"].startswith("NOT HELD")
+    assert "take_drive_lease" in session.session_facts["drive_lease"]
+
+
 def test_a_sun_that_did_not_bind_refuses_at_preroll(layout, server):
     server.start_raises = staged(
         SolarAuditFailedException("requested 07:00, world reports 12:00", None), "PreRoll")

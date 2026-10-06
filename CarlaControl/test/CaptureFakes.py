@@ -415,6 +415,8 @@ class _Report:
         self.CompileLock = FakeCompileLock()
         self.Teleporting = FakeTeleporting()
         self.LayerVisibility = _Keyed(road=False, signals=False)
+        self.DriveLeaseHolder = "run_capture (process 41 on HOST)"
+        self.DriveLeaseRefused = None
         self.Ticks = 0
         self.SumoSteps = 0
         self.PosesComputed = 0
@@ -485,6 +487,8 @@ class FakeSession:
         self.Report = _Report(_Pacing(float(kwargs["real_time_factor"])))
         self.Report.CompileLock = world.compile_lock
         self.Report.Teleporting = world.teleporting
+        # The server's drive lease: held for the run, or refused by a server built before it carried one.
+        self.Report.DriveLeaseRefused = world.drive_lease_refused
         self.Clock = "SUMO step 1 s = 20 world ticks of 0.05 s; capture 2 Hz"
         illumination = kwargs["illumination"] or {}
         binds = illumination.get("policy") != "ignore"
@@ -713,6 +717,8 @@ class FakeServer:
         self.next_actor = 100
         self.start_raises: Exception | None = None
         self.start_returns_none = False
+        # Why the server granted the session no drive lease, in its words, or None where it holds one.
+        self.drive_lease_refused: str | None = None
         self.fault_at: tuple[float, Exception] | None = None
         self.achieved_factor: float | None = 3.2
         self.drops_per_step = 0
