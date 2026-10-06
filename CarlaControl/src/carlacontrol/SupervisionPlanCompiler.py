@@ -19,8 +19,7 @@ What an author declares, and what it compiles to:
 **Every row is a vehicle's or a flow's** (06 §3.5, the owner's ruling of 2026-10-05). SUMO reports
 vehicles, not places, so a label follows the vehicle it is about and nothing here writes a row for an
 empty place: an occasion a rota skips writes no trip and no slot, and an author who wants a planted
-omission in the record labels the vehicle that deviates, or states the intent as a note at scenario
-level. Every actor not named in an instance and every flow not named in a cohort is written explicitly
+omission in the record labels the vehicle that deviates. Every actor not named in an instance and every flow not named in a cohort is written explicitly
 as `unlabelled`, because a missing element must not stand for an asserted negative (06 §3.1).
 
 **A row says nothing its terms do not define.** A row's `parameters` are keys its labels' terms
@@ -179,8 +178,8 @@ class SupervisionPlanCompiler:
         if not participants:
             self.findings.refuse(19, where, "has no participant. An instance is an assertion about "
                                  "one or more vehicles, and a label follows its vehicle (06 §3.5); "
-                                 "an omission is conveyed by labelling the vehicle that deviates, or "
-                                 "as a scenario-level note")
+                                 "an omission is conveyed by labelling the vehicle that deviates: give "
+                                 "the vehicle that fails to arrive a route and a label of its own")
         if len(participants) == 1 and participants[0]["role"] != SUBJECT_ROLE:
             self.findings.refuse(50, where, f"has one participant, whose role is "
                                  f"'{participants[0]['role']}'; a one-participant instance names "

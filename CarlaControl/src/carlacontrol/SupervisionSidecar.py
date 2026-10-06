@@ -19,9 +19,9 @@ the question a behavioural model is being asked. It goes in its own file, on the
 as `marked_ids` does.
 
 The shape here is a carry-forward, not a schema: one record per described gap, the author's keys
-untouched, plus the resolved window. It is a note at scenario level, which is one of the two ways the
-owner's ruling of 2026-10-05 leaves an author to convey an omission (`06_Truth_And_Annotation.md`
-§3.5): the other is to label the vehicle that deviates. Nothing is ever written per frame for a place
+untouched, plus the resolved window, read only for datasets made before compiled scenarios. A compiled
+scenario conveys an omission one way, by the owner's ruling (`06_Truth_And_Annotation.md` §3.5): it
+labels the vehicle that deviates. Nothing is ever written per frame for a place
 no vehicle came to, because SUMO reports vehicles, not places, and a label follows its vehicle.
 """
 from __future__ import annotations

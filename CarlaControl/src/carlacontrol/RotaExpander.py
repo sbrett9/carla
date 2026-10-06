@@ -22,8 +22,8 @@ with an explicit exclusion list. Each entry departs at `d<day> <clock>` under th
 anomaly that was never planted -- the whole of the sizing scenario's no-show rests on one `continue`
 firing -- and a skip carries its reason as a field, so the report can state it. A skipped occasion
 writes no trip and no supervision row: there is no vehicle for a label to follow (06 §3.5), so the
-gap it makes in the schedule is conveyed by the report, by the vehicle an author labels as deviating,
-or by a note at scenario level, never per frame.
+gap it makes in the schedule is stated by the report, and an author who wants it in the record labels
+the vehicle that deviates; nothing is written per frame for the gap.
 
 `id_pattern` fields: `{day}`, `{hour}` and `{minute}` of the clock as integers, `{subject_index}`,
 and `{subject}`, the subject's place name.

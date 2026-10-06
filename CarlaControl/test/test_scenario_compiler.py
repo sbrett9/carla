@@ -928,7 +928,8 @@ def test_an_instance_with_no_participant_is_refused_under_check_19(world, instal
     result = compile_spec(world, installation, tmp_path, supervision=block)
     assert 19 in checks(result)
     assert "has no participant" in messages(result, 19)
-    assert "labelling the vehicle that deviates, or as a scenario-level note" in messages(result, 19)
+    assert "labelling the vehicle that deviates" in messages(result, 19)
+    assert "scenario-level note" not in messages(result, 19)
 
 
 def test_the_absence_shape_is_refused_by_the_schema_under_check_53(world, installation, tmp_path):

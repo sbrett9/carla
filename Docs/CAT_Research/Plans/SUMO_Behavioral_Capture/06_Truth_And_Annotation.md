@@ -48,6 +48,7 @@ the real scenario artifacts. No code changed, no build run.
 | 39 · 2026-10-05 | A still is written with the truth of its own frame or not at all, as the owner ruled ("close the door"; §8.2). The recorder holds the client's snapshots open while it records (`CarlaClient.HoldSnapshotFrames`, `SnapshotHold`) and releases each frame once an image of a later frame has been prepared, less a margin of four; the client serves a frame exactly or not at all, keeps sixteen frames with no hold open and never more than 256. A still whose own frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`), reported by `NativeRecorder` and the run result, and gated at zero by the closeout (`capture.frame_unpaired[<sensor>]`, [12](12_Operator_Control_Surface.md) §7.2). `telemetry_tick` is gone from the sidecar and the PNG's `carla:capture`; the sidecar audit no longer counts truth from a neighbouring frame. Built and tested against a stand-in server; the live check is the owner's. |
 | 40 · 2026-10-05 | The two exports are withdrawn by the owner's ruling (§10.3, D6.15): imagery and truth stay side by side in one capture folder, with no export step, no separate imagery folder, no held-back partition and no validator over an imagery folder. §10.2 is reduced to what the collection contains and where each thing is written; §10's opening and §10.1's per-tick row follow. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and the supervision-transfer rule of §10.1 is published and not applied here. |
 | 41 · 2026-10-06 | Bahonar's planted omission is carried by a vehicle that deviates, as the owner ruled (§3.5, §9.1, §9.2, §9.4). The guard schedule still skips the posting at tower 3 on day 4 at 07:00, which writes no trip and no row; the guard who should have taken it, `offpost_d4_h7_t3`, departs the apron on schedule as the guards do, parks for the eight-hour shift on a dead-end airside road between the air base's western aprons, and returns. It is the `subject` of the annotated instance `pi_posting_not_taken_up_d4`, labeled with the new term `bahonar:posting_not_taken_up`, whose parameters name the tower and the shift it was due at, its interval anchored to its stop. The namespace is at version 2; the term's counterfactual is `bahonar:tower_posting`, whose `hard_negative_for` now names it, since the postings differ from it only in where the guard parks. The plan has 27 instances, 6 of them annotated, and 366 entities; its vocabulary digest is `9b05590f…`. |
+| 42 · 2026-10-06 | §3.5: one way to convey a planted omission, as the owner ruled: label the vehicle that deviates. The note at scenario level is no longer offered; the skip's `because` is the reason for the skip, and a legacy `anomaly_notes` is carried for old datasets only. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -817,18 +818,16 @@ The series the rota compiles to holds one slot per occasion a vehicle realises (
 occasion is none of them. The label is carried by the guard who should have taken the posting, a
 vehicle that deviates (below).
 
-**An author who wants a planted omission in the record has two ways to convey it, and nothing per
-frame:**
+**An author who wants a planted omission in the record labels the vehicle that deviates, and nothing
+is written per frame for the place it failed to reach:**
 
 1. **Label the vehicle that deviates.** The record is about a vehicle, so the author names one. A
    guard who leaves early, or who never sets out and is authored as a vehicle that turns back, carries
    the author's term for what it does; the posting it fails is then the story the label tells, on the
    track a consumer can find.
-2. **State the intent as a note at scenario level.** Where there is no deviating vehicle to label, the
-   author writes what they meant where the scenario is declared — the skip's `because`, the
-   specification's description, a legacy labels file's `anomaly_notes` carried out beside the dataset
-   (`SupervisionSidecar`) — and it reaches a reader as prose about the scenario, never as a per-frame
-   truth row.
+2. **No other way is offered** (the owner's ruling of 2026-10-06). The skip's `because` is the author's
+   reason for the skip and nothing more; a legacy labels file's `anomaly_notes` is carried beside a
+   dataset made before compiled scenarios (`SupervisionSidecar`) and is never a way to author one.
 
 **Bahonar's omission is the first way, as the owner ruled on 2026-10-06.** The schedule still skips
 the posting at tower 3 on day 4 at 07:00, so there is no ordinary posting and no row for the empty post.
