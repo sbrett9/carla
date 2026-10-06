@@ -18,14 +18,20 @@ witnesses, because neither can see what the other sees:
   the tick the tiles were answered in for count, and a view whose tiles stop being in starts its
   picture again.
 
-**The picture's span and ceiling are counted in ticks.** The placements were measured with a camera
-rendering every tick, where ten frames and ten ticks are the same thing. Measured on Bahonar with a
-camera rendering at the 2 Hz capture rate, a view with no traffic had settled by 50 ticks after its
-tiles -- its frames 50 and 150 ticks after them matched -- which is five of its own frames, against
-the 19 to 39 frames the placements' renderer took: the renderer settles on the world's ticks, not on
-the frames a camera renders. So a frame is compared with the newest one rendered ten or more ticks
-before it -- the frame before it at 2 Hz, the frame ten before it at 20 Hz -- and the ceiling is the
-120 ticks the placements' 120 frames were.
+**The span is counted in ticks; the ceiling in the camera's own frames.** The placements were
+measured with a camera rendering every tick, where ten frames and ten ticks are the same thing. A
+frame is compared with the newest one rendered ten or more ticks before it -- the frame before it at
+2 Hz, the frame ten before it at 20 Hz. The ceiling was first written as 120 of the camera's frames,
+then as 120 ticks after one Bahonar run at 2 Hz whose view had settled five frames after its tiles,
+and is counted in the camera's frames again by the owner's ruling of 2026-10-06, from what the
+Arapahoe check stare measured: judged under a running session at 2 Hz, its worst block fell 2.63,
+1.90, 2.04, 1.53, 1.15, 0.94, 0.76, 0.73, 0.73, 0.62 gray levels from its 4th to its 13th frame,
+heading under 0.5 around its 15th, just past the 120 ticks, which at 2 Hz are twelve frames; the run
+that passed the day before was judged on the camera's 72nd frame only because its tiles took 712
+ticks to arrive. The capture component keeps its rendering state between captures, so what settles
+-- antialiasing history, exposure, global illumination -- advances once per frame the camera draws
+and not once per tick. So the ceiling is a number of frames the camera has drawn since its tiles
+came in, `PICTURE_CEILING_FRAMES` (60: 30 s at 2 Hz) unless the run configuration says otherwise.
 
 **The question is the world's rendering, not the scene's stillness.** A vehicle driving through the
 view changes its blocks whatever the tiles are doing: on Bahonar, 56 rendered vehicles held the worst
@@ -42,7 +48,12 @@ view that stays so until the ceiling is refused with that as the reason.
 
 Each witness has a ceiling in the unit it progresses in, and a ceiling only fails: 90 s of wall clock
 for the tiles -- above the 60 s request timeout, so a stalled request shows first as a failed tile --
-and 120 ticks for the picture, counted from the tiles being in. Neither is a count a caller supplies.
+and for the picture a number of the camera's frames, counted from the first rendered on or after the
+tick its tiles were answered in for. The tiles' ceiling is not a count a caller supplies. The
+picture's ceiling and its tolerance are session-fixed run-configuration fields,
+`capture.picture_ceiling_frames` and `capture.picture_tolerance_levels`, whose tool defaults are
+`PICTURE_CEILING_FRAMES` and `PICTURE_TOLERANCE_LEVELS` here, so either can be changed for a run
+without a code change and the lock records the value; the ten-tick span is not a field.
 
 **The gate never ticks the world.** `ViewReadinessGate.after_step` is called by the process that owns
 the clock after each of its steps, and asks the server once then; a wait that did not tick would have
@@ -54,8 +65,8 @@ which is also where each frame's vehicles are placed.
 per SUMO step, so the ticks until they were in are counted to within one step, and the picture is
 compared frame by frame. Every comparison is kept on the record, with how many frames the camera had
 delivered at each of its two frames and whether the camera was posed from the snapshot or where it is
-held: a refusal then shows whether the picture was converging, and against which count -- the ticks
-since the tiles, or the camera's own frames. The three refusals of 2026-10-06 were judged over a
+held: a refusal then shows whether the picture was converging and how fast, against the camera's own
+frame count, the count the ceiling is in. The three refusals of 2026-10-06 were judged over a
 camera's 2nd to 13th frames, its tiles in 4 ticks after it was spawned, with no vehicle within 250 m
 of the view; the run that passed the day before was judged over the same camera's 72nd and 73rd
 frames, its tiles in after 712 ticks (03 §9.5.1). Nothing here is written into a capture. An image
@@ -78,7 +89,10 @@ import numpy as np
 
 TILES_CEILING_S = 90.0
 PICTURE_SPAN_TICKS = 10
-PICTURE_CEILING_TICKS = 120
+# The tool defaults of capture.picture_ceiling_frames and capture.picture_tolerance_levels: how many
+# of its own frames a camera has, from its tiles being in, to settle its picture (30 s at 2 Hz), and
+# the gray levels within which a frame counts as settled against its frame ten ticks earlier.
+PICTURE_CEILING_FRAMES = 60
 PICTURE_TOLERANCE_LEVELS = 0.5
 # The share of the view's blocks a comparison must be left to judge once the vehicles are excluded.
 PICTURE_MIN_JUDGED_SHARE = 0.5
@@ -162,10 +176,10 @@ def describe_view(view: dict) -> str:
     text = (f"tiles in at frame {tiles['in_at_frame']} after {tiles['ticks']} ticks, "
             f"{tiles['wall_s']:.1f} s" if tiles else f"waiting for tiles ({view['tiles_now']})")
     if picture:
-        text += (f"; picture settled at frame {picture['settled_at_frame']}, "
-                 f"{picture['ticks_since_tiles']} ticks after its tiles, worst judged block "
-                 f"{picture['residual_levels']:.2f} grey levels with {picture['judged_share']:.0%} "
-                 "of its blocks judged")
+        text += (f"; picture settled at frame {picture['settled_at_frame']}, its frame "
+                 f"{picture['frames']} since its tiles ({picture['ticks_since_tiles']} ticks), worst "
+                 f"judged block {picture['residual_levels']:.2f} grey levels with "
+                 f"{picture['judged_share']:.0%} of its blocks judged")
     elif tiles:
         comparison = view.get("last_comparison")
         text += "; picture settling"
@@ -422,15 +436,31 @@ def _actor_key(actor_id: int):
 
 # -- how long a wait needs -------------------------------------------------------------------------
 
-def hold_lead_s(step_s: float, delta_s: float) -> float:
+def ticks_to_ceiling(ticks_per_frame: int, ceiling_frames: int) -> int:
+    """The ticks the picture's ceiling needs after the tiles are first answered for: the camera's
+    `ceiling_frames` frames at its rate, whatever the phase of its period, and the
+    `PICTURE_SPAN_TICKS` a frame is compared across. 610 at the defaults, 30.5 s."""
+    return max(1, int(ticks_per_frame)) * int(ceiling_frames) + PICTURE_SPAN_TICKS
+
+
+def first_judged_frame(ticks_per_frame: int) -> int:
+    """Which of the camera's frames since its tiles were in is the first the picture can be judged
+    on: the frame whose frame at least `PICTURE_SPAN_TICKS` before it was also rendered since the
+    tiles -- the 2nd at 2 Hz, the 11th at 20 Hz. A ceiling of fewer frames holds no comparison."""
+    period = max(1, int(ticks_per_frame))
+    return 1 + math.ceil(PICTURE_SPAN_TICKS / period)
+
+
+def hold_lead_s(step_s: float, delta_s: float, ticks_per_frame: int, ceiling_frames: int) -> float:
     """How long before the window opens a camera that follows the traffic stops and holds the pose
-    it opens on: one SUMO step for the tiles to be first asked about, and the picture's ceiling, in
-    whole SUMO steps."""
-    return math.ceil((step_s + PICTURE_CEILING_TICKS * delta_s) / step_s - 1e-9) * step_s
+    it opens on: one SUMO step for the tiles to be first asked about, and the ticks the picture's
+    ceiling needs (`ticks_to_ceiling`), in whole SUMO steps. 32 s at the defaults."""
+    lead = step_s + ticks_to_ceiling(ticks_per_frame, ceiling_frames) * delta_s
+    return math.ceil(lead / step_s - 1e-9) * step_s
 
 
-def wait_begins_s(window_begin_s: float, first_rendered_s: float, step_s: float,
-                  delta_s: float, follows_traffic: bool) -> float:
+def wait_begins_s(window_begin_s: float, first_rendered_s: float, step_s: float, delta_s: float,
+                  ticks_per_frame: int, ceiling_frames: int, follows_traffic: bool) -> float:
     """Where every camera's wait for its view begins: the prewarm's first rendered instant, or --
     where a stare follows the rendered traffic -- where that stare stops to hold its pose,
     `hold_lead_s` before the window opens, and never before the prewarm's first step has rendered
@@ -438,14 +468,8 @@ def wait_begins_s(window_begin_s: float, first_rendered_s: float, step_s: float,
     while another is still moving."""
     if not follows_traffic:
         return first_rendered_s
-    return max(window_begin_s - hold_lead_s(step_s, delta_s), first_rendered_s + step_s)
-
-
-def ticks_to_first_comparison(ticks_per_frame: int) -> int:
-    """The most ticks after the tiles are first answered for before the camera has rendered two
-    frames at least `PICTURE_SPAN_TICKS` apart, whatever the phase of its period."""
-    period = max(1, int(ticks_per_frame))
-    return (period - 1) + math.ceil(PICTURE_SPAN_TICKS / period) * period
+    return max(window_begin_s - hold_lead_s(step_s, delta_s, ticks_per_frame, ceiling_frames),
+               first_rendered_s + step_s)
 
 
 def ticks_after_first_ask(held_s: float, step_s: float, delta_s: float) -> float:
@@ -550,12 +574,17 @@ class ChannelReadiness:
     def __init__(self, sensor_id: str, camera_id: int, ask: Callable[[], dict],
                  frames: CameraFrames, clock: Callable[[], float], ticks_per_frame: int,
                  locate: Callable[[int], FrameVehicles | None] | None = None,
-                 fov_deg: float = 90.0) -> None:
+                 fov_deg: float = 90.0, ceiling_frames: int = PICTURE_CEILING_FRAMES,
+                 tolerance_levels: float = PICTURE_TOLERANCE_LEVELS) -> None:
         """
         Args:
             locate: Where a frame's rendered vehicles stood (`SessionFrameVehicles`); None where the
                 camera sees no vehicle a session renders, so nothing is excluded.
             fov_deg: The camera's horizontal field of view, which the vehicles are projected with.
+            ceiling_frames: How many of its own frames the camera has, from its tiles being in, to
+                settle its picture (capture.picture_ceiling_frames).
+            tolerance_levels: The gray levels within which a frame counts as settled against its
+                frame at least `PICTURE_SPAN_TICKS` earlier (capture.picture_tolerance_levels).
         """
         self.sensor_id = sensor_id
         self.camera_id = camera_id
@@ -565,6 +594,8 @@ class ChannelReadiness:
         self._locate = locate
         self.fov_deg = float(fov_deg)
         self.ticks_per_frame = max(1, int(ticks_per_frame))
+        self.ceiling_frames = max(1, int(ceiling_frames))
+        self.tolerance_levels = float(tolerance_levels)
         self.state = NOT_STARTED
         self.began: dict | None = None
         self.tiles: dict | None = None
@@ -676,42 +707,43 @@ class ChannelReadiness:
         for frame, small, width, height, camera_frame in arrived:
             if frame < self._settle_from or (self._history and frame <= self._history[-1].frame):
                 continue
-            if frame - self._settle_from > PICTURE_CEILING_TICKS:
-                raise ViewNotReadyError(
-                    self.sensor_id, "picture",
-                    f"channel {self.sensor_id}: its picture did not settle within "
-                    f"{PICTURE_CEILING_TICKS} ticks of its tiles being in at frame "
-                    f"{self._settle_from} ({RULE}): {self._comparison_text()}")
+            # The camera's frames since its tiles were in: the count the ceiling is in.
             self._compared += 1
             entry = self._keep(frame, small, width, height, camera_frame)
             older = next((kept for kept in reversed(self._history)
                           if kept.frame <= frame - PICTURE_SPAN_TICKS), None)
             self._history.append(entry)
-            if older is None:
-                continue
-            comparison = self._compare(entry, older)
-            self.last_comparison = comparison
-            self.comparison_history.append(comparison)
-            if comparison["reason"] is None and \
-                    comparison["worst_block_levels"] <= PICTURE_TOLERANCE_LEVELS:
-                self.state = READY
-                self.picture = {"settled_at_frame": frame, "compared_with_frame": older.frame,
-                                "frames": self._compared,
-                                "ticks_since_tiles": frame - self._settle_from,
-                                "camera_frames": comparison["camera_frames"],
-                                "residual_levels": comparison["worst_block_levels"],
-                                "worst_block_px": comparison["worst_block_px"],
-                                "blocks": comparison["blocks"],
-                                "excluded_blocks": comparison["excluded_blocks"],
-                                "judged_share": comparison["judged_share"],
-                                "vehicles": comparison["vehicles"],
-                                "camera_from_snapshot": comparison["camera_from_snapshot"]}
-                return [(logging.INFO,
-                         f"channel {self.sensor_id}: picture settled at frame {frame}, "
-                         f"{frame - self._settle_from} ticks after its tiles were in; worst judged "
-                         f"80-pixel block {comparison['worst_block_levels']:.2f} grey levels from "
-                         f"frame {older.frame}, {comparison['excluded_blocks']} of "
-                         f"{comparison['blocks']} blocks left out for rendered vehicles")]
+            if older is not None:
+                comparison = self._compare(entry, older)
+                self.last_comparison = comparison
+                self.comparison_history.append(comparison)
+                if comparison["reason"] is None and \
+                        comparison["worst_block_levels"] <= self.tolerance_levels:
+                    self.state = READY
+                    self.picture = {"settled_at_frame": frame, "compared_with_frame": older.frame,
+                                    "frames": self._compared,
+                                    "ticks_since_tiles": frame - self._settle_from,
+                                    "camera_frames": comparison["camera_frames"],
+                                    "residual_levels": comparison["worst_block_levels"],
+                                    "worst_block_px": comparison["worst_block_px"],
+                                    "blocks": comparison["blocks"],
+                                    "excluded_blocks": comparison["excluded_blocks"],
+                                    "judged_share": comparison["judged_share"],
+                                    "vehicles": comparison["vehicles"],
+                                    "camera_from_snapshot": comparison["camera_from_snapshot"]}
+                    return [(logging.INFO,
+                             f"channel {self.sensor_id}: picture settled at frame {frame}, its "
+                             f"frame {self._compared} since its tiles were in "
+                             f"({frame - self._settle_from} ticks); worst judged 80-pixel block "
+                             f"{comparison['worst_block_levels']:.2f} grey levels from frame "
+                             f"{older.frame}, {comparison['excluded_blocks']} of "
+                             f"{comparison['blocks']} blocks left out for rendered vehicles")]
+            if self._compared >= self.ceiling_frames:
+                raise ViewNotReadyError(
+                    self.sensor_id, "picture",
+                    f"channel {self.sensor_id}: its picture did not settle within "
+                    f"{self.ceiling_frames} of its frames after its tiles were in at frame "
+                    f"{self._settle_from} ({RULE}): {self._comparison_text()}")
         return []
 
     def _keep(self, frame: int, small: np.ndarray, width: int, height: int,
@@ -798,7 +830,7 @@ class ChannelReadiness:
         return (f"frame {comparison['frame']} differs from frame {comparison['against_frame']}, "
                 f"{comparison['ticks_apart']} ticks earlier, by "
                 f"{comparison['worst_block_levels']:.2f} grey levels in its worst judged 80-pixel "
-                f"block (at x {x}, y {y}) against {PICTURE_TOLERANCE_LEVELS}, with "
+                f"block (at x {x}, y {y}) against {self.tolerance_levels:g}, with "
                 f"{comparison['excluded_blocks']} of {comparison['blocks']} blocks left out for "
                 f"rendered vehicles{counts}{self._series_text()}")
 
@@ -868,10 +900,16 @@ class ViewReadinessGate:
     """Every capture camera's wait, told after each of the session's steps and never ticking."""
 
     def __init__(self, clock: Callable[[], float] = time.monotonic,
-                 logger: logging.Logger | None = None, drain_s: float = FRAME_DRAIN_S) -> None:
+                 logger: logging.Logger | None = None, drain_s: float = FRAME_DRAIN_S,
+                 ceiling_frames: int = PICTURE_CEILING_FRAMES,
+                 tolerance_levels: float = PICTURE_TOLERANCE_LEVELS) -> None:
+        """`ceiling_frames` and `tolerance_levels` are the run's capture.picture_ceiling_frames and
+        capture.picture_tolerance_levels, given to every channel watched."""
         self._clock = clock
         self.logger = logger or logging.getLogger(__name__)
         self.drain_s = drain_s
+        self.ceiling_frames = max(1, int(ceiling_frames))
+        self.tolerance_levels = float(tolerance_levels)
         self.channels: list[ChannelReadiness] = []
         self._cameras: list[Any] = []
         self.begun_at: dict | None = None
@@ -889,7 +927,8 @@ class ViewReadinessGate:
         frames = CameraFrames()
         channel = ChannelReadiness(sensor_id, int(camera.id),
                                    lambda: world.get_view_readiness(camera), frames, self._clock,
-                                   ticks_per_frame, locate, fov_deg)
+                                   ticks_per_frame, locate, fov_deg, self.ceiling_frames,
+                                   self.tolerance_levels)
         camera.listen(frames)
         self._cameras.append(camera)
         self.channels.append(channel)
@@ -931,8 +970,9 @@ class ViewReadinessGate:
     def to_dict(self) -> dict:
         return {"rule": RULE, "tiles_ceiling_s": TILES_CEILING_S,
                 "picture_span_ticks": PICTURE_SPAN_TICKS,
-                "picture_ceiling_ticks": PICTURE_CEILING_TICKS,
-                "picture_tolerance_levels": PICTURE_TOLERANCE_LEVELS,
+                # The camera's frames since its tiles were in; the run configuration's values.
+                "picture_ceiling_frames": self.ceiling_frames,
+                "picture_tolerance_levels": self.tolerance_levels,
                 "picture_block_px": PICTURE_BLOCK_PX,
                 "picture_min_judged_share": PICTURE_MIN_JUDGED_SHARE,
                 "vehicle_margin_px": VEHICLE_MARGIN_PX,

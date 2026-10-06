@@ -3,10 +3,10 @@
 Plan 12 §5.2 and D12.37: `stare_look_at_target: rendered_traffic` resolves to the mean position,
 height included, of the vehicles the session rendered on the last frame before its camera holds for
 the window, measured from the poses it wrote to bodies. The camera follows that centre through the
-prewarm until one SUMO step and the picture's 120-tick ceiling before the window opens -- seven
-one-second steps -- and then holds one pose, so the view whose tiles and picture are waited on
-(03 §9.5.1) is the view the window holds; the run result records the point so the view is
-reproducible as an ordinary look-at stare.
+prewarm until one SUMO step and the picture's ceiling -- its 60 frames at 2 Hz and the ten-tick
+span, 32 one-second steps at the defaults -- before the window opens, and then holds one pose, so
+the view whose tiles and picture are waited on (03 §9.5.1) is the view the window holds; the run
+result records the point so the view is reproducible as an ordinary look-at stare.
 
 The stand-in session hands `on_pose` one record per vehicle per tick. Its vehicles drive east at one
 metre per simulated second, so the centre of a step's last frame, the centre of the whole step and the
@@ -42,10 +42,11 @@ Usage = namedtuple("Usage", "total used free")
 SESSION_ID = "cap-traffic"
 FIRST_RENDERED_S = 24900.0
 BEGIN_S = 25200.0
-# One SUMO step for the tiles to be first asked about and 120 ticks of 0.05 s for the picture: seven
+# One SUMO step for the tiles to be first asked about, and the picture's ceiling -- 60 of the camera's
+# frames at one every ten ticks of 0.05 s, and the ten-tick span, 30.5 s -- in whole steps: 32
 # one-second steps before the window.
-HOLD_S = 25193.0
-LAST_FOLLOWED_FRAME_S = 25192.95
+HOLD_S = 25168.0
+LAST_FOLLOWED_FRAME_S = 25167.95
 FOLLOWED_STEPS = int(HOLD_S - FIRST_RENDERED_S)
 A_TRAFFIC_STARE = {"sensor_id": "TRAFFIC-1", "stare_look_at_target": "rendered_traffic",
                    "stare_altitude_m": 250.0, "stare_standoff_m": 300.0, "stare_bearing_deg": 45.0}
@@ -139,7 +140,7 @@ def test_it_resolves_to_the_centre_of_the_bodies_on_the_last_frame_before_the_ho
         pytest.approx(point, abs=1e-6)
     assert record["measured_on"]["vehicles"] == len(BODIES)
     assert record["measured_on"]["frame_s"] == pytest.approx(LAST_FOLLOWED_FRAME_S)
-    assert (record["held_from_s"], record["held_before_the_window_s"]) == (HOLD_S, 7.0)
+    assert (record["held_from_s"], record["held_before_the_window_s"]) == (HOLD_S, 32.0)
     assert record["pose"] == pytest.approx(
         dict(zip(("x_m", "y_m", "z_m", "pitch_deg", "yaw_deg"),
                  expected_pose(aim_around(point)), strict=True)), abs=1e-6)
@@ -243,22 +244,35 @@ def test_a_one_step_prewarm_measures_the_traffic_but_leaves_no_frame_to_witness(
     assert server.clients == []
 
 
-@pytest.mark.parametrize(("prewarm", "outcome"), [("2", "refused_offline"),
-                                                  ("3", "run_finished")])
-def test_one_step_to_measure_and_one_to_compare_two_frames_after_the_first_ask(
-        layout, prewarm, outcome):
-    # One step followed and one held step before the tiles are first asked about; then a camera
-    # rendering every ten ticks needs up to nineteen more for two frames ten ticks apart. Two
-    # seconds leave none, three leave twenty.
+@pytest.mark.parametrize(("prewarm", "outcome"), [("32", "refused_offline"),
+                                                  ("33", "run_finished")])
+def test_one_step_to_measure_and_the_ceiling_s_frames_after_the_first_ask(layout, prewarm,
+                                                                          outcome):
+    # One step followed and one held step before the tiles are first asked about; then the
+    # ceiling's 60 frames at one every ten ticks and the ten-tick span, 610 ticks. 32 s leave 600,
+    # 33 s leave 620.
     server = traffic_server()
     result = capture(layout, server, overrides=[f"capture.prewarm_s={prewarm}"])
     assert result.outcome == outcome
     if outcome == "refused_offline":
-        assert result.refusals[0]["check"] == 51 and "at least 2.95 s" in             result.refusals[0]["message"]
+        assert result.refusals[0]["check"] == 51
+        assert "at least 32.5 s" in result.refusals[0]["message"]
         return
     rgb, _ = cameras(server)
     assert len(moves_of(server, rgb.id)) == 1
     assert result.produced["readiness"]["channels"][0]["picture"]["frames"] == 2
+
+
+def test_a_shorter_ceiling_shortens_the_hold(layout):
+    # A ceiling of two frames needs 30 ticks after the first ask, 1.5 s; with the step for the ask,
+    # 2.5 s, held for three whole steps. The camera follows for the other 297.
+    server = traffic_server()
+    result = capture(layout, server, overrides=["capture.picture_ceiling_frames=2"])
+    assert result.outcome == "run_finished"
+    [record] = result.produced["cameras"]
+    assert (record["held_from_s"], record["held_before_the_window_s"]) == (BEGIN_S - 3.0, 3.0)
+    rgb, _ = cameras(server)
+    assert len(moves_of(server, rgb.id)) == 297
 
 
 def test_a_stare_at_a_point_beside_it_is_never_moved_and_poses_are_asked_for(layout):

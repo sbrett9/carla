@@ -174,6 +174,22 @@
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
         },
+        "picture_ceiling_frames": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many of its own frames a camera has, from its photoreal tiles being in, to settle its picture before the run is refused at pre-roll (03 §9.5.1, check 50): 60 is 30 s at 2 Hz. Counted in the camera's frames, not ticks, because what the renderer settles advances once per frame the camera draws. The prewarm must hold this many frames at the capture rate and the ten-tick comparison span (check 51).",
+          "default": 60,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
+        "picture_tolerance_levels": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "The gray levels by which a camera's frame may differ from its frame at least ten ticks earlier, in its worst 80-pixel block that no rendered vehicle covers, and count as settled (03 §9.5.1). Measured over 27 placements; recorded in the lock, so a run that loosens it says so.",
+          "default": 0.5,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
+        },
         "road_layer_visible": {
           "type": "boolean",
           "description": "Draw the generated road surface. Hidden by default: it is a flat ribbon over the photogrammetry of the real road, so drawn it is an artefact in every frame.",
@@ -444,7 +460,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare: a point named instead of given. rendered_traffic is the centre of the vehicles the session rendered on the last frame before the camera holds for the window; the camera follows it through the prewarm until one SUMO step and 120 ticks before the window opens (7 s at the defaults), then holds the pose it resolves to while its view becomes ready and for the whole window, and the run result records that point. Needs a prewarm of at least one SUMO step.",
+                "description": "Stare: a point named instead of given. rendered_traffic is the centre of the vehicles the session rendered on the last frame before the camera holds for the window; the camera follows it through the prewarm until one SUMO step and the picture's ceiling before the window opens (32 s at the defaults: capture.picture_ceiling_frames at the capture rate and the ten-tick span, in whole steps), then holds the pose it resolves to while its view becomes ready and for the whole window, and the run result records that point. Needs a prewarm of at least one SUMO step.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"

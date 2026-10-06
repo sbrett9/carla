@@ -135,6 +135,45 @@ def test_a_prewarm_longer_than_the_window_s_start_warns(layout):
     assert finding.outcome == "warn" and "clipped to 100" in finding.message
 
 
+def test_a_prewarm_too_short_for_the_picture_ceiling_is_refused_offline(layout):
+    # The ceiling's 60 frames at one every ten ticks and the ten-tick span are 610 ticks after the
+    # tiles are first asked about, one step into the prewarm: 31.5 s. A shorter ceiling needs less.
+    *_, findings, _, _ = offline(layout, overrides=["capture.prewarm_s=31"])
+    finding = only(findings, 51)
+    assert finding.subject == "capture.prewarm_s"
+    assert "60 frames at one every 10 ticks and the 10-tick span" in finding.message
+    assert "at least 31.5 s" in finding.message
+    assert not offline(layout, overrides=["capture.prewarm_s=32"])[2].findings
+    assert not offline(layout, overrides=["capture.prewarm_s=3",
+                                          "capture.picture_ceiling_frames=2"])[2].findings
+
+
+@pytest.mark.parametrize(("hz", "ceiling", "first_judged"), [("2", 1, 2), ("20", 10, 11)])
+def test_a_picture_ceiling_too_small_to_hold_a_comparison_is_refused_offline(layout, hz, ceiling,
+                                                                            first_judged):
+    # A frame is judged against the camera's frame at least ten ticks before it, also rendered since
+    # the tiles: the second frame at 2 Hz, the eleventh at 20 Hz.
+    *_, findings, _, _ = offline(layout, overrides=[f"capture.capture_hz={hz}",
+                                                    f"capture.picture_ceiling_frames={ceiling}"])
+    finding = only(findings, 51)
+    assert finding.subject == "capture.picture_ceiling_frames"
+    assert f"at least {first_judged} frames" in finding.message
+    assert not offline(layout, overrides=[f"capture.capture_hz={hz}",
+                                          f"capture.picture_ceiling_frames={first_judged}"]
+                       )[2].refused
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("picture_ceiling_frames", 0), ("picture_ceiling_frames", 1.5),
+    ("picture_ceiling_frames", "many"), ("picture_tolerance_levels", 0),
+    ("picture_tolerance_levels", -0.5)])
+def test_an_unusable_picture_ceiling_or_limit_is_refused_by_the_schema(field, value):
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document({"capture": {field: value}}, "test.run.json")
+    [finding] = raised.value.findings.refusals
+    assert (finding.check_id, finding.subject) == (1, f"capture.{field}")
+
+
 # -- the clock, the sun, the epoch ---------------------------------------------------------------
 
 def test_a_world_delta_that_does_not_divide_the_step_is_refused(layout):
