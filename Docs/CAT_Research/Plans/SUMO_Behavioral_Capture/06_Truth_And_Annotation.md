@@ -47,6 +47,7 @@ the real scenario artifacts. No code changed, no build run.
 | 38 · 2026-10-05 | The SUMO-against-CARLA divergence is a run-level measurement, as the owner ruled, written where a reader finds it: `bridge_divergence` on the manifest's `manifest_closed` row, the same figures in the run result, and two closeout gates with limits from 39 measured drives, `bridge.position_divergence` at 0.01 m and `bridge.velocity_divergence` at 0.01 m/s, run-configuration fields (§4.3, §8.4, D6.10 as built; question 7 closed). D6.10's four per-capture sidecar fields are withdrawn; `heading_separation` is defined once, in §4.3, and the body-heading-against-SUMO-angle difference of §8.2 is named as a designed quantity and not it. An independent test holds the pose convention to hand-worked numbers. The vehicle lights are driven and the rule is on the manifest's opening row (`vehicle_lights`); per-vehicle state in the truth comes later (question 11). Authors see which bodies' headlights, brake lights and turn signals light up, in the skill's generated `references/vehicles.md` and the resolution report's vehicle section; as measured, none of the shipped bodies do. |
 | 39 · 2026-10-05 | A still is written with the truth of its own frame or not at all, as the owner ruled ("close the door"; §8.2). The recorder holds the client's snapshots open while it records (`CarlaClient.HoldSnapshotFrames`, `SnapshotHold`) and releases each frame once an image of a later frame has been prepared, less a margin of four; the client serves a frame exactly or not at all, keeps sixteen frames with no hold open and never more than 256. A still whose own frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`), reported by `NativeRecorder` and the run result, and gated at zero by the closeout (`capture.frame_unpaired[<sensor>]`, [12](12_Operator_Control_Surface.md) §7.2). `telemetry_tick` is gone from the sidecar and the PNG's `carla:capture`; the sidecar audit no longer counts truth from a neighbouring frame. Built and tested against a stand-in server; the live check is the owner's. |
 | 40 · 2026-10-05 | The two exports are withdrawn by the owner's ruling (§10.3, D6.15): imagery and truth stay side by side in one capture folder, with no export step, no separate imagery folder, no held-back partition and no validator over an imagery folder. §10.2 is reduced to what the collection contains and where each thing is written; §10's opening and §10.1's per-tick row follow. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and the supervision-transfer rule of §10.1 is published and not applied here. |
+| 41 · 2026-10-06 | Bahonar's planted omission is carried by a vehicle that deviates, as the owner ruled (§3.5, §9.1, §9.2, §9.4). The guard schedule still skips the posting at tower 3 on day 4 at 07:00, which writes no trip and no row; the guard who should have taken it, `offpost_d4_h7_t3`, departs the apron on schedule as the guards do, parks for the eight-hour shift on a dead-end airside road between the air base's western aprons, and returns. It is the `subject` of the annotated instance `pi_posting_not_taken_up_d4`, labeled with the new term `bahonar:posting_not_taken_up`, whose parameters name the tower and the shift it was due at, its interval anchored to its stop. The namespace is at version 2; the term's counterfactual is `bahonar:tower_posting`, whose `hard_negative_for` now names it, since the postings differ from it only in where the guard parks. The plan has 27 instances, 6 of them annotated, and 366 entities; its vocabulary digest is `9b05590f…`. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -808,12 +809,13 @@ supervision this pipeline writes is about a vehicle or about every vehicle a flo
 nothing is written for the world apart from the plan every row is bound from.
 
 The guard no-show is the case this section once built a record for: one tower stands unmanned for a
-shift while the other fifteen are relieved. What stands of it is the schedule's **skip** — the rota
+shift while the other fifteen are relieved. What stands of the schedule is its **skip** — the rota
 leaves the occasion out, with its reason as a field (`skip[].because`), the resolution report states
 it, and the generated traffic has the gap. The skip writes no trip, so there is no vehicle, and it
 writes no supervision row, because a row for an empty place would be a label with nothing to follow.
 The series the rota compiles to holds one slot per occasion a vehicle realises (§3.4); the skipped
-occasion is none of them.
+occasion is none of them. The label is carried by the guard who should have taken the posting, a
+vehicle that deviates (below).
 
 **An author who wants a planted omission in the record has two ways to convey it, and nothing per
 frame:**
@@ -828,8 +830,23 @@ frame:**
    (`SupervisionSidecar`) — and it reaches a reader as prose about the scenario, never as a per-frame
    truth row.
 
-Whether to re-author Bahonar's no-show with a deviating vehicle is the owner's; the shipped scenario
-keeps the skip and labels nothing for it.
+**Bahonar's omission is the first way, as the owner ruled on 2026-10-06.** The schedule still skips
+the posting at tower 3 on day 4 at 07:00, so there is no ordinary posting and no row for the empty post.
+The guard who should have taken it is one planted vehicle, `offpost_d4_h7_t3`: the guards' own type,
+departing the apron at 07:00 in the guards' own entry style, it drives past tower 3's turnoff and
+around the north perimeter to a dead-end airside road between the air base's two western aprons, which
+no scheduled route drives (`west_apron_spur`, lane `-441624290#0_0` at 70 m, under 400 m from the
+guards' base), parks there for the eight hours of the shift, and returns. It is the one participant,
+`subject`, of the annotated instance `pi_posting_not_taken_up_d4`, labeled
+`bahonar:posting_not_taken_up` — "A guard due to relieve a tower departs on schedule but parks
+elsewhere for the shift; the tower it was due at goes unmanned." — with `expected_tower` `tower_03`
+and `expected_shift_start` `2026-10-03T07:00:00+03:30`, both strings the term declares (check 56),
+and its interval anchored to its stop, `stop:0` to `stop_end:0`, declaring 28 800 s and no start
+(§3.3). The term names `bahonar:tower_posting` as its counterfactual, and the tower posting names it
+in `hard_negative_for`: the 335 postings are the same guard type leaving the same base at the same
+shift changes and parking for the same eight hours, at the tower and not elsewhere, so they are its
+matched negatives (§3.9(d)). A label on the skipped posting itself is refused: there is no vehicle
+for it to follow (check 19).
 
 **What is gone, end to end.** The `absences[]` block of the specification and its schema; the `slot`
 subject kind, the `realisation` family, the `vacancy` phase and the `slot_unrealised` close in the core
@@ -3233,7 +3250,7 @@ Each key migrates to a different place, and two of them are deleted rather than 
 | `affiliation_by_type` — **display** half (civilian neutral, military friendly) | Kept, as a display convention in the run manifest | Legitimate: it is what makes a TAK view readable and it says nothing about supervision |
 | `affiliation_by_type` — **supervision** half (every `anomaly_*` type to `u`) | **Deleted** — done: withheld when a legacy labels file is read (`CotDisplayConvention.from_legacy_labels`, D6.18) | [20 decision 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): a detector-derived track cannot produce an affiliation, so encoding the label there breaks the truth-versus-detection comparison the identical-shape contract exists for |
 | `special_type = "marked"` (`SumoCotBridge.py:321-322`) | **Deleted** — done: `special_type` is the vehicle's kind for every vehicle, planted or not, and the truth sidecar's XML and CSV say which vehicles were planted in their own `marked` field (D6.18, §8.3) | It writes the answer into a field whose entire job is to say what kind of vehicle this is ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
-| `anomaly_notes` — free text | **The rota's skip, and nothing per frame** (§3.5): the schedule's gap is declared where the schedule is and stated in the resolution report; a planted omission in the record is a label on the vehicle that deviates, or a note at scenario level | A row for an empty place is a label with no vehicle to follow (the owner's ruling of 2026-10-05). The series joins the 335 postings a guard realises; the skipped one has no row |
+| `anomaly_notes` — free text | **The schedule's skip, and the vehicle that deviates** (§3.5): the schedule's gap is declared where the schedule is and stated in the resolution report, and the guard who should have taken the posting parks elsewhere for the shift and carries `bahonar:posting_not_taken_up` | A row for an empty place is a label with no vehicle to follow (the owner's ruling of 2026-10-05); the omission is the deviating guard's label (the owner's ruling of 2026-10-06). The series joins the 335 postings a guard realises; the skipped one has no row |
 | nothing | **`nominal` on 356 scheduled vehicles** (335 guard postings, 21 hauls) | The hard negatives that make the corpus teach that duration alone is not the signal (§3.1) |
 | nothing | **`unlabelled`, explicitly, on every flow member** | Doc 20 §2.2: absence of an element must not stand for "asserted negative" |
 
@@ -3247,7 +3264,10 @@ Each key migrates to a different place, and two of them are deleted rather than 
 | `pi_perimeter_shadow_d6` | `shadow` `subject` | one transit | `bahonar:perimeter_transit_off_cadence` |
 | `pi_ferry_stay_behind_d1` | `staybehind` `subject` | arrival, dwell (489 000 s, unclosed at scenario end) | `bahonar:arrival_without_departure` |
 
-Five instances from nine ids; the note is the rota's skip (§3.5). Two facts fall out of this table that `marked_ids` cannot
+Five instances from nine ids; the note becomes the schedule's skip and a sixth instance, `pi_posting_not_taken_up_d4`,
+whose one participant `offpost_d4_h7_t3`, `subject`, is a vehicle the sizing scenario never had: the
+guard who should have taken the skipped posting and parks elsewhere for the shift, its interval its
+one stop (§3.5). Two facts fall out of this table that `marked_ids` cannot
 state and that a trainer needs:
 
 - **The stay-behind's dwell is unclosed at scenario end.** 489 000 s of a 604 800 s scenario, starting
@@ -3320,6 +3340,7 @@ reconstructible from the shipped generator (*read*, `CarlaControl/scripts/make_b
 | Perimeter shadow | 1 instance (`:282-286`) | entity | `annotated` | `bahonar:perimeter_transit_off_cadence` |
 | Ferry stay-behind | 1 instance (`:289-295`) | entity | `annotated` | `bahonar:arrival_without_departure` |
 | Guard no-show | the rota's one skip (`:236`) | — | no row: a skip writes no trip and no label (§3.5) | — |
+| The guard who should have taken it | 1 instance, `offpost_d4_h7_t3`, parked elsewhere for the shift | entity | `annotated` | `bahonar:posting_not_taken_up` |
 
 The ferry pulses are `annotated` and not `nominal` because D6.2 forbids `nominal` on a cohort, and
 because what is true of them *is* true of every member for its whole life: each one is port-cleared
@@ -3327,9 +3348,9 @@ traffic that transits a checkpoint and enters. That is class-conditioned presenc
 ([20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) class 4), which needs no
 onset and is the one annotation a cohort may carry (§3.2).
 
-**The terms, in the form §3.8 declares them.** Eight terms, three roles, one reserved role and the
-area kinds, in one namespace. Every term applies to a vehicle or to a flow's vehicles; none labels a
-place (§3.5).
+**The terms, in the form §3.8 declares them.** Nine terms, three roles, one reserved role and the
+area kinds, in one namespace at version 2, the version that added `bahonar:posting_not_taken_up`.
+Every term applies to a vehicle or to a flow's vehicles; none labels a place (§3.5).
 
 | Term | `applies_to` | `broader` | Other fields |
 |---|---|---|---|
@@ -3338,7 +3359,8 @@ place (§3.5).
 | `bahonar:standoff_dwell_at_access_point` | entity | — | `parameters: dwell_s`; `contrast_with` and `counterfactual: term bahonar:cleared_gate_transit` |
 | `bahonar:perimeter_transit_off_cadence` | entity | — | `parameters: speed_factor, circuit_edges` |
 | `bahonar:arrival_without_departure` | entity | — | `parameters: dwell_s`; note that its interval closes on `scenario_end` |
-| `bahonar:tower_posting` | entity | — | `hard_negative_for: standoff_dwell_at_access_point, arrival_without_departure` |
+| `bahonar:posting_not_taken_up` | entity | — | `since: 2`; `parameters: expected_tower, expected_shift_start`, both strings; `counterfactual: term bahonar:tower_posting` |
+| `bahonar:tower_posting` | entity | — | `hard_negative_for: standoff_dwell_at_access_point, arrival_without_departure, posting_not_taken_up` |
 | `bahonar:routine_freight_haul` | entity | — | `hard_negative_for: coordinated_group_transit, destination_off_pattern` |
 | `bahonar:cleared_gate_transit` | **cohort** | — | the whole-life term the ferry pulses carry |
 
@@ -3360,12 +3382,15 @@ them a fact the generator already holds and today discards:
    `nominal` subject carrying `bahonar:tower_posting`, readable from the manifest and — under §8.2 —
    from a sidecar alone.
 2. **The hard negatives say what they are negatives *for*.** `bahonar:tower_posting` is the matched
-   negative for the two dwell-shaped terms; `bahonar:routine_freight_haul` for the two escort terms.
-   The trainer builds a matched set instead of sampling 356 vehicles at random (§3.9(d)).
-3. **The no-show is a skip and nothing else.** The rota's `skip` carries its reason, the resolution
-   report states it, and no row is written for the posting it removes: there is no vehicle for a label
-   to follow (§3.5). What the generator once discarded as free text it now states where the schedule is
-   declared.
+   negative for the two dwell-shaped terms and for the posting not taken up; `bahonar:routine_freight_haul`
+   for the two escort terms. The trainer builds a matched set instead of sampling 356 vehicles at
+   random (§3.9(d)).
+3. **The no-show is a skip, and its label is the vehicle's that deviates.** The rota's `skip` carries
+   its reason, the resolution report states it, and no row is written for the posting it removes: there
+   is no vehicle for a label to follow (§3.5). The guard who should have taken it parks elsewhere for
+   the shift and carries `bahonar:posting_not_taken_up`, naming the tower and the shift. What the
+   generator once discarded as free text it now states where the schedule is declared, and on the
+   track a consumer can find.
 4. **The general case and the specific case both survive**, wherever an author declares a `broader`
    parent (D6.33): a consumer stratifying coarsely rolls a child up to its parent, and one that cares
    about the child reads it. Bahonar declares no parent today.

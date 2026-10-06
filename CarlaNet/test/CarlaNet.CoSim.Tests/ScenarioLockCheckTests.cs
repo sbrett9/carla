@@ -589,9 +589,9 @@ public sealed class ScenarioLockCheckTests
         Assert.True(check.EpochCompared);
         Assert.Contains("supervision plan and catalogue agree with it; so does the epoch", check.ToString());
         Assert.Equal(Path.ChangeExtension(Path.GetFullPath(scenario), ".supervision.json"), check.Plan!.Path);
-        Assert.Equal(26, check.Plan.Instances.Length);
+        Assert.Equal(27, check.Plan.Instances.Length);
         Assert.Equal(check.Lock!.VocabularyDigest, check.Plan.Vocabulary.Digest);
-        Assert.StartsWith("Shahid_Bahonar_Port_PatternOfLife: 26 instances (5 annotated, 21 nominal), 1 series of 335 slots",
+        Assert.StartsWith("Shahid_Bahonar_Port_PatternOfLife: 27 instances (6 annotated, 21 nominal), 1 series of 335 slots",
                           check.PlanText);
 
         // Every planned vehicle entered its compile's SUMO-only run, over the whole week.

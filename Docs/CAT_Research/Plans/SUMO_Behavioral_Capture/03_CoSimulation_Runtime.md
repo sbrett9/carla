@@ -71,6 +71,7 @@ advancement policy, the headlight predicate),
 | 2026-10-05 | §9.5.1: an orbit is flown by the server (issue #37, promoted into the plan by the owner). The circle goes to the plugin's orbit mover (`set_orbit`) as the camera is placed, held, and is set moving as the window opens; the mover advances the angle by each tick's delta on the simulation clock in `TG_PrePhysics`, before the sensors capture and the world observer reports the frame. The client's orbit thread, which sent a pose about fifty times a second on the wall clock beside D3.3's two round trips, is gone. Written and tested offline; the plugin awaits a build. |
 | 2026-10-06 | §9.5.1: the three pre-roll refusals of 2026-10-06 on the Arapahoe check stare are explained against the run that passed the day before. The vehicle mask's zero was right -- SUMO run offline puts no vehicle's box or shadow in the frame before t = 65.55 s, and the projection is held equal to the occlusion estimate's -- and the tiles never went out, so the 0.53–0.69 at the ceiling is the renderer settling a freshly spawned camera's view, judged over the camera's 2nd to 13th frames where the passing run was judged over its 72nd and 73rd. Across the four runs to hand the residual orders by the camera's frame count and not by the ticks since its tiles, which the one Bahonar run had been read the other way; inference only, decided by one warm stare with `capture.capture_hz` the only thing varied, the owner's to run. The ceiling and the tolerance stand. The run result keeps every comparison with the camera's frame count on either side and the camera's pose source, and a refusal at the ceiling lists the judged residuals in order. |
 | 2026-10-06 | §9.5.1: the owner's ruling -- the picture's ceiling is counted in the camera's own frames since its tiles came in, 60 by default (30 s at 2 Hz), as the session-fixed field `capture.picture_ceiling_frames`, and the 0.5-level limit is the session-fixed field `capture.picture_tolerance_levels`, unchanged in value; the ten-tick span stays a constant. Measured on the Arapahoe check stare under a running session, the worst block fell 2.63 to 0.62 gray levels over the camera's 4th to 13th frames, heading under 0.5 around its 15th, past the 120 ticks that are twelve frames at 2 Hz. Check 51 asks the prewarm for the ceiling's frames at the capture rate plus the span (31.5 s at the defaults) and refuses a ceiling too small to hold one comparison; a stare aimed at the traffic holds for one SUMO step and the ceiling, 32 s at the defaults. |
+| 2026-10-06 | §2.7: the `supervision plan` line quoted for Bahonar is the recompiled plan's, which carries the guard who parks elsewhere instead of relieving tower 3 as a sixth annotated instance and the `bahonar` namespace at version 2 ([`06`](06_Truth_And_Annotation.md) §3.5). |
 
 ---
 
@@ -549,8 +550,8 @@ generation of the files would resolve some of its ids and not others, and nothin
 it. The bound plan is `ScenarioLockCheck.Plan`, on `CoSimRunReport.CompileLock`, which the session's
 interval binder (`SupervisionBinder`, §8.9, §9.7) takes, and the report's `supervision plan` line says
 what it holds:
-`Shahid_Bahonar_Port_PatternOfLife: 26 instances (5 annotated, 21 nominal), 1 series of 335 slots,
-248 cohorts (98 annotated), 365 entities; vocabulary core 3, bahonar 1, digest 2bb00a43…`. A lock that
+`Shahid_Bahonar_Port_PatternOfLife: 27 instances (6 annotated, 21 nominal), 1 series of 335 slots,
+248 cohorts (98 annotated), 366 entities; vocabulary core 3, bahonar 2, digest 9b05590f…`. A lock that
 names no plan binds no supervision, and the line says so; every lock the compiler
 writes names one, since every compile writes a plan.
 

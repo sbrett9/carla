@@ -18,8 +18,8 @@ public sealed class SupervisionPlanTests
     private const string Arapahoe = "Arapahoe_I25_UnderpassDwell";
     private const string Gardnerville = "Gardnerville_Centerville_Lane_NeighborhoodOrbit";
 
-    /// <summary>The shipped Bahonar plan's vocabulary digest, over the core at version 3 and the bahonar namespace.</summary>
-    private const string BahonarDigest = "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7";
+    /// <summary>The shipped Bahonar plan's vocabulary digest, over the core at version 3 and the bahonar namespace at version 2.</summary>
+    private const string BahonarDigest = "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355";
 
     private readonly ITestOutputHelper _output;
 
@@ -43,8 +43,8 @@ public sealed class SupervisionPlanTests
         Assert.Equal(locked.WorldNetworkFingerprint, plan.NetworkDigest);
         Assert.Null(plan.AdditionalDigest);
 
-        Assert.Equal(26, plan.Instances.Length);
-        Assert.Equal(5, plan.Instances.Count(instance => instance.Supervision == SupervisionState.Annotated));
+        Assert.Equal(27, plan.Instances.Length);
+        Assert.Equal(6, plan.Instances.Count(instance => instance.Supervision == SupervisionState.Annotated));
         Assert.Equal(21, plan.Instances.Count(instance => instance.Supervision == SupervisionState.Nominal));
         Assert.All(plan.Instances, instance => Assert.NotEmpty(instance.Participants));
 
@@ -86,6 +86,25 @@ public sealed class SupervisionPlanTests
         Assert.Equal(604800.0, dwell.DeclaredEndSeconds);
         Assert.Null(dwell.DeclaredDurationSeconds);
 
+        // The guard who should have relieved tower 3 on day 4 at 07:00 and parks elsewhere for the shift: the
+        // omission is carried by the vehicle that deviates (06 §3.5, the owner's ruling of 2026-10-06).
+        PatternInstance offPost = Instance(plan, "pi_posting_not_taken_up_d4");
+        Assert.Equal(SupervisionState.Annotated, offPost.Supervision);
+        Assert.Equal<string>(["bahonar:posting_not_taken_up"], offPost.Labels);
+        Assert.Equal(("offpost_d4_h7_t3", CoreVocabulary.SubjectRole),
+                     (Assert.Single(offPost.Participants).EntityId, offPost.Participants[0].Role));
+        Assert.Equal(("tower_03", "2026-10-03T07:00:00+03:30"),
+                     (offPost.Parameters["expected_tower"].GetString(), offPost.Parameters["expected_shift_start"].GetString()));
+        Assert.Empty(offPost.AoiRefs);
+        PlannedInterval shift = Assert.Single(offPost.Intervals);
+        Assert.Equal(("offpost_d4_h7_t3", "dwell"), (shift.EntityId, shift.Phase));
+        Assert.Equal((AnchorEvent.Stop, 0, "-441624290#0_0", 70.0),
+                     (shift.Anchor!.Start.Event, shift.Anchor.Start.Index, shift.Anchor.Start.Lane,
+                      shift.Anchor.Start.EndPositionMetres));
+        Assert.Equal(AnchorEvent.StopEnd, shift.Anchor.End!.Event);
+        Assert.Null(shift.DeclaredStartSeconds);
+        Assert.Equal(28800.0, shift.DeclaredDurationSeconds);
+
         // A haul: nominal, carrying its term's matched negatives (06 §3.9(d)).
         PatternInstance haul = Instance(plan, "haul_d0_0");
         Assert.Equal(SupervisionState.Nominal, haul.Supervision);
@@ -96,15 +115,18 @@ public sealed class SupervisionPlanTests
 
         // The guard rota as a series: 335 slots, one per posting a guard realises. The schedule skips the
         // posting at tower 3 on day 4 at 07:00, and a skipped occasion has no slot: there is no vehicle for
-        // a label to follow (06 §3.5, the owner's ruling of 2026-10-05).
+        // a label to follow (06 §3.5, the owner's ruling of 2026-10-05). The guard who should have taken it
+        // is the instance above, and is no slot either.
         RecurringSeries relief = Assert.Single(plan.Series);
         Assert.Equal(("tower_relief", "guard_posting", CadenceForm.Enumerated, "bahonar:guard", SupervisionState.Nominal),
                      (relief.SeriesId, relief.RotaRef, relief.Cadence, relief.MemberRole, relief.Supervision));
         Assert.Equal<string>(["bahonar:tower_posting"], relief.Labels);
-        Assert.Equal<string>(["bahonar:standoff_dwell_at_access_point", "bahonar:arrival_without_departure"],
+        Assert.Equal<string>(["bahonar:standoff_dwell_at_access_point", "bahonar:arrival_without_departure",
+                              "bahonar:posting_not_taken_up"],
                      relief.HardNegativeFor!);
         Assert.Equal(335, relief.Slots.Length);
         Assert.DoesNotContain(relief.Slots, slot => slot.SlotKey == "guard_d4_h7_t3");
+        Assert.DoesNotContain(relief.Slots, slot => slot.EntityId == "offpost_d4_h7_t3");
         Assert.All(relief.Slots, slot => Assert.Equal(slot.SlotKey, slot.EntityId));
         Assert.Equal(("guard_d0_h7_t0", "guard_d0_h7_t0", "tower_00"),
                      (relief.Slots[0].SlotKey, relief.Slots[0].EntityId, relief.Slots[0].AoiRef));
@@ -115,16 +137,20 @@ public sealed class SupervisionPlanTests
         Assert.Equal(98, plan.Cohorts.Count(cohort => cohort.Supervision == SupervisionState.Annotated));
         Assert.Equal<string>(["bahonar:cleared_gate_transit"],
                      plan.Cohorts.First(cohort => cohort.Supervision == SupervisionState.Annotated).Labels);
-        Assert.Equal(365, plan.Entities.Length);
+        Assert.Equal(366, plan.Entities.Length);
         EntitySupervision lead = plan.Entities.Single(entity => entity.EntityId == "escort_0");
         Assert.Equal<SupervisionState>([SupervisionState.Annotated], lead.Supervision);
         Assert.Equal<string>([escort.InstanceId], lead.Refs);
         EntitySupervision guard = plan.Entities.Single(entity => entity.EntityId == "guard_d0_h15_t0");
         Assert.Equal<SupervisionState>([SupervisionState.Nominal], guard.Supervision);
         Assert.Equal<string>(["series:tower_relief"], guard.Refs);
+        EntitySupervision deviating = plan.Entities.Single(entity => entity.EntityId == "offpost_d4_h7_t3");
+        Assert.Equal<SupervisionState>([SupervisionState.Annotated], deviating.Supervision);
+        Assert.Equal<string>([offPost.InstanceId], deviating.Refs);
+        Assert.DoesNotContain(plan.Entities, entity => entity.EntityId == "guard_d4_h7_t3");
 
-        Assert.StartsWith($"{Bahonar}: 26 instances (5 annotated, 21 nominal), 1 series of 335 slots, "
-                          + "248 cohorts (98 annotated), 365 entities; vocabulary core 3, bahonar 1, "
+        Assert.StartsWith($"{Bahonar}: 27 instances (6 annotated, 21 nominal), 1 series of 335 slots, "
+                          + "248 cohorts (98 annotated), 366 entities; vocabulary core 3, bahonar 2, "
                           + $"digest {BahonarDigest[..8]}", plan.ToString());
     }
 
@@ -137,9 +163,9 @@ public sealed class SupervisionPlanTests
         Assert.Equal(CoreVocabulary.Source, vocabulary.CoreSource);
         Assert.Equal(BahonarDigest, vocabulary.Digest);
         AuthorNamespace bahonar = Assert.Single(vocabulary.Namespaces);
-        Assert.Equal(("bahonar", 1), (bahonar.Namespace, bahonar.Version));
+        Assert.Equal(("bahonar", 2), (bahonar.Namespace, bahonar.Version));
         Assert.StartsWith("Shahid Bahonar Port pattern of life", bahonar.Authority);
-        Assert.Equal(8, bahonar.Terms.Length);
+        Assert.Equal(9, bahonar.Terms.Length);
         Assert.Equal<string>(["bahonar:lead", "bahonar:follower", "bahonar:guard"], bahonar.Roles.Select(role => role.Role));
         Assert.Equal<string>(["bahonar:guard_post", "bahonar:gate", "bahonar:drydock", "bahonar:ferry_terminal"],
                      bahonar.AreaKinds.Select(kind => kind.Kind));
@@ -159,8 +185,18 @@ public sealed class SupervisionPlanTests
                       group.Parameters["group_size"].Definition));
         Assert.Equal(("number", "s"), (group.Parameters["departure_spread_s"].Type, group.Parameters["departure_spread_s"].Unit));
 
+        // The term the deviating guard carries, added at the namespace's version 2 with the tower and the
+        // shift it was due at; a tower posting is its matched negative and its counterfactual.
+        AuthorTerm notTakenUp = Term(bahonar, "bahonar:posting_not_taken_up");
+        Assert.Equal(("active", 2), (notTakenUp.Status, notTakenUp.Since));
+        Assert.Equal<SubjectKind>([SubjectKind.Entity], notTakenUp.AppliesTo);
+        Assert.Equal<string>(["expected_shift_start", "expected_tower"], notTakenUp.Parameters.Keys);
+        Assert.All(notTakenUp.Parameters.Values, parameter => Assert.Equal("string", parameter.Type));
+        Assert.Equal(("term", "bahonar:tower_posting"), (notTakenUp.Counterfactual!.Kind, notTakenUp.Counterfactual.Ref));
+
         Assert.Equal<string>(["bahonar:cleared_gate_transit"], Term(bahonar, "bahonar:standoff_dwell_at_access_point").ContrastWith);
-        Assert.Equal<string>(["bahonar:standoff_dwell_at_access_point", "bahonar:arrival_without_departure"],
+        Assert.Equal<string>(["bahonar:standoff_dwell_at_access_point", "bahonar:arrival_without_departure",
+                              "bahonar:posting_not_taken_up"],
                      Term(bahonar, "bahonar:tower_posting").HardNegativeFor);
         Assert.Equal<SubjectKind>([SubjectKind.Cohort], Term(bahonar, "bahonar:cleared_gate_transit").AppliesTo);
         Assert.Empty(Term(bahonar, "bahonar:destination_off_pattern").HardNegativeFor);

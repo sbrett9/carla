@@ -432,14 +432,14 @@ def test_no_planted_vehicle_is_told_apart_by_its_cot_type_in_any_sink(tmp_path, 
     """The Bahonar convention over the Bahonar traffic: the CSV, the XML and the datagrams.
 
     Measured on each sink: no CoT type, and no pairing of the CoT type with the vehicle's observable
-    base type, occurs among the nine annotated vehicles and nowhere else; both letters the
+    base type, occurs among the ten annotated vehicles and nowhere else; both letters the
     convention uses reach the output, so the check is over a convention that was applied; and the
     XML says which convention drew it.
     """
     roster, table = compiled
     planted = _planted(specification)
     assert planted == {"escort_0", "escort_1", "escort_2", "escort_3", "escort_4",
-                       "probe_d2", "probe_d5", "shadow", "staybehind"}
+                       "probe_d2", "probe_d5", "shadow", "staybehind", "offpost_d4_h7_t3"}
     assert planted <= {vehicle_id for vehicle_id, _ in roster}
     convention = CotDisplayConvention.from_file(CONVENTION)
 
@@ -461,7 +461,7 @@ def test_no_planted_vehicle_is_told_apart_by_its_cot_type_in_any_sink(tmp_path, 
     drawn = _cot_type_by_vehicle(rows)
     assert {vehicle: drawn[vehicle] for vehicle in planted} == {
         "escort_0": FRIEND, "escort_1": FRIEND, "escort_2": FRIEND, "escort_3": FRIEND,
-        "escort_4": FRIEND, "shadow": FRIEND,
+        "escort_4": FRIEND, "shadow": FRIEND, "offpost_d4_h7_t3": FRIEND,
         "probe_d2": NEUTRAL, "probe_d5": NEUTRAL, "staybehind": NEUTRAL}
 
     header = ET.parse(xml_path).getroot().find("_display_convention")

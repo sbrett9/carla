@@ -4,9 +4,9 @@
   "scenario": {
     "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
     "scenario_name": "Shahid Bahonar Port pattern of life",
-    "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard no-show, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
+    "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "2ed0e942c0b97199e60ddbe2eb2259097110ede819eeff716fc7cfb4a003a2cf",
+    "specification_sha256": "841afe55e6bf262ec6b3b3ec7827b28e279cd29e6f38cace8a1d302cb87cc61e",
     "spec_version": 1
   },
   "findings": [
@@ -68,7 +68,7 @@
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = 0.142 over 613 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = 0.142 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -141,13 +141,13 @@
       "not_computed": "no capture window is declared"
     },
     "over_span": {
-      "entries": 613,
+      "entries": 614,
       "table": {
         "day": {
-          "annotated": 85,
+          "annotated": 86,
           "nominal": 244,
           "unlabelled": 73,
-          "total": 402
+          "total": 403
         },
         "golden": {
           "annotated": 7,
@@ -175,18 +175,18 @@
         }
       },
       "state_totals": {
-        "annotated": 107,
+        "annotated": 108,
         "nominal": 356,
         "unlabelled": 150
       },
       "annotated_rate": {
-        "day": 0.21144278606965175,
+        "day": 0.21339950372208435,
         "golden": 0.25,
         "nautical_twilight": 1.0,
         "astronomical_twilight": 1.0,
         "night": 0.005917159763313609
       },
-      "base_annotated_rate": 0.17455138662316477,
+      "base_annotated_rate": 0.1758957654723127,
       "normalized_mutual_information": 0.142,
       "degenerate_bands": [
         "nautical_twilight",
@@ -201,10 +201,10 @@
     "normalized_mutual_information": 0.142,
     "bands": {
       "day": {
-        "annotated": 85,
+        "annotated": 86,
         "nominal": 244,
         "unlabelled": 73,
-        "total": 402
+        "total": 403
       },
       "golden": {
         "annotated": 7,
@@ -231,7 +231,7 @@
         "total": 169
       }
     },
-    "entries": 613,
+    "entries": 614,
     "measured_over": "span",
     "remedies": [
       "pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)",
@@ -250,7 +250,7 @@
     ],
     "georeference": "+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
-      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\.claude\\worktrees\\agent-a51c65ccb59bc7e64\\Build\\sumo-install",
+      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\.claude\\worktrees\\agent-a4a8d795ca078f479\\Build\\sumo-install",
       "version": "1.27.0",
       "matched_by": "explicit",
       "release_agreement": "SameRelease",
@@ -513,6 +513,30 @@
           "street": "",
           "length_m": 136.88,
           "speed_mps": 22.22
+        }
+      ]
+    },
+    "west_apron_spur": {
+      "name": "west_apron_spur",
+      "authored": {
+        "lane": "-441624290#0_0",
+        "offset_m": 70.0
+      },
+      "form": "lane",
+      "edges": [
+        "-441624290#0"
+      ],
+      "lane": "-441624290#0_0",
+      "start_pos": null,
+      "end_pos": 70.0,
+      "street": "",
+      "detail": "",
+      "edge_details": [
+        {
+          "edge": "-441624290#0",
+          "street": "",
+          "length_m": 137.86,
+          "speed_mps": 13.89
         }
       ]
     },
@@ -1071,7 +1095,7 @@
           "entry": "guard_d4_h7_t3",
           "seconds": 345600.0,
           "civil": "2026-10-03T07:00:00+03:30",
-          "because": "the guard no-show: this post is not manned this shift"
+          "because": "the guard due here this shift, offpost_d4_h7_t3, parks elsewhere: this post is not manned"
         }
       ]
     }
@@ -2543,6 +2567,61 @@
         "form": "day_clock",
         "seconds": 90000.0,
         "civil": "2026-09-30T08:00:00+03:30"
+      },
+      "origin": "actor"
+    },
+    {
+      "id": "offpost_d4_h7_t3",
+      "type": "guard",
+      "from": "26413425#5",
+      "to": "26413425#5",
+      "via": [
+        "-441624290#0"
+      ],
+      "route": [
+        "26413425#5",
+        "-26413425#5",
+        "-26413425#4",
+        "-26413425#3",
+        "-26413425#1",
+        "-26413425#0",
+        "26413409#1",
+        "-26413391",
+        "26413338#1",
+        "-26413385",
+        "26413373#1",
+        "26413299#0",
+        "-441624290#0",
+        "441624290#0",
+        "26413301#1",
+        "-26413373#1",
+        "26413385",
+        "-26413338#1",
+        "26413391",
+        "-26413409#1",
+        "-26413409#0",
+        "26413425#1",
+        "26413425#2",
+        "26413425#4",
+        "26413425#5"
+      ],
+      "route_length_m": 12509.47,
+      "free_flow_s": 2094.5,
+      "stops": [
+        {
+          "place": "west_apron_spur",
+          "lane": "-441624290#0_0",
+          "start_pos": null,
+          "end_pos": 70.0,
+          "parking": true,
+          "duration": 28800.0
+        }
+      ],
+      "depart": {
+        "authored": "d4 07:00",
+        "form": "day_clock",
+        "seconds": 345600.0,
+        "civil": "2026-10-03T07:00:00+03:30"
       },
       "origin": "actor"
     },
@@ -27002,7 +27081,9 @@
         "26413373#1",
         "26413281",
         "26413274#0",
-        "26413256",
+        "26413274#2",
+        "26417705#3",
+        "26402480#0",
         "26402480#1",
         "26402480#2",
         "168434252",
@@ -27010,8 +27091,8 @@
         "1396607721",
         "1396607732"
       ],
-      "route_length_m": 10648.31,
-      "free_flow_s": 1274.4,
+      "route_length_m": 11132.83,
+      "free_flow_s": 1271.3,
       "stops": [],
       "begin": {
         "authored": "d4 07:15",
@@ -27088,9 +27169,7 @@
         "26413373#1",
         "26413281",
         "26413274#0",
-        "26413274#2",
-        "26417705#3",
-        "26402480#0",
+        "26413256",
         "26402480#1",
         "26402480#2",
         "168434252",
@@ -27098,8 +27177,8 @@
         "1396607721",
         "1396607732"
       ],
-      "route_length_m": 11132.83,
-      "free_flow_s": 1271.3,
+      "route_length_m": 10648.31,
+      "free_flow_s": 1274.4,
       "stops": [],
       "begin": {
         "authored": "d4 15:15",
@@ -27352,7 +27431,9 @@
         "26413373#1",
         "26413281",
         "26413274#0",
-        "26413256",
+        "26413274#2",
+        "26417705#3",
+        "26402480#0",
         "26402480#1",
         "26402480#2",
         "168434252",
@@ -27360,8 +27441,8 @@
         "1396607721",
         "1396607732"
       ],
-      "route_length_m": 10648.31,
-      "free_flow_s": 1274.4,
+      "route_length_m": 11132.83,
+      "free_flow_s": 1271.3,
       "stops": [],
       "begin": {
         "authored": "d5 15:15",
@@ -27438,7 +27519,9 @@
         "26413373#1",
         "26413281",
         "26413274#0",
-        "26413256",
+        "26413274#2",
+        "26417705#3",
+        "26402480#0",
         "26402480#1",
         "26402480#2",
         "168434252",
@@ -27446,8 +27529,8 @@
         "1396607721",
         "1396607732"
       ],
-      "route_length_m": 10648.31,
-      "free_flow_s": 1274.4,
+      "route_length_m": 11132.83,
+      "free_flow_s": 1271.3,
       "stops": [],
       "begin": {
         "authored": "d5 23:15",
@@ -27700,9 +27783,7 @@
         "26413373#1",
         "26413281",
         "26413274#0",
-        "26413274#2",
-        "26417705#3",
-        "26402480#0",
+        "26413256",
         "26402480#1",
         "26402480#2",
         "168434252",
@@ -27710,8 +27791,8 @@
         "1396607721",
         "1396607732"
       ],
-      "route_length_m": 11132.83,
-      "free_flow_s": 1271.3,
+      "route_length_m": 10648.31,
+      "free_flow_s": 1274.4,
       "stops": [],
       "begin": {
         "authored": "d6 23:15",
@@ -28568,6 +28649,50 @@
             "declared_end_s": 604800.0,
             "declared_end_civil": "2026-10-06T07:00:00+03:30",
             "declared_duration_s": null
+          }
+        ]
+      },
+      {
+        "instance_id": "Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4",
+        "supervision": "annotated",
+        "labels": [
+          "bahonar:posting_not_taken_up"
+        ],
+        "parameters": {
+          "expected_tower": "tower_03",
+          "expected_shift_start": "2026-10-03T07:00:00+03:30"
+        },
+        "hard_negative_for": null,
+        "counterfactual": null,
+        "aoi_refs": [],
+        "participants": [
+          {
+            "entity_id": "offpost_d4_h7_t3",
+            "role": "subject",
+            "sumo_id": "offpost_d4_h7_t3"
+          }
+        ],
+        "intervals": [
+          {
+            "entity_id": "offpost_d4_h7_t3",
+            "phase": "dwell",
+            "anchor": {
+              "start": {
+                "event": "stop:0",
+                "lane": "-441624290#0_0",
+                "end_pos_m": 70.0
+              },
+              "end": {
+                "event": "stop_end:0",
+                "lane": "-441624290#0_0",
+                "end_pos_m": 70.0
+              }
+            },
+            "declared_start_s": null,
+            "declared_start_civil": null,
+            "declared_end_s": null,
+            "declared_end_civil": null,
+            "declared_duration_s": 28800.0
           }
         ]
       },
@@ -30733,7 +30858,8 @@
         "parameters": {},
         "hard_negative_for": [
           "bahonar:standoff_dwell_at_access_point",
-          "bahonar:arrival_without_departure"
+          "bahonar:arrival_without_departure",
+          "bahonar:posting_not_taken_up"
         ],
         "slots": 335
       }
@@ -30745,14 +30871,14 @@
     "begin_s": 0.0,
     "end_s": 604800.0,
     "vehicles": {
-      "loaded": 69245,
-      "inserted": 69245,
+      "loaded": 69246,
+      "inserted": 69246,
       "discarded": 0,
       "waiting_at_end": 0
     },
     "planned_vehicles": {
-      "total": 365,
-      "inserted": 365
+      "total": 366,
+      "inserted": 366
     },
     "collisions": 0,
     "teleports": 0,
@@ -33514,102 +33640,11 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 345600.0,
-        "waited_s": 0.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t1",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
         "depart_s": 345602.0,
         "waited_s": 2.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t10",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
-        "depart_s": 345624.0,
-        "waited_s": 24.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t11",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
-        "depart_s": 345627.0,
-        "waited_s": 27.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t12",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
-        "depart_s": 345629.0,
-        "waited_s": 29.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t13",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
-        "depart_s": 345633.0,
-        "waited_s": 33.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t14",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
-        "depart_s": 345635.0,
-        "waited_s": 35.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t15",
-        "refs": [
-          "series tower_relief"
-        ],
-        "declared_depart_s": 345600.0,
-        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
-        "entrance": "26413425#5",
-        "inserted": true,
-        "outcome": "inserted",
-        "depart_s": 345638.0,
-        "waited_s": 38.0
-      },
-      {
-        "vehicle_id": "guard_d4_h7_t2",
+        "vehicle_id": "guard_d4_h7_t1",
         "refs": [
           "series tower_relief"
         ],
@@ -33622,7 +33657,85 @@
         "waited_s": 4.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t4",
+        "vehicle_id": "guard_d4_h7_t10",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345627.0,
+        "waited_s": 27.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t11",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345629.0,
+        "waited_s": 29.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t12",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345633.0,
+        "waited_s": 33.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t13",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345635.0,
+        "waited_s": 35.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t14",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345638.0,
+        "waited_s": 38.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t15",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345640.0,
+        "waited_s": 40.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t2",
         "refs": [
           "series tower_relief"
         ],
@@ -33635,7 +33748,7 @@
         "waited_s": 7.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t5",
+        "vehicle_id": "guard_d4_h7_t4",
         "refs": [
           "series tower_relief"
         ],
@@ -33648,7 +33761,7 @@
         "waited_s": 10.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t6",
+        "vehicle_id": "guard_d4_h7_t5",
         "refs": [
           "series tower_relief"
         ],
@@ -33661,7 +33774,7 @@
         "waited_s": 12.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t7",
+        "vehicle_id": "guard_d4_h7_t6",
         "refs": [
           "series tower_relief"
         ],
@@ -33674,7 +33787,7 @@
         "waited_s": 16.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t8",
+        "vehicle_id": "guard_d4_h7_t7",
         "refs": [
           "series tower_relief"
         ],
@@ -33687,7 +33800,7 @@
         "waited_s": 18.0
       },
       {
-        "vehicle_id": "guard_d4_h7_t9",
+        "vehicle_id": "guard_d4_h7_t8",
         "refs": [
           "series tower_relief"
         ],
@@ -33698,6 +33811,32 @@
         "outcome": "inserted",
         "depart_s": 345621.0,
         "waited_s": 21.0
+      },
+      {
+        "vehicle_id": "guard_d4_h7_t9",
+        "refs": [
+          "series tower_relief"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345624.0,
+        "waited_s": 24.0
+      },
+      {
+        "vehicle_id": "offpost_d4_h7_t3",
+        "refs": [
+          "Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4"
+        ],
+        "declared_depart_s": 345600.0,
+        "declared_depart_civil": "2026-10-03T07:00:00+03:30",
+        "entrance": "26413425#5",
+        "inserted": true,
+        "outcome": "inserted",
+        "depart_s": 345600.0,
+        "waited_s": 0.0
       },
       {
         "vehicle_id": "haul_d4_0",
@@ -33761,8 +33900,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374425.0,
-        "waited_s": 25.0
+        "depart_s": 374426.0,
+        "waited_s": 26.0
       },
       {
         "vehicle_id": "guard_d4_h15_t11",
@@ -33774,8 +33913,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374428.0,
-        "waited_s": 28.0
+        "depart_s": 374429.0,
+        "waited_s": 29.0
       },
       {
         "vehicle_id": "guard_d4_h15_t12",
@@ -33787,8 +33926,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374431.0,
-        "waited_s": 31.0
+        "depart_s": 374432.0,
+        "waited_s": 32.0
       },
       {
         "vehicle_id": "guard_d4_h15_t13",
@@ -33800,8 +33939,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374433.0,
-        "waited_s": 33.0
+        "depart_s": 374434.0,
+        "waited_s": 34.0
       },
       {
         "vehicle_id": "guard_d4_h15_t14",
@@ -33813,8 +33952,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374436.0,
-        "waited_s": 36.0
+        "depart_s": 374437.0,
+        "waited_s": 37.0
       },
       {
         "vehicle_id": "guard_d4_h15_t15",
@@ -33826,8 +33965,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374439.0,
-        "waited_s": 39.0
+        "depart_s": 374440.0,
+        "waited_s": 40.0
       },
       {
         "vehicle_id": "guard_d4_h15_t2",
@@ -33839,8 +33978,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374404.0,
-        "waited_s": 4.0
+        "depart_s": 374405.0,
+        "waited_s": 5.0
       },
       {
         "vehicle_id": "guard_d4_h15_t3",
@@ -33865,8 +34004,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374409.0,
-        "waited_s": 9.0
+        "depart_s": 374410.0,
+        "waited_s": 10.0
       },
       {
         "vehicle_id": "guard_d4_h15_t5",
@@ -33891,8 +34030,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374414.0,
-        "waited_s": 14.0
+        "depart_s": 374415.0,
+        "waited_s": 15.0
       },
       {
         "vehicle_id": "guard_d4_h15_t7",
@@ -33904,8 +34043,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374417.0,
-        "waited_s": 17.0
+        "depart_s": 374418.0,
+        "waited_s": 18.0
       },
       {
         "vehicle_id": "guard_d4_h15_t8",
@@ -33917,8 +34056,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 374420.0,
-        "waited_s": 20.0
+        "depart_s": 374421.0,
+        "waited_s": 21.0
       },
       {
         "vehicle_id": "guard_d4_h15_t9",
@@ -34008,8 +34147,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403231.0,
-        "waited_s": 31.0
+        "depart_s": 403232.0,
+        "waited_s": 32.0
       },
       {
         "vehicle_id": "guard_d4_h23_t13",
@@ -34021,8 +34160,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403234.0,
-        "waited_s": 34.0
+        "depart_s": 403235.0,
+        "waited_s": 35.0
       },
       {
         "vehicle_id": "guard_d4_h23_t14",
@@ -34047,8 +34186,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403239.0,
-        "waited_s": 39.0
+        "depart_s": 403240.0,
+        "waited_s": 40.0
       },
       {
         "vehicle_id": "guard_d4_h23_t2",
@@ -34086,8 +34225,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403210.0,
-        "waited_s": 10.0
+        "depart_s": 403209.0,
+        "waited_s": 9.0
       },
       {
         "vehicle_id": "guard_d4_h23_t5",
@@ -34099,8 +34238,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403213.0,
-        "waited_s": 13.0
+        "depart_s": 403212.0,
+        "waited_s": 12.0
       },
       {
         "vehicle_id": "guard_d4_h23_t6",
@@ -34138,8 +34277,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403221.0,
-        "waited_s": 21.0
+        "depart_s": 403220.0,
+        "waited_s": 20.0
       },
       {
         "vehicle_id": "guard_d4_h23_t9",
@@ -34151,8 +34290,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 403224.0,
-        "waited_s": 24.0
+        "depart_s": 403223.0,
+        "waited_s": 23.0
       },
       {
         "vehicle_id": "guard_d5_h7_t0",
@@ -34190,8 +34329,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 432025.0,
-        "waited_s": 25.0
+        "depart_s": 432026.0,
+        "waited_s": 26.0
       },
       {
         "vehicle_id": "guard_d5_h7_t11",
@@ -34255,8 +34394,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 432039.0,
-        "waited_s": 39.0
+        "depart_s": 432038.0,
+        "waited_s": 38.0
       },
       {
         "vehicle_id": "guard_d5_h7_t2",
@@ -34294,8 +34433,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 432009.0,
-        "waited_s": 9.0
+        "depart_s": 432010.0,
+        "waited_s": 10.0
       },
       {
         "vehicle_id": "guard_d5_h7_t5",
@@ -34320,8 +34459,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 432014.0,
-        "waited_s": 14.0
+        "depart_s": 432015.0,
+        "waited_s": 15.0
       },
       {
         "vehicle_id": "guard_d5_h7_t7",
@@ -34450,8 +34589,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 460830.0,
-        "waited_s": 30.0
+        "depart_s": 460829.0,
+        "waited_s": 29.0
       },
       {
         "vehicle_id": "guard_d5_h15_t12",
@@ -34515,8 +34654,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 460805.0,
-        "waited_s": 5.0
+        "depart_s": 460804.0,
+        "waited_s": 4.0
       },
       {
         "vehicle_id": "guard_d5_h15_t3",
@@ -34567,8 +34706,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 460815.0,
-        "waited_s": 15.0
+        "depart_s": 460816.0,
+        "waited_s": 16.0
       },
       {
         "vehicle_id": "guard_d5_h15_t7",
@@ -34710,8 +34849,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 489637.0,
-        "waited_s": 37.0
+        "depart_s": 489636.0,
+        "waited_s": 36.0
       },
       {
         "vehicle_id": "guard_d5_h23_t15",
@@ -34775,8 +34914,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 489613.0,
-        "waited_s": 13.0
+        "depart_s": 489612.0,
+        "waited_s": 12.0
       },
       {
         "vehicle_id": "guard_d5_h23_t6",
@@ -34827,8 +34966,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 489624.0,
-        "waited_s": 24.0
+        "depart_s": 489623.0,
+        "waited_s": 23.0
       },
       {
         "vehicle_id": "shadow",
@@ -34892,8 +35031,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518429.0,
-        "waited_s": 29.0
+        "depart_s": 518428.0,
+        "waited_s": 28.0
       },
       {
         "vehicle_id": "guard_d6_h7_t12",
@@ -34905,8 +35044,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518432.0,
-        "waited_s": 32.0
+        "depart_s": 518431.0,
+        "waited_s": 31.0
       },
       {
         "vehicle_id": "guard_d6_h7_t13",
@@ -34918,8 +35057,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518434.0,
-        "waited_s": 34.0
+        "depart_s": 518433.0,
+        "waited_s": 33.0
       },
       {
         "vehicle_id": "guard_d6_h7_t14",
@@ -34931,8 +35070,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518438.0,
-        "waited_s": 38.0
+        "depart_s": 518436.0,
+        "waited_s": 36.0
       },
       {
         "vehicle_id": "guard_d6_h7_t15",
@@ -34944,8 +35083,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518440.0,
-        "waited_s": 40.0
+        "depart_s": 518439.0,
+        "waited_s": 39.0
       },
       {
         "vehicle_id": "guard_d6_h7_t2",
@@ -34983,8 +35122,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518410.0,
-        "waited_s": 10.0
+        "depart_s": 518409.0,
+        "waited_s": 9.0
       },
       {
         "vehicle_id": "guard_d6_h7_t5",
@@ -34996,8 +35135,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518413.0,
-        "waited_s": 13.0
+        "depart_s": 518412.0,
+        "waited_s": 12.0
       },
       {
         "vehicle_id": "guard_d6_h7_t6",
@@ -35009,8 +35148,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518416.0,
-        "waited_s": 16.0
+        "depart_s": 518415.0,
+        "waited_s": 15.0
       },
       {
         "vehicle_id": "guard_d6_h7_t7",
@@ -35022,8 +35161,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518418.0,
-        "waited_s": 18.0
+        "depart_s": 518417.0,
+        "waited_s": 17.0
       },
       {
         "vehicle_id": "guard_d6_h7_t8",
@@ -35035,8 +35174,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518421.0,
-        "waited_s": 21.0
+        "depart_s": 518420.0,
+        "waited_s": 20.0
       },
       {
         "vehicle_id": "guard_d6_h7_t9",
@@ -35048,8 +35187,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 518424.0,
-        "waited_s": 24.0
+        "depart_s": 518422.0,
+        "waited_s": 22.0
       },
       {
         "vehicle_id": "haul_d6_0",
@@ -35126,8 +35265,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547229.0,
-        "waited_s": 29.0
+        "depart_s": 547228.0,
+        "waited_s": 28.0
       },
       {
         "vehicle_id": "guard_d6_h15_t12",
@@ -35139,8 +35278,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547231.0,
-        "waited_s": 31.0
+        "depart_s": 547232.0,
+        "waited_s": 32.0
       },
       {
         "vehicle_id": "guard_d6_h15_t13",
@@ -35165,8 +35304,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547236.0,
-        "waited_s": 36.0
+        "depart_s": 547237.0,
+        "waited_s": 37.0
       },
       {
         "vehicle_id": "guard_d6_h15_t15",
@@ -35178,8 +35317,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547240.0,
-        "waited_s": 40.0
+        "depart_s": 547239.0,
+        "waited_s": 39.0
       },
       {
         "vehicle_id": "guard_d6_h15_t2",
@@ -35217,8 +35356,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547210.0,
-        "waited_s": 10.0
+        "depart_s": 547209.0,
+        "waited_s": 9.0
       },
       {
         "vehicle_id": "guard_d6_h15_t5",
@@ -35230,8 +35369,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547213.0,
-        "waited_s": 13.0
+        "depart_s": 547212.0,
+        "waited_s": 12.0
       },
       {
         "vehicle_id": "guard_d6_h15_t6",
@@ -35243,8 +35382,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547215.0,
-        "waited_s": 15.0
+        "depart_s": 547214.0,
+        "waited_s": 14.0
       },
       {
         "vehicle_id": "guard_d6_h15_t7",
@@ -35269,8 +35408,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 547221.0,
-        "waited_s": 21.0
+        "depart_s": 547220.0,
+        "waited_s": 20.0
       },
       {
         "vehicle_id": "guard_d6_h15_t9",
@@ -35490,8 +35629,8 @@
         "entrance": "26413425#5",
         "inserted": true,
         "outcome": "inserted",
-        "depart_s": 576022.0,
-        "waited_s": 22.0
+        "depart_s": 576021.0,
+        "waited_s": 21.0
       },
       {
         "vehicle_id": "guard_d6_h23_t9",
@@ -35515,7 +35654,7 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "spec_version": 1,
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "2ed0e942c0b97199e60ddbe2eb2259097110ede819eeff716fc7cfb4a003a2cf",
+    "specification_sha256": "841afe55e6bf262ec6b3b3ec7827b28e279cd29e6f38cace8a1d302cb87cc61e",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "1.0.0"
@@ -35523,7 +35662,7 @@
     "files": {
       "routes": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
-        "sha256": "75d800404a046bccceaf48c012439a514effeab259ce0c427c3d698b1aa00928"
+        "sha256": "4ffd77d313bdbc31155687848847572a7ce6b8c5c37b781cdf51ed48113e1710"
       },
       "config": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
@@ -35535,7 +35674,7 @@
       },
       "supervision": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-        "sha256": "292b3909573bec7ec8cf5c66dc1e0f532c940955088e7c19b26f6e03989a2302"
+        "sha256": "ccec6c9c68c21e2485e495db1123201d5f685a209ddc9b9181c7f3be96293cbf"
       }
     },
     "world": {
@@ -35593,10 +35732,10 @@
       "namespaces": [
         {
           "namespace": "bahonar",
-          "version": 1
+          "version": 2
         }
       ],
-      "vocabulary_digest": "2bb00a43c4b045be6fc583ab3e8fafae6e086387c962f0f9cd182dd7714befa7"
+      "vocabulary_digest": "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355"
     },
     "traffic": {
       "sumo_seed": 42,
@@ -35622,14 +35761,14 @@
       "begin_s": 0.0,
       "end_s": 604800.0,
       "vehicles": {
-        "loaded": 69245,
-        "inserted": 69245,
+        "loaded": 69246,
+        "inserted": 69246,
         "discarded": 0,
         "waiting_at_end": 0
       },
       "planned_vehicles": {
-        "total": 365,
-        "inserted": 365
+        "total": 366,
+        "inserted": 366
       },
       "collisions": 0
     },
@@ -35654,10 +35793,10 @@
       "normalized_mutual_information": 0.142,
       "bands": {
         "day": {
-          "annotated": 85,
+          "annotated": 86,
           "nominal": 244,
           "unlabelled": 73,
-          "total": 402
+          "total": 403
         },
         "golden": {
           "annotated": 7,
@@ -35684,7 +35823,7 @@
           "total": 169
         }
       },
-      "entries": 613
+      "entries": 614
     }
   }
 }

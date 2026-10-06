@@ -18,15 +18,19 @@ package (`07_Scenario_Authoring.md` §3.4). Held here:
   generator this one replaced, whose `t = 0` was midnight of day 0 (07 §1.4). Under the 07:00 epoch every entry of it that falls in the run --
   the 335 guard postings, the 21 hauls, the nine planted vehicles and every flow window -- comes back
   with the same id, the same roads and stops and the same local time; what it held before 07:00 on
-  day 0 is gone and what the run adds is day 7 before 07:00.
-* **The five vehicle anomalies are supervision, and the no-show is a skip.** The nine planted vehicles
-  are the participants of the five annotated instances. The guard no-show is a skip in the guard rota
-  at the tower, instant and length the labels' described gap gave it, and nothing more: the posting it
-  removes has no trip and no supervision row, because a label follows a vehicle and there is none
-  (06 §3.5, the owner's ruling of 2026-10-05).
+  day 0 is gone and what the run adds is day 7 before 07:00, and the guard who leaves the gap.
+* **The six anomalies are supervision, each a vehicle's, and the no-show is a skip.** The ten planted
+  vehicles are the participants of the six annotated instances. The guard schedule skips the posting
+  at the tower, instant and length the labels' described gap gave it, so the posting has no trip and
+  no row; the guard who should have taken it departs the apron at that instant as the guards do,
+  parks for that length elsewhere inside the wire, never at the tower, and carries the label, because
+  a label follows a vehicle (06 §3.5, the owner's rulings of 2026-10-05 and 2026-10-06). A label on
+  the skipped posting itself is refused: there is no vehicle for it to follow (check 19).
 * **The plan says nothing its terms do not define.** The perimeter shadow's `speed_factor` and
-  `circuit_edges` are the keys its term declares, of the declared types, and a value of another type
-  is refused (check 56); the hauls and the guard postings carry their terms' `hard_negative_for`.
+  `circuit_edges`, and the deviating guard's `expected_tower` and `expected_shift_start`, are the keys
+  their terms declare, of the declared types, and a value of another type or a key no term declares
+  is refused (check 56); the hauls and the guard postings carry their terms' `hard_negative_for`,
+  which for a posting includes the posting not taken up.
 
 What these cannot see: whether the traffic behaves as intended in SUMO -- that is measured when the
 scenario changes (07 §3.4) -- and whether a body suits the vehicle it is drawn for, which is the
@@ -83,6 +87,9 @@ NETWORK = "Shahid_Bahonar_Port.net.xml"
 SHIPPED_ROUTES = FIXTURES / f"{SCENARIO}.shipped.rou.xml"
 SHIPPED_LABELS = FIXTURES / f"{SCENARIO}.shipped.labels.json"
 SHIPPED_END_S = 7 * 86_400
+# The posting the schedule skips, and the guard who should have taken it and parks elsewhere instead.
+SKIPPED = "guard_d4_h7_t3"
+OFF_POST = "offpost_d4_h7_t3"
 
 
 def load_generator():
@@ -247,7 +254,8 @@ def test_a_shadow_parameter_its_term_does_not_declare_as_written_is_refused(tmp_
 
 def test_the_shipped_plan_projects_hard_negative_for_from_the_terms_onto_its_negatives():
     """The 21 hauls are matched negatives for the escort's terms and the guard postings for the
-    dwell-shaped ones, copied from the terms; the anomalies, all annotated, carry none."""
+    dwell-shaped ones and the posting not taken up, copied from the terms; the anomalies, all
+    annotated, carry none."""
     plan = shipped_plan()
     hauls = [i for i in plan["instances"] if i["supervision"] == "nominal"]
     assert len(hauls) == 21
@@ -255,13 +263,17 @@ def test_the_shipped_plan_projects_hard_negative_for_from_the_terms_onto_its_neg
         tuple(declared_term("bahonar:routine_freight_haul")["hard_negative_for"])}
     (series,) = plan["series"]
     assert series["hard_negative_for"] == declared_term("bahonar:tower_posting")["hard_negative_for"]
+    assert series["hard_negative_for"] == ["bahonar:standoff_dwell_at_access_point",
+                                           "bahonar:arrival_without_departure",
+                                           "bahonar:posting_not_taken_up"]
     assert all(i["hard_negative_for"] is None for i in plan["instances"]
                if i["supervision"] == "annotated")
 
 
 def test_the_shipped_anomalies_are_anchored_to_the_events_that_commit_them():
-    """Each transit opens at its vehicle's departure, which it declares; each probe's standoff and
-    the stay-behind's dwell are their one stop, which declares a length (06 D6.4) or an end."""
+    """Each transit opens at its vehicle's departure, which it declares; each probe's standoff, the
+    stay-behind's dwell and the deviating guard's parked shift are their one stop, which declares a
+    length (06 D6.4) or an end."""
     intervals = {i["instance_id"].split("/", 1)[1]: i["intervals"]
                  for i in shipped_plan()["instances"] if i["supervision"] == "annotated"}
     reading = Reading(generated_specification())
@@ -282,6 +294,60 @@ def test_the_shipped_anomalies_are_anchored_to_the_events_that_commit_them():
     (dwell,) = intervals["pi_ferry_stay_behind_d1"]
     assert dwell["anchor"]["start"]["event"] == "stop:0"
     assert (dwell["declared_start_s"], dwell["declared_end_s"]) == (None, float(SHIPPED_END_S))
+    (shift,) = intervals["pi_posting_not_taken_up_d4"]
+    lane, offset = reading.stop({"place": "west_apron_spur"})
+    stop = {"lane": lane, "end_pos_m": offset}
+    assert (shift["entity_id"], shift["phase"]) == (OFF_POST, "dwell")
+    assert shift["anchor"] == {"start": {"event": "stop:0", **stop},
+                               "end": {"event": "stop_end:0", **stop}}
+    assert (shift["declared_start_s"], shift["declared_end_s"], shift["declared_duration_s"]) == (
+        None, None, 28_800.0)
+
+
+@pytest.mark.parametrize(("parameters", "says"), [
+    ({"expected_tower": 3, "expected_shift_start": "2026-10-03T07:00:00+03:30"},
+     "parameter 'expected_tower' is 3, and 'bahonar:posting_not_taken_up' declares it string (the "
+     "tower the guard was due to relieve, as the id of its area of interest)"),
+    ({"expected_tower": "tower_03", "expected_shift_start": "2026-10-03T07:00:00+03:30",
+      "expected_shift_end": "2026-10-03T15:00:00+03:30"},
+     "carries parameter 'expected_shift_end', which none of its labels declares (they declare "
+     "expected_shift_start, expected_tower)"),
+])
+def test_a_deviating_guard_parameter_its_term_does_not_declare_as_written_is_refused(tmp_path,
+                                                                                     parameters,
+                                                                                     says):
+    require_world()
+    specification = compilable_specification()
+    guard = next(i for i in specification["supervision"]["instances"]
+                 if i["name"] == "pi_posting_not_taken_up_d4")
+    guard["parameters"] = parameters
+    result = compile_specification(specification, tmp_path)
+    assert {f.check_id for f in result.findings.refusals} == {56}
+    (finding,) = result.findings.by_check(56)
+    assert finding.subject == "instance pi_posting_not_taken_up_d4" and says in finding.message
+
+
+@pytest.mark.parametrize(("participants", "says"), [
+    ([{"actor": SKIPPED, "role": "subject"}],
+     f"participant '{SKIPPED}' is not an actor of this scenario"),
+    ([], "has no participant. An instance is an assertion about one or more vehicles, and a label "
+         "follows its vehicle (06 §3.5); an omission is conveyed by labelling the vehicle that "
+         "deviates"),
+])
+def test_a_label_on_the_skipped_posting_is_refused_because_no_vehicle_takes_it(tmp_path,
+                                                                               participants, says):
+    """The empty post cannot carry the label in the deviating guard's place: the posting the schedule
+    skips is no vehicle, and an instance about no vehicle is refused (check 19)."""
+    require_world()
+    specification = compilable_specification()
+    guard = next(i for i in specification["supervision"]["instances"]
+                 if i["name"] == "pi_posting_not_taken_up_d4")
+    guard["participants"] = participants
+    guard["intervals"] = []
+    result = compile_specification(specification, tmp_path)
+    assert {f.check_id for f in result.findings.refusals} == {19}
+    (finding,) = result.findings.by_check(19)
+    assert finding.subject == "instance pi_posting_not_taken_up_d4" and says in finding.message
 
 
 def test_a_probe_anchored_to_a_stop_it_does_not_make_is_refused_under_check_58(tmp_path):
@@ -296,21 +362,60 @@ def test_a_probe_anchored_to_a_stop_it_does_not_make_is_refused_under_check_58(t
         f.message for f in result.findings.by_check(58))
 
 
-def test_the_shipped_plan_carries_no_row_for_the_skipped_posting():
-    """The no-show is a skip and nothing else: no instance, no slot, no interval names the posting the
-    rota leaves out, and every row of the plan is a vehicle's or a flow's (06 §3.5)."""
+def test_the_shipped_plan_carries_a_row_for_the_deviating_guard_and_none_for_the_skipped_posting():
+    """The omission is the guard's: one annotated instance about the vehicle that parks elsewhere,
+    naming the tower and the shift it was due at, while no instance, slot or interval names the
+    posting the schedule leaves out, and every row of the plan is a vehicle's or a flow's (06 §3.5)."""
     plan = shipped_plan()
-    skipped = "guard_d4_h7_t3"
+    (row,) = [i for i in plan["instances"] if i["labels"] == ["bahonar:posting_not_taken_up"]]
+    assert row["instance_id"] == f"{SCENARIO}/pi_posting_not_taken_up_d4"
+    assert row["supervision"] == "annotated"
+    assert row["participants"] == [{"entity_id": OFF_POST, "role": "subject", "sumo_id": OFF_POST}]
+    assert row["parameters"] == {"expected_tower": "tower_03",
+                                 "expected_shift_start": "2026-10-03T07:00:00+03:30"}
+    declared = declared_term("bahonar:posting_not_taken_up")["parameters"]
+    assert {key: entry["type"] for key, entry in declared.items()} == {
+        "expected_tower": "string", "expected_shift_start": "string"}
+    (guard,) = [e for e in plan["entities"] if e["entity_id"] == OFF_POST]
+    assert (guard["supervision"], guard["refs"]) == (["annotated"], [row["instance_id"]])
+
     assert all(row["participants"] for row in plan["instances"])
     assert all(interval["entity_id"] for row in plan["instances"] for interval in row["intervals"])
-    assert not any(skipped in json.dumps(row) for row in plan["instances"])
+    assert not any(SKIPPED in json.dumps(row) for row in plan["instances"])
     (series,) = plan["series"]
     assert len(series["slots"]) == 335
     assert all(slot["entity_id"] == slot["slot_key"] for slot in series["slots"])
-    assert skipped not in {slot["slot_key"] for slot in series["slots"]}
-    assert skipped not in {entity["entity_id"] for entity in plan["entities"]}
+    assert SKIPPED not in {slot["slot_key"] for slot in series["slots"]}
+    assert OFF_POST not in {slot["entity_id"] for slot in series["slots"]}
+    assert SKIPPED not in {entity["entity_id"] for entity in plan["entities"]}
     assert "realisation" not in json.dumps(plan)
     assert plan["vocabulary"]["core"]["vocabulary_version"] == 3
+
+
+def test_the_deviating_guard_never_reaches_the_tower_it_was_due_at():
+    """Its one stop is the airside spur, and its route never enters the skipped tower's road, nor
+    stops at any tower, nor where another planted vehicle stops or ends."""
+    routes = ET.parse(IMPORT / f"{SCENARIO}.rou.xml").getroot()
+    (vehicle,) = [v for v in routes.iter("vehicle") if v.get("id") == OFF_POST]
+    edges = vehicle.find("route").get("edges").split()
+    specification = generated_specification()
+    reading = Reading(specification)
+    generator = load_generator()
+    tower_edge, _ = generator.TOWER_POSTS[3]
+    assert tower_edge == "26413459" and tower_edge not in edges
+    assert edges[0] == edges[-1] == reading.edge("apron")
+    (stop,) = vehicle.findall("stop")
+    lane, offset = reading.stop({"place": "west_apron_spur"})
+    assert (stop.get("lane"), float(stop.get("endPos")), float(stop.get("duration")),
+            stop.get("parking")) == (lane, offset, 28_800.0, "true")
+    towers = {(f"{edge}_0", position) for edge, position in generator.TOWER_POSTS}
+    assert (lane, offset) not in towers
+    others = [a for a in specification["actors"]
+              if a["id"] != OFF_POST and not a["id"].startswith("haul_")]
+    elsewhere = {reading.edge(a["to"]) for a in others}
+    elsewhere |= {reading.edge(s["place"]) for a in others for s in a.get("stops", [])}
+    elsewhere |= set(generator.FENCE_LINE)
+    assert lane.rsplit("_", 1)[0] not in elsewhere
 
 
 # ---- the owner's epoch ---------------------------------------------------------------------------------
@@ -336,6 +441,11 @@ def test_t0_is_07_00_at_bahonar_and_every_local_time_is_kept():
     assert departs["probe_d2"] == "2026-10-01T11:04:34+03:30"
     assert departs["staybehind"] == "2026-09-30T08:00:00+03:30"
     assert departs["escort_4"] == "2026-10-02T10:00:16+03:30"
+    # The deviating guard leaves at the skipped posting's shift change, which its label names.
+    assert departs[OFF_POST] == skips[0].depart.civil
+    (guard,) = [i for i in specification["supervision"]["instances"]
+                if i["name"] == "pi_posting_not_taken_up_d4"]
+    assert guard["parameters"]["expected_shift_start"] == skips[0].depart.civil
 
 
 # ---- the sizing scenario it replaced ---------------------------------------------------------------------
@@ -417,12 +527,15 @@ def test_the_guard_rota_and_the_hauls_come_back_entry_for_entry():
 
 
 def test_the_nine_planted_vehicles_come_back_with_their_roads_stops_and_local_times():
+    """The sizing scenario's nine come back; the tenth, the deviating guard, is the run's own."""
     specification = generated_specification()
     reading = Reading(specification)
     _, trips = shipped_entries()
     marked = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))["marked_ids"]
     actors = {a["id"]: a for a in specification["actors"] if not a["id"].startswith("haul_")}
-    assert sorted(actors) == sorted(marked)
+    assert sorted(actors) == sorted([*marked, OFF_POST])
+    assert OFF_POST not in trips
+    del actors[OFF_POST]
     for actor_id, actor in actors.items():
         shipped = trips[actor_id]
         assert reading.shipped_seconds(actor["depart"], actor_id) == shipped["depart"], actor_id
@@ -469,17 +582,17 @@ def test_every_flow_window_comes_back_cut_to_the_run():
         assert reading.shipped_seconds(flow["end"], flow_id) <= run_end
 
 
-def test_the_five_vehicle_anomalies_are_supervision_and_the_no_show_is_a_skip_at_its_described_gap():
+def test_the_six_anomalies_are_supervision_and_the_no_show_is_a_skip_at_its_described_gap():
     specification = generated_specification()
     reading = Reading(specification)
     labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
     supervision = specification["supervision"]
     annotated = [i for i in supervision["instances"] if i["supervision"] == "annotated"]
-    assert len(annotated) == 5
+    assert len(annotated) == 6
     assert sorted(p["actor"] for i in annotated for p in i["participants"]) == \
-        sorted(labels["marked_ids"])
+        sorted([*labels["marked_ids"], OFF_POST])
     assert all(i["labels"] for i in annotated)
-    # The no-show is conveyed by the rota's skip alone: the block declares no row for it.
+    # The posting is the schedule's skip, and the block declares no row for an empty place.
     assert "absences" not in supervision
     (series,) = supervision["series"]
     assert (series["rota"], series["supervision"]) == ("guard_posting", "nominal")
@@ -487,8 +600,9 @@ def test_the_five_vehicle_anomalies_are_supervision_and_the_no_show_is_a_skip_at
     _, skips = RotaExpander(reading.resolver, CompileFindings()).expand(
         specification["rotas"][0], specification["place_sets"]["guard_towers"])
     (skip,) = skips
-    assert skip.entry_id == "guard_d4_h7_t3"
+    assert skip.entry_id == SKIPPED
     assert skip.subject_index == gap["tower_index"]
+    assert OFF_POST in skip.because
     lane, offset = reading.stop({"place": skip.subject})
     assert (lane.rsplit("_", 1)[0], offset) == (gap["edge"], gap["edge_pos_m"])
     assert skip.depart.seconds + reading.shift == gap["begin_s"]
@@ -496,13 +610,32 @@ def test_the_five_vehicle_anomalies_are_supervision_and_the_no_show_is_a_skip_at
     assert skip.depart.seconds + slot + reading.shift == gap["end_s"]
     assert series["slot_aoi_refs"][skip.subject] == skip.subject
 
+    # The guard who should have taken it: one of the guards, leaving their base on their schedule,
+    # in their entry style, parked for the gap's length, and somewhere other than the tower.
+    (guard,) = [a for a in specification["actors"] if a["id"] == OFF_POST]
+    template = specification["rotas"][0]["template"]
+    for key in ("type", "from", "to", "depart_lane", "depart_speed", "arrival_speed"):
+        assert guard[key] == template[key], key
+    assert reading.shipped_seconds(guard["depart"], OFF_POST) == gap["begin_s"]
+    (stop,) = guard["stops"]
+    assert stop["parking"] is True
+    assert reading.resolver.duration(stop["duration"], OFF_POST) == gap["end_s"] - gap["begin_s"]
+    assert guard["via"] == [stop["place"]]
+    assert stop["place"] != skip.subject and reading.edge(stop["place"]) != gap["edge"]
+    (instance,) = [i for i in annotated if i["participants"][0]["actor"] == OFF_POST]
+    assert instance["labels"] == ["bahonar:posting_not_taken_up"]
+    assert instance["participants"] == [{"actor": OFF_POST, "role": "subject"}]
+    assert instance["parameters"]["expected_tower"] == skip.subject
+    assert "aoi_refs" not in instance
+
 
 def test_only_the_two_behaviour_classes_are_carried_by_planted_vehicles_alone():
     """A class only planted vehicles carry puts the label in the vehicle type the truth record
     names; the two that do differ from their population in the behaviour itself."""
     specification = generated_specification()
-    marked = set(json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))["marked_ids"])
+    marked = set(json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))["marked_ids"]) | {OFF_POST}
     planted = {a["type"] for a in specification["actors"] if a["id"] in marked}
+    assert "guard" in planted
     ordinary = {a["type"] for a in specification["actors"] if a["id"] not in marked}
     ordinary |= {r["template"]["type"] for r in specification["rotas"]}
     ordinary |= {c for m in specification["vehicle_mixes"] for c in m["shares"]}
