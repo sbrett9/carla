@@ -26,6 +26,15 @@ or says its supervision is unknown; then a SUMO vehicle record without the eleme
 three, an annotated vehicle naming no instance, an unlabelled one naming any, a sidecar naming a plan
 with no world element, and a sidecar saying nothing of supervision at all are each a defect.
 
+**And whether each vehicle is in the picture.** Every vehicle record a recorder writes says where the
+vehicle's box fell against the camera's picture, `in_frame` -- `wholly`, `partly`, `none` or
+`behind_camera` -- and, where the five occlusion fields are absent, why, in one word of
+`occlusion_unmeasured` (the owner's ruling of 2026-10-05: an absent fraction was being read as "not
+hidden"). A record saying nothing of its place, one carrying occlusion fields while its place says the
+picture has no view of the vehicle, one carrying neither occlusion nor a reason, one carrying a reason
+beside a measurement, and a place or a reason outside the recorder's words are each a defect. A capture
+made before the recorder wrote the place is shown to carry the first.
+
 **A uid that changes vehicle is seen even where no record names one.** With SUMO ids on the records,
 a uid carrying two of them over the capture is counted directly. Without them, a uid seen on the
 road, then below the ground band, then on the road again is a body that was given back and lent again
@@ -62,6 +71,16 @@ DEFAULT_MARGIN_M = 50.0
 # The three states a vehicle's supervision is written in: the annotation vocabulary's core spellings.
 SUPERVISION_STATES = ("annotated", "nominal", "unlabelled")
 
+# Where a vehicle's box fell against the picture, as the recorder writes it (`CarlaNet.Recording.InFrame`),
+# and the two places that put any of the vehicle in the picture.
+IN_FRAME_VALUES = ("wholly", "partly", "none", "behind_camera")
+IN_PICTURE = ("wholly", "partly")
+
+# Why a record's occlusion went unmeasured, as the recorder writes it (`CarlaNet.Recording.OcclusionUnmeasured`).
+OCCLUSION_UNMEASURED_REASONS = ("behind_camera", "outside_frame", "beyond_draw_distance", "no_depth_camera",
+                                "no_depth_capture", "depth_out_of_step", "depth_pose_mismatch",
+                                "beyond_depth_range", "no_sample")
+
 
 @dataclass(frozen=True)
 class VehicleRecord:
@@ -79,6 +98,11 @@ class VehicleRecord:
     annotations: int = 0
     # Whether its sidecar named a supervision plan, so the record ought to carry a state.
     in_supervised_sidecar: bool = False
+    # Where its box fell against the picture, None where the record does not say; whether it carries
+    # the occlusion fields; and why not, where it says.
+    in_frame: str | None = None
+    occlusion_measured: bool = False
+    occlusion_unmeasured: str | None = None
 
 
 @dataclass
@@ -108,6 +132,12 @@ class SidecarAuditResult:
     records_with_unknown_state: list[VehicleRecord] = field(default_factory=list)
     records_annotated_naming_nothing: list[VehicleRecord] = field(default_factory=list)
     records_unlabelled_naming_something: list[VehicleRecord] = field(default_factory=list)
+    records_without_in_frame: list[VehicleRecord] = field(default_factory=list)
+    records_with_unknown_in_frame: list[VehicleRecord] = field(default_factory=list)
+    records_occluded_outside_picture: list[VehicleRecord] = field(default_factory=list)
+    records_without_occlusion_or_reason: list[VehicleRecord] = field(default_factory=list)
+    records_with_reason_beside_measurement: list[VehicleRecord] = field(default_factory=list)
+    records_with_unknown_reason: list[VehicleRecord] = field(default_factory=list)
 
     @property
     def had_plan(self) -> bool:
@@ -162,11 +192,30 @@ class SidecarAuditResult:
         if self.had_plan and self.sidecars_saying_nothing_of_supervision:
             found.append(f"{len(self.sidecars_saying_nothing_of_supervision)} sidecar(s) of a run with a "
                          "supervision plan neither name it nor say their supervision was unknown")
+        if self.records_without_in_frame:
+            found.append(f"{len(self.records_without_in_frame)} of {total} vehicle records do not say "
+                         "whether the vehicle is in the picture (no in_frame)")
+        if self.records_with_unknown_in_frame:
+            found.append(f"{len(self.records_with_unknown_in_frame)} vehicle record(s) carry an in_frame "
+                         f"other than {', '.join(IN_FRAME_VALUES)}")
+        if self.records_occluded_outside_picture:
+            found.append(f"{len(self.records_occluded_outside_picture)} vehicle record(s) carry occlusion "
+                         "fields while in_frame says the picture has no view of the vehicle")
+        if self.records_without_occlusion_or_reason:
+            found.append(f"{len(self.records_without_occlusion_or_reason)} vehicle record(s) carry neither "
+                         "occlusion fields nor occlusion_unmeasured: an absent fraction with no reason")
+        if self.records_with_reason_beside_measurement:
+            found.append(f"{len(self.records_with_reason_beside_measurement)} vehicle record(s) carry "
+                         "occlusion_unmeasured beside a measured occlusion")
+        if self.records_with_unknown_reason:
+            found.append(f"{len(self.records_with_unknown_reason)} vehicle record(s) carry an "
+                         f"occlusion_unmeasured other than {', '.join(OCCLUSION_UNMEASURED_REASONS)}")
         return found
 
 
 class TruthSidecarAudit:
-    """Counts parked bodies listed as vehicles and records with no, or no stable, SUMO identity."""
+    """Counts parked bodies listed as vehicles, records with no, or no stable, SUMO identity, and
+    records that do not say whether their vehicle is in the picture or why its occlusion is absent."""
 
     def __init__(self, margin_m: float = DEFAULT_MARGIN_M, floor_hae: float | None = None) -> None:
         self.margin_m = float(margin_m)
@@ -219,6 +268,7 @@ class TruthSidecarAudit:
             if result.floor_hae is not None and record.hae < result.floor_hae:
                 result.below_band.append(record)
             self._check_supervision(record, result)
+            self._check_in_frame(record, result)
             if record.sumo_id is None:
                 result.without_sumo_id.append(record)
                 continue
@@ -263,6 +313,25 @@ class TruthSidecarAudit:
             result.records_unlabelled_naming_something.append(record)
 
     @staticmethod
+    def _check_in_frame(record: VehicleRecord, result: SidecarAuditResult) -> None:
+        """Hold one record to saying where its box fell against the picture, to carrying occlusion
+        fields only where the picture has a view of it, and to a reason wherever it carries none."""
+        if record.in_frame is None:
+            result.records_without_in_frame.append(record)
+        elif record.in_frame not in IN_FRAME_VALUES:
+            result.records_with_unknown_in_frame.append(record)
+        elif record.occlusion_measured and record.in_frame not in IN_PICTURE:
+            result.records_occluded_outside_picture.append(record)
+        if record.occlusion_measured:
+            if record.occlusion_unmeasured is not None:
+                result.records_with_reason_beside_measurement.append(record)
+        elif record.occlusion_unmeasured is None:
+            if record.in_frame is not None:
+                result.records_without_occlusion_or_reason.append(record)
+        elif record.occlusion_unmeasured not in OCCLUSION_UNMEASURED_REASONS:
+            result.records_with_unknown_reason.append(record)
+
+    @staticmethod
     def _lent_again_after_parking(result: SidecarAuditResult) -> list[str]:
         """The uids seen on the road, below the ground band, then on the road again, in tick order."""
         if result.floor_hae is None:
@@ -304,7 +373,10 @@ class TruthSidecarAudit:
                 speed_mps=0.0 if track is None else float(track.get("speed", "0")),
                 supervision_state=None if supervision is None else supervision.get("state", ""),
                 annotations=0 if supervision is None else len(supervision.findall("annotation")),
-                in_supervised_sidecar=supervised)
+                in_supervised_sidecar=supervised,
+                in_frame=extras.get("in_frame"),
+                occlusion_measured="occlusion" in extras.attrib,
+                occlusion_unmeasured=extras.get("occlusion_unmeasured"))
 
     @staticmethod
     def describe(result: SidecarAuditResult) -> list[str]:
@@ -332,6 +404,23 @@ class TruthSidecarAudit:
                              f"{len({record.actor_id for record in result.below_band})} actor(s)")
         lines.append(f"  without a SUMO id: {len(result.without_sumo_id)} of {total} "
                      f"({_percent(len(result.without_sumo_id), total)})")
+        places = defaultdict(int)
+        reasons = defaultdict(int)
+        measured = 0
+        for record in result.records:
+            if record.in_frame is not None:
+                places[record.in_frame] += 1
+            if record.occlusion_measured:
+                measured += 1
+            elif record.occlusion_unmeasured is not None:
+                reasons[record.occlusion_unmeasured] += 1
+        lines.append("  in the picture: "
+                     + (", ".join(f"{place} {places[place]}" for place in IN_FRAME_VALUES if places[place])
+                        or "none said")
+                     + f"; not said: {len(result.records_without_in_frame)} of {total}")
+        lines.append(f"  occlusion measured: {measured} of {total}; unmeasured by reason: "
+                     + (", ".join(f"{reason} {reasons[reason]}" for reason in sorted(reasons)) or "none")
+                     + f"; neither measured nor a reason given: {len(result.records_without_occlusion_or_reason)}")
         if result.had_plan:
             states = defaultdict(int)
             for record in result.records:
