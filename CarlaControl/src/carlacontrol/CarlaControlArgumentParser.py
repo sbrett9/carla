@@ -600,17 +600,10 @@ class CarlaControlArgumentParser:
             help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>, whatever the "
             "camera is named).",
         )
-        rec.add_argument(
-            "--no-occlusion",
-            dest="occlusion",
-            action="store_false",
-            help="do not record how much of each vehicle the camera can actually see. By default "
-            "every capture measures, per vehicle, the fraction of it hidden behind buildings, "
-            "trees, terrain or other vehicles, and writes it into the sidecar as occlusion "
-            "(0 = fully visible, 1 = fully hidden) plus a coarse occlusion_level band, so a "
-            "process drawing training boxes can drop the ones it cannot see and label the rest. "
-            "The measurement reads the depth camera, adding a second subscription to its frames.",
-        )
+        # Every capture measures, per vehicle, the fraction of it hidden behind buildings, trees,
+        # terrain or other vehicles, against the rig's depth camera, and writes it into the sidecar
+        # as occlusion (0 = fully visible, 1 = fully hidden) with a coarse occlusion_level band.
+        # There is no switch to turn the measurement off; the two settings below shape it.
         rec.add_argument(
             "--occlusion-margin",
             type=float,
@@ -618,7 +611,8 @@ class CarlaControlArgumentParser:
             help="metres nearer than a vehicle's own surface that something must be before it "
             "counts as hiding it (default 1.0). Absorbs the gap between the vehicle's bounding "
             "box and its real bodywork; raise it if vehicles report occlusion with a clear view, "
-            "lower it if an obstruction pressed right against a vehicle is being missed.",
+            "lower it if an obstruction pressed right against a vehicle is being missed. The "
+            "measurement itself is on for every capture and has no switch.",
         )
         rec.add_argument(
             "--occlusion-samples",

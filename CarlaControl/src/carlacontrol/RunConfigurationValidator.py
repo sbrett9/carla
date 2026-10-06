@@ -675,7 +675,7 @@ class RunConfigurationValidator:
             findings.refuse(24, "blueprints", f"could not read the server's blueprint library: "
                             f"{failure!r}")
             return findings
-        self._rig_attributes(effective, library, findings)
+        self._rig_attributes(library, findings)
         self._vehicle_blueprints(effective, library, findings)
         return findings
 
@@ -691,12 +691,9 @@ class RunConfigurationValidator:
                             "sun" + ("" if binds else ", and the run requires one"))
 
     @staticmethod
-    def _rig_attributes(effective: EffectiveRunConfiguration, library: Any,
-                        findings: RunConfigurationFindings) -> None:
-        wanted = [(RGB_BLUEPRINT, RGB_ATTRIBUTES)]
-        # Every channel gets a depth camera where occlusion is measured, an orbit's included.
-        if effective.value("occlusion.enabled"):
-            wanted.append((DEPTH_BLUEPRINT, DEPTH_ATTRIBUTES))
+    def _rig_attributes(library: Any, findings: RunConfigurationFindings) -> None:
+        # Every channel gets a depth camera, an orbit's included: occlusion is measured on each.
+        wanted = [(RGB_BLUEPRINT, RGB_ATTRIBUTES), (DEPTH_BLUEPRINT, DEPTH_ATTRIBUTES)]
         for blueprint_id, attributes in wanted:
             try:
                 blueprint = library.find(blueprint_id)

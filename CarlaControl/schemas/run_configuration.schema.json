@@ -565,13 +565,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Measure per-vehicle occlusion against a depth camera attached to each channel's camera, a stare's and an orbit's alike. Session-fixed: turning it off mid-run would change the unoccluded denominator.",
-          "default": true,
-          "x-mutability": "session_fixed",
-          "x-supplied-by": "tool"
-        },
         "margin_m": {
           "type": "number",
           "minimum": 0,

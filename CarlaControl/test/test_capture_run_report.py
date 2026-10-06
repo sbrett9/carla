@@ -73,13 +73,18 @@ class _Arguments:
     scenario = None
     scenario_id = None
     seed = None
-    occlusion = False
+
+
+class _DepthCamera:
+    """The depth camera every recording camera carries, as the recorder is handed it."""
+
+    id = 8
 
 
 def _recording(world: _World, saved: int, dropped: int, started_sim_time: float = 0.0,
                wall_seconds: float = 10.0) -> NativeRecorder:
     """A recorder mid-recording, with its window already open on both clocks."""
-    recorder = NativeRecorder(world, camera=None, args=_Arguments())
+    recorder = NativeRecorder(world, camera=None, args=_Arguments(), depth_camera=_DepthCamera())
     recorder._handle = _Handle(saved, dropped)
     recorder.recording = True
     recorder._started_sim_time = started_sim_time
@@ -178,9 +183,22 @@ def test_toggling_off_says_where_the_poses_came_from_and_names_a_disagreeing_hea
 
 
 def test_counters_read_from_a_released_handle_are_zero_rather_than_an_error():
-    recorder = NativeRecorder(_World(), camera=None, args=_Arguments())
+    recorder = NativeRecorder(_World(), camera=None, args=_Arguments(), depth_camera=_DepthCamera())
     assert recorder.saved == 0
     assert recorder.dropped == 0
+
+
+def test_a_recorder_given_no_depth_camera_says_its_captures_carry_no_occlusion(caplog):
+    # Occlusion is measured whenever a camera records and nothing turns it off, so the one way a
+    # recording can carry none -- no depth camera handed over -- is said at once, as a warning.
+    with caplog.at_level(logging.INFO, logger="carlacontrol.NativeRecorder"):
+        with_depth = NativeRecorder(_World(), camera=None, args=_Arguments(),
+                                    depth_camera=_DepthCamera())
+        assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+        without = NativeRecorder(_World(), camera=None, args=_Arguments())
+    assert with_depth.depth_camera is not None and without.depth_camera is None
+    [warning] = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert "no depth camera" in warning and "carry no occlusion" in warning
 
 
 def test_a_ratio_with_no_wall_clock_behind_it_is_zero_rather_than_a_division():

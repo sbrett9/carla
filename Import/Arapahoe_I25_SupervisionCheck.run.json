@@ -18,8 +18,5 @@
         "stare_look_at_y_m": -313.7
       }
     ]
-  },
-  "occlusion": {
-    "enabled": false
   }
 }

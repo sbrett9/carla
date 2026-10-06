@@ -47,21 +47,22 @@ class NativeRecorder:
             camera: CARLA camera sensor actor to record
             args: Parsed arguments with record_dir, record_hz, affiliation, stale, fov,
                   platform_type, platform_affiliation, camera_name, platform_uid,
-                  scenario, scenario_id, seed, occlusion, occlusion_margin, occlusion_samples.
+                  scenario, scenario_id, seed, occlusion_margin, occlusion_samples.
                   `camera_name` (`--camera-name`) is the name every capture is written under and
                   the platform track's callsign: the name the camera was spawned under, which the
                   shim refuses to record under any other; None records under the name the camera
                   holds on the server -- the one it was spawned under, or the server's Camera_<n>.
             run_id: Identifier grouping every capture of this run
-            depth_camera: Depth camera held at the recorded camera's pose. When given (and
-                  --no-occlusion was not passed) each capture also records how much of each
-                  vehicle the camera cannot see.
+            depth_camera: The depth camera held at the recorded camera's pose, which every
+                  capture's per-vehicle occlusion is measured against. Occlusion is measured
+                  whenever a camera records and nothing turns it off, so a recorder given no depth
+                  camera says so loudly: its captures carry no occlusion.
         """
         self.world = world
         self.camera = camera
         self.args = args
         self.run_id = run_id
-        self.depth_camera = depth_camera if getattr(args, "occlusion", True) else None
+        self.depth_camera = depth_camera
         self.record_dir = args.record_dir
         self.record_hz = args.record_hz
         self.affiliation = args.affiliation
@@ -88,9 +89,13 @@ class NativeRecorder:
         self.logger.info(
             f"native recorder initialized: dir={self.record_dir}, hz={self.record_hz}, "
             f"available={self.available}, "
-            f"scenario={self.scenario_id or 'none'}, "
-            f"occlusion={'on' if self.depth_camera is not None else 'off'}"
+            f"scenario={self.scenario_id or 'none'}"
         )
+        if self.depth_camera is None:
+            self.logger.warning(
+                "no depth camera was given to the recorder, so its captures carry no occlusion "
+                "measurement; every recording camera is meant to have one attached"
+            )
 
     @staticmethod
     def resolve_scenario_id(args) -> str | None:

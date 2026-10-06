@@ -22,6 +22,7 @@
 | 2026-10-02 | §4.3.3: the full-population tick measured on the owner's workstation -- what the camera, the vehicles and each optional control cost, the machine's power mode moving the pace more than any control, what is not yet known, and the options recorded but not pursued. M2 measured. |
 | 2026-10-02 | §4.1: a still is named after its camera, `<camera name>_<local capture time>`, where every still was `SCTMV_<local capture time>`; the time is written as before, so the clock ratio is read from either name. |
 | 2026-10-05 | Status corrected against the tree: M1 is measured and `sensor_tick` is set by both front ends (§4.6, §11); `FrameRecorder.Dropped` is read and gated and the clock ratio recorded (§4.6, §7, D10.7); the shipped networks' edge counts and place-name coverage are restated beside the 2026-09-18 figures (§3). |
+| 2026-10-05 | §4.1: the `--no-occlusion` switch the 2026-09-16 measurements name is removed, as the owner ruled; the occlusion measurement is on in every capture path, so every recording camera streams RGB and depth, which is what the "×2" rows cost. |
 
 ---
 
@@ -562,8 +563,9 @@ Every capture interval in every run is **exactly 10 ticks / 0.500 simulated seco
 | `run-20260916-214042` | 2,888 × 2,160 ×2 | 5.90 | 170 | **29.5%** |
 
 "×2" because `SensorRig.py:61-82` spawns an RGB **and** a depth camera at the same resolution, and the
-occlusion measurement subscribes to both (`--no-occlusion` is off by default,
-`CarlaControlArgumentParser.py:543-554`). The sidecar of `run-20260916-214042` confirms the configuration:
+occlusion measurement subscribes to both (a `--no-occlusion` switch existed then, off by default; it was
+removed on 2026-10-05, and the measurement is on in every capture path). The sidecar of
+`run-20260916-214042` confirms the configuration:
 **101 events = 1 platform + 100 vehicles**, 44 of them carrying an `occlusion` attribute,
 `_carla_intrinsics width="2888" height="2160"`.
 

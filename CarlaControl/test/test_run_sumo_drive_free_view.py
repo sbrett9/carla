@@ -10,6 +10,9 @@ session stood in for:
 * the flown rig is spawned over the centre of the world's staging bounds at `--camera-z` -- CARLA's
   origin where the world publishes none -- with the run configuration's depth range rather than the
   depth camera's stock 1000 m;
+* the fixed camera carries a depth camera attached to it, rigidly at the identity pose, with the
+  camera's image size, field of view and sensor tick and that same depth range, so its captures
+  measure occlusion as a capture run's do; there is no switch to turn the measurement off;
 * the session is handed no per-vehicle callback it does not need, in either view: the worst
   divergence comes off the session's report, so nothing crosses into Python per vehicle per tick
   while a window thread in the same process holds the interpreter;
@@ -95,14 +98,14 @@ def test_the_flown_rig_starts_over_the_world_s_centre_and_measures_depth_as_far_
     centre = drive.world_centre(_StagedWorld({"min_x": -838.9, "min_y": -455.1, "max_x": 839.1,
                                               "max_y": 456.9, "margin": 50.0}))
 
-    settings = drive.free_view_settings(
-        args, centre, SensorRig.FT_PER_M,
-        RunConfiguration.field("occlusion.depth_max_range_m").default)
+    settings = drive.free_view_settings(args, centre, SensorRig.FT_PER_M, drive.depth_range_m())
 
     # The staging bounds are in CARLA's frame, as the camera is.
     assert (settings.x, settings.y) == pytest.approx((0.1, 0.9))
     assert settings.z / SensorRig.FT_PER_M == pytest.approx(450.0)
+    # The run configuration's one depth range, read from its field table, for both views' cameras.
     assert settings.depth_max_range == 20000.0
+    assert drive.depth_range_m() == RunConfiguration.field("occlusion.depth_max_range_m").default
     assert (settings.width, settings.height, settings.fov) == (1280, 720, 90.0)
     assert settings.asynchronous is True
     assert settings.ev is None
@@ -157,20 +160,42 @@ def test_a_span_of_a_named_camera_is_written_to_a_folder_named_after_it(drive, m
         tmp_path / "DECK-I25-20261002T140722Z"
 
 
-class _SpawningWorld:
-    """A world a fixed camera is spawned into: the name it was spawned under."""
+class _Blueprint:
+    def __init__(self, blueprint_id: str, attributes: set[str]) -> None:
+        self.id = blueprint_id
+        self.attributes = attributes
+        self.values: dict[str, str] = {}
 
-    def __init__(self) -> None:
+    def has_attribute(self, name: str) -> bool:
+        return name in self.attributes
+
+    def set_attribute(self, name: str, value) -> None:
+        self.values[name] = str(value)
+
+
+class _SpawningWorld:
+    """A world a fixed camera is spawned into: the name it was spawned under, and the depth camera
+    spawned attached to it, with the attributes each was given."""
+
+    DEPTH = {"image_size_x", "image_size_y", "fov", "sensor_tick", "max_range"}
+
+    def __init__(self, depth: set[str] | None = None) -> None:
         self.spawned: list[tuple[str, str | None]] = []
+        self.blueprints = {"sensor.camera.rgb": _Blueprint("sensor.camera.rgb", self.DEPTH),
+                           "sensor.camera.depth": _Blueprint(
+                               "sensor.camera.depth", self.DEPTH if depth is None else depth)}
+        self.attached: list[tuple[str, object, object]] = []
 
     def get_blueprint_library(self):
-        blueprint = SimpleNamespace(id="sensor.camera.rgb", set_attribute=lambda *_: None,
-                                    has_attribute=lambda _name: True)
-        return SimpleNamespace(find=lambda _id: blueprint)
+        return SimpleNamespace(find=lambda blueprint_id: self.blueprints[blueprint_id])
 
     def spawn_camera(self, blueprint, transform, name=None):
         self.spawned.append((blueprint.id, name))
         return SimpleNamespace(id=4121)
+
+    def spawn_actor(self, blueprint, transform, attach_to=None, attachment_type=None):
+        self.attached.append((blueprint.id, attach_to, attachment_type))
+        return SimpleNamespace(id=4122, transform=transform)
 
     def camera_name(self, camera) -> str:
         return self.spawned[-1][1] or f"CARLA-SENSOR-{camera.id}"
@@ -181,6 +206,44 @@ def test_the_fixed_camera_is_spawned_under_its_name_or_left_its_default(drive, m
     drive.spawn_camera(world, _arguments(drive, monkeypatch, "--camera-name", "DECK-I25"), (0, 0))
     drive.spawn_camera(world, _arguments(drive, monkeypatch), (0, 0))
     assert world.spawned == [("sensor.camera.rgb", "DECK-I25"), ("sensor.camera.rgb", None)]
+
+
+def test_the_fixed_camera_carries_a_depth_camera_attached_at_its_pose_with_its_optics(
+        drive, monkeypatch):
+    # Occlusion is measured on the fixed camera's captures as on a capture run's: the depth camera is
+    # attached rigidly at the identity pose, so the camera's pose is its pose by construction, and
+    # takes the camera's image size, field of view and sensor tick and the run configuration's one
+    # depth range rather than the depth camera's stock 1000 m.
+    import carlanet
+
+    world = _SpawningWorld()
+    args = _arguments(drive, monkeypatch, "--record-hz", "4")
+    camera = drive.spawn_camera(world, args, (0, 0))
+
+    depth = drive.spawn_depth_camera(world, args, camera, drive.depth_range_m())
+
+    [(blueprint_id, attached_to, attachment)] = world.attached
+    assert (blueprint_id, attached_to, attachment) == ("sensor.camera.depth", camera,
+                                                       carlanet.AttachmentType.Rigid)
+    pose = depth.transform
+    assert (pose.location.x, pose.location.y, pose.location.z, pose.rotation.pitch,
+            pose.rotation.yaw, pose.rotation.roll) == (0.0,) * 6
+    rgb, depth_blueprint = world.blueprints["sensor.camera.rgb"], world.blueprints["sensor.camera.depth"]
+    assert depth_blueprint.values == {**rgb.values, "max_range": "20000.0"}
+    assert depth_blueprint.values["sensor_tick"] == "0.25"
+    assert (depth_blueprint.values["image_size_x"], depth_blueprint.values["image_size_y"],
+            depth_blueprint.values["fov"]) == ("1920", "1080", "60.0")
+
+
+def test_a_server_whose_depth_camera_has_no_range_attribute_is_said_loudly(drive, monkeypatch,
+                                                                            caplog):
+    world = _SpawningWorld(depth=_SpawningWorld.DEPTH - {"max_range"})
+    args = _arguments(drive, monkeypatch)
+    camera = drive.spawn_camera(world, args, (0, 0))
+    with caplog.at_level("WARNING", logger="run_sumo_drive"):
+        drive.spawn_depth_camera(world, args, camera, 20000.0)
+    assert "no max_range attribute" in caplog.text
+    assert "max_range" not in world.blueprints["sensor.camera.depth"].values
 
 
 def test_a_camera_name_the_rule_refuses_ends_the_drive_before_it_connects(drive, monkeypatch,

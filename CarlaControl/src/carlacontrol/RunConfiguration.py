@@ -281,11 +281,7 @@ _FIELDS: tuple[RunField, ...] = (
        NO_DEFAULT, SESSION_FIXED,
        help="The cameras, one object each; see the channel fields below. Every channel is "
             "recorded."),
-    # -- occlusion ---------------------------------------------------------------------------------
-    _F("occlusion.enabled", _BOOLEAN, True, SESSION_FIXED,
-       help="Measure per-vehicle occlusion against a depth camera attached to each channel's "
-            "camera, a stare's and an orbit's alike. Session-fixed: turning it off mid-run would "
-            "change the unoccluded denominator."),
+    # -- occlusion: measured on every channel, against a depth camera attached to its camera ---------
     _F("occlusion.margin_m", _NON_NEGATIVE, 1.0, SESSION_FIXED,
        help="How much nearer than a vehicle's own surface something must be to block it, metres."),
     _F("occlusion.samples", _POSITIVE_INTEGER, 24, SESSION_FIXED,

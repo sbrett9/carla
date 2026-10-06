@@ -227,7 +227,7 @@ def test_by_default_the_session_is_handed_no_limit_and_follows_no_camera(layout,
     # a run with an orbit flying.
     document = run_document()
     document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
-    _, result = capture(layout, server, document, ["occlusion.enabled=false"])
+    _, result = capture(layout, server, document)
     assert result.outcome == "run_finished"
     started = started_with(server)
     assert started["render_set"] == "all"
@@ -261,8 +261,7 @@ def test_under_the_cameras_every_channel_camera_is_followed_and_let_go_before_it
         layout, server):
     document = run_document()
     document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
-    _, result = capture(layout, server, document, ["occlusion.enabled=false",
-                                                   "capture.render_set=cameras"])
+    _, result = capture(layout, server, document, ["capture.render_set=cameras"])
     assert result.outcome == "run_finished"
     assert started_with(server)["render_set"] == "cameras"
     cameras = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
@@ -364,11 +363,17 @@ def test_a_stare_camera_is_placed_where_its_description_aims_it(layout, server):
                               "role_name": "OVERWATCH-1"}
 
 
-def test_a_stare_measuring_occlusion_has_a_depth_camera_at_its_pose(layout, server):
+def test_a_stare_has_a_depth_camera_at_its_pose_with_its_camera_s_optics(layout, server):
+    # Occlusion is measured on every channel, against a depth camera that takes the camera's image
+    # size, field of view and sensor tick and the run's one depth range.
     capture(layout, server)
     rgb, depth = server.actors
     assert depth.type_id == "sensor.camera.depth"
-    assert depth.attributes["max_range"] == "20000.0"
+    assert depth.attributes == {"image_size_x": rgb.attributes["image_size_x"],
+                                "image_size_y": rgb.attributes["image_size_y"],
+                                "fov": rgb.attributes["fov"],
+                                "sensor_tick": rgb.attributes["sensor_tick"],
+                                "max_range": "20000.0", "role_name": "Camera_1"}
     assert depth.transform.location.x == rgb.transform.location.x
     [start] = server.events.of("start_recording")
     assert start[4]["depth_camera"] is depth
@@ -491,9 +496,9 @@ def test_two_channels_named_alike_in_different_cases_are_refused_before_the_serv
     assert server.events.of("spawn") == []
 
 
-def test_an_orbit_measuring_occlusion_has_a_depth_camera_attached_to_its_camera(layout, server):
-    # Occlusion is on by default, and an orbit gets it as a stare does: a depth camera spawned
-    # attached to the channel's camera, and the recorder started with it.
+def test_an_orbit_has_a_depth_camera_attached_to_its_camera(layout, server):
+    # An orbit measures occlusion as a stare does: a depth camera spawned attached to the channel's
+    # camera, and the recorder started with it.
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     session, result = capture(layout, server, document)
@@ -543,15 +548,36 @@ def test_an_orbit_s_depth_camera_takes_every_pose_its_camera_takes(layout, serve
     assert held and all(pose_of(s[rgb.id]) == pose_of(s[depth.id]) for s in held)
 
 
-def test_with_occlusion_off_an_orbit_carries_no_depth_camera(layout, server):
+def test_every_channel_records_against_a_depth_camera_and_nothing_turns_the_measurement_off(
+        layout, server):
+    # The owner's ruling of 2026-10-05: occlusion is measured in every capture path, with no
+    # switch. A run configuration naming the switch there was is refused as naming a field the
+    # schema does not have, before anything is spawned.
     document = run_document()
-    document["capture"]["channels"] = [AN_ORBIT]
-    session, result = capture(layout, server, document, ["occlusion.enabled=false"])
+    document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
+    _, result = capture(layout, server, document)
     assert result.outcome == "run_finished"
-    assert [a.type_id for a in server.actors] == ["sensor.camera.rgb"]
-    [start] = server.events.of("start_recording")
-    assert start[4]["depth_camera"] is None
-    assert session.channels[0].orbit is not None
+    rgb = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    depth = [actor for actor in server.actors if actor.type_id == "sensor.camera.depth"]
+    assert len(rgb) == len(depth) == 2
+    # Each spawned attached to its channel's camera, and each released before it.
+    assert [event[3] for event in server.events.of("spawn") if event[1] == "sensor.camera.depth"] \
+        == [camera.id for camera in rgb]
+    destroyed = [event[2] for event in server.events.of("destroy")]
+    assert all(destroyed.index(d.id) < destroyed.index(c.id) for c, d in zip(rgb, depth, strict=True))
+    starts = server.events.of("start_recording")
+    assert [start[4]["depth_camera"] for start in starts] == depth
+    assert all(actor.destroyed for actor in depth)
+
+    for refused_as, override, block in (("override", ["occlusion.enabled=false"], None),
+                                        ("document", [], {"enabled": False})):
+        server = FakeServer()
+        if block is not None:
+            document["occlusion"] = block
+        _, result = capture(layout, server, document, override)
+        assert result.outcome == "usage_error", refused_as
+        assert "occlusion.enabled" in result.refusals[0]["message"], refused_as
+        assert server.events.of("spawn") == [], refused_as
 
 
 def test_a_depth_camera_the_server_will_not_attach_refuses_at_preroll(layout, server):

@@ -279,7 +279,6 @@ def run_configuration(network_text: str) -> dict:
             "prewarm_s": 30.0,
             "channels": [{**CAMERA, "stare_look_at_x_m": x, "stare_look_at_y_m": y}],
         },
-        "occlusion": {"enabled": False},
     }
 
 
