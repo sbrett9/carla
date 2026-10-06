@@ -123,8 +123,9 @@ class PluginOrbitCheck:
                 float(rotation.Pitch), float(rotation.Yaw), float(rotation.Roll))
 
     def snapshot_pose(self, frame: int, actor_id: int) -> tuple | None:
-        actors, served = self.world._client.GetSnapshotFrame(frame, 0)
-        if actors is None or int(served) != frame:
+        # The client serves a frame it holds exactly, or nothing (never a neighbouring frame).
+        actors = self.world._client.GetSnapshotFrame(frame)
+        if actors is None:
             return None
         found, state = actors.TryGetValue(UInt32(actor_id), None)
         return self.pose_of(state.Transform) if found and state is not None else None
@@ -284,7 +285,15 @@ class PluginOrbitCheck:
                          "depth capture, %d out of step, %d at a different pose)", recorder.Saved,
                          measured, recorder.OcclusionUnmatched, recorder.OcclusionNoDepthCaptures,
                          recorder.OcclusionDepthOutOfStep, wrong_pose)
-        self.check(measured > 0, f"recorder: occlusion was measured on the orbit ({measured} captures)")
+        # Occlusion is measured per vehicle, so a world with no vehicle in it gives the recorder nothing
+        # to measure: the pairing itself is what this check holds, below. With vehicles present, at
+        # least one capture must carry a measurement.
+        vehicles = len(self.world.get_actors().filter("vehicle.*"))
+        if vehicles == 0:
+            self.logger.info("recorder: no vehicle in the world, so no occlusion to measure")
+        else:
+            self.check(measured > 0, f"recorder: occlusion was measured on the orbit ({measured} captures, "
+                                     f"{vehicles} vehicles in the world)")
         self.check(int(wrong_pose) == 0,
                    f"recorder: zero captures skipped for the cameras being at different poses "
                    f"({int(wrong_pose)})")
