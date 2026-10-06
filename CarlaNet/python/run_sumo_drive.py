@@ -87,7 +87,11 @@ Linux it needs a display.
 A compiled scenario is checked against the compile lock the compiler wrote beside its configuration
 (`<stem>.lock.json`) before SUMO is started: its configuration, route file and network must be the
 ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
-scenario with no lock runs and is logged as uncompiled. A scenario whose configuration lets SUMO
+scenario with no lock runs and is logged as uncompiled. The lock also says whether the compiler ran the
+scenario in SUMO alone before writing it, which is what finds a vehicle the supervision plan names that
+never enters the simulation; a lock that says the run was skipped (`compile_scenario.py
+--skip-dry-run`), or records none, is refused unless `--accept-skipped-dry-run` is given, and the
+report records the acceptance. A scenario whose configuration lets SUMO
 teleport a waiting vehicle -- a positive `time-to-teleport`, or none, which SUMO takes as 300 s, or any
 of SUMO's other teleport triggers -- is refused unless `--allow-teleporting` is given. One that sets
 `ignore-route-errors` is refused outright, because SUMO then keeps a vehicle it cannot route standing at
@@ -174,13 +178,14 @@ one. A path that already holds a manifest is refused before anything starts.
 Every still is named after its camera, `<camera name>_<local capture time>.png` and `.xml`, and the
 camera's platform track carries the name as its callsign. `--camera-name` names the camera, fixed or
 free, so that cameras sharing a world -- this drive's and another client's -- are told apart in their
-files and their telemetry; without it the camera is `CARLA-SENSOR-<camera id>`, which no other camera
+files and their telemetry; without it the server names the camera `Camera_<n>`, which no other camera
 on the server holds. A name is short and plain -- `Overwatch_1`, `Southeast_1700m_orbit`,
 `NapOfEarth_2`: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and not a
-Windows device name, a stock sensor role name (`front`, `back`, ...) or `CARLA-SENSOR-<number>`. It
-is used as given or refused before the drive starts, never rewritten. It is set as the camera's
-`role_name` when the camera is spawned, so a name another camera in the world already holds, in any
-case, is refused then.
+Windows device name, a stock sensor role name (`front`, `back`, ...), the server's own
+`Camera_<number>` or `CARLA-SENSOR-<number>`. It is used as given or refused before the drive starts,
+never rewritten. It is set as the camera's `role_name` when the camera is spawned, and the server
+refuses it then where a live camera in the world already holds it, in any case. The name the camera
+holds is read back from the spawned camera, whoever gave it.
 
 Flying: hold the right mouse button and move the mouse to look; W/S A/D E/Q to fly; the wheel sets
 the speed, Shift triples it; Ctrl+click measures a point; B/M draw the perimeter and margin; Space
@@ -254,6 +259,13 @@ def parse_args() -> argparse.Namespace:
                              "another teleport trigger, such as time-to-teleport.highways or a vehicle "
                              "type's own timeToTeleport) instead of refusing it. The run report records "
                              "that it was accepted. It accepts no collision.action but warn")
+    parser.add_argument("--accept-skipped-dry-run", action="store_true",
+                        help="run a compiled scenario whose compile skipped its SUMO-only run "
+                             "(compile_scenario.py --skip-dry-run), or whose lock was written before "
+                             "the compiler ran one, instead of refusing it. That run is what finds a "
+                             "vehicle the supervision plan names that never enters the simulation; "
+                             "without it the same fault stops a run only when SUMO drops the vehicle. "
+                             "The run report records that the skipped run was accepted")
     parser.add_argument("--collision-detail", action="store_true",
                         help="print every collision as it ends, and list every collision and every "
                              "collision warning SUMO wrote in the report. Off by default, which prints "
@@ -399,11 +411,12 @@ def parse_args() -> argparse.Namespace:
                         help="the camera's name, fixed or free, given as it is created, such as "
                              "Overwatch_1 or NapOfEarth_2: 1 to 63 characters, each an ASCII letter, "
                              "digit, underscore or hyphen, and not a Windows device name, a stock "
-                             "sensor role name (front, back, ...), CARLA-SENSOR-<number> or a name "
-                             "another camera in the world holds. Every still is written as "
-                             "<NAME>_<local capture time>.png and .xml, a free view's span folders as "
-                             "<NAME>-<UTC>, and it is the callsign of the camera's platform track. "
-                             "Default: CARLA-SENSOR-<camera id>")
+                             "sensor role name (front, back, ...), the server's own Camera_<number>, "
+                             "CARLA-SENSOR-<number> or a name a live camera in the world holds, which "
+                             "the server refuses. Every still is written as <NAME>_<local capture "
+                             "time>.png and .xml, a free view's span folders as <NAME>-<UTC>, and it "
+                             "is the callsign of the camera's platform track. Default: the name the "
+                             "server gives the camera, Camera_<n>")
     parser.add_argument("--camera-z", type=float, default=300.0,
                         help="camera height, metres; a free view starts there over the centre of the "
                              "world's staging bounds, looking straight down")
@@ -742,8 +755,8 @@ def spawn_camera(world, args: argparse.Namespace, centre: tuple[float, float]):
     if blueprint.has_attribute("sensor_tick") and args.record_hz > 0:
         blueprint.set_attribute("sensor_tick", str(1.0 / args.record_hz))
     transform = camera_transform(args, centre)
-    # Spawned under its name, which every client reads as the camera's role_name; a name another
-    # camera in the world holds is refused here.
+    # Spawned under its name as the camera's role_name, which the server refuses where a live camera
+    # in the world holds it; given none, the server names it. The name is read back from the camera.
     camera = world.spawn_camera(blueprint, transform, name=args.camera_name)
     logger.info("camera %s (%s) at (%.1f, %.1f, %.1f), pitch %.1f, yaw %.1f, looking at (%.1f, %.1f)",
                 world.camera_name(camera), camera.id, transform.location.x, transform.location.y,
@@ -1001,7 +1014,7 @@ def main() -> int:
             logger.error("no %s at %s", label, path)
             return 2
     # Refused before anything starts rather than when the camera is spawned, after the prewarm. A
-    # name another camera holds can only be known once the world is reached, at the spawn.
+    # name a live camera holds is the server's to refuse, at the spawn.
     if args.camera_name is not None:
         refused = carla.camera_name_problem(args.camera_name)
         if refused is not None:
@@ -1047,6 +1060,7 @@ def main() -> int:
             allow_sumo_version_mismatch=args.allow_sumo_version_mismatch,
             sumo_gui=args.sumo_gui,
             allow_teleporting=args.allow_teleporting,
+            accept_skipped_dry_run=args.accept_skipped_dry_run,
             sumo_answer_timeout_s=args.sumo_answer_timeout,
             vehicle_lamps=not args.no_vehicle_lamps,
             headlight_on_below_deg=args.headlight_on_below,
@@ -1092,6 +1106,10 @@ def main() -> int:
         (logger.info if compiled.Compiled else logger.warning)("compile lock: %s", compiled)
         if compiled.Compiled:
             logger.info("routed by: %s", compiled.RoutedByText)
+            # A skipped run the drive accepted is said louder: the compile never checked that every
+            # planned vehicle enters.
+            (logger.warning if compiled.SkippedDryRunAccepted else logger.info)(
+                "dry run: %s", compiled.DryRunText)
         teleporting = session.Report.Teleporting
         (logger.warning if teleporting.Enabled else logger.info)("teleporting: %s", teleporting)
         logger.info("clock: %s", session.Clock)

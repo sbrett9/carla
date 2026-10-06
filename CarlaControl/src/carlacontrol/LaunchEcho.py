@@ -31,6 +31,11 @@ look.
 or a `capture.render_cap`, the echo states the limit and that a vehicle outside it is simulated by
 SUMO and is not in CARLA or the truth, so a reader who did not mean a limit sees one before anything
 is acquired.
+
+**So is an accepted skipped dry run.** The scenario block always says what the lock records of the
+compiler's SUMO-only run; where that run was skipped and `scenario.accept_skipped_dry_run` let the
+launch past check 54, the rendering adds a line saying so, because the run then starts unchecked for
+a planned vehicle that never enters.
 """
 from __future__ import annotations
 
@@ -92,7 +97,8 @@ class LaunchEcho:
             "caller": effective.value("caller"),
             "scenario": {"scenario_id": effective.scenario.scenario_id,
                          "lock": effective.scenario.describe(),
-                         "window": window.name or "explicit"},
+                         "window": window.name or "explicit",
+                         "dry_run": cls._dry_run(effective)},
             "simulated": {"begin_s": window.begin_s, "end_s": window.end_s,
                           "length_s": window.length_s, "end_source": window.end_source,
                           "prewarm_s": effective.prewarm_s,
@@ -133,6 +139,18 @@ class LaunchEcho:
                     for i in range(channels)) else []),
         }
         return cls(block)
+
+    @staticmethod
+    def _dry_run(effective: EffectiveRunConfiguration) -> dict:
+        """Whether the compile ran the scenario in SUMO alone, as the lock records it, and whether a
+        run that did not is one this launch accepted (check 54 has passed, so one of the two holds)."""
+        scenario = effective.scenario
+        ran = scenario.dry_run_ran
+        return {"ran": ran,
+                "skipped_accepted": not ran,
+                "statement": scenario.describe_dry_run()
+                + ("" if ran else "; accepted by scenario.accept_skipped_dry_run, so the run "
+                                  "starts unchecked for a planned vehicle that never enters")}
 
     @staticmethod
     def _sun(effective: EffectiveRunConfiguration, epoch: ScenarioEpoch) -> dict:
@@ -257,13 +275,15 @@ class LaunchEcho:
         b = self.block
         sim, civil, cap, sun = b["simulated"], b["civil"], b["captures"], b["sun"]
         lines = [f"{b['scenario']['lock']}  ::  window {b['scenario']['window']}"
-                 f"        caller: {b['caller']}",
-                 f"  simulated   {sim['begin_s']:,.0f} - {sim['end_s']:,.0f} s      "
-                 f"({sim['length_s']:,.0f} s, {cap['per_channel']:,} captures per channel at "
-                 f"{cap['capture_hz']:g} Hz x {cap['channels']})",
-                 f"              end: {sim['end_source']}; prewarm {sim['prewarm_s']:g} s from "
-                 f"t={sim['first_rendered_s']:,.0f}",
-                 f"  civil       {civil['begin']}  ->  {civil['end']}"]
+                 f"        caller: {b['caller']}"]
+        if b["scenario"]["dry_run"]["skipped_accepted"]:
+            lines.append(f"  dry run     {b['scenario']['dry_run']['statement']}")
+        lines += [f"  simulated   {sim['begin_s']:,.0f} - {sim['end_s']:,.0f} s      "
+                  f"({sim['length_s']:,.0f} s, {cap['per_channel']:,} captures per channel at "
+                  f"{cap['capture_hz']:g} Hz x {cap['channels']})",
+                  f"              end: {sim['end_source']}; prewarm {sim['prewarm_s']:g} s from "
+                  f"t={sim['first_rendered_s']:,.0f}",
+                  f"  civil       {civil['begin']}  ->  {civil['end']}"]
         if sun["binds"]:
             begin, end = sun["at_begin"], sun["at_end"]
             lines.append(f"  sun         elevation {begin['elevation_deg']:+.2f} deg -> "

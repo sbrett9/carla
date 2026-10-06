@@ -40,11 +40,12 @@ class SensorRig:
             world: CARLA world object
             args: Parsed arguments with x, y, z, width, height, fov, ev, asynchronous, and
                 optionally camera_name: the RGB camera's name, which every capture recorded from
-                it is written under and its platform track is called by. Spawned under it, so a
-                name another camera in the world holds is refused here; without one the camera is
-                CARLA-SENSOR-<actor id>. The depth camera rides the RGB camera's pose and is not
-                named: it keeps the role name the server gives every sensor spawned without one,
-                which no camera may be named, so it never holds or collides with a camera's name.
+                it is written under and its platform track is called by. Spawned under it, which
+                the server refuses where a live camera in the world holds it, so the spawn raises
+                here; without one the server names the camera Camera_<n>, and the name is read
+                back from the spawned camera (`self.camera_name`). The depth camera rides the RGB
+                camera's pose and is given no name: the server names it Camera_<n> too, so it never
+                collides with a camera's name.
             client: The client the world came from. Needed to move the rig's cameras as one
                 batch, which is what keeps them at the same pose in the same frame; without it
                 they are moved one call each, and can be captured a frame apart.

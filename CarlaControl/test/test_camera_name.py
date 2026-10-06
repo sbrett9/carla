@@ -4,7 +4,8 @@
 made before anything reaches .NET -- `run_capture`'s offline validation of a channel's `sensor_id`
 and the `--camera-name` of `run_SCTMV.py` and `run_free_move_camera.py`. The cases are those of
 `CarlaNet/test/CarlaNet.Tests/Recording/CameraNameTests.cs`, so the two answer alike: a name is 1 to
-63 ASCII letters, digits, underscores and hyphens, and every refusal says so.
+63 ASCII letters, digits, underscores and hyphens, and every refusal says so. The server names a
+camera spawned without one `Camera_<n>`; a client cannot choose that form, and a camera holds it.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 from carlacontrol.CameraName import CameraName  # noqa: E402  (needs the path above)
 
 
-def test_a_camera_given_no_name_is_named_by_its_actor_id():
+def test_a_camera_s_platform_track_uid_is_its_default_name_on_a_server_that_names_no_cameras():
     assert CameraName.default(42) == "CARLA-SENSOR-42"
     assert CameraName.problem(CameraName.default(42), 42) is None
 
@@ -29,6 +30,7 @@ def test_a_camera_given_no_name_is_named_by_its_actor_id():
 ACCEPTED = [
     "OVERWATCH", "Overwatch_1", "Southeast_1700m_orbit", "NapOfEarth_2", "DECK-I25", "a", "-lead",
     "CONSOLE", "COM10", "CON_1", "Front_1", "frontier", "CARLA-SENSOR-", "CARLA-SENSOR-12a",
+    "Camera_", "Camera_1a", "Camera-1", "Cameras_1",
     "1234567890" * 6 + "123",
 ]
 
@@ -73,6 +75,9 @@ REFUSED = [
     ("Back_Left", "role name the server gives sensors"),
     ("CARLA-SENSOR-12", "another camera's name"),
     ("carla-sensor-12", "another camera's name"),
+    ("Camera_1", "which a client cannot claim"),
+    ("camera_007", "which a client cannot claim"),
+    ("CAMERA_12", "which a client cannot claim"),
 ]
 
 
@@ -91,6 +96,28 @@ def test_the_default_form_is_accepted_only_as_the_default_of_the_camera_it_names
     assert CameraName.problem("carla-sensor-42", 42) is None
     assert "is not camera 43's own" in CameraName.problem("CARLA-SENSOR-42", 43)
     assert "names no camera of its own" in CameraName.problem("CARLA-SENSOR-42")
+
+
+@pytest.mark.parametrize("name", ["Camera_1", "camera_007", "CAMERA_12"])
+def test_a_name_the_server_issued_is_held_by_its_camera_though_no_client_may_choose_it(name):
+    assert CameraName.is_server_issued(name)
+    assert CameraName.problem(name) is not None
+    assert CameraName.held_problem(name) is None
+    assert CameraName.held_problem(name, 42) is None
+
+
+@pytest.mark.parametrize("name", ["Camera_", "Camera_1a", "Camera-1", "Cameras_1", "CARLA-SENSOR-1",
+                                  "", None])
+def test_only_camera_and_digits_is_the_server_s_form(name):
+    assert not CameraName.is_server_issued(name)
+
+
+def test_a_held_name_is_held_to_the_rule_unless_the_server_issued_it():
+    assert CameraName.held_problem("Deck Cam 1") == CameraName.problem("Deck Cam 1")
+    assert CameraName.held_problem("front") == CameraName.problem("front")
+    assert CameraName.held_problem("CARLA-SENSOR-42", 43) == CameraName.problem("CARLA-SENSOR-42", 43)
+    assert CameraName.held_problem("CARLA-SENSOR-42", 42) is None
+    assert CameraName.held_problem("OVERWATCH") is None
 
 
 def test_case_does_not_tell_two_names_apart():
@@ -114,3 +141,7 @@ def test_the_recorder_s_rule_gives_the_same_answer_word_for_word():
         answered = RecordersRule.Problem(name, camera_id)
         assert (None if answered is None else str(answered)) == \
             CameraName.problem(name, camera_id), name
+        held = RecordersRule.HeldProblem(name, camera_id)
+        assert (None if held is None else str(held)) == \
+            CameraName.held_problem(name, camera_id), name
+        assert bool(RecordersRule.IsServerIssued(name)) == CameraName.is_server_issued(name), name

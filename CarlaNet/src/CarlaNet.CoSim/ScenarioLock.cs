@@ -15,7 +15,9 @@ namespace CarlaNet.CoSim;
 /// anything. The ones it records are carried where present and reported as not recorded where
 /// not. The two files a lock may leave out -- the lane closures' additional file, which only a
 /// scenario that closes lanes has, and the supervision plan -- are none where absent and refused
-/// where named without both their path and their digest.</para>
+/// where named without both their path and their digest. The <c>dry_run</c> block is absent from a
+/// lock written before the compiler ran its SUMO-only run, and <see cref="DryRun"/> is then null;
+/// present, it says whether the run happened, and is refused where it does not say.</para>
 /// </remarks>
 public sealed class ScenarioLock
 {
@@ -85,6 +87,13 @@ public sealed class ScenarioLock
 
     /// <summary>Whether a routing release other than the world's converter was accepted explicitly.</summary>
     public bool? RoutingMismatchAccepted { get; private init; }
+
+    /// <summary>
+    /// The compiler's SUMO-only run of the scenario (its check 59): whether it ran, with its counts or
+    /// the reason it did not. Null where the lock has no <c>dry_run</c> block: one written before the
+    /// compiler ran the check.
+    /// </summary>
+    public LockedDryRun? DryRun { get; private init; }
 
     /// <summary>The world package's file name, as the compiler read it.</summary>
     public string? WorldPackage { get; private init; }
@@ -184,6 +193,7 @@ public sealed class ScenarioLock
                 RoutingAgreement = Text(root, missing, required: false, "traffic", "routed_by",
                                         "release_agreement"),
                 RoutingMismatchAccepted = Flag(root, "traffic", "routed_by", "mismatch_accepted"),
+                DryRun = DryRunOf(root, missing),
                 WorldPackage = Text(root, missing, required: false, "world", "package"),
                 WorldMapName = Text(root, missing, required: false, "world", "map_name"),
                 WorldNetworkFingerprint = Text(root, missing, required: false, "world",
@@ -219,6 +229,64 @@ public sealed class ScenarioLock
         && files.TryGetProperty(role, out _)
             ? LockedFileOf(root, missing, role)
             : null;
+
+    /// <summary>
+    /// The compiler's SUMO-only run, where the lock records one: absent is a lock written before the
+    /// compiler ran it, and present it says whether it ran or is refused. The counts are carried where
+    /// recorded, as <c>SumoDryRun.lock_record</c> writes them.
+    /// </summary>
+    private static LockedDryRun? DryRunOf(JsonElement root, List<string> missing)
+    {
+        if (!root.TryGetProperty("dry_run", out JsonElement block) || block.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        bool? ran = Flag(block, "ran");
+        if (ran is null)
+        {
+            missing.Add("dry_run.ran");
+            return null;
+        }
+
+        return new LockedDryRun(
+            ran.Value,
+            Text(block, missing, required: false, "reason"),
+            Text(block, missing, required: false, "sumo_release"),
+            Number(block, "end_s"),
+            Count(block, "vehicles", "loaded"),
+            Count(block, "vehicles", "inserted"),
+            Count(block, "vehicles", "discarded"),
+            Count(block, "vehicles", "waiting_at_end"),
+            Count(block, "planned_vehicles", "total"),
+            Count(block, "planned_vehicles", "inserted"),
+            Count(block, "collisions"));
+    }
+
+    private static double? Number(JsonElement root, params string[] keys) =>
+        Walk(root, keys) is { ValueKind: JsonValueKind.Number } at && at.TryGetDouble(out double value)
+            ? value
+            : null;
+
+    private static long? Count(JsonElement root, params string[] keys) =>
+        Walk(root, keys) is { ValueKind: JsonValueKind.Number } at && at.TryGetInt64(out long value)
+            ? value
+            : null;
+
+    /// <summary>The element the keys lead to, or null where any key is not there.</summary>
+    private static JsonElement? Walk(JsonElement root, string[] keys)
+    {
+        JsonElement at = root;
+        foreach (string key in keys)
+        {
+            if (at.ValueKind != JsonValueKind.Object || !at.TryGetProperty(key, out at))
+            {
+                return null;
+            }
+        }
+
+        return at;
+    }
 
     private static string? Text(JsonElement root, List<string> missing, bool required,
                                 params string[] keys)

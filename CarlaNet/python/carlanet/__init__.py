@@ -705,32 +705,34 @@ class Map:
 
 
 # ── Camera names ──────────────────────────────────────────────────────────────
-# Every camera a recording is taken from has a name: the one its client gave it, or
-# CARLA-SENSOR-<actor id>. Every still is named after it and it is the callsign of the camera's
-# platform track, so two cameras in one world never write files of one name or report under one
-# callsign. A name given at spawn (World.spawn_camera) is set as the camera's role_name, which every
-# client reads from the world's actors, so a client can refuse a name another client's camera holds.
-# The rule a name must meet is CarlaNet.Recording.CameraName's; names are compared without regard to
-# case, as a Windows file system compares file names.
+# Every camera has a name, held on the server as its role_name. Every still recorded from the camera
+# is named after it and it is the callsign of the camera's platform track, so two cameras in one world
+# never write files of one name or report under one callsign. The server issues the names and refuses
+# the duplicates: a camera spawned with no name (World.spawn_camera) is Camera_<n> from a counter the
+# server keeps for its lifetime, a name a live camera holds is refused at spawn, and so is a
+# client-given name of the server's form. Every client reads a camera's name back from the spawned
+# actor's attributes (World.camera_name), so every process holds the same name for one camera. The
+# rule a client-given name must meet is CarlaNet.Recording.CameraName's; names are compared without
+# regard to case, as a Windows file system compares file names. A server built before it named cameras
+# hands an unnamed camera back with its blueprint's role name; such a camera is CARLA-SENSOR-<actor id>,
+# the form every platform track's uid takes, and the shim says so once.
 
-# The names this process gave its cameras, by actor id: at spawn, or when first recorded under one.
-_camera_names = {}
-_camera_names_lock = threading.RLock()
+_server_names_no_cameras_said = False
 
 
 def default_camera_name(camera_id) -> str:
-    """The name of a camera its client did not name: CARLA-SENSOR-<actor id>, which no other camera
-    on the server can hold, and the form of every platform track's uid."""
+    """The uid of a camera's platform track, CARLA-SENSOR-<actor id>, and the name of a camera a
+    server built before it named cameras left unnamed."""
     return f"CARLA-SENSOR-{int(camera_id)}"
 
 
 def camera_name_problem(name, camera_id=None):
-    """Why `name` cannot be a camera's name, or None when it can, by CarlaNet.Recording.CameraName's
-    rule: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as Overwatch_1
-    or Southeast_1700m_orbit; not a name Windows keeps for a device, not a role name the server gives
-    sensors (front, back, left, right, ...), and not the default form unless it is `camera_id`'s own
-    default. A name is used as given or refused, never rewritten, and every refusal says what is
-    allowed."""
+    """Why `name` cannot be a name a client gives a camera, or None when it can, by
+    CarlaNet.Recording.CameraName's rule: 1 to 63 characters, each an ASCII letter, digit,
+    underscore or hyphen, such as Overwatch_1 or Southeast_1700m_orbit; not a name Windows keeps for
+    a device, not a role name the server gives sensors (front, back, left, right, ...), not the
+    server's own form, Camera_<n>, and not the default form unless it is `camera_id`'s own default. A
+    name is used as given or refused, never rewritten, and every refusal says what is allowed."""
     if not _CARLANET_RECORDING_AVAILABLE:
         raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
                            "(rebuild the wheel/DLLs)")
@@ -740,14 +742,37 @@ def camera_name_problem(name, camera_id=None):
     return None if problem is None else str(problem)
 
 
-def _same_camera_name(first, second) -> bool:
-    return str(first).upper() == str(second).upper()
+def camera_name_of(camera) -> str:
+    """The name `camera` holds on the server, read from the actor's attributes: its role_name where
+    that is a name -- the server's Camera_<n>, or the one its client gave -- and otherwise, from a
+    server built before it named cameras, its default, CARLA-SENSOR-<actor id>."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraName
+    return str(CameraName.Of(camera._actor))
 
 
-def _forget_camera_name(camera_id) -> None:
-    """A destroyed camera's name is free for another camera of this process to take."""
-    with _camera_names_lock:
-        _camera_names.pop(int(camera_id), None)
+def camera_named_by_server(camera) -> bool:
+    """Whether the server named `camera`: it carries a name of the server's form, Camera_<n>."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraName
+    return bool(CameraName.NamedByServer(camera._actor))
+
+
+def _say_server_names_no_cameras(camera) -> None:
+    """Said once per process: the server handed an unnamed camera back without a name of its own,
+    so it was built before it named cameras, and the camera is its default."""
+    global _server_names_no_cameras_said
+    if _server_names_no_cameras_said:
+        return
+    _server_names_no_cameras_said = True
+    print(f"this server names no cameras: camera {int(camera.id)} was spawned without a name and "
+          f"came back with role_name {camera.attributes.get('role_name', '')!r}, so it is "
+          f"{default_camera_name(camera.id)}; a server that names cameras gives it Camera_<n> "
+          "(rebuild the server)", file=sys.stderr)
 
 
 # ── Actor wrapper ─────────────────────────────────────────────────────────────
@@ -947,7 +972,6 @@ class Actor:
 
     def destroy(self) -> bool:
         self.stop()
-        _forget_camera_name(self._actor.Id)
         return bool(_sync(self._client.DestroyActorAsync(self._actor.Id)))
 
     def __repr__(self):
@@ -2044,14 +2068,13 @@ class World:
 
         Every still is named after the camera, `<camera name>_<local capture time>.png` and `.xml`, the
         time to the millisecond, and the name is the callsign of the camera's platform track, so two
-        cameras never share files or a callsign. The name is `camera_name`; without one, the name the
-        camera was spawned under (`spawn_camera`) or first recorded under in this process, and failing
-        both its default, CARLA-SENSOR-<camera id>. A name is used as given or refused with the reason
-        (`camera_name_problem`), never rewritten; one another camera of this process or of the world
-        holds is refused, and so is one other than the name the camera was spawned under. A second
-        recorder in this process cannot record under a name a live recorder holds. `platform_callsign`
-        is the older spelling of `camera_name`, kept for callers written before cameras had names;
-        giving both with different values is refused.
+        cameras never share files or a callsign. The name is the one the camera holds on the server
+        (`camera_name`): the one it was spawned under (`spawn_camera`), the server's Camera_<n> for a
+        camera spawned with none, or, from a server built before it named cameras, its default,
+        CARLA-SENSOR-<camera id>. `camera_name` given here must be that name, and any other is refused:
+        a camera is named when it is spawned. A second recorder in this process cannot record under a
+        name a live recorder holds. `platform_callsign` is the older spelling of `camera_name`, kept
+        for callers written before cameras had names; giving both with different values is refused.
 
         The collection platform (the airborne camera) is recorded as a CoT air track: `fov` is the camera
         horizontal field of view (degrees, for the sensor field-of-view and pinhole intrinsics);
@@ -2074,6 +2097,15 @@ class World:
         much nearer than a vehicle's own surface something has to be before it counts as blocking it,
         and `occlusion_samples` how finely each vehicle's outline is sampled. Measuring costs a second
         subscription to that camera's stream, so it happens only when a depth camera is given.
+
+        With or without one, every vehicle record says where the vehicle's box fell against this
+        camera's picture, `in_frame` -- `wholly`, `partly`, `none` or `behind_camera` -- with its
+        `apparent_width_px` and `apparent_height_px` wherever the box has a footprint, projected with
+        `fov` from the capture's own camera pose; and where the five occlusion fields are absent,
+        `occlusion_unmeasured` says why in one word (`no_depth_camera`, `outside_frame`,
+        `behind_camera`, `beyond_draw_distance`, `no_depth_capture`, `depth_out_of_step`,
+        `depth_pose_mismatch`, `beyond_depth_range` or `no_sample`), so an absent fraction is never
+        read as an unhidden vehicle. `audit_truth_sidecars.py` holds every record to it.
 
         Pass `illumination` -- a SUMO drive session's `session.Illumination` -- to have each capture
         also record what its sun was declared to be: the scenario epoch's digest, the illumination
@@ -2217,7 +2249,8 @@ class World:
                          epoch=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
                          sumo_home=None, allow_sumo_version_mismatch=False, sumo_gui=False,
-                         allow_teleporting=False, sumo_answer_timeout_s=60.0,
+                         allow_teleporting=False, accept_skipped_dry_run=False,
+                         sumo_answer_timeout_s=60.0,
                          vehicle_lamps=True, headlight_on_below_deg=3.0,
                          headlight_off_above_deg=6.0, draw_distance_m=None,
                          render_set="all", region_centre=None, region_radius_m=None,
@@ -2417,6 +2450,16 @@ class World:
         uncompiled one. `session.Report.CompileLock` says which, and for a compiled scenario the
         SUMO release that routed it and the world it was compiled for.
 
+        The lock also says whether the compiler ran the scenario in SUMO alone before writing it
+        (its check 59), which is what finds a vehicle the supervision plan names that never enters
+        the simulation. The session refuses, before SUMO is started, a lock that says the run was
+        skipped (`compile_scenario.py --skip-dry-run`) or records none -- a lock written before the
+        compiler ran the check -- naming the scenario and the lock's reason, because a capture that
+        started would find the same fault only when SUMO dropped the vehicle, hours of rendering in.
+        `accept_skipped_dry_run` runs anyway, and `session.Report.CompileLock.DryRunText` records
+        that the skipped run was accepted; where the run happened it accepts nothing, and the text
+        says what the run found.
+
         The session also refuses a scenario whose configuration lets SUMO teleport a blocked vehicle:
         a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
         as the scenario compiler writes. `allow_teleporting` runs anyway, and
@@ -2577,6 +2620,7 @@ class World:
         if sumo_gui:
             options.SumoGui = True
         options.AllowTeleporting = bool(allow_teleporting)
+        options.AcceptSkippedDryRun = bool(accept_skipped_dry_run)
         options.SumoAnswerTimeoutSeconds = float(sumo_answer_timeout_s)
         options.VehicleLampsDriven = bool(vehicle_lamps)
         options.HeadlightOnBelowDegrees = float(headlight_on_below_deg)
@@ -2732,77 +2776,56 @@ class World:
 
         `name` is the client's to choose, so that cameras sharing a world can be told apart in their
         files and their telemetry. It is used as given where the rule allows it and refused, with the
-        reason, where it does not (`camera_name_problem`); it is refused too where another camera of
-        this process holds it, or a camera in the world does, compared without regard to case. The
-        name is set as the camera's `role_name`, which every client reads from the world's actors, so
-        a client naming a camera later finds it held. None leaves the camera its default,
-        CARLA-SENSOR-<actor id>, which no other camera on the server can hold.
+        reason, where it does not (`camera_name_problem`). It is sent as the camera's `role_name`,
+        and the server refuses it, by raising from the spawn, where a live camera in the world
+        holds it, compared without regard to case. None lets the server name the camera Camera_<n>,
+        from a counter it keeps for its lifetime, so no two cameras on the server are ever named
+        alike; a client cannot claim a name of that form. Either way the camera's name is read back
+        from the spawned actor (`camera_name`), so every client holds the same name for it.
 
-        Raises ValueError for a name refused, saying why."""
-        if name is None:
-            return self.spawn_actor(blueprint, transform, attach_to, attachment_type)
-        name = str(name)
-        # Held from the check through the spawn, so two threads of this process cannot both take it.
-        with _camera_names_lock:
-            self._refuse_camera_name(name)
+        Raises ValueError for a name refused, saying why: by the rule before the spawn, or by the
+        server, with the server's reason."""
+        if name is not None:
+            name = str(name)
+            problem = camera_name_problem(name)
+            if problem is not None:
+                raise ValueError(problem)
             blueprint.set_attribute("role_name", name)
+        try:
             camera = self.spawn_actor(blueprint, transform, attach_to, attachment_type)
-            _camera_names[camera.id] = name
+        except Exception as refused:
+            # The server's refusal of the name -- held by a live camera, or of the server's own form
+            # -- is the RPC's error, said here as every refusal of a name is said.
+            if name is not None and "camera name '" in str(refused):
+                raise ValueError(str(refused)) from None
+            raise
+        if name is None and not camera_named_by_server(camera):
+            _say_server_names_no_cameras(camera)
         return camera
 
     def camera_name(self, camera) -> str:
-        """The name `camera` is recorded under: the one this process gave it, or its default,
-        CARLA-SENSOR-<actor id>."""
-        with _camera_names_lock:
-            return _camera_names.get(int(camera.id)) or default_camera_name(camera.id)
-
-    def _refuse_camera_name(self, name, camera_id=None) -> None:
-        """Raise ValueError where `name` cannot be taken for `camera_id` (None: a camera not yet
-        spawned): the rule refuses it, another camera of this process holds it, or a camera in the
-        world does -- spawned under it as its role_name, or holding it as its default."""
-        problem = camera_name_problem(name, camera_id)
-        if problem is not None:
-            raise ValueError(problem)
-        own = None if camera_id is None else int(camera_id)
-        with _camera_names_lock:
-            held_by = next((held for held, taken in _camera_names.items()
-                            if held != own and _same_camera_name(taken, name)), None)
-        if held_by is not None:
-            raise ValueError(f"camera name '{name}' is already held by camera {held_by} of this "
-                             "process: two cameras in one process cannot share a name")
-        from CarlaNet.Recording import CameraName
-        holder = _sync(CameraName.HolderInWorldAsync(self._client, name, own))
-        if holder is not None:
-            raise ValueError(f"camera name '{name}' is already held in this world by "
-                             f"{CameraName.DescribeHolder(holder)}: two cameras under one name "
-                             "would write files of one name and report under one callsign")
+        """The name `camera` holds on the server, read from the actor's attributes: the one it was
+        spawned under -- the server's Camera_<n>, or the one its client gave -- or, from a server
+        built before it named cameras, its default, CARLA-SENSOR-<actor id>."""
+        return camera_name_of(camera)
 
     def _recording_camera_name(self, camera, asked, callsign) -> str:
-        """The name `camera` is recorded under: the one asked for, or the one it was spawned under,
-        or its default; a name asked for that is not the one it was spawned under is refused, and so
-        is one the rule refuses or another camera holds."""
+        """The name `camera` is recorded under: the name it holds on the server (`camera_name`). A
+        name asked for that is not that name is refused: the server's name is the one every file and
+        every callsign carries."""
         if asked is not None and callsign is not None and str(asked) != str(callsign):
             raise ValueError(f"camera_name '{asked}' and platform_callsign '{callsign}' differ: the "
                              "platform track's callsign is the camera's name, so give one of them")
         asked = asked if asked is not None else callsign
-        camera_id = int(camera.id)
-        with _camera_names_lock:
-            given = _camera_names.get(camera_id)
-            if asked is None:
-                return given or default_camera_name(camera_id)
-            asked = str(asked)
-            if given is not None:
-                if asked != given:
-                    raise ValueError(f"camera {camera_id} is named '{given}', and is recorded under "
-                                     f"that name, not '{asked}'")
-                return given
-            self._refuse_camera_name(asked, camera_id)
-            _camera_names[camera_id] = asked
-            return asked
+        held = self.camera_name(camera)
+        if asked is not None and str(asked) != held:
+            raise ValueError(f"camera {int(camera.id)} is named '{held}' on the server, and is "
+                             f"recorded under that name, not '{asked}': a camera is named when it "
+                             "is spawned (spawn_camera)")
+        return held
 
     def destroy_actor(self, actor) -> bool:
         actor_id = int(actor.id) if isinstance(actor, Actor) else int(actor)
-        _forget_camera_name(actor_id)
         return bool(_sync(self._client.DestroyActorAsync(actor_id)))
 
     def tick(self) -> int:

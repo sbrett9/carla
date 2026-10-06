@@ -31,6 +31,9 @@ Findings set. Every external claim is cited.
 | 2026-10-01 | §3.4: the render set is published on the world-observer snapshot, as D8.3 asks of every world-scoped fact, so a recorder, the live pull and the CoT feed in any process list only the bodies a frame drew, by SUMO vehicle, and correctness no longer depends on where a recorder runs. |
 | 2026-10-02 | §2.4, §3.5: every capture is named after its camera, `<camera name>_<local capture time>`, where every capture was `SCTMV_<local capture time>`, and the camera's platform track carries the name as its callsign, which defaulted to `OVERWATCH` for every camera given none. A client names each camera as it chooses, used as given or refused, never rewritten; one it does not name is `CARLA-SENSOR-<camera id>`. A name is unique within a process and, set as the camera's `role_name`, visible to every client, so one another camera in the world holds is refused. The uid is unchanged. |
 | 2026-10-05 | §2.4, §3.5: a camera name is short and plain -- 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or `Southeast_1700m_orbit` -- and no other character; the free-move camera can be named too. |
+| 2026-10-05 | §3.2, §3.3: occlusion is measured on an orbit as on a stare, as the owner ruled. `run_capture` spawns each channel's depth camera attached to its RGB camera, rigidly at the camera's own pose, so one move carries both and the recorder's pose check compares poses set by one call; an orbit's captures carry occlusion and apparent size, where `run_capture` refused occlusion on an orbit before. |
+| 2026-10-05 | §2.4, §2.5, §2.7: every vehicle record of a capture says where its box fell against the picture, `in_frame`, with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; where the five occlusion fields are absent, `occlusion_unmeasured` says why in one word. The owner ruled that an absent fraction was being read as "not hidden". The projection is separated from the depth sampling and runs for every capture. |
+| 2026-10-05 | §2.4, §3.5: the server issues camera names and refuses duplicates, as the owner ruled. A camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, never reset by a world reload and never reused; a name a live camera holds is refused at spawn, case aside, and a client cannot claim `Camera_<digits>`. Every client reads the name back from the spawned camera for its files, callsign and recorder; the client-side check across the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras. The plugin change awaits a build. |
 | 2026-10-05 | The judgement text is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the label record is cut to geometry and happened facts (§5.1); `visible_signature`, `lit_face_px`, `shadow_px`, `observability_level`, the separation fields and the in-frame flags go (§5.7, §5.8, §8.3, §8.4, §8.6, §8.7); `coverage.jsonl`, the five levels and prevalence go (§10.1, §10.2); §10.5 keeps the recorded-sun strata and the date sweep and loses its probes; the fitness probe goes (§12); §13, §14, §16 follow. D8.15, D8.16, D8.19, D8.25, D8.33, D8.34, D8.36, D8.38 withdrawn; D8.2 and D8.17 amended. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
@@ -312,9 +315,12 @@ fps" (`run_SCTMV.py:215-219`). Two streams is today's rig. Multi-camera multipli
 
 Per capture, two files sharing a filename stem: the camera's name and local wall-clock time to the
 millisecond, `<camera name>_<yyyy.MM.dd_HH.mm.ss.fff>` (`CameraName.StillStem`). The name is the one
-the client gave the camera, used as given or refused, or `CARLA-SENSOR-<camera id>` where it gave none.
-A name is 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` (2026-10-05);
-captures written before 2026-10-02 carry `SCTMV` where the name is, whatever camera took them:
+the camera holds on the server: the one the client gave it, used as given or refused, or
+`Camera_<n>`, which the server names a camera spawned without one (2026-10-05); the client reads it
+back from the spawned camera. A client-given name is 1 to 63 ASCII letters, digits, underscores and
+hyphens, such as `Overwatch_1`, and never of the server's form. `CARLA-SENSOR-<camera id>` is an
+unnamed camera's name only on a server built before it named cameras; captures written before
+2026-10-02 carry `SCTMV` where the name is, whatever camera took them:
 
 - a lossless PNG with `carla:solar`, `carla:sensor` and `carla:capture` tEXt chunks
   (`FrameRecorder.cs:225-229`);
@@ -327,9 +333,18 @@ captures written before 2026-10-02 carry `SCTMV` where the name is, whatever cam
   `point/lat,lon,hae`, `track/course,speed`, `contact/callsign` and a `_carla` extras block
   (`:130-198`).
 
-Occlusion rides that extras block when it was measured: `occlusion`, `occlusion_level`,
-`occlusion_samples`, `apparent_width_px`, `apparent_height_px`, all absent when unmeasured
-(`CotWriter.cs:178-193`).
+Every vehicle's extras block says where its bounding box fell against this capture's picture,
+`in_frame` -- `wholly`, `partly`, `none` or `behind_camera`, from the box's eight corners projected
+through the camera from the capture's own pose with the picture's size and field of view
+(`BoxProjector`) -- and carries `apparent_width_px` and `apparent_height_px` wherever the box has a
+footprint, with or without a depth camera (2026-10-05). Occlusion rides the block where it was
+measured: `occlusion`, `occlusion_level`, `occlusion_samples`, only ever on a vehicle wholly or partly
+in the picture; where they are absent, `occlusion_unmeasured` says why in one word -- `behind_camera`,
+`outside_frame`, `beyond_draw_distance`, `no_depth_camera`, `no_depth_capture`, `depth_out_of_step`,
+`depth_pose_mismatch`, `beyond_depth_range` or `no_sample` -- and never beside a measurement
+(`CotWriter.cs`, [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). Before 2026-10-05 the five
+occlusion fields were simply absent when unmeasured, in six different situations, and nothing said
+which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect.
 
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
 RunId, ScenarioId, Seed)` (`CaptureMetadata.cs:24-29`) is taken from the very sensor frame that
@@ -360,6 +375,15 @@ if the two cameras are not co-located and co-boresighted** within tolerances
 render, and the apparent-size figures are computed by projecting the *true* box
 (`CotWriter.cs:189-192`); neither reads a pixel's brightness, so the fraction is a measurement of the scene's
 geometry whatever the light.
+
+**The projection is its own step, and runs for every capture (2026-10-05).** `BoxProjector` projects
+each vehicle's box through the capture's pinhole -- the camera pose of the capture's own frame, the
+picture's size and the field of view the recording was started with -- and says where it fell
+(`in_frame`) and how large it appears, whether or not a depth camera is attached;
+`OcclusionEstimator.Sample` lays its sampling grid over that projection in the depth capture's own
+intrinsics and says, per vehicle, why it measured nothing where it did not (`OcclusionUnmeasured`), and
+`MatchTo` says which way a pairing failed. The five failure buckets are still counted on the recorder;
+each vehicle record now carries the one that applied to it.
 
 ### 2.6 The arrival gate is built, and is inert by default
 
@@ -401,7 +425,10 @@ than telemetry: it is not part of the CoT contract and is not serialized to the 
 
 So the oriented 3D box for every telemetered vehicle, frame-coherent with the pixels, already exists in
 memory at write time. **Per-image labelling is a serialisation change plus a projection, not a new
-measurement.** That is the same conclusion doc 12 §2 reached, and it is still true.
+measurement.** That is the same conclusion doc 12 §2 reached, and it is still true. Since 2026-10-05
+the projection itself runs for every record of every capture (`BoxProjector.Mark`, §2.5), and what is
+written of it is where the box fell (`in_frame`) and its apparent size; the projected rectangle's
+pixel coordinates are computed and not yet serialised.
 
 ### 2.8 What does not exist — corrected
 
@@ -636,7 +663,15 @@ A "camera" in this rig is three co-posed sensors, of which the first is the prod
 
 The depth camera **must** be held at the RGB camera's pose and field of view: `OcclusionEstimator`
 refuses a pair whose poses have drifted (`OcclusionEstimator.cs:161-172`), and `SensorRig` already moves
-them together for that reason (`SensorRig.py:100-125, 186-189`).
+them together for that reason (`SensorRig.py:100-125, 186-189`). `run_capture` holds it there by
+construction: each channel's depth camera is spawned attached to its RGB camera, a rigid attachment at
+the camera's own pose (`CaptureSession._attach_depth_camera`), so one move of the RGB camera carries
+both and nothing moves the depth camera itself; the server reports an attached sensor's world pose on
+every snapshot and in every image header, which is what the recorder's depth pose check reads. That
+holds for a stare moved through the prewarm and for an orbit flown through the window alike, so an
+orbit's captures carry the occlusion and apparent-size fields a stare's do; until 2026-10-05
+`run_capture` refused occlusion on an orbit, on a reason from before the rig moved its cameras in one
+batch ([`12`](12_Operator_Control_Surface.md) check 47).
 
 On the third: doc 12 §1 rejected segmentation cameras *as a source of bounding-box truth*, because
 Cesium photoreal tiles are not CARLA actors and every building, tree and terrain pixel falls into
@@ -663,7 +698,7 @@ channels recording one run of one world.
 | Pattern | Motion | What it is for | State |
 |---|---|---|---|
 | **Stare** | fixed pose, fixed boresight | persistent coverage of a declared area of interest; the only pattern that gives an unbroken observed span over a long interval | supported today by simply not enabling orbit |
-| **Orbit** | circular ground track, boresight held on a centre | the existing EO collection idiom; gives look-angle diversity over one site | built — `OrbitSensorController` (`OrbitSensorController.py:250-277`), updated on its own 50 Hz thread (`:96-100`) |
+| **Orbit** | circular ground track, boresight held on a centre | the existing EO collection idiom; gives look-angle diversity over one site | built — `OrbitSensorController` (`OrbitSensorController.py:250-277`), updated on its own 50 Hz thread (`:96-100`); under `run_capture` it carries its depth camera attached and measures occlusion as a stare does (§3.2) |
 | **Transit** | a commanded waypoint track | covering several sites in one pass; every site gets a short, bounded observation | **not built**; `PyGameSensorController` is interactive only |
 
 A capture session mixes them. The recommended default for a corpus is **one orbiting primary plus one
@@ -847,12 +882,18 @@ Three identity defects, one already half-solved:
   camera's name:** its directory, the first part of every capture's file name and its platform
   track's callsign, which had defaulted to `OVERWATCH` for every camera given none. It is unique
   within the session without regard to case, since a Windows file system holds `Deck` and `deck` as
-  one name, and the camera is spawned under it as its `role_name`, so a name another client's camera
-  in the same world holds refuses the run at pre-roll. Since 2026-10-05 it is short and plain:
-  1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or
-  `Southeast_1700m_orbit`, and not a Windows device name, a sensor's stock role name or another
-  camera's default. A single channel given none is
-  `CARLA-SENSOR-<camera id>`, unstable across runs as before.
+  one name, and the camera is spawned under it as its `role_name`. Since 2026-10-05 it is short and
+  plain: 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or
+  `Southeast_1700m_orbit`, and not a Windows device name, a sensor's stock role name, the server's
+  own `Camera_<digits>` or another camera's default. **The server issues the names and refuses the
+  duplicates (2026-10-05, the owner's ruling):** a name a live camera in the same world holds, in
+  any case, is refused by the server at spawn, which refuses the run at pre-roll with the holder
+  named, and a single channel given no `sensor_id` takes the name the server gives its camera,
+  `Camera_<n>`, from a counter the server keeps for its lifetime — read back from the spawned
+  camera, as every client reads a camera's name, and still unstable across runs. Before this the
+  check across clients read the actor list at spawn, which two clients could pass in one tick.
+  `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named
+  cameras.
 - **`scenario_id` is still never supplied** (§2.8). Under SUMO drive the analogous identity is the
   scenario configuration, and it must reach `CaptureIdentity` (`CaptureMetadata.cs:24-29`) or the
   captures cannot be tied to the annotations. This belongs to [`04_Contracts.md`](04_Contracts.md); the
@@ -1491,9 +1532,10 @@ depends on a pass mark. Fields, with provenance.
 | `box2d_amodal_obb` | oriented 2D box, the hull of the projected corners | projection — doc 12 §4.3 |
 | `box2d_amodal_aabb` | axis-aligned, for plain YOLO | projection |
 | `box2d_modal` | visible-region box | needs instance segmentation (§3.2); absent otherwise |
-| in-picture statement | whether the box falls inside this camera's picture, and why the occlusion fields are absent when they are | the projection `OcclusionEstimator` already makes; **not written today**, with the owner |
-| `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured (`CotWriter.cs:178-193`) |
-| `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | measured (`CotWriter.cs:189-192`) |
+| `in_frame` | where the box fell against the picture: `wholly`, `partly`, `none`, `behind_camera` | **written on every record since 2026-10-05**, from the projection (`BoxProjector`, §2.4) |
+| `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured, written only where measured (`CotWriter.cs`) |
+| `occlusion_unmeasured` | why the three above are absent, in one word | **written since 2026-10-05** wherever they are absent, never beside them (§2.4) |
+| `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | from the projection, written wherever the box has a footprint (`CotWriter.cs`) |
 | `opacity` | **constant 1.0 under the default**, since nothing fades (§2.6). Retained so a later fade mode is not a schema change | computed, unserialised (`VehicleTelemetry.cs:59-63`) |
 | `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | derivable from the recorded pose; written as `camera_range_m` under a draw distance |
 | `truncation` | fraction of the amodal box outside the frame | derivable from the projection |
@@ -1572,9 +1614,10 @@ Doc 17 §12.2's fourth use — the telemetry gate that suppressed an unarrived v
 inert under the demoted fade (§2.6) and is not relied on anywhere here.
 
 Note that an absent `occlusion` attribute means "this camera cannot say", not "not occluded" (doc 09
-§5.1, `CotWriter.cs:176-177`); whether the record should say *why* it is absent — out of the picture,
-behind the camera, beyond the depth range, no paired depth frame, occlusion off, beyond the draw
-distance — is a plain fact of geometry and is with the owner.
+§5.1); since 2026-10-05 the record says *why* it is absent, in one word (`occlusion_unmeasured`:
+`behind_camera`, `outside_frame`, `beyond_draw_distance`, `no_depth_camera`, `no_depth_capture`,
+`depth_out_of_step`, `depth_pose_mismatch`, `beyond_depth_range`, `no_sample`), beside `in_frame` on every
+record (§2.4, §5.1).
 
 **One property of the occlusion measurement that is load-bearing:** it is illumination-independent
 (§2.5). Occlusion is computed from the depth capture against the true box, so a vehicle hidden behind a
@@ -2096,8 +2139,8 @@ purpose. The distances they held are derivable by any reader from the boxes in t
 and appeared mid-frame were each a word decided by a threshold (`w_min`, `c_max`, the lamp-on elevation)
 or a verdict on a track's history (§5.7). What stands: the measured `occlusion`, `occlusion_samples` and
 apparent size on every vehicle in the picture with a paired depth frame; `beyond_draw_distance` with
-`camera_range_m` under a draw distance; and, with the owner, an in-picture statement and the reason an
-occlusion value is absent (§5.1, §5.4). A consumer reads the numbers and decides.
+`camera_range_m` under a draw distance; `in_frame` on every record and `occlusion_unmeasured` wherever
+occlusion is absent (§5.1, §5.4, built 2026-10-05). A consumer reads the numbers and decides.
 
 ### 8.5 The supervision-transfer rule, published
 
@@ -3108,9 +3151,9 @@ Each is a plain measurement of the imagery or the engine with no pass mark.
 1. **Does `sensor_tick` compose with synchronous ticking, and do two cameras given the same value fall
    on the same simulation frames?** (§2.3.) **Measured 2026-09-21**: `sensor_tick` suppresses the render
    itself ([`10`](10_Scale_And_Performance.md) §4.6), and `run_capture` gives the RGB and depth cameras of
-   a stare channel the same tick, where the occlusion pairing holds on every capture
-   ([`13`](13_Work_Breakdown.md) §4). An orbit still refuses occlusion because its two cameras were moved
-   by separate calls (launch check 47); whether the batched camera move closes that is with the owner.
+   every channel the same tick, where the occlusion pairing holds on every capture
+   ([`13`](13_Work_Breakdown.md) §4). Since 2026-10-05 an orbit measures occlusion as a stare does: each
+   channel's depth camera is spawned attached to its camera, so one move carries both (§3.2, check 47).
 2. **Does a teleported vehicle blur?** (§6.5.) Method: capture the same vehicle at the same speed under
    physics drive and under per-tick `set_transform`, at the same pose, and difference the images. The
    prediction to test against is specific: `motionBlurMax = 5` caps the smear at 64 px at 1280 px wide,

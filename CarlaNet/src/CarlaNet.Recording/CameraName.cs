@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using CarlaNet.Transport;
 using CarlaNet.Types.Rpc.Actors;
 
 namespace CarlaNet.Recording;
@@ -11,48 +10,58 @@ namespace CarlaNet.Recording;
 /// two cameras in one world never write files of the same name or report under the same callsign.
 /// </summary>
 /// <remarks>
-/// <para><b>Every camera has one.</b> A client may name a camera as it likes, within the rule below; a
-/// camera it does not name is <c>CARLA-SENSOR-&lt;actor id&gt;</c> (<see cref="Default"/>), which no
-/// other camera on the server can hold, because the server never gives two actors one id. The platform
-/// track's uid takes the same form, whatever the camera is named.</para>
+/// <para><b>The server issues the names and refuses the duplicates.</b> A camera's name is its
+/// <c>role_name</c> on the server (<see cref="RoleNameAttribute"/>), settled when the camera is
+/// spawned. A client may name a camera as it likes, within the rule below; a camera spawned with no
+/// name is named <c>Camera_&lt;n&gt;</c> by the server (<see cref="ServerPrefix"/>) from a counter
+/// held for the server's lifetime, so no number is issued twice while the server runs, whatever
+/// world is loaded. The server refuses a client-given name a live camera holds, and one of its own
+/// form, which only it may issue. Every client reads the name back from the spawned camera's
+/// attributes (<see cref="Of"/>) and uses it everywhere the name is used. The platform track's uid
+/// is <c>CARLA-SENSOR-&lt;actor id&gt;</c> (<see cref="Default"/>), whatever the camera is named;
+/// the same form is a camera's name only on a server built before it named cameras, which hands an
+/// unnamed camera back with its blueprint's role name (<see cref="NamedByServer"/>).</para>
 ///
 /// <para><b>A name is short and plain.</b> It is 1 to <see cref="MaxLength"/> characters, each an ASCII
 /// letter, digit, underscore or hyphen -- <c>Overwatch_1</c>, <c>Southeast_1700m_orbit</c>,
 /// <c>NapOfEarth_2</c> -- and nothing else: no space, no dot, no other punctuation. Such a name is the
 /// same file name on Windows and on Linux, the same text in the image's PNG chunks and the same CoT
 /// callsign, so a chosen name is used as given or refused, never rewritten. <see cref="Problem"/>
-/// refuses, and says what is allowed, a name with any other character, and three names the characters
+/// refuses, and says what is allowed, a name with any other character, and four names the characters
 /// allow:</para>
 /// <list type="bullet">
 /// <item>a name Windows keeps for a device -- CON, PRN, AUX, NUL, COM0 to COM9, LPT0 to LPT9 -- in
 /// any case, because a channel's directory is named by its camera;</item>
 /// <item>a role name the server gives sensors -- front, back, left, right, front_left, front_right,
-/// back_left, back_right -- in any case, because every sensor spawned without a name carries the
-/// first, so other cameras already hold it; and</item>
+/// back_left, back_right -- in any case, because a camera spawned without a name carries the first
+/// until the server names it, and a camera is told from an unnamed one by it;</item>
+/// <item>the server's form, <c>Camera_&lt;digits&gt;</c>, in any case, because the server issues
+/// those and a client cannot claim one; and</item>
 /// <item>the default form, <c>CARLA-SENSOR-&lt;digits&gt;</c>, for any camera but the one it is the
-/// default of, because it would be that other camera's name.</item>
+/// default of, because it would be that other camera's uid.</item>
 /// </list>
 ///
 /// <para><b>Case does not tell two names apart</b> (<see cref="Same"/>): a Windows file system does not,
 /// so "Deck" and "deck" recording into one directory would write the same files.</para>
 ///
-/// <para><b>Unique in a process, and visible in the world.</b> A recorder holds its camera's name for
-/// its life (<see cref="Hold"/>), and no other recorder in the same process can take it. A client that
-/// names a camera when it spawns it sets the name as the camera's <c>role_name</c>
-/// (<see cref="RoleNameAttribute"/>), which every client reads from the world's actors, so a name a
-/// camera of another client holds is found (<see cref="HolderAmong"/>) and refused before it is used.
-/// A camera another client spawned without a name holds its default.</para>
+/// <para><b>Unique in a process too.</b> A recorder holds its camera's name for its life
+/// (<see cref="Hold"/>), and no other recorder in the same process can take it.</para>
 /// </remarks>
 public static class CameraName
 {
     /// <summary>The longest name a camera may have, in characters.</summary>
     public const int MaxLength = 63;
 
-    /// <summary>What every unnamed camera's name, and every platform track's uid, begins with.</summary>
+    /// <summary>What every platform track's uid begins with, and every unnamed camera's name on a
+    /// server built before it named cameras.</summary>
     public const string DefaultPrefix = "CARLA-SENSOR-";
 
-    /// <summary>The blueprint attribute a camera's chosen name is spawned under, readable by every
-    /// client from the world's actors.</summary>
+    /// <summary>What every name the server issues begins with: an unnamed camera is
+    /// <c>Camera_&lt;n&gt;</c>.</summary>
+    public const string ServerPrefix = "Camera_";
+
+    /// <summary>The blueprint attribute a camera's name is carried in, settled by the server at spawn
+    /// and readable by every client from the world's actors.</summary>
     public const string RoleNameAttribute = "role_name";
 
     /// <summary>The capture time in a still's file name: local wall-clock time to the millisecond.</summary>
@@ -69,7 +78,8 @@ public static class CameraName
             .Concat(Enumerable.Range(0, 10).Select(n => "LPT" + n)),
         StringComparer.OrdinalIgnoreCase);
 
-    // The role names the server offers every sensor blueprint, the first of them its default.
+    // The role names the server offers every sensor blueprint, the first of them its default: what an
+    // unnamed camera carries until the server names it, and so what one from an older server carries.
     private static readonly HashSet<string> SensorRoleNames = new(
         ["front", "back", "left", "right", "front_left", "front_right", "back_left", "back_right"],
         StringComparer.OrdinalIgnoreCase);
@@ -77,16 +87,17 @@ public static class CameraName
     private static readonly Dictionary<string, Holding> Held = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object HeldLock = new();
 
-    /// <summary>The name of a camera its client did not name: <c>CARLA-SENSOR-&lt;actor id&gt;</c>.</summary>
+    /// <summary>The uid of a camera's platform track, and the name of a camera a server built before it
+    /// named cameras left unnamed: <c>CARLA-SENSOR-&lt;actor id&gt;</c>.</summary>
     public static string Default(ActorId camera) => DefaultPrefix + camera.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Whether <paramref name="name"/> has the default form, <c>CARLA-SENSOR-&lt;digits&gt;</c>,
     /// in any case.</summary>
-    public static bool IsDefaultForm(string? name) =>
-        name is not null
-        && name.Length > DefaultPrefix.Length
-        && name.StartsWith(DefaultPrefix, StringComparison.OrdinalIgnoreCase)
-        && name.AsSpan(DefaultPrefix.Length).IndexOfAnyExceptInRange('0', '9') < 0;
+    public static bool IsDefaultForm(string? name) => HasDigitsAfter(name, DefaultPrefix);
+
+    /// <summary>Whether <paramref name="name"/> has the form the server gives every camera it names,
+    /// <c>Camera_&lt;digits&gt;</c>, in any case.</summary>
+    public static bool IsServerIssued(string? name) => HasDigitsAfter(name, ServerPrefix);
 
     /// <summary>Whether two names are the same name: compared without regard to case, as a Windows file
     /// system compares file names.</summary>
@@ -94,8 +105,9 @@ public static class CameraName
         string.Equals(first, second, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Why <paramref name="name"/> cannot be a camera's name, or null when it can. Every refusal says
-    /// what is allowed (<see cref="Allowed"/>).
+    /// Why <paramref name="name"/> cannot be a name a client gives a camera, or null when it can. Every
+    /// refusal says what is allowed (<see cref="Allowed"/>). The server's own form is refused: for the
+    /// name a camera already holds, the server's included, see <see cref="HeldProblem"/>.
     /// </summary>
     /// <param name="name">The name.</param>
     /// <param name="camera">The camera it is to name, where known: a name of the default form is
@@ -129,20 +141,66 @@ public static class CameraName
 
         if (SensorRoleNames.Contains(name))
         {
-            return $"camera name '{name}' is a role name the server gives sensors, and every sensor "
-                   + "spawned without a name carries one, so other cameras already hold it; choose "
-                   + "another, such as Overwatch_1";
+            return $"camera name '{name}' is a role name the server gives sensors, which every camera "
+                   + "spawned without a name carries until the server names it, so it is what tells an "
+                   + "unnamed camera apart; choose another, such as Overwatch_1";
+        }
+
+        if (IsServerIssued(name))
+        {
+            return $"camera name '{name}' has the form the server gives every camera spawned without one, "
+                   + $"{ServerPrefix}<n>, which a client cannot claim; choose another, such as Overwatch_1";
         }
 
         if (IsDefaultForm(name) && !(camera is { } own && Same(name, Default(own))))
         {
-            return $"camera name '{name}' has the form every unnamed camera's name takes, "
+            return $"camera name '{name}' has the form of every camera's platform track uid, "
                    + $"{DefaultPrefix}<actor id>, and "
                    + (camera is { } other ? $"is not camera {other}'s own" : "names no camera of its own")
                    + ": it would be another camera's name; choose another, such as Overwatch_1";
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Why <paramref name="name"/> cannot be the name a camera holds -- the one the server issued it or
+    /// accepted from its client -- or null when it can: a name of the server's form is accepted, and
+    /// any other is held to <see cref="Problem"/>.
+    /// </summary>
+    public static string? HeldProblem(string? name, ActorId? camera = null) =>
+        IsServerIssued(name) ? null : Problem(name, camera);
+
+    /// <summary>The <c>role_name</c> a spawned camera carries, or null where it carries none.</summary>
+    public static string? RoleNameOf(Actor camera)
+    {
+        foreach (ActorAttributeValue attribute in camera.Description.Attributes ?? [])
+        {
+            if (attribute.Id == RoleNameAttribute)
+            {
+                return attribute.Value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether the server named <paramref name="camera"/>: it carries a name of the server's
+    /// form. A camera spawned without a name on a server built before it named cameras does not: it
+    /// carries its blueprint's role name, and its name is its default (<see cref="Of"/>).</summary>
+    public static bool NamedByServer(Actor camera) => IsServerIssued(RoleNameOf(camera));
+
+    /// <summary>
+    /// The name <paramref name="camera"/> holds, as the server returned it at spawn or lists it among
+    /// the world's actors: its <c>role_name</c> where that is a name -- the server's
+    /// <c>Camera_&lt;n&gt;</c> or the one its client gave -- and otherwise, from a server built before
+    /// it named cameras, which hands an unnamed camera back with its blueprint's role name, its default,
+    /// <c>CARLA-SENSOR-&lt;actor id&gt;</c>.
+    /// </summary>
+    public static string Of(Actor camera)
+    {
+        string? held = RoleNameOf(camera);
+        return held is not null && HeldProblem(held, camera.Id) is null ? held : Default(camera.Id);
     }
 
     /// <summary>
@@ -180,59 +238,11 @@ public static class CameraName
         }
     }
 
-    /// <summary>
-    /// The camera among <paramref name="actors"/> that holds <paramref name="name"/>, or null: a sensor
-    /// spawned under the name as its <c>role_name</c>, or one whose default it is.
-    /// </summary>
-    /// <param name="actors">The world's actors, as any client reads them.</param>
-    /// <param name="name">The name sought.</param>
-    /// <param name="except">A camera that may hold it: the one the name is for.</param>
-    public static Actor? HolderAmong(IEnumerable<Actor> actors, string name, ActorId? except = null)
-    {
-        foreach (Actor actor in actors)
-        {
-            if (actor.Id == except || actor.Description.Id?.StartsWith("sensor.", StringComparison.Ordinal) != true)
-            {
-                continue;
-            }
-
-            if (Same(Default(actor.Id), name))
-            {
-                return actor;
-            }
-
-            foreach (ActorAttributeValue attribute in actor.Description.Attributes ?? [])
-            {
-                if (attribute.Id == RoleNameAttribute && Same(attribute.Value, name))
-                {
-                    return actor;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// The camera in the world <paramref name="client"/> observes that holds <paramref name="name"/>, or
-    /// null (<see cref="HolderAmong"/>). Asks the server for the description of every actor the client's
-    /// world snapshot holds, so it is for a name about to be taken, not for a tick loop.
-    /// </summary>
-    public static async Task<Actor?> HolderInWorldAsync(CarlaClient client, string name, ActorId? except = null)
-    {
-        IReadOnlyList<ActorId> ids = client.GetCachedActorIds();
-        if (ids.Count == 0)
-        {
-            return null;
-        }
-
-        IReadOnlyList<Actor> actors = await client.GetActorsByIdAsync(ids).ConfigureAwait(false);
-        return HolderAmong(actors, name, except);
-    }
-
-    /// <summary>How a refusal names the camera that holds a name.</summary>
-    public static string DescribeHolder(Actor holder) =>
-        $"camera {holder.Id.ToString(CultureInfo.InvariantCulture)} ({holder.Description.Id})";
+    private static bool HasDigitsAfter(string? name, string prefix) =>
+        name is not null
+        && name.Length > prefix.Length
+        && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+        && name.AsSpan(prefix.Length).IndexOfAnyExceptInRange('0', '9') < 0;
 
     private static bool IsAllowed(char c) =>
         c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '-';

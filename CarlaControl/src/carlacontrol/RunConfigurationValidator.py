@@ -15,7 +15,9 @@ by construction, and which have nothing in the tree to compare.
   and the epoch is `SolarEpoch` through `ScenarioEpoch`. Where the pre-roll's wait for each view
   could not possibly be met, the prewarm is refused here (check 51) rather than there (check 50).
   The optional draw distance, where one is set, has to reach the point every channel looks at
-  (check 52), and an optional render-set limit has to be one the session can draw (check 53).
+  (check 52), and an optional render-set limit has to be one the session can draw (check 53). A
+  scenario whose compile skipped its SUMO-only run is refused unless the run accepts that (check 54),
+  here rather than at the session's own refusal, so nothing is acquired first.
 * **The server checks** (`validate_against_server`) read what the rig and the scenario need from
   the server --
   the sun, the camera blueprints' attributes, the vehicle blueprints -- before anything is spawned.
@@ -90,6 +92,7 @@ class RunConfigurationValidator:
         self._mode(effective, findings)
         self._lock_version(effective, findings)
         self._world_binding(effective, findings)
+        self._dry_run(effective, findings)
         self._catalogue(effective, findings)
         self._site_paths(effective, findings)
         self._environment(effective, findings)
@@ -184,6 +187,37 @@ class RunConfigurationValidator:
                                 f"{effective.world.path.name} carries {carried}. Recompile the "
                                 "scenario against the world that will render, or name that world's "
                                 "package")
+
+    # -- check 54 ---------------------------------------------------------------------------------
+    @staticmethod
+    def _dry_run(effective: EffectiveRunConfiguration, findings: RunConfigurationFindings) -> None:
+        """The compile ran the scenario in SUMO alone, or the run says it knows it did not.
+
+        The compiler's run (its check 59) is what finds a vehicle the supervision plan names that
+        never enters the simulation. A lock that says `--skip-dry-run` skipped it, or one written
+        before the compiler ran it, reaches a capture unchecked, and the same fault then stops the
+        run only when SUMO drops the vehicle, hours of rendering in. Refused here, before anything is
+        acquired; the session refuses the same lock before SUMO is started.
+        """
+        scenario = effective.scenario
+        if scenario.dry_run_ran or effective.value("scenario.accept_skipped_dry_run") is True:
+            return
+        block = scenario.dry_run
+        if block is None:
+            recorded = ("records no dry_run block, so it was written before the compiler ran the "
+                        "scenario in SUMO alone")
+        else:
+            reason = block.get("reason") or "the lock records no reason"
+            recorded = f"records that the compile skipped its SUMO-only run ({reason})"
+        findings.refuse(54, f"scenario {scenario.describe()}",
+                        f"its lock {scenario.lock_path.name} {recorded}. That run is what finds a "
+                        "vehicle the supervision plan names that never enters the simulation -- "
+                        "discarded after waiting max-depart-delay at its entrance, or still waiting "
+                        "when the scenario ends -- and a capture that starts without it finds the "
+                        "same fault only when SUMO drops the vehicle, hours of rendering in. "
+                        "Recompile the scenario without --skip-dry-run, or set "
+                        "scenario.accept_skipped_dry_run true, which the echo and the session's "
+                        "report record")
 
     # -- checks 37 and 48 -------------------------------------------------------------------------
     @staticmethod
@@ -294,13 +328,9 @@ class RunConfigurationValidator:
             except ValueError as refusal:
                 findings.refuse(47, subject, str(refusal))
                 continue
-            if effective.value("occlusion.enabled") and description.pattern == "orbit":
-                findings.refuse(47, subject, "occlusion is measured against a depth camera held at "
-                                "the channel's pose, and an orbit moves its camera with one call "
-                                "at a time, so the depth camera would be captured a frame apart "
-                                "(SensorRig.set_transform measured 25 of 65 captures lost that "
-                                "way). Set occlusion.enabled false for a run with an orbit, or "
-                                "make this channel a stare")
+            # Occlusion is measured on a stare and on an orbit alike: the depth camera is attached
+            # to the channel's camera and moves with it (CaptureSession._attach_depth_camera), so
+            # there is no pattern it cannot be measured on.
             if description.aims_at_rendered_traffic():
                 RunConfigurationValidator._traffic_prewarm(effective, subject, findings)
             sensor_id = description.sensor_id
@@ -664,9 +694,8 @@ class RunConfigurationValidator:
     def _rig_attributes(effective: EffectiveRunConfiguration, library: Any,
                         findings: RunConfigurationFindings) -> None:
         wanted = [(RGB_BLUEPRINT, RGB_ATTRIBUTES)]
-        stares = any(effective.channel_values(i)["pattern"] == "stare"
-                     for i in range(effective.channel_count))
-        if effective.value("occlusion.enabled") and stares:
+        # Every channel gets a depth camera where occlusion is measured, an orbit's included.
+        if effective.value("occlusion.enabled"):
             wanted.append((DEPTH_BLUEPRINT, DEPTH_ATTRIBUTES))
         for blueprint_id, attributes in wanted:
             try:

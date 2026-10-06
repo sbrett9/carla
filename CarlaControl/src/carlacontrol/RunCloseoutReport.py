@@ -114,7 +114,9 @@ class RunCloseoutReport:
                              "lock_path": str(lock.ExpectedLockPath),
                              "statement": str(lock),
                              "routed_by": str(lock.RoutedByText),
-                             "compiled_for": str(lock.WorldText)},
+                             "compiled_for": str(lock.WorldText),
+                             "dry_run": str(lock.DryRunText),
+                             "skipped_dry_run_accepted": bool(lock.SkippedDryRunAccepted)},
             "teleporting": {"enabled": bool(teleporting.Enabled),
                             "accepted": bool(teleporting.Accepted),
                             "seconds": float(teleporting.Seconds),
@@ -436,6 +438,7 @@ class RunCloseoutReport:
             if lock["compiled"]:
                 lines.append(f"    routed by {lock['routed_by']}")
                 lines.append(f"    compiled for {lock['compiled_for']}")
+                lines.append(f"    dry run {lock['dry_run']}")
             lines.append(f"  teleporting: {checks['teleporting']['statement']}")
         render = snapshot.get("render")
         if render is not None and render.get("render_set_limits"):

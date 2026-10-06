@@ -311,7 +311,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "The channel's camera's name, such as Overwatch_1 or Southeast_1700m_orbit: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and not a Windows device name (CON, NUL, COM1, ...), a stock sensor role name (front, back, left, right, ...) or CARLA-SENSOR-<number>. Required when there is more than one channel, and unique among them, case aside. It names the channel's capture directory, begins every still's file name (<sensor_id>_<local capture time>) and is the platform track's callsign; refused at pre-roll where a camera in the world already holds it. A single channel without one is named CARLA-SENSOR-<camera actor id>.",
+                "description": "The channel's camera's name, such as Overwatch_1 or Southeast_1700m_orbit: 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, and not a Windows device name (CON, NUL, COM1, ...), a stock sensor role name (front, back, left, right, ...), the server's own Camera_<number> or CARLA-SENSOR-<number>. Required when there is more than one channel, and unique among them, case aside. It names the channel's capture directory, begins every still's file name (<sensor_id>_<local capture time>) and is the platform track's callsign; the server refuses it at pre-roll where a live camera in the world already holds it. A single channel without one takes the name the server gives its camera, Camera_<n>.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -567,7 +567,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Measure per-vehicle occlusion against a depth camera at each stare channel's pose. Session-fixed: turning it off mid-run would change the unoccluded denominator.",
+          "description": "Measure per-vehicle occlusion against a depth camera attached to each channel's camera, a stare's and an orbit's alike. Session-fixed: turning it off mid-run would change the unoccluded denominator.",
           "default": true,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -943,6 +943,13 @@
           "description": "The digest of the catalogue the scenario was compiled against.",
           "x-mutability": "bound",
           "x-supplied-by": "scenario"
+        },
+        "accept_skipped_dry_run": {
+          "type": "boolean",
+          "description": "Run a scenario whose compile skipped its SUMO-only run (compile_scenario.py --skip-dry-run), or whose lock records none, instead of refusing it (check 54). That run is what finds a vehicle the supervision plan names that never enters the simulation; without it the same fault stops the run only when SUMO drops the vehicle. The echo and the session's report record the acceptance.",
+          "default": false,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
         }
       }
     }

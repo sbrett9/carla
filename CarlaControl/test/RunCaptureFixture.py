@@ -156,6 +156,10 @@ def lock_document(world_package_name: str, files: dict[str, dict], **changes) ->
                                   "world_converter": MANIFEST["NetconvertVersion"],
                                   "release_agreement": "SameRelease",
                                   "mismatch_accepted": False}},
+        # The compiler's SUMO-only run, as SumoDryRun.lock_record writes it: every vehicle entered.
+        "dry_run": {"ran": True, "sumo_release": "1.27.0", "begin_s": 0.0, "end_s": END_S,
+                    "vehicles": {"loaded": 1, "inserted": 1, "discarded": 0, "waiting_at_end": 0},
+                    "planned_vehicles": {"total": 0, "inserted": 0}, "collisions": 0},
         "epoch": EPOCH,
         "epoch_block_sha256": hashlib.sha256(
             json.dumps(EPOCH, sort_keys=True, indent=2).encode("utf-8")).hexdigest(),

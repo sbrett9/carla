@@ -158,6 +158,7 @@ REFUSED = {
                                                  "a name Windows keeps for a device"),
     "a sensor's stock role name": ({**A_STARE, "sensor_id": "front"},
                                    "a role name the server gives sensors"),
+    "the server's own form": ({**A_STARE, "sensor_id": "Camera_1"}, "which a client cannot claim"),
     "another camera's default name": ({**A_STARE, "sensor_id": "CARLA-SENSOR-12"},
                                       "it would be another camera's name"),
     "a stare with nowhere to look": ({}, "stare_look_at_target 'rendered_traffic'"),

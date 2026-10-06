@@ -48,6 +48,7 @@ from RunCaptureFixture import (  # noqa: E402
     SCENARIO_ID,
     Layout,
     run_document,
+    write_scenario_package,
 )
 from System import Enum  # noqa: E402
 
@@ -74,9 +75,10 @@ def server() -> FakeServer:
     return FakeServer()
 
 
-def capture(layout: Layout, server: FakeServer, document: dict | None = None, overrides=(), *,
-            answer=lambda _prompt: "no", terminal=False, free=10**13, validate_only=False,
-            termination=None, profile_path=None):
+def build(layout: Layout, server: FakeServer, document: dict | None = None, overrides=(), *,
+          answer=lambda _prompt: "no", terminal=False, free=10**13, termination=None,
+          profile_path=None) -> CaptureSession:
+    """A run ready to launch against the stand-ins, not yet launched."""
     run_path = layout.root / "fixture.run.json"
     run_path.write_text(json.dumps(document if document is not None else run_document()),
                         encoding="utf-8")
@@ -89,7 +91,20 @@ def capture(layout: Layout, server: FakeServer, document: dict | None = None, ov
         monitor=SessionMonitor(stream=io.StringIO(), is_terminal=False),
         answer=answer, stdin_is_terminal=lambda: terminal, session_id=SESSION_ID)
     server.result_path = layout.runs_root / SESSION_ID / "run.result.json"
+    return session
+
+
+def capture(layout: Layout, server: FakeServer, document: dict | None = None, overrides=(), *,
+            answer=lambda _prompt: "no", terminal=False, free=10**13, validate_only=False,
+            termination=None, profile_path=None):
+    session = build(layout, server, document, overrides, answer=answer, terminal=terminal,
+                    free=free, termination=termination, profile_path=profile_path)
     return session, session.run(validate_only=validate_only)
+
+
+def pose_of(transform) -> tuple[float, ...]:
+    location, rotation = transform.location, transform.rotation
+    return location.x, location.y, location.z, rotation.pitch, rotation.yaw
 
 
 def started_with(server: FakeServer) -> dict:
@@ -332,6 +347,13 @@ def test_a_stare_measuring_occlusion_has_a_depth_camera_at_its_pose(layout, serv
     assert depth.transform.location.x == rgb.transform.location.x
     [start] = server.events.of("start_recording")
     assert start[4]["depth_camera"] is depth
+    # Attached to the camera, rigidly and at the camera's own pose, so one move carries both.
+    assert server.events.of("spawn")[1] == ("spawn", "sensor.camera.depth", depth.id, rgb.id)
+    assert depth.attachment_type == carlanet.AttachmentType.Rigid
+    assert pose_of(depth.spawned_at) == pose_of(rgb.spawned_at)
+    # And it leaves the world before the camera it is attached to.
+    destroyed = [event[2] for event in server.events.of("destroy")]
+    assert destroyed.index(depth.id) < destroyed.index(rgb.id)
 
 
 def test_recording_starts_when_the_window_opens_not_during_the_prewarm(layout, server):
@@ -373,12 +395,13 @@ def test_each_channel_s_camera_is_spawned_under_its_sensor_id_for_every_client_t
     capture(layout, server, document)
     rgb = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
     assert [camera.attributes["role_name"] for camera in rgb] == ["OVERWATCH-1", "OVERWATCH-2"]
-    # The depth camera rides its channel's camera and holds no name of its own.
-    assert all("role_name" not in actor.attributes for actor in server.actors
-               if actor.type_id == "sensor.camera.depth")
+    # The depth camera rides its channel's camera; given no name of its own, the server names it.
+    assert [actor.attributes["role_name"] for actor in server.actors
+            if actor.type_id == "sensor.camera.depth"] == ["Camera_1", "Camera_2"]
 
 
-def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, server):
+def test_a_single_channel_with_no_sensor_id_takes_the_name_the_server_gives_its_camera(layout,
+                                                                                       server):
     document = run_document()
     unnamed = dict(A_STARE)
     unnamed.pop("sensor_id")
@@ -386,7 +409,9 @@ def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, se
     session, result = capture(layout, server, document)
     assert result.outcome == "run_finished"
     [camera] = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
-    name = f"CARLA-SENSOR-{camera.id}"
+    # The server's name, read back from the spawned camera: the first camera the server named.
+    name = "Camera_1"
+    assert camera.attributes["role_name"] == name
     [start] = server.events.of("start_recording")
     assert start[2] == layout.capture_root / SESSION_ID / name
     assert start[4]["camera_name"] == name
@@ -400,8 +425,29 @@ def test_a_single_channel_with_no_sensor_id_is_named_after_its_camera(layout, se
     assert (placed["sensor_id"], placed["camera_actor_id"]) == (name, camera.id)
 
 
-def test_a_sensor_id_another_client_s_camera_holds_refuses_at_preroll(layout, server):
-    # Another client's camera in the same world was spawned under the name, in another case.
+def test_a_single_channel_with_no_sensor_id_on_a_server_that_names_no_cameras_is_its_default(
+        layout, server):
+    # A server built before it named cameras hands the camera back with its blueprint's role name.
+    server.names_cameras = False
+    document = run_document()
+    unnamed = dict(A_STARE)
+    unnamed.pop("sensor_id")
+    document["capture"]["channels"] = [unnamed]
+    session, result = capture(layout, server, document)
+    assert result.outcome == "run_finished"
+    [camera] = [actor for actor in server.actors if actor.type_id == "sensor.camera.rgb"]
+    assert "role_name" not in camera.attributes
+    name = f"CARLA-SENSOR-{camera.id}"
+    [start] = server.events.of("start_recording")
+    assert start[2] == layout.capture_root / SESSION_ID / name
+    assert start[4]["camera_name"] == name
+    assert [rig.sensor_id for rig in session.channels] == [name]
+
+
+def test_a_sensor_id_another_client_s_camera_holds_is_refused_by_the_server_at_preroll(layout,
+                                                                                       server):
+    # Another client's camera in the same world was spawned under the name, in another case; the
+    # server refuses the spawn, and the session reports the server's reason.
     server.cameras_of_other_clients = {7: "overwatch-1"}
     _, result = capture(layout, server)
     assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
@@ -410,7 +456,69 @@ def test_a_sensor_id_another_client_s_camera_holds_refuses_at_preroll(layout, se
     assert server.events.of("start_recording") == []
 
 
-def test_an_orbit_is_flown_and_carries_no_depth_camera(layout, server):
+def test_two_channels_named_alike_in_different_cases_are_refused_before_the_server_is_reached(
+        layout, server):
+    document = run_document()
+    document["capture"]["channels"] = [A_STARE, dict(A_STARE, sensor_id="overwatch-1",
+                                                     stare_bearing_deg=90.0)]
+    _, result = capture(layout, server, document)
+    assert result.outcome == "refused_offline"
+    assert server.events.of("spawn") == []
+
+
+def test_an_orbit_measuring_occlusion_has_a_depth_camera_attached_to_its_camera(layout, server):
+    # Occlusion is on by default, and an orbit gets it as a stare does: a depth camera spawned
+    # attached to the channel's camera, and the recorder started with it.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    session, result = capture(layout, server, document)
+    assert result.outcome == "run_finished"
+    rgb, depth = server.actors
+    assert (rgb.type_id, depth.type_id) == ("sensor.camera.rgb", "sensor.camera.depth")
+    assert server.events.of("spawn")[1] == ("spawn", "sensor.camera.depth", depth.id, rgb.id)
+    assert depth.attachment_type == carlanet.AttachmentType.Rigid
+    assert depth.attributes["max_range"] == "20000.0"
+    assert depth.attributes["fov"] == rgb.attributes["fov"]
+    assert pose_of(depth.spawned_at) == pose_of(rgb.spawned_at)
+    [start] = server.events.of("start_recording")
+    assert start[4]["depth_camera"] is depth
+    assert session.channels[0].orbit is not None
+    assert all(actor.destroyed for actor in server.actors)
+
+
+def test_an_orbit_s_depth_camera_takes_every_pose_its_camera_takes(layout, server):
+    # The orbit is advanced here by hand, a second's worth of angle on every step of the window, so
+    # that the moves checked do not depend on its wall-clock thread's timing; the thread's own
+    # moves come on top. After each move the depth camera stands where the camera stands, and no
+    # call ever moves the depth camera itself.
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    session = build(layout, server, document)
+    agreed: list[tuple[float, ...]] = []
+
+    def advanced(_fake_session) -> None:
+        [rig] = session.channels
+        if rig.depth is None or not rig.orbit.orbit_enabled:
+            return
+        rig.orbit.update_orbit(1.0)
+        assert pose_of(rig.depth.transform) == pose_of(rig.camera.transform)
+        agreed.append(pose_of(rig.camera.transform))
+
+    server.on_advance = advanced
+    result = session.run()
+    assert result.outcome == "run_finished"
+    rgb, depth = server.actors
+    assert len(agreed) == 1800 and len(set(agreed)) > 1, "the orbit never swept"
+    moved = [event[1] for event in server.events.of("move")]
+    assert moved and set(moved) == {rgb.id}
+    # Every frame the client holds places both cameras at one pose, which is what the recorder's
+    # pose check compares a depth capture against.
+    held = [snapshot for snapshot in server.snapshots.values()
+            if rgb.id in snapshot and depth.id in snapshot]
+    assert held and all(pose_of(s[rgb.id]) == pose_of(s[depth.id]) for s in held)
+
+
+def test_with_occlusion_off_an_orbit_carries_no_depth_camera(layout, server):
     document = run_document()
     document["capture"]["channels"] = [AN_ORBIT]
     session, result = capture(layout, server, document, ["occlusion.enabled=false"])
@@ -419,6 +527,21 @@ def test_an_orbit_is_flown_and_carries_no_depth_camera(layout, server):
     [start] = server.events.of("start_recording")
     assert start[4]["depth_camera"] is None
     assert session.channels[0].orbit is not None
+
+
+def test_a_depth_camera_the_server_will_not_attach_refuses_at_preroll(layout, server):
+    server.spawn_raises["sensor.camera.depth"] = RuntimeError(
+        "unable to attach actor: parent actor not found")
+    document = run_document()
+    document["capture"]["channels"] = [AN_ORBIT]
+    _, result = capture(layout, server, document)
+    assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
+    assert "channel ORBIT-1: its camera could not be placed" in result.detail
+    assert "parent actor not found" in result.detail
+    assert server.events.of("start_recording") == []
+    # The camera that was placed leaves the world with the refusal.
+    [rgb] = server.actors
+    assert rgb.type_id == "sensor.camera.rgb" and rgb.destroyed
 
 
 # -- how a run ends ---------------------------------------------------------------------------------
@@ -596,13 +719,48 @@ def test_the_compile_lock_and_teleporting_reach_the_result_and_the_closeout(layo
         "compiled": True, "lock_path": server.session.Report.CompileLock.ExpectedLockPath,
         "statement": str(server.session.Report.CompileLock),
         "routed_by": server.session.Report.CompileLock.RoutedByText,
-        "compiled_for": server.session.Report.CompileLock.WorldText}
+        "compiled_for": server.session.Report.CompileLock.WorldText,
+        "dry_run": server.session.Report.CompileLock.DryRunText,
+        "skipped_dry_run_accepted": False}
     assert session["teleporting"] == {"enabled": False, "accepted": False, "seconds": -1.0,
                                       "declared": "-1", "statement": "disabled (time-to-teleport '-1')"}
     text = caplog.text
     assert "compile lock: gardnerville_fixture, compiled by" in text
     assert "routed by duarouter 1.27.0" in text
+    assert "dry run: ran with SUMO 1.27.0" in text
     assert "teleporting: disabled (time-to-teleport '-1')" in text
+
+
+def test_a_skipped_dry_run_is_refused_offline_before_anything_is_started_unless_accepted(layout, server,
+                                                                                         caplog):
+    skipped = {"ran": False, "reason": "skipped at the author's request: nothing established that "
+                                       "every vehicle the plan names enters the run"}
+    write_scenario_package(layout.scenario_root, dry_run=skipped)
+
+    # Refused by check 54 with no session started: the session's own refusal never has to run.
+    _, result = capture(layout, server)
+    assert result.outcome == "refused_offline"
+    assert result.refusals[0]["check"] == 54
+    assert "skipped its SUMO-only run" in result.refusals[0]["message"]
+    assert server.events.of("start_sumo_drive") == []
+
+    # Accepted, the session is told so, and the acceptance is said louder than an ordinary lock.
+    caplog.set_level("INFO")
+    server.compile_lock = FakeCompileLock().accept_skipped_dry_run(skipped["reason"])
+    _, result = capture(layout, server, overrides=["scenario.accept_skipped_dry_run=true"])
+    assert result.outcome == "run_finished"
+    assert started_with(server)["accept_skipped_dry_run"] is True
+    lock = result.produced["session"]["compile_lock"]
+    assert lock["skipped_dry_run_accepted"] is True
+    assert lock["dry_run"].startswith("SKIPPED at the compile (skipped at the author's request")
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(m.startswith("dry run: SKIPPED at the compile") for m in warnings)
+    assert result.launch_echo["scenario"]["dry_run"]["skipped_accepted"] is True
+
+
+def test_by_default_the_session_is_told_to_accept_no_skipped_dry_run(layout, server):
+    capture(layout, server)
+    assert started_with(server)["accept_skipped_dry_run"] is False
 
 
 def test_an_uncompiled_scenario_and_an_accepted_teleport_are_said_louder(layout, server, caplog):

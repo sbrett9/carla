@@ -61,6 +61,17 @@ namespace CarlaNet.CoSim;
 /// none and says so. A lock that names a plan which is not there is refused: supervision travels in
 /// the plan alone (06 D6.1), and a run without it would bind none of the rows its author declared.</para>
 ///
+/// <para><b>A lock whose compile skipped its SUMO-only run is a refusal, unless the run accepts it.</b>
+/// The compiler runs the files it writes in SUMO alone over the scenario's whole span and refuses a
+/// scenario in which a vehicle the supervision plan names never enters the simulation (its check 59);
+/// <c>--skip-dry-run</c> skips that, and the lock records <c>ran: false</c> with the reason
+/// (<see cref="LockedDryRun"/>). A lock with no <c>dry_run</c> block at all was written before the
+/// compiler ran the check, and is treated the same. Once the files, the catalogue, the epoch and the
+/// plan agree with the lock, such a lock is refused naming the scenario and the lock's reason, unless
+/// <see cref="SumoDriveSessionOptions.AcceptSkippedDryRun"/>: a run that started would find the same
+/// fault only when SUMO dropped the vehicle, hours of rendering in. Accepted or not, the report says
+/// what the lock records of the run (<see cref="DryRunText"/>).</para>
+///
 /// <para><b>What it cannot see.</b></para>
 /// <list type="bullet">
 /// <item><b>The catalogue's contents.</b> The catalogue's declared digest is compared, not recomputed:
@@ -84,12 +95,13 @@ public sealed class ScenarioLockCheck
     private static readonly string[] AdditionalOptionNames = ["additional-files", "additional", "a"];
 
     private ScenarioLockCheck(string expectedLockPath, ScenarioLock? locked, bool epochCompared,
-                              SupervisionPlan? plan)
+                              SupervisionPlan? plan, bool skippedDryRunAccepted)
     {
         ExpectedLockPath = expectedLockPath;
         Lock = locked;
         EpochCompared = epochCompared;
         Plan = plan;
+        SkippedDryRunAccepted = skippedDryRunAccepted;
     }
 
     /// <summary>Where the session looked for the lock: <c>&lt;stem&gt;.lock.json</c> beside the configuration.</summary>
@@ -109,6 +121,19 @@ public sealed class ScenarioLockCheck
     /// run may bind. Null for an uncompiled scenario and for a lock that names no plan.
     /// </summary>
     public SupervisionPlan? Plan { get; }
+
+    /// <summary>
+    /// Whether the compiler ran the scenario in SUMO alone before writing it, as the lock records
+    /// (<see cref="ScenarioLock.DryRun"/>). False for an uncompiled scenario, for a lock that says the
+    /// run was skipped and for one written before the compiler ran the check.
+    /// </summary>
+    public bool DryRunRan => Lock?.DryRun is { Ran: true };
+
+    /// <summary>
+    /// Whether the lock's compile skipped its SUMO-only run, or records none, and the run accepted that
+    /// explicitly. False where the run ran, since there was nothing to accept.
+    /// </summary>
+    public bool SkippedDryRunAccepted { get; }
 
     /// <summary>
     /// Where the compile lock of a configuration is: beside it, named for it, <c>X.sumocfg</c> to
@@ -132,7 +157,7 @@ public sealed class ScenarioLockCheck
 
     /// <summary>
     /// Check the scenario against its compile lock, and its supervision plan against both, or record
-    /// that it has no lock.
+    /// that it has no lock. A lock whose compile skipped its SUMO-only run is refused.
     /// </summary>
     /// <param name="scenarioPath">The scenario's SUMO configuration.</param>
     /// <param name="catalogue">The catalogue the session loads.</param>
@@ -141,10 +166,34 @@ public sealed class ScenarioLockCheck
     /// <exception cref="CoSimSessionRefusedException">
     /// A lock sits beside the configuration and cannot be read; the files, the catalogue or the epoch
     /// disagree with it; the plan it names is not there, cannot be bound, or was compiled against other
-    /// files. Every disagreement of one kind is named in one refusal.
+    /// files; or the lock says the compile skipped its SUMO-only run, or records none. Every
+    /// disagreement of one kind is named in one refusal.
     /// </exception>
     public static ScenarioLockCheck Require(string scenarioPath, VehicleCatalogue catalogue,
-                                            SolarEpoch? epoch)
+                                            SolarEpoch? epoch) =>
+        Require(scenarioPath, catalogue, epoch, acceptSkippedDryRun: false);
+
+    /// <summary>
+    /// Check the scenario against its compile lock, and its supervision plan against both, or record
+    /// that it has no lock.
+    /// </summary>
+    /// <param name="scenarioPath">The scenario's SUMO configuration.</param>
+    /// <param name="catalogue">The catalogue the session loads.</param>
+    /// <param name="epoch">The epoch the session declares, or null where it declares none.</param>
+    /// <param name="acceptSkippedDryRun">
+    /// The run accepted explicitly a lock whose compile skipped its SUMO-only run, or records none
+    /// (<see cref="SumoDriveSessionOptions.AcceptSkippedDryRun"/>).
+    /// </param>
+    /// <returns>What was found, for the run report, with the plan for the session to bind.</returns>
+    /// <exception cref="CoSimSessionRefusedException">
+    /// A lock sits beside the configuration and cannot be read; the files, the catalogue or the epoch
+    /// disagree with it; the plan it names is not there, cannot be bound, or was compiled against other
+    /// files; or the lock says the compile skipped its SUMO-only run, or records none, and
+    /// <paramref name="acceptSkippedDryRun"/> is not set. Every disagreement of one kind is named in one
+    /// refusal.
+    /// </exception>
+    public static ScenarioLockCheck Require(string scenarioPath, VehicleCatalogue catalogue,
+                                            SolarEpoch? epoch, bool acceptSkippedDryRun)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scenarioPath);
         ArgumentNullException.ThrowIfNull(catalogue);
@@ -152,7 +201,8 @@ public sealed class ScenarioLockCheck
         string lockPath = LockPathFor(scenarioPath);
         if (!System.IO.File.Exists(lockPath))
         {
-            return new ScenarioLockCheck(lockPath, null, epochCompared: false, plan: null);
+            return new ScenarioLockCheck(lockPath, null, epochCompared: false, plan: null,
+                                         skippedDryRunAccepted: false);
         }
 
         ScenarioLock locked = ScenarioLock.Read(lockPath);
@@ -290,7 +340,30 @@ public sealed class ScenarioLockCheck
             }
         }
 
-        return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null, plan);
+        // Whether the compiler ran these files in SUMO alone and saw every planned vehicle enter. A
+        // compile that skipped that, or one from before the compiler did it, reaches here unchecked, and
+        // the run must say it knows.
+        bool dryRunSkipped = locked.DryRun is not { Ran: true };
+        if (dryRunSkipped && !acceptSkippedDryRun)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The scenario {scenarioPath} ('{locked.ScenarioId}') was compiled without its SUMO-only "
+                + $"run: its compile lock {lockPath} "
+                + (locked.DryRun is { } skipped
+                    ? "records that the run was skipped"
+                      + (string.IsNullOrEmpty(skipped.Reason) ? string.Empty : $" ({skipped.Reason})")
+                    : "records no dry_run block, so it was written before the compiler ran one")
+                + ". That run is what finds a vehicle the supervision plan names that never enters the "
+                + "simulation -- discarded after waiting max-depart-delay at its entrance, or still waiting "
+                + "when the scenario ends -- and a capture that starts without it finds the same fault only "
+                + "when SUMO drops the vehicle, hours of rendering in. SUMO has not been started. Recompile "
+                + "the scenario without --skip-dry-run, or accept the skipped run explicitly "
+                + "(AcceptSkippedDryRun; run_sumo_drive.py --accept-skipped-dry-run; run_capture "
+                + "scenario.accept_skipped_dry_run), which the run report then records.");
+        }
+
+        return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null, plan,
+                                     skippedDryRunAccepted: dryRunSkipped);
     }
 
     /// <summary>What was found, in the report's words.</summary>
@@ -325,6 +398,20 @@ public sealed class ScenarioLockCheck
             : Plan is not { } plan
                 ? "none: the lock names no supervision plan, so the run binds no supervision"
                 : $"{plan}; compiled against the files the run loads";
+
+    /// <summary>
+    /// The compiler's SUMO-only run of the scenario, as the lock records it, in the report's words: its
+    /// release and counts where it ran; where it was skipped or the lock records none, that the run
+    /// accepted it explicitly, since no session starts otherwise.
+    /// </summary>
+    public string DryRunText =>
+        Lock is not { } locked
+            ? "not recorded: an uncompiled scenario"
+            : locked.DryRun is not { } dryRun
+                ? "NOT RECORDED: the lock was written before the compiler ran one, accepted explicitly"
+                : dryRun.Ran
+                    ? dryRun.ToString()
+                    : $"SKIPPED at the compile ({Shown(dryRun.Reason)}), accepted explicitly";
 
     /// <summary>The routing release the lock records, in the report's words.</summary>
     public string RoutedByText =>

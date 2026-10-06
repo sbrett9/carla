@@ -151,9 +151,10 @@ _CHECKS: tuple[RunCheck, ...] = (
              "RunConfigurationValidator"),
     RunCheck(42, OFFLINE, "Handover channels are declared channels; the transcript root lies "
              "outside the corpus", (), NOT_BUILT, "no handover or transcript writer exists"),
-    RunCheck(47, OFFLINE, "Every channel is a valid ChannelDescription, occlusion is measured "
-             "only on a stare, and a stare aimed at the rendered traffic has a prewarm of at least "
-             "one SUMO step to measure it over", _R, RUN_CAPTURE,
+    RunCheck(47, OFFLINE, "Every channel is a valid ChannelDescription, and a stare aimed at the "
+             "rendered traffic has a prewarm of at least one SUMO step to measure it over; "
+             "occlusion is measured on a stare and an orbit alike, against a depth camera "
+             "attached to the channel's camera", _R, RUN_CAPTURE,
              "ChannelDescription, RunConfigurationValidator"),
     RunCheck(52, OFFLINE, "capture.draw_distance_m, where set, reaches the point every channel's "
              "camera is aimed at", _R, RUN_CAPTURE, "RunConfigurationValidator"),
@@ -162,6 +163,10 @@ _CHECKS: tuple[RunCheck, ...] = (
              _R, RUN_CAPTURE, "RunConfigurationValidator"),
     RunCheck(48, OFFLINE, "The catalogue at paths.catalogue is the one the scenario was compiled "
              "against", _R, RUN_CAPTURE, "RunConfigurationValidator"),
+    RunCheck(54, OFFLINE, "The scenario lock records that its compile ran the scenario in SUMO alone "
+             "(the compiler's check 59), or scenario.accept_skipped_dry_run accepts that it did not",
+             _R, RUN_CAPTURE, "RunConfigurationValidator; the session refuses the same lock before "
+             "SUMO is started"),
     RunCheck(51, OFFLINE, "The prewarm leaves every camera, at the pose it holds as the window "
              "opens, enough ticks after its tiles are first asked about to render two frames at "
              "least ten ticks apart: the fewest its picture can be witnessed settled on", _R,

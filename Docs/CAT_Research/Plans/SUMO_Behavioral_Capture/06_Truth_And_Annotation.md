@@ -39,8 +39,10 @@ the real scenario artifacts. No code changed, no build run.
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
 | 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
 | 33 · 2026-10-05 | The world truth track's rows are flushed once for each SUMO frame, when the frame's every row is written, and not after each row, as the owner ruled: the track is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. Every row is still a whole line, so a track cut off is still the rows before the cut, and a kill loses at most the frame being written (§8.3, [04](04_Contracts.md) C10 §12.7 W2). |
-| 34 · 2026-10-05 | Corrected against the code: the §8.2 example marks the `_carla` attributes and the `<_aoi>` block that nothing writes; the gap between the path heading and SUMO's angle is not §4.3's `heading_separation_deg`; open question 10 states the one solar limit the audit enforces. |
-| 35 · 2026-10-05 | The observability accounting is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (§5; D6.11, D6.22, D6.23, D6.25 withdrawn; D6.26, D6.27, D6.39 amended). The manifest sketch loses its observability, site-observability, prevalence, render-accounting and reconciliation blocks and its prevalence check (§8.4); no manifest summary document is planned. The sun's achieved state is in both exports with no rule based on prevalence (§10.2, §10.3). §13 names what 11 still owes. |
+| 34 · 2026-10-05 | Every vehicle record of a capture's truth sidecar says where the vehicle's box fell against that camera's picture, `in_frame` (`wholly`, `partly`, `none`, `behind_camera`), with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; and where the five occlusion attributes are absent, `occlusion_unmeasured` says why in one word, never beside a measurement. The owner ruled that an absent fraction was being read as "not hidden", and that a truth field carries only what was declared, what happened, or a measurement from the frame's geometry by a fixed published method with no pass mark: nothing here rests on a threshold besides the picture's edges and the camera's near plane. The sidecar audit holds every record to it (§8.2, [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). |
+| 35 · 2026-10-05 | The server issues camera names and refuses duplicates, as the owner ruled (§7.1): a camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, a name a live camera holds is refused at spawn, and every client reads a camera's name back from the spawned actor, so the `sensor_id` every capture and callsign carries is one the server settled, never one two clients agreed between themselves. `CARLA-SENSOR-<camera actor id>` stays the platform event's uid, and is an unnamed camera's name only on a server built before it named cameras. |
+| 36 · 2026-10-05 | Corrected against the code: the §8.2 example marks the `_carla` attributes and the `<_aoi>` block that nothing writes; the gap between the path heading and SUMO's angle is not §4.3's `heading_separation_deg`; open question 10 states the one solar limit the audit enforces. |
+| 37 · 2026-10-05 | The observability accounting is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (§5; D6.11, D6.22, D6.23, D6.25 withdrawn; D6.26, D6.27, D6.39 amended). The manifest sketch loses its observability, site-observability, prevalence, render-accounting and reconciliation blocks and its prevalence check (§8.4); no manifest summary document is planned. The sun's achieved state is in both exports with no rule based on prevalence (§10.2, §10.3). §13 names what 11 still owes. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -1315,7 +1317,7 @@ different place.
 | Height | drape / bare-earth decoupling: `hae` and `hae_dtm`, `:83-86` | a lookup in `bareearth.bin` at (x, y), `BareEarthGrid.height_at`, `:115-119` |
 | Velocity | `WorldObserver.cpp:385` serialises `GetActor()->GetVelocity()`, which for a pose-applied non-simulating body **is the velocity the bridge wrote with its pose** — SUMO's own ([03](03_CoSimulation_Runtime.md) D3.5) | `Vehicle.getSpeed` and `getAngle`, exact and never zero for a moving vehicle (measured: 0 of 2000 sample rows have speed 0) |
 | Dimensions | the **spawned blueprint's** bounding box, `:103,110` | the `vType`'s declared `length`/`width`/`height`, `:323-325` |
-| Camera-relative | occlusion fraction, band, sample count, apparent size ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md)); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
+| Camera-relative | where the box fell against the picture (`in_frame`) and apparent size, from the box's projection; occlusion fraction, band and sample count where measured, and otherwise why not (`occlusion_unmeasured`) ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md), [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
 | Network state | none | edge, lane, lane position, stop state, waiting time |
 | Illumination | the solar block paired to this tick, read from the world-observer cache with no RPC (`CarlaClient.cs:1988-1991`) and already emitted (`CotWriter.cs:52-65`) | **none.** SUMO has no sun, no date and no concept of illumination. It does not even know what civil time its own seconds mean (§4.5) |
 | Identity | `actor_id`, assigned at spawn, different every run | the SUMO vehicle id, which for a `<trip>` is **authored and stable across runs** |
@@ -1649,13 +1651,16 @@ What is written, and stays:
 | `render_state` and `render_reason` for every SUMO vehicle at every SUMO step of the window | the world truth track (§8.3) | happened |
 | `render_admitted` and `render_released` rows, and the `not_drawn` spans on each `interval_closed` row | the run manifest (§8.4) | happened |
 | `beyond_draw_distance` (`wholly` or `partly`) with `camera_range_m`, under an optional draw distance (D6.39) | each capture's sidecar, per vehicle (§8.2) | happened, against the declared distance |
-| `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_width_px`, `apparent_height_px` | each capture's sidecar, per vehicle in the picture with a paired depth frame (§4.1) | measured |
+| `in_frame`, and `occlusion_unmeasured` wherever occlusion is absent | each capture's sidecar, every vehicle record (§8.2) | measured, from the box's projection |
+| `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_width_px`, `apparent_height_px` | each capture's sidecar: the apparent size wherever the box has a footprint, the occlusion fields where occlusion was measured, on a stare or an orbit (§4.1, §8.2) | measured |
 | `illumination_band`, with both elevations the world reported | every capture's `<_solar>` and `carla:solar`, and every world-truth-track row ([11](11_Time_And_Illumination.md) §4.4) | happened |
 
 The six names of the core vocabulary's `observability_outcome` list (D6.27) are assigned to nothing by
-any code; their fate is with the owner. Whether a vehicle's sidecar record should say that the vehicle is
-in this camera's picture, and why its occlusion fields are absent, is a plain fact of geometry and is also
-with the owner; today a reader infers it from the absence of the occlusion attributes, which is ambiguous.
+any code; their fate is with the owner. Every sidecar vehicle record says where the vehicle's box fell
+against this camera's picture (`in_frame`: `wholly`, `partly`, `none`, `behind_camera`) and, wherever the
+occlusion fields are absent, why in one word (`occlusion_unmeasured`), both from the box's projection by a
+fixed method with no pass mark (§8.2 as built, 2026-10-05); a reader no longer infers either from an
+absence.
 
 ### 5.2 Observability of an absence
 
@@ -1780,7 +1785,7 @@ and splits another.
 | `entity_id` | Which authored entity is this | yes | yes | supervision plan; **defaults to `sumo_id`** |
 | `instance_id` | Which occurrence of a pattern is this | yes | yes, if the compiler assigns deterministically | compiler |
 | `series_id` + `slot_key` | Which scheduled occasion is this, **including ones that never happened** | yes | yes | compiler |
-| `sensor_id` | Which collection sensor produced this imagery and these tracks | yes | yes once authored | the camera's name, given by the client or defaulting to `CARLA-SENSOR-<camera actor id>` — a camera is an actor, so the default has `actor_id`'s defect. Every capture's file name begins with it and the platform event's callsign is it; the platform event's uid stays `CARLA-SENSOR-<camera actor id>` ([04](04_Contracts.md) §6.1) |
+| `sensor_id` | Which collection sensor produced this imagery and these tracks | yes | yes once authored | the camera's name, held on the server as its `role_name`: given by the client, or issued by the server as `Camera_<n>` for a camera spawned without one — from a counter the server keeps for its lifetime, so the default has `actor_id`'s defect across runs. The server refuses a name a live camera holds, and every client reads the name back from the spawned camera. Every capture's file name begins with it and the platform event's callsign is it; the platform event's uid stays `CARLA-SENSOR-<camera actor id>`, which is an unnamed camera's name only on a server built before it named cameras ([04](04_Contracts.md) §6.1) |
 
 **SUMO closes doc 20 §4.4's cross-run identity gap for free.** Doc 20's minimum viable fix was to
 carry the storyboard entity name into truth, because CARLA actor ids are assigned at spawn and a
@@ -2198,8 +2203,9 @@ set is extended. Taking the real emitted shape as the baseline (`CotWriter.cs:13
       <!-- _carla keeps its name although the source is SUMO, deliberately, so the two producers
            stay directly comparable. Existing attributes unchanged; new ones below the fold.
            WRITTEN TODAY (CotWriter.cs): the attributes above the fold, sumo_id, vtype_id,
-           admitted_tick, heading_deg, sumo_angle_deg and, under a draw distance,
-           beyond_draw_distance and camera_range_m. WRITTEN BY NOTHING: producer, entity_id,
+           admitted_tick, heading_deg, sumo_angle_deg, in_frame, occlusion_unmeasured where
+           occlusion is absent, and, under a draw distance, beyond_draw_distance and
+           camera_range_m. WRITTEN BY NOTHING: producer, entity_id,
            provenance, kinematics_source, pose_source, render_state, the sumo_* network state,
            the vtype dimensions and the four separations of 4.3 (D6.10). The SUMO-against-CARLA
            difference is measured every tick and only its worst and mean reach the log; where it
@@ -2538,6 +2544,29 @@ process writes the same thing for one frame. Of the shape above, as written:
   frame's plan, digest, states, instances, labels or areas. The capture sidecar has no CSV twin, so no CSV
   carries it; the CSV that mirrors a sidecar's per-vehicle fields is the standalone producer's
   (`SumoCotBridge`), which runs without a CARLA server and so without the server's supervision.
+
+**As built (2026-10-05): every vehicle record says whether it is in the picture, and why its occlusion
+is absent.** The owner ruled that the five occlusion attributes may not simply be absent -- they were,
+in six different situations, and a reader could not tell "no occlusion value" from "not hidden" -- and
+that a truth field carries only what was declared, what happened, or a measurement from the frame's
+geometry by a fixed published method with no pass mark. So the recorder projects every vehicle's
+bounding box into the capture's picture, from the camera pose the pixels were taken from, the
+picture's size and the horizontal field of view the recording was started with (the one the
+`<_carla_intrinsics>` element carries), whether or not a depth camera is attached, and every `_carla`
+block gains **`in_frame`** -- `wholly`, `partly`, `none` or `behind_camera`, read against the picture's
+edges and the camera's near plane and nothing else -- with **`apparent_width_px`** and
+**`apparent_height_px`** wherever the box has a footprint, a vehicle outside the picture included. The
+five occlusion attributes are written only where occlusion was measured, which is only on a vehicle
+`wholly` or `partly` in the picture; where they are absent **`occlusion_unmeasured`** says why, in one
+word and never beside a measurement: `behind_camera`, `outside_frame`, `beyond_draw_distance`,
+`no_depth_camera`, `no_depth_capture`, `depth_out_of_step`, `depth_pose_mismatch`,
+`beyond_depth_range` or `no_sample`, the reason nearest the vehicle where several hold
+([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). The projection (`BoxProjector`) is separated
+from the depth sampling (`OcclusionEstimator.Sample`), which runs over it and reports its own reasons.
+The live pull has no camera and carries none of this; the PNG carries none. `TruthSidecarAudit`
+(`audit_truth_sidecars.py`) holds every vehicle record of a capture to `in_frame`, to occlusion fields
+only where the picture has a view of the vehicle, and to a reason wherever they are absent, so a
+capture written before this date shows the defect it carries.
 
 ### 8.3 The world truth track
 

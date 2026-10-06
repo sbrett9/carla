@@ -80,6 +80,8 @@ def test_the_snapshot_carries_the_session_s_checks_and_the_closeout_shows_them(l
     text = RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
     assert f"compile lock: {session.Report.CompileLock}" in text
     assert f"routed by {session.Report.CompileLock.RoutedByText}" in text
+    assert f"dry run {session.Report.CompileLock.DryRunText}" in text
+    assert snapshot["scenario_checks"]["compile_lock"]["skipped_dry_run_accepted"] is False
     assert "teleporting: disabled (time-to-teleport '-1')" in text
     assert "admission passes in the window: 0; most population" in text
 

@@ -103,6 +103,37 @@ class ScenarioPackage:
         """The capture windows the scenario declares, by id."""
         return {str(w["id"]): dict(w) for w in self.lock.get("capture_windows", [])}
 
+    @property
+    def dry_run(self) -> dict | None:
+        """What the lock records of the compiler's SUMO-only run of the scenario (check 59 of the
+        compiler): `ran`, with the SUMO release and the counts where it ran, or the reason where
+        `--skip-dry-run` skipped it. None where the lock has no `dry_run` block: one written before
+        the compiler ran the check."""
+        block = self.lock.get("dry_run")
+        return dict(block) if isinstance(block, dict) else None
+
+    @property
+    def dry_run_ran(self) -> bool:
+        """Whether the compiler ran the scenario in SUMO alone before writing it. False where the
+        lock says it was skipped and where the lock records no run at all."""
+        return (self.dry_run or {}).get("ran") is True
+
+    def describe_dry_run(self) -> str:
+        """What the lock records of the dry run, in one line for a reader."""
+        block = self.dry_run
+        if block is None:
+            return "not recorded: the lock was written before the compiler ran one"
+        if block.get("ran") is not True:
+            return f"skipped at the compile: {block.get('reason') or 'the lock records no reason'}"
+        vehicles = block.get("vehicles") or {}
+        planned = block.get("planned_vehicles") or {}
+        return (f"ran with SUMO {block.get('sumo_release', '(not recorded)')} over "
+                f"{block.get('end_s', '(not recorded)')} s: {vehicles.get('loaded', '?')} vehicles "
+                f"loaded, {vehicles.get('inserted', '?')} inserted, {vehicles.get('discarded', '?')} "
+                f"discarded, {vehicles.get('waiting_at_end', '?')} waiting at the end; "
+                f"{planned.get('inserted', '?')} of {planned.get('total', '?')} planned vehicles "
+                f"inserted; {block.get('collisions', '?')} collisions")
+
     # -- the files it names ----------------------------------------------------------------------
 
     def file(self, role: str) -> Path:

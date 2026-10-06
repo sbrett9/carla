@@ -644,6 +644,19 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             json.WriteString("epoch_digest", locked?.EpochDigest);
             json.WriteString("world_opendrive_sha256", locked?.WorldOpenDriveSha256);
             json.WriteString("world_network_fingerprint", locked?.WorldNetworkFingerprint);
+            // Whether the compiler ran the scenario in SUMO alone before writing it; null where the lock
+            // records no run, or there is no lock. A run that skipped it starts only if accepted.
+            json.WritePropertyName("dry_run_ran");
+            if (locked?.DryRun is { } dryRun)
+            {
+                json.WriteBooleanValue(dryRun.Ran);
+            }
+            else
+            {
+                json.WriteNullValue();
+            }
+
+            json.WriteBoolean("skipped_dry_run_accepted", compile.SkippedDryRunAccepted);
             json.WriteEndObject();
 
             json.WritePropertyName("plan");
