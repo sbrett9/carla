@@ -259,6 +259,13 @@ public sealed class FrameRecorderInFrameTests : IAsyncLifetime
                                          drawDistanceMetres: drawDistanceMetres);
         try
         {
+            // A still is written with the truth of its own frame or not at all, so an image of another
+            // frame than the fixture's needs that frame observed first.
+            if (imageFrame != Frame)
+            {
+                await _streams.SendAsync(ObserverStream, imageFrame, imageFrame * DeltaSeconds, default, Snapshot());
+                await Until(() => _client!.LatestObservedFrame == imageFrame, $"the observer reaching frame {imageFrame}");
+            }
             if (depth is { } capture)
                 await _streams.SendAsync(DepthStream, capture.Frame, capture.Frame * DeltaSeconds, capture.Pose, Image());
             await _streams.SendAsync(CameraStream, imageFrame, imageFrame * DeltaSeconds, Nadir, Image());
