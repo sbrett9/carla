@@ -37,8 +37,8 @@ a hidden tileset that never loads.
 Each tick also records the frame's render set and the client's snapshot of it, as the session and
 `CarlaClient.GetSnapshotFrame` hold them: the vehicles `FakeServer.vehicles_at` places on the frame,
 and every camera where it stands. The session answers `RenderSet.TryGetRenderSet` for the last 256
-frames and the client `GetSnapshotFrame` for the last 64, with the nearest frame and its number past
-that; `get_actors` gives each vehicle the box `FakeServer.vehicle_extent` describes.
+frames and the client `GetSnapshotFrame` for the last 64, exactly or not at all; `get_actors` gives
+each vehicle the box `FakeServer.vehicle_extent` describes.
 """
 from __future__ import annotations
 
@@ -199,6 +199,7 @@ class FakeRecorder:
         self.capture_hz = capture_hz
         self.Saved = 0
         self.Dropped = 0
+        self.FrameUnpaired = 0
         self.IlluminationPaired = 0
         self.IlluminationUnpaired = 0
         self.SolarBlockMissing = 0
@@ -359,12 +360,9 @@ class FakeCarlaClient:
     def __init__(self, server: FakeServer) -> None:
         self.server = server
 
-    def GetSnapshotFrame(self, frame, _out):  # noqa: N802 -- the .NET member name
+    def GetSnapshotFrame(self, frame):  # noqa: N802 -- the .NET member name
         held = self.server.snapshots
-        if not held:
-            return None, 0
-        served = int(frame) if int(frame) in held else min(held, key=lambda f: abs(f - int(frame)))
-        return _Snapshot(held[served]), served
+        return _Snapshot(held[int(frame)]) if int(frame) in held else None
 
 
 class _FakeBoxed:

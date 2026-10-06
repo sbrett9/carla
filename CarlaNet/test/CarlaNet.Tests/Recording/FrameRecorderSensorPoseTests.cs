@@ -117,7 +117,7 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
 
         // The capture is of the image's own frame, and its truth was read as of that frame too.
         Assert.Equal("100", (string?)events.Attribute("tick"));
-        Assert.Equal("100", (string?)events.Attribute("telemetry_tick"));
+        Assert.Equal(0, recorder.FrameUnpaired);
     }
 
     [Fact]
@@ -134,15 +134,48 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_Frame_The_Client_No_Longer_Holds_Is_Placed_From_Its_Header_Never_The_Nearest_Frame_And_Counted_Apart()
+    public async Task A_Frame_The_Client_Does_Not_Hold_Is_Not_Written_From_The_Nearest_Frame_Or_From_Its_Header()
     {
         // The client holds 101 to 103, all with the camera moved; frame 100 has gone. The nearest frame
-        // held is the camera somewhere else, so the header is the better witness.
+        // held is the camera somewhere else, and the header alone is no truth of the frame's vehicles,
+        // so the still is dropped and counted rather than placed at all (the owner's ruling of 2026-10-05).
         await ObserveTheCameraMovedAfter(RenderedFrame, holdRenderedFrame: false);
+
+        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, platform: _platform,
+                                         cameraActorId: Camera);
+        try
+        {
+            await _streams.SendAsync(CameraStream, RenderedFrame, Seconds(RenderedFrame), Rendered, Image());
+            await Until(() => recorder.FrameUnpaired == 1, "the capture being dropped");
+        }
+        finally
+        {
+            recorder.Dispose();
+        }
+
+        Assert.Empty(Directory.GetFiles(_dir));
+        Assert.Equal(0, recorder.Saved);
+        Assert.Equal(0, recorder.SensorPoseFromSnapshot);
+        Assert.Equal(0, recorder.SensorPoseFromHeader);
+    }
+
+    [Fact]
+    public async Task A_Frame_Held_Without_The_Camera_In_It_Is_Placed_From_Its_Header_And_Counted_Apart()
+    {
+        // The client holds frame 100, but the snapshot does not carry the camera -- a camera the
+        // observer has not reported yet -- so the header is the only witness to the pose, and is used.
+        CarlaClient client = _client!;
+        await client.StartWorldObserverAsync();
+        await _streams.SendAsync(ObserverStream, RenderedFrame, Seconds(RenderedFrame), MovedTo,
+                                 EpisodeState(Rendered, DepthCamera));
+        for (ulong later = RenderedFrame + 1; later <= RenderedFrame + 3; later++)
+            await _streams.SendAsync(ObserverStream, later, Seconds(later), MovedTo, EpisodeState(MovedTo));
+        await Until(() => client.LatestObservedFrame == RenderedFrame + 3, "the observer reaching frame 103");
 
         (FrameRecorder recorder, XElement events) = await RecordOneImage(header: Rendered);
 
         AssertPlacedAtRendered(events);
+        Assert.Equal(0, recorder.FrameUnpaired);
         Assert.Equal(0, recorder.SensorPoseFromSnapshot);
         Assert.Equal(0, recorder.SensorPoseHeaderDisagreed);
         Assert.Equal(1, recorder.SensorPoseFromHeader);
@@ -257,12 +290,13 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
     private static double Number(XElement element, string attribute) =>
         double.Parse((string)element.Attribute(attribute)!, CultureInfo.InvariantCulture);
 
-    /// A world observer's payload holding both cameras at <paramref name="cameras"/>: the 124-byte
-    /// header of a server that measured no sun, then one 119-byte actor record for each.
-    private static byte[] EpisodeState(Transform cameras)
+    /// A world observer's payload holding the cameras at <paramref name="cameras"/> -- both of them, or
+    /// only those named -- as the 124-byte header of a server that measured no sun, then one 119-byte
+    /// actor record for each.
+    private static byte[] EpisodeState(Transform cameras, params ActorId[] carried)
     {
         const int headerSize = 124, actorSize = 119;
-        ActorId[] actors = [Camera, DepthCamera];
+        ActorId[] actors = carried.Length > 0 ? carried : [Camera, DepthCamera];
         var payload = new byte[headerSize + actorSize * actors.Length];
         for (int i = 0; i < actors.Length; i++)
         {

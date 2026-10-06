@@ -47,6 +47,7 @@ class _Handle:
         self.directory = directory
         self.Saved = 0
         self.Dropped = 0
+        self.FrameUnpaired = 0
         self.PairsRenderSet = True
         self.RenderSetPaired = 0
         self.RenderSetUnpaired = 0
@@ -273,8 +274,9 @@ def test_the_heads_up_display_reads_the_recorders_counts_while_it_records(tmp_pa
     recorder.step()
     handle = rig.handles[0]
     handle.Saved, handle.Dropped, handle.RenderSetPaired, handle.RenderSetUnpaired = 12, 1, 11, 1
+    handle.FrameUnpaired = 3
 
-    assert (recorder.saved, recorder.dropped) == (12, 1)
+    assert (recorder.saved, recorder.dropped, recorder.frame_unpaired) == (12, 1, 3)
     assert (recorder.render_set_paired, recorder.render_set_unpaired) == (11, 1)
     handle.PairsRenderSet = False
     assert recorder.render_set_paired is None

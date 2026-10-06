@@ -5,7 +5,8 @@ facts -- the co-simulation session (`SumoDriveSession`: its clock, its pacing, t
 newest frame's illumination declaration, its latest admission pass, and the compile lock and
 teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
 the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
-recorder (`FrameRecorder`: captures written, captures dropped, illumination
+recorder (`FrameRecorder`: captures written, captures dropped, stills dropped for want of their own
+frame's truth, illumination
 pairing, captures written without a solar block, render-set pairing, supervision pairing, occlusion
 pairing, where each capture's pose came from, and the vehicles it marked beyond the draw distance) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
@@ -20,6 +21,7 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 | gate | observed | status in the tree |
 |---|---|---|
 | `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 (10 D10.7) | measured |
+| `capture.frame_unpaired` | stills dropped because the client held no truth of their own frame when the image arrived -- a still is written with its own frame's truth or not at all -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
 | `capture.illumination_unpaired` | captures written without their frame's illumination declaration, threshold 0 | measured |
 | `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 (11 §8.4) | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
@@ -292,7 +294,7 @@ class RunCloseoutReport:
     def _channel(channel: ChannelCapture) -> dict:
         recorder = channel.recorder
         entry = {"sensor_id": channel.sensor_id, "directory": str(channel.directory),
-                 "captured": None, "written": None, "recorder_dropped": None,
+                 "captured": None, "written": None, "recorder_dropped": None, "frame_unpaired": None,
                  "illumination_paired": None, "illumination_unpaired": None,
                  "solar_block_missing": None, "render_set_paired": None, "render_set_unpaired": None,
                  "supervision_paired": None, "supervision_unpaired": None,
@@ -321,6 +323,10 @@ class RunCloseoutReport:
         if hasattr(recorder, "SupervisionUnpaired"):
             entry.update({"supervision_paired": int(recorder.SupervisionPaired),
                           "supervision_unpaired": int(recorder.SupervisionUnpaired)})
+        # Counted by a recorder that writes a still with its own frame's truth or not at all; one built
+        # before it wrote such stills beside a neighbouring frame's truth and counted nothing here.
+        if hasattr(recorder, "FrameUnpaired"):
+            entry["frame_unpaired"] = int(recorder.FrameUnpaired)
         if recorder.ChecksSensorPose:
             entry.update({"sensor_pose_from_snapshot": int(recorder.SensorPoseFromSnapshot),
                           "sensor_pose_header_disagreed": int(recorder.SensorPoseHeaderDisagreed),
@@ -359,6 +365,18 @@ class RunCloseoutReport:
             gates.append(self._gate(f"capture.recorder_dropped[{channel['sensor_id']}]",
                                     "captures the recorder's queue had no room for", "10 D10.7",
                                     channel["recorder_dropped"], 0, "equals"))
+            # A still the recorder did not write because the client held no truth of its own frame when
+            # the image arrived: a still is written with its own frame's truth or not at all, so each is a
+            # missing still and its missing sidecar, which the collection has to know about.
+            unpaired_gate = f"capture.frame_unpaired[{channel['sensor_id']}]"
+            unpaired_name = ("stills dropped because the client held no truth of their own frame when "
+                             "the image arrived")
+            if channel["frame_unpaired"] is None:
+                gates.append(self._skipped(unpaired_gate, unpaired_name,
+                                           "the recorder was built before it dropped such stills"))
+            else:
+                gates.append(self._gate(unpaired_gate, unpaired_name, "06 §8.2",
+                                        channel["frame_unpaired"], 0, "equals"))
             gates.append(self._gate(f"capture.illumination_unpaired[{channel['sensor_id']}]",
                                     "captures written without their frame's illumination "
                                     "declaration", "12 §7.2", channel["illumination_unpaired"], 0,
@@ -557,7 +575,10 @@ class RunCloseoutReport:
             lines.append(f"  view {view['sensor_id']}: {describe_view(view)}")
         for channel in snapshot["channels"]:
             lines.append(f"  channel {channel['sensor_id']}: written {channel['written']}, "
-                         f"recorder-dropped {channel['recorder_dropped']}, illumination unpaired "
+                         f"recorder-dropped {channel['recorder_dropped']}, "
+                         + (f"frame unpaired {channel['frame_unpaired']}, "
+                            if channel.get("frame_unpaired") is not None else "")
+                         + f"illumination unpaired "
                          f"{channel['illumination_unpaired']}, solar block missing "
                          f"{channel['solar_block_missing']}, render set unpaired "
                          f"{channel['render_set_unpaired']}"

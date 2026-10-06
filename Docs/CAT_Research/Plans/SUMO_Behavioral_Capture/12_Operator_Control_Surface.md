@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-05` — §7.2: the closeout gates `capture.frame_unpaired[<sensor>]`, a channel's stills dropped because the client held no truth of their own frame when the image arrived, at zero; a still is written with its own frame's truth or not at all, as the owner ruled ([`06`](06_Truth_And_Annotation.md) §8.2). The gate is skipped from a recorder built before it dropped such stills, the channel's closeout line and the run result carry the count, `NativeRecorder` reports it at stop, and the heads-up display shows it as it climbs.
 `2026-10-05` — Withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the planned "per-interval observability, prevalence in all three units" and the gate `render_accounting.intervals_rendered` (§7.1, §7.2); the coverage record and the "unoccluded denominator" it served (§1.5, §5.1, §7.1, §7.4.2, §7.6.2). The occlusion estimator stays session-fixed because turning it off mid-run changes what the measured fields of later captures mean.
 `2026-10-05` — Corrected against the code: the session drives vehicle lamps by default and `run_capture` offers no field for them (§4.4, §5.2, check 14); the run manifest and its supervision rows exist (§3.9, §3.10.3); `capture_rgb` is not a field of the schema (§5.2); the Windows distribution's four parity breaks are fixed and its launcher is still unbuilt (§10).
 `2026-10-05` — Occlusion is measured on an orbit as on a stare, as the owner ruled. Every channel measuring occlusion gets a depth camera spawned attached to its camera, rigidly and at the camera's own pose, so one move carries both and the two are never captured a frame apart; the orbit's recorder is started with it, so its captures carry per-vehicle occlusion and apparent size. Check 47 no longer refuses occlusion on an orbit; its reason cited the measurement from before the rig moved its cameras in one batch (§5.2 `capture_depth`, `occlusion.enabled`; §6.2 check 47; §6.3).
@@ -2004,8 +2005,11 @@ recommendation applied to more than the closed flag. A corpus is described the s
 finished or was stopped; the difference between those two is `closed_by`, not a change of tone.
 
 **As built**, the gate records `RunCloseoutReport` evaluates are `capture.recorder_dropped[<sensor>]`
-(threshold 0), `capture.illumination_unpaired[<sensor>]` (captures written without their frame's
-illumination declaration, threshold 0), `capture.solar_block_missing[<sensor>]` (captures written
+(threshold 0), `capture.frame_unpaired[<sensor>]` (stills dropped because the client held no truth of
+their own frame when the image arrived -- a still is written with its own frame's truth or not at all,
+2026-10-05 -- threshold 0; skipped from a recorder built before it dropped such stills;
+[`06`](06_Truth_And_Annotation.md) §8.2), `capture.illumination_unpaired[<sensor>]` (captures written
+without their frame's illumination declaration, threshold 0), `capture.solar_block_missing[<sensor>]` (captures written
 without a solar block, so with no recorded sun and no illumination band, threshold 0;
 [`11`](11_Time_And_Illumination.md) §8.4), `capture.render_set_unpaired[<sensor>]` (captures written
 with no vehicle list because their frame's render set was no longer held, threshold 0;

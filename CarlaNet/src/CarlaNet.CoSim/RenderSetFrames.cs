@@ -16,7 +16,7 @@ namespace CarlaNet.CoSim;
 /// needs the last few: an image arrives within a handful of ticks of its frame, and a set the recorder
 /// never asks for is dropped once it is <see cref="Capacity"/> frames old. A frame asked for after
 /// that is answered with nothing, and the recorder lists no vehicle for it rather than a guess. The
-/// client keeps the world's snapshots for fewer frames than this
+/// client keeps the world's snapshots for no more frames than this
 /// (<c>SnapshotHistory.DefaultCapacity</c>), so any frame whose truth is still held has its set held
 /// too.</para>
 ///

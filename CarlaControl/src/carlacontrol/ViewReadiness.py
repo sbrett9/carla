@@ -375,10 +375,10 @@ class SessionFrameVehicles:
         if not found or render_set is None:
             return None
         bodies = [int(actor) for actor in render_set.ByActor.Keys]
-        # The out parameter is a ulong, which pythonnet matches to a number and not to None, and the
-        # snapshot is keyed by the actor's uint id, which a plain int does not match.
-        snapshot, served = self._world._client.GetSnapshotFrame(frame, 0)
-        if snapshot is None or int(served) != int(frame):
+        # The client's snapshot of exactly this frame, or None where it does not hold it; the snapshot
+        # is keyed by the actor's uint id, which a plain int does not match.
+        snapshot = self._world._client.GetSnapshotFrame(frame)
+        if snapshot is None:
             return None
         unknown = [actor for actor in bodies if actor not in self._boxes]
         if unknown:

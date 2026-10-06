@@ -35,6 +35,7 @@ Findings set. Every external claim is cited.
 | 2026-10-05 | §2.4, §2.5, §2.7: every vehicle record of a capture says where its box fell against the picture, `in_frame`, with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; where the five occlusion fields are absent, `occlusion_unmeasured` says why in one word. The owner ruled that an absent fraction was being read as "not hidden". The projection is separated from the depth sampling and runs for every capture. |
 | 2026-10-05 | §2.4, §3.5: the server issues camera names and refuses duplicates, as the owner ruled. A camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, never reset by a world reload and never reused; a name a live camera holds is refused at spawn, case aside, and a client cannot claim `Camera_<digits>`. Every client reads the name back from the spawned camera for its files, callsign and recorder; the client-side check across the actor list, which two clients could pass in one tick, is removed. `CARLA-SENSOR-<camera id>` is an unnamed camera's name only on a server built before it named cameras. The plugin change awaits a build. |
 | 2026-10-05 | The judgement text is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry: the label record is cut to geometry and happened facts (§5.1); `visible_signature`, `lit_face_px`, `shadow_px`, `observability_level`, the separation fields and the in-frame flags go (§5.7, §5.8, §8.3, §8.4, §8.6, §8.7); `coverage.jsonl`, the five levels and prevalence go (§10.1, §10.2); §10.5 keeps the recorded-sun strata and the date sweep and loses its probes; the fitness probe goes (§12); §13, §14, §16 follow. D8.15, D8.16, D8.19, D8.25, D8.33, D8.34, D8.36, D8.38 withdrawn; D8.2 and D8.17 amended. |
+| 2026-10-05 | §2.4, §3.4: a still is written with the truth of its own frame or not at all, as the owner ruled. The recorder holds the client's snapshots open while it records and releases each frame once an image of a later frame has been prepared; a still whose frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`, gated at zero by the closeout), never written beside a neighbouring frame's truth, and `telemetry_tick` is gone ([`06`](06_Truth_And_Annotation.md) §8.2). |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -347,10 +348,15 @@ occlusion fields were simply absent when unmeasured, in six different situations
 which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect.
 
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
-RunId, ScenarioId, Seed)` (`CaptureMetadata.cs:24-29`) is taken from the very sensor frame that
-produced the pixels (`FrameRecorder.cs:179`), and the record's own doc comment explains why wall-clock
-time cannot serve (`CaptureMetadata.cs:9-14`). Filenames are a camera's name and the wall clock, and
-must never be used to pair anything.
+RunId, ScenarioId, Seed)` (`CaptureMetadata.cs`) is taken from the very sensor frame that
+produced the pixels (`FrameRecorder.cs`), and the record's own doc comment explains why wall-clock
+time cannot serve. Filenames are a camera's name and the wall clock, and
+must never be used to pair anything. **The vehicle records beside a still are the truth of the still's
+own tick and no other** (2026-10-05, the owner's ruling): the recorder reads them from the client's
+snapshot of the image's frame, which it holds open while it records, and a still whose frame's truth is
+not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`, gated at zero by the closeout)
+rather than written beside a neighbouring frame's; the `telemetry_tick` attribute that once named which
+frame the truth came from is gone ([`06`](06_Truth_And_Annotation.md) §8.2).
 
 **The solar block is already there, and it is already bound to the pixels.** `_solar` carries
 `solar_time`, `date`, `time_zone`, `lat`, `lon`, `sun_elevation_deg`, `sun_azimuth_deg`, `advancing` and
@@ -857,10 +863,10 @@ header when it captures the frame, and the recorder no longer relies on it: the 
 pose occlusion is measured from, are the camera's and the depth camera's in the snapshot of the
 image's own frame, the same snapshot the truth records are read from, with the header checked against
 it and a disagreement counted (`SensorPoseHeaderDisagreed`, `OcclusionDepthPoseHeaderDisagreed`). A
-frame the client no longer holds is placed from its header and counted apart, as its truth is served
-from the nearest frame and stamped `telemetry_tick`. So pose, truth and render set are all read as of
-the image's frame, which is what makes the co-location in this section enough for a flown camera as
-it is for a fixed one.
+frame the client does not hold is not written at all, and counted (`FrameUnpaired`, 2026-10-05); before
+that its truth was served from the nearest frame and stamped `telemetry_tick`. So pose, truth and render
+set are all read as of the image's frame, which is what makes the co-location in this section enough
+for a flown camera as it is for a fixed one.
 
 ### 3.5 Session and sensor identity, and the artifact roots
 

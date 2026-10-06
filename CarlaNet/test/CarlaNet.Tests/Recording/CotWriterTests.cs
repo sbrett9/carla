@@ -189,26 +189,15 @@ public class CotWriterTests
     }
 
     [Fact]
-    public void The_Frame_The_Truth_Came_From_Is_Named_Beside_The_Frame_Of_The_Pixels()
+    public void The_Capture_Names_One_Frame_For_The_Pixels_And_The_Truth_Alike()
     {
-        // The image's own frame and the frame its vehicle records describe are normally the same; when
-        // the client no longer held the image's frame the sidecar must say which frame it got instead.
-        string exact = WriteWith(new CaptureIdentity(260042, 310.21974, "run-1", null, 103, 260042), Saloon());
-        Assert.Contains("tick=\"260042\"", exact);
-        Assert.Contains("telemetry_tick=\"260042\"", exact);
-
-        string offset = WriteWith(new CaptureIdentity(260042, 310.21974, "run-1", null, 103, 260039), Saloon());
-        Assert.Contains("telemetry_tick=\"260039\"", offset);
-    }
-
-    [Fact]
-    public void A_Capture_Without_Truth_Names_No_Telemetry_Frame()
-    {
-        string xml = WriteWith(new CaptureIdentity(260042, 310.21974), Saloon());
+        // The vehicle records beside a still are the truth of the still's own frame and no other, so
+        // the container names one frame, tick, and no second frame the truth might have come from.
+        string xml = WriteWith(new CaptureIdentity(260042, 310.21974, "run-1", null, 103), Saloon());
         Assert.Contains("tick=\"260042\"", xml);
         Assert.DoesNotContain("telemetry_tick", xml);
-        Assert.DoesNotContain("telemetry_tick", new CaptureIdentity(1, 0.0).ToJson());
-        Assert.Contains("\"telemetry_tick\":5", new CaptureIdentity(7, 0.0, TelemetryTick: 5).ToJson());
+        Assert.DoesNotContain("telemetry_tick", new CaptureIdentity(260042, 310.21974, "run-1", null, 103).ToJson());
+        Assert.Equal("{\"tick\":7,\"sim_time_s\":0}", new CaptureIdentity(7, 0.0).ToJson());
     }
 
     [Fact]
@@ -256,11 +245,11 @@ public class CotWriterTests
                                       Occlusion = 0.42, OcclusionLevel = 2,
                                       OcclusionSamples = 96, ApparentWidthPx = 48, ApparentHeightPx = 21,
                                   }, parked],
-                                  solar: sun, capture: new CaptureIdentity(260042, 310.21974, "run-1", null, 103, 260042));
+                                  solar: sun, capture: new CaptureIdentity(260042, 310.21974, "run-1", null, 103));
             Assert.Equal(
                 """
                 <?xml version="1.0" encoding="utf-8"?>
-                <events captured="2026-07-10T18:00:00.000Z" count="2" source="truth" tick="260042" sim_time_s="310.21974" telemetry_tick="260042" run_id="run-1" seed="103">
+                <events captured="2026-07-10T18:00:00.000Z" count="2" source="truth" tick="260042" sim_time_s="310.21974" run_id="run-1" seed="103">
                   <_solar solar_time="7" date="2026-03-21" time_zone="3.5" lat="27.1501200" lon="56.1806500" sun_elevation_deg="4.981" sun_azimuth_deg="119.56" advancing="false" rate="0" illumination_band="golden" illumination_band_elevation="geometric" />
                   <event version="2.0" uid="CARLA-TRUTH-7" type="a-n-G-E-V" how="m-g" time="2026-07-10T18:00:00.000Z" start="2026-07-10T18:00:00.000Z" stale="2026-07-10T18:00:03.000Z">
                     <point lat="37.7841234" lon="-122.4567890" hae="61.20" ce="0.0" le="0.0" />
@@ -350,7 +339,7 @@ public class CotWriterTests
         try
         {
             CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), records,
-                                  capture: new CaptureIdentity(1044000, 370800.0, "cap-1", null, 42, 1044000),
+                                  capture: new CaptureIdentity(1044000, 370800.0, "cap-1", null, 42),
                                   vehicles: SidecarVehicles.Rendered, supervision: supervision);
             return File.ReadAllText(path).ReplaceLineEndings();
         }
@@ -373,7 +362,7 @@ public class CotWriterTests
 
         Assert.Contains(
             """
-            <events captured="2026-07-10T18:00:00.000Z" count="4" source="truth" tick="1044000" sim_time_s="370800" telemetry_tick="1044000" run_id="cap-1" seed="42" vehicles="rendered" plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
+            <events captured="2026-07-10T18:00:00.000Z" count="4" source="truth" tick="1044000" sim_time_s="370800" run_id="cap-1" seed="42" vehicles="rendered" plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
               <_supervision scope="world" vocabulary="2" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
                 <absence instance="Shahid_Bahonar_Port_PatternOfLife/pi_tower_relief_d4_h7_t3_unmanned" labels="bahonar:post_unmanned" areas="tower_03" phase="vacancy" />
               </_supervision>
@@ -439,7 +428,7 @@ public class CotWriterTests
         ObservedSupervision observed = Bahonar();
 
         Assert.Equal(SidecarSupervision.InForce, CaptureSupervision.For(100, 100, observed, observed).State);
-        // The image's frame was not held, and its neighbour carried a plan: unknown, not the neighbour's.
+        // The snapshot read is not the image's frame's, and it carried a plan: unknown, not the neighbour's.
         Assert.Same(CaptureSupervision.Unknown, CaptureSupervision.For(100, 99, observed, observed));
         // Its block could not be read: a plan was in force, and what it asserted is unknown.
         Assert.Same(CaptureSupervision.Unknown,

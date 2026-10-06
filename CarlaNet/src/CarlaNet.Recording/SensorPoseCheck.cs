@@ -4,11 +4,10 @@ using CarlaNet.Types.Geom;
 namespace CarlaNet.Recording;
 
 /// <summary>
-/// Every actor's snapshot as of <paramref name="frame"/>, or as of the nearest frame still held,
-/// which <paramref name="servedFrame"/> names; null when nothing is held. The shape of
-/// <see cref="CarlaClient.GetSnapshotFrame"/> and <see cref="SnapshotHistory.Nearest"/>.
+/// Every actor's snapshot as of <paramref name="frame"/>, where that frame is held; null otherwise.
+/// The shape of <see cref="CarlaClient.GetSnapshotFrame(ulong)"/> and <see cref="SnapshotHistory.Of(ulong)"/>.
 /// </summary>
-public delegate IReadOnlyDictionary<ActorId, ActorSnapshot>? SnapshotFrameLookup(ulong frame, out ulong servedFrame);
+public delegate IReadOnlyDictionary<ActorId, ActorSnapshot>? SnapshotFrameLookup(ulong frame);
 
 /// <summary>
 /// The pose a sensor's image was taken from: the sensor's transform in the client's world snapshot
@@ -30,12 +29,12 @@ public delegate IReadOnlyDictionary<ActorId, ActorSnapshot>? SnapshotFrameLookup
 /// what says so.</para>
 ///
 /// <para><b>Which pose is used.</b> The snapshot of the image's own frame whenever the client holds
-/// that frame exactly and the sensor is in it: that is the transform the world observer reported for
-/// the frame the pixels show, the same snapshot the capture's truth records are read from. A header
+/// that frame and the sensor is in it: that is the transform the world observer reported for the
+/// frame the pixels show, the same snapshot the capture's truth records are read from. A header
 /// further from it than the tolerance is counted in <see cref="HeaderDisagreed"/>, which a correct
-/// server keeps at zero. When the frame is no longer held, or the sensor is not in it, the nearest
-/// frame held would be the sensor at another instant, so the header's pose is used instead and
-/// counted in <see cref="FromHeader"/>.</para>
+/// server keeps at zero. When the frame is not held, or the sensor is not in it, the header's pose is
+/// used instead and counted in <see cref="FromHeader"/>; a neighbouring frame would be the sensor at
+/// another instant, and the lookup never serves one.</para>
 ///
 /// <para>The two transforms are the same world transform read at the same instant when the server
 /// is right, so the tolerance only has to absorb their single-precision encoding. A level with a
@@ -59,7 +58,7 @@ public sealed class SensorPoseCheck
     private long _fromSnapshot, _headerDisagreed, _fromHeader;
 
     /// <param name="lookup">The snapshots to read the sensor from, by frame:
-    /// <see cref="CarlaClient.GetSnapshotFrame"/>.</param>
+    /// <see cref="CarlaClient.GetSnapshotFrame(ulong)"/>.</param>
     /// <param name="sensor">The sensor actor whose images are checked.</param>
     /// <param name="toleranceMetres">How far apart the two locations may be;
     /// <see cref="DefaultToleranceMetres"/> by default.</param>
@@ -90,7 +89,7 @@ public sealed class SensorPoseCheck
     public long HeaderDisagreed => Interlocked.Read(ref _headerDisagreed);
 
     /// <summary>
-    /// Images whose own frame the client no longer held, or held without the sensor in it, so their
+    /// Images whose own frame the client did not hold, or held without the sensor in it, so their
     /// pose is the header's, unchecked.
     /// </summary>
     public long FromHeader => Interlocked.Read(ref _fromHeader);
@@ -103,8 +102,8 @@ public sealed class SensorPoseCheck
     /// <param name="header">The transform in the image's header.</param>
     public Transform Resolve(ulong frame, Transform header)
     {
-        IReadOnlyDictionary<ActorId, ActorSnapshot>? actors = _lookup(frame, out ulong served);
-        if (actors is not null && served == frame && actors.TryGetValue(_sensor, out ActorSnapshot? held))
+        IReadOnlyDictionary<ActorId, ActorSnapshot>? actors = _lookup(frame);
+        if (actors is not null && actors.TryGetValue(_sensor, out ActorSnapshot? held))
         {
             Interlocked.Increment(ref _fromSnapshot);
             if (!Agree(held.Transform, header, _toleranceMetres, _toleranceDegrees))

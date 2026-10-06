@@ -698,6 +698,11 @@ class PygameInterface:
         status = f"REC {recorder.saved}@{recorder.record_hz:g}Hz"
         if dropped:
             status += f" -{dropped} dropped"
+        # A still the client held no truth of its own frame for is not written, and is shown as it
+        # happens for the same reason a drop is.
+        unpaired = getattr(recorder, "frame_unpaired", 0)
+        if unpaired:
+            status += f" -{unpaired} unpaired"
         paired = getattr(recorder, "render_set_paired", None)
         if paired is not None:
             status += f"  set {paired} paired"

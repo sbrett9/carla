@@ -44,6 +44,7 @@ the real scenario artifacts. No code changed, no build run.
 | 36 · 2026-10-05 | Corrected against the code: the §8.2 example marks the `_carla` attributes and the `<_aoi>` block that nothing writes; the gap between the path heading and SUMO's angle is not §4.3's `heading_separation_deg`; open question 10 states the one solar limit the audit enforces. |
 | 37 · 2026-10-05 | The observability accounting is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (§5; D6.11, D6.22, D6.23, D6.25 withdrawn; D6.26, D6.27, D6.39 amended). The manifest sketch loses its observability, site-observability, prevalence, render-accounting and reconciliation blocks and its prevalence check (§8.4); no manifest summary document is planned. The sun's achieved state is in both exports with no rule based on prevalence (§10.2, §10.3). §13 names what 11 still owes. |
 | 38 · 2026-10-05 | The SUMO-against-CARLA divergence is a run-level measurement, as the owner ruled, written where a reader finds it: `bridge_divergence` on the manifest's `manifest_closed` row, the same figures in the run result, and two closeout gates with limits from 39 measured drives, `bridge.position_divergence` at 0.01 m and `bridge.velocity_divergence` at 0.01 m/s, run-configuration fields (§4.3, §8.4, D6.10 as built; question 7 closed). D6.10's four per-capture sidecar fields are withdrawn; `heading_separation` is defined once, in §4.3, and the body-heading-against-SUMO-angle difference of §8.2 is named as a designed quantity and not it. An independent test holds the pose convention to hand-worked numbers. The vehicle lights are driven and the rule is on the manifest's opening row (`vehicle_lights`); per-vehicle state in the truth comes later (question 11). Authors see which bodies' headlights, brake lights and turn signals light up, in the skill's generated `references/vehicles.md` and the resolution report's vehicle section; as measured, none of the shipped bodies do. |
+| 39 · 2026-10-05 | A still is written with the truth of its own frame or not at all, as the owner ruled ("close the door"; §8.2). The recorder holds the client's snapshots open while it records (`CarlaClient.HoldSnapshotFrames`, `SnapshotHold`) and releases each frame once an image of a later frame has been prepared, less a margin of four; the client serves a frame exactly or not at all, keeps sixteen frames with no hold open and never more than 256. A still whose own frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`), reported by `NativeRecorder` and the run result, and gated at zero by the closeout (`capture.frame_unpaired[<sensor>]`, [12](12_Operator_Control_Surface.md) §7.2). `telemetry_tick` is gone from the sidecar and the PNG's `carla:capture`; the sidecar audit no longer counts truth from a neighbouring frame. Built and tested against a stand-in server; the live check is the owner's. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -2509,7 +2510,7 @@ the capture's own frame in the same read as its vehicles and their render set (`
 process writes the same thing for one frame. Of the shape above, as written:
 
 ```xml
-<events ... tick="1044000" telemetry_tick="1044000" vehicles="rendered"
+<events ... tick="1044000" vehicles="rendered"
         plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="2"
         vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
   <_supervision scope="world" vocabulary="2" vocabulary_digest="e3571085...">
@@ -2543,13 +2544,28 @@ process writes the same thing for one frame. Of the shape above, as written:
   no session named is no subject of the plan. A nominal vehicle names the ordinary behaviour it is where
   the plan does (D6.31). The world element is written whenever a plan is in force, empty where no
   absence is, so its absence never stands for "none in force". No absence is ever an `<event>` (D6.6).
-- **The capture's own frame, or unknown.** The vehicles of a capture whose frame the client no longer
-  held are read from the nearest frame it did hold, which `telemetry_tick` names; its supervision is not,
-  because an interval can open or close between two frames and a body change hands. Such a capture, and
-  one whose frame's supervision block could not be read, says `supervision="unknown"` on its container
-  and carries no supervision. The recorder counts `SupervisionPaired` and `SupervisionUnpaired`, and the
-  run's closeout gates `capture.supervision_unpaired[<sensor>]` at zero ([12](12_Operator_Control_Surface.md)
-  §7.2). A capture of a frame no plan was in force on is written exactly as before.
+- **The capture's own frame, or no capture (2026-10-05, the owner's ruling: "close the door").** A still
+  is written with the truth of its own frame or not at all. The recorder holds the client's snapshots
+  open while it records (`CarlaClient.HoldSnapshotFrames`, `SnapshotHold`) and releases each frame once
+  an image of a later frame has been prepared, less a margin of four, so an image finds the snapshot of
+  its own frame however late it arrives; the client keeps sixteen frames with no hold open and never
+  more than 256 (`SnapshotHistory`), and serves a frame exactly or not at all -- `GetSnapshotFrame`
+  answers null for a frame it does not hold, never the nearest. A still whose own frame's truth is not
+  to be had -- the frame was never observed, the image came after the capacity dropped it, or its
+  records could not be built -- is dropped and counted in `FrameUnpaired`, and nothing is written for
+  it. There is no `telemetry_tick`: the sidecar's `tick` names the one frame of the pixels and the
+  truth alike. The run's closeout gates `capture.frame_unpaired[<sensor>]` at zero
+  ([12](12_Operator_Control_Surface.md) §7.2), `NativeRecorder` reports the count at stop, and the
+  heads-up display shows it as it climbs. Before this the vehicles of such a capture were read from the
+  nearest frame held and `telemetry_tick` named it, which was another instant's truth beside the picture
+  with nothing downstream made to check the stamp; on this path every vehicle moves every tick.
+- **The supervision is the same frame's, or unknown.** A capture whose frame's supervision block could
+  not be read -- or that carries no vehicle truth and whose frame the client does not hold -- says
+  `supervision="unknown"` on its container and carries no supervision, never a neighbouring frame's:
+  an interval can open or close between two frames and a body change hands. The recorder counts
+  `SupervisionPaired` and `SupervisionUnpaired`, and the run's closeout gates
+  `capture.supervision_unpaired[<sensor>]` at zero ([12](12_Operator_Control_Surface.md) §7.2). A
+  capture of a frame no plan was in force on is written exactly as before.
 - **Checked from the files.** `TruthSidecarAudit` (`audit_truth_sidecars.py`) holds a capture whose run
   had a plan -- a sidecar names one or says its supervision was unknown -- to a `<_supervision>` on every
   SUMO vehicle record, in one of the three states and consistent with what it names, and to the world

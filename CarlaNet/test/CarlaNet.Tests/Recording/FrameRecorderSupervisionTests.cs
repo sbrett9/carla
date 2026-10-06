@@ -185,22 +185,30 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_Capture_Whose_Frame_Is_No_Longer_Held_Is_Written_With_Supervision_Unknown()
+    public async Task A_Capture_Whose_Frame_The_Client_Does_Not_Hold_Is_Dropped_And_No_Supervision_Is_Guessed()
     {
-        // The image is of frame 300 and the client holds only frame 100, whose snapshot carried a plan: its
-        // vehicles are read from frame 100 and the sidecar names it, but frame 100's supervision is not
-        // frame 300's, so none is written and the sidecar says it is unknown.
+        // The image is of frame 300 and the client holds only frame 100, whose snapshot carried a plan.
+        // Frame 100's vehicles and supervision are not frame 300's, so the still is not written at all
+        // (the owner's ruling of 2026-10-05), and counted; nothing of frame 100 is written beside it.
         await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow], [Unmanned])));
 
-        (FrameRecorder recorder, XElement events, _) = await RecordOneImage(300);
+        string directory = Path.Combine(_dir, Guid.NewGuid().ToString("N"));
+        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), directory, 2.0,
+                                         cameraName: RecordedCamera);
+        try
+        {
+            await _streams.SendAsync(CameraStream, 300, 300 * DeltaSeconds, default, Image());
+            await Until(() => recorder.FrameUnpaired == 1, "the capture being dropped");
+        }
+        finally
+        {
+            recorder.Dispose();
+        }
 
-        Assert.Equal("100", (string?)events.Attribute("telemetry_tick"));
-        Assert.Equal("unknown", (string?)events.Attribute("supervision"));
-        Assert.Null(events.Attribute("plan_id"));
-        Assert.Null(events.Attribute("vocabulary_digest"));
-        Assert.Empty(events.Descendants("_supervision"));
+        Assert.Empty(Directory.GetFiles(directory));
+        Assert.Equal(0, recorder.Saved);
         Assert.Equal(0, recorder.SupervisionPaired);
-        Assert.Equal(1, recorder.SupervisionUnpaired);
+        Assert.Equal(0, recorder.SupervisionUnpaired);
     }
 
     [Fact]

@@ -45,8 +45,8 @@ class SpanRecorder:
     or of the window.
 
     The heads-up display reads it as it reads `NativeRecorder`: `recording`, `saved`, `dropped`,
-    `record_hz` and `toggle_want()`, plus `waiting`, `waiting_s`, `tiles`, `render_set_paired`,
-    `render_set_unpaired`, `supervision_paired` and `supervision_unpaired`, and it takes one-line
+    `frame_unpaired`, `record_hz` and `toggle_want()`, plus `waiting`, `waiting_s`, `tiles`,
+    `render_set_paired`, `render_set_unpaired`, `supervision_paired` and `supervision_unpaired`, and it takes one-line
     messages for the operator from `notices`. Each capture's supervision is the server's for its own
     frame, read by the recorder from the snapshot, so nothing about it is handed to the recorder here.
     """
@@ -143,6 +143,12 @@ class SpanRecorder:
     @property
     def dropped(self) -> int:
         return self._counter("Dropped")
+
+    @property
+    def frame_unpaired(self) -> int:
+        """Stills dropped because the client held no truth of their own frame when the image arrived:
+        a still is written with its own frame's truth or not at all."""
+        return self._counter("FrameUnpaired")
 
     @property
     def render_set_paired(self) -> int | None:

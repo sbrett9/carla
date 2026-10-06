@@ -176,6 +176,36 @@ def test_a_dropped_capture_is_a_gate_not_met_and_a_loud_condition(layout):
     assert [c for c, _ in report.loud_conditions(snapshot)] == ["recorder_dropped"]
 
 
+def test_a_still_dropped_for_want_of_its_own_frame_s_truth_is_a_gate_not_met(layout):
+    # Doc 06 §8.2: a still is written with the truth of its own frame or not at all, and one the client
+    # held no truth of its frame for is dropped and counted; the gate is that there are none.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    met = gate(report.gates(report.snapshot(), 0), "capture.frame_unpaired[OVERWATCH-1]")
+    assert (met["status"], met["observed"], met["threshold"], met["met"]) == ("evaluated", 0, 0, True)
+
+    recorder.FrameUnpaired = 2
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["frame_unpaired"] == 2
+    unpaired = gate(report.gates(snapshot, 0), "capture.frame_unpaired[OVERWATCH-1]")
+    assert (unpaired["observed"], unpaired["threshold"], unpaired["met"]) == (2, 0, False)
+    assert unpaired["owner"] == "06 §8.2"
+    assert "frame unpaired 2" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+
+
+def test_a_recorder_built_before_it_dropped_unpaired_stills_skips_the_gate_rather_than_meeting_it(layout):
+    # A wheel built before the recorder refused such stills has no such counter: not measured is never
+    # passed.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    del recorder.FrameUnpaired
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["frame_unpaired"] is None
+    skipped = gate(report.gates(snapshot, 0), "capture.frame_unpaired[OVERWATCH-1]")
+    assert skipped["status"] == "skipped"
+    assert "frame unpaired" not in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+
+
 def test_a_capture_listed_without_its_frame_s_render_set_is_a_gate_not_met(layout):
     report, session, recorder = closeout(layout)
     session.Advance()

@@ -29,7 +29,7 @@ public class SensorPoseCheckTests
     [Fact]
     public void A_Header_Carrying_Another_Pose_Yields_The_Snapshot_s_And_Is_Counted()
     {
-        var check = new SensorPoseCheck(Holding(100, AtFrame).Nearest, Sensor);
+        var check = new SensorPoseCheck(Holding(100, AtFrame).Of, Sensor);
 
         Assert.Equal(AtFrame, check.Resolve(100, NextFrame));
         Assert.Equal((1L, 1L, 0L), (check.FromSnapshot, check.HeaderDisagreed, check.FromHeader));
@@ -38,17 +38,17 @@ public class SensorPoseCheckTests
     [Fact]
     public void A_Header_That_Agrees_Is_Not_Counted()
     {
-        var check = new SensorPoseCheck(Holding(100, AtFrame).Nearest, Sensor);
+        var check = new SensorPoseCheck(Holding(100, AtFrame).Of, Sensor);
 
         Assert.Equal(AtFrame, check.Resolve(100, AtFrame));
         Assert.Equal((1L, 0L, 0L), (check.FromSnapshot, check.HeaderDisagreed, check.FromHeader));
     }
 
     [Fact]
-    public void A_Frame_Not_Held_Exactly_Yields_The_Header_Not_The_Nearest_Frame()
+    public void A_Frame_Not_Held_Yields_The_Header_Not_A_Neighbouring_Frame()
     {
         // Frame 101 is held, with the sensor elsewhere; the image is of frame 100.
-        var check = new SensorPoseCheck(Holding(101, NextFrame).Nearest, Sensor);
+        var check = new SensorPoseCheck(Holding(101, NextFrame).Of, Sensor);
 
         Assert.Equal(AtFrame, check.Resolve(100, AtFrame));
         Assert.Equal((0L, 0L, 1L), (check.FromSnapshot, check.HeaderDisagreed, check.FromHeader));
@@ -57,7 +57,7 @@ public class SensorPoseCheckTests
     [Fact]
     public void A_Frame_Held_Without_The_Sensor_In_It_Yields_The_Header()
     {
-        var check = new SensorPoseCheck(Holding(100, AtFrame).Nearest, Sensor + 1);
+        var check = new SensorPoseCheck(Holding(100, AtFrame).Of, Sensor + 1);
 
         Assert.Equal(NextFrame, check.Resolve(100, NextFrame));
         Assert.Equal((0L, 0L, 1L), (check.FromSnapshot, check.HeaderDisagreed, check.FromHeader));

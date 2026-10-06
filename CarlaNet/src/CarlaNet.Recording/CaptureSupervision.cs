@@ -25,9 +25,10 @@ public enum SidecarSupervision
 
     /// <summary>
     /// A plan was in force, and the supervision of the capture's own frame is not to be had: the client
-    /// no longer held the frame's snapshot, or could not read its block. Nothing is written in its
-    /// place -- a neighbouring frame's would be a guess -- and the container says
-    /// <c>supervision="unknown"</c>, so no vehicle's missing state reads as an omission.
+    /// could not read the frame's supervision block, or held no snapshot of the frame to read it from
+    /// (a capture with no vehicle truth at all). Nothing is written in its place -- a neighbouring
+    /// frame's would be a guess -- and the container says <c>supervision="unknown"</c>, so no vehicle's
+    /// missing state reads as an omission.
     /// </summary>
     Unknown,
 }
@@ -43,11 +44,12 @@ public enum SidecarSupervision
 /// same read as the frame's vehicles and their render set, so a body's supervision is always the one it
 /// carried for the vehicle it drew on that frame.</para>
 ///
-/// <para><b>The capture's own frame, or unknown.</b> Where the client no longer held the image's frame,
-/// its vehicles are read from the nearest frame it did hold, and the sidecar names that frame in
-/// <c>telemetry_tick</c>; the supervision is not, because an interval can open or close between two
-/// frames and a body can change hands, so the neighbour's would assert something of this image nobody
-/// asserted.</para>
+/// <para><b>The capture's own frame, or unknown.</b> A still whose own frame the client does not hold is
+/// not written at all (<see cref="FrameRecorder.FrameUnpaired"/>), so the supervision here is read from
+/// the frame the vehicles were read from, and never from a neighbouring frame: an interval can open or
+/// close between two frames and a body can change hands, so the neighbour's would assert something of
+/// this image nobody asserted. Unknown is what remains where the frame's block could not be read, or
+/// where a capture carries no vehicle truth and no snapshot of its frame is held.</para>
 /// </remarks>
 public sealed class CaptureSupervision
 {

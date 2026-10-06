@@ -385,7 +385,7 @@ public sealed class SumoDriveSession : IDisposable
     /// <remarks>
     /// <para>What the binder hands over, and nothing a recorder reads: the server carries it on every
     /// world-observer snapshot, and every reader -- a recorder beside the session included -- takes it
-    /// from there (<c>CarlaClient.GetSnapshotFrame(frame, out served, out renderSet, out supervision)</c>),
+    /// from there (<c>CarlaClient.GetSnapshotFrame(frame, out renderSet, out supervision)</c>),
     /// so no two clients of the world hold different truth for one frame.</para>
     ///
     /// <para>Nothing is put to the server until a plan is bound, nothing at all where the session renders

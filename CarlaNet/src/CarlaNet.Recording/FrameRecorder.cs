@@ -18,6 +18,18 @@ namespace CarlaNet.Recording;
 /// Construction starts recording; <see cref="Dispose"/> stops it (flushes pending captures).
 /// </summary>
 /// <remarks>
+/// <para><b>A still is written with the truth of its own frame, or not at all.</b> The image of a frame
+/// arrives some ticks after the world observer's snapshot of that frame, so the recorder reads each
+/// capture's vehicles, render set, supervision and camera pose from the client's snapshot of the
+/// image's own frame (<see cref="CarlaClient.GetSnapshotFrame(ulong)"/>), and holds the client's
+/// snapshots open for as long as it records (<see cref="SnapshotHold"/>): a frame is released once an
+/// image of a later frame has been prepared, less a margin, and never while an image of it could still
+/// arrive. Where the frame's truth is nonetheless not to be had -- the frame was never observed, or an
+/// image arrived so late that the client's capacity had dropped it -- the still is dropped and counted
+/// in <see cref="FrameUnpaired"/>, never written beside a neighbouring frame's truth: every vehicle
+/// moves every tick, and nothing downstream is made to check such a pairing. A run's closeout holds the
+/// count at zero.</para>
+///
 /// <para><b>The stream thread never waits on the server.</b> The camera's frames arrive on a thread
 /// that reads its socket and calls <see cref="OnFrame"/> inline, and that thread does only what needs
 /// nothing from the server: decimate, copy the pixels, read the cached sun and hand the frame on. The
@@ -76,6 +88,7 @@ public sealed class FrameRecorder : IDisposable
     private readonly Task _preparation;
     private readonly Channel<Job> _channel;
     private readonly Task[] _workers;
+    private readonly SnapshotHold _snapshots;
     private readonly IDisposable _subscription;
     private readonly CaptureInstantClock _captureClock = new();
 
@@ -83,7 +96,7 @@ public sealed class FrameRecorder : IDisposable
     private Transform? _prevSensorTf;
     private double _prevSensorSimTime = double.NegativeInfinity;
     private long _saved, _dropped;
-    private long _telemetryExact, _telemetryOffset, _telemetryWorstOffset;
+    private long _frameUnpaired;
     private long _illuminationPaired, _illuminationUnpaired;
     private long _solarBlockMissing;
     private long _drawDistanceCaptures, _beyondDrawDistance, _partlyBeyondDrawDistance;
@@ -97,6 +110,14 @@ public sealed class FrameRecorder : IDisposable
     /// </summary>
     private static readonly TimeSpan IlluminationWait = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>
+    /// Frames kept behind the last one prepared, past what the pairing needs: images arrive in frame
+    /// order on one stream, so once an image is prepared no earlier frame of that stream will be asked
+    /// for, and the depth capture paired to a still by simulation time in a free-running world is of a
+    /// frame near the still's. Nothing is lost by keeping those few frames a moment longer.
+    /// </summary>
+    public const int FramesKeptBehind = 4;
+
     public long Saved => Interlocked.Read(ref _saved);
     public long Dropped => Interlocked.Read(ref _dropped);
     public bool HaveTelemetryOrigin => _haveOrigin;
@@ -106,15 +127,14 @@ public sealed class FrameRecorder : IDisposable
     /// callsign of the camera's platform track (<see cref="CameraName"/>).</summary>
     public string Name => _name;
 
-    /// <summary>Captures whose truth records came from the very frame that produced the pixels.</summary>
-    public long TelemetryTickExact => Interlocked.Read(ref _telemetryExact);
-
-    /// <summary>Captures whose truth records came from a neighbouring frame, because the client no longer
-    /// held the image's own frame when the image arrived. Each such sidecar says which frame it got.</summary>
-    public long TelemetryTickOffset => Interlocked.Read(ref _telemetryOffset);
-
-    /// <summary>The largest distance, in frames, between a capture's pixels and its truth records.</summary>
-    public long TelemetryTickWorstOffset => Interlocked.Read(ref _telemetryWorstOffset);
+    /// <summary>
+    /// Stills dropped because the truth of their own frame was not to be had: the client held no snapshot
+    /// of the image's frame when the image arrived -- the frame was never observed, or the image came so
+    /// late that the client's capacity had dropped it -- or the frame's records could not be built. No
+    /// such still is written, beside a neighbouring frame's truth or beside none; every still written
+    /// carries its own frame's. A run's closeout holds this at zero.
+    /// </summary>
+    public long FrameUnpaired => Interlocked.Read(ref _frameUnpaired);
 
     /// <summary>Captures written with the illumination declaration of their own frame.</summary>
     public long IlluminationPaired => Interlocked.Read(ref _illuminationPaired);
@@ -159,10 +179,10 @@ public sealed class FrameRecorder : IDisposable
     public long SupervisionPaired => Interlocked.Read(ref _supervisionPaired);
 
     /// <summary>
-    /// Captures written with their supervision unknown, although a plan was in force: the client no
-    /// longer held the snapshot of the image's own frame, or could not read its supervision. Each such
-    /// sidecar says <c>supervision="unknown"</c> and carries none, never a neighbouring frame's, so a
-    /// run's closeout holds it at zero.
+    /// Captures written with their supervision unknown, although a plan was in force: the client could
+    /// not read the supervision block of the image's own frame, or held no snapshot of the frame for a
+    /// capture that carries no vehicle truth. Each such sidecar says <c>supervision="unknown"</c> and
+    /// carries none, never a neighbouring frame's, so a run's closeout holds it at zero.
     /// </summary>
     public long SupervisionUnpaired => Interlocked.Read(ref _supervisionUnpaired);
 
@@ -220,7 +240,8 @@ public sealed class FrameRecorder : IDisposable
     /// </summary>
     public long SensorPoseHeaderDisagreed => _sensorPose?.HeaderDisagreed ?? 0;
 
-    /// <summary>Captures whose own frame the client no longer held, written with their header's pose
+    /// <summary>Captures whose own frame's snapshot did not hold the camera -- or, for a capture that
+    /// carries no vehicle truth, whose frame the client did not hold -- written with their header's pose
     /// unchecked.</summary>
     public long SensorPoseFromHeader => _sensorPose?.FromHeader ?? 0;
 
@@ -235,8 +256,8 @@ public sealed class FrameRecorder : IDisposable
     /// <summary>Of those, the ones whose header carried a different pose; zero from a correct server.</summary>
     public long OcclusionDepthPoseHeaderDisagreed => _occlusion?.DepthPoseHeaderDisagreed ?? 0;
 
-    /// <summary>Matched depth captures whose own frame the client no longer held, projected from their
-    /// header's pose.</summary>
+    /// <summary>Matched depth captures whose own frame the client did not hold with the depth camera in
+    /// it, projected from their header's pose.</summary>
     public long OcclusionDepthPoseFromHeader => _occlusion?.DepthPoseFromHeader ?? 0;
 
     /// <param name="streamToken">The camera actor's StreamToken (24-byte sensor stream token).</param>
@@ -376,8 +397,19 @@ public sealed class FrameRecorder : IDisposable
             });
             _preparation = Task.Run(PreparationLoopAsync);
 
-            // Independent subscription to the camera stream (does not disturb the display listener).
-            _subscription = client.SubscribeToStream(streamToken, OnFrame);
+            // Taken before the subscription, so the frames of the images already in flight are held
+            // when the first of them arrives.
+            _snapshots = client.HoldSnapshotFrames();
+            try
+            {
+                // Independent subscription to the camera stream (does not disturb the display listener).
+                _subscription = client.SubscribeToStream(streamToken, OnFrame);
+            }
+            catch
+            {
+                _snapshots.Dispose();
+                throw;
+            }
         }
         catch
         {
@@ -432,8 +464,11 @@ public sealed class FrameRecorder : IDisposable
         {
             await foreach (Arrival arrival in _arrivals.Reader.ReadAllAsync().ConfigureAwait(false))
             {
-                Job job = Prepare(arrival);
-                if (!_channel.Writer.TryWrite(job))
+                Job? job = Prepare(arrival);
+                // Images arrive in frame order on one stream, so no earlier frame of this camera will
+                // be asked for again: the client may drop the frames before this one, less the margin.
+                _snapshots.Release(arrival.Frame > FramesKeptBehind ? arrival.Frame - FramesKeptBehind : 0);
+                if (job is not null && !_channel.Writer.TryWrite(job))
                     Interlocked.Increment(ref _dropped);
             }
         }
@@ -443,10 +478,13 @@ public sealed class FrameRecorder : IDisposable
         }
     }
 
-    private Job Prepare(Arrival arrival)
+    /// <summary>
+    /// The capture an arrival becomes, or null where it becomes none: a still whose own frame's truth
+    /// is not to be had is dropped and counted (<see cref="FrameUnpaired"/>).
+    /// </summary>
+    private Job? Prepare(Arrival arrival)
     {
         IReadOnlyList<VehicleTelemetry> recs = Array.Empty<VehicleTelemetry>();
-        ulong? telemetryTick = null;
         ObservedRenderSet servedRenderSet = ObservedRenderSet.None;
         ObservedSupervision servedSupervision = ObservedSupervision.None;
         ulong? supervisionFrame = null;
@@ -457,25 +495,27 @@ public sealed class FrameRecorder : IDisposable
             // its own stream, so by now the newest snapshot is usually a tick or more past the pixels,
             // and it can be behind them when the observer thread was held up. Descriptions are cached,
             // so this is fast once every actor has been seen.
+            IReadOnlyList<VehicleTelemetry>? atFrame;
             try
             {
-                recs = _telemetry.Compute(_origin, arrival.Frame, out ulong served, out servedRenderSet,
-                                          out servedSupervision, out bool fromSnapshot);
-                telemetryTick = served;
-                if (fromSnapshot)
-                    supervisionFrame = served;
-                if (served == arrival.Frame)
-                    Interlocked.Increment(ref _telemetryExact);
-                else
-                {
-                    Interlocked.Increment(ref _telemetryOffset);
-                    long gap = (long)(served > arrival.Frame ? served - arrival.Frame : arrival.Frame - served);
-                    long worst;
-                    while (gap > (worst = Interlocked.Read(ref _telemetryWorstOffset))
-                           && Interlocked.CompareExchange(ref _telemetryWorstOffset, gap, worst) != worst) { }
-                }
+                atFrame = _telemetry.ComputeAt(_origin, arrival.Frame, out servedRenderSet, out servedSupervision);
             }
-            catch { }
+            catch
+            {
+                atFrame = null;
+            }
+
+            // The frame's truth is not to be had: the client never held the frame, or dropped it before
+            // this image arrived, or the frame's records could not be built. The nearest frame's truth
+            // is another instant's, so the still is not written.
+            if (atFrame is null)
+            {
+                Interlocked.Increment(ref _frameUnpaired);
+                return null;
+            }
+
+            recs = atFrame;
+            supervisionFrame = arrival.Frame;
         }
 
         // Where the bodies are lent from a pool, the world's vehicle actors are not the scene's
@@ -485,9 +525,9 @@ public sealed class FrameRecorder : IDisposable
         // imagery -- a parked body is neither reported nor measured.
         SidecarVehicles vehicles = SidecarVehicles.World;
         double? drawDistance = _drawDistance;
-        if (_renderSet is not null && telemetryTick is { } described)
+        if (_renderSet is not null && _haveOrigin)
         {
-            PairedTruth paired = _renderSet.Pair(recs, described);
+            PairedTruth paired = _renderSet.Pair(recs, arrival.Frame);
             recs = paired.Records;
             vehicles = paired.Vehicles;
             // The frame's own set says what it was drawn under, so a distance the server refused,
@@ -504,13 +544,12 @@ public sealed class FrameRecorder : IDisposable
 
         // The supervision in force on the image's own frame, as the server carried it, from the same
         // read as the vehicles above, so a body's is the one it carried for the vehicle it drew then. A
-        // capture with no vehicle truth reads the frame's snapshot for it alone. Where the image's frame
-        // was not held, it is unknown, never a neighbour's (CaptureSupervision.For).
+        // capture with no vehicle truth reads the frame's snapshot for it alone, and where the client
+        // does not hold the frame its supervision is unknown, never a neighbour's (CaptureSupervision.For).
         if (supervisionFrame is null
-            && _client.GetSnapshotFrame(arrival.Frame, out ulong held, out _, out ObservedSupervision heldSupervision)
-               is not null)
+            && _client.GetSnapshotFrame(arrival.Frame, out _, out ObservedSupervision heldSupervision) is not null)
         {
-            supervisionFrame = held;
+            supervisionFrame = arrival.Frame;
             servedSupervision = heldSupervision;
         }
 
@@ -582,8 +621,7 @@ public sealed class FrameRecorder : IDisposable
         // Tick and simulation time come from the very frame that produced these pixels, so the still,
         // its truth sidecar and the simulation instant are bound together rather than correlated after
         // the fact by wall clock.
-        var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed,
-                                          telemetryTick);
+        var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed);
         return new Job(arrival.CapturedUtc, arrival.Width, arrival.Height, arrival.Bgra, recs, arrival.Solar,
                        sensor, capture, vehicles, drawDistance, supervision);
     }
@@ -699,9 +737,11 @@ public sealed class FrameRecorder : IDisposable
     {
         try { _subscription.Dispose(); } catch { /* already gone */ }
         // Every frame already handed on is prepared and written: the preparation task completes the
-        // encoding channel when it has drained the arrivals, and the workers finish on that.
+        // encoding channel when it has drained the arrivals, and the workers finish on that. The
+        // snapshots are held until then, so the last arrivals still find their frames.
         _arrivals.Writer.TryComplete();
         try { _preparation.Wait(TimeSpan.FromSeconds(10)); } catch { /* best-effort flush */ }
+        _snapshots.Dispose();
         _channel.Writer.TryComplete();
         _occlusion?.Dispose();
         try { Task.WaitAll(_workers, TimeSpan.FromSeconds(10)); } catch { /* best-effort flush */ }

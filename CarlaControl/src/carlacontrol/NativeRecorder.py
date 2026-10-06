@@ -169,25 +169,34 @@ class NativeRecorder:
             self._log_report(report, note)
 
     def _pairing_note(self) -> str:
-        """How many captures had their truth read from the very frame that produced the pixels."""
+        """Every still written carries the truth of its own frame; this says how many were dropped
+        because the client held no truth of theirs."""
         if self._handle is None:
             return ""
         try:
-            exact = int(self._handle.TelemetryTickExact)
-            offset = int(self._handle.TelemetryTickOffset)
-            worst = int(self._handle.TelemetryTickWorstOffset)
+            written = int(self._handle.Saved)
+            unpaired = int(self._handle.FrameUnpaired)
         except Exception as e:
             self.logger.debug(f"failed to read pairing counters: {e}")
             return ""
-        if not exact and not offset:
+        if not written and not unpaired:
             return ""
-        if not offset:
-            return f"; truth paired to its own frame on all {exact}"
-        # A capture whose own frame was no longer held got the nearest frame still held, and its
-        # sidecar names that frame in telemetry_tick. This is the case to watch: it means images were
-        # arriving further behind the observer than the client keeps history for.
-        return (f"; truth paired to its own frame on {exact}, to a neighbouring frame on {offset} "
-                f"(worst {worst} frame(s) apart, see telemetry_tick in those sidecars)")
+        if not unpaired:
+            return f"; every still carries its own frame's truth ({written})"
+        # A still whose own frame the client did not hold when the image arrived is not written: the
+        # nearest frame's truth is another instant's. This is the case to watch: it means a frame was
+        # never observed, or images were arriving further behind the observer than the client can keep.
+        return (f"; {unpaired} still(s) dropped because the client held no truth of their own frame "
+                "(the run's closeout gates capture.frame_unpaired at zero)")
+
+    @property
+    def frame_unpaired(self) -> int:
+        """Stills dropped because the client held no truth of their own frame when the image arrived.
+
+        A still is written with the truth of its own frame or not at all, so each of these is a
+        missing still AND its missing truth sidecar, never a still beside a neighbouring frame's truth.
+        """
+        return self._counter("FrameUnpaired")
 
     def _pose_note(self) -> str:
         """Where the captures' platform poses came from, for the stop message."""
@@ -323,7 +332,7 @@ class NativeRecorder:
             except Exception as e:
                 self.logger.info(f"exception during stop_recording: {e}")
             report = self.report()
-            note = self._occlusion_note()
+            note = self._occlusion_note() + self._pairing_note()
             self.recording = False
             self._handle = None
             self._log_report(report, note)

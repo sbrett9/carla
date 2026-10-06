@@ -19,10 +19,9 @@ public readonly record struct PairedTruth(IReadOnlyList<VehicleTelemetry> Record
 /// between ticks, and an image arrives several ticks after its frame, so the newest set is routinely
 /// one in which a body has changed hands: joined to it, a body's pose would be named for the vehicle
 /// it carries now rather than the one it carried when the image was taken, or a body just given back
-/// would be listed as the vehicle it no longer renders. The records are those of the image's own frame
-/// whenever the client still held it, and of the neighbouring frame the sidecar names in
-/// <c>telemetry_tick</c> when it did not, so asking for the records' frame is asking for the image's
-/// in every case where the two can be paired at all.</para>
+/// would be listed as the vehicle it no longer renders. The records are always those of the image's
+/// own frame -- the recorder writes no still whose records are another frame's -- so asking for the
+/// records' frame is asking for the image's.</para>
 ///
 /// <para><b>A frame whose set is no longer held is refused, not guessed.</b> The capture keeps its
 /// image, its sun and its sensor pose, and lists no vehicle, marked <see cref="SidecarVehicles.Unknown"/>
