@@ -1050,6 +1050,7 @@ public sealed class CoSimRunReport
             text.AppendLine($"  routed by        {CompileLock.RoutedByText}");
             text.AppendLine($"  compiled for     {CompileLock.WorldText}");
             text.AppendLine($"  processing       {CompileLock.ProcessingText}");
+            text.AppendLine($"  dry run          {CompileLock.DryRunText}");
             text.AppendLine($"  supervision plan {CompileLock.PlanText}");
         }
 

@@ -79,6 +79,9 @@ public sealed class RunManifestWriterTests : IDisposable
         Assert.Equal("deck", opened.GetProperty("run").GetProperty("sensors")[0].GetProperty("sensor_id").GetString());
         Assert.Equal(CoSimFixtures.DwellScenario, opened.GetProperty("scenario").GetProperty("config_path").GetString());
         Assert.False(opened.GetProperty("scenario").GetProperty("compiled").GetBoolean());
+        // Uncompiled, so no lock records a dry run, and nothing was accepted.
+        Assert.Equal(JsonValueKind.Null, opened.GetProperty("scenario").GetProperty("dry_run_ran").ValueKind);
+        Assert.False(opened.GetProperty("scenario").GetProperty("skipped_dry_run_accepted").GetBoolean());
         Assert.Equal(JsonValueKind.Null, opened.GetProperty("plan").ValueKind);
         Assert.Equal(StepSeconds, opened.GetProperty("sumo").GetProperty("step_s").GetDouble());
         Assert.Equal(42, opened.GetProperty("sumo").GetProperty("seed").GetInt64());

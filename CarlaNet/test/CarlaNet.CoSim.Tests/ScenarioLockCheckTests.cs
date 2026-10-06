@@ -39,6 +39,112 @@ public sealed class ScenarioLockCheckTests
         // A lock that names no plan binds no supervision, and runs.
         Assert.Null(check.Plan);
         Assert.Equal("none: the lock names no supervision plan, so the run binds no supervision", check.PlanText);
+
+        // Its compile ran the scenario in SUMO alone, and the report says what that found.
+        Assert.True(check.DryRunRan);
+        Assert.False(check.SkippedDryRunAccepted);
+        Assert.Equal("ran with SUMO 1.27.0 over 60 s: 4 vehicles loaded, 4 inserted, 0 discarded, 0 waiting at "
+                     + "the end; 1 of 1 planned vehicles inserted; 0 collisions", check.DryRunText);
+    }
+
+    [Fact]
+    public void ALockWhoseCompileSkippedTheDryRunIsRefusedNamingTheScenarioAndTheReasonUnlessAccepted()
+    {
+        // As the compiler writes it under --skip-dry-run.
+        const string reason = "skipped at the author's request: nothing established that every vehicle the plan "
+                              + "names enters the run";
+        using CompiledFixture compiled = CompiledFixture.Write(plan: true);
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document["dry_run"] = new JsonObject { ["ran"] = false, ["reason"] = reason };
+        compiled.WriteLock(document);
+
+        CoSimSessionRefusedException refused = Refusal(compiled);
+
+        _output.WriteLine(refused.Message);
+        Assert.StartsWith($"The scenario {compiled.Scenario} ('RightAngleTurn') was compiled without its SUMO-only "
+                          + $"run: its compile lock {compiled.Lock} records that the run was skipped ({reason}).",
+                          refused.Message);
+        Assert.Contains("SUMO has not been started", refused.Message);
+        Assert.Contains("AcceptSkippedDryRun; run_sumo_drive.py --accept-skipped-dry-run; run_capture "
+                        + "scenario.accept_skipped_dry_run", refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+
+        // Accepted, it runs, with its plan bound, and the report says the acceptance.
+        ScenarioLockCheck check = ScenarioLockCheck.Require(
+            compiled.Scenario, CompiledFixture.Catalogue, SolarLeaseTests.PortEpoch(), acceptSkippedDryRun: true);
+        Assert.False(check.DryRunRan);
+        Assert.True(check.SkippedDryRunAccepted);
+        Assert.False(check.Lock!.DryRun!.Ran);
+        Assert.Equal(reason, check.Lock.DryRun.Reason);
+        Assert.NotNull(check.Plan);
+        Assert.Equal($"SKIPPED at the compile ({reason}), accepted explicitly", check.DryRunText);
+    }
+
+    [Fact]
+    public void ALockWrittenBeforeTheCompilerRanADryRunIsRefusedUnlessAccepted()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document.Remove("dry_run");
+        compiled.WriteLock(document);
+
+        CoSimSessionRefusedException refused = Refusal(compiled);
+
+        _output.WriteLine(refused.Message);
+        Assert.Contains($"its compile lock {compiled.Lock} records no dry_run block, so it was written before the "
+                        + "compiler ran one.", refused.Message);
+        Assert.Contains("SUMO has not been started", refused.Message);
+
+        ScenarioLockCheck check = ScenarioLockCheck.Require(
+            compiled.Scenario, CompiledFixture.Catalogue, SolarLeaseTests.PortEpoch(), acceptSkippedDryRun: true);
+        Assert.Null(check.Lock!.DryRun);
+        Assert.False(check.DryRunRan);
+        Assert.True(check.SkippedDryRunAccepted);
+        Assert.Equal("NOT RECORDED: the lock was written before the compiler ran one, accepted explicitly",
+                     check.DryRunText);
+    }
+
+    [Fact]
+    public void AcceptingASkippedDryRunAcceptsNothingWhereTheRunHappened()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+
+        ScenarioLockCheck check = ScenarioLockCheck.Require(
+            compiled.Scenario, CompiledFixture.Catalogue, SolarLeaseTests.PortEpoch(), acceptSkippedDryRun: true);
+
+        Assert.True(check.DryRunRan);
+        Assert.False(check.SkippedDryRunAccepted);
+        Assert.StartsWith("ran with SUMO 1.27.0", check.DryRunText);
+    }
+
+    [Fact]
+    public void ADryRunBlockThatDoesNotSayWhetherItRanIsRefusedWhole()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document["dry_run"]!["ran"] = "yes";
+        compiled.WriteLock(document);
+
+        string message = Refusal(compiled).Message;
+        _output.WriteLine(message);
+        Assert.Contains("does not record dry_run.ran", message);
+    }
+
+    [Fact]
+    public void TheSkippedDryRunIsJudgedOnlyOnceTheFilesAgreeWithTheLock()
+    {
+        // Both wrong: the refusal is the lock's disagreement with the files, which a recompile fixes
+        // along with the run it skipped.
+        using CompiledFixture compiled = CompiledFixture.Write();
+        File.AppendAllText(compiled.Routes, "\n");
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document["dry_run"] = new JsonObject { ["ran"] = false, ["reason"] = "skipped" };
+        document["files"]!["routes"]!["sha256"] = new string('f', 64);
+        compiled.WriteLock(document);
+
+        string message = Refusal(compiled).Message;
+        Assert.Contains("is not the one its compile lock", message);
+        Assert.DoesNotContain("SUMO-only run", message);
     }
 
     [Fact]
@@ -420,6 +526,16 @@ public sealed class ScenarioLockCheckTests
         Assert.Equal("3", check.Lock.LaneChangeDuration);
         Assert.Equal("time-to-teleport '-1', lanechange.duration '3'", check.ProcessingText);
 
+        // Its compile ran it in SUMO alone over its whole span, and every vehicle entered.
+        _output.WriteLine(check.DryRunText);
+        Assert.True(check.DryRunRan);
+        Assert.Equal("1.27.0", check.Lock.DryRun!.SumoRelease);
+        Assert.Equal(2220.0, check.Lock.DryRun.EndSeconds);
+        Assert.Equal(check.Lock.DryRun.VehiclesLoaded, check.Lock.DryRun.VehiclesInserted);
+        Assert.Equal((0L, 0L, 0L), (check.Lock.DryRun.VehiclesDiscarded, check.Lock.DryRun.VehiclesWaitingAtEnd,
+                                    check.Lock.DryRun.Collisions));
+        Assert.StartsWith("ran with SUMO 1.27.0 over 2220 s: ", check.DryRunText);
+
         // Its plan, bound to the files it runs: it asserts nothing, and says so of every flow.
         _output.WriteLine(check.PlanText);
         Assert.Equal("Gardnerville_Centerville_Lane_NeighborhoodOrbit", check.Plan!.PlanId);
@@ -477,6 +593,26 @@ public sealed class ScenarioLockCheckTests
         Assert.Equal(check.Lock!.VocabularyDigest, check.Plan.Vocabulary.Digest);
         Assert.StartsWith("Shahid_Bahonar_Port_PatternOfLife: 27 instances (5 annotated, 21 nominal, 1 absent)",
                           check.PlanText);
+
+        // Every planned vehicle entered its compile's SUMO-only run, over the whole week.
+        Assert.True(check.DryRunRan);
+        Assert.Equal(604800.0, check.Lock.DryRun!.EndSeconds);
+        Assert.Equal(check.Lock.DryRun.PlannedTotal, check.Lock.DryRun.PlannedInserted);
+    }
+
+    [Fact]
+    public void EveryShippedLockRecordsThatItsCompileRanTheScenarioInSumoAlone()
+    {
+        // Each lock in Import/ was written by a compiler that ran the check, so a session starts on
+        // every shipped scenario without accepting anything.
+        string import = Path.GetDirectoryName(RepositoryFile("Import", "Arapahoe_I25_UnderpassDwell.lock.json"))!;
+        string[] locks = Directory.GetFiles(import, "*.lock.json");
+        Assert.NotEmpty(locks);
+        foreach (string path in locks)
+        {
+            ScenarioLock locked = ScenarioLock.Read(path);
+            Assert.True(locked.DryRun is { Ran: true }, $"{Path.GetFileName(path)} records no completed dry run");
+        }
     }
 
     private static CoSimSessionRefusedException Refusal(CompiledFixture compiled) =>

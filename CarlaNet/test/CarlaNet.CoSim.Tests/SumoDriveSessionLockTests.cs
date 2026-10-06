@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit.Abstractions;
 
@@ -47,6 +48,65 @@ public sealed class SumoDriveSessionLockTests
         Assert.Null(session.Report.CompileLock.Plan);
         Assert.Contains("  supervision plan none: the lock names no supervision plan, so the run binds no "
                         + "supervision", report);
+
+        // Its compile ran it in SUMO alone, and the report says what that found.
+        Assert.Contains("  dry run          ran with SUMO 1.27.0 over 60 s: 4 vehicles loaded, 4 inserted, 0 "
+                        + "discarded, 0 waiting at the end; 1 of 1 planned vehicles inserted; 0 collisions", report);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionOnAScenarioWhoseCompileSkippedTheDryRunIsRefusedBeforeSumoStartsUnlessAccepted()
+    {
+        // Verbose, so a SUMO that was launched would have written to the console.
+        using CompiledFixture compiled = CompiledFixture.Write(configuration: VerboseConfiguration());
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document["dry_run"] = new JsonObject
+        {
+            ["ran"] = false,
+            ["reason"] = "skipped at the author's request: nothing established that every vehicle the plan names "
+                         + "enters the run",
+        };
+        compiled.WriteLock(document);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        List<string> console = [];
+        SumoDriveSessionOptions options = Options(compiled.Scenario, world);
+        options.TickWorld = null;
+        options.World = carla;
+        options.SumoOutput = console.Add;
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        _output.WriteLine(refused.Message);
+        Assert.Contains("was compiled without its SUMO-only run", refused.Message);
+        Assert.Contains("skipped at the author's request", refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+        Assert.Empty(console);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.LayerWrites);
+        Assert.Empty(carla.SolarWrites);
+
+        // Accepted, it runs, and the report and the run manifest say so in the lock's words.
+        options.AcceptSkippedDryRun = true;
+        options.RunManifestPath = Path.Combine(compiled.Directory, "truth", "manifest.jsonl");
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            Assert.True(session.Report.CompileLock.SkippedDryRunAccepted);
+            Assert.False(session.Report.CompileLock.DryRunRan);
+            Assert.Contains("  dry run          SKIPPED at the compile (skipped at the author's request: nothing "
+                            + "established that every vehicle the plan names enters the run), accepted explicitly",
+                            session.Report.ToString());
+        }
+
+        using JsonDocument opened = JsonDocument.Parse(File.ReadLines(options.RunManifestPath).First());
+        JsonElement scenario = opened.RootElement.GetProperty("scenario");
+        Assert.False(scenario.GetProperty("dry_run_ran").GetBoolean());
+        Assert.True(scenario.GetProperty("skipped_dry_run_accepted").GetBoolean());
+
+        // Started this time, and it said so: the empty console above was a SUMO never launched.
+        Assert.Contains(console, line => line.Contains("Starting server", StringComparison.Ordinal));
     }
 
     [RequiresSumoFact]

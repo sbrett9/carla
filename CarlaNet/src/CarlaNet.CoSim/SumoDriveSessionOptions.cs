@@ -4,7 +4,8 @@ namespace CarlaNet.CoSim;
 /// <param name="ScenarioPath">
 /// The scenario's SUMO configuration. The network it names must be the one the world package
 /// carries, compared by canonical fingerprint before SUMO is started (<see cref="ScenarioNetworkCheck"/>);
-/// where a compile lock sits beside it, the files it runs must be the ones the lock binds
+/// where a compile lock sits beside it, the files it runs must be the ones the lock binds and the lock
+/// must record that the compiler ran the scenario in SUMO alone, unless <see cref="AcceptSkippedDryRun"/>
 /// (<see cref="ScenarioLockCheck"/>); it must not let SUMO teleport a waiting vehicle unless
 /// <see cref="AllowTeleporting"/> (<see cref="TeleportingCheck"/>, <see cref="SumoDistributionEditCheck"/>);
 /// and it must not let SUMO move or remove a vehicle at a collision, skip the collision check, offset its
@@ -144,6 +145,23 @@ public sealed record SumoDriveSessionOptions(
     /// collision action that teleports: a collision is constrained to <c>warn</c> whatever this says.
     /// </remarks>
     public bool AllowTeleporting { get; set; }
+
+    /// <summary>
+    /// Run a compiled scenario whose compile skipped its SUMO-only run, or whose lock was written before
+    /// the compiler ran one, rather than refusing.
+    /// </summary>
+    /// <remarks>
+    /// The scenario compiler runs the files it writes in SUMO alone over the scenario's whole span and
+    /// refuses a scenario in which a vehicle the supervision plan names never enters the simulation (its
+    /// check 59); <c>compile_scenario.py --skip-dry-run</c> skips that for quick iteration on a draft, and
+    /// the lock records it (<see cref="LockedDryRun"/>). A run of such a scenario finds the same fault
+    /// only when SUMO drops the vehicle, hours of rendering in, so the session refuses it before SUMO is
+    /// started unless this is set. Not silent: the report records that the skipped run was accepted,
+    /// with the lock's reason (<see cref="ScenarioLockCheck.DryRunText"/>). It accepts nothing of an
+    /// uncompiled scenario, which has no lock to record a run, and nothing where the lock says the run
+    /// happened.
+    /// </remarks>
+    public bool AcceptSkippedDryRun { get; set; }
 
     /// <summary>
     /// Height of the actor origin above the contact surface per blueprint, where it has been
