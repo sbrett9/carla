@@ -397,6 +397,14 @@ one: say so, drop the class, and let the shares redistribute — do not reach fo
 body, because a substituted body makes the imagery and the behavioural record disagree while each
 stays internally consistent.
 
+**Which bodies' lights work.** `references/vehicles.md`, generated from the catalogue, lists every
+class and body with whether its headlights, brake lights and turn signals light up, from the
+catalogue's optical pass; the resolution report's vehicle section states the same for the bodies a
+compiled scenario binds. The co-simulation session drives every body's lights by one rule —
+headlights by the sun, brake lights and turn signals from SUMO's signals — so a body whose lights read
+`unlit` is commanded like every other and shows nothing. Information only: nothing refuses or warns on
+it, and per-vehicle light state is not in the truth record.
+
 ## The recipe for a new scenario
 
 Prefer a specification compiled with `compile_scenario.py` (above): it resolves places, routes and checks everything below itself. This recipe is for the Python builders, which write SUMO XML directly.

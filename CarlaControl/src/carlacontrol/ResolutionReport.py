@@ -5,7 +5,8 @@ catalogue entries, dates or the sun: its clock reads elapsed seconds (`07_Scenar
 §5.3). So this report is **the only place an annotation or an epoch can be checked** before a capture
 is spent. It states every place and what it became, the epoch in one sentence, every declared instant
 with its second and its civil time, every rota and every skip with its reason, every route as
-`duarouter` produced it, every lane closure and its window, every vehicle type and the body it binds,
+`duarouter` produced it, every lane closure and its window, every vehicle type and the body it binds
+with whether that body's headlights, brake lights and turn signals light up,
 every supervision instance with its intervals in seconds and civil time, every capture window with its
 civil date and the sun the session will declare, the illumination-label association in full, every
 warning in full, what a SUMO-only run of the compiled files showed, the SUMO options the compiler fixed,
@@ -74,6 +75,7 @@ class ResolutionReport:
         lines += self._rotas(d.get("rotas"))
         lines += self._routes(d.get("routes"))
         lines += self._lane_closures(d.get("lane_closures"))
+        lines += self._vehicle_types(d.get("vehicle_types"))
         lines += self._supervision(d.get("supervision"))
         lines += self._dry_run(d.get("dry_run"))
         if "lock" in d:
@@ -208,6 +210,33 @@ class ResolutionReport:
             lines.append(f"| {c['id']} | {c['edge']} {c['street']} | {' '.join(c['lanes'])} | "
                          f"{c['open_lanes']} | {c['begin']['civil']} | {c['end']['civil']} | "
                          f"{' '.join(c['notify'])} |")
+        return [*lines, ""]
+
+    @staticmethod
+    def _vehicle_types(types) -> list[str]:
+        """Every vehicle type and the body it binds, with the body's measured dimensions and whether
+        its headlights, brake lights and turn signals light up when the session drives them, from the
+        catalogue's optical pass. Information for the author: a body whose lights are `unlit` is
+        commanded like every other and shows nothing."""
+        if not types:
+            return []
+        catalogue = types["catalogue"]
+        lines = ["## Vehicle types", "",
+                 f"Bodies from catalogue `{catalogue['catalogue_id']}` ({catalogue['path']}, digest "
+                 f"`{catalogue['catalogue_digest']}`). The lights are whether each lights up on the "
+                 "body when the session drives it: headlights by the sun, brake lights and turn "
+                 "signals from SUMO's signals.", ""]
+        lines += [f"- {line}" for line in types.get("classes", [])]
+        lines += ["", "| Type | Body | Length (m) | Body width (m) | Height (m) | Headlights | "
+                  "Brake lights | Turn signals |", "|---|---|---|---|---|---|---|---|"]
+        for type_id, body in types.get("types", {}).items():
+            lights = body.get("lights") or {}
+            body_width = body.get("body_width_m")
+            lines.append(f"| {type_id} | {body['blueprint']} | {body['length_m']:.3f} | "
+                         f"{'-' if body_width is None else f'{body_width:.3f}'} | "
+                         f"{body['height_m']:.3f} | {lights.get('headlights', 'unknown')} | "
+                         f"{lights.get('brake_lights', 'unknown')} | "
+                         f"{lights.get('turn_signals', 'unknown')} |")
         return [*lines, ""]
 
     @staticmethod

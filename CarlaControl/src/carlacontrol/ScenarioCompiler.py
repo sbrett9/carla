@@ -428,8 +428,11 @@ class ScenarioCompiler:
     def _body(self, blueprint: str) -> dict:
         extent = self.catalogue.extent_of(blueprint)
         # The box's width, mirrors included, is the drawn body's; the width without them is SUMO's.
+        # The lights are information for the author: whether the body's headlights, brake lights and
+        # turn signals light up when the session drives them, from the catalogue's optical pass.
         return {"blueprint": blueprint, "length_m": extent.length_m, "width_m": extent.width_m,
-                "body_width_m": extent.body_width_m, "height_m": extent.height_m}
+                "body_width_m": extent.body_width_m, "height_m": extent.height_m,
+                "lights": self.catalogue.lights_of(blueprint)}
 
     def _resolve_rotas(self) -> None:
         self.rota_entries: dict[str, list[RotaEntry]] = {}
