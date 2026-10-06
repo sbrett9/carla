@@ -6,6 +6,7 @@ using CarlaNet.Sumo;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Lighting;
+using CarlaNet.Types.Streaming;
 using CarlaNet.Types.Supervision;
 
 using ActorId = uint;
@@ -106,6 +107,12 @@ public sealed class SumoDriveSession : IDisposable
     private readonly Dictionary<ActorId, (string VehicleId, SupervisionInForce Supervision)> _supervisionNamed = [];
     private readonly List<ActorId> _supervisionDropped = [];
     private readonly List<BodySupervision> _supervisionSinceNamed = [];
+    private readonly HashSet<ActorId> _posedThisTick = [];
+    private readonly HashSet<ActorId> _placedAtSumoStepThisTick = [];
+    private readonly Dictionary<ActorId, (string VehicleId, PoseSource Source)> _poseSourceNamed = [];
+    private readonly List<ActorId> _poseSimulatedSinceNamed = [];
+    private readonly List<ActorId> _poseHeldSinceNamed = [];
+    private readonly List<ActorId> _poseClearedSinceNamed = [];
     private readonly TickBatch _batch = new();
     private readonly List<(string VehicleId, ActorId Actor, VehiclePose Pose)> _commanded = [];
     private readonly List<VehiclePose> _appliedPoses = [];
@@ -153,6 +160,9 @@ public sealed class SumoDriveSession : IDisposable
     private double? _drawDistanceApplied;
     private int _bodiesGivenTheDrawDistance;
     private ulong? _lastFrame;
+    private ulong? _stepFrame;
+    private bool _stepToDeclare = true;
+    private bool _stepDeclaredThisTick;
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
@@ -1001,6 +1011,7 @@ public sealed class SumoDriveSession : IDisposable
             ApplyTheDrawDistance();
             NameTheRenderSet();
             NameTheSupervision();
+            NameThePoseSource(tick);
             WriteTheSun();
             _bridgeClock.Stop();
 
@@ -1018,6 +1029,7 @@ public sealed class SumoDriveSession : IDisposable
             }
 
             _lastFrame = frame;
+            CheckTheStep(frame, tick);
             RecordTheRenderSet(frame);
             AuditTheSun(frame);
             MeasureDivergence();
@@ -1092,6 +1104,7 @@ public sealed class SumoDriveSession : IDisposable
         // Before the bodies go, though they take their own supervision with them: the plan is held for
         // the world, and outlives every body.
         Attempt(failures, "withdraw the supervision put to the server", WithdrawTheSupervisionAtTheEnd);
+        Attempt(failures, "withdraw the pose source put to the server", WithdrawThePoseSourceAtTheEnd);
         Attempt(failures, "destroy the bodies the session spawned", () => _pool?.DestroyAll());
         Attempt(failures, "draw the rendering layers again", () => _layers?.Dispose());
         Attempt(failures, "give back the world's settings", () => _settings?.Dispose());
@@ -1497,6 +1510,192 @@ public sealed class SumoDriveSession : IDisposable
         {
             WithdrawTheSupervision(world);
         }
+    }
+
+    /// <summary>
+    /// Put to the server where the pose each lent body is drawn at on the frame this tick produces comes
+    /// from: the SUMO step, declared once, and every body whose pose follows no step, named as its case
+    /// begins and ends.
+    /// </summary>
+    /// <param name="tickWithinStep">Which tick of the SUMO step this is, from 0.</param>
+    /// <remarks>
+    /// <para><b>Why the server, and only the server.</b> The session alone knows which ticks a SUMO step
+    /// falls on and which bodies it could not place, and a truth record of a frame is written by whichever
+    /// process records it. Put to the server, it rides on every world-observer snapshot beside the render
+    /// set, and every reader of a frame -- a recorder beside the session or in another process -- reads the
+    /// same pose source for it (the owner's ruling of 2026-10-06).</para>
+    ///
+    /// <para><b>The step once, not every tick.</b> The SUMO step is a whole number of world ticks
+    /// (<see cref="CoSimClock.WorldTicksPerSumoStep"/>), and on the first tick of every step the
+    /// interpolation fraction is zero, so a body stands where SUMO put it; on every other tick it stands
+    /// between two steps. So the step is declared on the first tick of the first step the session renders
+    /// -- the server takes the frame that tick produces as a step frame -- and every reader computes the
+    /// rest from a frame's number. It is declared again only after a frame comes back where the step does
+    /// not put it (<see cref="CheckTheStep"/>).</para>
+    ///
+    /// <para><b>Bodies only on a change.</b> Two cases follow no step, and the code holds both: a lent body
+    /// this tick did not pose -- its pose refused for want of ground, or its vehicle missing from SUMO's
+    /// step -- stands where its last pose put it, held; and a body whose step was discontinuous is placed at
+    /// SUMO's later step on every tick of it rather than interpolated, simulated. Each is named as it
+    /// begins and named cleared as it ends, which in a run is rare; a body given back or handed to another
+    /// vehicle loses its name on the server when the render set says so, a moment before in this drain.
+    /// Only a body the server holds lent to the vehicle it draws is named, because no other frame shows
+    /// it. A server that refuses a change, or refused the render set, is sent nothing more, and the report
+    /// says why.</para>
+    /// </remarks>
+    private void NameThePoseSource(int tickWithinStep)
+    {
+        _stepDeclaredThisTick = false;
+        if (_world is not { } world || _pool is not { } pool
+            || Report.PoseSourceRefused is not null || Report.RenderSetRefused is not null)
+        {
+            return;
+        }
+
+        // The server dropped the name of every body given back or handed to another vehicle when the render
+        // set told it so.
+        _poseClearedSinceNamed.Clear();
+        foreach ((ActorId actor, (string vehicleId, _)) in _poseSourceNamed)
+        {
+            if (!_namedToServer.TryGetValue(actor, out string? drawing) || drawing != vehicleId)
+            {
+                _poseClearedSinceNamed.Add(actor);
+            }
+        }
+
+        foreach (ActorId actor in _poseClearedSinceNamed)
+        {
+            _poseSourceNamed.Remove(actor);
+        }
+
+        _poseClearedSinceNamed.Clear();
+        _poseSimulatedSinceNamed.Clear();
+        _poseHeldSinceNamed.Clear();
+        foreach ((string vehicleId, PooledBody body) in pool.Held)
+        {
+            if (!_namedToServer.TryGetValue(body.Actor, out string? named) || named != vehicleId)
+            {
+                continue;
+            }
+
+            PoseSource? wanted = !_posedThisTick.Contains(body.Actor) ? PoseSource.Held
+                : _placedAtSumoStepThisTick.Contains(body.Actor) ? PoseSource.Simulated
+                : null;
+            PoseSource? carried = _poseSourceNamed.TryGetValue(body.Actor, out var held) ? held.Source : null;
+            if (wanted == carried)
+            {
+                continue;
+            }
+
+            switch (wanted)
+            {
+                case PoseSource.Held:
+                    _poseHeldSinceNamed.Add(body.Actor);
+                    break;
+                case PoseSource.Simulated:
+                    _poseSimulatedSinceNamed.Add(body.Actor);
+                    break;
+                default:
+                    _poseClearedSinceNamed.Add(body.Actor);
+                    break;
+            }
+        }
+
+        bool declare = _stepToDeclare && tickWithinStep == 0;
+        int changed = _poseSimulatedSinceNamed.Count + _poseHeldSinceNamed.Count + _poseClearedSinceNamed.Count;
+        if (!declare && changed == 0)
+        {
+            return;
+        }
+
+        PoseSourceWrite written = world.WritePoseSource(new PoseSourceChange(
+            declare, (uint)Clock.WorldTicksPerSumoStep,
+            _poseSimulatedSinceNamed, _poseHeldSinceNamed, _poseClearedSinceNamed));
+        if (!written.Taken)
+        {
+            Report.PoseSourceRefused = written.Refusal;
+            return;
+        }
+
+        if (declare)
+        {
+            _stepToDeclare = false;
+            _stepDeclaredThisTick = true;
+            Report.PoseSourceStepDeclarations++;
+        }
+
+        foreach (ActorId actor in _poseClearedSinceNamed)
+        {
+            _poseSourceNamed.Remove(actor);
+        }
+
+        foreach (ActorId actor in _poseSimulatedSinceNamed)
+        {
+            _poseSourceNamed[actor] = (_namedToServer[actor], PoseSource.Simulated);
+        }
+
+        foreach (ActorId actor in _poseHeldSinceNamed)
+        {
+            _poseSourceNamed[actor] = (_namedToServer[actor], PoseSource.Held);
+        }
+
+        Report.PoseSourceUpdates++;
+        Report.PoseSourceBodiesNotApplied += Math.Max(0, changed - written.BodiesApplied);
+    }
+
+    /// <summary>
+    /// Hold the frame a tick produced against the step the server was told, and declare the step again
+    /// at the next step's first tick where the frame is not where the step puts it.
+    /// </summary>
+    /// <remarks>
+    /// The server takes the step to fall on the frame the declaring tick produced, and a reader takes
+    /// every frame a whole number of steps after it to fall on one too. That holds while the world
+    /// produces one frame per tick of this session; a client that ticks the world in between moves every
+    /// later frame off the step, and the frames until the next declaration carry a step that does not
+    /// describe them. Counted, so the run says how often.
+    /// </remarks>
+    private void CheckTheStep(ulong frame, int tickWithinStep)
+    {
+        if (_stepDeclaredThisTick)
+        {
+            _stepFrame = frame;
+            return;
+        }
+
+        if (_stepToDeclare || _stepFrame is not { } stepFrame)
+        {
+            return;
+        }
+
+        ulong ticksPerStep = (ulong)Clock.WorldTicksPerSumoStep;
+        if (frame < stepFrame || (frame - stepFrame) % ticksPerStep != (ulong)tickWithinStep)
+        {
+            Report.PoseSourceFramesOutOfStep++;
+            _stepToDeclare = true;
+        }
+    }
+
+    /// <summary>
+    /// Withdraw the pose source put to the server, as the session ends, so the world carries no step that
+    /// no session is posing bodies from.
+    /// </summary>
+    private void WithdrawThePoseSourceAtTheEnd()
+    {
+        if (_world is not { } world || Report.PoseSourceUpdates == 0 || Report.PoseSourceRefused is not null)
+        {
+            return;
+        }
+
+        PoseSourceWrite written = world.WritePoseSource(PoseSourceChange.Withdrawal);
+        if (!written.Taken)
+        {
+            Report.PoseSourceRefused = written.Refusal;
+            return;
+        }
+
+        _poseSourceNamed.Clear();
+        _stepFrame = null;
+        Report.PoseSourceUpdates++;
     }
 
     /// <summary>
@@ -2016,6 +2215,8 @@ public sealed class SumoDriveSession : IDisposable
         _commanded.Clear();
         _appliedPoses.Clear();
         _sumoAngles.Clear();
+        _posedThisTick.Clear();
+        _placedAtSumoStepThisTick.Clear();
         VehicleLightStateFlags headlights = HeadlightsForThisTick();
 
         foreach (string vehicleId in _renderSet.RenderedVehicleIds)
@@ -2110,6 +2311,14 @@ public sealed class SumoDriveSession : IDisposable
                 _batch.Pose(actor, applied);
                 _commanded.Add((vehicleId, actor, applied));
                 _appliedPoses.Add(applied);
+                // Where this pose came from, where it follows no step: a body not posed this tick is held,
+                // and one placed at SUMO's later step across a discontinuity stands at SUMO's own step on
+                // every frame of this one (NameThePoseSource).
+                _posedThisTick.Add(actor);
+                if (state.Case == LaneInterpolationCase.Discontinuous)
+                {
+                    _placedAtSumoStepThisTick.Add(actor);
+                }
                 lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
             }
 

@@ -203,6 +203,11 @@ public sealed class VehicleTelemetryService
                 Rendered = renderSet.TryGetLent(id, out var lent)
                     ? new RenderedVehicle(id, lent.VehicleId, lent.VehicleTypeId, lent.AdmittedFrame)
                     : null,
+                // From the same snapshot as the pose: the lights the frame's vehicle state carried, and
+                // where the frame's pose came from, resolved with that frame's own number and render set.
+                // Neither is guessed where the snapshot did not carry it.
+                Lights = snap.CommandedLights(),
+                PoseSource = snap.PoseSource,
             });
         }
         // Drop cached descriptions for actors no longer present so this cache tracks the live world too

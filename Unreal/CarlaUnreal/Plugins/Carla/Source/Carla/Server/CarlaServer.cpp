@@ -1747,8 +1747,8 @@ void FCarlaServer::FPimpl::BindActions()
   // are. Bodies given back are applied before bodies lent, so one given back and lent again in one
   // change ends lent. A body given back, or lent to a vehicle other than the one it drew, loses the
   // supervision held for it (update_supervision), which was the author's assertion about that
-  // vehicle and not about whatever the body draws next. Answers how many of the named actors were
-  // found.
+  // vehicle and not about whatever the body draws next, and the pose source named for it
+  // (update_pose_source), which was that loan's. Answers how many of the named actors were found.
   BIND_SYNC(update_render_set) << [this](
       const std::vector<FCarlaActor::IdType> &lent_ids,
       const std::vector<std::string> &vehicle_ids,
@@ -1796,6 +1796,7 @@ void FCarlaServer::FPimpl::BindActions()
       Lent.VehicleId = vehicle_ids[Index];
       Lent.VehicleTypeId = vehicle_type_ids[Index];
       Lent.AdmittedFrame = bSameVehicle ? Held.AdmittedFrame : NextFrame;
+      Lent.PoseSource = bSameVehicle ? Held.PoseSource : FRenderSetMembership::EPoseSource::FollowsStep;
       View->SetRenderSetMembership(Lent);
       if (!bSameVehicle)
       {
@@ -1941,6 +1942,95 @@ void FCarlaServer::FPimpl::BindActions()
     }
 
     return Applied;
+  };
+
+  // Hold where the pose each of a co-simulation session's lent bodies is drawn at comes from. The
+  // session poses its bodies every world tick from SUMO steps a whole number of ticks apart, so it
+  // declares the step once -- ticks_per_step, falling on the frame after the one in progress, which
+  // is also the frame tick_cue answers with -- and every frame a whole number of steps after that one
+  // shows SUMO's own step, every other an interpolated pose. A body whose pose follows neither is named
+  // as its case begins and named cleared as it ends: one placed at SUMO's own step on every frame of a
+  // step across a discontinuity (simulated), one left where its last pose put it because the session
+  // could not place it (held). The world observer carries the step and every lent body named on every
+  // snapshot from the next frame on, so every client of the world reads the same pose source for the
+  // same frame, and nothing about it is kept in one client's process or sent per tick.
+  //
+  // declare_step with a ticks_per_step of zero withdraws everything: the step, and every body's name,
+  // so the snapshot carries no pose source block again; it carries nothing else. A body's name is held
+  // on its render set record and only while it is lent: a body not lent is not given one, and a body
+  // given back or handed to another vehicle loses it (update_render_set). Cleared bodies are applied
+  // first, then simulated, then held. Everything is checked before anything is changed, so a refused
+  // change leaves what was held. Answers how many of the named bodies were found, and lent where they
+  // were named simulated or held.
+  BIND_SYNC(update_pose_source) << [this](
+      const bool declare_step,
+      const uint32_t ticks_per_step,
+      const std::vector<FCarlaActor::IdType> &simulated_ids,
+      const std::vector<FCarlaActor::IdType> &held_ids,
+      const std::vector<FCarlaActor::IdType> &cleared_ids) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+    using EPoseSource = FRenderSetMembership::EPoseSource;
+
+    const bool bWithdrawal = declare_step && ticks_per_step == 0u;
+    if (bWithdrawal && (!simulated_ids.empty() || !held_ids.empty() || !cleared_ids.empty()))
+    {
+      RESPOND_ERROR("update_pose_source: a withdrawal withdraws every body's pose source and carries nothing else");
+    }
+
+    if (bWithdrawal)
+    {
+      Episode->GetSumoStepPhase() = FSumoStepPhase();
+      for (auto& Named : Episode->GetActorRegistry())
+      {
+        FCarlaActor* View = Named.Value.Get();
+        if (View == nullptr)
+        {
+          continue;
+        }
+        FRenderSetMembership Membership = View->GetRenderSetMembership();
+        if (Membership.PoseSource != EPoseSource::FollowsStep)
+        {
+          Membership.PoseSource = EPoseSource::FollowsStep;
+          View->SetRenderSetMembership(Membership);
+        }
+      }
+      return 0u;
+    }
+
+    if (declare_step)
+    {
+      FSumoStepPhase &Phase = Episode->GetSumoStepPhase();
+      Phase.TicksPerStep = ticks_per_step;
+      Phase.StepFrame = FCarlaEngine::GetFrameCounter() + 1u;
+    }
+
+    uint32_t Found = 0u;
+    // Name each body found; a body named simulated or held only while the render set holds it lent.
+    auto NameEach = [this, &Found](const std::vector<FCarlaActor::IdType> &Ids, EPoseSource Source)
+    {
+      for (const FCarlaActor::IdType Id : Ids)
+      {
+        FCarlaActor* View = Episode->FindCarlaActor(Id);
+        if (View == nullptr)
+        {
+          continue;
+        }
+        FRenderSetMembership Membership = View->GetRenderSetMembership();
+        if (Source != EPoseSource::FollowsStep &&
+            Membership.State != FRenderSetMembership::EState::Lent)
+        {
+          continue;
+        }
+        Membership.PoseSource = Source;
+        View->SetRenderSetMembership(Membership);
+        ++Found;
+      }
+    };
+    NameEach(cleared_ids, EPoseSource::FollowsStep);
+    NameEach(simulated_ids, EPoseSource::Simulated);
+    NameEach(held_ids, EPoseSource::Held);
+    return Found;
   };
 
   // Take the drive lease on this world: the claim to be the one traffic system that drives its

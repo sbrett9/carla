@@ -268,6 +268,55 @@ def test_a_capture_written_without_a_solar_block_is_a_gate_not_met(layout):
     assert "solar block missing 2" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
 
 
+def test_a_capture_written_with_its_lights_or_pose_source_unknown_is_a_gate_not_met(layout):
+    # Doc 08 §5.1: a vehicle in the picture carries its lights and, drawn by a SUMO drive, its pose source,
+    # from the snapshot of the capture's own frame, or the capture says they are unknown; the gates are
+    # that there are none.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    for field in ("lights_unknown", "pose_source_unknown"):
+        met = gate(report.gates(report.snapshot(), 0), f"capture.{field}[OVERWATCH-1]")
+        assert (met["status"], met["observed"], met["threshold"], met["met"]) == ("evaluated", 0, 0, True)
+
+    recorder.LightsUnknown = 3
+    recorder.PoseSourceUnknown = 2
+    snapshot = report.snapshot()
+    assert (snapshot["channels"][0]["lights_unknown"], snapshot["channels"][0]["pose_source_unknown"]) == (3, 2)
+    lights = gate(report.gates(snapshot, 0), "capture.lights_unknown[OVERWATCH-1]")
+    poses = gate(report.gates(snapshot, 0), "capture.pose_source_unknown[OVERWATCH-1]")
+    assert (lights["observed"], lights["met"], poses["observed"], poses["met"]) == (3, False, 2, False)
+    assert lights["owner"] == poses["owner"] == "08 §5.1"
+    assert "lights unknown 3, pose source unknown 2" in RunCloseoutReport.render(snapshot,
+                                                                                report.gates(snapshot, 0))
+
+
+def test_a_recorder_built_before_it_wrote_lights_and_pose_sources_skips_both_gates(layout):
+    # Not measured is never passed.
+    report, session, recorder = closeout(layout)
+    session.Advance()
+    del recorder.LightsUnknown
+    del recorder.PoseSourceUnknown
+    snapshot = report.snapshot()
+    assert snapshot["channels"][0]["lights_unknown"] is None
+    for field in ("lights_unknown", "pose_source_unknown"):
+        assert gate(report.gates(snapshot, 0), f"capture.{field}[OVERWATCH-1]")["status"] == "skipped"
+    assert "lights unknown" not in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
+
+
+def test_a_server_that_refused_the_pose_source_is_named_and_the_run_goes_on(layout):
+    # A server built before it carried a pose source refuses the session's; the closeout says what it said.
+    report, session, _ = closeout(layout)
+    session.Advance()
+    assert report.snapshot()["render"]["pose_source_refused"] is None
+    assert "pose source: refused" not in RunCloseoutReport.render(report.snapshot(), [])
+
+    session.Report.PoseSourceRefused = "unknown method 'update_pose_source'"
+    snapshot = report.snapshot()
+    assert snapshot["render"]["pose_source_refused"] == "unknown method 'update_pose_source'"
+    assert ("pose source: refused by the server, so no capture says where a vehicle's pose came from "
+            "(unknown method 'update_pose_source')") in RunCloseoutReport.render(snapshot, [])
+
+
 def test_a_capture_whose_image_header_disagreed_with_its_frame_s_snapshot_is_a_gate_not_met(layout):
     # The recorder wrote the snapshot's pose, so the still is placed right; the gate records that the
     # server stamped the header after the frame.

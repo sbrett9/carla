@@ -532,6 +532,48 @@ public sealed class CoSimRunReport
     public string? SupervisionRefused { get; internal set; }
 
     /// <summary>
+    /// Changes to the pose source put to the server: the SUMO step declared once, as the first tick is
+    /// cued, and again only after a frame came back out of step; a body named as its pose stops or starts
+    /// following the step -- held where its pose was refused, placed at SUMO's own step across a
+    /// discontinuity; and one withdrawing it all as the session ends. None on any other tick.
+    /// </summary>
+    /// <remarks>
+    /// The server carries the step and the named bodies on every world-observer snapshot, so every reader
+    /// computes where each lent body's pose on a frame came from with that frame's number, and nothing is
+    /// sent per tick (the owner's ruling of 2026-10-06).
+    /// </remarks>
+    public long PoseSourceUpdates { get; internal set; }
+
+    /// <summary>
+    /// How many times the SUMO step was declared to the server: one in a run whose world produced its
+    /// frames one per tick, and one more after each frame that came back out of step.
+    /// </summary>
+    public long PoseSourceStepDeclarations { get; internal set; }
+
+    /// <summary>
+    /// Frames that came back where the declared step did not put them -- another client ticked the world
+    /// between two of the session's ticks -- each followed by a fresh declaration at the next step. The
+    /// frames from that one to the next declaration carry a step that does not describe them. Zero in a
+    /// healthy run.
+    /// </summary>
+    public long PoseSourceFramesOutOfStep { get; internal set; }
+
+    /// <summary>
+    /// Bodies named to the server whose pose source it did not apply, summed over the changes: a body the
+    /// server no longer had, or no longer held lent. Zero in a healthy run.
+    /// </summary>
+    public long PoseSourceBodiesNotApplied { get; internal set; }
+
+    /// <summary>
+    /// Why the server refused the pose source, in its words, or <see langword="null"/> where it took every
+    /// change or none was sent. A server built before it carried a pose source refuses the first change,
+    /// and the session sends nothing more: the run goes on, and no reader is told where any pose came
+    /// from, so a truth record writes no <c>pose_source</c>. A server that refused the render set is told
+    /// no pose source either, because a pose source is carried per lent body.
+    /// </summary>
+    public string? PoseSourceRefused { get; internal set; }
+
+    /// <summary>
     /// How far from a camera, in metres, the run asked for its bodies to be drawn -- the optional
     /// performance control, as it stands now -- or null for no limit, which is the default: every body
     /// drawn at any range.
@@ -1175,6 +1217,10 @@ public sealed class CoSimRunReport
         text.AppendLine($"supervision        {SupervisionUpdates} change(s) put to the server"
                         + (SupervisionBodiesNotApplied > 0 ? $", {SupervisionBodiesNotApplied} body(ies) not applied" : string.Empty)
                         + (SupervisionRefused is { } supervisionRefused ? $"; refused, so no reader is told any supervision: {supervisionRefused}" : string.Empty));
+        text.AppendLine($"pose source        {PoseSourceUpdates} change(s) put to the server, the step declared {PoseSourceStepDeclarations} time(s)"
+                        + (PoseSourceFramesOutOfStep > 0 ? $", {PoseSourceFramesOutOfStep} frame(s) out of step" : string.Empty)
+                        + (PoseSourceBodiesNotApplied > 0 ? $", {PoseSourceBodiesNotApplied} body(ies) not applied" : string.Empty)
+                        + (PoseSourceRefused is { } poseSourceRefused ? $"; refused, so no reader is told where any pose came from: {poseSourceRefused}" : string.Empty));
         text.AppendLine($"draw distance      {DescribeDrawDistance()}");
         text.AppendLine("lamps              "
                         + (!VehicleLampsDriven

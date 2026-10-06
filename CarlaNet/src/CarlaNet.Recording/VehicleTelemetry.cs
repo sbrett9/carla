@@ -1,4 +1,6 @@
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Rpc.Lighting;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Recording;
 
@@ -140,4 +142,21 @@ public sealed record VehicleTelemetry(
     /// where no render set named the body, which is every run whose actors are their vehicles.
     /// </summary>
     public RenderedVehicle? Rendered { get; init; }
+
+    /// <summary>
+    /// The lights commanded on for the vehicle on the record's frame, as the world-observer snapshot of
+    /// that frame carried them, by whichever client set them. Null where that snapshot did not carry them
+    /// -- one from a server built before it did -- so a record never says no light was on for want of a
+    /// reading. Written on a record whose vehicle is in the picture (<see cref="CotWriter"/>).
+    /// </summary>
+    public VehicleLightStateFlags? Lights { get; init; }
+
+    /// <summary>
+    /// Where the pose the vehicle's body was drawn at on the record's frame came from, as the
+    /// world-observer snapshot of that frame carried it: SUMO's own step, interpolated between two, or
+    /// held where the session could not place it (<see cref="ObservedPoseSource"/>). Null for a vehicle
+    /// no session lent a body, and where the snapshot carried no pose source. Written on a record whose
+    /// vehicle is in the picture (<see cref="CotWriter"/>).
+    /// </summary>
+    public PoseSource? PoseSource { get; init; }
 }

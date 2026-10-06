@@ -28,6 +28,14 @@ namespace CarlaNet.Types.Streaming;
 /// render set and not the supervision finds the actors and the render set as before and skips the
 /// supervision unread, and every reader of a world no session supervises reads it as before.</para>
 ///
+/// <para>A pose source block can follow the supervision block, or the render set's entries where there
+/// is none, inside the render set block: the frames a co-simulation session's SUMO steps fall on, and
+/// every lent body whose pose followed no step (<see cref="ObservedPoseSource"/>). The server says so
+/// with <see cref="PoseSourceCarried"/>, and the render set block's size counts it, so every earlier
+/// reader skips it unread. Every vehicle's state also carries its lights from a server that says so
+/// with <see cref="VehicleLightStateCarried"/>; from one that does not, the same bytes are zero and are
+/// no reading.</para>
+///
 /// <para>Both readers of the header in this tree -- the client's own world-observer parse and the
 /// episode-state sensor decoder -- read it through here, so the two cannot come to disagree about
 /// where the actors start.</para>
@@ -63,6 +71,24 @@ public static class EpisodeStateLayout
     /// block. Mirrors <c>EpisodeStateSerializer::SupervisionCarried</c>.
     /// </summary>
     public const byte SupervisionCarried = 0x20;
+
+    /// <summary>
+    /// The flag saying every vehicle's state carries the lights commanded on for it on the frame.
+    /// Mirrors <c>EpisodeStateSerializer::VehicleLightStateCarried</c>.
+    /// </summary>
+    /// <remarks>
+    /// Set on every snapshot from a server that fills the field, because zero there is every light off
+    /// and a server built before it leaves the same bytes zero: a snapshot without it says nothing of
+    /// any vehicle's lights.
+    /// </remarks>
+    public const byte VehicleLightStateCarried = 0x40;
+
+    /// <summary>
+    /// The flag saying a pose source block follows the supervision block, or the render set's entries
+    /// where there is none, inside the render set block. Mirrors
+    /// <c>EpisodeStateSerializer::PoseSourceCarried</c>.
+    /// </summary>
+    public const byte PoseSourceCarried = 0x80;
 
     /// <summary>
     /// Where the first actor starts: straight after the header, or after the render set block where
@@ -158,6 +184,79 @@ public static class EpisodeStateLayout
         }
 
         return ObservedSupervision.Read(after.Slice(4, (int)size), previous);
+    }
+
+    /// <summary>
+    /// Whether every vehicle's state in the snapshot carries its lights: false for a payload too short
+    /// to say, and for a server built before it filled the field, whose zero is no reading.
+    /// </summary>
+    public static bool CarriesVehicleLightState(ReadOnlySpan<byte> payload) => Carries(payload, VehicleLightStateCarried);
+
+    /// <summary>
+    /// The pose source the snapshot carried, or <see cref="ObservedPoseSource.None"/> where it carried
+    /// none.
+    /// </summary>
+    /// <param name="payload">The snapshot, from its episode-state header on.</param>
+    /// <param name="previous">
+    /// The pose source read from the frame before, which is answered again, instance and all, where this
+    /// snapshot's block is the same bytes.
+    /// </param>
+    /// <exception cref="InvalidDataException">The snapshot says it carries a pose source outside a render
+    /// set block; or the block is shorter than it says, ends part-way through what it holds, or names a
+    /// state this reader does not know.</exception>
+    public static ObservedPoseSource ReadPoseSource(ReadOnlySpan<byte> payload, ObservedPoseSource? previous = null)
+    {
+        if (!Carries(payload, PoseSourceCarried))
+        {
+            return ObservedPoseSource.None;
+        }
+
+        if (!Carries(payload, RenderSetCarried))
+        {
+            throw new InvalidDataException(
+                "The snapshot says it carries a pose source and no render set block, which the pose source "
+                + "block is written inside.");
+        }
+
+        ReadOnlySpan<byte> block = RenderSetBlock(payload);
+        ReadOnlySpan<byte> after = block[ObservedRenderSet.Measure(block)..];
+        // Past the supervision block, which comes first where the snapshot carries one.
+        if (Carries(payload, SupervisionCarried))
+        {
+            if (after.Length < 4)
+            {
+                throw new InvalidDataException(
+                    $"The snapshot says it carries supervision and a pose source, and its render set block ends "
+                    + $"{after.Length} byte(s) after the render set's entries, before the supervision block's size.");
+            }
+
+            long supervision = 4L + BinaryPrimitives.ReadUInt32LittleEndian(after);
+            if (supervision > after.Length)
+            {
+                throw new InvalidDataException(
+                    $"The snapshot's supervision block says it is {supervision - 4} bytes, and the render set "
+                    + $"block it is written inside ends {after.Length - 4} bytes after its size.");
+            }
+
+            after = after[(int)supervision..];
+        }
+
+        if (after.Length < 4)
+        {
+            throw new InvalidDataException(
+                $"The snapshot says it carries a pose source and its render set block ends {after.Length} "
+                + "byte(s) before the pose source block's size.");
+        }
+
+        uint size = BinaryPrimitives.ReadUInt32LittleEndian(after);
+        if (4L + size > after.Length)
+        {
+            throw new InvalidDataException(
+                $"The snapshot's pose source block says it is {size} bytes, and the render set block it is "
+                + $"written inside ends {after.Length - 4} bytes after its size.");
+        }
+
+        return ObservedPoseSource.Read(after.Slice(4, (int)size), previous);
     }
 
     /// <summary>The render set block after its size field, where the snapshot says it carries one.</summary>

@@ -331,6 +331,29 @@ public sealed class CarlaClientWorld : ICarlaWorld
 
     /// <inheritdoc/>
     /// <remarks>
+    /// A server that answers with an error -- one built before it carried a pose source, which has no
+    /// such call -- is answered as a refusal carrying its words, as the render set is, rather than
+    /// thrown: the run goes on, and the report says what the server said.
+    /// </remarks>
+    public PoseSourceWrite WritePoseSource(PoseSourceChange change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        try
+        {
+            uint applied = _client.UpdatePoseSourceAsync(change.DeclareStep, change.TicksPerStep,
+                                                         change.Simulated.ToArray(), change.Held.ToArray(),
+                                                         change.Cleared.ToArray())
+                .GetAwaiter().GetResult();
+            return new PoseSourceWrite((int)applied, null);
+        }
+        catch (CarlaRpcException refused)
+        {
+            return new PoseSourceWrite(0, refused.Message);
+        }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
     /// A server that answers with an error -- one built before it carried the call -- is answered as
     /// a refusal carrying its words, as the render set is, rather than thrown: the run goes on with
     /// every body drawn at any range, and the report says what the server said.

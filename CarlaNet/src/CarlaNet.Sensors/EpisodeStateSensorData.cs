@@ -4,7 +4,8 @@
 // or 12 where the server also carries the refraction-corrected elevation (EpisodeStateLayout).
 // A render set block sits between the header and the actors where the server carries one
 // (SimulationState.RenderSetCarried; EpisodeStateLayout.ActorsOffset), and a supervision block inside
-// it, after the render set's entries, where the server carries that (SimulationState.SupervisionCarried).
+// it, after the render set's entries, where the server carries that (SimulationState.SupervisionCarried),
+// and a pose source block after those where it carries one (SimulationState.PoseSourceCarried).
 // static_assert(sizeof(ActorDynamicState) == 119) — verified in source (§13.6).
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Enums;
@@ -34,7 +35,16 @@ public enum SimulationState : byte
     /// co-simulation session has bound, and what the author asserts of the vehicle each lent body
     /// draws. Set only on a snapshot that carries one, and always with the flag above, whose block
     /// size counts it.
-    SupervisionCarried = 0x20
+    SupervisionCarried = 0x20,
+    /// Every vehicle's state carries the lights commanded on for it on the frame. Set on every snapshot
+    /// from a server that fills the field, because zero there is every light off, and a server built
+    /// before it leaves the same bytes zero.
+    VehicleLightStateCarried = 0x40,
+    /// A pose source block follows the supervision block, or the render set's entries where there is
+    /// none, inside the render set block: the frames a co-simulation session's SUMO steps fall on, and
+    /// every lent body whose pose followed no step. Always with RenderSetCarried, whose block size
+    /// counts it.
+    PoseSourceCarried = 0x80
 }
 
 public sealed class EpisodeStateHeader
@@ -61,6 +71,11 @@ public sealed class EpisodeStateHeader
     /// vehicle each lent body drew. ObservedSupervision.None where the snapshot carried none, and
     /// ObservedSupervision.Unreadable where its block could not be read.
     public ObservedSupervision Supervision { get; init; } = ObservedSupervision.None;
+
+    /// The pose source the snapshot carried: the frames a co-simulation session's SUMO steps fall on,
+    /// and every lent body whose pose followed no step. ObservedPoseSource.None where the snapshot
+    /// carried none, and ObservedPoseSource.Unreadable where its block could not be read.
+    public ObservedPoseSource PoseSource { get; init; } = ObservedPoseSource.None;
 }
 
 public sealed class ActorDynamicState
@@ -101,7 +116,8 @@ public sealed class EpisodeStateSensorData
             DeltaSeconds = deltaSeconds, MapOrigin = new Vector3DInt(mx, my, mz),
             SimulationState = simState, Solar = solar,
             RenderSet = ReadRenderSet(payload),
-            Supervision = ReadSupervision(payload)
+            Supervision = ReadSupervision(payload),
+            PoseSource = ReadPoseSource(payload)
         };
 
         int actorsOffset = EpisodeStateLayout.ActorsOffset(payload);
@@ -171,6 +187,20 @@ public sealed class EpisodeStateSensorData
         catch (InvalidDataException)
         {
             return ObservedSupervision.Unreadable;
+        }
+    }
+
+    // And a pose source block, read as unreadable -- no body given a pose source -- with everything
+    // before it and the actors read all the same.
+    private static ObservedPoseSource ReadPoseSource(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return EpisodeStateLayout.ReadPoseSource(payload);
+        }
+        catch (InvalidDataException)
+        {
+            return ObservedPoseSource.Unreadable;
         }
     }
 }

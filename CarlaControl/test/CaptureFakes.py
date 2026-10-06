@@ -303,6 +303,8 @@ class FakeRecorder:
         self.RenderSetBodiesMissing = 0
         self.SupervisionPaired = 0
         self.SupervisionUnpaired = 0
+        self.LightsUnknown = 0
+        self.PoseSourceUnknown = 0
         self.OcclusionMeasured = 0
         self.OcclusionUnmatched = 0
         self.ChecksSensorPose = True
@@ -598,6 +600,7 @@ class _Report:
         self.LastAdmissionPass = None
         self.DrawDistanceMetres = None
         self.DrawDistanceRefused = None
+        self.PoseSourceRefused = None
         self.RenderSetPolicy = "every vehicle SUMO has"
         self.RenderSetLimits = False
         self.RenderSetCapacity = None

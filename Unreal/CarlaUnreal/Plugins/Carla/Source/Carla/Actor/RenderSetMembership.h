@@ -43,4 +43,20 @@ struct FRenderSetMembership
   /// The first frame the body is drawn for this vehicle: the frame after the one in progress when
   /// it was lent. Zero unless lent.
   uint64_t AdmittedFrame = 0u;
+
+  /// Where the body's pose comes from while it does not follow the SUMO step the session declared
+  /// (FSumoStepPhase), as the session named it (update_pose_source).
+  enum class EPoseSource : uint8_t
+  {
+    /// Follows the step: SUMO's own pose on a frame a step falls on, interpolated on every other.
+    FollowsStep,
+    /// Standing where SUMO put it at one of its steps, whichever frame it is: placed at SUMO's later
+    /// step across a discontinuity rather than interpolated.
+    Simulated,
+    /// Left where its last pose put it, because the session could not place it.
+    Held
+  };
+
+  /// Part of the loan: a body given back, or lent to another vehicle, follows the step again.
+  EPoseSource PoseSource = EPoseSource::FollowsStep;
 };

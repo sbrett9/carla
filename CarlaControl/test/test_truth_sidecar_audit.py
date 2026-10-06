@@ -27,6 +27,10 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
   * every vehicle record in the picture carries its box -- the six box fields and a geodetic
     `<_box3d>` of eight corners -- and no record outside the picture carries any of it, the range
     beside the draw distance mark apart; a capture written before the recorder wrote boxes shows the
+    first; and
+  * every vehicle record in the picture carries its `lights`, and every SUMO vehicle record in it its
+    `pose_source`, unless its sidecar says its frame's snapshot did not carry them, and no record
+    outside the picture carries either; a capture written before the recorder wrote them shows the
     first.
 """
 from __future__ import annotations
@@ -50,18 +54,29 @@ SENSOR = """  <event version="2.0" uid="CARLA-SENSOR-32" type="a-f-A-M-F-Q" how=
 """
 
 
+AS_WRITTEN = "as written"
+
+
 def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None = None,
             in_frame: str | None = "wholly", occlusion: float | None = None,
-            unmeasured: str | None = "no_depth_camera", box: bool = True) -> str:
+            unmeasured: str | None = "no_depth_camera", box: bool = True,
+            lights: str | None = AS_WRITTEN, pose_source: str | None = AS_WRITTEN) -> str:
     """A vehicle record as `CotWriter` writes one: where its box fell against the picture, and either
     the five occlusion fields (`occlusion` given) or the reason they are absent (`unmeasured`); None
     for either leaves it out, as a recorder written before 2026-10-05 did. A record in the picture
     carries its box, as the recorder has written it since 2026-10-06, unless `box` is false, as one
-    written before then did not."""
+    written before then did not; and its lights, and a SUMO vehicle's its pose source, as the recorder
+    writes them since the same ruling, unless given None, or another value written whatever the place."""
     identity = "" if sumo_id is None else (
         f' sumo_id="{sumo_id}" vtype_id="passenger" admitted_tick="100"')
     place = "" if in_frame is None else f' in_frame="{in_frame}"'
     boxed = box and in_frame in ("wholly", "partly")
+    if lights == AS_WRITTEN:
+        lights = "position low_beam" if in_frame in ("wholly", "partly") else None
+    if pose_source == AS_WRITTEN:
+        pose_source = "interpolated" if in_frame in ("wholly", "partly") and sumo_id is not None else None
+    shown = ("" if lights is None else f' lights="{lights}"') + (
+        "" if pose_source is None else f' pose_source="{pose_source}"')
     tilt = ' pitch_deg="0.00" roll_deg="0.00"' if boxed else ""
     if occlusion is not None:
         picture = (f' occlusion="{occlusion:.3f}" occlusion_level="1" occlusion_samples="64" '
@@ -74,6 +89,7 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
         picture += (' box_px="634.00 355.00 646.00 360.00" '
                     'box_oriented_px="634.20 355.00 646.00 356.10 645.80 360.00 634.00 358.90" '
                     'truncation="0.000"')
+    picture += shown
     if occlusion is None and unmeasured is not None:
         picture += f' occlusion_unmeasured="{unmeasured}"'
     if boxed:
@@ -101,8 +117,11 @@ def box3d(hae: float, corners: int = 8, frame: str = "geodetic") -> str:
 
 
 def sidecar(directory: Path, tick: int, events: list[str], vehicles: str | None = None,
-            stem: str | None = None) -> None:
+            stem: str | None = None, unknown: tuple[str, ...] = ()) -> None:
+    """A truth sidecar of one tick; `unknown` names what its container says the frame's snapshot did
+    not carry (`lights`, `pose_source`)."""
     marker = "" if vehicles is None else f' vehicles="{vehicles}"'
+    marker += "".join(f' {name}="unknown"' for name in unknown)
     (directory / f"{stem or f'SCTMV_{tick}'}.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<events captured="t" count="{len(events)}" source="truth" tick="{tick}" '
@@ -514,7 +533,7 @@ def test_a_box_missing_a_field_or_a_corner_or_in_another_frame_is_a_defect(tmp_p
 def test_a_box_on_a_record_outside_the_picture_is_a_defect(tmp_path):
     # Box fields and a <_box3d> where the picture has no view of the vehicle; the range alone is a box
     # field there too, unless the draw distance mark it rests on stands beside it.
-    inside = vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly")
+    inside = vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly", lights=None, pose_source=None)
     outside = vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="none", unmeasured="outside_frame")
     behind = vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="behind_camera",
                      unmeasured="behind_camera")
@@ -545,3 +564,75 @@ def test_a_record_saying_nothing_of_its_place_is_not_held_to_a_box(tmp_path):
 
     assert result.records_in_picture_without_box == []
     assert result.records_outside_picture_with_box == []
+
+
+# A vehicle in the picture carries its lights and, drawn by a SUMO drive, where its pose came from, from the
+# snapshot of the capture's own frame (the owner's ruling of 2026-10-06; 08 §5.1), and no other vehicle does.
+def test_a_capture_whose_vehicles_in_the_picture_carry_their_lights_and_pose_source_has_no_defect(tmp_path):
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights="position low_beam brake left_blinker",
+                pose_source="simulated"),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly", lights="none", pose_source="held"),
+        vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="none", unmeasured="outside_frame"),
+        # A vehicle no session lent carries its lights and no pose source: nothing placed it.
+        vehicle("CARLA-TRUTH-7", 7, ROAD, 9.0, lights="reverse bit11")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert result.defects(sumo_drive=False) == []
+    lines = TruthSidecarAudit.describe(result)
+    assert any("lights: on 3 of 3 records in the picture" in line for line in lines)
+    assert any("pose source in the picture: simulated 1, held 1" in line for line in lines)
+
+
+def test_a_record_in_the_picture_without_its_lights_or_pose_source_is_a_defect(tmp_path):
+    # As a capture made before the recorder wrote them, from a server that carried them, shows.
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights=None, pose_source=None),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly", pose_source=None),
+        vehicle("CARLA-TRUTH-7", 7, ROAD, 9.0, lights=None)],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.uid for record in result.records_in_picture_without_lights] == [
+        "CARLA-TRUTH-SUMO-a", "CARLA-TRUTH-7"]
+    assert [record.sumo_id for record in result.records_in_picture_without_pose_source] == ["a", "b"]
+    assert result.defects(sumo_drive=False) == [
+        "2 vehicle record(s) in the picture carry no lights, in sidecars that do not say their lights were unknown",
+        "2 SUMO vehicle record(s) in the picture carry no pose_source, in sidecars that do not say it was unknown"]
+
+
+def test_a_capture_whose_frame_s_snapshot_carried_neither_says_so_and_is_counted_not_faulted(tmp_path):
+    # A server built before the light state and the pose source: the records go without, and the container
+    # says they are unknown, which the run's closeout gates.
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights=None, pose_source=None),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="none", unmeasured="outside_frame")],
+        vehicles="rendered", unknown=("lights", "pose_source"))
+
+    result = audit(tmp_path)
+
+    assert (result.sidecars_lights_unknown, result.sidecars_pose_source_unknown) == (1, 1)
+    assert result.defects() == []
+    assert any("sidecars saying their lights were unknown: 1" in line for line in TruthSidecarAudit.describe(result))
+
+
+def test_lights_or_a_pose_source_outside_the_picture_on_no_sumo_vehicle_or_in_other_words_are_defects(tmp_path):
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="none", unmeasured="outside_frame",
+                lights="brake"),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="behind_camera", unmeasured="behind_camera",
+                pose_source="interpolated"),
+        vehicle("CARLA-TRUTH-7", 7, ROAD, 9.0, pose_source="simulated"),
+        vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", lights="headlights", pose_source="snapped")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_outside_picture_with_lights_or_pose_source] == ["a", "b"]
+    assert [record.uid for record in result.records_with_pose_source_and_no_sumo_id] == ["CARLA-TRUTH-7"]
+    assert [record.sumo_id for record in result.records_with_unknown_lights] == ["c"]
+    assert [record.sumo_id for record in result.records_with_unknown_pose_source] == ["c"]
+    assert len(result.defects(sumo_drive=False)) == 4

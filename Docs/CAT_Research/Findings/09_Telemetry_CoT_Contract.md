@@ -55,6 +55,14 @@
 > record in the sidecar; there is no separate label file per image. The live pull and the live feed,
 > which have no camera, are unchanged.
 
+> **Revision (2026-10-06):** A vehicle record of a recorded sidecar in the picture also carries
+> `lights`, the lights commanded on for the vehicle in words, and, where it names its SUMO vehicle,
+> `pose_source` -- `simulated`, `interpolated` or `held` -- as the owner ruled (§5.1). Both are read from
+> the world-observer snapshot of the capture's own frame, so a recorder in any process writes the same;
+> a sidecar whose snapshot did not carry one says `lights="unknown"` or `pose_source="unknown"` on
+> `<events>` and writes it on no record. A vehicle outside the picture carries neither; the live pull
+> and the live feed are unchanged.
+
 ## 1. Purpose
 
 One CoT event schema emitted by **both** producers so they are directly comparable in WinTAK and in a
@@ -183,13 +191,22 @@ it. A corner at the point's height has the point's `hae`, and where the box stan
 bottom four average to the point. Latitude and longitude are written to seven places and `hae` to two,
 as the point is.
 
-**What a vehicle in the picture does not carry, and why.** `pose_source` (whether the body's pose on
-the frame is SUMO's own step, interpolated between two, or held) is not written: no world-observer
-snapshot says where a frame falls in its SUMO step, nor which bodies' poses the session held, and the
-truth state is the server's to carry, so a recorder in another process could not write the same value
-([06 §8.2](../Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md)). The lamps commanded on a
-vehicle are not written either: the snapshot's per-vehicle state carries no light state, and asking the
-server for it per vehicle would answer the lamps of the moment asked, not of the capture's frame.
+**And what else a vehicle in the picture shows (the owner's ruling of 2026-10-06).** Both are the
+server's truth for the capture's own frame, read from that frame's world-observer snapshot, never asked
+for per vehicle, which would answer the moment asked:
+
+| Attribute | Written | Meaning |
+|---|---|---|
+| `lights` | on a vehicle whose `in_frame` is `wholly` or `partly`, where the frame's snapshot carried the light state | The lights commanded on for the vehicle on the frame, one word per light in CARLA's flag order, separated by single spaces: `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`, `special2`; `none` where no light was on; `bit<n>` for a light CARLA declares and no word names. What was commanded -- by the SUMO drive's session from SUMO's signals and the sun, or by the traffic manager -- not what a body draws. For example `position low_beam brake left_blinker` |
+| `pose_source` | with `lights`'s place rule, on a record that names its SUMO vehicle (`sumo_id`), where the frame's snapshot carried a pose source | Where the body's drawn pose on the frame came from: `simulated` -- where SUMO put the vehicle at one of its steps, on a frame a step falls on or across a discontinuous step, where the body is placed at SUMO's later step; `interpolated` -- between two SUMO steps, along the lane; `held` -- where its last pose put it, because the session could not place it on the frame |
+
+A sidecar whose frame's snapshot did not carry the light state -- one from a server built before it
+did, whose vehicle bytes are zero and would read as every light off -- writes `lights` on no record and
+says `lights="unknown"` on `<events>`; one whose snapshot carried no pose source for a drawn SUMO vehicle
+in the picture -- an older server, or one that refused the session's -- says `pose_source="unknown"`.
+
+| Attribute | Written | Meaning |
+|---|---|---|
 | `occlusion` | where occlusion was measured | Fraction of the vehicle's silhouette hidden from this capture's camera by anything nearer — photoreal buildings and trees, terrain relief, other vehicles — 0 (wholly visible) to 1 (wholly hidden). |
 | `occlusion_level` | with `occlusion` | The same value as a coarse band: `0` wholly visible · `1` up to 30 % · `2` 30–60 % · `3` 60–90 % · `4` over 90 % (the bands the amodal-segmentation datasets report against). |
 | `occlusion_samples` | with `occlusion` | How many points across the vehicle's outline the fraction was measured over. |
@@ -218,7 +235,9 @@ situations and nothing said which; a sidecar from before then carries no `in_fra
 `in_frame` says the picture has no view of it, a record with neither occlusion nor a reason, and a
 reason beside a measurement. A sidecar from before 2026-10-06 carries no box on a vehicle in the
 picture, which the audit reports as a defect, as it does any box field or `<_box3d>` on a vehicle
-outside the picture or behind the lens (`camera_range_m` beside `beyond_draw_distance` apart).
+outside the picture or behind the lens (`camera_range_m` beside `beyond_draw_distance` apart). The audit
+also holds every vehicle in the picture to its `lights`, and every SUMO vehicle in it to its
+`pose_source`, unless the sidecar says it was unknown, and every vehicle outside the picture to neither.
 Measurement and tuning:
 [17_Photoreal_Occlusion_Metric.md](17_Photoreal_Occlusion_Metric.md); the projection is
 `CarlaNet.Recording.BoxProjector`, the sampling `OcclusionEstimator.Sample`.
