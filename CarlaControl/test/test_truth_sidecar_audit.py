@@ -23,7 +23,11 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
     occlusion fields are absent, why (`occlusion_unmeasured`): a record saying neither, occlusion
     fields on a vehicle the picture has no view of, a reason beside a measurement, and a place or a
     reason outside the recorder's words are each a defect, and a capture written before the recorder
-    said where each vehicle fell shows the first.
+    said where each vehicle fell shows the first; and
+  * every vehicle record in the picture carries its box -- the six box fields and a geodetic
+    `<_box3d>` of eight corners -- and no record outside the picture carries any of it, the range
+    beside the draw distance mark apart; a capture written before the recorder wrote boxes shows the
+    first.
 """
 from __future__ import annotations
 
@@ -48,13 +52,17 @@ SENSOR = """  <event version="2.0" uid="CARLA-SENSOR-32" type="a-f-A-M-F-Q" how=
 
 def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None = None,
             in_frame: str | None = "wholly", occlusion: float | None = None,
-            unmeasured: str | None = "no_depth_camera") -> str:
+            unmeasured: str | None = "no_depth_camera", box: bool = True) -> str:
     """A vehicle record as `CotWriter` writes one: where its box fell against the picture, and either
     the five occlusion fields (`occlusion` given) or the reason they are absent (`unmeasured`); None
-    for either leaves it out, as a recorder written before 2026-10-05 did."""
+    for either leaves it out, as a recorder written before 2026-10-05 did. A record in the picture
+    carries its box, as the recorder has written it since 2026-10-06, unless `box` is false, as one
+    written before then did not."""
     identity = "" if sumo_id is None else (
         f' sumo_id="{sumo_id}" vtype_id="passenger" admitted_tick="100"')
     place = "" if in_frame is None else f' in_frame="{in_frame}"'
+    boxed = box and in_frame in ("wholly", "partly")
+    tilt = ' pitch_deg="0.00" roll_deg="0.00"' if boxed else ""
     if occlusion is not None:
         picture = (f' occlusion="{occlusion:.3f}" occlusion_level="1" occlusion_samples="64" '
                    'apparent_width_px="12" apparent_height_px="5"')
@@ -62,8 +70,14 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
         picture = ""
     else:
         picture = ' apparent_width_px="12" apparent_height_px="5"'
+    if boxed:
+        picture += (' box_px="634.00 355.00 646.00 360.00" '
+                    'box_oriented_px="634.20 355.00 646.00 356.10 645.80 360.00 634.00 358.90" '
+                    'truncation="0.000"')
     if occlusion is None and unmeasured is not None:
         picture += f' occlusion_unmeasured="{unmeasured}"'
+    if boxed:
+        picture += ' camera_range_m="518.0"'
     return (f'  <event version="2.0" uid="{uid}" type="a-n-G-E-V" how="m-g" time="t" start="t" '
             f'stale="t">\n'
             f'    <point lat="38.9051631" lon="-119.7526194" hae="{hae:.2f}" ce="0.0" le="0.0" />\n'
@@ -71,9 +85,19 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
             f'      <track course="90.0" speed="{speed:.2f}" />\n'
             f'      <contact callsign="car-{actor}" />\n'
             f'      <_carla source="truth" actor_id="{actor}" type_id="vehicle.audi.tt" '
-            f'base_type="car" role_name="autopilot"{place}{picture}{identity} />\n'
-            f'    </detail>\n'
+            f'base_type="car" role_name="autopilot"{tilt}{place}{picture}{identity} />\n'
+            + (box3d(hae) if boxed else "")
+            + f'    </detail>\n'
             f'  </event>\n')
+
+
+def box3d(hae: float, corners: int = 8, frame: str = "geodetic") -> str:
+    """A `<_box3d>` as `CotWriter` writes one: the floor around from the front left, then the roof."""
+    heights = [hae] * 4 + [hae + 1.5] * 4
+    return (f'      <_box3d frame="{frame}">\n'
+            + "".join(f'        <corner lat="38.90516{index}" lon="-119.75262{index}" hae="{height:.2f}" />\n'
+                      for index, height in enumerate(heights[:corners]))
+            + '      </_box3d>\n')
 
 
 def sidecar(directory: Path, tick: int, events: list[str], vehicles: str | None = None,
@@ -425,3 +449,99 @@ def test_the_in_picture_checks_apply_to_traffic_manager_captures_too(tmp_path):
 
     assert result.defects(sumo_drive=False) == ["1 of 2 vehicle records do not say whether the vehicle is in "
                                                 "the picture (no in_frame)"]
+
+
+# The box of a vehicle in the picture, as `CotWriter` writes it since the owner's ruling of 2026-10-06
+# (09 §5.1): six fields in `_carla` and a geodetic `<_box3d>` of eight corners beside it, on every record
+# in the picture and on no other.
+def test_a_capture_whose_every_record_in_the_picture_carries_its_box_has_no_defect(tmp_path):
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly", occlusion=0.18),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly"),
+        vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="none", unmeasured="outside_frame"),
+        vehicle("CARLA-TRUTH-SUMO-d", 4, ROAD, 9.0, "d", in_frame="behind_camera", unmeasured="behind_camera")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert result.defects() == []
+    assert [record.box3d_corners for record in result.records] == [8, 8, None, None]
+    assert any("boxes: whole on 2 of 2 records in the picture; on records outside it: 0" in line
+               for line in TruthSidecarAudit.describe(result))
+
+
+def test_a_record_in_the_picture_without_its_box_is_a_defect(tmp_path):
+    # A capture written before the recorder wrote boxes: every record in the picture lacks one, and the
+    # records outside it are as they were.
+    sidecar(tmp_path, 100, [
+        vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly", box=False),
+        vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="partly", box=False),
+        vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="none", unmeasured="outside_frame")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_in_picture_without_box] == ["a", "b"]
+    assert result.defects() == ["2 vehicle record(s) in the picture lack part of their box (box_px, "
+                                "box_oriented_px, truncation, pitch_deg, roll_deg, camera_range_m and a "
+                                "<_box3d> of 8 corners)"]
+    assert any("boxes: whole on 0 of 2 records in the picture" in line
+               for line in TruthSidecarAudit.describe(result))
+
+
+def _renamed(record: str, sumo_id: str) -> str:
+    """The same record for another SUMO vehicle."""
+    return record.replace("SUMO-a", f"SUMO-{sumo_id}").replace('sumo_id="a"', f'sumo_id="{sumo_id}"')
+
+
+def test_a_box_missing_a_field_or_a_corner_or_in_another_frame_is_a_defect(tmp_path):
+    whole = vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a")
+    sidecar(tmp_path, 100, [
+        whole.replace(' truncation="0.000"', ""),
+        _renamed(whole.replace(box3d(ROAD), box3d(ROAD, corners=7)), "b"),
+        _renamed(whole.replace(box3d(ROAD), box3d(ROAD, frame="local")), "c"),
+        _renamed(whole.replace(box3d(ROAD), ""), "d"),
+        _renamed(whole.replace(' camera_range_m="518.0"', ""), "e"),
+        _renamed(whole, "f")],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_in_picture_without_box] == ["a", "b", "c", "d", "e"]
+    assert len(result.defects()) == 1
+
+
+def test_a_box_on_a_record_outside_the_picture_is_a_defect(tmp_path):
+    # Box fields and a <_box3d> where the picture has no view of the vehicle; the range alone is a box
+    # field there too, unless the draw distance mark it rests on stands beside it.
+    inside = vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame="wholly")
+    outside = vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="none", unmeasured="outside_frame")
+    behind = vehicle("CARLA-TRUTH-SUMO-c", 3, ROAD, 9.0, "c", in_frame="behind_camera",
+                     unmeasured="behind_camera")
+    beyond = vehicle("CARLA-TRUTH-SUMO-d", 4, ROAD, 9.0, "d", in_frame="none", unmeasured="beyond_draw_distance")
+    sidecar(tmp_path, 100, [
+        inside.replace('in_frame="wholly"', 'in_frame="none"'),
+        outside.replace('unmeasured="outside_frame"', 'unmeasured="outside_frame" camera_range_m="518.0"'),
+        behind.replace("    </detail>\n", box3d(ROAD) + "    </detail>\n"),
+        beyond.replace('unmeasured="beyond_draw_distance"',
+                       'unmeasured="beyond_draw_distance" beyond_draw_distance="wholly" camera_range_m="518.0"')],
+        vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert [record.sumo_id for record in result.records_outside_picture_with_box] == ["a", "b", "c"]
+    assert result.defects() == ["3 vehicle record(s) outside the picture carry box fields or a <_box3d>"]
+    assert any("on records outside it: 3" in line for line in TruthSidecarAudit.describe(result))
+
+
+def test_a_record_saying_nothing_of_its_place_is_not_held_to_a_box(tmp_path):
+    # Faulted for saying nothing of its place, or for a place outside the recorder's words, and for no
+    # box either way.
+    sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame=None, unmeasured=None),
+                            vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", in_frame="inside")],
+            vehicles="rendered")
+
+    result = audit(tmp_path)
+
+    assert result.records_in_picture_without_box == []
+    assert result.records_outside_picture_with_box == []

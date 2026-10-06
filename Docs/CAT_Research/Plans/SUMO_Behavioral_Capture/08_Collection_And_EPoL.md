@@ -39,6 +39,7 @@ Findings set. Every external claim is cited.
 | 2026-10-05 | §2.4, §3.4: a still is written with the truth of its own frame or not at all, as the owner ruled. The recorder holds the client's snapshots open while it records and releases each frame once an image of a later frame has been prepared; a still whose frame's truth is not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`, gated at zero by the closeout), never written beside a neighbouring frame's truth, and `telemetry_tick` is gone ([`06`](06_Truth_And_Annotation.md) §8.2). |
 | 2026-10-05 | §3.5, §9.4, D8.17: the two-folder split is withdrawn by the owner's ruling, with its validator over the imagery folder, the held-back partition and the release attestation. Imagery and truth stay side by side in one capture folder, as the recorder writes them; the layout is stated as built, and no `.collect.json` is planned. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, and the truth sidecar sits beside it; §8.5 and D8.14, the published supervision-transfer rule, stand as the owner keeps them. |
 | 2026-10-05 | §3.3: the orbit is flown by the server (issue #37, promoted into the plan by the owner). `OrbitSensorController` gives the circle once to the plugin's orbit mover, which advances the angle by each tick's delta on the simulation clock and sets the camera on the circle before the frame's sensors capture; the client's 50 Hz wall-clock thread is gone, with the halved tick rate and the pace-dependent turn it cost. `SensorRig`'s depth camera is attached to its camera as `run_capture`'s is, so the server's move carries both. Written and tested offline; the plugin and the wheel await a build, and the live check (`CarlaNet/python/test_plugin_orbit.py`) is the owner's to run. |
+| 2026-10-06 | §2.7, §5.1, §5.2, §5.5, §6.4, D8.6, D8.8, D8.10: a vehicle in the picture carries its box on its record in the truth sidecar, as the owner ruled -- `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg`, `roll_deg`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, converted as the record's own point is -- and a vehicle outside the picture or behind the lens carries none. There is no separate label file per image (D8.6 amended); the box and `<_supervision>` share the sidecar and are kept apart by element (§5.5, D8.8 amended). `pose_source` and the commanded lamps are not written, because no snapshot carries either; what writing each needs is stated (§5.1, §6.4). |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -447,8 +448,9 @@ So the oriented 3D box for every telemetered vehicle, frame-coherent with the pi
 memory at write time. **Per-image labelling is a serialisation change plus a projection, not a new
 measurement.** That is the same conclusion doc 12 §2 reached, and it is still true. Since 2026-10-05
 the projection itself runs for every record of every capture (`BoxProjector.Mark`, §2.5), and what is
-written of it is where the box fell (`in_frame`) and its apparent size; the projected rectangle's
-pixel coordinates are computed and not yet serialised.
+written of it is where the box fell (`in_frame`) and its apparent size. Since 2026-10-06 a vehicle in
+the picture also carries its box on its record in the sidecar: the projected rectangles, the share
+outside the picture, the range, the body's tilt and the 3D box's eight corners (§5.1).
 
 ### 2.8 What does not exist — corrected
 
@@ -1539,9 +1541,14 @@ Stated as properties, not designs, per the house rule.
 
 ### 5.1 What accompanies each frame
 
-One label record per (sensor, tick, vehicle). Under the charter's rule on what a truth file may carry
+One label record per (sensor, tick, vehicle), and that record is the vehicle's record in the
+capture's truth sidecar: the owner ruled on 2026-10-06 that the box fields go on each vehicle's
+existing record, with no separate label file per image (D8.6), that the 3D box is written as explicit
+corners, and that only a vehicle in the picture gets a box (`in_frame` of `wholly` or `partly`). Under
+the charter's rule on what a truth file may carry
 ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b, the owner's ruling of 2026-10-05) the record holds geometry and happened facts and nothing that
-depends on a pass mark. Fields, with provenance.
+depends on a pass mark. Fields, with provenance; the written names and their exact form are
+[09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md).
 
 | Field | What it is | Source today |
 |---|---|---|
@@ -1550,21 +1557,21 @@ depends on a pass mark. Fields, with provenance.
 | `actor_id` | intra-run join to the truth sidecar | `VehicleTelemetry.Id`, written as `CARLA-TRUTH-<id>` (`CotWriter.cs:134`) |
 | `entity_id`, `instance_id` | cross-run join to the authored entity and pattern instance | doc 20 §6.3, §7.2 — **not emitted today** |
 | `class` | detector class: `base_type` plus a `special_type` suffix | `VehicleTelemetry.BaseType/SpecialType`, from the vehicle catalogue |
-| `box3d_local` | 8 corners in CARLA-local metres, from the oriented box | `ActorTransform` + `BoundingBox`, computed and discarded (`VehicleTelemetry.cs:65-74`) |
-| `box3d_geodetic` | the same corners as lat/lon/hae, so the label survives a coordinate-frame change | `Geodesy.CarlaLocalToGeodetic`, already used per vehicle |
-| `box2d_amodal_obb` | oriented 2D box, the hull of the projected corners | projection — doc 12 §4.3 |
-| `box2d_amodal_aabb` | axis-aligned, for plain YOLO | projection |
+| `box3d_local` | 8 corners in CARLA-local metres, from the oriented box | **not written**: the geodetic corners below are, and a consumer holding the world's georeference recovers these from them |
+| `box3d_geodetic` | the same corners as lat/lon/hae, so the label survives a coordinate-frame change | **written since 2026-10-06** on every vehicle in the picture as `<_box3d frame="geodetic">`, eight explicit corners in a fixed order, each converted as the record's own point is (`Geodesy.CarlaLocalToGeodetic` from the same origin, less the height-align offset taken off the point), so a corner and the point agree (`CaptureBoxes.GeodeticCorners`) |
+| `box2d_amodal_obb` | oriented 2D box, the minimum-area rectangle enclosing the projected corners | **written since 2026-10-06** as `box_oriented_px`, four corners clockwise from the top-most (`CaptureBoxes.MinimumAreaRectangle`) |
+| `box2d_amodal_aabb` | axis-aligned, for plain YOLO | **written since 2026-10-06** as `box_px`, the rectangle the projected corners span, unclipped |
 | `box2d_modal` | visible-region box | needs instance segmentation (§3.2); absent otherwise |
 | `in_frame` | where the box fell against the picture: `wholly`, `partly`, `none`, `behind_camera` | **written on every record since 2026-10-05**, from the projection (`BoxProjector`, §2.4) |
 | `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured, written only where measured (`CotWriter.cs`) |
 | `occlusion_unmeasured` | why the three above are absent, in one word | **written since 2026-10-05** wherever they are absent, never beside them (§2.4) |
 | `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | from the projection, written wherever the box has a footprint (`CotWriter.cs`) |
 | `opacity` | **constant 1.0 under the default**, since nothing fades (§2.6). Retained so a later fade mode is not a schema change | computed, unserialised (`VehicleTelemetry.cs:59-63`) |
-| `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | derivable from the recorded pose; written as `camera_range_m` under a draw distance |
-| `truncation` | fraction of the amodal box outside the frame | derivable from the projection |
-| `pose_source` | `simulated` / `interpolated` / `held` — see §6.4 | **new**; needed under SUMO drive |
-| `yaw_world_deg` | heading supervision for free (doc 12 §7) | `ActorTransform`; the sidecar writes `heading_deg` |
-| `light_state` | the `VehicleLightStateFlags` bitmask commanded for this vehicle at this tick, a happened fact | the lamps are driven (`VehicleLampMapping`, `HeadlightRule`); **no truth file records the state**, and whether one should is with the owner |
+| `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | **written since 2026-10-06** on every vehicle in the picture as `camera_range_m`, the name it already had under a draw distance: one range, one method (`OrientedBox.RangeFrom`), written once whichever needs it |
+| `truncation` | fraction of the amodal box outside the frame | **written since 2026-10-06** as `truncation`, the share of `box_px`'s area outside the picture |
+| `pose_source` | `simulated` / `interpolated` / `held` — see §6.4 | **not written**: no snapshot says where its frame falls in the SUMO step or which bodies' poses the session held, and a recorder in another process must write what one beside the session does. It needs the session to put it on the server (§6.4) |
+| `yaw_world_deg` | heading supervision for free (doc 12 §7) | `ActorTransform`; the sidecar writes `heading_deg`, and since 2026-10-06 `pitch_deg` and `roll_deg` beside it on every vehicle in the picture |
+| `light_state` | the `VehicleLightStateFlags` bitmask commanded for this vehicle at this tick, a happened fact | the lamps are driven (`VehicleLampMapping`, `HeadlightRule`); **no truth file records the state**: the world-observer snapshot's per-vehicle state carries no light state (`ActorDynamicState.h`, `VehicleData`), so a recorder cannot read the lamps of the capture's own frame. Writing it needs the world observer to put each vehicle's light state in `VehicleData`, which uses 30 of its union's 54 bytes, so a 4-byte field fits with the snapshot's size unchanged -- a plugin and LibCarla change |
 
 **Withdrawn 2026-10-05 by the owner's ruling:** `lit_face_px`, `visible_signature`, `shadow_px`,
 `observability_level`, `truth_separation_px`, `truth_separation_norm` and `truth_neighbour_count`.
@@ -1575,8 +1582,8 @@ a neighbour distance computes it from the boxes, the recorded sun and the camera
 carries.
 
 Every field above is **truth** by the rule of §9.3 — each is computed from the true box, from the depth
-capture, or from state the simulator commanded — and lives in the label record, a truth artifact. None
-may be placed in the observation root.
+capture, or from state the simulator commanded — and lives in the label record, which is the truth
+sidecar's vehicle record. None may be placed in the observation root, and the PNG carries none of them.
 
 ### 5.2 Format: a record, not a text line
 
@@ -1589,6 +1596,10 @@ converter, which costs nothing and can be re-run with different gates (doc 19's 
 with different label parameters" advantage, preserved properly). The illumination fields make the
 argument stronger rather than weaker: a night export that emits lamp centroids and a day export that
 emits body boxes are two projections of one record, and neither is expressible as the other's text line.
+
+The self-describing record per frame is the truth sidecar, as the owner ruled on 2026-10-06: each
+vehicle's box rides on its existing record there, beside its identity, occlusion and the frame's sun, so
+no second file per image has to be kept in step with the first.
 
 ### 5.3 Gates are recorded, never applied at write time
 
@@ -1652,6 +1663,12 @@ crane is `occluded` at noon and at midnight alike. That is why the fraction is a
 in a per-image label record. Two reasons: the label record is a *detector* artifact and a detector has
 no business learning behaviour from a per-frame flag; and keeping the behavioural statement out of the
 label file makes the artifact classes of §9.4 separable by file rather than by field.
+
+**Amended 2026-10-06 by the owner's ruling on D8.6.** There is no separate label file: a vehicle's box
+is on its record in the truth sidecar, beside its `<_supervision>`. The two stay apart by element
+rather than by file -- the box is in `_carla` and `<_box3d>`, the behavioral statement in
+`<_supervision>` -- so a detector export derived from the sidecar (YOLO, DOTA, COCO) takes the first and
+never the second. The first reason stands; the separation now rests on the element.
 
 ### 5.6 A measured confounder already present in the sizing scenario
 
@@ -1836,6 +1853,19 @@ later reader will treat it as simulator output.
   declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a
   stated positional bound for the others, so a consumer knows the precision of every label they are
   given rather than assuming all labels are equal.
+
+  **Not written (2026-10-06).** Truth state is held on the server so that no two readers hold different
+  truth, and no world-observer snapshot carries what `pose_source` rests on: where its frame falls in
+  the SUMO step (the session's `CoSimClock.InterpolationFraction` for the tick), and which bodies the
+  session held where they stood (a pose refused for missing ground, `TickBatch.HoldStill`) or placed at
+  the later of two SUMO frames (`LaneInterpolationCase.Discontinuous`). A recorder in another process
+  cannot derive either from the frame number, the world delta and the render set, which carry neither
+  the step length nor its phase. Writing it needs the session to put it on the server: each tick, before
+  the cue, the tick's place in its SUMO step (tick within the step, ticks per step) and the bodies whose
+  pose it held, carried by the world observer in the render set block behind a new flag beside
+  `SupervisionCarried` and sized so a reader that does not know it skips it -- a plugin change (an RPC
+  beside `update_render_set`, the episode's state, `EpisodeStateSerializer`, `WorldObserver`) with its
+  reader in `EpisodeStateLayout`.
 - **Truth velocity must be the derivative of the pose that was rendered.** `WorldObserver.cpp:385`
   serialises `View->GetActor()->GetVelocity()`, and a `set_transform` on a non-simulating body does not
   update it. [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** solves it at source: a
@@ -3428,11 +3458,11 @@ with this one:**
 | **D8.3a** | **Multi-camera decision, part two — how many processes: one, by default.** Doc 20 §7.3's premise that a second camera needs a second client process is wrong: a recorder already opens two streams (`FrameRecorder.cs:112-113, 125-126`), the transport holds an unbounded list (`CarlaClient.cs:1748-1754`), and the limit is the shim's `World._recorder` field over a `Client` that returns a fresh `World` per call (`carlanet/__init__.py:1908, 1924, 2285, 2295`). One process gives every channel the same world-observer snapshot, so a per-camera `<_supervision>` **or `_solar`** disagreement at one tick becomes impossible rather than merely prohibited. Moving a channel out is then a throughput decision, not a correctness one (§2.2, §3.4) |
 | **D8.4** | **A capture session identity is assigned once and handed to every channel**; the per-recorder wall-clock fallback (`FrameRecorder.cs:98-103`) survives only for a single-channel run. **A stable `sensor_id` is required and validated unique** for any multi-channel session. Nothing is ever paired across channels by filename; the tick is the join key (§3.5) |
 | **D8.5** | **Coverage is a design input — and so is the sun.** One channel at detector-usable resolution covers a 576 × 324 m swath whatever the altitude — 0.64 % of the measured 29.0 km² sizing world — so channels are placed against the declared areas of interest the annotations reference, and a session's coverage of its own authored intervals is computed at planning time, not discovered afterwards. **The window's sun elevation is resolved at the same planning step**, because it sets the shadow field (112 px at 1.7° against a 10 px vehicle) and the exposure profile (§3.1, §3.3, §4.1, §4.7) |
-| **D8.6** | **Per-image labels are a separate artifact from the truth sidecar**, one self-describing record per frame per sensor. YOLO/DOTA/COCO text forms are derived projections, never the primary, because a text line cannot carry the identity keys, the 3D box, the gate inputs or the illumination fields (§5.1, §5.2) |
+| **D8.6** | **Amended 2026-10-06 by the owner's ruling: per-image labels are the truth sidecar's vehicle records**, one self-describing file per frame per sensor, with no separate label file. A vehicle in the picture carries its box on its existing record -- the pixel rectangles, the share outside the picture, the range, the tilt, and the 3D box as eight explicit corners -- and no other vehicle does. YOLO/DOTA/COCO text forms are derived projections, never the primary, because a text line cannot carry the identity keys, the 3D box, the gate inputs or the illumination fields (§5.1, §5.2). As first decided: per-image labels were to be a separate artifact from the truth sidecar |
 | **D8.7** | **The label writer emits every in-frame vehicle with every gate input attached and applies no gate.** Apparent size, occlusion and truncation thresholds are consumer-side and are unmeasured (doc 17 §12.5); baking one into the artifact would fix an unvalidated number. **A fourth reason:** a size gate calibrated on daylight silhouettes is meaningless on a lamp, so a writer that gated would discard exactly the frames the night question is about (§5.3) |
-| **D8.8** | **The behavioural annotation never appears in a per-image label file.** It lives in the truth sidecar and the manifest, which keeps the artifact classes separable by file rather than by field (§5.5) |
+| **D8.8** | **The behavioural annotation never appears in a detector label.** It lives in the truth sidecar and the manifest. Amended 2026-10-06 with D8.6: with no separate label file, the box and `<_supervision>` share the sidecar and are separable by element, so a detector export derived from it takes the box and never the supervision (§5.5) |
 | **D8.9** | **The imagery's requirement on the co-simulation runtime is pose continuity, not capture rate.** Per-tick pose increments small against the projected vehicle length, and velocity discontinuities no more often than one per five capture intervals — which at a 2 Hz capture means a resampled pose whatever the authored SUMO step. Capturing faster does not fix a discontinuity; it samples it more finely. Against [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.6** this sharpens to: **the sub-step interpolant must be continuous in along-lane speed, not only in position** — a cubic Hermite through the two buffered endpoints and their two speeds, which costs nothing over the linear form D3.6 already has the inputs for (§6.2, §6.3) |
-| **D8.10** | **Fabricated motion is labelled.** Every vehicle carries `pose_source` ∈ `simulated` \| `interpolated` \| `held` per capture. This is a **label-accuracy declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a stated positional bound for the others, so a consumer knows the precision of each label rather than assuming they are all equal (§6.4) |
+| **D8.10** | **Fabricated motion is labelled.** Every vehicle carries `pose_source` ∈ `simulated` \| `interpolated` \| `held` per capture. This is a **label-accuracy declaration**: only a `simulated` pose is exact, and the corpus publishes the interpolation rule and a stated positional bound for the others, so a consumer knows the precision of each label rather than assuming they are all equal (§6.4). **Not written as of 2026-10-06**: no snapshot carries what it rests on, and it needs the session to put it on the server (§6.4) |
 | **D8.11** | **Recorded truth speed must describe the motion in the pixels.** [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.5** fixes zero velocity at source and this section depends on it; what this section adds is the consistency requirement, because D3.5 reports SUMO's interpolated speed while D3.6 derives the pose from linear along-lane interpolation. Reported speed and rendered pose must agree to a stated tolerance; failing that the recorder derives speed from the pose using the pattern it already applies to the platform (`FrameRecorder.cs:166-174`); and both figures are carried so a disagreement is visible. Truth acceleration is not trustworthy at SUMO-step boundaries (`WorldObserver.cpp:264-277`), so those frames are flagged and the corpus documents the limitation rather than shipping a field that is silently wrong one frame in twenty (§6.4) |
 | **D8.12** | **The observation handover carries imagery plus collection metadata and never truth.** The corpus may publish a bare-earth surface beside the imagery — a legitimate prior a real exploitation chain has — and may never publish the simulator's depth capture there, because it is a per-frame measurement of the scene's contents. What a consumer does with the ray is theirs (§7.2, §7.4) |
 | **D8.13** | **Line-delimited JSON, one record per line, is the shape *our own* stream uses, and CoT is a display projection rather than an interchange** — a CoT event cannot carry a track's history or its coast state. **It is not offered as a recommendation for a consumer's output**: we state what we emit, their shape is theirs, and §7.3 specifies no `Detection` or `Track` schema for the same reason (§7.3, §11.0, §11.5) |

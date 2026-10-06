@@ -225,6 +225,21 @@ public sealed class LiveTruthRenderSetTests : IAsyncLifetime
         Assert.Null(extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("beyond_draw_distance"));
         Assert.Equal("wholly", (string?)extras["CARLA-TRUTH-23"].Attribute("beyond_draw_distance"));
         Assert.Equal("87.2", (string?)extras["CARLA-TRUTH-23"].Attribute("camera_range_m"));
+        // The lent body is in the picture, straight below the camera, so it carries its box: the range
+        // to its center, 49 m, and its eight corners. The other is outside the picture and carries none.
+        Assert.Equal("wholly", (string?)extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("in_frame"));
+        Assert.Equal("49.0", (string?)extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("camera_range_m"));
+        Assert.NotNull(extras["CARLA-TRUTH-SUMO-escort_0"].Attribute("box_px"));
+        XElement[] corners = [.. extras["CARLA-TRUTH-SUMO-escort_0"].Parent!.Element("_box3d")!.Elements("corner")];
+        Assert.Equal(8, corners.Length);
+        // Its box is centered on its point, so the corners average to the point the record carries.
+        XElement point = extras["CARLA-TRUTH-SUMO-escort_0"].Parent!.Parent!.Element("point")!;
+        foreach (string axis in new[] { "lat", "lon" })
+            Assert.InRange(corners.Average(c => (double)c.Attribute(axis)!) - (double)point.Attribute(axis)!, -2e-7, 2e-7);
+        Assert.InRange(corners.Average(c => (double)c.Attribute("hae")!) - (double)point.Attribute("hae")!, -0.011, 0.011);
+        Assert.Equal("none", (string?)extras["CARLA-TRUTH-23"].Attribute("in_frame"));
+        Assert.Null(extras["CARLA-TRUTH-23"].Attribute("box_px"));
+        Assert.Null(extras["CARLA-TRUTH-23"].Parent!.Element("_box3d"));
         Assert.Equal(1, recorder.DrawDistanceCaptures);
         Assert.Equal(1, recorder.VehiclesBeyondDrawDistance);
         Assert.Equal(0, recorder.VehiclesPartlyBeyondDrawDistance);

@@ -122,6 +122,8 @@ internal readonly struct OrientedBox
     }
 
     /// <summary>Corner <paramref name="corner"/> (0 to 7, one bit per axis) relative to a point in the world.</summary>
+    /// <remarks>Bit 0 is the box's X axis, the way the body points (clear: back, set: front); bit 1 its Y
+    /// axis, to the body's right (clear: left, set: right); bit 2 its Z axis (clear: bottom, set: top).</remarks>
     public (double X, double Y, double Z) CornerFrom(int corner, double fromX, double fromY, double fromZ)
     {
         double sx = (corner & 1) == 0 ? -ExtentX : ExtentX;
@@ -130,6 +132,14 @@ internal readonly struct OrientedBox
         return (X + AxisX.X * sx + AxisY.X * sy + AxisZ.X * sz - fromX,
                 Y + AxisX.Y * sx + AxisY.Y * sy + AxisZ.Y * sz - fromY,
                 Z + AxisX.Z * sx + AxisY.Z * sy + AxisZ.Z * sz - fromZ);
+    }
+
+    /// <summary>How far the box's center is from a point in the world, meters: the one range a
+    /// capture's records are marked with, against the draw distance and in the picture alike.</summary>
+    public double RangeFrom(double x, double y, double z)
+    {
+        double dx = X - x, dy = Y - y, dz = Z - z;
+        return Math.Sqrt((dx * dx) + (dy * dy) + (dz * dz));
     }
 }
 
@@ -163,29 +173,25 @@ public static class BoxProjector
         => Project(camera, new OrientedBox(actorTransform, box));
 
     internal static BoxProjection Project(in PinholeCamera camera, in OrientedBox box)
+        => Project(camera, box, stackalloc PixelPoint[8]);
+
+    /// <summary>Where a box falls against the picture, with its eight projected corners left in
+    /// <paramref name="corners"/> wherever it has a footprint.</summary>
+    private static BoxProjection Project(in PinholeCamera camera, in OrientedBox box, Span<PixelPoint> corners)
     {
-        RotationBasis axes = camera.Basis;
-        double camX = camera.Pose.Location.X, camY = camera.Pose.Location.Y, camZ = camera.Pose.Location.Z;
+        // A box with a corner at or behind the lens has no well-defined footprint.
+        if (!TryProjectCorners(camera, box, corners))
+            return new BoxProjection(InFrame.BehindCamera, double.NaN, double.NaN, double.NaN, double.NaN);
 
         // Footprint of the box in pixels, from its eight corners.
         double minU = double.PositiveInfinity, maxU = double.NegativeInfinity;
         double minV = double.PositiveInfinity, maxV = double.NegativeInfinity;
-        for (int corner = 0; corner < 8; corner++)
+        foreach (PixelPoint corner in corners)
         {
-            (double wx, double wy, double wz) = box.CornerFrom(corner, camX, camY, camZ);
-            double forward = wx * axes.Forward.X + wy * axes.Forward.Y + wz * axes.Forward.Z;
-            // A box with a corner at or behind the lens has no well-defined footprint.
-            if (forward <= NearPlaneMetres)
-                return new BoxProjection(InFrame.BehindCamera, double.NaN, double.NaN, double.NaN, double.NaN);
-            double right = wx * axes.Right.X + wy * axes.Right.Y + wz * axes.Right.Z;
-            double up = wx * axes.Up.X + wy * axes.Up.Y + wz * axes.Up.Z;
-
-            double u = camera.CentreX + camera.Focal * right / forward;
-            double v = camera.CentreY - camera.Focal * up / forward;
-            if (u < minU) minU = u;
-            if (u > maxU) maxU = u;
-            if (v < minV) minV = v;
-            if (v > maxV) maxV = v;
+            if (corner.U < minU) minU = corner.U;
+            if (corner.U > maxU) maxU = corner.U;
+            if (corner.V < minV) minV = corner.V;
+            if (corner.V > maxV) maxV = corner.V;
         }
 
         // The picture spans 0 to Width across and 0 to Height down. A rectangle that only touches an
@@ -198,24 +204,94 @@ public static class BoxProjector
     }
 
     /// <summary>
+    /// A vehicle's box's eight corners projected into the picture, by the projection
+    /// <see cref="Project(in PinholeCamera, Transform, BoundingBox)"/> reads its rectangle off, or null
+    /// where a corner is at or behind the lens. Corner <c>n</c> has bit 0 set at the box's front, bit 1
+    /// on its right and bit 2 at its top.
+    /// </summary>
+    public static PixelPoint[]? ProjectCorners(in PinholeCamera camera, Transform actorTransform, BoundingBox box)
+    {
+        var corners = new PixelPoint[8];
+        return TryProjectCorners(camera, new OrientedBox(actorTransform, box), corners) ? corners : null;
+    }
+
+    /// <summary>
+    /// The box's eight corners projected into the picture, in corner order (<see cref="OrientedBox.CornerFrom"/>):
+    /// false, with <paramref name="corners"/> part-written, where a corner is at or behind the lens.
+    /// </summary>
+    internal static bool TryProjectCorners(in PinholeCamera camera, in OrientedBox box, Span<PixelPoint> corners)
+    {
+        RotationBasis axes = camera.Basis;
+        double camX = camera.Pose.Location.X, camY = camera.Pose.Location.Y, camZ = camera.Pose.Location.Z;
+        for (int corner = 0; corner < 8; corner++)
+        {
+            (double wx, double wy, double wz) = box.CornerFrom(corner, camX, camY, camZ);
+            double forward = wx * axes.Forward.X + wy * axes.Forward.Y + wz * axes.Forward.Z;
+            if (forward <= NearPlaneMetres)
+                return false;
+            double right = wx * axes.Right.X + wy * axes.Right.Y + wz * axes.Right.Z;
+            double up = wx * axes.Up.X + wy * axes.Up.Y + wz * axes.Up.Z;
+
+            corners[corner] = new PixelPoint(camera.CentreX + camera.Focal * right / forward,
+                                             camera.CentreY - camera.Focal * up / forward);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Every record marked with where its box fell against the camera's picture and how large it
     /// appears there, from the pose the record's own geometry was read at.
     /// </summary>
     /// <param name="records">The capture's truth records.</param>
     /// <param name="camera">The camera the capture's picture was taken by, at the pose it was taken from.</param>
     public static IReadOnlyList<VehicleTelemetry> Mark(IReadOnlyList<VehicleTelemetry> records, in PinholeCamera camera)
+        => Mark(records, camera, origin: null);
+
+    /// <summary>
+    /// Every record marked with where its box fell against the camera's picture and how large it
+    /// appears there, and each record whose box fell in the picture with its box as well
+    /// (<see cref="CaptureBox"/>): the pixel rectangles, the share outside the picture, the range from
+    /// the camera, the body's tilt and the box's eight corners in latitude, longitude and bare-earth
+    /// height. A record whose box fell outside the picture or behind the lens gets no box.
+    /// </summary>
+    /// <param name="records">The capture's truth records.</param>
+    /// <param name="camera">The camera the capture's picture was taken by, at the pose it was taken from.</param>
+    /// <param name="origin">The world's georeference origin the records' own points were converted from,
+    /// which their boxes' corners are converted from too.</param>
+    public static IReadOnlyList<VehicleTelemetry> Mark(IReadOnlyList<VehicleTelemetry> records, in PinholeCamera camera,
+                                                       GeoLocation origin)
+        => Mark(records, camera, (GeoLocation?)origin);
+
+    private static IReadOnlyList<VehicleTelemetry> Mark(IReadOnlyList<VehicleTelemetry> records, in PinholeCamera camera,
+                                                        GeoLocation? origin)
     {
         ArgumentNullException.ThrowIfNull(records);
         var marked = new List<VehicleTelemetry>(records.Count);
+        Span<PixelPoint> corners = stackalloc PixelPoint[8];
         foreach (VehicleTelemetry record in records)
         {
-            BoxProjection projection = Project(camera, record.ActorTransform, record.BoundingBox);
-            marked.Add(record with
+            var box = new OrientedBox(record.ActorTransform, record.BoundingBox);
+            BoxProjection projection = Project(camera, box, corners);
+            VehicleTelemetry projected = record with
             {
                 InFrame = projection.InFrame,
                 ApparentWidthPx = projection.ApparentWidthPx,
                 ApparentHeightPx = projection.ApparentHeightPx,
-            });
+            };
+            // Only a vehicle in the picture gets a box, as the owner ruled; its range is the one the
+            // draw distance is marked by, from the same center and the same camera.
+            if (origin is { } georeference && projection.IsInPicture)
+            {
+                Location at = camera.Pose.Location;
+                projected = projected with
+                {
+                    Box = CaptureBoxes.Of(camera, box, projection, corners, record, georeference),
+                    CameraRangeMetres = box.RangeFrom(at.X, at.Y, at.Z),
+                };
+            }
+
+            marked.Add(projected);
         }
 
         return marked;

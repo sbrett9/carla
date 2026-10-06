@@ -25,6 +25,13 @@ namespace CarlaNet.Recording;
 /// (<see cref="OcclusionUnmeasured"/>), so a reader never mistakes an absent fraction for an unhidden
 /// vehicle. A record no camera projected -- the live pull's -- carries none of these.</para>
 ///
+/// <para>A vehicle whose box fell in the picture, <c>in_frame</c> of <c>wholly</c> or <c>partly</c>, also
+/// carries its box (<see cref="CaptureBox"/>), as the owner ruled on 2026-10-06: <c>pitch_deg</c> and
+/// <c>roll_deg</c> beside its heading, <c>box_px</c>, <c>box_oriented_px</c> and <c>truncation</c> beside
+/// its apparent size, <c>camera_range_m</c>, and a <c>&lt;_box3d frame="geodetic"&gt;</c> beside
+/// <c>_carla</c> holding the box's eight corners. A vehicle outside the picture or behind the lens
+/// carries none of them, the range apart where the draw distance reached it.</para>
+///
 /// <para>A capture whose image was rendered under a draw distance says so on its container
 /// (<c>draw_distance_m</c>), and every vehicle the distance kept out of the image, wholly or in part,
 /// carries <c>beyond_draw_distance</c> and the <c>camera_range_m</c> it rests on in its extras: it is in
@@ -256,6 +263,16 @@ public static class CotWriter
             {
                 w.WriteAttributeString("heading_deg", F(r.HeadingDeg, "0.0"));
             }
+            // A vehicle whose box fell in the picture carries its box, and no other vehicle does, as the
+            // owner ruled: the record of a vehicle outside the picture or behind the lens is written as
+            // before, and so is every record no camera projected.
+            CaptureBox? box = r.InFrame is InFrame.Wholly or InFrame.Partly ? r.Box : null;
+            // The body's tilt from its transform, beside the heading it points along.
+            if (box is not null)
+            {
+                w.WriteAttributeString("pitch_deg", F(box.PitchDeg, "0.00"));
+                w.WriteAttributeString("roll_deg", F(box.RollDeg, "0.00"));
+            }
             // Where this vehicle's box fell against the picture -- wholly in it, partly, outside it, or
             // with a corner at or behind the lens -- read off the box's projection, which needs no
             // depth capture. Written for every vehicle a recorder projected, so a record with no
@@ -292,19 +309,36 @@ public static class CotWriter
                 w.WriteAttributeString("apparent_height_px",
                                        r.ApparentHeightPx.ToString(CultureInfo.InvariantCulture));
             }
+            // Where the box lies in the picture: the axis-aligned rectangle its eight projected corners
+            // span, as x min, y min, x max, y max; the minimum-area rectangle enclosing them, as four
+            // x y corners clockwise from the top-most; neither clipped to the picture, so the share of
+            // the first outside it is written beside them.
+            if (box is not null)
+            {
+                w.WriteAttributeString("box_px",
+                                       $"{F(box.MinU, "0.00")} {F(box.MinV, "0.00")} {F(box.MaxU, "0.00")} {F(box.MaxV, "0.00")}");
+                w.WriteAttributeString("box_oriented_px",
+                                       string.Join(' ', box.Oriented.Select(c => $"{F(c.U, "0.00")} {F(c.V, "0.00")}")));
+                w.WriteAttributeString("truncation", F(box.Truncation, "0.000"));
+            }
             // Why there is no occlusion, where there is none: the recorder's own state, in one word,
             // and never written beside a measurement.
             if (!measured && r.OcclusionUnmeasured is { } unmeasured)
             {
                 w.WriteAttributeString("occlusion_unmeasured", UnmeasuredOcclusion.SidecarValue(unmeasured));
             }
-            // Kept out of this image by the draw distance, wholly or in part, and how far from the
-            // camera it stood: in the world and in the truth, and not a vehicle this image shows.
-            // Written only where the distance reached it, so its absence under a draw distance means
-            // the image drew all of it.
-            if (DrawDistanceCheck.SidecarValue(r.DrawDistance) is { } beyond)
+            // Kept out of this image by the draw distance, wholly or in part: in the world and in the
+            // truth, and not a vehicle this image shows. Written only where the distance reached it, so
+            // its absence under a draw distance means the image drew all of it.
+            string? beyond = DrawDistanceCheck.SidecarValue(r.DrawDistance);
+            if (beyond is not null)
             {
                 w.WriteAttributeString("beyond_draw_distance", beyond);
+            }
+            // How far from the camera the box's center stood: what the draw distance mark rests on, and
+            // a box field of every vehicle in the picture. One range whichever needs it, written once.
+            if (beyond is not null || box is not null)
+            {
                 w.WriteAttributeString("camera_range_m", F(r.CameraRangeMetres, "0.0"));
             }
             // Who this body was drawing on this frame, where it was lent one: the SUMO vehicle that
@@ -324,6 +358,25 @@ public static class CotWriter
                 }
             }
             w.WriteEndElement(); // _carla
+
+            // The box's eight corners in latitude, longitude and bare-earth height, converted as the
+            // point above was, in a fixed order: the bottom face around from the front left, then the
+            // top face the same way (CaptureBoxes.CornerNames).
+            if (box is not null)
+            {
+                w.WriteStartElement("_box3d");
+                w.WriteAttributeString("frame", "geodetic");
+                foreach (GeodeticCorner corner in box.Corners)
+                {
+                    w.WriteStartElement("corner");
+                    w.WriteAttributeString("lat", F(corner.Lat, "0.0000000"));
+                    w.WriteAttributeString("lon", F(corner.Lon, "0.0000000"));
+                    w.WriteAttributeString("hae", F(corner.Hae, "0.00"));
+                    w.WriteEndElement(); // corner
+                }
+
+                w.WriteEndElement(); // _box3d
+            }
 
             // What the author asserts of the vehicle this body drew on this frame, where it drew one:
             // asserted, never derived, and written for every drawn vehicle, unlabelled included.

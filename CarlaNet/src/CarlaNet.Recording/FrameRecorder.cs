@@ -583,10 +583,13 @@ public sealed class FrameRecorder : IDisposable
         // pose the pixels were taken from and the picture's own size and field of view: a fact for
         // every record, whether or not a depth camera is attached, so a record with no occlusion is
         // never read as a vehicle the image shows unhidden. The field of view is the platform's where
-        // one was given, so the projection agrees with the intrinsics the sidecar writes.
+        // one was given, so the projection agrees with the intrinsics the sidecar writes. A vehicle
+        // whose box fell in the picture gets its box too -- the pixel rectangles, the share outside the
+        // picture, its range and tilt, and the box's corners converted as its own point was -- and no
+        // other vehicle does, as the owner ruled.
         var picture = new PinholeCamera(cameraPose, arrival.Width, arrival.Height,
                                         _platform?.HFovDeg ?? arrival.HeaderHFovDeg);
-        recs = BoxProjector.Mark(recs, picture);
+        recs = _haveOrigin ? BoxProjector.Mark(recs, picture, _origin) : BoxProjector.Mark(recs, picture);
 
         // How much of each vehicle this camera can actually see. Occlusion belongs to the
         // (vehicle, camera) pair, so it is measured against the depth capture of THIS frame from THIS
