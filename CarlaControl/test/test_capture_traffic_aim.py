@@ -6,7 +6,10 @@ the window, measured from the poses it wrote to bodies. The camera follows that 
 prewarm until one SUMO step and the picture's ceiling -- its 60 frames at 2 Hz and the ten-tick
 span, 32 one-second steps at the defaults -- before the window opens, and then holds one pose, so
 the view whose tiles and picture are waited on (03 §9.5.1) is the view the window holds; the run
-result records the point so the view is reproducible as an ordinary look-at stare.
+result records the point so the view is reproducible as an ordinary look-at stare. That hold is the
+one `capture.picture_settled_wait` true asks for, and the tests that work it out set the field; at
+its default, off by the owner's ruling of 2026-10-06, only the tiles are waited on and the camera
+holds for their own lead, `capture.tiles_hold_s`, 10 s, which the tests at the end work out.
 
 The stand-in session hands `on_pose` one record per vehicle per tick. Its vehicles drive east at one
 metre per simulated second, so the centre of a step's last frame, the centre of the whole step and the
@@ -81,9 +84,14 @@ def aim_around(point: tuple[float, float, float]) -> StareAim:
                                A_TRAFFIC_STARE["stare_bearing_deg"])
 
 
-def capture(layout: Layout, server: FakeServer, channels=None, overrides=()):
+def capture(layout: Layout, server: FakeServer, channels=None, overrides=(), picture_wait=True):
+    """Run the fixture capture. The hold most tests here work out is the one the picture's wait
+    needs, so they turn it on with the run field that does; `picture_wait=False` leaves the field at
+    its default, off, where the hold is one SUMO step."""
     document = run_document()
     document["capture"]["channels"] = channels or [A_TRAFFIC_STARE]
+    if picture_wait:
+        overrides = ["capture.picture_settled_wait=true", *overrides]
     run_path = layout.root / "fixture.run.json"
     run_path.write_text(json.dumps(document), encoding="utf-8")
     site = SiteProfile.discover(layout.root, layout.write_profile(), environ={})
@@ -317,4 +325,74 @@ def test_a_prewarm_shorter_than_a_sumo_step_is_refused_offline(layout, prewarm):
     assert (result.outcome, result.refusals[0]["check"]) == ("refused_offline", 47)
     assert "rendered traffic" in result.refusals[0]["message"]
     assert server.clients == []
+
+
+# -- with the picture's wait off, its default, the hold is the tiles' own lead ----------------------
+
+def test_by_default_it_follows_the_traffic_until_the_tiles_lead_and_holds_for_it(layout):
+    # The tiles' own lead, capture.tiles_hold_s, 10 s, and nothing for the picture: the camera
+    # follows for 290 of the prewarm's 300 steps, resolves to the center of the bodies on the last
+    # frame of the 290th, and its tiles are asked about after each of the ten held steps, the last
+    # the step that opens the window.
+    server = traffic_server()
+    result = capture(layout, server, picture_wait=False)
+    assert result.outcome == "run_finished"
+    hold = BEGIN_S - 10.0
+    [record] = result.produced["cameras"]
+    assert (record["held_from_s"], record["held_before_the_window_s"]) == (hold, 10.0)
+    assert record["look_at"]["x_m"] == pytest.approx(centre_at(hold - 0.05)[0], abs=1e-6)
+    rgb, _ = cameras(server)
+    assert len(moves_of(server, rgb.id)) == int(hold - FIRST_RENDERED_S) == 290
+    log = server.events.log
+    asks = [i for i, event in enumerate(log) if event[0] == "view_readiness"]
+    assert len(asks) == 10
+    assert [e[1] for e in log[:asks[0]] if e[0] == "advance"][-1] == hold + 1.0
+    view = result.produced["readiness"]["channels"][0]
+    assert view["wait_began"]["sim_time_s"] == hold
+    assert (view["state"], view["ready_at_window_open"]) == ("ready", True)
+    assert result.launch_echo["readiness"]["traffic_stare_holds_from_s"] == hold
+
+
+@pytest.mark.parametrize(("in_from", "outcome"), [(6900, "run_finished"),
+                                                  (7020, "refused_preroll")])
+def test_by_default_its_tiles_are_asked_about_on_every_step_of_the_hold(layout, in_from, outcome):
+    # The hold begins after the prewarm's 290th step, on frame 6800, and the window opens on frame
+    # 7000. Tiles in from frame 6900, the fifth held step, are in time; tiles not in until after
+    # the window has opened refuse the run at pre-roll (check 50).
+    server = traffic_server()
+    server.tiles_at = lambda camera, frame: {"published": frame > camera.spawn_frame,
+                                             "load_progress": 100.0 if frame >= in_from else 62.0,
+                                             "failed_in_view": 0}
+    result = capture(layout, server, picture_wait=False)
+    assert result.outcome == outcome
+    view = result.produced["readiness"]["channels"][0]
+    if outcome == "refused_preroll":
+        assert {refusal["check"] for refusal in result.refusals} == {50}
+        assert view["state"] == "waiting for tiles" and "62%" in result.detail
+        assert server.events.of("start_recording") == []
+        return
+    assert view["tiles"]["in_at_frame"] == in_from
+    assert view["tiles"]["ticks"] == in_from - 6800
+
+
+@pytest.mark.parametrize(("prewarm", "outcome"), [("1", "refused_offline"),
+                                                  ("10", "refused_offline"),
+                                                  ("11", "run_finished")])
+def test_by_default_one_step_to_measure_and_the_tiles_lead_to_hold(layout, prewarm, outcome):
+    # One step followed, then the tiles' 10 s lead held: 11 s at a one-second step, where check 51
+    # asks 32.5 s with the picture waited on.
+    server = traffic_server()
+    result = capture(layout, server, overrides=[f"capture.prewarm_s={prewarm}"],
+                     picture_wait=False)
+    assert result.outcome == outcome
+    if outcome == "refused_offline":
+        [refusal] = result.refusals
+        assert (refusal["check"], refusal["subject"]) == (51, "capture.prewarm_s")
+        assert "at least 11 s" in refusal["message"]
+        assert "stare following the rendered traffic" in refusal["message"]
+        assert server.clients == []
+        return
+    rgb, _ = cameras(server)
+    assert len(moves_of(server, rgb.id)) == 1
+    assert result.produced["cameras"][0]["held_before_the_window_s"] == 10.0
 

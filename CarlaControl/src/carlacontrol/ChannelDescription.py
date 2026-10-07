@@ -35,8 +35,9 @@ class ChannelDescription:
     * *aimed at the rendered traffic* -- `stare_look_at_target` set to `rendered_traffic`. The
       point is not known when the channel is declared: it is the centre of the vehicles a
       co-simulation session has rendered on the last frame before the camera holds for the capture
-      window -- one SUMO step and the picture's ceiling (`capture.picture_ceiling_frames` at the
-      capture rate, and the ten-tick span) before the window opens, so its view can be seen to be
+      window -- `capture.tiles_hold_s` before the window opens, in whole SUMO steps, or one SUMO
+      step and the picture's ceiling (`capture.picture_ceiling_frames` at the capture rate, and the
+      ten-tick span) where `capture.picture_settled_wait` is true, so its view can be seen to be
       ready where it will be held -- their mean position including their height, and the camera
       stands off from it by the same
       `stare_altitude_m`, `stare_standoff_m` and `stare_bearing_deg` as a point. `stare_look_at_z_m`

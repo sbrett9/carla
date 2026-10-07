@@ -51,7 +51,12 @@ from carlacontrol.RunConfigurationFindings import (
     RunConfigurationRefusedError,
 )
 from carlacontrol.ScenarioSchema import ScenarioSchema
-from carlacontrol.ViewReadiness import PICTURE_CEILING_FRAMES, PICTURE_TOLERANCE_LEVELS
+from carlacontrol.ViewReadiness import (
+    PICTURE_CEILING_FRAMES,
+    PICTURE_SETTLED_WAIT,
+    PICTURE_TOLERANCE_LEVELS,
+    TILES_HOLD_S,
+)
 
 RUN_CONFIGURATION_VERSION = 1
 
@@ -229,25 +234,48 @@ _FIELDS: tuple[RunField, ...] = (
             "unless the caller stops it first."),
     _F("capture.prewarm_s", _NON_NEGATIVE, 300.0, SESSION_FIXED,
        help="Simulated seconds rendered before the window opens and not recorded, so every "
-            "camera's view is ready -- its tiles in, its picture settled -- before the first "
-            "capture (03 §9.5.1). A view not ready by the window's opening refuses the run; the "
-            "window is not moved."),
+            "camera's view is ready -- its tiles in, and its picture settled where "
+            "capture.picture_settled_wait is true -- before the first capture (03 §9.5.1). A view "
+            "not ready by the window's opening refuses the run; the window is not moved."),
     _F("capture.world_delta_s", _POSITIVE, 0.05, SESSION_FIXED,
        help="Simulated seconds per world tick. The SUMO step must be a whole number of them."),
     _F("capture.capture_hz", _POSITIVE, 2.0, SESSION_FIXED,
        help="Captures per simulated second, on every channel. One capture must be a whole number "
             "of world ticks."),
+    _F("capture.picture_settled_wait", _BOOLEAN, PICTURE_SETTLED_WAIT, SESSION_FIXED,
+       help="Whether the pre-roll also waits, once a camera's photoreal tiles are in, for its "
+            "picture to settle (03 §9.5.1, checks 50 and 51). Off by default, by the owner's ruling "
+            "of 2026-10-06, until the wait is fixed: it places each compared frame's rendered "
+            "vehicles from the client's snapshot of that frame and is asked once per SUMO step, "
+            "after the step's last tick, so with many ticks to a step -- twenty at Bahonar's 1 s "
+            "step -- the client no longer holds the older frame's snapshot, every comparison is "
+            "vehicles_unknown and the pre-roll refuses; the owner also found it too strict. Off, the "
+            "pre-roll waits for the tiles alone, through capture.tiles_hold_s; no camera frame is "
+            "compared, and capture.picture_ceiling_frames and capture.picture_tolerance_levels are "
+            "not read. Set it true to run the wait as it stands."),
+    _F("capture.tiles_hold_s", _POSITIVE, TILES_HOLD_S, SESSION_FIXED,
+       help="Read only where capture.picture_settled_wait is false, its default: the photoreal "
+            "tiles' own lead before the window, in simulated seconds (03 §9.5.1). A stare aimed at "
+            "the rendered traffic stops following it and holds the pose the window opens on this "
+            "long before the window, rounded up to whole SUMO steps, so its tiles are asked about "
+            "after every step of the hold; and every camera's prewarm must be at least this long, "
+            "a stare aimed at the traffic one SUMO step longer to measure it on (check 51). 10 s "
+            "covers every cold tile load measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s; one "
+            "outlier took 712 ticks, 35.6 s. A view whose tiles are not in as the window opens "
+            "still refuses the run (check 50). Where capture.picture_settled_wait is true, the "
+            "picture's ceiling sets the hold instead."),
     _F("capture.picture_ceiling_frames", _POSITIVE_INTEGER, PICTURE_CEILING_FRAMES, SESSION_FIXED,
-       help="How many of its own frames a camera has, from its photoreal tiles being in, to settle "
-            "its picture before the run is refused at pre-roll (03 §9.5.1, check 50): 60 is 30 s at "
-            "2 Hz. Counted in the camera's frames, not ticks, because what the renderer settles "
-            "advances once per frame the camera draws. The prewarm must hold this many frames at "
-            "the capture rate and the ten-tick comparison span (check 51)."),
+       help="Read only where capture.picture_settled_wait is true. How many of its own frames a "
+            "camera has, from its photoreal tiles being in, to settle its picture before the run is "
+            "refused at pre-roll (03 §9.5.1, check 50): 60 is 30 s at 2 Hz. Counted in the camera's "
+            "frames, not ticks, because what the renderer settles advances once per frame the camera "
+            "draws. The prewarm must hold this many frames at the capture rate and the ten-tick "
+            "comparison span (check 51)."),
     _F("capture.picture_tolerance_levels", _POSITIVE, PICTURE_TOLERANCE_LEVELS, SESSION_FIXED,
-       help="The gray levels by which a camera's frame may differ from its frame at least ten ticks "
-            "earlier, in its worst 80-pixel block that no rendered vehicle covers, and count as "
-            "settled (03 §9.5.1). Measured over 27 placements; recorded in the lock, so a run that "
-            "loosens it says so."),
+       help="Read only where capture.picture_settled_wait is true. The gray levels by which a "
+            "camera's frame may differ from its frame at least ten ticks earlier, in its worst "
+            "80-pixel block that no rendered vehicle covers, and count as settled (03 §9.5.1). "
+            "Measured over 27 placements; recorded in the lock, so a run that loosens it says so."),
     _F("capture.road_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated road surface. Hidden by default: it is a flat ribbon over the "
             "photogrammetry of the real road, so drawn it is an artefact in every frame."),
@@ -449,12 +477,15 @@ _CHANNEL_HELP = {
     "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the centre "
                             "of the vehicles the session rendered on the last frame before the "
                             "camera holds for the window; the camera follows it through the "
-                            "prewarm until one SUMO step and the picture's ceiling before the "
-                            "window opens (32 s at the defaults: capture.picture_ceiling_frames "
-                            "at the capture rate and the ten-tick span, in whole steps), then "
-                            "holds the pose it resolves to while its view becomes ready and for "
-                            "the whole window, and the run result records that point. Needs a "
-                            "prewarm of at least one SUMO step.",
+                            "prewarm until capture.tiles_hold_s before the window opens (10 s at "
+                            "the default, in whole SUMO steps) -- or one SUMO step and the "
+                            "picture's ceiling where capture.picture_settled_wait is true (32 s at "
+                            "a 1 s step and the default ceiling: capture.picture_ceiling_frames at "
+                            "the capture rate and the ten-tick span, in whole steps) -- then holds "
+                            "the pose it resolves to while its view becomes ready and for the whole "
+                            "window, and the run result records that point. Needs a prewarm of at "
+                            "least one SUMO step to measure it on (check 47), and one SUMO step "
+                            "more than check 51 asks of a camera at a fixed pose.",
     "stare_altitude_m": "Stare: height above the point, metres.",
     "stare_standoff_m": "Stare: horizontal distance back from the point, metres; 0 looks "
                         "straight down.",

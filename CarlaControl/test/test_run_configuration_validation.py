@@ -48,6 +48,8 @@ from carlacontrol.SiteProfile import SiteProfile  # noqa: E402
 
 Usage = namedtuple("Usage", "total used free")
 PLENTY = 10**13
+# The picture's wait is off by default; a test of its checks turns it on.
+PICTURE_WAIT_ON = "capture.picture_settled_wait=true"
 
 
 @pytest.fixture
@@ -136,31 +138,85 @@ def test_a_prewarm_longer_than_the_window_s_start_warns(layout):
 
 
 def test_a_prewarm_too_short_for_the_picture_ceiling_is_refused_offline(layout):
-    # The ceiling's 60 frames at one every ten ticks and the ten-tick span are 610 ticks after the
-    # tiles are first asked about, one step into the prewarm: 31.5 s. A shorter ceiling needs less.
-    *_, findings, _, _ = offline(layout, overrides=["capture.prewarm_s=31"])
+    # With the picture waited on, the ceiling's 60 frames at one every ten ticks and the ten-tick
+    # span are 610 ticks after the tiles are first asked about, one step into the prewarm: 31.5 s.
+    # A shorter ceiling needs less.
+    *_, findings, _, _ = offline(layout, overrides=[PICTURE_WAIT_ON, "capture.prewarm_s=31"])
     finding = only(findings, 51)
     assert finding.subject == "capture.prewarm_s"
     assert "60 frames at one every 10 ticks and the 10-tick span" in finding.message
     assert "at least 31.5 s" in finding.message
-    assert not offline(layout, overrides=["capture.prewarm_s=32"])[2].findings
-    assert not offline(layout, overrides=["capture.prewarm_s=3",
+    assert not offline(layout, overrides=[PICTURE_WAIT_ON, "capture.prewarm_s=32"])[2].findings
+    assert not offline(layout, overrides=[PICTURE_WAIT_ON, "capture.prewarm_s=3",
                                           "capture.picture_ceiling_frames=2"])[2].findings
 
 
 @pytest.mark.parametrize(("hz", "ceiling", "first_judged"), [("2", 1, 2), ("20", 10, 11)])
 def test_a_picture_ceiling_too_small_to_hold_a_comparison_is_refused_offline(layout, hz, ceiling,
                                                                             first_judged):
-    # A frame is judged against the camera's frame at least ten ticks before it, also rendered since
-    # the tiles: the second frame at 2 Hz, the eleventh at 20 Hz.
-    *_, findings, _, _ = offline(layout, overrides=[f"capture.capture_hz={hz}",
+    # With the picture waited on, a frame is judged against the camera's frame at least ten ticks
+    # before it, also rendered since the tiles: the second frame at 2 Hz, the eleventh at 20 Hz.
+    *_, findings, _, _ = offline(layout, overrides=[PICTURE_WAIT_ON, f"capture.capture_hz={hz}",
                                                     f"capture.picture_ceiling_frames={ceiling}"])
     finding = only(findings, 51)
     assert finding.subject == "capture.picture_ceiling_frames"
     assert f"at least {first_judged} frames" in finding.message
-    assert not offline(layout, overrides=[f"capture.capture_hz={hz}",
+    assert not offline(layout, overrides=[PICTURE_WAIT_ON, f"capture.capture_hz={hz}",
                                           f"capture.picture_ceiling_frames={first_judged}"]
                        )[2].refused
+
+
+def test_by_default_check_51_asks_the_prewarm_for_the_tiles_lead(layout):
+    # The picture's wait is off by default, so the prewarm needs only the tiles' own lead,
+    # capture.tiles_hold_s, 10 s: 31 s, refused above with the wait on, is accepted, and so is a
+    # ceiling too small to hold a comparison, which is not read; 9 s is refused, and so is any
+    # prewarm shorter than a lead the run sets.
+    assert not offline(layout, overrides=["capture.prewarm_s=31"])[2].findings
+    assert not offline(layout, overrides=["capture.prewarm_s=10"])[2].findings
+    assert not offline(layout, overrides=["capture.picture_ceiling_frames=1"])[2].findings
+    assert not offline(layout, overrides=["capture.prewarm_s=1",
+                                          "capture.tiles_hold_s=1"])[2].findings
+    for prewarm in ("9", "0"):
+        *_, findings, _, _ = offline(layout, overrides=[f"capture.prewarm_s={prewarm}"])
+        finding = only(findings, 51)
+        assert finding.subject == "capture.prewarm_s"
+        assert "capture.tiles_hold_s, 10 s" in finding.message
+        assert "at least 10 s" in finding.message
+        assert "capture.picture_settled_wait" in finding.message
+    *_, findings, _, _ = offline(layout, overrides=["capture.prewarm_s=30",
+                                                    "capture.tiles_hold_s=45"])
+    assert "at least 45 s" in only(findings, 51).message
+
+
+def test_with_the_picture_waited_on_the_tiles_lead_is_not_read(layout):
+    # The picture's ceiling sets the hold then: a lead far longer than the prewarm changes nothing.
+    assert not offline(layout, overrides=[PICTURE_WAIT_ON, "capture.prewarm_s=32",
+                                          "capture.tiles_hold_s=100"])[2].findings
+
+
+@pytest.mark.parametrize("value", [0, -1, "soon", None])
+def test_a_tiles_lead_that_is_not_a_positive_number_is_refused_by_the_schema(value):
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document({"capture": {"tiles_hold_s": value}}, "test.run.json")
+    [finding] = raised.value.findings.refusals
+    assert (finding.check_id, finding.subject) == (1, "capture.tiles_hold_s")
+
+
+@pytest.mark.parametrize("value", ["yes", 1, None])
+def test_a_picture_settled_wait_that_is_not_true_or_false_is_refused_by_the_schema(value):
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.from_document({"capture": {"picture_settled_wait": value}},
+                                       "test.run.json")
+    [finding] = raised.value.findings.refusals
+    assert (finding.check_id, finding.subject) == (1, "capture.picture_settled_wait")
+
+
+def test_the_picture_settled_wait_is_off_by_default_and_the_tiles_lead_is_10_s(layout):
+    effective, *_ = offline(layout)
+    assert effective.value("capture.picture_settled_wait") is False
+    assert effective.value("capture.tiles_hold_s") == 10.0
+    assert effective.resolution("capture.picture_settled_wait").layer == "tool_default"
+    assert effective.resolution("capture.tiles_hold_s").layer == "tool_default"
 
 
 @pytest.mark.parametrize(("field", "value"), [

@@ -170,11 +170,15 @@ _CHECKS: tuple[RunCheck, ...] = (
              "(the compiler's check 59), or scenario.accept_skipped_dry_run accepts that it did not",
              _R, RUN_CAPTURE, "RunConfigurationValidator; the session refuses the same lock before "
              "SUMO is started"),
-    RunCheck(51, OFFLINE, "The picture's ceiling, capture.picture_ceiling_frames, holds at least "
-             "one comparison at the capture rate, and the prewarm leaves every camera, at the pose "
-             "it holds as the window opens, enough ticks after its tiles are first asked about to "
-             "draw the ceiling's frames at that rate and the ten-tick span a frame is compared "
-             "across", _R, RUN_CAPTURE, "RunConfigurationValidator"),
+    RunCheck(51, OFFLINE, "The prewarm leaves every camera, at the pose it holds as the window "
+             "opens, the tiles' own lead, capture.tiles_hold_s in whole SUMO steps, with its tiles "
+             "asked about after every step of it -- a stare following the traffic one SUMO step "
+             "more, to measure it on; and where capture.picture_settled_wait is true (off by "
+             "default), instead: the picture's ceiling, capture.picture_ceiling_frames, holds at "
+             "least one comparison at the capture rate, and the prewarm leaves enough ticks after "
+             "the tiles are first asked about to draw the ceiling's frames at that rate and the "
+             "ten-tick span a frame is compared across", _R, RUN_CAPTURE,
+             "RunConfigurationValidator"),
     # -- the server --------------------------------------------------------------------------
     RunCheck(22, SERVER, "The loaded world is the world package's", (), SESSION,
              "SumoDriveSession.Start, LoadedWorldCheck, before SUMO is started"),
@@ -208,10 +212,11 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(45, PRE_ROLL, "The handover transport opens", (), NOT_BUILT,
              "no handover transport exists"),
     RunCheck(50, PRE_ROLL, "Every channel's view is ready as the window opens: its photoreal tiles "
-             "in and its picture settled with the blocks rendered vehicles cover left out, each "
-             "within its ceiling", _R, RUN_CAPTURE,
+             "in, and where capture.picture_settled_wait is true (off by default) its picture "
+             "settled with the blocks rendered vehicles cover left out, each within its ceiling", _R,
+             RUN_CAPTURE,
              "CaptureSession, ViewReadinessGate: world.get_view_readiness after every prewarm "
-             "step, and the camera's own frames"),
+             "step, and under capture.picture_settled_wait the camera's own frames"),
     # -- while the run proceeds -------------------------------------------------------------------
     RunCheck(46, CONTINUOUS, "Write headroom under the capture root stays above "
              "write_headroom_floor_s of capture", _R, RUN_CAPTURE,

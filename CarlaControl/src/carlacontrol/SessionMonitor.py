@@ -14,7 +14,7 @@ because that is how a wrong sun is made visible, and the session's latest admiss
 population, every vehicle of which is rendered unless an optional limit was chosen, the vehicles
 admitted and released at it, and under a limit the eligible, the drawn and the shed -- because the
 population is what sets the pace and a limit is what thins it. Until the recorders start it also shows where each channel's view stands in its
-wait for its tiles and its picture (03 §9.5.1), because that wait is what the prewarm is spent on. An exercised operator's picture is a different display and never this one (D12.31).
+wait for its tiles, and for its picture where `capture.picture_settled_wait` is true (03 §9.5.1), because that wait is what the prewarm is spent on. An exercised operator's picture is a different display and never this one (D12.31).
 """
 from __future__ import annotations
 
