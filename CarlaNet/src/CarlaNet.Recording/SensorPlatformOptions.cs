@@ -17,13 +17,17 @@ namespace CarlaNet.Recording;
 /// <param name="SensorModel">Sensor/camera model string for the CoT sensor element, e.g. "sensor.camera.rgb".</param>
 /// <param name="Distortion">Lens-distortion descriptor: "none" at CARLA defaults, or the serialized raw
 /// CARLA lens parameters (which are a non-standard model, not Brown-Conrady) when non-default.</param>
+/// <param name="Exposure">The exposure the camera was given (<see cref="CameraExposure.Of"/>), written on
+/// every capture as <c>&lt;_carla_exposure&gt;</c>; null for a camera that carries none, whose captures
+/// carry no element.</param>
 public sealed record SensorPlatformOptions(
     double HFovDeg,
     string CotType,
     string Callsign,
     string Uid,
     string SensorModel = "sensor.camera.rgb",
-    string Distortion = "none")
+    string Distortion = "none",
+    CameraExposure? Exposure = null)
 {
     /// <summary>
     /// Resolve an airframe alias (or a raw CoT type string) plus an affiliation into a CoT air-track type.

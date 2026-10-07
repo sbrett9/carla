@@ -769,6 +769,20 @@ def camera_named_by_server(camera) -> bool:
     return bool(CameraName.NamedByServer(camera._actor))
 
 
+def camera_exposure_of(camera):
+    """The exposure `camera` was given, read from the actor's attributes as the server spawned it, as a
+    CarlaNet.Recording.CameraExposure: the post_process_profile it names, and the exposure_mode, iso,
+    shutter_speed (per second), fstop and exposure_compensation set over that profile. None for a camera
+    that does not carry all six -- one of a server built before it published its exposure, or one with no
+    post-process pair, such as the depth camera. Every capture recorded from the camera carries it as
+    `<_carla_exposure>` (`start_recording`), and the run manifest's camera entry as `exposure`."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera exposure is read by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraExposure
+    return CameraExposure.Of(camera._actor)
+
+
 def _say_server_names_no_cameras(camera) -> None:
     """Said once per process: the server handed an unnamed camera back without a name of its own,
     so it was built before it named cameras, and the camera is its default."""
@@ -2229,7 +2243,11 @@ class World:
         or a raw CoT type string; `platform_affiliation` is the CoT standard identity (default 'f' friend,
         as the platform is our own collection asset); the track's callsign is the camera's name and
         `platform_uid` its uid (default CARLA-SENSOR-<camera id>, whatever the camera is named);
-        `distortion` describes the lens model ('none' at CARLA defaults).
+        `distortion` describes the lens model ('none' at CARLA defaults). Every capture's platform event
+        also carries the exposure the camera was given, `<_carla_exposure>`, read from the camera's own
+        attributes (`camera_exposure_of`): its `post_process_profile`, `method` (`manual` or
+        `histogram`), `iso`, `shutter_s` in seconds, `fstop`, `compensation_ev`, and under manual the
+        `ev100` they make; a camera that carries none writes none.
 
         Every capture records the simulation tick that produced it, so a still and its sidecar are bound
         to a simulation instant rather than to wall-clock time, which does not track the simulation
@@ -2318,8 +2336,9 @@ class World:
         token = camera._actor.StreamToken
         uid = platform_uid or default_camera_name(camera.id)
         cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
+        # The exposure the camera was given, read from its own attributes, rides on every capture.
         opts = SensorPlatformOptions(float(fov), cot_type, name, str(uid),
-                                     "sensor.camera.rgb", str(distortion))
+                                     "sensor.camera.rgb", str(distortion), camera_exposure_of(camera))
         depth_token = None if depth_camera is None else depth_camera._actor.StreamToken
         occlusion = None
         if depth_camera is not None:
@@ -2502,7 +2521,8 @@ class World:
         what the run is (`run_manifest_header`, a dict or its JSON text, carried verbatim beside what the
         session established: the compile lock's digests, the supervision plan and its vocabulary, the
         SUMO settings it runs under, the epoch and illumination), `sensor_placed` for each camera named
-        with `session.RunManifest.PlaceSensor(name, camera.id)`, `render_admitted` and
+        with `session.RunManifest.PlaceSensor(name, camera.id, world.camera_exposure(camera))`, with
+        the exposure the camera was given where it carries one, `render_admitted` and
         `render_released` for every vehicle entering and leaving the render set, the events that change
         the population (`collision_began`, `collision_ended`, `vehicle_not_inserted`,
         `emergency_stop`, `teleport`) at TraCI's clock, the sun at the window's first and last capture
@@ -2970,6 +2990,11 @@ class World:
         spawned under -- the server's Camera_<n>, or the one its client gave -- or, from a server
         built before it named cameras, its default, CARLA-SENSOR-<actor id>."""
         return camera_name_of(camera)
+
+    def camera_exposure(self, camera):
+        """The exposure `camera` was given, read from the actor's attributes (`camera_exposure_of`):
+        a CarlaNet.Recording.CameraExposure, or None for a camera that carries none."""
+        return camera_exposure_of(camera)
 
     def _recording_camera_name(self, camera, asked, callsign) -> str:
         """The name `camera` is recorded under: the name it holds on the server (`camera_name`). A

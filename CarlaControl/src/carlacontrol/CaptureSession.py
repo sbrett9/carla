@@ -98,6 +98,7 @@ the run result and the lock carry both.
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import secrets
@@ -113,6 +114,7 @@ import carlanet as carla
 from CarlaNet.CoSim import CoSimSessionRefusedException
 
 from carlacontrol.ChannelDescription import ChannelDescription
+from carlacontrol.ChannelExposure import ChannelExposure
 from carlacontrol.EffectiveRunConfiguration import EffectiveRunConfiguration
 from carlacontrol.LaunchEcho import LaunchEcho
 from carlacontrol.OrbitSensorController import OrbitSensorController
@@ -709,6 +711,10 @@ class CaptureSession:
         rgb.set_attribute("fov", str(description.fov))
         rgb.set_attribute("sensor_tick", str(tick))
         rgb.set_attribute("post_process_profile", str(values["post_process_profile"]))
+        # The whole exposure, every field of it, so the run states every capture's exposure and none
+        # is left to the blueprint's defaults; the camera applies it over the profile.
+        for attribute, value in ChannelExposure.from_channel(values).blueprint_attributes().items():
+            rgb.set_attribute(attribute, value)
         transform = self._start_transform(rig)
         # Spawned under the channel's sensor_id as the camera's role_name, which the server refuses
         # where a live camera in the world holds it, so the spawn raises here. A channel with none --
@@ -717,8 +723,12 @@ class CaptureSession:
         # here: its directory, every still in it and its platform track's callsign carry it.
         rig.camera = rig.world.spawn_camera(rgb, transform, name=description.sensor_id)
         rig.sensor_id = rig.world.camera_name(rig.camera)
+        # The exposure the camera was given, read from its attributes as every capture's sidecar reads
+        # it, for the manifest's camera entry and the result's.
+        exposure = rig.world.camera_exposure(rig.camera)
         if self.session.RunManifest is not None:
-            self.session.RunManifest.PlaceSensor(rig.sensor_id, rig.camera.id)
+            self.session.RunManifest.PlaceSensor(rig.sensor_id, rig.camera.id, exposure)
+        rig.aim_record["exposure"] = None if exposure is None else json.loads(str(exposure.ToJson()))
         rig.directory = self.capture_directory / rig.sensor_id
         rig.aim_record["sensor_id"] = rig.sensor_id
         rig.pose = transform

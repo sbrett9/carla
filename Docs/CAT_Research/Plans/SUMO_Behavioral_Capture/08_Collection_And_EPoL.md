@@ -43,6 +43,7 @@ Findings set. Every external claim is cited.
 | 2026-10-06 | §5.1, §6.4, D8.10, D8.33: a vehicle in the picture also carries `lights`, the lights commanded on for it in words (`position low_beam brake left_blinker`, or `none`), and a SUMO vehicle in the picture `pose_source`, `simulated`, `interpolated` or `held`, as the owner ruled; a vehicle outside the picture carries neither. Both come from the world-observer snapshot of the capture's own frame: the world observer puts each vehicle's light state in `VehicleData` behind a new flag, with the snapshot's per-actor size unchanged, and the session declares its SUMO step to the server once and names a body only as it is held or placed at SUMO's later step across a discontinuity, carried in the render set block behind a new flag, so any reader computes `simulated` or `interpolated` from the frame number and nothing is sent per tick. From a server that carries neither, the records go without and the capture says `lights="unknown"` or `pose_source="unknown"`, counted and gated at zero by the closeout. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §5.1, §6.4, D8.10: `pose_source` in the owner's four words -- `sumo` (the frame falls on a SUMO step: the position is SUMO's own), `interpolated` (a frame between SUMO steps: the position is filled in along the lane), `jump` (SUMO reported a step too far from the last to drive in one step: the body is shown at SUMO's later position for the frames of that step) and `stale` (the body could not be placed this frame and stands where it was last drawn) -- in place of `simulated`, `interpolated` and `held`. A jump, written `simulated` until now, is carried and written as its own state. A run on a server built before the jump state names a jump `sumo`, the one name that server has, and the run report and closeout say so and how many. Measured: a vehicle missing from SUMO's next step leaves the render set as that step begins, so no capture shows it stale; a stale body is one with no ground under it. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §5.7, §6.4: a vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished -- is drawn at its last SUMO position on that step's own frame, `pose_source` `sumo`, and is gone from the next frame, as the owner ruled ([`03`](03_CoSimulation_Runtime.md) D3.45). Until now its body was parked from that step's own frame, so the capture at the step a vehicle was last reported in did not show it; now it shows it where SUMO last had it, and the capture after it does not. Never `stale` for leaving; a stale body is one with no ground under it. The manifest's `render_released` is stamped with the instant of the first frame that no longer draws the vehicle (§5.7). |
+| 2026-10-07 | §2.9, §4.2, §4.8, §4.9, §7.2, §16, D8.26, D8.27, D8.28: exposure is built as planned (stage K), as the owner ruled on 2026-10-06. The RGB camera publishes upstream CARLA 0.9's `exposure_mode` (`manual` or `histogram`), `exposure_compensation` (EV), `iso`, `shutter_speed` (per second) and `fstop`, each recommended at the `Default` profile's value, and the plugin applies them after the profile loads, setting each override flag again, so the numbers set the exposure and the profile the rest of the picture; it now logs a profile that does not load. A run states them per channel -- `exposure_method`, `exposure_iso`, `exposure_shutter_s`, `exposure_fstop`, `exposure_compensation_ev` -- at the `Default` profile's values by default, and sends every one, so every capture's exposure is known from the run; `histogram` warns. Every capture carries the exposure its camera was given, read from the camera's own attributes, as `<_carla_exposure>` beside `<_carla_intrinsics>`, with EV100 under manual, and the run manifest's camera entry carries it as `exposure`. No profile set is made: the numbers are the control (D8.26 and D8.27 amended). The digest of the profile the server loaded stays not built (run check 43). The plugin change awaits a build; `CarlaNet/python/test_camera_exposure.py` is the live check, the owner's to run. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -476,6 +477,13 @@ the reason §2.9 exists.**
 
 **This is the single most consequential measurement in the section.** `exposure_compensation` is not
 there to be found; following the attribute that *is* there leads somewhere different.
+
+> **Built since, 2026-10-07 (stage K, D8.27).** The RGB camera publishes `exposure_mode`,
+> `exposure_compensation`, `iso`, `shutter_speed` and `fstop` beside the post-process pair, recommended at
+> the `Default` profile's values below, and `SetCamera` applies them after the profile loads, each with its
+> override flag, so they set the exposure whatever the profile; it logs a profile that does not load. Every
+> capture records the exposure its camera was given in `<_carla_exposure>` (§4.8). The measurements below
+> are of the tree before that change.
 
 **The camera definition publishes eleven attributes and none of them is an exposure.**
 `MakeCameraDefinition` declares `fov`, `image_size_x`, `image_size_y`, the six `lens_*` parameters,
@@ -1118,7 +1126,13 @@ phase, and §10.5 stratifies on relative azimuth for that reason.
 
 ### 4.2 Exposure: what can be controlled, what cannot, and what that costs at night
 
-§2.9 has the measurements. The summary a collection engineer needs:
+§2.9 has the measurements. The summary a collection engineer needs, as measured on 2026-09-18:
+
+> **Since 2026-10-07 (stage K):** a run sets the exposure in numbers per channel -- the method, ISO,
+> shutter, aperture and compensation, at the `Default` profile's values unless it says otherwise -- sent to
+> the camera at spawn and applied over the profile, and every capture records it (§4.8). The first, second,
+> third, fifth and sixth answers below are of the tree before that change; the fourth, spawn time only,
+> stands.
 
 | Question | Answer |
 |---|---|
@@ -1139,7 +1153,9 @@ dusk or night corpus each of those three limitations bites, and they bite in a s
    them is thirteen stops. Since the profile is just a JSON file the server reads by name, an **EO
    collection profile set** — named for the illumination regime rather than for a stock town, and
    version-controlled beside the plan — is a content change with no code in it at all. That is the
-   cheapest useful thing in this whole section.
+   cheapest useful thing in this whole section. *Amended 2026-10-07: no profile set is made; the
+   exposure is set in numbers per channel, over whichever profile the channel names, so any exposure
+   between and beyond the four profiles is reachable without a file (D8.27).*
 2. **No mid-session change is a real constraint and it argues for a design choice, not against one.**
    A window whose sun advances through dusk will cross several stops; with a fixed manual exposure the
    window's early frames or its late frames will be wrong, and with histogram adaptation the exposure
@@ -1165,10 +1181,13 @@ look flat while the scene illumination varied by stops. Doc 13 §5 reached the s
 determinism side — "prefer scheduled fixed `--ev` over auto-exposure when generating reproducible EO
 frames" — and that is adopted here for a second, independent reason.
 
-**Decision (D8.26): the corpus uses a fixed, manual, per-window exposure, chosen from a named EO
-profile set, and recorded per capture. Auto-exposure is permitted only in a live exercise and only when
-recorded as such**, because there the product is an operator's picture rather than a comparable
-measurement.
+**Decision (D8.26): the corpus uses a fixed, manual, per-window exposure, set in numbers per channel,
+and recorded per capture. Auto-exposure is permitted only in a live exercise and only when recorded as
+such**, because there the product is an operator's picture rather than a comparable measurement.
+*Amended 2026-10-07: it read "chosen from a named EO profile set". As built, a run's channel states its
+exposure in numbers (`exposure_method`, `exposure_iso`, `exposure_shutter_s`, `exposure_fstop`,
+`exposure_compensation_ev`); `histogram` is permitted and raises a warning, which the unattended caller
+must adjudicate, and every capture records the method.*
 
 ### 4.3 Dynamic range, noise, and the 8-bit tonemapped product
 
@@ -1459,6 +1478,26 @@ Four reasons, in order of weight:
 The sun is already recorded (§2.4). The camera is not (§2.9). Three additions, and the classification of
 each is the point rather than an afterthought — §9.7 is the rule being applied.
 
+> **As built, 2026-10-07 (stage K).** The two-folder split and its `.collect.json` are withdrawn
+> (2026-10-05), so the camera's record rides in the truth sidecar and the run manifest. Every capture's
+> platform event carries the exposure its camera was given, beside `<_carla_intrinsics>`:
+>
+> ```
+> <_carla_exposure post_process_profile="Default" method="manual" iso="100"
+>                  shutter_s="0.003125" fstop="4" compensation_ev="0" ev100="12.322" />
+> ```
+>
+> read from the camera's own attributes as the server spawned it (`CameraExposure.Of`), as every client
+> reads the camera's name, so a recorder in any process writes the same; `ev100` is the engine's manual
+> figure, `log2(N²/t) − log2(ISO/100)`, and is written under manual alone, because under histogram the
+> engine meters each frame. The run manifest's `sensor_placed` row carries the same as `exposure`. A run
+> sends every exposure field to the camera, so the record is the exposure the run gave it; `run_capture`
+> refuses a server whose camera cannot take them (run check 24), and the sidecar audit holds every capture
+> of a camera that has an exposure to carrying it. A declared camera fact, as the intrinsics are. **Not
+> recorded:** the adaptation limits and speeds, the tonemap, bloom, flare, vignette, grain and motion
+> blur, which the profile sets and the record names only by the profile's name; and `profile_digest`,
+> which needs a read-back of what the server loaded that nothing builds (run check 43, not built).
+
 **On the `OBSERVATION` side, in `.collect.json` beside the imagery**, because a fielded system knows all
 of it about itself:
 
@@ -1534,7 +1573,7 @@ Stated as properties, not designs, per the house rule.
 | # | Property |
 |---|---|
 | 1 | **A per-run solar policy control** — frozen or advancing, with a rate — that is recorded as an assertion rather than inferred from the world (06 §4.5 measured that `advancing=false` is ambiguous between "deliberately frozen" and "never configured") |
-| 2 | **A per-window exposure selection**, expressed as a named profile from an EO profile set rather than as a stock-town name, applied at camera spawn and recorded by digest (§4.8) |
+| 2 | **A per-window exposure selection**, expressed as a named profile from an EO profile set rather than as a stock-town name, applied at camera spawn and recorded by digest (§4.8). *Built 2026-10-07 as five numeric fields per channel, applied at spawn and recorded as given; the digest is not built* |
 | 3 | **A refusal, not a warning, when a window's declared illumination and the camera's exposure are grossly mismatched** — for example a window whose sun is below the horizon spawned against a clear-sun profile. The check is arithmetic on two numbers both of which the surface already holds |
 | 4 | **No control that changes the sun mid-session**, since the corpus's stratification assumes one illumination per session (§4.7) and there is no way to re-expose anyway (§2.9) |
 
@@ -2015,7 +2054,7 @@ as a directory**, so the same contract serves both products and a consumer write
 
 | Guarantee | What backs it |
 |---|---|
-| **Every frame is self-describing.** Pose, intrinsics, radiometry and achieved solar state travel with the pixels, so an image is interpretable without reference to any other file | §2.4 (the pose and solar chunk already do), §4.8 (radiometry is added), D8.28 |
+| **Every frame is self-describing.** Pose, intrinsics, radiometry and achieved solar state travel with the pixels, so an image is interpretable without reference to any other file | §2.4 (the pose and solar chunk already do), §4.8 (radiometry is added; the exposure the camera was given is on every sidecar since 2026-10-07), D8.28 |
 | **The tick is the only join key.** Filenames are local wall-clock stems (`FrameRecorder.cs:223-232`) and must never be used to pair anything; `CaptureIdentity` is taken from the sensor frame that produced the pixels (`FrameRecorder.cs:179`) and the record's own doc comment says why wall clock cannot serve (`CaptureMetadata.cs:9-14`) | §2.4, D8.4 |
 | **Channels are frame-coherent.** All channels of a session read one world-observer snapshot per tick, so two channels stamping the same tick cannot disagree about the sun or the supervision state | §3.4, D8.3a |
 | **The radiometry is attested, not asserted.** `profile_digest` is a hash of the JSON the server actually loaded, because a missing profile fails silently and the return value is discarded (`ActorBlueprintFunctionLibrary.cpp:1376-1380`) | §2.9, §4.8, D8.28 |
@@ -3504,9 +3543,9 @@ with this one:**
 | **D8.23** | **Truth rides its own endpoint and is off by default in a live exercise; the recorded outputs never overload the CoT affiliation, and an operator may explicitly opt in to a distinct affiliation for planted vehicles on the live display feed only — off by default, never recorded.** **No EPoL assessment rides the feed as a `<_epol>` detail child**, because this pipeline emits no assessments. What stands is the separation — truth on a viewer's feed is a leak when the operator is part of what is being exercised and a confusion when they are not — and doc 20 decision 9's refusal to encode a label in the CoT type, which §5.6 measured being violated by `affiliation_by_type` in the largest authored scenario, until `b12d7bdc8` withheld its unknown entries and moved the display half to a run convention. The opt-in exists because an operator watching TAK during an exercise has a legitimate reason to see which vehicle was planted (`cb90fdd84`); it is `--marked-affiliation`, which reaches the UDP feed alone and is refused without `--udp`. `_solar` on the feed is fine; `advancing` and `rate` are not (§11.4) |
 | **D8.24** | **Coverage is published both per sensor and unioned, so a consumer's fusion choice does not change what our record means.** Fusion is a consumer's design problem, and **a multi-channel live exercise does not wait on a fusion stage**. What is ours is that fusing changes what "observed" means (doc 20 §7.6), so the corpus carries both forms per doc 20 decision 15 and the consumer picks the one matching what they did (§11.4) |
 | **D8.25** | **Withdrawn 2026-10-05 by the owner's ruling.** The probe ran a model over our data and applied pass marks to say whether an interval was worth collecting; usefulness is in the eye of the beholder and scoring is the model developer's work (§12). As decided: **Doc 20 §11 question 1 is a question about our corpus, answered by a two-tier fitness probe, and it sequences first.** Tier A — the in-frustum / resolvable / unoccluded span of an annotated interval, computed by a reader over sidecars today's recorder already produces — **needs no detector, no SUMO and nothing external at all**, and bounds the answer at every illumination simultaneously. Tier B applies **one stock detector, pinned by version and weights digest, as an instrument** and reports the longest single track covering the interval, the interval's detection continuity, and the track's `dominant_truth_fraction`. **It emits no figure of merit for the detector**: no precision, no recall, no F1, no comparison between instruments. Its outputs set our altitude, our field of view and our channel count before any corpus is collected (§12) |
-| **D8.26** | **The corpus uses a fixed, manual, per-window exposure, chosen from a named EO profile set, and recorded per capture.** Auto-exposure is permitted only in a live exercise and only when recorded as such. Two independent reasons: it makes the exposure a function of the scene's content, which is what is being detected; and it partially cancels the illumination covariate the corpus is stratified by, so two windows at different sun elevations can produce similar pixel statistics. Doc 13 §5 reached the same conclusion from determinism (§4.2) |
-| **D8.27** | **Exposure is a published, per-run collection parameter, and the profile set is named for illumination regimes rather than for stock towns.** Today the only lever is `post_process_profile` over four files spanning EV100 +12.32 to −1.06 (measured), applied at spawn (`ActorBlueprintFunctionLibrary.cpp:1369-1381`) and unrecorded; the engine-side setters are complete and unpublished (`SceneCaptureSensor.h:237-393`). Publishing them is an additive change to one function and a rebuild is not a cost (§2.9, §4.2) |
-| **D8.28** | **Every capture records its own radiometry on the OBSERVATION side, including a digest of the profile the server actually loaded.** The name the client asked for is not evidence: a missing profile file fails silently and the return value is discarded (`ActorBlueprintFunctionLibrary.cpp:1376-1380`). **A capture with no radiometric record fails the session**, on the same principle as a capture with no `_solar` element (§4.8) |
+| **D8.26** | **The corpus uses a fixed, manual, per-window exposure, set in numbers per channel, and recorded per capture.** *Amended 2026-10-07: it read "chosen from a named EO profile set"; no profile set is made, and `histogram` warns and is recorded (§4.2).* Auto-exposure is permitted only in a live exercise and only when recorded as such. Two independent reasons: it makes the exposure a function of the scene's content, which is what is being detected; and it partially cancels the illumination covariate the corpus is stratified by, so two windows at different sun elevations can produce similar pixel statistics. Doc 13 §5 reached the same conclusion from determinism (§4.2) |
+| **D8.27** | **Exposure is a published, per-run collection parameter, set in numbers -- method, ISO, shutter, aperture and compensation -- over the channel's post-process profile; no profile set is made, because the numbers are the control.** *Amended 2026-10-07: it read "and the profile set is named for illumination regimes rather than for stock towns". Built: the camera publishes upstream CARLA's `exposure_mode`, `exposure_compensation`, `iso`, `shutter_speed` and `fstop`, applied after the profile, and a run's channel states them, defaulting to the `Default` profile's (§2.9, §4.2).* As measured before, the only lever was `post_process_profile` over four files spanning EV100 +12.32 to −1.06 (measured), applied at spawn (`ActorBlueprintFunctionLibrary.cpp:1369-1381`) and unrecorded, while the engine-side setters were complete and unpublished (`SceneCaptureSensor.h:237-393`); publishing them was an additive change to one function, and a rebuild is not a cost (§2.9, §4.2) |
+| **D8.28** | **Every capture records its own radiometry on the OBSERVATION side, including a digest of the profile the server actually loaded.** The name the client asked for is not evidence: a missing profile file fails silently and the return value is discarded (`ActorBlueprintFunctionLibrary.cpp:1376-1380`). **A capture with no radiometric record fails the session**, on the same principle as a capture with no `_solar` element (§4.8). *As built 2026-10-07: the record is the exposure the run gave the camera, on every capture's sidecar as `<_carla_exposure>` and in the run manifest's camera entry, the two-folder split being withdrawn (2026-10-05); `run_capture` refuses a server whose camera cannot take it (run check 24), and the plugin logs a profile that does not load. The digest of the loaded profile is not built (run check 43).* |
 | **D8.29** | **Night capture is not viable today as a detector corpus, and low-sun capture is where the illumination axis is built.** The chain is broken at every link: no light below the horizon (`CesiumSunSky.cpp:59, 82, 86`), no artificial lights anywhere in the tree, tiles with daytime radiance baked in (doc 13 §4), a clear-sun exposure, and an 8-bit tonemapped product in which under-exposure is not recoverable (`PngEncoder.cs:37-38`). At the sizing site the 23:00 sun is 37° to 76° below the horizon in every season (computed). **What may be viable is a corpus of vehicle lamps against a dark field — a different task, and it must be named as one.** Doc 13's Phase 2 moon light is the first phase that makes a night vehicle detectable at all; Phase 1 alone produces a readable picture and no additional detections (§4.6) |
 | **D8.30** | **A session never takes its illumination from the host clock.** `--date` currently defaults to `datetime.now()` (`WorldBuilder.py:226-230`), and at the sizing site the seasonal spread at a fixed hour is 21.4° of sun elevation and a factor of fourteen in shadow length (computed). The epoch belongs to [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md); the collection-side requirement is that no capture's light is a function of the day somebody ran it (§2.10, §4.1) |
 | **D8.31** | **The default solar policy for a corpus is frozen at the window's opening instant, one window per run.** A sweep comparing behaviours must hold illumination constant; a twenty-minute window at rate 1.0 sweeps 4.5° of elevation at this latitude (computed), which at low sun is most of a stratum; a frozen policy makes 06 §4.5's residual check decisive rather than merely indicative; and it removes the mid-session exposure problem instead of managing it. **Advance is correct in exactly two cases** — a window whose subject *is* a transition, and a live exercise long enough that a frozen sun would be visibly wrong. When advancing, the rate is bounded by the stratum width, and the arithmetic is stated rather than a number baked in (§4.7) |
@@ -3595,7 +3634,8 @@ with this one:**
    way their absence as attributes suggests: §2.9 measured that motion blur is **on** in every shipped
    profile, and that exposure is settable at spawn through `post_process_profile` with a full
    engine-side setter surface that is merely unpublished (`SceneCaptureSensor.h:237-393`). D8.27 and
-   D8.28 settle the collection side. **The noise model is genuinely open:**
+   D8.28 settle the collection side, and since 2026-10-07 the exposure is published and recorded.
+   **The noise model is genuinely open:**
    `filmGrainIntensity = 0` in all four profiles (measured), real low-light EO is noise-dominated, and
    choosing a physically meaningful grain level needs a sensor model nobody in this plan owns.
    **Recommendation:** leave grain at zero, record the zero (§4.8), and treat noise as a trainer-side

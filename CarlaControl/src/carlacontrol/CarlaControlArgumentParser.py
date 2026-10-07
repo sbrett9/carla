@@ -268,7 +268,9 @@ class CarlaControlArgumentParser:
             "--ev",
             type=float,
             default=0.0,
-            help="camera exposure_compensation (EV); >0 brightens",
+            help="camera exposure compensation, EV, added to the camera's exposure (the Default "
+            "profile's manual ISO 100, 1/320 s, f/4, EV100 +12.32); above 0 brightens, +1 doubles "
+            "the brightness. Recorded on every capture",
         )
         view.add_argument(
             "--time",

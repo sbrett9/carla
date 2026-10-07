@@ -60,6 +60,16 @@ the first. The audit reads the words, not whether they are right: which lamps we
 ticks fell on a SUMO step and which steps were a jump, is the server's and the session's, and their tests
 hold it.
 
+**And the exposure the camera was given, on every capture of a camera that has it.** The collection
+platform's event carries, beside `<_carla_intrinsics>`, the exposure its camera was given,
+`<_carla_exposure>`: the `post_process_profile`, `method` (`manual` or `histogram`), `iso`, `shutter_s`,
+`fstop` and `compensation_ev`, and `ev100` under manual alone. A camera's exposure is set when it is
+spawned and read from its own attributes, so every capture of a camera that has one carries it, and the
+same one. A sidecar of such a camera without it, an element missing one of its fields or holding a method
+outside the two, an `ev100` under histogram or none under manual, and a camera whose captures carry two
+exposures are each a defect. A camera of a server built before it published its exposure carries it on
+none of its captures, which is not a defect.
+
 **A uid that changes vehicle is seen even where no record names one.** With SUMO ids on the records,
 a uid carrying two of them over the capture is counted directly. Without them, a uid seen on the
 road, then below the ground band, then on the road again is a body that was given back and lent again
@@ -123,6 +133,12 @@ NO_LIGHT = "none"
 # The owner's four words (2026-10-06): the frame falls on a SUMO step; between two steps, filled in along the
 # lane; shown at SUMO's later position across a step too far to drive in one; standing where it was last drawn.
 POSE_SOURCES = ("sumo", "interpolated", "jump", "stale")
+
+# The exposure the camera was given, as the recorder writes it on the platform event
+# (`CarlaNet.Recording.CameraExposure`): every field but `ev100`, which is written under manual alone.
+EXPOSURE_ELEMENT = "_carla_exposure"
+EXPOSURE_FIELDS = ("post_process_profile", "method", "iso", "shutter_s", "fstop", "compensation_ev")
+EXPOSURE_METHODS = ("manual", "histogram")
 
 
 @dataclass(frozen=True)
@@ -200,6 +216,18 @@ class SidecarAuditResult:
     records_with_pose_source_and_no_sumo_id: list[VehicleRecord] = field(default_factory=list)
     records_with_unknown_lights: list[VehicleRecord] = field(default_factory=list)
     records_with_unknown_pose_source: list[VehicleRecord] = field(default_factory=list)
+    # The exposure on the platform event, by camera (the platform track's uid): what each sidecar of a
+    # camera carries, None where it carries none.
+    exposures: dict[str, dict[str, dict[str, str] | None]] = field(default_factory=dict)
+    sidecars_without_exposure: list[str] = field(default_factory=list)
+    sidecars_with_malformed_exposure: list[str] = field(default_factory=list)
+    cameras_with_several_exposures: list[str] = field(default_factory=list)
+
+    @property
+    def cameras_with_exposure(self) -> list[str]:
+        """The cameras any of whose sidecars carry an exposure, and so every one of whose must."""
+        return sorted(camera for camera, seen in self.exposures.items()
+                      if any(exposure is not None for exposure in seen.values()))
 
     @property
     def had_plan(self) -> bool:
@@ -297,13 +325,25 @@ class SidecarAuditResult:
         if self.records_with_unknown_pose_source:
             found.append(f"{len(self.records_with_unknown_pose_source)} vehicle record(s) carry a pose_source "
                          f"other than {', '.join(POSE_SOURCES)}")
+        if self.sidecars_without_exposure:
+            found.append(f"{len(self.sidecars_without_exposure)} sidecar(s) of a camera whose other captures "
+                         f"carry its exposure carry no <{EXPOSURE_ELEMENT}>")
+        if self.sidecars_with_malformed_exposure:
+            found.append(f"{len(self.sidecars_with_malformed_exposure)} sidecar(s) carry a <{EXPOSURE_ELEMENT}> "
+                         f"missing one of {', '.join(EXPOSURE_FIELDS)}, with a method other than "
+                         f"{' or '.join(EXPOSURE_METHODS)}, or with an ev100 under histogram or none under "
+                         "manual")
+        if self.cameras_with_several_exposures:
+            found.append(f"{len(self.cameras_with_several_exposures)} camera(s) carry more than one exposure "
+                         "over the capture, where a camera's exposure is set once, when it is spawned")
         return found
 
 
 class TruthSidecarAudit:
     """Counts parked bodies listed as vehicles, records with no, or no stable, SUMO identity, records
-    that do not say whether their vehicle is in the picture or why its occlusion is absent, and boxes,
-    lights and pose sources missing from a vehicle in the picture or written on one outside it."""
+    that do not say whether their vehicle is in the picture or why its occlusion is absent, boxes,
+    lights and pose sources missing from a vehicle in the picture or written on one outside it, and a
+    camera's exposure missing from any of its captures."""
 
     def __init__(self, margin_m: float = DEFAULT_MARGIN_M, floor_hae: float | None = None) -> None:
         self.margin_m = float(margin_m)
@@ -349,7 +389,9 @@ class TruthSidecarAudit:
             result.sidecars_pose_source_unknown += pose_source_unknown
             result.records.extend(self._records(path, root, None if tick is None else int(tick),
                                                 supervised, lights_unknown, pose_source_unknown))
+            self._exposure(path, root, result)
 
+        self._check_exposures(result)
         self._band(result)
         uid_to_sumo: dict[str, set[str]] = defaultdict(set)
         sumo_to_uid: dict[str, set[str]] = defaultdict(set)
@@ -392,6 +434,37 @@ class TruthSidecarAudit:
             result.sidecars_with_world_supervision.append(path.name)
             break
         return True
+
+    @staticmethod
+    def _exposure(path: Path, root: ET.Element, result: SidecarAuditResult) -> None:
+        """Note the exposure one sidecar's platform event carries, by its camera, and fault an element
+        the recorder would not write. A sidecar with no platform event names no camera and is passed."""
+        for event in root.iter("event"):
+            detail = event.find("detail")
+            if detail is None or detail.find("_carla_intrinsics") is None:
+                continue
+            element = detail.find(EXPOSURE_ELEMENT)
+            exposure = None if element is None else dict(element.attrib)
+            result.exposures.setdefault(event.get("uid", ""), {})[path.name] = exposure
+            if exposure is not None:
+                method = exposure.get("method")
+                if (any(name not in exposure for name in EXPOSURE_FIELDS)
+                        or method not in EXPOSURE_METHODS
+                        or ("ev100" in exposure) != (method == "manual")):
+                    result.sidecars_with_malformed_exposure.append(path.name)
+            return
+
+    @staticmethod
+    def _check_exposures(result: SidecarAuditResult) -> None:
+        """Hold every sidecar of a camera that carries its exposure anywhere to carrying it, and the
+        same one: a camera's exposure is set when it is spawned and never changes."""
+        for camera in result.cameras_with_exposure:
+            seen = result.exposures[camera]
+            result.sidecars_without_exposure.extend(sorted(name for name, exposure in seen.items()
+                                                           if exposure is None))
+            distinct = {tuple(sorted(exposure.items())) for exposure in seen.values() if exposure is not None}
+            if len(distinct) > 1:
+                result.cameras_with_several_exposures.append(camera)
 
     @staticmethod
     def _check_supervision(record: VehicleRecord, result: SidecarAuditResult) -> None:
@@ -593,6 +666,18 @@ class TruthSidecarAudit:
                         or "none written")
                      + f"; sidecars saying it was unknown: {result.sidecars_pose_source_unknown}; SUMO records "
                        f"missing it elsewhere: {len(result.records_in_picture_without_pose_source)}")
+        with_exposure = result.cameras_with_exposure
+        carried = sum(1 for camera in with_exposure for exposure in result.exposures[camera].values()
+                      if exposure is not None)
+        lines.append(f"  exposure: carried by {carried} sidecar(s) of {len(with_exposure)} of "
+                     f"{len(result.exposures)} camera(s); missing on a camera that has it: "
+                     f"{len(result.sidecars_without_exposure)}")
+        for camera in with_exposure[:5]:
+            exposure = next(each for each in result.exposures[camera].values() if each is not None)
+            lines.append(f"    {camera}: {exposure.get('post_process_profile')}, {exposure.get('method')}, "
+                         f"ISO {exposure.get('iso')}, {exposure.get('shutter_s')} s, f/{exposure.get('fstop')}, "
+                         f"{exposure.get('compensation_ev')} EV"
+                         + (f", EV100 {exposure['ev100']}" if "ev100" in exposure else ""))
         if result.had_plan:
             states = defaultdict(int)
             for record in result.records:

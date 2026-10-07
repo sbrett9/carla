@@ -74,7 +74,9 @@ def parse_args() -> argparse.Namespace:
                         help="start altitude in FEET above the world's origin (default 1000)")
     camera.add_argument("--fov", type=float, default=90.0, help="horizontal field of view, degrees")
     camera.add_argument("--ev", type=float, default=0.0,
-                        help="camera exposure compensation (EV); above 0 brightens")
+                        help="camera exposure compensation, EV, added to the camera's exposure "
+                             "(the Default profile's manual ISO 100, 1/320 s, f/4); above 0 "
+                             "brightens, +1 doubles the brightness")
     camera.add_argument("--speed", type=float, default=60.0, help="initial move speed, m/s")
     camera.add_argument("--width", type=int, default=1280)
     camera.add_argument("--height", type=int, default=720)

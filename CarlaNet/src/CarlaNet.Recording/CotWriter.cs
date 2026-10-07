@@ -39,6 +39,10 @@ namespace CarlaNet.Recording;
 /// carry one, every record in the picture goes without it and the container says <c>lights="unknown"</c> or
 /// <c>pose_source="unknown"</c>. A vehicle outside the picture carries neither.</para>
 ///
+/// <para>The collection platform's event carries, beside <c>&lt;_carla_intrinsics&gt;</c>, the exposure the
+/// camera was given, <c>&lt;_carla_exposure&gt;</c> (<see cref="CameraExposure"/>), wherever the camera
+/// carries one: a declared camera fact, as the intrinsics are.</para>
+///
 /// <para>A capture whose image was rendered under a draw distance says so on its container
 /// (<c>draw_distance_m</c>), and every vehicle the distance kept out of the image, wholly or in part,
 /// carries <c>beyond_draw_distance</c> and the <c>camera_range_m</c> it rests on in its extras: it is in
@@ -219,6 +223,12 @@ public static class CotWriter
             w.WriteAttributeString("distortion", sensor.Distortion);
             w.WriteAttributeString("align_offset_m", F(sensor.AlignOffsetM, "0.00"));
             w.WriteEndElement(); // _carla_intrinsics
+
+            // The exposure the camera was given -- its profile, method, ISO, shutter, aperture and
+            // compensation, and the EV100 they make under manual -- read from the camera's own
+            // attributes, so it is a declared camera fact, as the intrinsics are. A camera that carries
+            // none writes none.
+            sensor.Exposure?.WriteElement(w);
 
             w.WriteEndElement(); // detail
             w.WriteEndElement(); // event

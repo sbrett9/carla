@@ -10,6 +10,10 @@ namespace CarlaNet.Recording;
 /// height-align offset — so it shares the vehicle telemetry's datum; <see cref="AlignOffsetM"/> records
 /// that offset so the physical platform altitude is recoverable (physical = Hae + AlignOffsetM).
 /// </para>
+/// <para>
+/// <see cref="Exposure"/> is the exposure the camera was given, from the platform options; null for a camera
+/// that carries none.
+/// </para>
 /// </summary>
 public sealed record SensorPose(
     string CotType,
@@ -34,4 +38,5 @@ public sealed record SensorPose(
     double VFovDeg,
     string SensorModel,
     string ProjectionModel,
-    string Distortion);
+    string Distortion,
+    CameraExposure? Exposure = null);

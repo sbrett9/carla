@@ -8,6 +8,7 @@ the live parser object and grepping the live source tree on 2026-09-18; the furt
 §3.5, §3.10.1, §3.10.2, §5.2 and §7.6 were taken the same way, and each says where.
 **Date:** 2026-09-18
 **Revisions:**
+`2026-10-07` — Exposure is a per-channel field set, as the owner ruled on 2026-10-06 (stage K, [`08`](08_Collection_And_EPoL.md) D8.26-D8.27): `exposure_method` (`manual` or `histogram`), `exposure_iso`, `exposure_shutter_s` (seconds), `exposure_fstop` and `exposure_compensation_ev`, each defaulting to the `Default` profile's value (manual, ISO 100, 0.003125 s, f/4, 0 EV, EV100 +12.32), so a run that sets none renders as before. Every field is sent to the camera at spawn, as upstream CARLA's `exposure_mode`, `iso`, `shutter_speed` (per second), `fstop` and `exposure_compensation`, applied over the profile, which sets the rest of the picture; check 24 refuses a server whose camera lacks them. Check 16 no longer refuses an exposure: it runs offline, refuses a value the camera cannot take as stated and warns of `histogram` (`exposure_follows_the_scene`), which the unattended caller must adjudicate; a key that is the blueprint's own name is refused naming the field (check 1). Every capture carries the exposure the camera was given in `<_carla_exposure>`, the manifest's `sensor_placed` row and the result's `produced.cameras[]` carry it as `exposure`, and the sidecar audit holds every capture of a camera that has it to carrying it. `--ev` sets the camera's compensation (§1.3, §2, §4.2, §5.2, §6.2, §6.2.1, §7.2, §9.4, §11, D12.18). Check 43, the read-back of the loaded profile's digest, stays not built. The plugin change awaits a build.
 `2026-10-06` — §5.2, §6.2 checks 50 and 51, §6.2.1, D12.37, D12.38: the picture's ceiling is counted in the camera's own frames since its tiles came in, as the owner ruled, and is the session-fixed field `capture.picture_ceiling_frames` (60: 30 s at 2 Hz), beside `capture.picture_tolerance_levels` (0.5, unchanged) for the limit, so either can be changed for a run without a code change. Check 51 asks the prewarm for the ceiling's frames at the capture rate plus the ten-tick span (31.5 s at the defaults) and refuses a ceiling too small to hold one comparison; a stare aimed at the traffic holds for one SUMO step and the ceiling, 32 s at the defaults ([`03`](03_CoSimulation_Runtime.md) §9.5.1).
 `2026-10-05` — The occlusion measurement is always on, in every capture path, with no switch, as the owner ruled ("I can't fathom why disabling it was ever considered"). `occlusion.enabled` is no longer a field and `run_SCTMV.py --no-occlusion` is no longer an option; every channel of `run_capture` and the fixed camera of `run_sumo_drive.py` carry a depth camera attached to the camera, with the camera's image size, field of view and sensor tick and `occlusion.depth_max_range_m`, and every recorder is started with it (§4, §5.1, §5.2, §6.3, §7.2, §9.6, D12.13). The check scenario's run file loses its `occlusion` block. What stays session-fixed is how the measurement is made: `occlusion.margin_m`, `occlusion.samples`, `occlusion.depth_max_range_m`.
 `2026-10-05` — The two-folder split is withdrawn by the owner's ruling: imagery and truth stay side by side in one capture folder, `paths.capture_root`, with no separate imagery folder, no held-back partition and no validator over an imagery folder. `roots.observation` and `roots.truth` are not offered and not planned (§5), check 17 is withdrawn, checks 19, 40, 42 and 46 and the site profile name the capture root (§3.1, §6.2), and §7.5's and §12's references to two roots read against the ruling.
@@ -174,6 +175,13 @@ profile the camera spawned with — which is the one exposure control that does 
 a first-class toggle. A surface that offers `--ev` today is telling the operator a lie, and §6 check 16
 turns that lie into a refusal that names the field that works.
 
+*Superseded 2026-10-07, as the owner ruled (stage K):* the RGB camera publishes `exposure_mode`,
+`exposure_compensation`, `iso`, `shutter_speed` and `fstop` beside the post-process pair, applied over
+the profile ([`08`](08_Collection_And_EPoL.md) D8.27), so `--ev` sets the camera's compensation on a
+server built with them, and `SensorRig` says so where a server lacks the attribute rather than leave a
+value unapplied in silence. A run sets the exposure by the five channel fields of §5.2, and check 16
+refuses only a value the camera cannot take as stated. The measurement above is of the tree before.
+
 **`--fade` was demoted to `default=False`** (`:318-328`), with `--no-fade` retained at `:329-334` so
 existing command lines keep working. The stated reason is in the help text itself: the opacity is
 "pushed to the server one blocking RPC per vehicle per reconcile, which is the heaviest load this
@@ -309,7 +317,7 @@ argument list would have to express.
 | **Supervision and export roots** | Two roots, one writer each | [`08`](08_Collection_And_EPoL.md) D8.17 |
 | **Telemetry sinks** | Whether, where, and on which thread | [`10`](10_Scale_And_Performance.md) D10.11; [`08`](08_Collection_And_EPoL.md) D8.23 |
 | **Occlusion estimator** | Margin and sample density; always on, with no switch (2026-10-05) | [`08`](08_Collection_And_EPoL.md) §5.4, open question 1 |
-| **Radiometry** | Which post-process profile each channel spawns with, and the digest of the one the server actually loaded | [`08`](08_Collection_And_EPoL.md) §2.9, D8.27, D8.28 |
+| **Radiometry** | Which post-process profile each channel spawns with and the exposure set over it -- method, ISO, shutter, aperture, compensation -- recorded on every capture as the run gave it to the camera; the digest of the profile the server loaded is not built (check 43) | [`08`](08_Collection_And_EPoL.md) §2.9, D8.26, D8.27, D8.28 |
 | **Pacing** | As fast as the machine allows, or against a wall clock at a stated factor | [`08`](08_Collection_And_EPoL.md) §11.1; this section for expression |
 | **Handover and transcript** | Whether frames leave the process live, on which channels, and whether what comes back is recorded | [`08`](08_Collection_And_EPoL.md) §11.2, §11.3; [`02`](02_Use_Cases.md) UC-8 |
 | **Caller** | Attended or unattended, and — if unattended — how each warning is adjudicated in advance. An unattended caller also decides when the run ends, which is not a field (§3.10.2) | §3.10, §6.4 |
@@ -984,7 +992,7 @@ merely annoying: the record is trustworthy and the value in it is wrong.
 | 4 | **The policy is not recorded at run level.** Per capture, `advancing` and `rate` ride in `<_solar>`; the *run's intent* — freeze or advance, and from which epoch — is nowhere. [`06`](06_Truth_And_Annotation.md) §8.4's manifest has no solar block at all | Read from the manifest schema |
 | 5 | **A world with no sun is a warning, not a refusal** | `WorldBuilder.py:244-245` |
 | 6 | **`rate` is unpinned and under-specified.** Its help says "wall-clock in `--async`, simulation time under synchronous ticking" but says nothing about which simulated second | `:256-270`; `carlanet/__init__.py:1535-1541` |
-| 7 | **No exposure control exists**, so illumination cannot be compensated for even deliberately | §1.3, measured |
+| 7 | **No exposure control exists**, so illumination cannot be compensated for even deliberately. *Closed 2026-10-07: the five exposure fields of §5.2 set it per channel* | §1.3, measured |
 
 ### 4.3 How an operator expresses it
 
@@ -1292,8 +1300,12 @@ other field.
 | `capture_segmentation` | *not offered*: the recorder writes no segmentation | — | [`08`](08_Collection_And_EPoL.md) OQ2 |
 | `depth_max_range_m` | *not offered per channel*: `occlusion.depth_max_range_m`, one range for every depth camera | — | `:274-285`; and see §1.5's divergent second default |
 | `sensor_tick` | *not a field*: `1 / capture_hz` on every camera, so a camera renders only the frames the recorder keeps | Session-fixed | `ActorBlueprintFunctionLibrary.cpp:248`; check 10 holds by construction |
-| `post_process_profile` | `Default` (EV100 +12.32, measured by [`08`](08_Collection_And_EPoL.md) §2.9) | Session-fixed. Set on the camera by name, spelt with the file's own case; the digest of the JSON the server loaded is not readable, so check 43 is not built | [`08`](08_Collection_And_EPoL.md) D8.27, D8.28; see the correction below |
-| `exposure` (a numeric exposure value) | **not offered** — no numeric exposure attribute exists on any camera blueprint (§1.3) | — | measured; check 16 names `post_process_profile` as the field that does the job |
+| `post_process_profile` | `Default` (measured by [`08`](08_Collection_And_EPoL.md) §2.9) | Session-fixed. Set on the camera by name, spelt with the file's own case. It sets the picture -- tone curve, bloom, lens flare, vignette, motion blur -- and the five exposure fields below set the exposure over it, whichever profile it is; the digest of the JSON the server loaded is not readable, so check 43 is not built | [`08`](08_Collection_And_EPoL.md) D8.27, D8.28; see the correction below |
+| `exposure_method` | `manual` | Session-fixed. `manual`, fixed by the ISO, shutter and aperture; or `histogram`, metered by the engine from each frame, which warns (check 16, `exposure_follows_the_scene`): permitted for a live exercise's operator picture and not for captures meant to be compared. Sent as the camera's `exposure_mode` | [`08`](08_Collection_And_EPoL.md) D8.26, D8.27 |
+| `exposure_iso` | `100.0` | Session-fixed. At least 1 (check 16). Sent as the camera's `iso` | the `Default` profile's; [`08`](08_Collection_And_EPoL.md) D8.27 |
+| `exposure_shutter_s` | `0.003125` (1/320 s) | Session-fixed. Seconds, from 1/8000 s to 100 s (check 16). Sent as the camera's `shutter_speed`, which is per second, so 0.003125 is 320 | the `Default` profile's; [`08`](08_Collection_And_EPoL.md) D8.27 |
+| `exposure_fstop` | `4.0` | Session-fixed. An f-number from 1 to 32 (check 16); it also sets the depth of field. Sent as the camera's `fstop` | the `Default` profile's; [`08`](08_Collection_And_EPoL.md) D8.27 |
+| `exposure_compensation_ev` | `0.0` | Session-fixed. EV, from −15 to +15 (check 16), added under either method. Sent as the camera's `exposure_compensation` | the `Default` profile's; [`08`](08_Collection_And_EPoL.md) D8.27 |
 | `orbit_radius_m`, `orbit_altitude_m`, `orbit_period_s` | `200.0`, `518.2`, `240.0` | Session-fixed | today's `:598-615`, **converted to metres** (§1.5) |
 | `orbit_centre_x_m`, `orbit_centre_y_m` | **cond.** — required when `pattern` is `orbit`; refused with `stare` | Session-fixed | today's `--orbit-x` / `--orbit-y`, which fall back to the start pose when absent (`OrbitSensorController.py:235-242`) |
 | `orbit_centre_z_m` | `0.0` | Session-fixed | today's fixed `center_z` (`OrbitSensorController.py:215`) |
@@ -1323,9 +1335,20 @@ were set by one call. Nothing in the process moves the depth camera itself, and 
 the camera it is attached to. A field the chosen pattern would ignore is refused rather than dropped. The single
 definition of every row in this table that is built is
 `ChannelDescription` (`CarlaControl/src/carlacontrol/ChannelDescription.py`), whose defaults a test
-holds equal to this table; the stare geometry is `StareAim`. `post_process_profile` is not yet in it:
-it is a field of a run configuration's channel object, defined once in `RunConfiguration`, until
-§9.2's `SensorRig` conversion moves it into the description.
+holds equal to this table; the stare geometry is `StareAim`. `post_process_profile` and the five
+exposure fields are not yet in it: they are fields of a run configuration's channel object, defined
+once in `RunConfiguration`, the exposure's defaults and limits in `ChannelExposure`, until §9.2's
+`SensorRig` conversion moves them into the description.
+
+**Every capture's exposure is known from the run.** Each of the five exposure fields is sent to the
+channel's camera at spawn, at its default where the channel sets none, so no camera renders at a value
+the run did not state; the plugin applies them over the profile it loads and sets each override flag
+again, because the profile replaces the whole of the camera's post-process settings. The exposure the
+camera was given is then read from its own attributes, as every client reads its name, and recorded on
+every capture as `<_carla_exposure>` beside `<_carla_intrinsics>` -- the profile, method, ISO, shutter in
+seconds, f-stop, compensation, and under manual the EV100 they make -- in the manifest's `sensor_placed`
+row and in the result's `produced.cameras[]` as `exposure`. Nothing reads back what the server loaded;
+check 43, which would, stays not built.
 
 **A stare aimed at the rendered traffic** (`"stare_look_at_target": "rendered_traffic"`) stands off
 the same way from a point that is measured rather than given: the mean position, height included, of
@@ -1349,6 +1372,10 @@ ordinary look-at stare. It needs a prewarm of at least one SUMO step (check 47),
 more than check 51 asks of a still camera; a frame before the hold that rendered no vehicle refuses
 the run at pre-roll, naming the channel; and a camera follower refuses the form, because only the
 process driving the session sees the poses.
+
+*Corrected 2026-10-07:* the five exposure fields above set the exposure over the profile, so the
+profile no longer chooses it; what follows about the profile's default name stands, and the plugin
+now logs a profile that does not load.
 
 **`post_process_profile` is the exposure control, and its default is a hidden host-dependent value of
 exactly the kind M2 forbids.** No camera blueprint publishes a *numeric* exposure attribute (§1.3), but
@@ -1512,7 +1539,7 @@ the later phases.
 | 13 | The window's civil span is computable from the epoch | refuse | `epoch time zone '+3:3' is not a valid offset.` |
 | 14 | If the window's sun elevation falls below −6°, `solar.vehicle_lights` is stated | refuse | `window night_shift is dark (sun elevation −37.2° to −41.8°). 'solar.vehicle_lights' has no default in a dark window: state 'from_sumo' or 'off'.` |
 | 15 | `solar.policy` is not `accelerated` | refuse | `solar.policy 'accelerated' is not permitted in a capture run: a rate other than 1.0 makes recorded solar time disagree with the scenario's clock. Use the interactive viewer for look development.` |
-| 16 | A numeric `exposure` is not requested | refuse, **naming the field that does exist** | `a numeric camera exposure is not settable on this build: sensor.camera.rgb declares no exposure attribute (ActorBlueprintFunctionLibrary.cpp:313-410). Exposure is chosen per channel by 'post_process_profile': Default, GoPro, Town10HD_Opt, Town_C.` — §1.3's dead flag made loud, and the refusal names the field that works rather than only a wall (R4) |
+| 16 | Every channel's exposure is one its camera takes as stated: a finite ISO of at least 1, a shutter from 1/8000 s to 100 s, an f-stop from 1 to 32 and a compensation within 15 EV | refuse a malformed value, naming the field and its range; **warn** on `exposure_method` `histogram` (`exposure_follows_the_scene`) | `capture.channels[0].exposure_shutter_s: 320 is not a value the camera takes as stated; it takes a shutter from 1/8000 s (0.000125) to 100 s, in seconds: 1/320 s is 0.003125, where the camera's shutter_speed of 320 is per second.` and, warning, `exposure_method is 'histogram': the engine meters each frame and sets its own exposure, so the exposure follows what is in the picture ... permitted for a live exercise's operator picture and not for captures meant to be compared (08 D8.26).` — reworked 2026-10-07 from a refusal of any numeric exposure, which no camera then published (§1.3) |
 | 17 | *Withdrawn 2026-10-05 by the owner's ruling*: there is one capture root, `paths.capture_root`, with imagery and truth side by side, so there are no two roots to keep disjoint ([`08`](08_Collection_And_EPoL.md) D8.17 withdrawn, [`04`](04_Contracts.md) D4.26 as amended). As written: the two export roots are distinct and neither contains the other | — | — |
 | 18 | Every seed has an explicit value or `random` | refuse | `seeds.sumo is unset. Give a value, or 'random' to draw and record one.` |
 | 19 | Free space under `paths.capture_root`, expressed in **captured seconds** at the configured rate and channel count | refuse when the window declares an end that does not fit; **warn with the figure** when it declares none | `window needs ~52 GB at 2 Hz × 2 channels × 6.2 Mpx; 31 GB free at /data.` and, with no declared end, `at 24 GB/h, 31 GB free at /data is 1 h 17 m of capture. This window declares no end.` — derived from [`10`](10_Scale_And_Performance.md) §4.2.3's measured per-frame sizes. Check 46 is the same quantity re-evaluated while the run proceeds |
@@ -1610,7 +1637,7 @@ resolved, with outcome `usage_error` (§3.10.2). A check the co-simulation sessi
 | 13 | offline | `run_capture` | ScenarioEpoch, which reads the epoch with the session's SolarEpoch |
 | 14 | offline | **not built** | the session drives the lights by one rule with no run field to state; the rule is recorded on the manifest's opening row rather than checked against a field |
 | 15 | offline | `run_capture` | RunConfigurationValidator |
-| 16 | resolution | `run_capture` | RunConfiguration; the refusal names post_process_profile, the field that exists |
+| 16 | offline | `run_capture` | RunConfigurationValidator, with ChannelExposure; histogram warns, `exposure_follows_the_scene` |
 | 17 | offline | **not built** | the recorder writes each capture's image and sidecar into one directory; the two-root split is stage K's and no writer makes it |
 | 18 | offline | by construction | the only seed the run consumes is SUMO's, bound by the scenario package |
 | 19 | offline | `run_capture` | RunConfigurationValidator, from doc 10's measured capture sizes |
@@ -2004,7 +2031,7 @@ rendering of the manifest, never a second computation, for the same reason the m
 | **Capture** | per channel: captured, written, `Dropped`, capture rate including any degradation step, occlusion pairing | `capture.recorder_dropped` — observed `Dropped`, threshold 0 (D10.7). `capture.captured_minus_written` — observed the difference, threshold 0, which is non-zero exactly when a kill left frames in the encode queue (§3.10.2). `capture.rate_changes_recorded` — observed rate changes carrying a record, threshold: all |
 | **Render set** | admissions and releases as the manifest's rows; vehicle types refused a body, by reason (`no_blueprint`, `unknown_extent`); the `not_drawn` spans on each closed interval | **no gate.** `render_accounting.intervals_rendered` is withdrawn 2026-10-05 by the owner's ruling: what a participant's undrawn spans are worth is the reader's question, and the spans are in the manifest as happened facts |
 | **Solar** | requested policy, epoch, applied state, confirmed state, closing state | `solar.applied_equals_confirmed` — observed the difference, threshold 0 |
-| **Radiometry** | per channel: the profile asked for and the digest of the profile the server loaded | `radiometry.profile_digest_present` — observed channels carrying a digest, threshold: all ([`08`](08_Collection_And_EPoL.md) D8.28) |
+| **Radiometry** | per channel: the profile and the exposure the run gave the camera, on every capture's `<_carla_exposure>`, the manifest's `sensor_placed` row and `produced.cameras[]`; the digest of the profile the server loaded is not built (check 43) | `radiometry.profile_digest_present` — observed channels carrying a digest, threshold: all ([`08`](08_Collection_And_EPoL.md) D8.28) |
 | **Pacing** | requested mode and real-time factor; achieved factor per window | `pacing.factor_recorded` — under `wall_clock`, observed: recorded or not. `pacing.achieved_factor` — observed the achieved factor, threshold `min_achieved_factor` |
 | **Handover** | per channel: frames offered, handover drops, last delivered tick; transcript sources, blobs received, last stamp | **no gate.** A handover drop is expected by design ([`08`](08_Collection_And_EPoL.md) §11.3) and is counted per sensor |
 | **Launch provenance** | caller, caller label, every warning with its adjudication and the artifact that granted it, every declared expectation and that it held | `launch.warnings_adjudicated` — observed warnings with no adjudication, threshold 0; an attended run's pre-roll warning that nobody adjudicated in writing misses it (§6.4.2), and otherwise only a bug in §6.4 can |
@@ -2408,7 +2435,9 @@ truncating the occlusion measurement that the observed denominator rests on.
 These are not migration work; they are defects §1 measured, and they should be fixed in
 `run_SCTMV.py`'s own surface whether or not the new one is built.
 
-1. **`--ev` is refused or removed** (§1.3). A flag that cannot work must not parse.
+1. **`--ev` is refused or removed** (§1.3). A flag that cannot work must not parse. *Moot 2026-10-07:
+   the camera publishes `exposure_compensation`, so `--ev` works on a server built with it, and
+   `SensorRig` says so where a server lacks it.*
 2. **The three divergent defaults are reconciled** (§1.5), starting with `depth_max_range`.
 3. **`--time-rate` without `--time-advance` warns** rather than being silently inert (§1.3).
 4. **`setup_solar_time` does not overwrite the sun in attach mode** unless `--time` or `--date` was
@@ -2797,11 +2826,10 @@ on Windows runs unedited on Linux.
 - **The pacing ruling and the drop policy.** [`08`](08_Collection_And_EPoL.md) §11.1 and §11.3 own them.
   This section expresses them (§5.2), shows them (§7.4.1) and states in §7.5 what it needs back. The one
   place it declines to offer a toggle at all is the drop policy, because that section has already ruled.
-- **Numeric exposure control.** Measured absent from every camera blueprint (§1.3); exposure is
-  selectable at spawn through `post_process_profile` instead (§5.2). Publishing the engine-side setters
-  (`SceneCaptureSensor.h:237-393`) is [`08`](08_Collection_And_EPoL.md) D8.27's; §6 check 16 refuses a
-  numeric exposure and names the field that works, and check 43 makes a profile that did not load
-  loud.
+- **Numeric exposure control.** *Built 2026-10-07 (stage K):* the camera publishes its exposure and the
+  five channel fields of §5.2 set it over the profile ([`08`](08_Collection_And_EPoL.md) D8.27); §6
+  check 16 refuses a value the camera cannot take as stated and warns of `histogram`. Check 43, which
+  would read back the profile the server loaded, stays not built.
 - **The cadence, the training, the models — and when a run should stop.** What decides that a corpus
   should be regenerated, what trains on it, what any of it is worth, and when enough has been produced
   are all outside this plan ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b, §3d). §3.10 specifies an
@@ -2845,7 +2873,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.15** | **One condition interrupts the operator in every run, and nothing else does:** a non-zero `Dropped` on any channel; a live run adds the achieved real-time factor falling below its floor (§7.4.1). A participant in an open annotated interval is always drawn, because every vehicle SUMO has is drawn, so it is a gate record rather than an interruption (§7.2). Everything else is a column (§7.1) |
 | **D12.16** | **This surface publishes gate records and never an aggregate verdict.** Each record names what the check observed, the threshold it compared against and whether it met it; nothing rolls them into a single field saying the corpus is fit, because fitness is relative to a purpose the caller never told us ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3d). The records are **appended to the manifest as they change**, so a run stopped at minute nine has already published everything it knew at minute nine, and the closeout is a rendering rather than the moment they come into existence. A record that did not meet its threshold deletes nothing and hides nothing (§7.2, §3.10.3) |
 | **D12.17** | **`run_SCTMV.py` and its parser keep every one of their 87 arguments (§1's 86 and `--aoi`) and all thirteen hotkeys.** The new surface is a second front end over shared definitions — `WorldBuildConfiguration`, the channel description, the capture description, and one solar application path — with **defaults defined exactly once in the schema**. *Measured justification:* three `getattr` fallbacks already disagree with the parser and exist precisely to survive a caller that is not this parser (§9.2, §9.3, §1.5) |
-| **D12.18** | **Seven repairs to the interactive surface are owed regardless of whether the new one is built:** refuse or remove `--ev`; reconcile the three divergent defaults; warn on `--time-rate` without `--time-advance`; stop overwriting the sun in attach mode; document the four undocumented hotkeys; make `parse` and `parse_args` behave identically; and fix the post-process profile default, whose name is the lowercase literal `"default"` (`ActorBlueprintFunctionLibrary.cpp:1376`) against a file named `Default.json` — so it resolves on a case-insensitive file system and silently does not on a case-sensitive one, with the failure discarded at `:1377-1380` (§9.4) |
+| **D12.18** | **Seven repairs to the interactive surface are owed regardless of whether the new one is built:** refuse or remove `--ev` (*moot 2026-10-07: the camera publishes `exposure_compensation`, so `--ev` works*); reconcile the three divergent defaults; warn on `--time-rate` without `--time-advance`; stop overwriting the sun in attach mode; document the four undocumented hotkeys; make `parse` and `parse_args` behave identically; and fix the post-process profile default, whose name is the lowercase literal `"default"` (`ActorBlueprintFunctionLibrary.cpp:1376`) against a file named `Default.json` — so it resolves on a case-insensitive file system and silently does not on a case-sensitive one, with the failure discarded at `:1377-1380` (§9.4) |
 | **D12.19** | **The launcher ships on both platforms in the same change, its `--help` generated from the schema, with a CI parity check comparing the two option sets.** *Measured:* the existing parity break survived because nothing compared them — `MakeDistribution.ps1:237` copies a file deleted in `d2c666c23` and only warns, `:301` then writes a launcher that runs it, and the Windows script additionally omits the `carlacontrol` wheel that `MakeDistribution.sh:112-113` bundles (§10) |
 | **D12.20** | **Withdrawn 2026-09-30.** There is no render cap or render region to check a population against: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner (§6.2 checks 20 and 21, withdrawn) |
 | **D12.21** | **The external caller is a first-class consumer of this surface, not a scripted human.** It is declared (`caller: unattended`), it is recorded in the corpus, and it changes what the tool may do without being told. **Three of its six requirements already hold and are not rebuilt:** no interactive prompt (*measured:* no `input()` anywhere in `CarlaControl/src/carlacontrol` or `CarlaControl/scripts`), a provenance-carrying effective configuration (D12.3), and a reproducible artifact (R1, D12.11). Three are specified here: a record that distinguishes stopped from finished (D12.22), a result artifact written in every outcome the tool survives (D12.23), and clean termination under a kill (D12.33). What this surface does **not** contain is a scheduler, a loop, a cadence, a run length or a comparison between runs — all of those belong to the caller (§3.10) |

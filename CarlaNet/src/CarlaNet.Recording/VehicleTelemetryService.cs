@@ -279,7 +279,7 @@ public sealed class VehicleTelemetryService
             geo.Latitude, geo.Longitude, hae, offset,
             az, el, roll, course, speed,
             width, height, fx, fy, cx, cy, opt.HFovDeg, vfov,
-            opt.SensorModel, "pinhole", opt.Distortion);
+            opt.SensorModel, "pinhole", opt.Distortion, opt.Exposure);
     }
 
     private static string Attr(IReadOnlyList<ActorAttributeValue> attrs, string id, string dflt)

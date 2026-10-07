@@ -564,8 +564,47 @@
                   "Town10HD_Opt",
                   "Town_C"
                 ],
-                "description": "The post-process profile the camera spawns with, which sets its exposure: Default, GoPro, Town10HD_Opt or Town_C. Named with the file's own case, so it resolves on a case-sensitive file system.",
+                "description": "The post-process profile the camera spawns with: Default, GoPro, Town10HD_Opt or Town_C, named with the file's own case so it resolves on a case-sensitive file system. It sets the picture -- tone curve, bloom, lens flare, vignette, motion blur -- and the exposure fields set the exposure over it, whichever profile it is.",
                 "default": "Default",
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "exposure_method": {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "histogram"
+                ],
+                "description": "How the camera's exposure is set, over its profile: manual, fixed by exposure_iso, exposure_shutter_s and exposure_fstop; or histogram, metered by the engine from each frame, so the exposure follows what is in the picture. histogram warns (check 16): it suits a live exercise's operator picture, not captures meant to be compared (08 D8.26).",
+                "default": "manual",
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "exposure_iso": {
+                "type": "number",
+                "description": "The camera's sensitivity, ISO, at least 1. Under manual, doubling it brightens the picture by one stop.",
+                "default": 100.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "exposure_shutter_s": {
+                "type": "number",
+                "description": "The shutter, seconds, from 1/8000 s to 100 s: 0.003125 is 1/320 s. Sent to the camera as its shutter_speed, which is per second. Under manual, doubling it brightens the picture by one stop.",
+                "default": 0.003125,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "exposure_fstop": {
+                "type": "number",
+                "description": "The aperture, as an f-number from 1 to 32: 4.0 is f/4. Under manual, each doubling darkens the picture by two stops; it also sets the depth of field, as on a lens.",
+                "default": 4.0,
+                "x-mutability": "session_fixed",
+                "x-supplied-by": "tool"
+              },
+              "exposure_compensation_ev": {
+                "type": "number",
+                "description": "Exposure compensation, EV, from -15 to +15, added under either method: +1 doubles the picture's brightness.",
+                "default": 0.0,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               }

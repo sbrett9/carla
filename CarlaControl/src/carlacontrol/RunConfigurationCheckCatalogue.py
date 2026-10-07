@@ -86,8 +86,6 @@ _CHECKS: tuple[RunCheck, ...] = (
              "RunConfiguration, when a document or an override is read"),
     RunCheck(3, RESOLUTION, "No override targets a value bound by the world package or the scenario "
              "package", _R, RUN_CAPTURE, "RunConfigurationResolver"),
-    RunCheck(16, RESOLUTION, "A numeric camera exposure is not requested", _R, RUN_CAPTURE,
-             "RunConfiguration; the refusal names post_process_profile, the field that exists"),
     RunCheck(38, RESOLUTION, "No world_build block is present: a capture run binds a world "
              "package and never builds one", _R, RUN_CAPTURE, "RunConfiguration"),
     RunCheck(49, RESOLUTION, "The scenario package and the world package resolve, and the "
@@ -126,6 +124,11 @@ _CHECKS: tuple[RunCheck, ...] = (
              "IlluminationPolicy, and advancing only at one sun-second per simulated second; "
              "'ignore' warns", _RW, RUN_CAPTURE, "RunConfigurationValidator",
              warning_code="lighting_honours_no_epoch"),
+    RunCheck(16, OFFLINE, "Every channel's exposure is one its camera takes as stated: a finite ISO "
+             "of at least 1, a shutter from 1/8000 s to 100 s, an f-stop from 1 to 32 and a "
+             "compensation within 15 EV; 'histogram' warns, because the exposure then follows what "
+             "is in the picture", _RW, RUN_CAPTURE, "RunConfigurationValidator, with ChannelExposure",
+             warning_code="exposure_follows_the_scene"),
     RunCheck(17, OFFLINE, "The observation and truth roots are distinct and disjoint", (),
              NOT_BUILT, "the recorder writes each capture's image and sidecar into one directory; "
              "the two-root split is stage K's and no writer makes it"),

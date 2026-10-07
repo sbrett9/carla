@@ -6,7 +6,9 @@ chosen name as the camera's `role_name`, refuses before the round trip only what
 and reads the name the server settled back from the spawned actor (`World.camera_name`), so every
 process holds the same name for one camera; a recorder is started under that name and no other. A
 server built before it named cameras hands an unnamed camera back with its blueprint's role name, and
-the shim says so once and calls the camera `CARLA-SENSOR-<actor id>`.
+the shim says so once and calls the camera `CARLA-SENSOR-<actor id>`. The exposure a camera was given
+is read back from the spawned actor the same way (`World.camera_exposure`), and a camera of a server
+that publishes no exposure has none.
 
 The shim under test is this tree's, loaded by path under its own module name so the installed
 `carlanet` is not what answers, over a stand-in client whose `SpawnActorAsync` answers as the server
@@ -260,3 +262,46 @@ def test_a_recorder_of_a_camera_named_by_its_client_takes_that_name(shim):
     assert world._recording_camera_name(camera, "DECK-I25", None) == "DECK-I25"
     with pytest.raises(ValueError, match="is named 'DECK-I25' on the server"):
         world._recording_camera_name(camera, "deck-i25", None)
+
+
+def _rgb_blueprint_with_exposure(shim):
+    """A sensor.camera.rgb blueprint of a server whose camera publishes its exposure, each attribute
+    at its recommended value, the Default profile's."""
+    blueprint = _rgb_blueprint(shim)
+    string, number = int(shim.ActorAttributeType.String), int(shim.ActorAttributeType.Float)
+    for key, kind, value in (("post_process_profile", string, "default"),
+                             ("exposure_mode", string, "manual"), ("iso", number, "100.0"),
+                             ("shutter_speed", number, "320.0"), ("fstop", number, "4.0"),
+                             ("exposure_compensation", number, "0.0")):
+        blueprint._attrs[key] = {"type": kind, "value": value, "recommended": [value],
+                                 "modifiable": True}
+    return blueprint
+
+
+def test_the_exposure_a_camera_was_given_is_read_back_from_its_attributes(shim):
+    # The shim sends every attribute of the blueprint, so the exposure the camera was given is on the
+    # actor the server hands back, and every client reads it from there, as it reads the name.
+    client = _Client(shim)
+    world = shim.World(client)
+    blueprint = _rgb_blueprint_with_exposure(shim)
+    blueprint.set_attribute("iso", "400.0")
+
+    camera = world.spawn_camera(blueprint, _anywhere(shim), name="Overwatch_1")
+    exposure = world.camera_exposure(camera)
+
+    assert client.spawned[-1]["attributes"]["shutter_speed"] == "320.0"
+    assert (str(exposure.PostProcessProfile), str(exposure.Method), float(exposure.Iso),
+            float(exposure.ShutterSeconds), float(exposure.FStop), float(exposure.CompensationEv)) == (
+        "default", "manual", 400.0, pytest.approx(0.003125), 4.0, 0.0)
+    # Four times the Default profile's ISO: two stops brighter than its EV100 of 12.32.
+    assert float(exposure.Ev100) == pytest.approx(10.3219, abs=1e-4)
+
+
+def test_a_camera_of_a_server_that_publishes_no_exposure_has_no_record(shim):
+    client = _Client(shim)
+    world = shim.World(client)
+
+    camera = world.spawn_camera(_rgb_blueprint(shim), _anywhere(shim))
+
+    assert world.camera_exposure(camera) is None
+    assert shim.camera_exposure_of(camera) is None

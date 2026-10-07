@@ -596,6 +596,69 @@ def test_an_open_window_that_may_outrun_the_disk_warns(layout):
     assert finding.outcome == "warn" and "declares no end" in finding.message
 
 
+# -- the exposure (check 16) -------------------------------------------------------------------------
+
+def test_a_channel_that_sets_no_exposure_launches_clean_at_the_default_profile_s(layout):
+    effective, _, findings, _, _ = offline(layout)
+    assert findings.findings == []
+    values = effective.channel_values(0)
+    assert (values["exposure_method"], values["exposure_iso"], values["exposure_shutter_s"],
+            values["exposure_fstop"], values["exposure_compensation_ev"]) == (
+        "manual", 100.0, 0.003125, 4.0, 0.0)
+
+
+def test_a_stated_manual_exposure_launches_clean(layout):
+    *_, findings, _, _ = offline(layout, overrides=[
+        "capture.channels[0].exposure_iso=400", "capture.channels[0].exposure_shutter_s=0.001",
+        "capture.channels[0].exposure_fstop=8", "capture.channels[0].exposure_compensation_ev=-1.5"])
+    assert findings.findings == []
+
+
+@pytest.mark.parametrize(("field", "value", "phrase"), [
+    ("exposure_iso", "0.5", "ISO of at least 1"),
+    ("exposure_iso", "0", "ISO of at least 1"),
+    ("exposure_shutter_s", "0", "from 1/8000 s"),
+    ("exposure_shutter_s", "320", "1/320 s is 0.003125"),
+    ("exposure_shutter_s", "0.00001", "from 1/8000 s"),
+    ("exposure_fstop", "0.7", "f-stop from 1 to 32"),
+    ("exposure_fstop", "45", "f-stop from 1 to 32"),
+    ("exposure_compensation_ev", "16", "compensation from -15 to +15 EV"),
+    ("exposure_compensation_ev", "-20", "compensation from -15 to +15 EV"),
+])
+def test_an_exposure_value_the_camera_cannot_take_as_stated_is_refused_naming_the_range(
+        layout, field, value, phrase):
+    *_, findings, _, _ = offline(layout, overrides=[f"capture.channels[0].{field}={value}"])
+    finding = only(findings, 16)
+    assert finding.outcome == "refuse"
+    assert finding.subject == f"capture.channels[0].{field}"
+    assert phrase in finding.message
+
+
+def test_histogram_warns_citing_d8_26_and_is_not_refused(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.channels[0].exposure_method=histogram"])
+    finding = only(findings, 16)
+    assert finding.outcome == "warn" and not findings.refused
+    assert finding.subject == "capture.channels[0].exposure_method"
+    assert "follows what is in the picture" in finding.message and "08 D8.26" in finding.message
+    assert RunConfigurationFindings.warning_code(finding) == "exposure_follows_the_scene"
+
+
+def test_histogram_under_the_unattended_caller_needs_an_adjudication(layout):
+    unattended = ["caller=unattended", "capture.channels[0].exposure_method=histogram",
+                  f"result_path={layout.runs_root / 'r.result.json'}"]
+    finding = only(launch(layout, overrides=unattended), 34)
+    assert "on_warning.exposure_follows_the_scene" in finding.message
+    findings = launch(layout, overrides=[*unattended,
+                                         'on_warning={"exposure_follows_the_scene": "proceed"}'])
+    assert not findings.refused and checks(findings, "warn") == {16}
+
+
+def test_a_malformed_value_is_refused_and_not_also_warned_of(layout):
+    *_, findings, _, _ = offline(layout, overrides=["capture.channels[0].exposure_method=histogram",
+                                                    "capture.channels[0].exposure_iso=0"])
+    assert checks(findings) == {16} and checks(findings, "warn") == set()
+
+
 # -- the unattended caller -----------------------------------------------------------------------
 
 def test_an_unattended_warning_without_adjudication_is_refused(layout):
@@ -691,7 +754,8 @@ class _Library:
 class _World:
     """A world that answers the server checks' two reads and refuses every write."""
 
-    RGB = {"image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile"}
+    RGB = {"image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile",
+           "exposure_mode", "iso", "shutter_speed", "fstop", "exposure_compensation"}
     DEPTH = {"image_size_x", "image_size_y", "fov", "sensor_tick", "max_range"}
 
     def __init__(self, sun=True, rgb=None, depth=None, vehicles=("vehicle.lincoln.mkz",
@@ -734,6 +798,15 @@ def test_a_world_with_no_sun_is_accepted_when_nothing_needs_one(layout):
 def test_a_camera_attribute_the_build_lacks_is_refused_by_name(layout):
     findings = server(layout, _World(rgb=_World.RGB - {"post_process_profile"}))
     assert "post_process_profile" in only(findings, 24).message
+
+
+@pytest.mark.parametrize("attribute", ["exposure_mode", "iso", "shutter_speed", "fstop",
+                                       "exposure_compensation"])
+def test_a_server_whose_camera_publishes_no_exposure_is_refused_naming_the_attribute(layout, attribute):
+    # Every capture's exposure is sent to the camera and stated from the run, so a camera that cannot
+    # take it would render at another exposure than the record says.
+    findings = server(layout, _World(rgb=_World.RGB - {attribute}))
+    assert f"'{attribute}'" in only(findings, 24).message
 
 
 def test_the_depth_camera_is_checked_for_every_run(layout):

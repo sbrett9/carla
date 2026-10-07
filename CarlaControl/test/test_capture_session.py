@@ -360,9 +360,45 @@ def test_a_stare_camera_is_placed_where_its_description_aims_it(layout, server):
     location, rotation = rgb.transform.location, rgb.transform.rotation
     assert (location.x, location.y, location.z) == pytest.approx((aim.x_m, aim.y_m, aim.z_m))
     assert (rotation.pitch, rotation.yaw) == pytest.approx((aim.pitch_deg, aim.yaw_deg))
+    # The whole exposure is sent, at the Default profile's values where the channel sets none.
     assert rgb.attributes == {"image_size_x": "1280", "image_size_y": "720", "fov": "90.0",
                               "sensor_tick": "0.5", "post_process_profile": "Default",
+                              "exposure_mode": "manual", "iso": "100.0", "shutter_speed": "320.0",
+                              "fstop": "4.0", "exposure_compensation": "0.0",
                               "role_name": "OVERWATCH-1"}
+
+
+def test_a_channel_s_exposure_is_sent_to_its_camera_in_the_camera_s_units(layout, server):
+    # Seconds in the run, per second on the camera: 1/500 s is a shutter_speed of 500.
+    capture(layout, server, overrides=["capture.channels[0].post_process_profile=GoPro",
+                                       "capture.channels[0].exposure_method=histogram",
+                                       "capture.channels[0].exposure_iso=400",
+                                       "capture.channels[0].exposure_shutter_s=0.002",
+                                       "capture.channels[0].exposure_fstop=5.6",
+                                       "capture.channels[0].exposure_compensation_ev=-1",
+                                       'on_warning={"exposure_follows_the_scene": "proceed"}'])
+    rgb = next(a for a in server.actors if a.type_id == "sensor.camera.rgb")
+    assert {key: rgb.attributes[key] for key in ("post_process_profile", "exposure_mode", "iso",
+                                                 "shutter_speed", "fstop",
+                                                 "exposure_compensation")} == {
+        "post_process_profile": "GoPro", "exposure_mode": "histogram", "iso": "400.0",
+        "shutter_speed": "500.0", "fstop": "5.6", "exposure_compensation": "-1.0"}
+    depth = next(a for a in server.actors if a.type_id == "sensor.camera.depth")
+    assert "iso" not in depth.attributes
+
+
+def test_the_manifest_and_the_result_record_the_exposure_the_camera_was_given(layout, server):
+    _, result = capture(layout, server, overrides=["capture.channels[0].exposure_iso=400"])
+    rows = [json.loads(line) for line in
+            Path(result.produced["run_manifest"]).read_text(encoding="utf-8").splitlines()]
+    placed = next(row for row in rows if row["row"] == "sensor_placed")
+    expected = {"post_process_profile": "Default", "method": "manual", "iso": 400.0,
+                "shutter_s": 0.003125, "fstop": 4.0, "compensation_ev": 0.0}
+    assert {key: placed["exposure"][key] for key in expected} == pytest.approx(expected)
+    # Four times the Default profile's ISO: two stops brighter, EV100 12.32 - 2.
+    assert placed["exposure"]["ev100"] == pytest.approx(math.log2(16 * 320) - 2.0)
+    [camera] = result.produced["cameras"]
+    assert camera["exposure"] == placed["exposure"]
 
 
 def test_a_stare_has_a_depth_camera_at_its_pose_with_its_camera_s_optics(layout, server):

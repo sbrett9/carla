@@ -31,12 +31,18 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
   * every vehicle record in the picture carries its `lights`, and every SUMO vehicle record in it its
     `pose_source`, unless its sidecar says its frame's snapshot did not carry them, and no record
     outside the picture carries either; a capture written before the recorder wrote them shows the
-    first.
+    first; and
+  * every sidecar of a camera whose captures carry its exposure (`<_carla_exposure>` on the platform
+    event) carries it, whole and the same on each, with `ev100` under manual alone; a camera that
+    carries it on none of its captures -- one of a server built before the camera published its
+    exposure -- is not faulted, and one camera's exposure says nothing of another's.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+
+import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
@@ -52,6 +58,18 @@ SENSOR = """  <event version="2.0" uid="CARLA-SENSOR-32" type="a-f-A-M-F-Q" how=
     </detail>
   </event>
 """
+
+# The Default profile's exposure, as `CotWriter` writes it on the platform event.
+DEFAULT_EXPOSURE = ('<_carla_exposure post_process_profile="Default" method="manual" iso="100" '
+                    'shutter_s="0.003125" fstop="4" compensation_ev="0" ev100="12.322" />')
+
+
+def sensor(exposure: str | None = DEFAULT_EXPOSURE, uid: str = "CARLA-SENSOR-32") -> str:
+    """The platform event of camera `uid`, carrying `exposure` beside its intrinsics, or none."""
+    event = SENSOR.replace('uid="CARLA-SENSOR-32"', f'uid="{uid}"')
+    if exposure is None:
+        return event
+    return event.replace('cy="360" />\n', f'cy="360" />\n      {exposure}\n')
 
 
 AS_WRITTEN = "as written"
@@ -117,16 +135,16 @@ def box3d(hae: float, corners: int = 8, frame: str = "geodetic") -> str:
 
 
 def sidecar(directory: Path, tick: int, events: list[str], vehicles: str | None = None,
-            stem: str | None = None, unknown: tuple[str, ...] = ()) -> None:
+            stem: str | None = None, unknown: tuple[str, ...] = (), platform: str = SENSOR) -> None:
     """A truth sidecar of one tick; `unknown` names what its container says the frame's snapshot did
-    not carry (`lights`, `pose_source`)."""
+    not carry (`lights`, `pose_source`), and `platform` is its camera's event."""
     marker = "" if vehicles is None else f' vehicles="{vehicles}"'
     marker += "".join(f' {name}="unknown"' for name in unknown)
     (directory / f"{stem or f'SCTMV_{tick}'}.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         f'<events captured="t" count="{len(events)}" source="truth" tick="{tick}" '
         f'sim_time_s="{tick * 0.05:.3f}"{marker}>\n'
-        + SENSOR + "".join(events) + "</events>\n", encoding="utf-8")
+        + platform + "".join(events) + "</events>\n", encoding="utf-8")
 
 
 def audit(directory: Path, **options):
@@ -652,3 +670,83 @@ def test_the_words_before_the_owner_s_ruling_are_outside_the_recorder_s(tmp_path
     assert [record.sumo_id for record in result.records_with_unknown_pose_source] == ["a", "b"]
     assert result.defects(sumo_drive=False) == [
         "2 vehicle record(s) carry a pose_source other than sumo, interpolated, jump, stale"]
+
+
+# -- the exposure the camera was given -----------------------------------------------------------------
+
+def test_a_camera_whose_every_capture_carries_its_exposure_has_no_defect(tmp_path):
+    for tick in (100, 110):
+        sidecar(tmp_path, tick, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a")], vehicles="rendered",
+                platform=sensor())
+
+    result = audit(tmp_path)
+
+    assert result.defects() == []
+    assert result.cameras_with_exposure == ["CARLA-SENSOR-32"]
+    lines = TruthSidecarAudit.describe(result)
+    assert any("exposure: carried by 2 sidecar(s) of 1 of 1 camera(s)" in line for line in lines)
+    assert any("Default, manual, ISO 100, 0.003125 s, f/4, 0 EV, EV100 12.322" in line for line in lines)
+
+
+def test_a_capture_of_a_camera_with_an_exposure_that_carries_none_is_a_defect(tmp_path):
+    sidecar(tmp_path, 100, [], platform=sensor())
+    sidecar(tmp_path, 110, [], platform=sensor(None))
+
+    result = audit(tmp_path)
+
+    assert result.sidecars_without_exposure == ["SCTMV_110.xml"]
+    assert result.defects(sumo_drive=False) == [
+        "1 sidecar(s) of a camera whose other captures carry its exposure carry no <_carla_exposure>"]
+
+
+def test_a_camera_that_carries_its_exposure_on_none_of_its_captures_is_not_faulted(tmp_path):
+    # A camera of a server built before the camera published its exposure; and beside it a camera
+    # that has one, whose captures say nothing of the first camera's.
+    sidecar(tmp_path, 100, [], platform=sensor(None), stem="Old_100")
+    sidecar(tmp_path, 110, [], platform=sensor(None), stem="Old_110")
+    sidecar(tmp_path, 100, [], platform=sensor(uid="CARLA-SENSOR-33"), stem="New_100")
+
+    result = audit(tmp_path)
+
+    assert result.defects(sumo_drive=False) == []
+    assert result.cameras_with_exposure == ["CARLA-SENSOR-33"]
+
+
+@pytest.mark.parametrize("element", [
+    # A field missing; a method outside the two; an EV100 under histogram; none under manual.
+    '<_carla_exposure post_process_profile="Default" method="manual" iso="100" shutter_s="0.003125" '
+    'fstop="4" ev100="12.322" />',
+    '<_carla_exposure post_process_profile="Default" method="auto" iso="100" shutter_s="0.003125" '
+    'fstop="4" compensation_ev="0" />',
+    '<_carla_exposure post_process_profile="Default" method="histogram" iso="100" shutter_s="0.003125" '
+    'fstop="4" compensation_ev="0" ev100="12.322" />',
+    '<_carla_exposure post_process_profile="Default" method="manual" iso="100" shutter_s="0.003125" '
+    'fstop="4" compensation_ev="0" />',
+])
+def test_an_exposure_element_the_recorder_would_not_write_is_a_defect(tmp_path, element):
+    sidecar(tmp_path, 100, [], platform=sensor(element))
+
+    result = audit(tmp_path)
+
+    assert result.sidecars_with_malformed_exposure == ["SCTMV_100.xml"]
+    assert len(result.defects(sumo_drive=False)) == 1
+
+
+def test_histogram_with_no_ev100_is_what_the_recorder_writes(tmp_path):
+    sidecar(tmp_path, 100, [], platform=sensor(
+        '<_carla_exposure post_process_profile="Default" method="histogram" iso="100" '
+        'shutter_s="0.003125" fstop="4" compensation_ev="-1" />'))
+
+    assert audit(tmp_path).defects(sumo_drive=False) == []
+
+
+def test_a_camera_carrying_two_exposures_over_the_capture_is_a_defect(tmp_path):
+    sidecar(tmp_path, 100, [], platform=sensor())
+    sidecar(tmp_path, 110, [], platform=sensor(DEFAULT_EXPOSURE.replace('iso="100"', 'iso="400"')))
+
+    result = audit(tmp_path)
+
+    assert result.cameras_with_several_exposures == ["CARLA-SENSOR-32"]
+    assert result.defects(sumo_drive=False) == [
+        "1 camera(s) carry more than one exposure over the capture, where a camera's exposure is set "
+        "once, when it is spawned"]

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using CarlaNet.Recording;
 using CarlaNet.Sumo;
 using Xunit.Abstractions;
 
@@ -385,6 +386,39 @@ public sealed class RunManifestWriterTests : IDisposable
         JsonElement lights = rows[0].GetProperty("vehicle_lights");
         Assert.True(lights.GetProperty("driven").GetBoolean());
         Assert.True(lights.GetProperty("headlights_follow_sun").GetBoolean());
+    }
+
+    [RequiresSumoFact]
+    public void ACameraPlacedWithItsExposureCarriesItsProfileAndExposureAndOneWithoutCarriesNone()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string manifest = Path.Combine(_directory, "manifest.jsonl");
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, new Watcher());
+        options.RunManifestPath = manifest;
+        // What the camera's attributes give it: the GoPro profile, with the exposure set over it.
+        var exposure = new CameraExposure("GoPro", CameraExposure.Manual, 200.0, 500.0, 5.6, -0.5);
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.RunManifest!.PlaceSensor("deck", 4121, exposure);
+            session.RunManifest!.PlaceSensor("Camera_7", 4122, null);
+            session.RunManifest!.PlaceSensor("plain", 4123);
+        }
+
+        List<JsonElement> placed = [.. ReadRows(File.ReadAllText(manifest)).Where(row => Kind(row) == "sensor_placed")];
+        Assert.Equal(["deck", "Camera_7", "plain"], placed.Select(row => row.GetProperty("sensor_id").GetString()));
+        _output.WriteLine(placed[0].GetRawText());
+
+        JsonElement written = placed[0].GetProperty("exposure");
+        Assert.Equal("GoPro", written.GetProperty("post_process_profile").GetString());
+        Assert.Equal("manual", written.GetProperty("method").GetString());
+        Assert.Equal(200.0, written.GetProperty("iso").GetDouble());
+        Assert.Equal(1.0 / 500.0, written.GetProperty("shutter_s").GetDouble(), 12);
+        Assert.Equal(5.6, written.GetProperty("fstop").GetDouble());
+        Assert.Equal(-0.5, written.GetProperty("compensation_ev").GetDouble());
+        Assert.Equal(exposure.Ev100!.Value, written.GetProperty("ev100").GetDouble(), 12);
+        Assert.False(placed[1].TryGetProperty("exposure", out _));
+        Assert.False(placed[2].TryGetProperty("exposure", out _));
     }
 
     [RequiresSumoFact]
