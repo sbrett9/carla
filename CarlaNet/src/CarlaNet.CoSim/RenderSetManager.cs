@@ -27,7 +27,9 @@ namespace CarlaNet.CoSim;
 ///
 /// <para>Nothing here spawns, destroys or moves an actor. The manager says which vehicles a pool
 /// would be checked out for; what is done about it, and from which frame, is the driving stage's,
-/// which draws a vehicle admitted at a step from that step's frame on.</para>
+/// which draws a vehicle admitted at a step from that step's frame on, and a vehicle released because
+/// SUMO no longer has it on the frame of the last step that had it, completing its interval once that
+/// frame has rendered.</para>
 /// </remarks>
 public sealed class RenderSetManager
 {
@@ -143,7 +145,9 @@ public sealed class RenderSetManager
         LastPopulation = frames.Count;
 
         // A vehicle that was rendered and is no longer in the frames is one SUMO removed. How it went
-        // is what the reason records: SUMO listed it as arrived, or it vanished without being listed.
+        // is what the reason records: SUMO listed it as arrived, or it vanished without being listed. Its
+        // interval is handed out stamped with this pass; the driving stage, which still draws it on the
+        // frame of its last step, ends it at the frame after that one before passing it on.
         _leaving.Clear();
         foreach (string vehicleId in _admittedAt.Keys)
         {

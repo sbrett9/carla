@@ -2431,10 +2431,11 @@ class World:
         and reports what each blueprint declares.
 
         By default every vehicle SUMO has is rendered: the scenario is the only arbiter of
-        population. A vehicle holds a body from the frame SUMO first reports it in until SUMO removes
-        it or the session ends, wherever it is and however many others there are, parked vehicles
-        included; one SUMO inserts during the run is drawn first where SUMO inserted it, moving from
-        there, and never before. Every vehicle SUMO has at `warm_up_to` is drawn on the first
+        population. A vehicle holds a body from the frame SUMO first reports it in to the frame of
+        the last step SUMO reports it in, or until the session ends, wherever it is and however many
+        others there are, parked vehicles included; one SUMO inserts during the run is drawn first
+        where SUMO inserted it, moving from there, and never before; one SUMO stops reporting is drawn
+        last where SUMO last had it, on that step's own frame, and never after. Every vehicle SUMO has at `warm_up_to` is drawn on the first
         rendered frame. Nothing caps the count unless asked to; a scenario heavier than the machine is
         comfortable with makes a synchronous run slower on the wall clock, never different in content.
 
@@ -2666,8 +2667,10 @@ class World:
         `on_divergence` the commanded pose and velocity against the transform and velocity the world
         reported for the body. The run's summary is on `session.Report` either way. A render interval
         says why it ended in `ReleaseReason`: 'Vanished' is a vehicle that stopped reporting without
-        SUMO listing it as arrived -- taken out between two steps -- whose body was parked wherever it
-        happened to be.
+        SUMO listing it as arrived -- taken out between two steps -- drawn last where SUMO last had it,
+        as an arrival is. An interval ends at the instant of the first frame that no longer draws its
+        vehicle; for one SUMO removed, `on_release` is handed it once the frame of its last step has
+        rendered.
 
         `vehicle_lamps` drives each body's lamps: SUMO's brake and indicator signals mapped bit by bit
         (SUMO's right blinker is 1 where CARLA's is 0x10, so a cast would light the parking lights), and

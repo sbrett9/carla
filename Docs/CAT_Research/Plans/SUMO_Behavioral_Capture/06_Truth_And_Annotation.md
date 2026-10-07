@@ -52,6 +52,7 @@ the real scenario artifacts. No code changed, no build run.
 | 43 · 2026-10-06 | §8.2: a vehicle in the picture carries its box on its record in the capture truth sidecar, as the owner ruled: `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg` and `roll_deg` in `_carla`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, each converted as the record's own point is. A vehicle outside the picture or behind the lens carries none, there is no separate label file per image, and the sidecar audit holds both. `pose_source` and the commanded lamps are not written: no snapshot carries either. |
 | 44 · 2026-10-06 | §8.2, open question 11: a vehicle in the picture also carries `lights`, the lights commanded on for it in words, and a SUMO vehicle in the picture `pose_source` -- `simulated`, `interpolated` or `held` -- as the owner ruled, both from the world-observer snapshot of the capture's own frame, so a recorder in any process writes the same. The world observer carries each vehicle's light state in its record, and the session declares its SUMO step to the server once and names a body only as it is held or placed at SUMO's later step; any reader resolves the frame's pose source from its number. A capture whose snapshot carried neither -- a server built before it did -- says `lights="unknown"` or `pose_source="unknown"` and writes none, counted and gated at zero by the closeout; the audit holds the rest. `pose_source` is no longer the planned producer field of the §8.2 example. The plugin and LibCarla change awaits a build. |
 | 45 · 2026-10-06 | §8.2: `pose_source` is written in the owner's four words -- `sumo` where the frame falls on a SUMO step and the position is SUMO's own, `interpolated` on a frame between steps, `jump` where SUMO reported a step too far from the last to drive in one step and the body is shown at SUMO's later position for the frames of that step, and `stale` where the body could not be placed and stands where it was last drawn -- in place of `simulated`, `interpolated` and `held`. A jump, written `simulated` until now, is its own word. A run on a server built before the jump state writes a jump `sumo`, and its run report and closeout say how many. The audit holds the four words. |
+| 46 · 2026-10-06 | §3.7, §4.4, §8.2, §8.3, §8.4: a vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished -- is drawn at its last SUMO position on that step's own frame, `pose_source` `sumo`, and is gone from the next frame, as the owner ruled ([03](03_CoSimulation_Runtime.md) D3.45); it was parked from that frame, a frame early, and its capture showed it not at all. So the capture at a SUMO step lists every vehicle SUMO had then, the world truth track's row at a vehicle's last SUMO frame reads `rendered`, and the track writes `left_the_simulation` and `vanished` no more, which the vocabulary keeps. The rendered span's release instant is the first frame that no longer draws the vehicle, as the session's end already stamped it; the old instant for a vehicle that left SUMO was a step late. |
 
 **This pipeline produces imagery, truth and labels, and scores nothing.** The detect-and-track model
 and the estimated-pattern-of-life model are external to this effort; §10 draws that boundary field by
@@ -994,7 +995,7 @@ author term appears in that diff only as bytes.
 | reserved `role` | `subject`, and nothing else | the compiler: an instance with exactly one participant must name that participant `subject` | One handle a consumer can rely on for "the participant this instance is about" |
 | `interval_anchor` | `depart` · `stop` · `stop_end` · `phase`, a stop or a phase written with its index (`stop:0`) | the compiler resolves each against the vehicle's stops and route ([07](07_Scenario_Authoring.md) check 58); the interval binder commits a start or an end on the event it names | An anchor spelled otherwise names no event, and its interval never opens (§3.3) |
 | `render_state` | `rendered` · `simulated_only` | the world truth track writes it per vehicle per sample (§8.3); prevalence counts its denominator over it (D6.17) | The line between the vehicles the corpus drew and those it only simulated (§4.4) |
-| `render_reason` | `no_world` · `left_the_simulation` · `vanished` · `outside_limit` · `no_blueprint` · `unknown_extent` · `no_ground` · `not_drawn` | the world truth track writes the first that holds; `outside_limit` is the one a consumer must read as sampling (D6.40) | A drawn population under a limit is a sample, and a misspelt reason hides that it is (§10.4) |
+| `render_reason` | `no_world` · `left_the_simulation` · `vanished` · `outside_limit` · `no_blueprint` · `unknown_extent` · `no_ground` · `not_drawn` | the world truth track writes the first that holds, and since 2026-10-06 never `left_the_simulation` or `vanished`, which the vocabulary keeps: a vehicle's last SUMO frame is drawn (§8.3); `outside_limit` is the one a consumer must read as sampling (D6.40) | A drawn population under a limit is a sample, and a misspelt reason hides that it is (§10.4) |
 
 **As built, the core is generated, not written** (D6.30). The enumerations are `CarlaNet.Types`'s
 `CarlaNet.Types.Supervision` — `SupervisionState`, `SubjectKind`, `IntervalOnset`, `ClosedBy`,
@@ -1475,7 +1476,7 @@ fade is ever restored this row comes back with it; nothing else in this section 
 |---|---|---|---|---|---|
 | **Simulated, never rendered** | yes | no | **absent** | present, `producer="sumo"`, `render_state="never"` | counted; its intervals' `not_drawn` spans say the body was not drawn |
 | **Rendered** | yes | actor exists, opaque from its first tick | present, `producer="reconciled"`, with residuals | present, `render_state="rendered"` | rendered span open, from the **admission instant** |
-| **Rendered, SUMO-removed** | no | actor may briefly persist | present until released, with `sumo_state="removed"` | present until released | interval closed `sumo_removed` or `entity_arrived`; rendered span closed at the **release instant** |
+| **Rendered, SUMO-removed** | no | drawn on the frame of its last SUMO step, where SUMO last had it, and parked from the next ([03](03_CoSimulation_Runtime.md) D3.45) | present until released, with `sumo_state="removed"` | present until released | interval closed `sumo_removed` or `entity_arrived`; rendered span closed at the **release instant**, the frame after its last |
 
 **The two instants are the record that replaces fade.** For every vehicle CARLA rendered, the pool
 records the tick it was admitted and the tick it was released. Both are exact — a vehicle appears
@@ -2581,8 +2582,10 @@ same: the world observer carries each vehicle's light state in its record, behin
 as it becomes a jump or stale and as that ends, carried in the render set block behind
 `PoseSourceCarried`, and every reader resolves the frame's pose source from its number
 ([08](08_Collection_And_EPoL.md) §5.1, §6.4; `ObservedPoseSource`, `VehicleLights`, `PoseSources`). As
-built, a body is stale where its pose was refused for want of ground under it; a vehicle missing from
-SUMO's next step leaves the render set as that step begins, so no capture shows it at all. A server built
+built, a body is stale where its pose was refused for want of ground under it, and never for leaving: a
+vehicle that leaves SUMO is drawn on the frame of its last step, at SUMO's position there and `sumo`, and
+its body is parked from the next frame, so the capture at that step shows it where SUMO last had it
+([03](03_CoSimulation_Runtime.md) D3.45, the owner's ruling of 2026-10-06). A server built
 before the jump state has no name for a jump but `sumo`: a run on one writes its jumps `sumo`, and the
 session's report and the run's closeout say so and how many ([03](03_CoSimulation_Runtime.md) §8.9). A
 vehicle outside the picture carries neither. Neither is guessed: a capture whose snapshot did not carry
@@ -2697,8 +2700,9 @@ denominator is stratified as its numerator is (D6.23). A CSV has no record per i
 repeated on each row. `render_state` takes [04](04_Contracts.md) C2's words, read for one frame:
 `rendered`, with the body's `actor_id`, or `simulated_only`, where §4.4's table says `never`, with a
 `render_reason`. Three reasons are C2 §4.5's: `outside_limit`, `no_blueprint` and `unknown_extent`. Four
-more are a single frame's, and C2 has no word for them. `left_the_simulation` and `vanished` mark a vehicle's last SUMO frame:
-the ticks after it have nothing to carry it towards, so the frame stamped with it does not draw it.
+more are a single frame's, and C2 has no word for them. `left_the_simulation` and `vanished` marked a vehicle's last
+SUMO frame until 2026-10-06, when the frame stamped with it did not draw it; that frame now draws it where SUMO
+last had it ([03](03_CoSimulation_Runtime.md) D3.45), so the track writes neither, and the vocabulary keeps both.
 `no_ground` marks a vehicle off the world's ground grid, and `no_world` a session that renders no world.
 `not_drawn` is a frame that drew no body for it for a reason the track cannot name.
 
@@ -2741,7 +2745,9 @@ supervision rather than keeping every capture and losing the thing that explains
 under the run's capture directory beside the world truth track, and names it in its result's
 `produced` block; `run_sumo_drive.py` writes it when given `--run-manifest PATH`, and the shim takes
 `start_sumo_drive(run_manifest=..., run_manifest_header=...)`. Each row carries its kind in `row`,
-and every instant is TraCI's clock for the SUMO frame it describes:
+and every instant is TraCI's clock for the SUMO frame it describes but a release's, which is the end of
+the session's interval, the instant of the first frame that no longer draws the vehicle
+([04](04_Contracts.md) C2 §4.3):
 
 - `manifest_opened`, first: the caller's header verbatim under `run` -- `run_capture`'s run and session
   id, scenario id, caller, effective-configuration digest, window and declared channels -- beside what
@@ -2758,7 +2764,8 @@ and every instant is TraCI's clock for the SUMO frame it describes:
 - `render_admitted`, at the instant of the pass that admitted the vehicle, with why
   (`rendering_began`, `inserted` or `entered_limit`) and the frame and body that first drew it, null
   where no body did; and `render_released`, the interval the session hands out, with its span, body and
-  reason ([04](04_Contracts.md) C2 §4.1). A vehicle still in the render set when the run ends has an
+  reason ([04](04_Contracts.md) C2 §4.1) -- for a vehicle that left SUMO, once the frame of its last step,
+  which draws it, has rendered, or at the close where the run ended before that frame. A vehicle still in the render set when the run ends has an
   admission row and no release row;
 - `collision_began` and `collision_ended`, the second with the span; `vehicle_not_inserted`,
   `emergency_stop` and `teleport`;

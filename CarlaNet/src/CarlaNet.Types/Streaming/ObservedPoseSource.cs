@@ -17,7 +17,8 @@ public enum PoseSource : byte
 
     /// <summary>
     /// The body could not be placed on the frame and stands where it was last drawn: its pose was refused
-    /// for want of ground under it, or its vehicle was missing from SUMO's next step.
+    /// for want of ground under it. A vehicle SUMO stops reporting is never stale for leaving: it is drawn
+    /// at its last SUMO position on that step's own frame, and its body is parked from the next.
     /// </summary>
     Stale = 4,
 }

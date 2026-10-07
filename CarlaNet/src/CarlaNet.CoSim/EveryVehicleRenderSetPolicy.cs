@@ -7,8 +7,8 @@ namespace CarlaNet.CoSim;
 /// </summary>
 /// <remarks>
 /// <para><b>No capacity, the default.</b> SUMO's scenario is the only arbiter of population: a vehicle
-/// holds a body from the frame SUMO first reports it in until SUMO removes it or the session ends,
-/// parked vehicles included, and vehicles new to the set are admitted in ordinal order of their ids,
+/// holds a body from the frame SUMO first reports it in to the frame of the last step SUMO reports it in,
+/// or until the session ends, parked vehicles included, and vehicles new to the set are admitted in ordinal order of their ids,
 /// so two runs of one scenario lend their bodies in the same order. A heavier scenario makes a
 /// synchronous run slower on the wall clock, never thinner.</para>
 ///
@@ -17,7 +17,10 @@ namespace CarlaNet.CoSim;
 /// one is free, the newcomers ranked by their place in the scenario seed's order
 /// (<see cref="SeededOrder"/>): fixed for a vehicle's life and blind to where it is, so the vehicles
 /// drawn are an unbiased sample of the ones SUMO has, and one seed always draws the same sample. A
-/// vehicle left out has no body and no truth record, and the report counts it.</para>
+/// vehicle left out has no body and no truth record, and the report counts it. A vehicle that leaves
+/// SUMO gives up its place at the pass that finds it gone and still keeps its body for the frame of its
+/// last step, so on that one frame the bodies drawn can exceed the capacity by the vehicles leaving SUMO
+/// at that step.</para>
 /// </remarks>
 public sealed class EveryVehicleRenderSetPolicy : IRenderSetPolicy
 {

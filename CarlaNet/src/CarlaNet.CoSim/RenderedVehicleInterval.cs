@@ -8,15 +8,21 @@ namespace CarlaNet.CoSim;
 /// <param name="VehicleId">SUMO's vehicle id.</param>
 /// <param name="Actor">
 /// The pooled body that rendered it, or zero where it held none -- a vehicle whose type names no
-/// measured blueprint, one SUMO had for a single frame and removed before the rendered clock reached
-/// that frame, or a run with no CARLA attached.
+/// measured blueprint, one with no ground under it on every frame it had, one whose every frame was read
+/// after the last frame the run rendered, or a run with no CARLA attached.
 /// </param>
 /// <param name="AdmittedAtSeconds">
 /// Simulated second the vehicle entered the render set: with no limit, the SUMO frame it was first
 /// reported in, which is the first frame its body is drawn on; under an optional limit, the frame of
 /// the pass that admitted it.
 /// </param>
-/// <param name="ReleasedAtSeconds">Simulated second it left, or the session's end.</param>
+/// <param name="ReleasedAtSeconds">
+/// Simulated second it left: the instant of the first frame that no longer draws it, so that the interval
+/// holds the instants of exactly the frames that drew it. For a vehicle SUMO removed, the frame after the
+/// one of its last SUMO step, which draws it; for one still in the render set when the session ends, the
+/// frame after the last rendered. Under an optional limit, a vehicle the limit releases is stamped with
+/// the frame of the pass that released it, as its admission is.
+/// </param>
 /// <param name="ReleaseReason">
 /// Why it left: SUMO listing it as arrived, it vanishing without being listed, or the session ending;
 /// under an optional limit, also the policy no longer admitting it, or a capacity ranking it out.

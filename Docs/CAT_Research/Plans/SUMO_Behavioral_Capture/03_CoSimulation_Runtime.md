@@ -74,6 +74,7 @@ advancement policy, the headlight predicate),
 | 2026-10-06 | §2.7: the `supervision plan` line quoted for Bahonar is the recompiled plan's, which carries the guard who parks elsewhere instead of relieving tower 3 as a sixth annotated instance and the `bahonar` namespace at version 2 ([`06`](06_Truth_And_Annotation.md) §3.5). |
 | 2026-10-06 | §8.9, D3.44: where each lent body's drawn pose came from is held on the server, as the owner ruled, so a recorder in any process writes the same `pose_source`. The session declares its SUMO step once (`update_pose_source`: ticks per step, falling on the frame the next cue produces) and names a body only as it becomes held -- not posed on the tick -- or placed at SUMO's later step across a discontinuity, and as that ends; the world observer carries the step and the named bodies in the render set block behind `PoseSourceCarried`, and any reader resolves a frame's pose source from its number. Nothing is sent per tick. A frame that comes back out of step is counted and the step declared again at the next step; a server that refuses is recorded and told nothing more. Each vehicle's commanded light state rides in its own record, behind `VehicleLightStateCarried`. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §8.9, D3.44: the owner ruled the pose source's four words -- `sumo` (the frame falls on a SUMO step), `interpolated` (between steps, filled in along the lane), `jump` (SUMO reported a step too far from the last to drive in one step; the body is shown at SUMO's later position for the frames of that step) and `stale` (the body could not be placed and stands where it was last drawn) -- in place of `simulated`, `interpolated` and `held`, and a jump, written `simulated` until now, is a state of its own end to end: `update_pose_source` takes a sixth argument, the jump list; the snapshot's entry states are `Sumo = 1`, `Stale = 2`, `Jump = 3`; the session names a discontinuous body jump. A server built before it binds five arguments and refuses six for their count; the session learns that from the declaration, sends every change in the five, names a jumping body sumo, and records the server's words and the count on the run report and the closeout. Measured with a stop that ends in SUMO's `jump`: all twenty frames of its step read `jump` at twenty ticks per step. Measured too: a vehicle missing from SUMO's next step leaves the render set as that step begins and is never drawn stale. The plugin and LibCarla change awaits a build. |
+| 2026-10-06 | §6.3, §8.3, §8.4, §8.5, §8.8, §8.9, §9.7, §11.3, D3.6, D3.35, D3.45: the owner ruled that a vehicle that leaves SUMO -- arrived at the end of its route, or vanished -- is drawn at its last SUMO position on that step's own frame, pose source `sumo`, and is gone from the next frame: never `stale` for leaving, nothing invented or held, and a frame that falls on a SUMO step shows every vehicle SUMO had at it within the render set. Until now the pass that read step N+1 and found the vehicle gone parked its body from step N's own frame, so it vanished a frame early, last drawn interpolated most of the way to N; the 2026-10-06 entry above measured that and called it never stale, which it was. Now the session keeps the body lent for step N's frame, posed at fraction zero from the N state with its N signals, lends it to no other vehicle there, and gives it back after that frame: parked at the head of the next batch and named parked by `update_render_set` before the next cue, back to its blueprint's free bodies in the order of the vehicles' ids. Its interval ends at the next frame's instant, the convention every interval keeps -- from the first frame that draws the vehicle to the first that no longer does, as the session's end already closed them -- so the old release instant, the pass's t(N+1), was a step late against frames that stopped at t(N); at one tick per step the new instant is the same number, at twenty it is t(N) plus one tick. The interval is handed out once the frame has rendered, with the next step's record; one whose frame the run never rendered is released by the session's end at that frame's instant with its own reason, and the run manifest writes it at its close either way. The world truth track no longer writes `left_the_simulation` or `vanished`: a vehicle's last SUMO frame is drawn. Releases an optional limit makes (`left_the_region`, `capacity`) are unchanged and still take effect, and are stamped, at their pass. Measured: the body of a vehicle that left SUMO drawn on its last frame 0.000000 m from SUMO's point and within 2e-6 m of what the world applied, at one and twenty ticks per step. No server change. |
 ---
 
 ## 0. What this section does not cover
@@ -1470,9 +1471,11 @@ up on the lane edge.
 
 > **D3.6 — The bridge runs SUMO exactly one step ahead of the rendered clock and produces every
 > sub-step pose by interpolating between the two buffered SUMO frames along the lane's own geometry.
-> A vehicle is drawn over a step only where SUMO reported it at both of the step's frames, so a
-> vehicle SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving
-> from then, and never before SUMO inserted it.** The SUMO step-length is whatever the scenario
+> A vehicle is drawn between two of SUMO's frames only where SUMO reported it at both, and on the
+> frame of a step wherever SUMO reported it at that step, so a vehicle SUMO inserts is drawn from the
+> frame SUMO first reports it in, at that position and moving from then, and never before SUMO inserted
+> it, and a vehicle that leaves SUMO is drawn last on the frame of the last step that had it, where SUMO
+> put it then, and never after (D3.45).** The SUMO step-length is whatever the scenario
 > authored; the bridge reads it with `Simulation.getDeltaT()` and does not change it. An operator
 > override exists but is a behaviour-changing knob and the run manifest must record it.
 
@@ -1489,6 +1492,18 @@ is read, with every vehicle on it subscribed, before the step of lookahead, so e
 and is drawn on the first rendered frame (§8.3). Exercised by `SumoDriveSessionInsertionTests`, which
 fails against the step-early draw, against a body lent before the insertion frame and posed nowhere,
 and against an unrenderable vehicle's ticks counted from the step before its insertion.
+
+**Changed 2026-10-06: a vehicle that leaves SUMO is drawn on the frame of its last step** (the owner's
+ruling, D3.45). The rule as first built drew a vehicle only over a step whose two frames both had it,
+and the bridge reads SUMO a step ahead, so the pass that read step N+1 and found a vehicle gone released
+it before step N's frame rendered: its body was parked from that frame, and its last drawn frame was the
+one before, interpolated most of the way to N. A frame that falls on a SUMO step shows every vehicle
+SUMO had at that step, so the vehicle now keeps its body for step N's own frame, posed there as every
+body is on a step's first tick -- at fraction zero from its N state, seated, turned and lit as at N,
+reading `sumo` -- and its body is parked from the next frame: the next step's at one tick per step, the
+second tick of the same step at twenty. Nothing about its position is invented or held. Exercised by
+`SumoDriveSessionLeavingTests` and `SumoDriveSessionPoseSourceTests`, at one and at twenty ticks per
+step.
 
 ### 6.4 The interpolator
 
@@ -2261,7 +2276,8 @@ admission pass that sees it (§8.8) and drawn from the frame SUMO first reports 
 inserted it, moving from then, and never on a frame before SUMO inserted it (D3.6). A vehicle SUMO
 already has at the instant the session starts rendering — where SUMO was fast-forwarded to, the
 prewarm's first frame where there is a prewarm — is drawn on that first rendered frame. It is released
-when SUMO removes it, or when the capture window closes or the session stops
+when it leaves SUMO -- drawn on the frame of the last step SUMO reports it in, and parked from the next
+(D3.45) -- or when the capture window closes or the session stops
 ([`04`](04_Contracts.md) §4.3, E1 and E3). A vehicle SUMO holds parked is drawn too. Unless a caller
 chooses a limit, no policy chooses among them — no region, no camera footprint, no ranking, no
 capacity — and the pool lends a body to each, growing without a ceiling (§8.2). The population is the
@@ -2433,10 +2449,10 @@ marking what its camera did not draw, by the frame's own distance and through a 
 
 Because the bridge holds one full SUMO step of future (D3.6), `Simulation.getArrivedIDList()`
 (`_simulation.py:329`) tells it about an arrival **before** the rendered clock reaches it. So a vehicle
-that SUMO removes is known about a whole SUMO step before the rendered clock reaches it, and it is
-released at its arrival instant rather than vanishing wherever it happened to be when the bridge
-noticed. The same applies to departures via `getDepartedIDList()` (`_simulation.py:314`): a vehicle
-SUMO inserts is known a whole step before the rendered clock reaches the frame it was inserted at, so
+that SUMO removes is known to be leaving before the rendered clock reaches the frame of its last step:
+it is drawn on that frame, where SUMO last had it, and released from the next (D3.45), rather than
+vanishing wherever it happened to be when the bridge noticed. The same applies to departures via
+`getDepartedIDList()` (`_simulation.py:314`): a vehicle SUMO inserts is known a whole step before the rendered clock reaches the frame it was inserted at, so
 its body is lent and posed for exactly that frame, where SUMO inserted it and already moving, rather
 than on the step before it (D3.6). Under D3.10 this lookahead is doing the work the
 dissolve used to do, and doing it better: a vehicle appears and disappears exactly where and when the
@@ -2474,10 +2490,10 @@ mid-scene does so because the scenario began or ended it there, and a camera tha
 the scenario holds. A dissolve would change the imagery around that event without recording that it
 did.
 
-**The timing is the lookahead's.** §8.4's one SUMO step of lookahead lets the bridge lend a departing
-vehicle its body for exactly the frame SUMO inserted it at and release an arriving one at its arrival
-instant, so neither appears or disappears a step early or late. Vehicles alive when a window's prewarm begins are
-drawn from the prewarm, before the window's first frame, so a window opens on traffic already in
+**The timing is the lookahead's.** §8.4's one SUMO step of lookahead lets the bridge lend a vehicle SUMO
+inserts its body for exactly the frame SUMO inserted it at, and keep a vehicle that leaves SUMO on the
+frame of its last step and give its body back from the next, so neither appears or disappears a step
+early or late (D3.6, D3.45). Vehicles alive when a window's prewarm begins are drawn from the prewarm, before the window's first frame, so a window opens on traffic already in
 place rather than on vehicles appearing in its first frame.
 
 **The arrival gate needs no replacement, and this is the good news.**
@@ -2589,7 +2605,7 @@ D3.31), and carries:
 |---|---|
 | when | the world ticks rendered when the pass was made, and the SUMO frame it decided, one step ahead of the last rendered frame (§8.4) |
 | the population | every vehicle SUMO has at that frame, each of them subscribed (§8.3) |
-| rendered | the vehicles holding a body: every vehicle of the population whose type has a measured body, or under an optional limit every one the limit admits; one SUMO inserts holds its body from the frame the pass is for, the first SUMO reports it in (D3.6). A vehicle of a type with no measured body is simulated and not drawn (§8.3), and `VehicleTicksWithNoMeasuredBody` counts its vehicle-ticks from that same frame |
+| rendered | the vehicles holding a body: every vehicle of the population whose type has a measured body, or under an optional limit every one the limit admits; one SUMO inserts holds its body from the frame the pass is for, the first SUMO reports it in (D3.6); one that has left SUMO at the frame the pass is for is released at the pass, and keeps its body for the next frame rendered, the frame of its last step, which draws it (D3.45). A vehicle of a type with no measured body is simulated and not drawn (§8.3), and `VehicleTicksWithNoMeasuredBody` counts its vehicle-ticks from that same frame |
 | under an optional limit | `Eligible`, the vehicles the circle or the cameras admitted and the lag held; `Admitted`, those holding a place after the pass; `Shed`, those a capacity declined; the held, the capacity, the rule and the cameras the pass decided from; and `Limited`. With no limit `Eligible` and `Admitted` are the population and nothing is shed (§8.3.2) |
 | admitted and released | the vehicles admitted at this pass, and those released at it for any reason |
 | total admissions | the running total since the session started; a vehicle admitted again counts again |
@@ -2890,10 +2906,14 @@ render set ([`08`](08_Collection_And_EPoL.md) §6.4).
   (`LaneInterpolationCase.Discontinuous`) is shown at SUMO's later position on every tick of the step,
   `jump`; a body the server holds lent that the tick did not pose stands where it was last drawn, `stale`;
   a body whose case ended is named cleared. A pose refused for missing ground is what leaves a body stale.
-  A vehicle missing from SUMO's next step -- at the end of its route, or removed by SUMO -- does not: the
-  render set releases it as that step begins and its body is parked from the step's first frame, so no
-  frame draws it at all (measured: no lent body went unposed on whole ground over the Succession,
-  RightAngleTurn and Jam fixtures, Jam's follower removed by a teleport included).
+  A vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished,
+  taken out between two steps -- does not: it is drawn on the frame of the last step SUMO reported it in,
+  posed at that step's state and reading `sumo`, and its body is parked from the next frame, named
+  parked by `update_render_set` before that frame's cue (D3.45; until 2026-10-06 it was parked from that
+  step's own frame, a frame early). Measured: no lent body went unposed on whole ground over the
+  Succession, RightAngleTurn and Jam fixtures, Jam's follower removed by a teleport included, and the
+  body of each vehicle that left SUMO is drawn on its last step's frame 0.000000 m from SUMO's point, at
+  one and at twenty ticks per step.
   `CheckTheStep` holds every frame a tick returns against the step declared, and one that comes back out
   of step -- another client ticked the world -- is counted (`CoSimRunReport.PoseSourceFramesOutOfStep`)
   and the step declared again at the next step's first tick; the frames between carry the old step. On
@@ -2945,9 +2965,10 @@ frame at one tick per step `sumo`; at twenty ticks per step one frame in twenty 
 body's published source what the session did on that tick; a stop that ends in SUMO's `jump`
 (`Jump.sumocfg`) read `jump` on all twenty frames of its step and on no other, named as it began and
 cleared as the next step began; a body with no ground under it `stale` on exactly the frames the session
-did not pose it, named on a change; a vehicle missing from SUMO's next step parked from that step's first
-frame and never drawn stale; a frame out of step counted and the step declared again at the next step; a
-refusing server asked once and the run going on; a server built before the jump state sent the
+did not pose it, named on a change; a vehicle that leaves SUMO drawn on its last step's frame at SUMO's
+position, reading `sumo` and lent on the server's render set, gone from the next frame and never stale,
+at twenty and at one tick per step; a frame out of step counted and the step declared again at the next
+step; a refusing server asked once and the run going on; a server built before the jump state sent the
 declaration again and every change without the jump list, the jump named and read `sumo`, the report
 saying so; everything withdrawn on disposal), `CarlaClientWorldTests` (the jump list sent sixth; a
 five-argument server's refusal read as one without jump and the change taken in five, the jump as sumo; a
@@ -3579,6 +3600,9 @@ session.run():
                 batch += ApplyTransformCommand(v.actor, poses[v].transform)
                 batch += ApplyTargetVelocityCommand(v.actor, poses[v].velocity)
             if i == 0:
+                for v in leaving:                         # gone from P_next: drawn where P_prev has it, D3.45
+                    batch += ApplyTransformCommand(v.actor, poseAt(P_prev[v]).transform)
+                    batch += ApplyTargetVelocityCommand(v.actor, poseAt(P_prev[v]).velocity)
                 batch += changedLightStates(P_next, sun.elevation)   # §3.5, mean 14.44, max 47
             client.applyBatch(batch, doTickCue = false)   # one RPC; no variable tail, §8.5
             if policy.advances:                           # this frame's sun, D3.19
@@ -3589,6 +3613,8 @@ session.run():
             auditSolar(client.getCachedSolarState(), t_render)   # this frame's snapshot, D3.20
             stepRecord.emit(t_render, sun, allSumoVehicles, renderSet)
             captureHook(frame)
+            if i == 0:
+                giveBack(leaving, releasedAt = t_render + Δw)   # parked at the head of the next batch, D3.45
         P_prev = P_next
         Simulation.step()
         P_next = readSubscriptions()
@@ -4038,10 +4064,11 @@ that gives back only until the first failure.
 
 On the normal path the lookahead prevents it (§8.4). When it happens anyway — an arrival the
 subscription missed, or a removal inside the step — the vehicle id is absent from the new
-subscription results. The bridge releases the actor immediately: park, check in, record the release
-instant with `released: vanished` so the count is visible rather than inferred. This is the one case
-where a vehicle disappears mid-scene without the lookahead having timed the release to an arrival SUMO
-reported (§8.4, §8.5), which is exactly why the reason code matters.
+subscription results. The bridge releases it as it releases an arrival: drawn on the frame of its last
+step, where SUMO last reported it, then parked and checked in, with the release instant recorded and
+`released: vanished`, so the count is visible rather than inferred (D3.45). This is the one case where a
+vehicle disappears mid-scene without an arrival SUMO reported (§8.4, §8.5), which is exactly why the
+reason code matters.
 
 **Where it happens, measured.** SUMO lists as arrivals only the vehicles it removed during the step: a
 vehicle taken out between two steps — by a TraCI `vehicle.remove`, as another client would — has its
@@ -4055,17 +4082,18 @@ the end of the route — goes through `MSVehicleControl::removePending` and is l
 **As built.** `SubscribedPopulation.LastVanished` names the subscribed vehicles that delivered nothing and
 were not listed as arrived, and the render set releases a rendered one as `RenderSetReleaseReason.Vanished`
 at the SUMO frame that showed it; `CoSimRunReport.Releases` counts releases by reason. The frames already
-buffered are ones in which the vehicle existed, so it is rendered up to the last of them, and its body
-leaves wherever that put it — possibly in frame, which is why the reason is recorded. From the release
-on, nothing is written for it: its body is checked back in and written to its slot, with zero
-velocity, at the head of the next tick's batch, and every later write to that body is the pose of a
+buffered are ones in which the vehicle existed, so it is rendered up to the last of them -- the frame of
+its last step, where SUMO last reported it (D3.45) -- and its body leaves from there, possibly in frame,
+which is why the reason is recorded. After that frame, nothing is written for it: its body is checked
+back in and written to its slot, with zero velocity, at the head of the next tick's batch, and every later write to that body is the pose of a
 vehicle it was lent to afterwards.
 
 **Exercised by** `SumoDriveSessionFailureTests` (a rendered vehicle removed through the session's own
 connection between two advances: one `Vanished` release naming its body, nothing posed for it after, its
-body parked at the head of the next batch, every other release an arrival SUMO listed) and
-`RenderSetManagerTests` (a vanished and an arrived vehicle in one pass). Each was seen failing against a
-wrong implementation: a population that does not name what vanished; a render set that ignores it; and a
+body parked at the head of the next batch, every other release an arrival SUMO listed),
+`SumoDriveSessionLeavingTests` (the vanished vehicle drawn on its last step's frame where SUMO last had it
+and gone from the next, at one and at twenty ticks per step) and `RenderSetManagerTests` (a vanished and
+an arrived vehicle in one pass). Each was seen failing against a wrong implementation: a population that does not name what vanished; a render set that ignores it; and a
 released body that is not parked.
 
 The inverse — CARLA loses an actor SUMO still has — shows up as the actor id disappearing from the
@@ -4681,7 +4709,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.3** | One `apply_batch` per world tick carries every pose write; the tick is a separate `SendTickCueAsync` because `do_tick_cue` does not wait for the frame (G6). `apply_batch_sync` only for the admission batch. |
 | **D3.4** | A SUMO-driven actor is kinematic: physics off, gravity off, **collision response left on** so sensors still see it. |
 | **D3.5** | A pose-applied vehicle reports the velocity its driver supplies: `FVehicleActor::SetActorTargetVelocity` on a vehicle whose physics is disabled writes the pawn movement component's `Velocity` and the root's `ComponentVelocity` (candidate **e**), and the bridge sends an `ApplyTargetVelocityCommand` beside every `ApplyTransformCommand` and a zero one at check-in (§5.4). Vehicles with physics on, and every other actor, are unchanged. Candidate (b) is **verified impossible** (§5.3). Candidate (d) is a fallback for actors nobody drives; candidates (c) and (f) are not taken. |
-| **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. A vehicle is drawn over a step only where SUMO reported it at both frames: **one SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it** (§6.3). The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
+| **D3.6** | SUMO runs **one step ahead** of the rendered clock; every sub-step pose is interpolated between the two buffered frames **along the lane's own geometry**, never chordally. A vehicle is drawn between two frames only where SUMO reported it at both, and on a step's own frame wherever SUMO reported it at that step: **one SUMO inserts is drawn from the frame SUMO first reports it in, at that position and moving, and never before SUMO inserted it**, and one that leaves SUMO is drawn last on the frame of its last step (§6.3, D3.45). The SUMO step-length is the scenario's; the bridge reads it and does not change it. |
 | **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper sits exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
 | **D3.8** | **A body is seated on the ground where its road is at grade and on its road where the road is a structure.** The road is found from the vehicle's lane by `RoadSurface` (the edge's `sumoId`, a merge's lane sections, a connector's links) and the s by projecting the origin at the lane's offset across the road. One weight `w`, 1 while the road's profile departs from the ground grid by under 0.5 m **at its reference line at that s** and 0 from 1.5 m, smoothstep between, decides height, pitch and roll alike: at grade (`w` = 1) the seat is the ground grid's exactly (`GroundSurface`, sampled in the **CARLA** frame `(x_s, −y_s)`) — the visible road across its whole width, camber included, where the profile is the reference line's height built flat across; on a structure (`w` = 0) height and pitch are the profile's, the pitch signed for the direction of travel against +s, and the roll is none; between, height and roll are blended by `w`, and pitch and vertical velocity come from the blended seat's own slope. A vehicle on no lane, on a lane with no road, or more than 5 m off its road is seated on the ground grid exactly as before, and the run report counts it by reason (§7.5). `z_seat` per blueprint is **measured**, not computed from the bounding box. |
 | **D3.9** | Actors come from a **per-blueprint pool**, checked out on admission and in on release, and no pooled actor is destroyed during a session. The pool has **no ceiling**: it grows to what the scenario's population needs, spawning a body onto its own clear parking slot only when a vehicle needs one and none of its blueprint is parked, and no vehicle goes without a body for want of one (§8.2). |
@@ -4709,7 +4737,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.32** | **Every answer SUMO owes the session is bounded** (`SumoAnswerTimeoutSeconds`, 60 s by default), and one that does not come stops the run as any other SUMO failure does; the `sumo` that stopped answering is ended at shutdown without the grace an exiting one gets, and no close waits longer than 5 s for SUMO's answer. A hung SUMO keeps its socket open, so without a bound a session would hold the world in synchronous mode indefinitely with nothing ticking it (§11.1). |
 | **D3.33** | **A collision SUMO registers is recorded as one span and never stops the run** — the collision as first registered, the simulated seconds it began and ended at, and the bodies that rendered both vehicles — handed out once it is over and counted on the report, with the `collision.action` that governed the run. SUMO reports an ongoing collision on every step it lasts, so a span, not a report, is the unit. Which actions a corpus may carry belongs to behavioural truth ([`13`](13_Work_Breakdown.md) §11; §11.5): `warn` alone ([`06`](06_Truth_And_Annotation.md) D6.12, as the owner ruled on 2026-10-05), and the session refuses every other before SUMO is started, SUMO's default `teleport`, `none` and `ignore-accidents` included, so the record of collisions always exists. The collision list is asked for only on the first frame and on a step a collision began or is still going on, and what is printed of the record is a switch that changes nothing recorded (§11.5). |
 | **D3.34** | **A route SUMO cannot follow stops the run, and a vehicle SUMO cannot insert is recorded.** A scenario setting `ignore-route-errors` is refused before SUMO starts, because SUMO then keeps an unroutable vehicle standing at the end of an edge and says nothing (measured); a vehicle that leaves SUMO's insertion queue without departing is recorded with the frame it was last waiting and the first it was gone, because SUMO drops it without a word; SUMO's console warnings are counted and kept verbatim (§11.4). |
-| **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release the lookahead cannot place, so it has its own reason (§11.3). |
+| **D3.35** | **A rendered vehicle that stops reporting without SUMO listing it as arrived is released as `Vanished`**, drawn on the frame of its last step where SUMO last reported it, as an arrived one is (D3.45), then its body parked at the head of the next batch and written to for nothing else of that vehicle's; it is the one release SUMO's step does not explain, so it has its own reason (§11.3). |
 | **D3.36** | **A session can launch `sumo-gui` in place of `sumo`** (`SumoGui`; `run_sumo_drive.py --sumo-gui`), from the installation it resolved and no other, with `sumo`'s arguments followed by `--start --quit-on-end --delay 0 --message-log stdout --error-log stderr`, so the one SUMO process the session steps is on screen, follows the session with nobody at the window, exits when the session closes it, never sets the pace and keeps the console the session reads. The release pin holds for the binary that runs: the release compared with the world's converter is `sumo-gui`'s own. An installation without `sumo-gui` is refused before anything starts, naming the file and the setup script that stages it. The report records the binary that ran on every run (§2.6). |
 | **D3.38** | **Withdrawn 2026-09-30.** No policy chooses which vehicles are drawn: every vehicle SUMO has is drawn, so the render set no longer follows the cameras by default (§8.3). The circle, the cameras' footprints and a capacity return only as optional limits a caller chooses (D3.42). |
 | **D3.37** | **Each frame's render set is published for the truth, keyed by the frame the tick produced** — every body lent, the SUMO vehicle it rendered, its vType and the first frame of its rendered span, read from the pool as the tick left it and recorded as the tick returns, the last 256 frames held (`SumoDriveSession.RenderSet`, `IRenderSetSource`). The recorder lists exactly the set of the frame its truth describes, named by SUMO vehicle, and no parked body; a frame whose set is no longer held is written with no vehicles, marked `vehicles="unknown"`, and counted, never guessed. With no source the recorder is unchanged (§8.9). |
@@ -4719,6 +4747,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.42** | **A limit on which vehicles get a body is an optional performance control, off by default.** The default policy draws every vehicle SUMO has (D3.38's rule); a circle, the registered cameras' footprints and a capacity under any policy may be chosen in its place. A vehicle outside the chosen limit is simulated by SUMO and has no body, no frame, no render set entry and no truth record; the report states the policy and counts what it left out, and its releases say why each track ended. Every vehicle stays subscribed, so one inside the limit is drawn exactly where and as it would be with none, inserted vehicles from SUMO's first frame. No limit is a default, a recommendation or a sizing rule (§8.3.2). |
 | **D3.43** | **The supervision in force is held on the server, beside the render set, for every reader** (owner's ruling, 2026-10-05) — the session puts each change (per body drawing a supervised vehicle, its state and instances in force; one bound plan with its vocabulary version and digest, and nothing for the world besides the plan) in one `update_supervision` after the render set's and before the tick cue of the frame it is drawn in; the server holds a body's on its record only while it is lent and drops it when the body is given back or handed on, and holds the plan's identity on the episode; the world observer carries all of it on every snapshot inside the render set block. An unlabelled vehicle has no row; no reader takes supervision from an in-process source; a world no session supervises is unchanged; a server that refuses is recorded and told nothing more (§8.9). **The binder is built (2026-10-05):** the session builds it from the plan its lock binds and tells it every frame after the caller's observers; what it states is put in force from the frame at its instant and never before the window, and a plan subject SUMO drops makes the advance refuse |
 | **D3.44** | **Where each lent body's drawn pose came from is held on the server, declared once and named on a change, in the owner's four words** (owner's rulings, 2026-10-06) — the session declares its SUMO step once (`update_pose_source`, the step falling on the frame the next cue produces) and names a body only as it becomes a `jump` (a discontinuous step, shown at SUMO's later position for its frames) or `stale` (not posed, standing where it was last drawn), and as that ends; the world observer carries the step and the names in the render set block behind `PoseSourceCarried` (`Sumo = 1`, `Stale = 2`, `Jump = 3`), and any reader resolves a frame's `sumo` or `interpolated` from its number. Nothing is sent per tick; a frame out of step is counted and the step declared again; a server that refuses is recorded and told nothing more; a server built before the jump state, which refuses the sixth argument for its count, is sent the five and a jumping body named `sumo`, recorded on the run report (§8.9) |
+| **D3.45** | **A vehicle that leaves SUMO is drawn at its last SUMO position on that step's own frame, and is gone from the next frame** (owner's ruling, 2026-10-06) -- arrived at the end of its route or by SUMO removing it, or vanished, taken out between two steps (`left_the_simulation`, `vanished`). The pass that reads the step without it releases it from the render set; the session keeps its body lent for the frame of the step before, poses it there at fraction zero from that step's state and its signals, as every body is posed on a step's first tick, so that frame reads `sumo`, lends that body to no other vehicle on it, and gives it back once the frame has rendered: parked at the head of the next tick's batch, named parked by `update_render_set` before the next cue, returned to its blueprint's free bodies in the order of the vehicles' ids. Never `stale` for leaving; nothing invented or held. Its interval ends at the next frame's instant, the first that no longer draws it, and is handed out then; one whose frame the run never renders is released by the session's end at that frame's instant, with its own reason. A release an optional limit makes (`left_the_region`, `capacity`) is for a vehicle SUMO still has, and still takes effect at its pass; under an optional capacity the place a vehicle leaving SUMO gives up can be filled at that pass while its body is still drawn on its last frame, so that one frame can draw more bodies than the capacity, by the vehicles leaving SUMO at that step (§8.4, §8.9, §11.3). |
 ---
 
 ## 15. Open questions

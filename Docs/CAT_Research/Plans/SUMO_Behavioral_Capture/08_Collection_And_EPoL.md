@@ -42,6 +42,7 @@ Findings set. Every external claim is cited.
 | 2026-10-06 | §2.7, §5.1, §5.2, §5.5, §6.4, D8.6, D8.8, D8.10: a vehicle in the picture carries its box on its record in the truth sidecar, as the owner ruled -- `box_px`, `box_oriented_px`, `truncation`, `camera_range_m`, `pitch_deg`, `roll_deg`, and the 3D box as eight explicit corners in `<_box3d frame="geodetic">`, converted as the record's own point is -- and a vehicle outside the picture or behind the lens carries none. There is no separate label file per image (D8.6 amended); the box and `<_supervision>` share the sidecar and are kept apart by element (§5.5, D8.8 amended). `pose_source` and the commanded lamps are not written, because no snapshot carries either; what writing each needs is stated (§5.1, §6.4). |
 | 2026-10-06 | §5.1, §6.4, D8.10, D8.33: a vehicle in the picture also carries `lights`, the lights commanded on for it in words (`position low_beam brake left_blinker`, or `none`), and a SUMO vehicle in the picture `pose_source`, `simulated`, `interpolated` or `held`, as the owner ruled; a vehicle outside the picture carries neither. Both come from the world-observer snapshot of the capture's own frame: the world observer puts each vehicle's light state in `VehicleData` behind a new flag, with the snapshot's per-actor size unchanged, and the session declares its SUMO step to the server once and names a body only as it is held or placed at SUMO's later step across a discontinuity, carried in the render set block behind a new flag, so any reader computes `simulated` or `interpolated` from the frame number and nothing is sent per tick. From a server that carries neither, the records go without and the capture says `lights="unknown"` or `pose_source="unknown"`, counted and gated at zero by the closeout. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §5.1, §6.4, D8.10: `pose_source` in the owner's four words -- `sumo` (the frame falls on a SUMO step: the position is SUMO's own), `interpolated` (a frame between SUMO steps: the position is filled in along the lane), `jump` (SUMO reported a step too far from the last to drive in one step: the body is shown at SUMO's later position for the frames of that step) and `stale` (the body could not be placed this frame and stands where it was last drawn) -- in place of `simulated`, `interpolated` and `held`. A jump, written `simulated` until now, is carried and written as its own state. A run on a server built before the jump state names a jump `sumo`, the one name that server has, and the run report and closeout say so and how many. Measured: a vehicle missing from SUMO's next step leaves the render set as that step begins, so no capture shows it stale; a stale body is one with no ground under it. The plugin and LibCarla change awaits a build. |
+| 2026-10-06 | §5.7, §6.4: a vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished -- is drawn at its last SUMO position on that step's own frame, `pose_source` `sumo`, and is gone from the next frame, as the owner ruled ([`03`](03_CoSimulation_Runtime.md) D3.45). Until now its body was parked from that step's own frame, so the capture at the step a vehicle was last reported in did not show it; now it shows it where SUMO last had it, and the capture after it does not. Never `stale` for leaving; a stale body is one with no ground under it. The manifest's `render_released` is stamped with the instant of the first frame that no longer draws the vehicle (§5.7). |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
 > not run a detector, a tracker or an EPoL model; it does not associate external model output to truth;
@@ -1747,9 +1748,10 @@ because the shadow is the larger object.
 judge anybody's tracker; it detects the artefact, records it as a fact about the data, and narrows the
 exclusion to the claim the artefact actually damages rather than throwing away the frame:
 
-- **Record what happened, and nothing more.** The run manifest writes `render_admitted` and
-  `render_released` for every vehicle, at TraCI's clock, with the frame and body that first drew it
-  ([`06`](06_Truth_And_Annotation.md) §8.4), and the sidecar carries `admitted_tick` on every vehicle
+- **Record what happened, and nothing more.** The run manifest writes `render_admitted` for every vehicle
+  at TraCI's clock, with the frame and body that first drew it, and `render_released` at the instant of
+  the first frame that no longer draws it ([`06`](06_Truth_And_Annotation.md) §8.4,
+  [`04`](04_Contracts.md) §4.3), and the sidecar carries `admitted_tick` on every vehicle
   record. Those are the facts; whether an admission fell inside a camera's picture is derivable from them
   and the camera pose in the same sidecar.
 - **Withdrawn 2026-10-05 by the owner's ruling:** the flags `birth_in_frame`, `death_in_frame`,
@@ -1873,10 +1875,12 @@ later reader will treat it as simulator output.
   (`LaneInterpolationCase.Discontinuous`) is shown at SUMO's later position on every tick of it rather
   than slid along the lane, `jump` (`update_pose_source`'s sixth argument, entry state `3`); and a lent
   body it did not pose on the tick stands where it was last drawn, `stale` (a pose refused for missing
-  ground, `TickBatch.HoldStill`). A vehicle missing from SUMO's next step -- at the end of its route, or
-  removed by SUMO -- is not stale: the render set releases it as that step begins and its body is parked
-  from the step's first frame, so no capture shows it (measured over three fixtures, a SUMO teleport off
-  the network among them). Both ride in the render set block behind `PoseSourceCarried`, after the
+  ground, `TickBatch.HoldStill`). A vehicle that leaves SUMO -- arrived at the end of its route or by SUMO
+  removing it, or vanished -- is not stale: the frame of the last step SUMO reported it in draws it at
+  SUMO's position there, `sumo`, and its body is parked from the next frame, so a capture of that step
+  shows it where SUMO last had it and no later capture shows it (the owner's ruling of 2026-10-06,
+  [`03`](03_CoSimulation_Runtime.md) D3.45; measured over three fixtures, a SUMO teleport off the network
+  and a vehicle taken out between two steps among them, at one and at twenty ticks per step). Both ride in the render set block behind `PoseSourceCarried`, after the
   supervision block, sized so a reader that does not know it skips it; a body's name is part of its loan
   on the server, dropped when the body is given back or handed on. Should a frame come back where the
   declared step does not put it -- another client ticked the world -- the session declares the step again

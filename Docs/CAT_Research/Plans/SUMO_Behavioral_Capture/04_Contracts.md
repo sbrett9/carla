@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 46 | 2026-10-06. `C2`, `C6`, `C10`: a vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished -- is drawn at its last SUMO position on that step's own frame, `pose_source` `sumo`, and is gone from the next frame, as the owner ruled; it is never `stale` for leaving (§4.3 E1, §8.3c, [`03`](03_CoSimulation_Runtime.md) D3.45). Until now its body was parked from that step's own frame, a frame early. The release instant is stated: the instant of the first frame that no longer draws the vehicle, so a rendered span holds the instants of exactly the frames that drew it, as the session's end already closed spans; the old instant for a vehicle that left SUMO, the pass's, was a step late against the frames, and at twenty ticks per step the new one is a tick after the last step's frame (§4.3). `render_released` for such a vehicle is written once that frame has rendered, or at the manifest's close where the run ended before it (§4.1). `left_the_region` and `capacity` are unchanged: still taken from, and stamped at, their pass. No server change. |
 | 45 | 2026-10-06. `C6`, `C8`: the pose source in the owner's four words -- `sumo`, `interpolated`, `jump`, `stale` -- in place of `simulated`, `interpolated` and `held` (§8.3c, `D4.48`). `update_pose_source` gains a sixth argument, `jump_ids`, and its lists are `sumo_ids`, `stale_ids`, `cleared_ids`; the block's entry states are `1` sumo, `2` stale and the new `3` jump, so a body shown at SUMO's later position across a discontinuous step is written `jump`, not `simulated`. A server built before it binds five arguments and refuses six for their count; the session then sends every change in the five with a jumping body named sumo, and the run report and closeout say so. The plugin and LibCarla change awaits a build. |
 | 44 | 2026-10-06. `C6`, `C8`: each vehicle in the picture carries its commanded lights and, a SUMO vehicle, where its drawn pose came from, both from the snapshot of the capture's own frame, as the owner ruled (§8.3c, `D4.48`). `update_pose_source` joins `update_render_set` and `update_supervision`: the session declares its SUMO step once and names a body only as it is held or placed at SUMO's later step, and the world observer carries both in the render set block behind `PoseSourceCarried` (`0x80`), so any reader resolves `simulated` or `interpolated` from the frame number; each vehicle's light state is `VehicleData::light_state`, behind `VehicleLightStateCarried` (`0x40`), the per-actor size unchanged. From a server that carries neither, the sidecar says `lights="unknown"` or `pose_source="unknown"` and writes none. The plugin and LibCarla change awaits a build. |
 | 43 | 2026-10-05. Labels follow vehicles, by the owner's ruling ([`06`](06_Truth_And_Annotation.md) §3.5): `C6` §8.3b's `update_supervision` loses `absences_opened` and `absences_closed` and the snapshot's supervision block its absence count and absences; `C8` §10.6's *Supervised* row loses the world-scoped `<_supervision>`; `C3`'s plan completions lose an absence's site. `C9`: `corpus_eligible` is renamed `sun_matched_declaration` on the `solar_window_end` row (§11.6-§11.8, D4.24, §12.5, V10.4), a fact — an epoch declared, the sun bound and present, the audit within tolerance — carrying no verdict in its name, as the owner agreed. |
@@ -1407,7 +1408,9 @@ Two halves, both named:
   `render_admitted` -- at the instant of the pass that admitted the vehicle, with its vType, why
   (`rendering_began`, `inserted` or `entered_limit`), and the frame and actor that first drew it -- and
   `render_released`, the session's interval with its span, actor and reason (`left_the_simulation`,
-  `vanished`, `left_the_region`, `capacity`). The per-vehicle `render_states[]` summary of §4.5 is not
+  `vanished`, `left_the_region`, `capacity`), stamped with the span's end (§4.3) -- for a vehicle that left
+  SUMO, written once the frame of its last step has rendered, or at the close where the run ended before
+  that frame. The per-vehicle `render_states[]` summary of §4.5 is not
   composed: a reader gathers it from these rows.
 
 ### 4.2 The admission predicate
@@ -1466,7 +1469,7 @@ A rendered vehicle is released when any of:
 
 | # | Condition | Notes |
 |---|---|---|
-| E1 | SUMO removed the vehicle (arrival, `remove`, collision removal) | SUMO is the authority on existence |
+| E1 | SUMO removed the vehicle (arrival, `remove`, collision removal) | SUMO is the authority on existence. The vehicle is drawn on the frame of the last step SUMO reports it in, at SUMO's position there, and its body is parked from the next frame ([`03`](03_CoSimulation_Runtime.md) D3.45, owner's ruling 2026-10-06) |
 | E2 | *Withdrawn 2026-09-30* with the render region: there is no region for a vehicle to leave | — |
 | E3 | The capture window closed and no window opens within `prewarm_s` | |
 | E4 | *Withdrawn 2026-09-30* with the render cap: there is no capacity to exceed | — |
@@ -1481,7 +1484,13 @@ appears at full opacity and a released one disappears. What replaces the fade-de
 vehicle having "arrived" is the **recorded admission and release instant** — `rendered_spans[]` in §4.5
 — which is a fact about the capture rather than a visual transition. The admission instant is the
 frame SUMO first reports the vehicle in, or the first rendered frame for one SUMO already had, and it
-is the first frame the vehicle is drawn on (§4.2): no frame before it shows the vehicle.
+is the first frame the vehicle is drawn on (§4.2): no frame before it shows the vehicle. The release
+instant is the instant of the first frame that no longer draws the vehicle, so the span holds the
+instants of exactly the frames that drew it: for a vehicle that leaves SUMO (E1), the frame after the one
+of its last SUMO step, which draws it; for one still drawn when the session ends, the frame after the
+last rendered. Under an optional limit, a release for `left_the_region` or `capacity` (E5, E6) is stamped
+with the pass that made it, as an `entered_limit` admission is, a step after the frames it takes effect
+on; those are unchanged.
 
 Two consequences, both already true in the tree. The arrival gate degrades to inert rather than
 breaking: `CarlaClient.IsActorEstablished` returns true for any actor nobody has faded
@@ -2639,7 +2648,8 @@ four words the owner also ruled that day: `sumo`, the frame falls on a SUMO step
 own; `interpolated`, a frame between SUMO steps, the position filled in along the lane; `jump`, SUMO
 reported a step too far from the last to drive in one step, and the body is shown at SUMO's later position
 for the frames of that step; `stale`, the body could not be placed on the frame and stands where it was
-last drawn. And, by the ruling of 2026-10-05 above, from the server, so every recorder writes the same for
+last drawn. A vehicle that leaves SUMO is never `stale` for leaving: the frame of its last step shows it
+at SUMO's position there, `sumo`, and the next frame has its body parked (§4.3 E1). And, by the ruling of 2026-10-05 above, from the server, so every recorder writes the same for
 one frame. Both follow §8.3b's
 contract: whole state on every snapshot, nothing per tick, a server built before them read as carrying
 neither. They are [`03`](03_CoSimulation_Runtime.md) D3.44 and [`08`](08_Collection_And_EPoL.md) §5.1, §6.4.

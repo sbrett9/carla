@@ -340,7 +340,10 @@ public sealed record SumoDriveSessionOptions(
     /// <summary>Where each computed pose goes.</summary>
     public Action<CoSimPoseRecord>? OnPose { get; set; }
 
-    /// <summary>Where a completed render-set interval goes.</summary>
+    /// <summary>
+    /// Where a completed render-set interval goes: as its body is given back, which for a vehicle SUMO
+    /// removed is once the frame of its last step has rendered.
+    /// </summary>
     public Action<RenderedVehicleInterval>? OnRelease { get; set; }
 
     /// <summary>
