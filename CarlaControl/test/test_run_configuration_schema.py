@@ -2,9 +2,13 @@
 
 An assistant generating a configuration makes mistakes that `argparse` would accept in silence: a
 misspelt key, a number where a name belongs, a field that does not exist on this build. Plan 12 R4
-requires each to be a refusal naming the field and the candidates, and two to be refusals that point
-at the field that does exist -- a numeric exposure (check 16) and a world build (check 38) -- because
-a generic "unknown key" would leave the operator no better off.
+requires each to be a refusal naming the field and the candidates, and some to be refusals that point
+at the field that does exist -- the camera blueprint's own name for part of the exposure, which a
+channel sets with a field in the run's units, and a world build (check 38) -- because a generic
+"unknown key" would leave the operator no better off.
+
+A channel's exposure is five fields, each defaulting to the Default profile's value: the run states
+every capture's exposure whether or not it sets one (08 D8.26-D8.27).
 
 The field table is also what `--help` prints and what the published schema says, so a default exists
 once; the tests hold the published file equal to the generated one and every default equal to the
@@ -22,6 +26,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.ChannelDescription import ChannelDescription  # noqa: E402
+from carlacontrol.ChannelExposure import ChannelExposure  # noqa: E402
 from carlacontrol.RunConfiguration import (  # noqa: E402
     NO_DEFAULT,
     RunConfiguration,
@@ -67,12 +72,46 @@ def test_a_value_of_the_wrong_type_is_refused_naming_the_field():
     assert "integer" in finding.message
 
 
-def test_a_numeric_exposure_is_refused_naming_the_field_that_exists():
-    raised = refusal({"capture": {"channels": [{"stare_look_at_x_m": 0.0,
-                                                "stare_look_at_y_m": 0.0, "ev": 1.5}]}})
+def test_a_channel_s_exposure_is_five_fields_defaulting_to_the_default_profile_s():
+    fields = RunConfiguration.channel_fields()
+    assert {name: fields[name].default for name in ChannelExposure.FIELDS} == {
+        "exposure_method": "manual", "exposure_iso": 100.0, "exposure_shutter_s": 0.003125,
+        "exposure_fstop": 4.0, "exposure_compensation_ev": 0.0}
+    assert fields["post_process_profile"].default == "Default"
+    document = RunConfiguration.from_document(
+        {"capture": {"channels": [{"stare_look_at_x_m": 0.0, "stare_look_at_y_m": 0.0,
+                                   "exposure_method": "histogram", "exposure_iso": 400,
+                                   "exposure_shutter_s": 0.002, "exposure_fstop": 5.6,
+                                   "exposure_compensation_ev": -1.0}]}}, "test.run.json")
+    assert document.values["capture.channels"][0]["exposure_iso"] == 400
+
+
+def test_an_exposure_method_that_is_not_one_is_refused_naming_the_two():
+    raised = refusal({"capture": {"channels": [{"exposure_method": "auto"}]}})
     [finding] = raised.findings.refusals
-    assert finding.check_id == 16
-    assert "post_process_profile" in finding.message and "Default" in finding.message
+    assert finding.check_id == 1 and finding.subject == "capture.channels[0].exposure_method"
+    assert "manual" in finding.message and "histogram" in finding.message
+
+
+@pytest.mark.parametrize(("attribute", "field"), [
+    ("iso", "exposure_iso"), ("shutter_speed", "exposure_shutter_s"), ("fstop", "exposure_fstop"),
+    ("exposure_compensation", "exposure_compensation_ev"), ("exposure_mode", "exposure_method")])
+def test_the_blueprint_s_name_for_part_of_the_exposure_is_refused_naming_the_field(attribute, field):
+    raised = refusal({"capture": {"channels": [{"stare_look_at_x_m": 0.0,
+                                                "stare_look_at_y_m": 0.0, attribute: 1.5}]}})
+    [finding] = raised.findings.refusals
+    assert finding.check_id == 1
+    assert finding.subject == f"capture.channels[0].{attribute}"
+    assert f"'{field}'" in finding.message
+    assert ("in seconds" in finding.message) == (field == "exposure_shutter_s")
+
+
+def test_an_override_names_the_exposure_by_its_field():
+    assert RunConfiguration.parse_override("capture.channels[0].exposure_shutter_s=0.004") == (
+        "capture.channels[0].exposure_shutter_s", 0.004)
+    with pytest.raises(RunConfigurationRefusedError) as raised:
+        RunConfiguration.parse_override("capture.channels[0].shutter_speed=250")
+    assert "'exposure_shutter_s'" in raised.value.findings.refusals[0].message
 
 
 def test_a_world_build_block_is_refused_as_a_world_build():

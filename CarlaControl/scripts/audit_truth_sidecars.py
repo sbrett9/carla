@@ -34,6 +34,13 @@ its frame did not carry them; those sidecars are counted, not faulted, as the ru
 Either on a record outside the picture, a `pose_source` on a record naming no SUMO vehicle, and a word
 outside the recorder's are defects.
 
+Every sidecar of a camera whose captures carry its exposure must carry it too, and the same one: the
+platform event's `<_carla_exposure>` -- `post_process_profile`, `method`, `iso`, `shutter_s`, `fstop`,
+`compensation_ev`, and `ev100` under manual alone. A sidecar of such a camera without it, an element
+missing a field or holding another method, an `ev100` under histogram or none under manual, and a
+camera carrying two exposures are defects. A camera that carries it on none of its captures, one of a
+server built before the camera published its exposure, is not.
+
 Any of those is a defect and the exit status is 1. A capture of traffic-manager traffic carries no
 SUMO id by design: pass `--traffic-manager` and only the ground band, the uid and the in-picture
 checks apply.
@@ -96,6 +103,8 @@ def main() -> int:
         return 1
     logging.info("every vehicle record stands on the ground, says whether it is in the picture, carries "
                  "its box, lights and pose source where it is"
+                 + (", every capture of a camera with an exposure carries it"
+                    if result.cameras_with_exposure else "")
                  + (" and names one SUMO vehicle under one uid" if not args.traffic_manager else "")
                  + (", and carries its supervision" if result.had_plan else ""))
     return 0

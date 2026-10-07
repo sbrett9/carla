@@ -54,8 +54,9 @@ namespace CarlaNet.CoSim;
 /// found wrong with the seam rather than the scenario (<see cref="SupervisionBinder.Defects"/>) -- in its
 /// own words, written as the binder next opens or closes an interval, at the next frame, or at the
 /// close, whichever comes first.</description></item>
-/// <item><term><c>sensor_placed</c></term><description>A camera the caller placed and named
-/// (<see cref="PlaceSensor"/>).</description></item>
+/// <item><term><c>sensor_placed</c></term><description>A camera the caller placed and named, with the
+/// exposure it was given where it carries one: its post-process profile, method, ISO, shutter, aperture,
+/// compensation and EV100 (<see cref="PlaceSensor(string, uint, CameraExposure)"/>).</description></item>
 /// <item><term><c>render_admitted</c>, <c>render_released</c></term><description>A vehicle taking up a
 /// place in the render set and giving it up (doc 04 C2 §4.1): admitted at the pass that admitted it, with
 /// why -- <c>rendering_began</c>, <c>inserted</c> or <c>entered_limit</c> -- and the frame and body that
@@ -319,7 +320,20 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     /// </summary>
     /// <param name="sensorId">The camera's name.</param>
     /// <param name="cameraActorId">The camera's actor id.</param>
-    public void PlaceSensor(string sensorId, uint cameraActorId)
+    public void PlaceSensor(string sensorId, uint cameraActorId) => PlaceSensor(sensorId, cameraActorId, null);
+
+    /// <summary>
+    /// Record a camera the caller has placed: its name, which its captures and its platform track carry,
+    /// its actor, and the exposure it was given -- the post-process profile it names, the method, ISO,
+    /// shutter, aperture and compensation its attributes set over it, and the EV100 they make under
+    /// manual -- in <c>exposure</c>, under the names its captures' <c>&lt;_carla_exposure&gt;</c> carries,
+    /// read from the camera's attributes (<see cref="CameraExposure.Of"/>). A camera that carries none has
+    /// no <c>exposure</c>.
+    /// </summary>
+    /// <param name="sensorId">The camera's name.</param>
+    /// <param name="cameraActorId">The camera's actor id.</param>
+    /// <param name="exposure">The exposure the camera was given, or null where it carries none.</param>
+    public void PlaceSensor(string sensorId, uint cameraActorId, CameraExposure? exposure)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sensorId);
         if (_manifestClosed)
@@ -332,6 +346,12 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             json.WriteString("sensor_id", sensorId);
             json.WriteNumber("camera_actor_id", cameraActorId);
             WriteNumberOrNull(json, "after_frame", _lastFrame?.Frame);
+            if (exposure is not null)
+            {
+                json.WriteStartObject("exposure");
+                exposure.WriteJsonProperties(json);
+                json.WriteEndObject();
+            }
         }));
     }
 

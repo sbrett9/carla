@@ -22,10 +22,15 @@ simulated by SUMO and is not in CARLA or the truth.
 The session takes its render region in SUMO's frame (y north); `CaptureSession` negates y once, at
 the call.
 
-A key the schema does not name is refused, with the nearest names it does (check 1). Two keys get a
-refusal of their own because a generic one would not help: a numeric exposure, which no camera
-blueprint publishes (check 16, naming `post_process_profile`, the field that does exist), and a
-`world_build` block, because a capture run binds a world and never builds one (check 38).
+A key the schema does not name is refused, with the nearest names it does (check 1); a channel key
+that is the camera blueprint's own name for part of the exposure (`iso`, `shutter_speed`, ...) is
+refused naming the channel field that sets it, in the run's units. A `world_build` block gets a refusal
+of its own, because a capture run binds a world and never builds one (check 38).
+
+**A channel's exposure is five fields** (`ChannelExposure`): the method, ISO, shutter, aperture and
+compensation, each defaulting to the `Default` profile's value, every one sent to the camera so the run
+states every capture's exposure. Check 16 refuses a value the camera cannot take as stated and warns of
+`histogram`; it runs offline, in `RunConfigurationValidator`, on the resolved channel.
 """
 from __future__ import annotations
 
@@ -39,6 +44,8 @@ from typing import Any, ClassVar
 
 from carlacontrol.CameraName import CameraName
 from carlacontrol.ChannelDescription import ChannelDescription
+from carlacontrol.ChannelExposure import METHODS as EXPOSURE_METHODS
+from carlacontrol.ChannelExposure import ChannelExposure
 from carlacontrol.RunConfigurationFindings import (
     RunConfigurationFindings,
     RunConfigurationRefusedError,
@@ -91,8 +98,9 @@ ILLUMINATION_POLICIES = ("freeze_at_window_start", "advance", "freeze_at", "igno
 # The post-process profiles the content tree ships (Content/Carla/Config/PostProcess/*.json).
 POST_PROCESS_PROFILES = ("Default", "GoPro", "Town10HD_Opt", "Town_C")
 
-# Keys that ask for a numeric exposure, which no camera blueprint publishes (12 §1.3).
-_EXPOSURE_KEYS = frozenset({"exposure", "ev", "exposure_compensation", "exposure_value"})
+# The camera blueprint's own names for the exposure (upstream CARLA's), each with the channel field that
+# sets it: a channel names the field, in the run's units, never the attribute.
+_BLUEPRINT_EXPOSURE_NAMES = {attribute: name for name, attribute in ChannelExposure.ATTRIBUTES.items()}
 _WORLD_BUILD_KEY = "world_build"
 
 _POSITIVE = {"type": "number", "exclusiveMinimum": 0}
@@ -457,9 +465,26 @@ _CHANNEL_HELP = {
     "stare_z_m": "Stare pose: z metres.",
     "stare_pitch_deg": "Stare pose: pitch, degrees; negative looks down.",
     "stare_yaw_deg": "Stare pose: yaw, degrees; 0 faces east, -90 north.",
-    "post_process_profile": "The post-process profile the camera spawns with, which sets its "
-                            "exposure: Default, GoPro, Town10HD_Opt or Town_C. Named with the "
-                            "file's own case, so it resolves on a case-sensitive file system.",
+    "post_process_profile": "The post-process profile the camera spawns with: Default, GoPro, "
+                            "Town10HD_Opt or Town_C, named with the file's own case so it resolves "
+                            "on a case-sensitive file system. It sets the picture -- tone curve, "
+                            "bloom, lens flare, vignette, motion blur -- and the exposure fields set "
+                            "the exposure over it, whichever profile it is.",
+    "exposure_method": "How the camera's exposure is set, over its profile: manual, fixed by "
+                       "exposure_iso, exposure_shutter_s and exposure_fstop; or histogram, metered "
+                       "by the engine from each frame, so the exposure follows what is in the "
+                       "picture. histogram warns (check 16): it suits a live exercise's operator "
+                       "picture, not captures meant to be compared (08 D8.26).",
+    "exposure_iso": "The camera's sensitivity, ISO, at least 1. Under manual, doubling it brightens "
+                    "the picture by one stop.",
+    "exposure_shutter_s": "The shutter, seconds, from 1/8000 s to 100 s: 0.003125 is 1/320 s. Sent "
+                          "to the camera as its shutter_speed, which is per second. Under manual, "
+                          "doubling it brightens the picture by one stop.",
+    "exposure_fstop": "The aperture, as an f-number from 1 to 32: 4.0 is f/4. Under manual, each "
+                      "doubling darkens the picture by two stops; it also sets the depth of field, "
+                      "as on a lens.",
+    "exposure_compensation_ev": "Exposure compensation, EV, from -15 to +15, added under either "
+                                "method: +1 doubles the picture's brightness.",
 }
 
 # The characters a ChannelDescription text field may hold, where the schema can state them: a
@@ -472,6 +497,14 @@ _CHANNEL_PATTERNS = {"sensor_id": CameraName.PATTERN}
 _CHANNEL_CAPTURE_FIELDS = (
     RunField("post_process_profile", {"type": "string", "enum": list(POST_PROCESS_PROFILES)},
              "Default", SESSION_FIXED, help=_CHANNEL_HELP["post_process_profile"]),
+    # The exposure, over the profile; each default is the Default profile's (ChannelExposure).
+    RunField("exposure_method", {"type": "string", "enum": list(EXPOSURE_METHODS)},
+             ChannelExposure.default_of("exposure_method"), SESSION_FIXED,
+             help=_CHANNEL_HELP["exposure_method"]),
+    *(RunField(name, _NUMBER, ChannelExposure.default_of(name), SESSION_FIXED,
+               help=_CHANNEL_HELP[name])
+      for name in ("exposure_iso", "exposure_shutter_s", "exposure_fstop",
+                   "exposure_compensation_ev")),
 )
 
 
@@ -554,11 +587,12 @@ class RunConfiguration:
                             "Build the world with run_SCTMV.py --build and name the package it "
                             "writes (12 §3.10.4)")
             return
-        if leaf in _EXPOSURE_KEYS:
-            findings.refuse(16, path, "a numeric camera exposure is not settable on this build: "
-                            "sensor.camera.rgb declares no exposure attribute "
-                            "(ActorBlueprintFunctionLibrary.cpp:313-410). Exposure is chosen per "
-                            "channel by 'post_process_profile': " + ", ".join(POST_PROCESS_PROFILES))
+        if leaf in _BLUEPRINT_EXPOSURE_NAMES:
+            field = _BLUEPRINT_EXPOSURE_NAMES[leaf]
+            findings.refuse(1, path, f"{source}: '{leaf}' is the camera blueprint's name for part of "
+                            f"the exposure; a channel sets it with '{field}'"
+                            + (", in seconds, where the camera's shutter_speed is per second"
+                               if field == "exposure_shutter_s" else ""))
             return
         near = difflib.get_close_matches(path, cls.known_paths(), n=3, cutoff=0.6)
         hint = f"; did you mean {' or '.join(repr(n) for n in near)}?" if near else ""
@@ -595,7 +629,7 @@ class RunConfiguration:
                 path = f"capture.channels[{index}].{key}"
                 if key in channel_fields:
                     cls._check_channel_field(path, key, value, findings, source)
-                elif key in _EXPOSURE_KEYS:
+                elif key in _BLUEPRINT_EXPOSURE_NAMES:
                     cls._refuse_unknown(path, findings, source)
                 else:
                     near = difflib.get_close_matches(key, list(channel_fields), n=3, cutoff=0.6)

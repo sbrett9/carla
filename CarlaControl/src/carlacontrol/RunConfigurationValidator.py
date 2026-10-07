@@ -16,6 +16,8 @@ by construction, and which have nothing in the tree to compare.
   could not run to the picture's ceiling -- a prewarm too short for the ceiling's frames at the
   capture rate and the ten-tick span, or a ceiling too small to hold one comparison -- it is refused
   here (check 51) rather than there (check 50).
+  Every channel's exposure has to be one its camera takes as stated, and `histogram` warns
+  (check 16, `ChannelExposure`).
   The optional draw distance, where one is set, has to reach the point every channel looks at
   (check 52), and an optional render-set limit has to be one the session can draw (check 53). A
   scenario whose compile skipped its SUMO-only run is refused unless the run accepts that (check 54),
@@ -48,6 +50,7 @@ from CarlaNet.CoSim import CoSimClock, CoSimSessionRefusedException, Illuminatio
 
 from carlacontrol.CameraName import CameraName
 from carlacontrol.ChannelDescription import ChannelDescription
+from carlacontrol.ChannelExposure import HISTOGRAM, ChannelExposure
 from carlacontrol.EffectiveRunConfiguration import (
     EffectiveRunConfiguration,
     WindowResolutionError,
@@ -71,7 +74,8 @@ PNG_BYTES_PER_PIXEL = MEASURED_PNG_BYTES / MEASURED_PNG_PIXELS
 
 RGB_BLUEPRINT = "sensor.camera.rgb"
 DEPTH_BLUEPRINT = "sensor.camera.depth"
-RGB_ATTRIBUTES = ("image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile")
+RGB_ATTRIBUTES = ("image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile",
+                  *ChannelExposure.ATTRIBUTES.values())
 DEPTH_ATTRIBUTES = ("image_size_x", "image_size_y", "fov", "sensor_tick", "max_range")
 
 # Fields a more specific check refuses when no layer supplies them.
@@ -102,6 +106,7 @@ class RunConfigurationValidator:
         window_ok = self._window(effective, findings)
         self._clock(effective, findings)
         self._channels(effective, findings)
+        self._exposure(effective, findings)
         self._draw_distance(effective, findings)
         self._render_set(effective, findings)
         if window_ok:
@@ -352,6 +357,28 @@ class RunConfigurationValidator:
                     findings.refuse(11, subject, f"channels {first} and {index} both name {named}")
                 else:
                     seen[sensor_id.upper()] = (index, sensor_id)
+
+    # -- check 16 ---------------------------------------------------------------------------------
+    @staticmethod
+    def _exposure(effective: EffectiveRunConfiguration,
+                  findings: RunConfigurationFindings) -> None:
+        """Refuse an exposure value a channel's camera cannot take as stated, and warn of histogram:
+        every value is sent to the camera and stated on every capture, so one the camera would read
+        otherwise would make the record say what the picture was not exposed at."""
+        for index in range(effective.channel_count):
+            subject = f"capture.channels[{index}]"
+            exposure = ChannelExposure.from_channel(effective.channel_values(index))
+            problems = exposure.problems()
+            for name, why in problems:
+                findings.refuse(16, f"{subject}.{name}", why)
+            if not problems and exposure.method == HISTOGRAM:
+                findings.warn(16, f"{subject}.exposure_method", "exposure_method is 'histogram': the "
+                              "engine meters each frame and sets its own exposure, so the exposure "
+                              "follows what is in the picture -- a bright vehicle entering the frame "
+                              "darkens the rest -- and two windows under different suns can come out "
+                              "alike. It is permitted for a live exercise's operator picture and not "
+                              "for captures meant to be compared (08 D8.26); each capture records the "
+                              "method and no EV100")
 
     @staticmethod
     def _traffic_prewarm(effective: EffectiveRunConfiguration, subject: str,

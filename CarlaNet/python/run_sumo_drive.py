@@ -938,7 +938,8 @@ def free_view_settings(args: argparse.Namespace, centre: tuple[float, float], fe
         # The rig takes its start altitude in feet, as run_SCTMV.py does.
         z=args.camera_z * feet_per_metre,
         width=args.width, height=args.height, fov=args.fov,
-        # No camera blueprint here publishes an exposure compensation to set.
+        # The camera keeps its blueprint's exposure, the Default profile's: manual, ISO 100, 1/320 s,
+        # f/4 and no compensation. Every capture records it from the camera's attributes.
         ev=None,
         # The run configuration's one depth range, so occlusion is measured as far as a capture
         # run's is rather than to the depth camera's stock 1000 m.
@@ -1226,7 +1227,8 @@ def main() -> int:
             camera = spawn_camera(world, args, centre)
             depth = spawn_depth_camera(world, args, camera, depth_range_m())
             if session.RunManifest is not None:
-                session.RunManifest.PlaceSensor(world.camera_name(camera), camera.id)
+                session.RunManifest.PlaceSensor(world.camera_name(camera), camera.id,
+                                                world.camera_exposure(camera))
             if args.render_set == "cameras":
                 # From the next step a render set that follows the cameras follows this one's view.
                 session.AddCamera(camera.id)

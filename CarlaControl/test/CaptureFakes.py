@@ -62,7 +62,10 @@ if str(_SRC) not in sys.path:
 from carlacontrol.CameraName import CameraName  # noqa: E402  (needs the path above)
 
 RGB_ATTRIBUTES = {"image_size_x", "image_size_y", "fov", "sensor_tick", "post_process_profile",
-                  "role_name"}
+                  "role_name", "exposure_mode", "iso", "shutter_speed", "fstop",
+                  "exposure_compensation"}
+EXPOSURE_ATTRIBUTES = ("post_process_profile", "exposure_mode", "iso", "shutter_speed", "fstop",
+                       "exposure_compensation")
 DEPTH_ATTRIBUTES = {"image_size_x", "image_size_y", "fov", "sensor_tick", "max_range", "role_name"}
 
 
@@ -620,6 +623,22 @@ class _RenderedIds:
     Count = 7
 
 
+class FakeCameraExposure:
+    """A CarlaNet.Recording.CameraExposure: the exposure a camera's attributes give it, as its JSON."""
+
+    def __init__(self, attributes: dict[str, str]) -> None:
+        method = "histogram" if attributes["exposure_mode"].lower() == "histogram" else "manual"
+        iso, speed, fstop = (float(attributes[key]) for key in ("iso", "shutter_speed", "fstop"))
+        self.record = {"post_process_profile": attributes["post_process_profile"], "method": method,
+                       "iso": iso, "shutter_s": 1.0 / speed, "fstop": fstop,
+                       "compensation_ev": float(attributes["exposure_compensation"]),
+                       "ev100": (math.log2(fstop * fstop * speed * 100.0 / max(1.0, iso))
+                                 if method == "manual" else None)}
+
+    def ToJson(self) -> str:  # noqa: N802 -- the .NET member name
+        return json.dumps(self.record)
+
+
 class FakeRunManifest:
     """A RunManifestWriter: the rows a session appends to its manifest, one JSON object per line, opened
     with the header it was handed and closed by its terminal row -- by its caller, or by the session's end."""
@@ -637,9 +656,13 @@ class FakeRunManifest:
             file.write(json.dumps(row) + "\n")
         self.Rows += 1
 
-    def PlaceSensor(self, sensor_id: str, camera: int) -> None:  # noqa: N802 -- the .NET member name
+    def PlaceSensor(self, sensor_id: str, camera: int,  # noqa: N802 -- the .NET member name
+                    exposure: FakeCameraExposure | None = None) -> None:
         if not self.Closed:
-            self._write({"row": "sensor_placed", "sensor_id": sensor_id, "camera_actor_id": int(camera)})
+            row = {"row": "sensor_placed", "sensor_id": sensor_id, "camera_actor_id": int(camera)}
+            if exposure is not None:
+                row["exposure"] = json.loads(exposure.ToJson())
+            self._write(row)
 
     def Close(self, reason) -> None:  # noqa: N802 -- the .NET member name
         self.reasons.append(reason)
@@ -911,6 +934,12 @@ class FakeWorld:
         if held is not None and CameraName.held_problem(held, camera.id) is None:
             return held
         return f"CARLA-SENSOR-{camera.id}"
+
+    def camera_exposure(self, camera) -> FakeCameraExposure | None:
+        # As the shim reads it: from the camera's attributes, where it carries all six.
+        if not all(key in camera.attributes for key in EXPOSURE_ATTRIBUTES):
+            return None
+        return FakeCameraExposure(camera.attributes)
 
     def start_sumo_drive(self, scenario, world_package, catalogue, **kwargs):
         self.server.events.add("start_sumo_drive", scenario, world_package, catalogue, kwargs)

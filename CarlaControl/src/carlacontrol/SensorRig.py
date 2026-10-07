@@ -74,8 +74,17 @@ class SensorRig:
         bp.set_attribute("image_size_y", str(args.height))
         if bp.has_attribute("fov"):
             bp.set_attribute("fov", str(args.fov))
-        if args.ev is not None and bp.has_attribute("exposure_compensation"):
-            bp.set_attribute("exposure_compensation", str(args.ev))
+        # --ev is the camera's exposure compensation, EV, added to the exposure it otherwise has: the
+        # blueprint's own, the Default profile's manual ISO 100, 1/320 s and f/4. Every capture
+        # records it, in <_carla_exposure>. A server built before the camera published its exposure
+        # has no such attribute; the rig then says so rather than leave a value unapplied in silence.
+        if args.ev is not None:
+            if bp.has_attribute("exposure_compensation"):
+                bp.set_attribute("exposure_compensation", str(float(args.ev)))
+            elif float(args.ev) != 0.0:
+                self.logger.warning(
+                    "server's camera has no exposure_compensation attribute, so --ev %g is not "
+                    "applied (rebuild the server to apply it)", float(args.ev))
 
         # Configure depth camera blueprint
         dbp = world.get_blueprint_library().find("sensor.camera.depth")

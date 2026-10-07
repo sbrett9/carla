@@ -121,6 +121,27 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_Exposure_The_Camera_Was_Given_Rides_On_Its_Capture_Beside_The_Intrinsics()
+    {
+        // The shim reads it from the camera's attributes (CameraExposure.Of) and hands it over on the
+        // platform options; the recorder writes it on every capture's platform event.
+        await ObserveTheCameraMovedAfter(RenderedFrame, holdRenderedFrame: true);
+        var given = new CameraExposure("Default", CameraExposure.Manual, 400.0, 320.0, 4.0, 0.5);
+
+        (_, XElement events) = await RecordOneImage(header: Rendered, _platform with { Exposure = given });
+
+        XElement detail = events.Elements("event").Single(e => (string?)e.Attribute("uid") == _platform.Uid)
+            .Element("detail")!;
+        XElement exposure = detail.Element(CameraExposure.ElementName)!;
+        Assert.NotNull(detail.Element("_carla_intrinsics"));
+        Assert.Equal("400", (string?)exposure.Attribute("iso"));
+        Assert.Equal("0.003125", (string?)exposure.Attribute("shutter_s"));
+        Assert.Equal("0.5", (string?)exposure.Attribute("compensation_ev"));
+        // Four times the ISO of the Default profile's 12.322: two stops brighter, two fewer EV100.
+        Assert.Equal("10.322", (string?)exposure.Attribute("ev100"));
+    }
+
+    [Fact]
     public async Task A_Header_That_Agrees_With_The_Snapshot_Of_The_Image_s_Frame_Is_Not_Counted()
     {
         await ObserveTheCameraMovedAfter(RenderedFrame, holdRenderedFrame: true);
@@ -237,10 +258,11 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
 
     /// Records the camera, streams it the image of frame 100 with <paramref name="header"/> in its
     /// sensor header, and returns the recorder, flushed, with the capture's sidecar.
-    private async Task<(FrameRecorder Recorder, XElement Events)> RecordOneImage(Transform header)
+    private async Task<(FrameRecorder Recorder, XElement Events)> RecordOneImage(
+        Transform header, SensorPlatformOptions? platform = null)
     {
-        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, platform: _platform,
-                                         cameraActorId: Camera);
+        var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0,
+                                         platform: platform ?? _platform, cameraActorId: Camera);
         try
         {
             await _streams.SendAsync(CameraStream, RenderedFrame, Seconds(RenderedFrame), header, Image());
