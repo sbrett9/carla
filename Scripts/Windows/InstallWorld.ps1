@@ -15,7 +15,9 @@
     The .zip written by PackageWorld.ps1.
 
 .PARAMETER Into
-    Root of the CARLA package to install into: the directory holding CarlaUnreal\ and VERSION.
+    The CARLA package to install into: a cooked package's root (the directory holding CarlaUnreal\
+    and VERSION), or a CARLA distribution's root (the one holding CarlaServer\ and VERSION). Run from
+    a distribution's world-tools folder, it defaults to that distribution.
 
 .PARAMETER Force
     Install even when the build check fails. For the case where you know two builds are compatible
@@ -24,13 +26,16 @@
 
 .EXAMPLE
     .\InstallWorld.ps1 -Package Build\WorldPackages\Arapahoe_I25.zip -Into D:\Carla-0.10.0-Win64
+
+.EXAMPLE
+    .\world-tools\InstallWorld.ps1 -Package D:\Downloads\Arapahoe_I25.zip
+    Install into the distribution this script came with.
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(Mandatory = $true)]
     [string]$Package,
 
-    [Parameter(Mandatory = $true)]
     [string]$Into,
 
     [switch]$Force,
@@ -53,21 +58,44 @@ InstallWorld.ps1 - install a packaged world into an existing CARLA package.
 USAGE:
   .\InstallWorld.ps1 -Package <world.zip> -Into <package directory> [-Force]
 
-The package directory is the one holding CarlaUnreal\ and VERSION.
+The package directory is a cooked package's root (holding CarlaUnreal\ and VERSION) or a CARLA
+distribution's root (holding CarlaServer\ and VERSION). Run from a distribution's world-tools
+folder, -Into defaults to that distribution.
 -Force installs despite a build mismatch; the world may then fail to load.
 '@ | Write-Host
     exit 0
 }
 
 if (-not (Test-Path $Package)) { Write-Fail "No such package: $Package"; exit 1 }
-if (-not (Test-Path $Into))    { Write-Fail "No such directory: $Into";   exit 1 }
 
-$PluginsDir = Join-Path $Into 'CarlaUnreal\Plugins\GeneratedWorlds'
+# Where the server's CarlaUnreal\ is. A cooked package holds it at its root beside VERSION; a
+# distribution holds it under CarlaServer\, with VERSION at the distribution's root. Run from a
+# distribution's world-tools folder with no -Into, the distribution it came with is the one.
+if (-not $Into) {
+    $Enclosing = Join-Path $PSScriptRoot '..'
+    if (-not (Test-Path (Join-Path $Enclosing 'CarlaServer\CarlaUnreal'))) {
+        Write-Fail "-Into is required: the CARLA package or distribution to install the world into."
+        exit 1
+    }
+    $Into = $Enclosing
+}
+if (-not (Test-Path $Into)) { Write-Fail "No such directory: $Into"; exit 1 }
+$Into = (Resolve-Path $Into).Path
 $VersionFile = Join-Path $Into 'VERSION'
+if (Test-Path (Join-Path $Into 'CarlaServer\CarlaUnreal')) {
+    $Into = Join-Path $Into 'CarlaServer'
+}
+$PluginsDir = Join-Path $Into 'CarlaUnreal\Plugins\GeneratedWorlds'
 if (-not (Test-Path (Join-Path $Into 'CarlaUnreal'))) {
     Write-Fail "$Into does not look like a CARLA package (no CarlaUnreal\ inside)."
     exit 1
 }
+if (-not (Test-Path $VersionFile)) {
+    # Named the distribution's CarlaServer\ itself: its VERSION is one folder up.
+    $VersionFile = Join-Path (Split-Path $Into -Parent) 'VERSION'
+}
+# A distribution starts its server with run-server.ps1, beside its VERSION.
+$RunServer = Join-Path (Split-Path $VersionFile -Parent) 'run-server.ps1'
 
 $Unpacked = Join-Path ([System.IO.Path]::GetTempPath()) "carla-install-$PID"
 if (Test-Path $Unpacked) { Remove-Item -Recurse -Force $Unpacked }
@@ -147,7 +175,11 @@ try {
     Write-Info "`nInstalled $($m.world)"
     Write-Info "  into  : $Target"
     Write-Info "`nLoad it with:"
-    Write-Info "  .\Scripts\Windows\RunCarlaServer.ps1 -Map $($m.mapPackage)"
+    if (Test-Path $RunServer) {
+        Write-Info "  $RunServer $($m.mapPackage)"
+    } else {
+        Write-Info "  .\Scripts\Windows\RunCarlaServer.ps1 -Map $($m.mapPackage)"
+    }
 }
 finally {
     if (Test-Path $Unpacked) { Remove-Item -Recurse -Force $Unpacked -ErrorAction SilentlyContinue }

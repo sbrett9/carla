@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
+import importlib
 import json
 import logging
 import socket
@@ -79,7 +79,6 @@ CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 SHIPPED_ROUTES = FIXTURES / f"{SCENARIO}.shipped.rou.xml"
 SHIPPED_LABELS = FIXTURES / f"{SCENARIO}.shipped.labels.json"
-SCRIPT = _REPO / "CarlaControl" / "scripts" / "sumo_cot_telemetry.py"
 UID_PREFIX = "SUMO-TRUTH"
 
 # A measured body standing in for any the catalogue has not measured, as the Bahonar generator's own
@@ -527,10 +526,8 @@ def test_a_legacy_labels_file_keeps_its_display_half_and_withholds_its_anomaly_h
 
 
 def _script():
-    spec = importlib.util.spec_from_file_location("sumo_cot_telemetry", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The command's module, `carla-cot-telemetry` (run from a checkout as sumo_cot_telemetry.py)."""
+    return importlib.import_module("carlacontrol.commands.cot_telemetry")
 
 
 def _arguments(config: Path, display_convention: Path | None = None,
@@ -850,7 +847,8 @@ def test_a_bridge_given_no_catalogue_reads_every_base_type_from_the_vehicle_clas
 
 
 def test_the_script_reads_kinds_from_the_catalogue_it_is_given_or_else_this_repository_s(tmp_path,
-                                                                                      caplog):
+                                                                                      caplog,
+                                                                                      monkeypatch):
     """A named catalogue, else the repository's, else none; one that does not read stops the run."""
     script = _script()
     with caplog.at_level(logging.INFO):
@@ -866,7 +864,7 @@ def test_the_script_reads_kinds_from_the_catalogue_it_is_given_or_else_this_repo
     with pytest.raises(ValueError, match="cannot be read"):
         script.vehicle_catalogue(argparse.Namespace(catalogue=tmp_path / "missing.json"))
 
-    script.DEFAULT_CATALOGUE = tmp_path / "no.catalogue.json"
+    monkeypatch.setattr(script, "DEFAULT_CATALOGUE", tmp_path / "no.catalogue.json")
     caplog.clear()
     with caplog.at_level(logging.INFO):
         assert script.vehicle_catalogue(argparse.Namespace(catalogue=None)) is None

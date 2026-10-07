@@ -4,6 +4,13 @@ This package provides advanced control systems, automation utilities, and
 high-level interfaces for working with the CARLA simulator through CarlaNet.
 """
 
+import os
+
+# pygame prints a banner on stdout when it is first imported, unless told not to, and several of the
+# modules imported below import it. A command's log is its only output, so the banner is turned off
+# here, before any of them: a `carla-*` command imports this package before its own module runs.
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 from carlacontrol.CaptureRunReport import CaptureRunReport
 from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
 from carlacontrol.ClockRatioMeter import ClockRatioMeter

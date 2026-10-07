@@ -20,6 +20,11 @@
 #
 # Paths are derived from this script's location (it lives at carla/Scripts/Linux/, so the CARLA
 # repository root is two directories up).
+#
+# Examples, from the repository root:
+#   ./Scripts/Linux/RunCapture.sh --run Import/Arapahoe_I25_SupervisionCheck.run.json --validate-only
+#   ./Scripts/Linux/RunCapture.sh --run Import/Arapahoe_I25_SupervisionCheck.run.json \
+#       --caller unattended --result out/arapahoe.result.json
 
 set -uo pipefail
 

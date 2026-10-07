@@ -14,6 +14,7 @@
 
 set -uo pipefail
 
+script_dir="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
 package=""
 into=""
 force=0
@@ -26,7 +27,9 @@ Install a packaged world into an existing CARLA package.
 
 Options:
   --package <path>   The .zip written by PackageWorld.sh (required).
-  --into <path>      Root of the CARLA package: the directory holding CarlaUnreal/ (required).
+  --into <path>      The CARLA package: a cooked package's root (the directory holding CarlaUnreal/),
+                     or a CARLA distribution's root (the one holding CarlaServer/ and VERSION). Run
+                     from a distribution's world-tools folder, it defaults to that distribution.
   --force            Install despite a build mismatch; the world may then fail to load.
   -h, --help         This text.
 EOF
@@ -46,17 +49,36 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$package" ] || { echo "ERROR: --package is required." >&2; usage; exit 1; }
-[ -n "$into" ]    || { echo "ERROR: --into is required." >&2; usage; exit 1; }
 [ -f "$package" ] || { echo "ERROR: no such package: $package" >&2; exit 1; }
-[ -d "$into" ]    || { echo "ERROR: no such directory: $into" >&2; exit 1; }
+
+# Where the server's CarlaUnreal/ is. A cooked package holds it at its root beside VERSION; a
+# distribution holds it under CarlaServer/, with VERSION at the distribution's root. Run from a
+# distribution's world-tools folder with no --into, the distribution it came with is the one.
+if [ -z "$into" ]; then
+    if [ ! -d "$script_dir/../CarlaServer/CarlaUnreal" ]; then
+        echo "ERROR: --into is required: the CARLA package or distribution to install the world into." >&2
+        usage
+        exit 1
+    fi
+    into="$script_dir/.."
+fi
+[ -d "$into" ] || { echo "ERROR: no such directory: $into" >&2; exit 1; }
+into="$(cd "$into" && pwd)"
+version_file="$into/VERSION"
+if [ -d "$into/CarlaServer/CarlaUnreal" ]; then
+    into="$into/CarlaServer"
+fi
 
 if [ ! -d "$into/CarlaUnreal" ]; then
     echo "ERROR: $into does not look like a CARLA package (no CarlaUnreal/ inside)." >&2
     exit 1
 fi
+# Named the distribution's CarlaServer/ itself: its VERSION is one folder up.
+[ -f "$version_file" ] || version_file="$(dirname "$into")/VERSION"
+# A distribution starts its server with run-server.sh, beside its VERSION.
+run_server="$(dirname "$version_file")/run-server.sh"
 
 plugins_dir="$into/CarlaUnreal/Plugins/GeneratedWorlds"
-version_file="$into/VERSION"
 interface_ini="$into/CarlaUnreal/Config/DefaultWorldInterface.ini"
 
 unpacked="$(mktemp -d)"
@@ -135,4 +157,8 @@ echo "Installed $world"
 echo "  into  : $target"
 echo ""
 echo "Load it with:"
-echo "  ./Scripts/Linux/RunCarlaServer.sh --map $map_package"
+if [ -f "$run_server" ]; then
+    echo "  $run_server $map_package"
+else
+    echo "  ./Scripts/Linux/RunCarlaServer.sh --map $map_package"
+fi

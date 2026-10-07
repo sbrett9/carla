@@ -18,16 +18,27 @@ from carlacontrol.NetconvertTypeMap import (
 )
 from carlacontrol.OsmClipper import OsmClipper
 from carlacontrol.SumoInstallation import SumoInstallation
+from carlacontrol.ToolLayout import ToolLayout
 
 
 class WorldBuilder:
-    def __init__(self, repo_root: str, netconvert_path: str, proj_data_path: str):
-        self.repo_root = repo_root
+    def __init__(self, layout: ToolLayout | str | Path, netconvert_path: str,
+                 proj_data_path: str | None):
+        """
+        Args:
+            layout: where intermediate files go (`ToolLayout`), or a source checkout's root.
+            netconvert_path: the netconvert that converts the extract.
+            proj_data_path: PROJ's data folder for netconvert, or None to leave PROJ to find its own.
+        """
+        self.layout = layout if isinstance(layout, ToolLayout) else ToolLayout(layout)
         self.netconvert_path = netconvert_path
         self.proj_data_path = proj_data_path
         # The world's own edge types, when it declares any (`load_type_map`); passed to netconvert
         # with SUMO's map first by `make_osm_conversion_options`.
         self.type_map: NetconvertTypeMap | None = None
+        # The world package's manifest once one is written (`--emit-world-package`); None until then,
+        # and after a write that failed, which the build reports and does not fail on.
+        self.world_package_path: str | None = None
         self.logger = logging.getLogger(__name__)
 
         self.logger.info(f"world builder initialized: netconvert={netconvert_path}")
@@ -93,6 +104,9 @@ class WorldBuilder:
 
     def build_world(self, client, args) -> bool:
         self.logger.info("== Digital-twin build (headless, no editor) ==")
+        if not args.osm:
+            self.logger.error("no --osm given: name the OpenStreetMap extract to build the world from")
+            return False
         self.logger.info(f"  osm        : {args.osm}")
         if not os.path.exists(args.osm):
             self.logger.error(f"OSM not found: {args.osm}")
@@ -140,8 +154,7 @@ class WorldBuilder:
                 self.logger.info("  clip       : skipped (no <bounds> in the OSM)")
             else:
                 clipped = os.path.join(
-                    self.repo_root,
-                    "Build",
+                    self.layout.build_directory,
                     "sumo-smoketest",
                     os.path.splitext(os.path.basename(args.osm))[0] + "_clipped.osm",
                 )
@@ -158,8 +171,7 @@ class WorldBuilder:
             self.logger.info("  clip       : OFF (--no-clip-bounds)")
 
         save_path = args.save or os.path.join(
-            self.repo_root,
-            "Build",
+            self.layout.build_directory,
             "sumo-smoketest",
             os.path.splitext(os.path.basename(args.osm))[0] + "_elevated.xodr",
         )
@@ -293,6 +305,7 @@ class WorldBuilder:
         except Exception as ex:
             self.logger.warning(f"world package not written: {ex}")
             return
+        self.world_package_path = manifest_path
         self.logger.info(f"        wrote world package -> {manifest_path}")
         self._publish_reference_set(manifest_path, areas)
 
