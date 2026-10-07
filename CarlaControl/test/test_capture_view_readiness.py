@@ -12,6 +12,12 @@ channel and the witness, and the window's first frame is not moved. The ceiling 
 `capture.picture_tolerance_levels`, are the run configuration's, so a test that moves either does so
 with an override and not a constant.
 
+The picture's wait is off by default, by the owner's ruling of 2026-10-06, and runs only under
+`capture.picture_settled_wait` true, which every test of the picture here sets. Off, a view is ready
+on the step its tiles are in, no camera is listened to and no frame compared, the prewarm must hold
+the tiles' own lead, `capture.tiles_hold_s` (10 s), and the record says the wait was not run; the
+tests of that default are together near the end.
+
 The stand-in server numbers its frames from 1000 and the camera is spawned on that frame; with a
 one-second SUMO step of twenty 0.05 s ticks and a 2 Hz capture, the camera renders every tenth frame,
 the prewarm's 300 steps end on frame 7000, and the window's first frame is 7001. The stand-in's
@@ -65,6 +71,7 @@ from carlacontrol.ViewReadiness import (  # noqa: E402
     VehicleBox,
     blocks_covered,
     grey_small,
+    hold_lead_s,
     rotation_basis,
     tiles_in,
     vehicle_footprint,
@@ -83,6 +90,13 @@ WIDTH, HEIGHT = 320, 160
 BLOCK = 80
 A_NADIR = {"sensor_id": "NADIR-1", "stare_look_at_x_m": 0.0, "stare_look_at_y_m": 0.0,
            "stare_altitude_m": 160.0}
+PICTURE_WAIT_ON = "capture.picture_settled_wait=true"
+# What the run result's readiness block holds only where the picture is waited on.
+PICTURE_FIGURES = ("picture_span_ticks", "picture_ceiling_frames", "picture_tolerance_levels",
+                   "picture_block_px", "picture_min_judged_share", "vehicle_margin_px", "vehicles")
+CHANNEL_PICTURE_FIGURES = ("picture", "last_comparison", "comparison_history", "comparisons",
+                           "locate_failures", "last_locate_failure", "frames_received",
+                           "frames_unreadable")
 
 
 @pytest.fixture
@@ -90,10 +104,14 @@ def layout(tmp_path: Path) -> Layout:
     return Layout(tmp_path)
 
 
-def capture(layout: Layout, server: FakeServer, channels=None, overrides=()):
+def capture(layout: Layout, server: FakeServer, channels=None, overrides=(), picture_wait=True):
+    """Run the fixture capture. Most tests here are of the picture's wait, so they turn it on with
+    the run field that does; `picture_wait=False` leaves the field at its default, off."""
     document = run_document()
     if channels is not None:
         document["capture"]["channels"] = channels
+    if picture_wait:
+        overrides = [PICTURE_WAIT_ON, *overrides]
     run_path = layout.root / "fixture.run.json"
     run_path.write_text(json.dumps(document), encoding="utf-8")
     site = SiteProfile.discover(layout.root, layout.write_profile(), environ={})
@@ -755,3 +773,195 @@ def test_the_monitor_shows_each_view_until_the_recorders_start():
                                           "recorder_dropped": 0, "illumination_unpaired": 0,
                                           "occlusion_measured": 3, "occlusion_unmatched": 0}])
     assert not any(row.startswith("view") for row in SessionMonitor.lines(recording))
+
+
+# -- the picture's wait is off by default ---------------------------------------------------------
+
+def test_by_default_a_view_is_ready_on_the_step_its_tiles_are_in_and_no_frame_is_compared(layout):
+    # A picture that changes on every frame and so never settles, and tiles in from frame 6980, the
+    # end of the 299th step, 5980 ticks and 29.9 s of the stand-in's wall clock into the wait: with
+    # the picture's wait off the view is ready there and the window opens on time. No camera is
+    # listened to, and the tiles are still asked about once after every step.
+    server = FakeServer()
+    server.tiles_at = in_from(6980)
+    server.picture_at = lambda _camera, frame: frame * 7 % 256
+    _, result = capture(layout, server, picture_wait=False)
+    assert result.outcome == "run_finished"
+    view = the_view(result)
+    assert (view["state"], view["picture_settled_wait"], view["ready_at_window_open"]) == \
+        ("ready", False, True)
+    assert view["tiles"] == {"in_at_frame": 6980, "ticks": 5980, "wall_s": pytest.approx(29.9)}
+    assert not set(CHANNEL_PICTURE_FIGURES) & set(view)
+    assert server.events.of("listen") == [] and server.events.of("stop_listening") == []
+    assert len(server.events.of("view_readiness")) == 300
+    assert server.events.of("world_tick") == []
+    [start] = server.events.of("start_recording")
+    assert start[5] == BEGIN_S and start[6] == LAST_PREWARM_FRAME
+
+
+def test_by_default_tiles_in_on_the_prewarm_s_last_step_are_in_time(layout):
+    # With the picture waited on, tiles in only on the prewarm's last frame leave no frame to
+    # compare and the run is refused; with it off, the view is ready on that step.
+    server = FakeServer()
+    server.tiles_at = in_from(LAST_PREWARM_FRAME)
+    _, result = capture(layout, server, picture_wait=False)
+    assert result.outcome == "run_finished"
+    assert the_view(result)["tiles"]["in_at_frame"] == LAST_PREWARM_FRAME
+
+
+def test_by_default_tiles_that_never_come_in_still_refuse_at_preroll(layout):
+    server = FakeServer()
+    server.tiles_at = lambda _camera, _frame: tiles(published=False)
+    _, result = capture(layout, server, picture_wait=False)
+    refused_by_check_50(server, result)
+    assert "not published for this view yet" in result.detail
+    assert the_view(result)["state"] == "waiting for tiles"
+
+
+def test_by_default_a_view_must_still_have_its_tiles_as_the_window_opens(layout):
+    # In from the start, then streaming again over the last two steps: ready, then waiting for its
+    # tiles again as the window opens.
+    server = FakeServer()
+    server.tiles_at = in_from(0, until=LAST_PREWARM_FRAME - TICKS_PER_STEP)
+    _, result = capture(layout, server, picture_wait=False)
+    refused_by_check_50(server, result)
+    view = the_view(result)
+    assert view["state"] == "waiting for tiles"
+    assert view["relapses"] == [{"frame": LAST_PREWARM_FRAME - TICKS_PER_STEP, "was": "ready",
+                                 "tiles": "62%"}]
+
+
+def test_by_default_the_result_says_the_picture_wait_was_not_run_and_holds_no_figure_of_it(layout):
+    # The tiles are in at the first ask, after the first step: frame 1020, 20 ticks and 0.1 s of
+    # the stand-in's wall clock into the wait.
+    server = FakeServer()
+    _, result = capture(layout, server, picture_wait=False)
+    readiness = result.produced["readiness"]
+    assert readiness["picture_settled_wait"] is False
+    assert readiness["picture"].startswith("not run")
+    assert "capture.picture_settled_wait" in readiness["picture"]
+    assert not set(PICTURE_FIGURES) & set(readiness)
+    assert (readiness["tiles_ceiling_s"], readiness["tiles_hold_s"], readiness["wait_began"]) == \
+        (90.0, 10.0, {"sim_time_s": FIRST_PREWARM_S, "ticks": 0})
+    assert the_view(result)["tiles"] == {"in_at_frame": 1020, "ticks": 20, "wall_s": 0.1}
+    text = RunCloseoutReport.render(result.produced["session"]["last_snapshot"] | {
+        "scenario": "s", "window_name": "w", "sim_time_s": None, "window": {},
+        "channels": [], "readiness": readiness}, [])
+    assert "view OVERWATCH-1: tiles in at frame 1020 after 20 ticks, 0.1 s; picture-settled wait " \
+           "off" in text
+    assert "picture settl" not in text
+
+
+def test_with_the_wait_on_the_result_and_the_echo_say_so_beside_its_figures(layout):
+    server = FakeServer()
+    _, result = capture(layout, server)
+    readiness = result.produced["readiness"]
+    assert readiness["picture_settled_wait"] is True
+    assert set(PICTURE_FIGURES) <= set(readiness) and "tiles_hold_s" not in readiness
+    assert "tiles_hold_s" not in result.launch_echo["readiness"]
+    view = the_view(result)
+    assert view["picture_settled_wait"] is True and set(CHANNEL_PICTURE_FIGURES) <= set(view)
+    assert result.launch_echo["readiness"]["picture_settled_wait"] is True
+    assert server.events.of("listen") != []
+
+
+def test_by_default_the_echo_says_the_picture_is_not_waited_on(layout):
+    server = FakeServer()
+    _, result = capture(layout, server, picture_wait=False)
+    readiness = result.launch_echo["readiness"]
+    assert (readiness["waits"], readiness["picture_settled_wait"]) == (True, False)
+    assert readiness["picture"].startswith("not waited on")
+    assert "capture.picture_settled_wait" in readiness["picture"]
+    assert not {"picture_ceiling_frames", "picture_ceiling_s", "picture_tolerance_levels",
+                "vehicles"} & set(readiness)
+    assert (readiness["tiles_ceiling_s"], readiness["tiles_hold_s"], readiness["from_s"],
+            readiness["until_s"]) == (90.0, 10.0, FIRST_PREWARM_S, BEGIN_S)
+    rendered = LaunchEcho(result.launch_echo).render()
+    assert ("readiness   every view's tiles (ceiling 90 s), from t=24,900 to t=25,200; not ready "
+            "by then refuses at pre-roll" in rendered)
+    assert ("picture not waited on: capture.picture_settled_wait is false; the tiles' lead is 10 s "
+            "(capture.tiles_hold_s)" in rendered)
+
+
+@pytest.mark.parametrize(("prewarm", "outcome"), [
+    ("0", "refused_offline"), ("9", "refused_offline"), ("10", "run_finished"),
+    ("31", "run_finished")])
+def test_by_default_the_prewarm_must_hold_the_tiles_lead(layout, prewarm, outcome):
+    # With the picture not waited on, the tiles have a lead of their own, capture.tiles_hold_s, 10 s
+    # by default, which a camera at a fixed pose holds from the prewarm's first step: its tiles are
+    # asked about after each of the ten steps. That lead is all check 51 asks of the prewarm, where
+    # with the picture waited on 31 s would be refused.
+    server = FakeServer()
+    _, result = capture(layout, server, overrides=[f"capture.prewarm_s={prewarm}"],
+                        picture_wait=False)
+    assert result.outcome == outcome
+    if outcome == "refused_offline":
+        [refusal] = result.refusals
+        assert (refusal["check"], refusal["subject"]) == (51, "capture.prewarm_s")
+        assert "capture.tiles_hold_s, 10 s" in refusal["message"]
+        assert "at least 10 s" in refusal["message"]
+        assert server.clients == []
+        return
+    assert the_view(result)["state"] == "ready"
+    assert len(server.events.of("view_readiness")) == int(prewarm)
+
+
+@pytest.mark.parametrize(("hold", "prewarm", "outcome", "needed"), [
+    ("2", "1", "refused_offline", "at least 2 s"), ("2", "2", "run_finished", None),
+    ("2.5", "2", "refused_offline", "at least 3 s"), ("2.5", "3", "run_finished", None)])
+def test_the_tiles_lead_is_the_run_configuration_s_in_whole_steps(layout, hold, prewarm, outcome,
+                                                                   needed):
+    # 2 s is two one-second steps; 2.5 s is rounded up to three.
+    server = FakeServer()
+    _, result = capture(layout, server, overrides=[f"capture.tiles_hold_s={hold}",
+                                                   f"capture.prewarm_s={prewarm}"],
+                        picture_wait=False)
+    assert result.outcome == outcome
+    if outcome == "refused_offline":
+        [refusal] = result.refusals
+        assert (refusal["check"], refusal["subject"]) == (51, "capture.prewarm_s")
+        assert needed in refusal["message"]
+        return
+    assert result.produced["readiness"]["tiles_hold_s"] == float(hold)
+
+
+def test_by_default_the_picture_s_ceiling_and_limit_are_not_read(layout):
+    # A ceiling of one frame at 2 Hz holds no comparison, which check 51 refuses where the picture
+    # is waited on; with it off neither field is read, and the run goes ahead.
+    server = FakeServer()
+    _, result = capture(layout, server, overrides=["capture.picture_ceiling_frames=1",
+                                                   "capture.picture_tolerance_levels=9"],
+                        picture_wait=False)
+    assert result.outcome == "run_finished"
+    assert not set(PICTURE_FIGURES) & set(result.produced["readiness"])
+
+
+def test_by_default_the_monitor_never_says_the_picture_is_settling():
+    waiting = {"sensor_id": "OVERWATCH-1", "state": "waiting for tiles",
+               "picture_settled_wait": False, "tiles": None, "tiles_now": "87%", "relapses": []}
+    ready = dict(waiting, state="ready", tiles={"in_at_frame": 1100, "ticks": 100, "wall_s": 0.5},
+                 tiles_now="in")
+    snapshot = {"scenario": "s", "window_name": "w", "sim_time_s": 24910.0,
+                "window": {"end_s": 27000.0}, "illumination": None, "pacing": None,
+                "admission": None, "render": None, "channels": [],
+                "readiness": {"channels": [waiting]}}
+    assert "view  OVERWATCH-1   waiting for tiles (87%)" in SessionMonitor.lines(snapshot)
+    held = dict(snapshot, readiness={"channels": [ready]})
+    assert "view  OVERWATCH-1   tiles in at frame 1100 after 100 ticks, 0.5 s; picture-settled " \
+           "wait off" in SessionMonitor.lines(held)
+    assert "picture settling" not in SessionMonitor.line(held)
+
+
+def test_the_hold_is_the_tiles_lead_by_default_and_the_picture_s_ceiling_with_it_on():
+    # By default the tiles' own lead, 10 s, in whole SUMO steps: ten one-second steps, or two
+    # hundred steps of a scenario that steps every tick; 2.5 s rounds up to three one-second steps,
+    # and a lead shorter than a step is one step. With the picture waited on, one step for the tiles
+    # to be first asked about and the ceiling's 60 frames at one every ten ticks and the ten-tick
+    # span, 610 ticks, in whole steps: 32 one-second steps, whatever the tiles' lead.
+    assert hold_lead_s(1.0, 0.05, 10, 60) == pytest.approx(10.0)
+    assert hold_lead_s(0.05, 0.05, 10, 60) == pytest.approx(10.0)
+    assert hold_lead_s(1.0, 0.05, 10, 60, tiles_hold_s=2.5) == pytest.approx(3.0)
+    assert hold_lead_s(1.0, 0.05, 10, 60, tiles_hold_s=0.2) == pytest.approx(1.0)
+    assert hold_lead_s(1.0, 0.05, 10, 60, picture_wait=True) == pytest.approx(32.0)
+    assert hold_lead_s(1.0, 0.05, 10, 60, picture_wait=True, tiles_hold_s=60.0) == \
+        pytest.approx(32.0)

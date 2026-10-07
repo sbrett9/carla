@@ -1,4 +1,5 @@
-"""Whether a capture camera's view is ready to be written: its photoreal tiles in, and its picture settled.
+"""Whether a capture camera's view is ready to be written: its photoreal tiles in, and its picture settled
+where the run asks for that.
 
 `03_CoSimulation_Runtime.md` §9.5.1. Cesium selects and refines tiles on the world tick, from the views
 registered for that tick, so this readiness progresses only while the world ticks. It has two
@@ -17,6 +18,22 @@ witnesses, because neither can see what the other sees:
   those. A whole-frame mean would hide one tile refining in a corner. Only frames rendered on or after
   the tick the tiles were answered in for count, and a view whose tiles stop being in starts its
   picture again.
+
+**The picture's wait is off by default.** By the owner's ruling of 2026-10-06 -- "It's in a state
+that is not something I'd like to include at publication" -- the picture is waited on only where the
+run configuration sets `capture.picture_settled_wait` true; its tool default is
+`PICTURE_SETTLED_WAIT`, false. Off, a view is ready on the step its tiles are in: the camera's frames
+are not listened to, none is compared, and the record says the wait was not run, names the field and
+holds no picture figure. The tiles then have a lead of their own, `capture.tiles_hold_s`
+(`TILES_HOLD_S`, 10 s): a stare that follows the traffic holds the pose the window opens on for that
+long before the window, in whole SUMO steps, and every camera's prewarm must hold it, so the tiles are
+asked about after every step of it. The picture's code below is kept as it is and runs, unchanged,
+only where the field is true, and then its ceiling sets the hold and the tiles' lead is not read. It is off for a fault left unfixed: the comparison places each frame's rendered
+vehicles from the client's snapshot of that frame, and the gate is asked once per SUMO step, after the
+step's last tick, so at Bahonar's 1 s step of twenty ticks the client no longer holds the older
+compared frame's snapshot by then and every comparison is `vehicles_unknown` -- 59 of 59 on the guard
+run of 2026-10-06, refused at pre-roll. Arapahoe steps every tick, so it never showed there. The owner
+had also found the wait too strict.
 
 **The span is counted in ticks; the ceiling in the camera's own frames.** The placements were
 measured with a camera rendering every tick, where ten frames and ten ticks are the same thing. A
@@ -57,9 +74,9 @@ without a code change and the lock records the value; the ten-tick span is not a
 
 **The gate never ticks the world.** `ViewReadinessGate.after_step` is called by the process that owns
 the clock after each of its steps, and asks the server once then; a wait that did not tick would have
-nothing new to ask about. The frames are watched by listening to each camera for as long as the gate
-holds it, reduced on the stream's thread as they arrive, and compared in frame order on the caller's,
-which is also where each frame's vehicles are placed.
+nothing new to ask about. Where the picture is waited on, the frames are watched by listening to
+each camera for as long as the gate holds it, reduced on the stream's thread as they arrive, and
+compared in frame order on the caller's, which is also where each frame's vehicles are placed.
 
 **What a readiness record describes.** A view as of the end of a step: the tiles are asked about once
 per SUMO step, so the ticks until they were in are counted to within one step, and the picture is
@@ -89,6 +106,13 @@ import numpy as np
 
 TILES_CEILING_S = 90.0
 PICTURE_SPAN_TICKS = 10
+# The tool default of capture.picture_settled_wait: whether the picture is waited on once the tiles
+# are in. Off, by the owner's ruling of 2026-10-06.
+PICTURE_SETTLED_WAIT = False
+# The tool default of capture.tiles_hold_s: with the picture's wait off, how long every camera holds
+# the pose the window opens on before it, its tiles asked about after each step of that hold. 10 s
+# covers every cold tile load measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s; one outlier took 712.
+TILES_HOLD_S = 10.0
 # The tool defaults of capture.picture_ceiling_frames and capture.picture_tolerance_levels: how many
 # of its own frames a camera has, from its tiles being in, to settle its picture (30 s at 2 Hz), and
 # the gray levels within which a frame counts as settled against its frame ten ticks earlier.
@@ -122,6 +146,9 @@ PER_CAPTURE = ("not recorded: the server answers for the view as of the last tic
                "needs the server to publish it per frame, on the observer snapshot, which it does "
                "not; an orbit's readiness as the window opens says nothing of the ground it sweeps "
                "afterwards")
+PICTURE_WAIT_OFF = ("not run: capture.picture_settled_wait is false, its default by the owner's ruling "
+                    "of 2026-10-06, so each view waited for its tiles only and no camera frame was "
+                    "compared; the wait is kept, and runs where capture.picture_settled_wait is true")
 VEHICLES = ("excluded: every 80-pixel block covered, in either frame of a comparison, by a rendered "
             "vehicle's box and its ground shadow, projected from the client's snapshot of that frame "
             f"with a {VEHICLE_MARGIN_PX}-pixel margin; a comparison left less than "
@@ -169,13 +196,17 @@ def describe_tiles(readiness: dict | None) -> str:
 
 def describe_view(view: dict) -> str:
     """One channel's wait for its view (`ChannelReadiness.to_dict`) in a line: where each
-    witness stands."""
+    witness stands, or where the tiles stand where the picture is not waited on."""
     tiles, picture = view.get("tiles"), view.get("picture")
     if view["state"] == NOT_STARTED:
         return "its wait has not begun"
     text = (f"tiles in at frame {tiles['in_at_frame']} after {tiles['ticks']} ticks, "
             f"{tiles['wall_s']:.1f} s" if tiles else f"waiting for tiles ({view['tiles_now']})")
-    if picture:
+    # A record written before capture.picture_settled_wait existed always waited on the picture.
+    if not view.get("picture_settled_wait", True):
+        if tiles:
+            text += "; picture-settled wait off"
+    elif picture:
         text += (f"; picture settled at frame {picture['settled_at_frame']}, its frame "
                  f"{picture['frames']} since its tiles ({picture['ticks_since_tiles']} ticks), worst "
                  f"judged block {picture['residual_levels']:.2f} grey levels with "
@@ -439,7 +470,7 @@ def _actor_key(actor_id: int):
 def ticks_to_ceiling(ticks_per_frame: int, ceiling_frames: int) -> int:
     """The ticks the picture's ceiling needs after the tiles are first answered for: the camera's
     `ceiling_frames` frames at its rate, whatever the phase of its period, and the
-    `PICTURE_SPAN_TICKS` a frame is compared across. 610 at the defaults, 30.5 s."""
+    `PICTURE_SPAN_TICKS` a frame is compared across. 610 at the default ceiling, 30.5 s."""
     return max(1, int(ticks_per_frame)) * int(ceiling_frames) + PICTURE_SPAN_TICKS
 
 
@@ -451,16 +482,26 @@ def first_judged_frame(ticks_per_frame: int) -> int:
     return 1 + math.ceil(PICTURE_SPAN_TICKS / period)
 
 
-def hold_lead_s(step_s: float, delta_s: float, ticks_per_frame: int, ceiling_frames: int) -> float:
+def hold_lead_s(step_s: float, delta_s: float, ticks_per_frame: int, ceiling_frames: int,
+                *, picture_wait: bool = PICTURE_SETTLED_WAIT,
+                tiles_hold_s: float = TILES_HOLD_S) -> float:
     """How long before the window opens a camera that follows the traffic stops and holds the pose
-    it opens on: one SUMO step for the tiles to be first asked about, and the ticks the picture's
-    ceiling needs (`ticks_to_ceiling`), in whole SUMO steps. 32 s at the defaults."""
-    lead = step_s + ticks_to_ceiling(ticks_per_frame, ceiling_frames) * delta_s
-    return math.ceil(lead / step_s - 1e-9) * step_s
+    it opens on, in whole SUMO steps and never less than one. With the picture's wait off, its
+    default, `tiles_hold_s` (capture.tiles_hold_s), so the tiles are asked about after every step
+    of it: 10 s at the default. With it on, one SUMO step for the tiles to be first asked about and
+    the ticks the picture's ceiling needs (`ticks_to_ceiling`), and `tiles_hold_s` is not read: 32 s
+    at a 1 s step and the default ceiling."""
+    if picture_wait:
+        lead = step_s + ticks_to_ceiling(ticks_per_frame, ceiling_frames) * delta_s
+    else:
+        lead = float(tiles_hold_s)
+    return max(1, math.ceil(lead / step_s - 1e-9)) * step_s
 
 
 def wait_begins_s(window_begin_s: float, first_rendered_s: float, step_s: float, delta_s: float,
-                  ticks_per_frame: int, ceiling_frames: int, follows_traffic: bool) -> float:
+                  ticks_per_frame: int, ceiling_frames: int, follows_traffic: bool,
+                  *, picture_wait: bool = PICTURE_SETTLED_WAIT,
+                  tiles_hold_s: float = TILES_HOLD_S) -> float:
     """Where every camera's wait for its view begins: the prewarm's first rendered instant, or --
     where a stare follows the rendered traffic -- where that stare stops to hold its pose,
     `hold_lead_s` before the window opens, and never before the prewarm's first step has rendered
@@ -468,7 +509,8 @@ def wait_begins_s(window_begin_s: float, first_rendered_s: float, step_s: float,
     while another is still moving."""
     if not follows_traffic:
         return first_rendered_s
-    return max(window_begin_s - hold_lead_s(step_s, delta_s, ticks_per_frame, ceiling_frames),
+    return max(window_begin_s - hold_lead_s(step_s, delta_s, ticks_per_frame, ceiling_frames,
+                                            picture_wait=picture_wait, tiles_hold_s=tiles_hold_s),
                first_rendered_s + step_s)
 
 
@@ -569,15 +611,18 @@ class _Frame:
 
 
 class ChannelReadiness:
-    """One capture camera's wait: its tiles, then its picture, then held until the window opens."""
+    """One capture camera's wait: its tiles, then -- where the picture is waited on -- its picture,
+    then held until the window opens."""
 
     def __init__(self, sensor_id: str, camera_id: int, ask: Callable[[], dict],
-                 frames: CameraFrames, clock: Callable[[], float], ticks_per_frame: int,
+                 frames: CameraFrames | None, clock: Callable[[], float], ticks_per_frame: int,
                  locate: Callable[[int], FrameVehicles | None] | None = None,
                  fov_deg: float = 90.0, ceiling_frames: int = PICTURE_CEILING_FRAMES,
-                 tolerance_levels: float = PICTURE_TOLERANCE_LEVELS) -> None:
+                 tolerance_levels: float = PICTURE_TOLERANCE_LEVELS,
+                 picture_wait: bool = PICTURE_SETTLED_WAIT) -> None:
         """
         Args:
+            frames: The camera's frames as it delivers them; read only where `picture_wait`.
             locate: Where a frame's rendered vehicles stood (`SessionFrameVehicles`); None where the
                 camera sees no vehicle a session renders, so nothing is excluded.
             fov_deg: The camera's horizontal field of view, which the vehicles are projected with.
@@ -585,7 +630,14 @@ class ChannelReadiness:
                 settle its picture (capture.picture_ceiling_frames).
             tolerance_levels: The gray levels within which a frame counts as settled against its
                 frame at least `PICTURE_SPAN_TICKS` earlier (capture.picture_tolerance_levels).
+            picture_wait: Whether the picture is waited on once the tiles are in
+                (capture.picture_settled_wait). Off, the view is ready on the step its tiles are in
+                and no frame is compared.
         """
+        self.picture_wait = bool(picture_wait)
+        if self.picture_wait and frames is None:
+            raise ValueError(f"channel {sensor_id}: the picture is waited on, so its camera's "
+                             "frames are needed")
         self.sensor_id = sensor_id
         self.camera_id = camera_id
         self._ask = ask
@@ -623,14 +675,15 @@ class ChannelReadiness:
 
     def begin(self, ticks: int, rendered_s: float) -> None:
         """The camera holds the pose the window opens on from here: forget every frame before."""
-        self.frames.keep()
+        if self.picture_wait:
+            self.frames.keep()
         now = self._clock()
         self.began = {"sim_time_s": rendered_s, "ticks": ticks}
         self._wait_for_tiles(now, ticks)
 
     def observe(self, ticks: int) -> list[tuple[int, str]]:
-        """After a step: ask about the tiles, compare the frames that arrived, and say what changed,
-        each with the logging level it is said at.
+        """After a step: ask about the tiles, compare the frames that arrived where the picture is
+        waited on, and say what changed, each with the logging level it is said at.
 
         Raises:
             ViewNotReadyError: a ceiling was reached, or the server could not be asked.
@@ -648,7 +701,7 @@ class ChannelReadiness:
         self.last_answer = answer
         frame = int(answer["frame"])
         now = self._clock()
-        arrived = self.frames.take()
+        arrived = self.frames.take() if self.picture_wait else []
         said: list[tuple[int, str]] = []
         if not tiles_in(answer):
             if self.state in (SETTLING, READY):
@@ -656,8 +709,9 @@ class ChannelReadiness:
                                       "tiles": describe_tiles(answer)})
                 said.append((logging.WARNING,
                              f"channel {self.sensor_id}: its tiles stopped being in at frame "
-                             f"{frame} ({describe_tiles(answer)}); its picture starts again once "
-                             "they are back"))
+                             f"{frame} ({describe_tiles(answer)}); "
+                             + ("its picture starts again once they are back" if self.picture_wait
+                                else "its view is not ready until they are back")))
                 self._wait_for_tiles(now, ticks)
             waited = now - self._tiles_wait_wall
             if waited >= TILES_CEILING_S:
@@ -668,6 +722,14 @@ class ChannelReadiness:
                     f"{ticks - self._tiles_wait_ticks} ticks and {waited:.1f} s into the wait, "
                     f"the tiles were {describe_tiles(answer)}{self._tilesets_text(answer)}")
             return said
+        if self.state == WAITING_FOR_TILES and not self.picture_wait:
+            self.state = READY
+            self.tiles = {"in_at_frame": frame, "ticks": ticks - self._tiles_wait_ticks,
+                          "wall_s": round(now - self._tiles_wait_wall, 3)}
+            said.append((logging.INFO,
+                         f"channel {self.sensor_id}: tiles in at frame {frame}, "
+                         f"{self.tiles['ticks']} ticks and {self.tiles['wall_s']:.1f} s into the "
+                         "wait; ready, with the picture-settled wait off"))
         if self.state == WAITING_FOR_TILES:
             self.state = SETTLING
             self.tiles = {"in_at_frame": frame, "ticks": ticks - self._tiles_wait_ticks,
@@ -873,27 +935,32 @@ class ChannelReadiness:
                 f"the picture had not settled: {self._comparison_text()}")
 
     def to_dict(self) -> dict:
+        """The channel's wait; with the picture's wait off, its tiles alone and no picture figure."""
         asked = None
         if self._asked_ms:
             asked = {"count": len(self._asked_ms),
                      "median_ms": round(statistics.median(self._asked_ms), 3),
                      "worst_ms": round(max(self._asked_ms), 3)}
-        return {"sensor_id": self.sensor_id, "camera_id": self.camera_id, "state": self.state,
-                "wait_began": self.began, "tiles": self.tiles, "picture": self.picture,
+        view = {"sensor_id": self.sensor_id, "camera_id": self.camera_id, "state": self.state,
+                "picture_settled_wait": self.picture_wait,
+                "wait_began": self.began, "tiles": self.tiles,
                 "tiles_now": describe_tiles(self.last_answer),
                 "last_answer": None if self.last_answer is None else {
                     "frame": int(self.last_answer["frame"]),
                     "published": bool(self.last_answer.get("published")),
                     "visible_tilesets": visible_tilesets(self.last_answer)},
-                "last_comparison": self.last_comparison,
-                "comparison_history": list(self.comparison_history),
-                "comparisons": dict(self.comparisons),
-                "locate_failures": self.locate_failures,
-                "last_locate_failure": self.last_locate_failure,
                 "relapses": list(self.relapses),
-                "frames_received": self.frames.received,
-                "frames_unreadable": self.frames.unreadable,
                 "readiness_asked": asked, "ready_at_window_open": self.ready_at_window_open}
+        if self.picture_wait:
+            view.update({"picture": self.picture,
+                         "last_comparison": self.last_comparison,
+                         "comparison_history": list(self.comparison_history),
+                         "comparisons": dict(self.comparisons),
+                         "locate_failures": self.locate_failures,
+                         "last_locate_failure": self.last_locate_failure,
+                         "frames_received": self.frames.received,
+                         "frames_unreadable": self.frames.unreadable})
+        return view
 
 
 class ViewReadinessGate:
@@ -902,12 +969,19 @@ class ViewReadinessGate:
     def __init__(self, clock: Callable[[], float] = time.monotonic,
                  logger: logging.Logger | None = None, drain_s: float = FRAME_DRAIN_S,
                  ceiling_frames: int = PICTURE_CEILING_FRAMES,
-                 tolerance_levels: float = PICTURE_TOLERANCE_LEVELS) -> None:
-        """`ceiling_frames` and `tolerance_levels` are the run's capture.picture_ceiling_frames and
-        capture.picture_tolerance_levels, given to every channel watched."""
+                 tolerance_levels: float = PICTURE_TOLERANCE_LEVELS,
+                 picture_wait: bool = PICTURE_SETTLED_WAIT,
+                 tiles_hold_s: float = TILES_HOLD_S) -> None:
+        """`picture_wait`, `ceiling_frames` and `tolerance_levels` are the run's
+        capture.picture_settled_wait, capture.picture_ceiling_frames and
+        capture.picture_tolerance_levels, given to every channel watched; the last two are read only
+        where the first is true. `tiles_hold_s` is capture.tiles_hold_s, recorded where the first is
+        false."""
         self._clock = clock
         self.logger = logger or logging.getLogger(__name__)
         self.drain_s = drain_s
+        self.picture_wait = bool(picture_wait)
+        self.tiles_hold_s = float(tiles_hold_s)
         self.ceiling_frames = max(1, int(ceiling_frames))
         self.tolerance_levels = float(tolerance_levels)
         self.channels: list[ChannelReadiness] = []
@@ -922,15 +996,17 @@ class ViewReadinessGate:
     def watch(self, sensor_id: str, camera: Any, world: Any, ticks_per_frame: int,
               locate: Callable[[int], FrameVehicles | None] | None = None,
               fov_deg: float = 90.0) -> ChannelReadiness:
-        """Listen to a capture camera's frames and ask about its tiles through `world`; place each
-        frame's rendered vehicles with `locate`."""
-        frames = CameraFrames()
+        """Ask about a capture camera's tiles through `world`; where the picture is waited on, also
+        listen to its frames and place each frame's rendered vehicles with `locate`. With the
+        picture's wait off the camera is not listened to."""
+        frames = CameraFrames() if self.picture_wait else None
         channel = ChannelReadiness(sensor_id, int(camera.id),
                                    lambda: world.get_view_readiness(camera), frames, self._clock,
                                    ticks_per_frame, locate, fov_deg, self.ceiling_frames,
-                                   self.tolerance_levels)
-        camera.listen(frames)
-        self._cameras.append(camera)
+                                   self.tolerance_levels, self.picture_wait)
+        if frames is not None:
+            camera.listen(frames)
+            self._cameras.append(camera)
         self.channels.append(channel)
         return channel
 
@@ -968,16 +1044,27 @@ class ViewReadinessGate:
         self._cameras = []
 
     def to_dict(self) -> dict:
-        return {"rule": RULE, "tiles_ceiling_s": TILES_CEILING_S,
-                "picture_span_ticks": PICTURE_SPAN_TICKS,
-                # The camera's frames since its tiles were in; the run configuration's values.
-                "picture_ceiling_frames": self.ceiling_frames,
-                "picture_tolerance_levels": self.tolerance_levels,
-                "picture_block_px": PICTURE_BLOCK_PX,
-                "picture_min_judged_share": PICTURE_MIN_JUDGED_SHARE,
-                "vehicle_margin_px": VEHICLE_MARGIN_PX,
-                "vehicles": VEHICLES,
-                "asked": "once per SUMO step, after its last tick",
-                "wait_began": self.begun_at, "window_opens_at_s": self.window_opens_at_s,
-                "per_capture": PER_CAPTURE,
-                "channels": [channel.to_dict() for channel in self.channels]}
+        """The wait as the run result records it: whether the picture was waited on, and with it off
+        the statement that it was not run in place of every picture figure."""
+        record: dict = {"rule": RULE, "tiles_ceiling_s": TILES_CEILING_S,
+                        "picture_settled_wait": self.picture_wait}
+        if self.picture_wait:
+            record.update({"picture_span_ticks": PICTURE_SPAN_TICKS,
+                           # The camera's frames since its tiles were in; the run configuration's
+                           # values.
+                           "picture_ceiling_frames": self.ceiling_frames,
+                           "picture_tolerance_levels": self.tolerance_levels,
+                           "picture_block_px": PICTURE_BLOCK_PX,
+                           "picture_min_judged_share": PICTURE_MIN_JUDGED_SHARE,
+                           "vehicle_margin_px": VEHICLE_MARGIN_PX,
+                           "vehicles": VEHICLES})
+        else:
+            record.update({"picture": PICTURE_WAIT_OFF,
+                           # The tiles' own lead before the window: how long a stare following the
+                           # traffic holds, and the least prewarm every camera had.
+                           "tiles_hold_s": self.tiles_hold_s})
+        record.update({"asked": "once per SUMO step, after its last tick",
+                       "wait_began": self.begun_at, "window_opens_at_s": self.window_opens_at_s,
+                       "per_capture": PER_CAPTURE,
+                       "channels": [channel.to_dict() for channel in self.channels]})
+        return record

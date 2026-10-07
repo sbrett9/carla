@@ -70,6 +70,9 @@ NOT_PREDICTED = (
 NOT_PREDICTED_TRAFFIC_AIM = ("where a stare aimed at the rendered traffic will look: the point is "
                              "measured on the last frame before its camera holds for the window, "
                              "and the run result records it")
+PICTURE_NOT_WAITED_ON = ("not waited on: capture.picture_settled_wait is false, its default by the "
+                         "owner's ruling of 2026-10-06, so each view waits for its tiles only and "
+                         "no camera frame is compared")
 
 
 class LaunchEcho:
@@ -226,36 +229,50 @@ class LaunchEcho:
 
     @staticmethod
     def _readiness(effective: EffectiveRunConfiguration) -> dict:
-        """The wait for every channel's view inside the prewarm (03 §9.5.1), and where it begins."""
+        """The wait for every channel's view inside the prewarm (03 §9.5.1), and where it begins:
+        the tiles, and the picture only where capture.picture_settled_wait is true, whose figures
+        are left out where it is not."""
         window = effective.window
         follows = any(effective.channel_description(index).aims_at_rendered_traffic()
                       for index in range(effective.channel_count))
         delta = float(effective.value("capture.world_delta_s"))
         period = effective.ticks_per_frame
-        ceiling_frames = int(effective.value("capture.picture_ceiling_frames"))
-        tolerance = float(effective.value("capture.picture_tolerance_levels"))
+        picture_wait = bool(effective.value("capture.picture_settled_wait"))
+        ceiling_frames = int(effective.value("capture.picture_ceiling_frames")) if picture_wait \
+            else 0
+        tiles_hold = 0.0 if picture_wait else float(effective.value("capture.tiles_hold_s"))
         begins = wait_begins_s(window.begin_s, effective.first_rendered_s,
                                float(effective.value("scenario.sumo_step_s")), delta, period,
-                               ceiling_frames, follows)
-        return {"waits": True, "rule": RULE,
-                "tiles": "world.get_view_readiness after every prewarm step: the camera published "
-                         "on the last tick, every visible tileset at load progress 100, no failed "
-                         "tile in view",
-                "picture": f"the camera's frame within {tolerance:g} gray levels of its frame at "
-                           f"least {PICTURE_SPAN_TICKS} ticks earlier in its worst judged "
-                           f"{PICTURE_BLOCK_PX}-pixel block",
-                "vehicles": VEHICLES,
-                "tiles_ceiling_s": TILES_CEILING_S,
-                # The camera's own frames from its tiles being in, and the simulated seconds they
-                # are at the capture rate.
-                "picture_ceiling_frames": ceiling_frames,
-                "picture_ceiling_s": round(ceiling_frames * period * delta, 6),
-                "picture_tolerance_levels": tolerance,
-                "from_s": begins, "until_s": window.begin_s,
-                "traffic_stare_holds_from_s": begins if follows else None,
-                "not_ready": "refused at pre-roll (check 50); the window's first frame is not "
-                             "moved",
-                "per_capture": PER_CAPTURE}
+                               ceiling_frames, follows, picture_wait=picture_wait,
+                               tiles_hold_s=tiles_hold)
+        block: dict = {"waits": True, "rule": RULE,
+                       "tiles": "world.get_view_readiness after every prewarm step: the camera "
+                                "published on the last tick, every visible tileset at load "
+                                "progress 100, no failed tile in view",
+                       "picture_settled_wait": picture_wait}
+        if picture_wait:
+            tolerance = float(effective.value("capture.picture_tolerance_levels"))
+            block.update({"picture": f"the camera's frame within {tolerance:g} gray levels of its "
+                                     f"frame at least {PICTURE_SPAN_TICKS} ticks earlier in its "
+                                     f"worst judged {PICTURE_BLOCK_PX}-pixel block",
+                          "vehicles": VEHICLES,
+                          "tiles_ceiling_s": TILES_CEILING_S,
+                          # The camera's own frames from its tiles being in, and the simulated
+                          # seconds they are at the capture rate.
+                          "picture_ceiling_frames": ceiling_frames,
+                          "picture_ceiling_s": round(ceiling_frames * period * delta, 6),
+                          "picture_tolerance_levels": tolerance})
+        else:
+            block.update({"picture": PICTURE_NOT_WAITED_ON, "tiles_ceiling_s": TILES_CEILING_S,
+                          # The tiles' own lead: a stare following the traffic holds this long
+                          # before the window, and every camera's prewarm is at least this long.
+                          "tiles_hold_s": tiles_hold})
+        block.update({"from_s": begins, "until_s": window.begin_s,
+                      "traffic_stare_holds_from_s": begins if follows else None,
+                      "not_ready": "refused at pre-roll (check 50); the window's first frame is not "
+                                   "moved",
+                      "per_capture": PER_CAPTURE})
+        return block
 
     # -- reading ---------------------------------------------------------------------------------------
 
@@ -323,12 +340,21 @@ class LaunchEcho:
             f", {pacing['real_time_factor']:g}x real time, floor {pacing['min_achieved_factor']:g}"
             if pacing["mode"] == "wall_clock" else ""))
         readiness = b["readiness"]
-        lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} s) "
-                     f"and picture (ceiling {readiness['picture_ceiling_frames']} of the camera's "
-                     f"frames, {readiness['picture_ceiling_s']:g} s at {cap['capture_hz']:g} Hz, "
-                     f"settled within {readiness['picture_tolerance_levels']:g} gray levels), from "
-                     f"t={readiness['from_s']:,.0f} to t={readiness['until_s']:,.0f}; not ready by "
-                     "then refuses at pre-roll")
+        if readiness.get("picture_settled_wait", True):
+            lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} "
+                         f"s) and picture (ceiling {readiness['picture_ceiling_frames']} of the "
+                         f"camera's frames, {readiness['picture_ceiling_s']:g} s at "
+                         f"{cap['capture_hz']:g} Hz, settled within "
+                         f"{readiness['picture_tolerance_levels']:g} gray levels), from "
+                         f"t={readiness['from_s']:,.0f} to t={readiness['until_s']:,.0f}; not ready "
+                         "by then refuses at pre-roll")
+        else:
+            lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} "
+                         f"s), from t={readiness['from_s']:,.0f} to "
+                         f"t={readiness['until_s']:,.0f}; not ready by then refuses at pre-roll")
+            lines.append(f"              picture not waited on: capture.picture_settled_wait is "
+                         f"false; the tiles' lead is {readiness['tiles_hold_s']:g} s "
+                         "(capture.tiles_hold_s)")
         if readiness["traffic_stare_holds_from_s"] is not None:
             lines.append(f"              a stare aimed at the traffic follows it until "
                          f"t={readiness['traffic_stare_holds_from_s']:,.0f}, then holds")

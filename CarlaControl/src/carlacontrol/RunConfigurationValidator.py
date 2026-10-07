@@ -13,7 +13,8 @@ by construction, and which have nothing in the tree to compare.
   for a rule, they call it rather than restate it: the clock ratio is
   `CarlaNet.CoSim.CoSimClock.ForSession`, the illumination object is `IlluminationPolicy.FromJson`,
   and the epoch is `SolarEpoch` through `ScenarioEpoch`. Where the pre-roll's wait for each view
-  could not run to the picture's ceiling -- a prewarm too short for the ceiling's frames at the
+  could not be met -- a prewarm shorter than the tiles' own lead, `capture.tiles_hold_s`, or, where
+  `capture.picture_settled_wait` is true, a prewarm too short for the picture ceiling's frames at the
   capture rate and the ten-tick span, or a ceiling too small to hold one comparison -- it is refused
   here (check 51) rather than there (check 50).
   The optional draw distance, where one is set, has to reach the point every channel looks at
@@ -60,6 +61,7 @@ from carlacontrol.VehicleCatalogue import VehicleCatalogue
 from carlacontrol.ViewReadiness import (
     PICTURE_SPAN_TICKS,
     first_judged_frame,
+    hold_lead_s,
     ticks_after_first_ask,
     ticks_to_ceiling,
     wait_begins_s,
@@ -445,10 +447,15 @@ class RunConfigurationValidator:
     def _readiness_prewarm(effective: EffectiveRunConfiguration,
                            findings: RunConfigurationFindings) -> None:
         """Every channel's view is waited on inside the prewarm (03 §9.5.1), from where every camera
-        holds the pose the window opens on, and its picture has capture.picture_ceiling_frames of the
-        camera's own frames from its tiles being in to settle. A ceiling too small to hold one
-        comparison, and a prewarm that leaves too few ticks for the ceiling's frames at the capture
-        rate and the ten-tick span, are refused before anything is started."""
+        holds the pose the window opens on. With the picture's wait off, its default, the tiles have
+        a lead of their own, capture.tiles_hold_s in whole SUMO steps, which every camera must hold
+        before the window -- a stare following the traffic after the step it measures the traffic on
+        -- and a prewarm too short for it is refused before anything is started; neither picture
+        field is read. Where capture.picture_settled_wait is true the picture is waited on too, with
+        capture.picture_ceiling_frames of the camera's own frames from its tiles being in to settle,
+        and a ceiling too small to hold one comparison, or a prewarm that leaves too few ticks after
+        the tiles are first asked about for the ceiling's frames at the capture rate and the
+        ten-tick span, is refused instead; capture.tiles_hold_s is not read."""
         step = effective.value("scenario.sumo_step_s")
         if step is None:
             return
@@ -461,9 +468,10 @@ class RunConfigurationValidator:
         step = float(step)
         delta = float(effective.value("capture.world_delta_s"))
         period = effective.ticks_per_frame
-        ceiling = int(effective.value("capture.picture_ceiling_frames"))
+        picture_wait = bool(effective.value("capture.picture_settled_wait"))
+        ceiling = int(effective.value("capture.picture_ceiling_frames")) if picture_wait else 0
         first_judged = first_judged_frame(period)
-        if ceiling < first_judged:
+        if picture_wait and ceiling < first_judged:
             findings.refuse(51, "capture.picture_ceiling_frames", (
                 f"the picture's ceiling is {ceiling} of the camera's frames from its tiles being "
                 f"in, and a frame is judged against the camera's frame at least {PICTURE_SPAN_TICKS} "
@@ -476,8 +484,32 @@ class RunConfigurationValidator:
         if follows and prewarm + 1e-9 < step:
             return  # check 47 refuses it: there is no step to measure the traffic on
         begin = effective.window.begin_s
+        tiles_hold = 0.0 if picture_wait else float(effective.value("capture.tiles_hold_s"))
         held = begin - wait_begins_s(begin, effective.first_rendered_s, step, delta, period,
-                                     ceiling, follows)
+                                     ceiling, follows, picture_wait=picture_wait,
+                                     tiles_hold_s=tiles_hold)
+        following = (", and the wait begins only where the stare following the rendered traffic "
+                     "stops to hold its pose, after the step it measures the traffic on"
+                     if follows else "")
+        if not picture_wait:
+            # The tiles' own lead: the camera holds for it, its tiles asked about after every step.
+            lead = hold_lead_s(step, delta, period, ceiling, picture_wait=False,
+                               tiles_hold_s=tiles_hold)
+            if held + 1e-6 >= lead:
+                return
+            needed = lead + (step if follows else 0.0)
+            rounded = (f" ({lead:g} s in whole SUMO steps)" if abs(lead - tiles_hold) > 1e-6
+                       else "")
+            findings.refuse(51, "capture.prewarm_s", (
+                f"every channel's view is waited on inside the prewarm, and with the picture-settled "
+                f"wait off (capture.picture_settled_wait) its photoreal tiles have a lead of their "
+                f"own: every camera holds the pose the window opens on for capture.tiles_hold_s, "
+                f"{tiles_hold:g} s{rounded}, its tiles asked about after every step of it "
+                f"(03 §9.5.1): the prewarm is {prewarm:g} s (capture.prewarm_s, clipped "
+                f"to the window's begin){following}, which leaves {max(held, 0.0):g} s of that hold, "
+                "so a view whose tiles are slow to arrive would be refused at pre-roll short of the "
+                f"lead. Give a prewarm of at least {needed:g} s, or a shorter capture.tiles_hold_s"))
+            return
         ticks = ticks_after_first_ask(held, step, delta)
         needed_ticks = ticks_to_ceiling(period, ceiling)
         if ticks + 1e-6 >= needed_ticks:
@@ -489,10 +521,8 @@ class RunConfigurationValidator:
             f"(capture.picture_ceiling_frames), each judged against the camera's frame at least "
             f"{PICTURE_SPAN_TICKS} ticks before it, all rendered after its tiles are first asked "
             f"about, one SUMO step into the wait (03 §9.5.1): the prewarm is {prewarm:g} s "
-            f"(capture.prewarm_s, clipped to the window's begin)"
-            + (", and the wait begins only where the stare following the rendered traffic stops "
-               "to hold its pose, after the step it measures the traffic on" if follows else "")
-            + f", which leaves {max(ticks, 0.0):g} ticks against the {needed_ticks} that {ceiling} "
+            f"(capture.prewarm_s, clipped to the window's begin){following}"
+            f", which leaves {max(ticks, 0.0):g} ticks against the {needed_ticks} that {ceiling} "
             f"frames at one every {period} ticks and the {PICTURE_SPAN_TICKS}-tick span need, so a "
             "picture still settling when the window opens would be refused at pre-roll short of "
             f"the frames its ceiling allows. Give a prewarm of at least {needed:g} s"))

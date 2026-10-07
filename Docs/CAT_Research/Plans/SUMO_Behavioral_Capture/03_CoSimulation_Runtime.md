@@ -75,6 +75,7 @@ advancement policy, the headlight predicate),
 | 2026-10-06 | §8.9, D3.44: where each lent body's drawn pose came from is held on the server, as the owner ruled, so a recorder in any process writes the same `pose_source`. The session declares its SUMO step once (`update_pose_source`: ticks per step, falling on the frame the next cue produces) and names a body only as it becomes held -- not posed on the tick -- or placed at SUMO's later step across a discontinuity, and as that ends; the world observer carries the step and the named bodies in the render set block behind `PoseSourceCarried`, and any reader resolves a frame's pose source from its number. Nothing is sent per tick. A frame that comes back out of step is counted and the step declared again at the next step; a server that refuses is recorded and told nothing more. Each vehicle's commanded light state rides in its own record, behind `VehicleLightStateCarried`. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §8.9, D3.44: the owner ruled the pose source's four words -- `sumo` (the frame falls on a SUMO step), `interpolated` (between steps, filled in along the lane), `jump` (SUMO reported a step too far from the last to drive in one step; the body is shown at SUMO's later position for the frames of that step) and `stale` (the body could not be placed and stands where it was last drawn) -- in place of `simulated`, `interpolated` and `held`, and a jump, written `simulated` until now, is a state of its own end to end: `update_pose_source` takes a sixth argument, the jump list; the snapshot's entry states are `Sumo = 1`, `Stale = 2`, `Jump = 3`; the session names a discontinuous body jump. A server built before it binds five arguments and refuses six for their count; the session learns that from the declaration, sends every change in the five, names a jumping body sumo, and records the server's words and the count on the run report and the closeout. Measured with a stop that ends in SUMO's `jump`: all twenty frames of its step read `jump` at twenty ticks per step. Measured too: a vehicle missing from SUMO's next step leaves the render set as that step begins and is never drawn stale. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §6.3, §8.3, §8.4, §8.5, §8.8, §8.9, §9.7, §11.3, D3.6, D3.35, D3.45: the owner ruled that a vehicle that leaves SUMO -- arrived at the end of its route, or vanished -- is drawn at its last SUMO position on that step's own frame, pose source `sumo`, and is gone from the next frame: never `stale` for leaving, nothing invented or held, and a frame that falls on a SUMO step shows every vehicle SUMO had at it within the render set. Until now the pass that read step N+1 and found the vehicle gone parked its body from step N's own frame, so it vanished a frame early, last drawn interpolated most of the way to N; the 2026-10-06 entry above measured that and called it never stale, which it was. Now the session keeps the body lent for step N's frame, posed at fraction zero from the N state with its N signals, lends it to no other vehicle there, and gives it back after that frame: parked at the head of the next batch and named parked by `update_render_set` before the next cue, back to its blueprint's free bodies in the order of the vehicles' ids. Its interval ends at the next frame's instant, the convention every interval keeps -- from the first frame that draws the vehicle to the first that no longer does, as the session's end already closed them -- so the old release instant, the pass's t(N+1), was a step late against frames that stopped at t(N); at one tick per step the new instant is the same number, at twenty it is t(N) plus one tick. The interval is handed out once the frame has rendered, with the next step's record; one whose frame the run never rendered is released by the session's end at that frame's instant with its own reason, and the run manifest writes it at its close either way. The world truth track no longer writes `left_the_simulation` or `vanished`: a vehicle's last SUMO frame is drawn. Releases an optional limit makes (`left_the_region`, `capacity`) are unchanged and still take effect, and are stamped, at their pass. Measured: the body of a vehicle that left SUMO drawn on its last frame 0.000000 m from SUMO's point and within 2e-6 m of what the world applied, at one and twenty ticks per step. No server change. |
+| 2026-10-07 | §9.5.1: the owner's ruling of 2026-10-06 -- the picture's wait is off by default ("It's in a state that is not something I'd like to include at publication"), as the session-fixed field `capture.picture_settled_wait`, `false` unless a run sets it `true`, which runs the wait as it stood, ceiling and tolerance included. Off, the pre-roll waits for the tiles alone: no camera is listened to and no frame compared; the tiles have a lead of their own, the session-fixed field `capture.tiles_hold_s`, 10 s by default, which covers every cold tile load measured (1.5 to 6.2 s; one outlier took 35.6 s), for which a stare aimed at the traffic holds the pose the window opens on, in whole SUMO steps, its tiles asked about after every step; check 51 asks every camera's prewarm for that lead (10 s at a fixed pose, 11 s for a stare aimed at the traffic, which needs a step before the hold to measure the traffic on); and the run result says the wait was not run and holds no picture figure. With the wait on, the picture's ceiling sets the hold and the lead is not read. Recorded and not fixed: the comparison places each frame's vehicles from the client's snapshot of that frame and is asked once per SUMO step, after its last tick, so at Bahonar's twenty ticks a step the older frame's snapshot is gone and all 59 comparisons of the guard run were `vehicles_unknown`, refused at pre-roll; Arapahoe steps every tick and never showed it; and the owner had found the wait too strict. |
 ---
 
 ## 0. What this section does not cover
@@ -3358,7 +3359,9 @@ are session-fixed fields of the run configuration ([`12`](12_Operator_Control_Su
 either can be changed for a run without a code change, and the lock records them. The span and the
 picture's ceiling were first written as ten and 120 of the camera's frames with no vehicle left out,
 then as ten and 120 ticks; the next paragraphs give the measurements that changed them and the ruling
-that set the ceiling as it is.
+that set the ceiling as it is. By a second ruling of 2026-10-06 the picture's witness is off by
+default and is consulted only where a run sets `capture.picture_settled_wait` to `true`; the
+paragraph after the ceiling's ruling gives it and the fault behind it.
 
 **Traffic in view, and the unit the picture settles in.** Measured on Bahonar (2026-09-30), two runs of
 one stare — (−1400, −600) from 450 m, straight down, 1280×720 at 2 Hz, synchronous at 0.05 s, the
@@ -3456,6 +3459,38 @@ a stare aimed at the traffic holds for one SUMO step and that many ticks, in who
 defaults. The 2-against-20 Hz probe above keeps its purpose: it would show how many frames the picture
 needs at each rate, which the ceiling in frames now allows for.
 
+**The ruling of 2026-10-06: the picture's wait is off by default.** The owner ruled that the
+picture's wait is not to run until the owner comes back to it: "It's in a state that is not
+something I'd like to include at publication." Its code is kept, and it runs only where a run sets
+the session-fixed field `capture.picture_settled_wait` to `true`
+([`12`](12_Operator_Control_Surface.md) §5.2); by default the field is `false` and the pre-roll
+waits for each view's tiles alone. Then no camera is listened to and no frame is compared; a view is
+ready on the step its tiles are in; check 50 refuses for the tiles only — a view whose tiles are not
+in as the window opens, or are still out at their 90 s ceiling; the tiles have a lead of their own,
+the session-fixed field `capture.tiles_hold_s`, 10 s by default — every cold tile load the 27
+placements measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s, though one outlier took 712 ticks,
+35.6 s — so a stare aimed at the traffic stops following it and holds the pose the window opens on
+that long before the window, rounded up to whole SUMO steps, its tiles asked about after every step
+of the hold, instead of for one step and the picture's ceiling; check 51 asks every camera's prewarm
+for that lead, a stare aimed at the traffic one SUMO step more to measure it on — 10 s and 11 s at a
+1 s step; `capture.picture_ceiling_frames` and `capture.picture_tolerance_levels` are not read; and
+the run
+result's `readiness` block states `picture_settled_wait` false, says the wait was not run, names the
+field, and records no picture figure. The launch echo, the monitor's view lines and the closeout
+follow the same field. With the field `true`, everything this section says of the picture holds as
+written, the ceiling and the tolerance included, the picture's ceiling sets the hold, and
+`capture.tiles_hold_s` is not read. The wait is off for a fault recorded here and not
+fixed. Each compared frame's rendered vehicles are placed from the client's snapshot of that frame,
+and the gate is asked once per SUMO step, after the step's last tick, so at Bahonar's 1 s step of
+twenty ticks the client no longer holds the older compared frame's snapshot by the time the vehicles
+are placed: on the Bahonar guard run of 2026-10-06 every one of 59 comparisons was
+`vehicles_unknown`, and the pre-roll refused (`its picture did not settle within 60 of its frames
+after its tiles were in at frame 14831 (03 §9.5.1): the rendered vehicles of frame 15425 or frame
+15415 could not be placed …`). Arapahoe steps every tick, so there the comparison was made while
+both snapshots were held, and the fault never showed. The owner had also found the wait too strict.
+To run it, set `capture.picture_settled_wait` to `true` in the run configuration or with
+`--set capture.picture_settled_wait=true`; the lock records the value either way.
+
 **What the server reports.** `get_view_readiness(actor_id)` reads the tilesets' state as of the end of
 the last tick. The camera counts only once `ACesiumSensorViewPublisher` has written its view on that
 tick, because a tileset with no view for the camera selects nothing for it and reads fully loaded. For
@@ -3467,11 +3502,13 @@ camera follower flying during the wait holds `LoadProgress` below 100. The RPC i
 live on Bahonar (`CarlaNet/python/test_view_readiness.py`), and the client method is
 `world.get_view_readiness`.
 
-**What the capture waits on, and where.** `run_capture` writes no capture before both witnesses say
-its camera's view is ready ([`12`](12_Operator_Control_Surface.md) §6.2 check 50 and §6.3;
+**What the capture waits on, and where.** `run_capture` writes no capture before its camera's view
+is ready — its tiles in, and its picture settled where `capture.picture_settled_wait` is `true`
+([`12`](12_Operator_Control_Surface.md) §6.2 check 50 and §6.3;
 `CarlaControl/src/carlacontrol/ViewReadiness.py`). The wait lives in the prewarm and ticks with it:
 the session owns the clock (D3.12), so the capture asks the server once after each of the session's
-steps and never between them — a wait that did not tick would ask about the same tick again. The
+steps and never between them — a wait that did not tick would ask about the same tick again. Where
+the picture is waited on, the
 camera's own frames are listened to from its placement until the recorders start, reduced as they
 arrive and compared in frame order as the 27 placements were measured (BT.601 grey, the mean of each
 4 × 4 pixels, the mean absolute difference over each 20 × 20 of those), counting only frames rendered
@@ -3484,9 +3521,10 @@ placed, not moving -- and sweeps from the window's opening, flown by the server 
 from that circle (`set_orbit`, issue #37; the client sends no pose per frame, so D3.3's two round trips
 a tick are the whole of it); and a stare aimed at the
 rendered traffic, which starts over the centre of the world's staging bounds (`get_staging_bounds`),
-follows the traffic through the prewarm until one SUMO step and the picture's ceiling — its frames at
-the capture rate and the ten-tick span — before the window opens, 32 one-second steps at the defaults,
-and holds from there
+follows the traffic through the prewarm until the tiles' own lead, `capture.tiles_hold_s`, before
+the window opens, 10 s at the default in whole SUMO steps — with the picture waited on, one SUMO step
+and the picture's ceiling, its frames at the capture rate and the ten-tick span, 32 one-second steps
+at the default ceiling — and holds from there
 ([`12`](12_Operator_Control_Surface.md) §5.2, D12.37).
 
 **A view not ready by the window's opening refuses the run at `PreRoll`, and the window is not
@@ -3497,18 +3535,22 @@ reasons. SUMO has been fast-forwarded to the prewarm's first instant before the 
 be taken back to start earlier ([`10`](10_Scale_And_Performance.md) D10.2). And a window opened later
 than declared is not the window D3.21 binds the sun for. So a
 ceiling reached, or a view not ready when the window opens, ends the run `refused_preroll`, naming the
-channel, the witness and where it stood; a prewarm too short for the camera to draw the picture
-ceiling's frames at its capture rate, and the ten-tick span, after its tiles are first asked about is
-refused before anything starts (check 51): 31.5 s at the defaults, 32.5 s for a stare following the
-traffic, against 300 s of prewarm; cold tiles are in after 30–124 ticks.
+channel, the witness and where it stood; a prewarm shorter than the tiles' lead — 10 s, and 11 s for
+a stare following the traffic at a 1 s step — or, with the picture waited
+on, one too short for the camera to draw the picture ceiling's frames at its capture rate, and the
+ten-tick span, after its tiles are first asked about — 31.5 s at the default ceiling, 32.5 s for a
+stare following the traffic — is refused before anything starts (check 51), against 300 s of
+prewarm; cold tiles are in after 30–124 ticks.
 
 **What is recorded, and what is not.** The run result carries, per channel, the ticks and the wall
 clock until the tiles were in — to within one SUMO step, the interval they are asked at — the ticks
 and frames until the picture settled and its residual, the blocks rendered vehicles took out of that
 comparison and the share of the view judged, how many comparisons were judged and how many could not
 be (too few blocks left, or vehicles that could not be placed), where each witness stood if it did not
-finish, and any return of the tiles to streaming; the launch echo says the wait will happen and where
-it begins. A
+finish, and any return of the tiles to streaming; with the picture's wait off, its default, the
+record says so — `picture_settled_wait` false, the wait not run, the field named — and holds no
+picture figure. The launch echo says the wait will happen, whether the picture is part of it, and
+where it begins. A
 capture's own readiness is not recorded: the server answers only for the last tick and an image
 reaches the recorder several ticks after its frame, so it needs the server to publish readiness per
 frame on the observer snapshot, which it does not; and an orbit's readiness as the window opens says
