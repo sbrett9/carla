@@ -2435,8 +2435,8 @@ class World:
         the last step SUMO reports it in, or until the session ends, wherever it is and however many
         others there are, parked vehicles included; one SUMO inserts during the run is drawn first
         where SUMO inserted it, moving from there, and never before; one SUMO stops reporting is drawn
-        last where SUMO last had it, on that step's own frame, and never after. Every vehicle SUMO has at `warm_up_to` is drawn on the first
-        rendered frame. Nothing caps the count unless asked to; a scenario heavier than the machine is
+        last where SUMO last had it, on that step's own frame, and never after. Every vehicle SUMO
+        has at `warm_up_to` is drawn on the first rendered frame. Nothing caps the count unless asked to; a scenario heavier than the machine is
         comfortable with makes a synchronous run slower on the wall clock, never different in content.
 
         `render_set` limits which vehicles get a body, an optional performance control: 'all', the

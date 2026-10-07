@@ -8,9 +8,9 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>No capacity, the default.</b> SUMO's scenario is the only arbiter of population: a vehicle
 /// holds a body from the frame SUMO first reports it in to the frame of the last step SUMO reports it in,
-/// or until the session ends, parked vehicles included, and vehicles new to the set are admitted in ordinal order of their ids,
-/// so two runs of one scenario lend their bodies in the same order. A heavier scenario makes a
-/// synchronous run slower on the wall clock, never thinner.</para>
+/// or until the session ends, parked vehicles included, and vehicles new to the set are admitted in
+/// ordinal order of their ids, so two runs of one scenario lend their bodies in the same order. A heavier
+/// scenario makes a synchronous run slower on the wall clock, never thinner.</para>
 ///
 /// <para><b>With a capacity</b>, an optional performance control: at most that many hold a body at
 /// once. A vehicle holding one keeps it until SUMO removes it, and a newcomer takes a place only when
