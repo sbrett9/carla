@@ -10,7 +10,7 @@ code they describe, and ship in the distribution under `skills/`.
 
 | Skill | Covers |
 |---|---|
-| [`sumo-traffic-scenarios`](../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md) | Building SUMO traffic scenarios and Cursor-on-Target telemetry datasets for a CARLA world generated from OpenStreetMap: the OSM to world-package to SUMO-network to routes to CoT pipeline, the netconvert flags, coordinate alignment, and the `make_*_scenario.py` / `sumo_cot_telemetry.py` tools |
+| [`sumo-traffic-scenarios`](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md) | Building SUMO traffic scenarios and Cursor-on-Target telemetry datasets for a CARLA world generated from OpenStreetMap: the OSM to world-package to SUMO-network to routes to CoT pipeline, the netconvert flags, coordinate alignment, and the `make_*_scenario.py` / `sumo_cot_telemetry.py` tools |
 
 They sit beside `CarlaControl/src/carlacontrol/`, the code that generates most of their contents, so
 a skill cannot describe a tool the same commit changed. A copy outside the repository has no
@@ -32,7 +32,7 @@ they read needs a commit behind it rather than whatever a developer happened to 
 | Upstream | <https://github.com/quodsoler/unreal-engine-skills> |
 | Pinned commit | `231c8571be6f3335685edc566a28ec6f9621361d` |
 | Licence | MIT, Copyright (c) 2025 quodsoler — the upstream text sits beside the skills as `LICENSE`, verbatim |
-| Provenance and update procedure | [`PROVENANCE.md`](../CarlaControl/skills/third-party/unreal-engine-skills/PROVENANCE.md) beside them |
+| Provenance and update procedure | [`PROVENANCE.md`](../../../CarlaControl/skills/third-party/unreal-engine-skills/PROVENANCE.md) beside them |
 
 **They do not ship.** `MakeDistribution` copies `CarlaControl/skills/` into the distribution and skips
 `third-party/` on both platforms. A distribution recipient authors scenarios against a generated

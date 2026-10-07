@@ -34,5 +34,5 @@ it is ours.
 
 Replace the directory wholesale from a fresh clone at the new commit, keep `LICENSE` and this file
 beside it, and update the pinned commit in the table above and in
-[`Docs/authoring_skills.md`](../../../../Docs/authoring_skills.md). Do not edit the vendored files: a
+[`Docs/CAT_Research/Skills/Authoring_Skills.md`](../../../../Docs/CAT_Research/Skills/Authoring_Skills.md). Do not edit the vendored files: a
 local fix here is invisible to upstream and is lost at the next update.

@@ -44,6 +44,7 @@ specifies only their packaging shape.
 | 2026-09-22 | The Unreal skills are vendored under `skills/third-party/` and excluded from the distribution. |
 | 2026-09-29 | The setup scripts build and stage `sumo-gui` for development (§2.5); FOX a Linux prerequisite in both homes; bundling it is an open decision (§5.4, Open question 5). |
 | 2026-10-05 | Status corrected against the tree: the guard and the full staged set are built on Windows (§1, §2.1); `CarlaNet.Sumo` exists (§3.4); the clipper's node order is sorted (§7.3, D9.9); the skill is a bundle at 1.5.0 (§5.4). |
+| 2026-10-07 | §5.5: the authoring-skills guide moved, at the owner's direction, from `Docs/authoring_skills.md` to `Docs/CAT_Research/Skills/Authoring_Skills.md`; the link follows. |
 
 ---
 
@@ -855,7 +856,7 @@ template (`12`).
   the generated `MANIFEST.md` honest — its `skills/` row states one provenance and one licence for
   the whole slot. The workspace copies under `.agents/skills/ue-*` are what the harness actually
   loads and stay exactly where they are; the layout is recorded in
-  [`Docs/authoring_skills.md`](../../../authoring_skills.md).
+  [`Docs/CAT_Research/Skills/Authoring_Skills.md`](../../Skills/Authoring_Skills.md).
 - **The illumination reference.** [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md)'s pre-authoring
   artifact list (item 12, §2.9) names a per-world, per-date sunrise/sunset/sun-elevation table and a
   night-viability verdict, computed from the world's origin and the scenario's epoch — owned by
