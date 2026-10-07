@@ -34,7 +34,8 @@ namespace CarlaNet.CoSim;
 /// stamped with the same instant, the first of the ticks that interpolate from it. That frame says
 /// whether the instant is the capture window's, which body drew each vehicle, and the sun the world
 /// reported. Which vehicles it drew was decided at the SUMO frame after it, the one the ticks
-/// interpolate towards, and that frame says why a vehicle not drawn was not.</para>
+/// interpolate towards, and that frame says why a vehicle not drawn was not -- except for a vehicle SUMO
+/// no longer had there, which the frame draws at its last state, decided at the frame's own.</para>
 ///
 /// <para><b>Inside the capture window only.</b> A frame of the prewarm writes nothing. A track at a
 /// reduced rate outside every window is not built; the summary records it as not written.</para>
@@ -53,9 +54,6 @@ namespace CarlaNet.CoSim;
 /// reason, the first of these that holds:</para>
 /// <list type="table">
 /// <item><term><c>no_world</c></term><description>The session renders no world.</description></item>
-/// <item><term><c>left_the_simulation</c>, <c>vanished</c></term><description>SUMO no longer had it at
-/// its next frame -- listed among the arrivals, or not -- so no frame from this instant draws it: the
-/// ticks after a vehicle's last SUMO frame have nothing to carry it towards.</description></item>
 /// <item><term><c>outside_limit</c></term><description>An optional render-set limit left it no
 /// body.</description></item>
 /// <item><term><c>no_blueprint</c>, <c>unknown_extent</c></term><description>Its type has no measured
@@ -65,6 +63,11 @@ namespace CarlaNet.CoSim;
 /// <item><term><c>not_drawn</c></term><description>None of those: the frame drew no body for it, for a
 /// reason the track cannot name.</description></item>
 /// </list>
+/// <para>A vehicle's last SUMO frame is drawn like any other (the owner's ruling of 2026-10-06): the frame
+/// stamped with it shows every vehicle SUMO had then, so SUMO removing it at its next frame is never why a
+/// row reads <c>simulated_only</c>, and the track writes neither <c>left_the_simulation</c> nor
+/// <c>vanished</c>, which the vocabulary keeps. Which pass decided such a vehicle's body is its own frame's,
+/// since the pass after it no longer had the vehicle.</para>
 ///
 /// <para><b>Written to survive a kill</b> (doc 04 C10 §12.7, W2). The header is the first line, flushed as
 /// the track opens. Each row is appended as one whole line before the next is composed, and the rows are
@@ -95,8 +98,6 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     public static readonly string SimulatedOnlyState = CoreVocabulary.Name(RenderState.SimulatedOnly);
 
     private static readonly string NoWorld = CoreVocabulary.Name(RenderReason.NoWorld);
-    private static readonly string LeftTheSimulation = CoreVocabulary.Name(RenderReason.LeftTheSimulation);
-    private static readonly string Vanished = CoreVocabulary.Name(RenderReason.Vanished);
     private static readonly string OutsideLimit = CoreVocabulary.Name(RenderReason.OutsideLimit);
     private static readonly string NoBlueprint = CoreVocabulary.Name(RenderReason.NoBlueprint);
     private static readonly string UnknownExtent = CoreVocabulary.Name(RenderReason.UnknownExtent);
@@ -318,7 +319,6 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         }
 
         sample.Admitted.UnionWith(step.RenderedVehicleIds);
-        sample.Vanished.UnionWith(step.Vanished);
         _waiting.Enqueue(sample);
     }
 
@@ -450,7 +450,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         sample.Vehicles.Sort(static (left, right) => string.CompareOrdinal(left.Id, right.Id));
         foreach (CoSimVehicleFrame vehicle in sample.Vehicles)
         {
-            WriteVehicle(vehicle, next, instant);
+            WriteVehicle(vehicle, sample, next, instant);
         }
 
         // Once for the frame, its every row written.
@@ -460,7 +460,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         LastSampleSeconds = sample.FrameSeconds;
     }
 
-    private void WriteVehicle(in CoSimVehicleFrame vehicle, Sample? next, Instant instant)
+    private void WriteVehicle(in CoSimVehicleFrame vehicle, Sample sample, Sample? next, Instant instant)
     {
         WorldTruthVehicleType type = _types[vehicle.TypeId];
         double course = ((vehicle.HeadingDegrees % 360.0) + 360.0) % 360.0;
@@ -471,7 +471,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         // converted at the ground's height where it is known.
         GeoLocation where = Geodesy.CarlaLocalToGeodetic(
             _origin, vehicle.X, -vehicle.Y, bareEarth is { } ground ? ground - _origin.Altitude : 0.0);
-        (string state, string reason, string actor) = RenderStateOf(vehicle, type, bareEarth, next,
+        (string state, string reason, string actor) = RenderStateOf(vehicle, type, bareEarth, sample, next,
                                                                     instant.DrawsAWorld);
         int flowEnd = vehicle.Id.LastIndexOf('.');
 
@@ -526,8 +526,14 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     /// <summary>
     /// Whether a body drew the vehicle on the frame, and if not, why: the first reason that holds.
     /// </summary>
+    /// <remarks>
+    /// The render set a frame drew is decided at the SUMO frame after it, the one its ticks interpolate
+    /// towards, for every vehicle SUMO still has there; for a vehicle SUMO removed there, at the frame's own,
+    /// the last pass that had it.
+    /// </remarks>
     private (string State, string Reason, string Actor) RenderStateOf(
-        in CoSimVehicleFrame vehicle, WorldTruthVehicleType type, double? bareEarth, Sample? next, bool drawsAWorld)
+        in CoSimVehicleFrame vehicle, WorldTruthVehicleType type, double? bareEarth, Sample sample, Sample? next,
+        bool drawsAWorld)
     {
         if (!drawsAWorld)
         {
@@ -539,9 +545,9 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
             return (RenderedState, string.Empty, actor.ToString(CultureInfo.InvariantCulture));
         }
 
-        string reason = next is null ? NotDrawn
-            : !next.Present.Contains(vehicle.Id) ? (next.Vanished.Contains(vehicle.Id) ? Vanished : LeftTheSimulation)
-            : next.Limited && !next.Admitted.Contains(vehicle.Id) ? OutsideLimit
+        Sample? decidedBy = next is not null && !next.Present.Contains(vehicle.Id) ? sample : next;
+        string reason = decidedBy is null ? NotDrawn
+            : decidedBy.Limited && !decidedBy.Admitted.Contains(vehicle.Id) ? OutsideLimit
             : type.Unrenderable is UnrenderableReason.NoBlueprint ? NoBlueprint
             : type.Unrenderable is UnrenderableReason.UnknownExtent ? UnknownExtent
             : bareEarth is null ? NoGround
@@ -660,7 +666,6 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         sample.Vehicles.Clear();
         sample.Present.Clear();
         sample.Admitted.Clear();
-        sample.Vanished.Clear();
         _spare.Push(sample);
     }
 
@@ -723,7 +728,5 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         public HashSet<string> Present { get; } = new(StringComparer.Ordinal);
 
         public HashSet<string> Admitted { get; } = new(StringComparer.Ordinal);
-
-        public HashSet<string> Vanished { get; } = new(StringComparer.Ordinal);
     }
 }

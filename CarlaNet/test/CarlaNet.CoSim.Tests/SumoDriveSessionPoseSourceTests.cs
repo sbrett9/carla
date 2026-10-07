@@ -232,45 +232,60 @@ public sealed class SumoDriveSessionPoseSourceTests
         Assert.Equal(0, session.Report.PoseSourceBodiesNotApplied);
     }
 
-    [RequiresSumoFact]
-    public void ABodyWhoseVehicleIsMissingFromSumosNextStepIsParkedFromThatStepsFirstFrameAndNeverDrawnStale()
+    [RequiresSumoTheory]
+    [InlineData(0.0025)]
+    [InlineData(0.05)]
+    public void AVehicleSumoStopsReportingIsDrawnOnItsLastStepsFrameAtSumosPositionReadingSumoAndGoneFromTheNext(
+        double worldDelta)
     {
-        // The first truck reaches the end of its route and leaves SUMO. The step whose next SUMO frame no
-        // longer has it releases it as the step begins, so its body is parked from that step's first frame:
-        // no frame draws it standing where it was last drawn, and nothing is named stale on ground that is
-        // whole.
+        // The first truck reaches the end of its route and leaves SUMO. The frame of the last step SUMO reported
+        // it in shows it exactly where SUMO put it then, its body lent to it on the server's render set and
+        // reading sumo; from the next frame -- the second of that step at twenty ticks per step, the next step's
+        // at one -- its body is parked. No frame draws it standing where it was last drawn, and nothing is named
+        // stale on ground that is whole (the owner's ruling of 2026-10-06).
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        var timeline = new LeavingTimeline();
         List<CoSimPoseRecord> computed = [];
         List<RenderedVehicleInterval> released = [];
         SumoDriveSessionOptions options = Options(CoSimFixtures.SuccessionScenario, world, computed);
         options.World = carla;
-        options.WorldDeltaSeconds = 0.0025;
+        options.WorldDeltaSeconds = worldDelta;
         options.OnRelease = released.Add;
+        options.StepObservers.Add(timeline);
 
-        using SumoDriveSession session = SumoDriveSession.Start(options);
-        for (int step = 0; step < 400 && session.Advance(); step++)
+        int ticksPerStep;
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
         {
+            for (int step = 0; step < 400 && session.Advance(); step++)
+            {
+            }
+
+            _output.WriteLine(session.Report.ToString());
+            ticksPerStep = session.Clock.WorldTicksPerSumoStep;
         }
 
-        _output.WriteLine(session.Report.ToString());
+        Assert.Equal(worldDelta < 0.01 ? 20 : 1, ticksPerStep);
         RenderedVehicleInterval first = Assert.Single(released, interval => interval.VehicleId == "first");
         Assert.Equal(RenderSetReleaseReason.LeftTheSimulation, first.ReleaseReason);
-        Assert.NotEqual(0u, first.Actor);
+        uint body = first.Actor;
+        Assert.NotEqual(0u, body);
 
+        // Every lent body on every frame was posed on that frame's tick and is never stale; the first truck's
+        // last such frame is the frame of the last step SUMO reported it in.
         HashSet<(ulong Frame, uint Actor)> posed = [.. computed
             .Where(record => record.Actor != 0)
             .Select(record => ((ulong)record.TickIndex + 1, record.Actor))];
         ulong lastDrawn = 0;
-        for (ulong frame = 1; frame <= (ulong)session.Report.Ticks; frame++)
+        for (ulong frame = 1; frame <= (ulong)carla.Ticks; frame++)
         {
             ObservedPoseSource published = carla.PublishedPoseSourceOf(frame)!;
-            foreach ((uint body, (string vehicleId, _, _)) in carla.PublishedRenderSetOf(frame)?.Lent
+            foreach ((uint lent, (string vehicleId, _, _)) in carla.PublishedRenderSetOf(frame)?.Lent
                          ?? new Dictionary<uint, (string, string, ulong)>())
             {
-                Assert.Contains((frame, body), posed);
-                Assert.NotEqual(PoseSource.Stale, published.Of(body, frame));
+                Assert.Contains((frame, lent), posed);
+                Assert.NotEqual(PoseSource.Stale, published.Of(lent, frame));
                 if (vehicleId == "first")
                 {
                     lastDrawn = frame;
@@ -278,9 +293,25 @@ public sealed class SumoDriveSessionPoseSourceTests
             }
         }
 
-        // The last frame that drew it ends a step: the next is a step frame, the first of the step it left in.
-        Assert.True(lastDrawn > 0, "the first truck was never drawn");
-        Assert.True(carla.PublishedPoseSourceOf(lastDrawn + 1)!.StepFallsOn(lastDrawn + 1));
+        LeavingTimeline.Step lastStep = timeline.LastStepWith("first");
+        Assert.Equal(timeline.FrameAt(lastStep.FrameSeconds), lastDrawn);
+        Assert.Equal(("first", body), (carla.PublishedRenderSetOf(lastDrawn)!.Lent[body].VehicleId, body));
+
+        // A step frame, reading sumo, and drawn where SUMO put it: the step's own state, at fraction zero.
+        ObservedPoseSource onTheLast = carla.PublishedPoseSourceOf(lastDrawn)!;
+        Assert.True(onTheLast.StepFallsOn(lastDrawn));
+        Assert.Equal(PoseSource.Sumo, onTheLast.Of(body, lastDrawn));
+        CoSimPoseRecord drawn = Assert.Single(computed, record => record.Pose.VehicleId == "first"
+                                                                  && (ulong)record.TickIndex + 1 == lastDrawn);
+        Assert.Equal(0, drawn.TickIndex % ticksPerStep);
+        CoSimVehicleFrame there = lastStep.Frames["first"];
+        Assert.True(Math.Sqrt(((drawn.SumoX - there.X) * (drawn.SumoX - there.X))
+                              + ((drawn.SumoY - there.Y) * (drawn.SumoY - there.Y))) < 0.01,
+                    "the first truck was not drawn where SUMO last had it");
+
+        // Gone from the next frame: its body parked there, and no later frame drawing it.
+        Assert.Contains(body, carla.PublishedRenderSetOf(lastDrawn + 1)!.Parked);
+        Assert.Equal(ticksPerStep == 1, carla.PublishedPoseSourceOf(lastDrawn + 1)!.StepFallsOn(lastDrawn + 1));
         Assert.All(carla.PoseSourceWrites, write => Assert.Empty(write.Change.Stale));
     }
 

@@ -8,7 +8,9 @@ pass (admitted) and how many a capacity declined (shed). With no limit -- the de
 SUMO has is rendered, and eligible and admitted are the population. A pass is made for the SUMO frame
 it names (`SimulatedTimeSeconds`), one step ahead of the last frame rendered, and its render set is
 what the next step renders: a pass for frame F governs the ticks from F - step up to F. The vehicles
-SUMO inserted at F are the exception: they are drawn from F on, never on those ticks.
+SUMO inserted at F are one exception: they are drawn from F on, never on those ticks. The vehicles SUMO
+no longer has at F are the other: they are drawn on the first of those ticks, the frame of F - step,
+the last step that had them, and on none after it.
 
 Two things are kept, and nothing else per pass, so a window with no end costs no memory:
 

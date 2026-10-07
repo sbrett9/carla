@@ -360,28 +360,26 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
                          row["time_utc"]);
         }
 
-        // The measured vehicles are drawn but on their last SUMO frame, after which the ticks have
-        // nothing to carry them towards -- where that frame was rendered at all: the second vehicle is
-        // the scenario's last, and its last frame is among the two read after the last frame rendered.
-        // The unmeasured one is never drawn, for want of a body.
+        // The measured vehicles are drawn on every frame, their last SUMO frame included (the owner's ruling
+        // of 2026-10-06) -- where that frame was rendered at all: the second vehicle is the scenario's last,
+        // and its last frame is among the two read after the last frame rendered. The first has a row at its
+        // last frame, drawn by its body. The unmeasured one is never drawn, for want of a body, on its last
+        // frame as on every other.
         foreach (string measured in (string[])["first", "second"])
         {
             List<Row> life = [.. rows.Where(row => row["sumo_id"] == measured)];
-            string lastSeen = Seconds(watcher.Steps.Last(step => step.Frames.ContainsKey(measured)).FrameSeconds);
             Assert.True(life.Count > 2, $"{measured} has {life.Count} rows");
-            Assert.All(life, row => Assert.Equal(
-                             row["sim_time_s"] == lastSeen ? ("simulated_only", "left_the_simulation") : ("rendered", ""),
-                             (row["render_state"], row["render_reason"])));
+            Assert.All(life, row => Assert.Equal(("rendered", ""), (row["render_state"], row["render_reason"])));
         }
 
-        Assert.Equal(("simulated_only", "left_the_simulation"),
-                     (rows.Last(row => row["sumo_id"] == "first")["render_state"],
-                      rows.Last(row => row["sumo_id"] == "first")["render_reason"]));
+        Assert.Equal(Seconds(watcher.Steps.Last(step => step.Frames.ContainsKey("first")).FrameSeconds),
+                     rows.Last(row => row["sumo_id"] == "first")["sim_time_s"]);
+        Assert.DoesNotContain(rows, row => row["render_reason"] is "left_the_simulation" or "vanished");
 
         List<Row> unmeasured = [.. rows.Where(row => row["sumo_id"] == "unrenderable")];
         Assert.NotEmpty(unmeasured);
-        Assert.All(unmeasured[..^1], row => Assert.Equal(("simulated_only", "no_blueprint"),
-                                                          (row["render_state"], row["render_reason"])));
+        Assert.All(unmeasured, row => Assert.Equal(("simulated_only", "no_blueprint"),
+                                                    (row["render_state"], row["render_reason"])));
         // Its type names no blueprint, so its base type is its passenger class's, and it has no kind.
         Assert.Equal("car", unmeasured[0]["base_type"]);
         Assert.Equal("car-unrenderable", unmeasured[0]["callsign"]);

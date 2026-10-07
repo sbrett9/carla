@@ -23,4 +23,14 @@ public sealed record SessionEndRecord(
     double? LastRenderedSeconds,
     ulong? LastRenderedFrame,
     bool ScenarioFinished,
-    CoSimRunStop? Stopped);
+    CoSimRunStop? Stopped)
+{
+    /// <summary>
+    /// The vehicles SUMO had removed at the last SUMO frame read, released by the session's end because the
+    /// frame of their last step, which would have drawn them, was never rendered: each with the body that
+    /// drew it, its own reason, and ending at the instant of that frame, the first that did not draw it. In
+    /// the order of their ids. The other vehicles still in the render set are released by the end too, and
+    /// are in none of these.
+    /// </summary>
+    public IReadOnlyList<RenderedVehicleInterval> Released { get; init; } = [];
+}

@@ -32,9 +32,12 @@ namespace CarlaNet.CoSim;
 /// will when it drives.</para>
 ///
 /// <para><b>By default every vehicle SUMO has is drawn.</b> The scenario is the only arbiter of
-/// population: a vehicle holds a body from the frame SUMO first reports it in until SUMO removes it or
-/// the session ends, parked vehicles included. One SUMO inserts during the run is drawn first at the
-/// position SUMO first reported, moving from there, and never on a frame before SUMO inserted it.
+/// population: a vehicle holds a body from the frame SUMO first reports it in to the frame of the last
+/// step SUMO reports it in, or until the session ends, parked vehicles included, so a frame that falls on
+/// a SUMO step shows every vehicle SUMO had at that step. One SUMO inserts during the run is drawn first at
+/// the position SUMO first reported, moving from there, and never on a frame before SUMO inserted it; one
+/// SUMO stops reporting is drawn last at the position SUMO last reported, on that step's own frame, and on
+/// no frame after it (the owner's ruling of 2026-10-06).
 /// Nothing limits how many unless the caller asks for a limit; a scenario heavier than the machine is
 /// comfortable with makes a synchronous run slower on the wall clock, never different in content.</para>
 ///
@@ -128,6 +131,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly HashSet<string> _stillAwaiting = [];
     private readonly List<VehicleNotInserted> _notInsertedThisFrame = [];
     private readonly List<RenderedVehicleInterval> _releasedThisFrame = [];
+    private readonly List<RenderedVehicleInterval> _leaving = [];
     private readonly HeadlightRule? _headlights;
     private readonly Dictionary<string, (ActorId Actor, VehicleLightStateFlags Lamps)> _lampsWritten = [];
     private readonly PathHeading _headings = new();
@@ -269,7 +273,7 @@ public sealed class SumoDriveSession : IDisposable
         try
         {
             _manifest = options.RunManifestPath is { } manifestPath
-                ? RunManifestWriter.Open(manifestPath, options, Report, () => _scenarioFinished)
+                ? RunManifestWriter.Open(manifestPath, options, Report, () => _scenarioFinished, LeavingReleasedNow)
                 : null;
         }
         catch
@@ -342,7 +346,9 @@ public sealed class SumoDriveSession : IDisposable
     /// <summary>
     /// The vehicles in the render set as of the SUMO frame last read, one step ahead of the rendered
     /// clock: every vehicle SUMO has, or under an optional limit the ones it admits. One SUMO inserted at
-    /// that frame holds its body from that frame on, once the rendered clock reaches it.
+    /// that frame holds its body from that frame on, once the rendered clock reaches it. One SUMO no longer
+    /// has at that frame is not in it, and still holds its body for the next frame rendered, the frame of
+    /// its last step, which draws it.
     /// </summary>
     public IReadOnlyCollection<string> RenderedVehicleIds => _renderSet.RenderedVehicleIds;
 
@@ -1006,7 +1012,7 @@ public sealed class SumoDriveSession : IDisposable
         {
             _bridgeClock.Start();
             double fraction = Clock.InterpolationFraction(tick);
-            ComputePoses(fraction);
+            ComputePoses(fraction, stepFrame: tick == 0);
             WriteTheBatch();
             ApplyTheDrawDistance();
             NameTheRenderSet();
@@ -1039,6 +1045,13 @@ public sealed class SumoDriveSession : IDisposable
             _tickIndex++;
             Report.Ticks++;
             RenderedTimeSeconds += Clock.WorldDeltaSeconds;
+
+            // The vehicles SUMO removed were drawn on this, the frame of their last step; their bodies are
+            // parked from the next, and their intervals end at its instant.
+            if (tick == 0)
+            {
+                GiveBackTheLeaving(RenderedTimeSeconds);
+            }
         }
 
         bool more = AdvanceSumo();
@@ -1067,6 +1080,13 @@ public sealed class SumoDriveSession : IDisposable
 
         _disposed = true;
         List<Exception> failures = [];
+
+        // A vehicle SUMO removed at the frame last read keeps its body until the frame of its last step has
+        // rendered, and no frame renders now: its interval ends where every other one still open does, at
+        // the instant of the frame the run did not render, with its own reason.
+        List<RenderedVehicleInterval> leftAtTheEnd = [];
+        Attempt(failures, "release the vehicles SUMO removed whose last step was not rendered",
+                () => leftAtTheEnd.AddRange(GiveBackTheLeaving(RenderedTimeSeconds)));
         Attempt(failures, "close the rendered intervals", () => _renderSet.CloseAll(RenderedTimeSeconds));
         Attempt(failures, "close the collisions still in progress", CloseEveryCollision);
         Attempt(failures, "complete the report", () =>
@@ -1090,7 +1110,10 @@ public sealed class SumoDriveSession : IDisposable
         // Before SUMO is stopped, so an observer closing what it holds can still ask SUMO about it; each
         // told whatever the one before it did.
         var end = new SessionEndRecord(_frameSeconds, _lastCompleteSeconds, _lastCompleteFrame,
-                                       _scenarioFinished, Report.Stopped);
+                                       _scenarioFinished, Report.Stopped)
+        {
+            Released = leftAtTheEnd,
+        };
         foreach (ISumoStepObserver observer in _observers)
         {
             Attempt(failures, $"tell an observer ({observer.GetType().Name}) the session has ended",
@@ -1536,14 +1559,15 @@ public sealed class SumoDriveSession : IDisposable
     /// <para><b>Bodies only on a change.</b> Two cases follow no step, and the code holds both: a body whose
     /// step SUMO reported too far from the last to drive in one step is shown at SUMO's later position on
     /// every tick of it rather than slid along the lane, jump; and a lent body this tick did not pose -- its
-    /// pose refused for want of ground under it -- stands where it was last drawn, stale. A vehicle missing
-    /// from SUMO's next step leaves the render set at that step and its body is parked from the step's first
-    /// frame, so no frame draws it, stale or otherwise. Each is named as it begins and named cleared as it
-    /// ends, which in a run is rare; a body given back or handed to another vehicle loses its name on the
-    /// server when the render set says so, a moment before in this drain. Only a body the server holds lent
-    /// to the vehicle it draws is named, because no other frame shows it. A server that refuses a change,
-    /// or refused the render set, is sent nothing more, and the report says why; one built before the jump
-    /// state is sent each change without it (<see cref="WriteThePoseSource"/>).</para>
+    /// pose refused for want of ground under it -- stands where it was last drawn, stale. A vehicle SUMO
+    /// stops reporting is never stale for leaving: it is posed on the first tick of the step, at its last
+    /// SUMO state, where the frame falls on that step and reads sumo, and its body is parked from the next
+    /// frame, named parked by the render set before that frame's cue. Each case is named as it begins and
+    /// named cleared as it ends, which in a run is rare; a body given back or handed to another vehicle
+    /// loses its name on the server when the render set says so, a moment before in this drain. Only a body
+    /// the server holds lent to the vehicle it draws is named, because no other frame shows it. A server
+    /// that refuses a change, or refused the render set, is sent nothing more, and the report says why; one
+    /// built before the jump state is sent each change without it (<see cref="WriteThePoseSource"/>).</para>
     /// </remarks>
     private void NameThePoseSource(int tickWithinStep)
     {
@@ -1912,7 +1936,6 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private IReadOnlyList<string> ReconcileAndRead()
     {
-        _releasedThisFrame.Clear();
         _events = _simulation.ReadEvents();
         IReadOnlyList<string> departed = _events.Departed;
         _population.Reconcile(departed, _events.Arrived);
@@ -1952,23 +1975,28 @@ public sealed class SumoDriveSession : IDisposable
     /// vehicle's state and the render set.
     /// </summary>
     /// <param name="afterFastForward">Whether the frame is the one SUMO was fast-forwarded to.</param>
+    /// <remarks>
+    /// The intervals the record hands out are every one completed since the last record: those the frame's
+    /// pass released under an optional limit, and those of the vehicles SUMO removed at the frame before,
+    /// completed once the frame of their last step had rendered.
+    /// </remarks>
     private void PublishTheSumoStep(bool afterFastForward)
     {
-        if (_observers.Length == 0)
+        if (_observers.Length > 0)
         {
-            return;
+            var step = new SumoStepRecord(_tickIndex, _frameSeconds, afterFastForward, _events, _collisionsThisFrame,
+                                          [.. _notInsertedThisFrame], _population.LastVanished, _next,
+                                          _renderSet.RenderedVehicleIds, Report.LastAdmissionPass!, _vehicleQueries)
+            {
+                Released = [.. _releasedThisFrame],
+            };
+            foreach (ISumoStepObserver observer in _observers)
+            {
+                observer.OnSumoStep(step);
+            }
         }
 
-        var step = new SumoStepRecord(_tickIndex, _frameSeconds, afterFastForward, _events, _collisionsThisFrame,
-                                      [.. _notInsertedThisFrame], _population.LastVanished, _next,
-                                      _renderSet.RenderedVehicleIds, Report.LastAdmissionPass!, _vehicleQueries)
-        {
-            Released = [.. _releasedThisFrame],
-        };
-        foreach (ISumoStepObserver observer in _observers)
-        {
-            observer.OnSumoStep(step);
-        }
+        _releasedThisFrame.Clear();
     }
 
     /// <summary>
@@ -2246,7 +2274,15 @@ public sealed class SumoDriveSession : IDisposable
         _options.OnAdmissionPass?.Invoke(pass);
     }
 
-    private void ComputePoses(double fraction)
+    /// <summary>
+    /// Compute every rendered vehicle's pose for this tick, and the batch that writes it.
+    /// </summary>
+    /// <param name="fraction">How far this tick is between the two buffered SUMO frames.</param>
+    /// <param name="stepFrame">
+    /// Whether this is the first tick of the SUMO step, the one whose frame falls on the earlier of the two
+    /// frames: the one tick that draws the vehicles SUMO no longer has at the later one.
+    /// </param>
+    private void ComputePoses(double fraction, bool stepFrame)
     {
         // Every body released since the last tick goes back to its slot at the head of this same
         // batch, ahead of every pose, so a body lent to another vehicle this tick holds that
@@ -2275,103 +2311,143 @@ public sealed class SumoDriveSession : IDisposable
                 continue;
             }
 
-            if (!_binder.TryBind(to.TypeId, out VehicleExtent extent))
-            {
-                Report.VehicleTicksWithNoMeasuredBody++;
-                continue;
-            }
+            PoseVehicle(vehicleId, from, to, fraction, headlights, leaving: false);
+        }
 
-            InterpolatedState state = _interpolator.Interpolate(from, to, fraction,
-                                                                Clock.SumoStepSeconds);
-            Report.CountCase(state.Case);
-            if (state.Case == LaneInterpolationCase.Discontinuous)
+        // A vehicle SUMO no longer has at the frame just read had a state at the frame before it, and that
+        // step's own frame is this tick's: it is drawn here, exactly where SUMO last put it, as every body is
+        // posed on a step's first tick, and on no later tick of the step, which would have nothing to carry
+        // it towards. Its body stays lent to it for this frame, so no other vehicle is lent it here, and is
+        // given back once the frame has rendered (GiveBackTheLeaving). In the order of their ids, so two
+        // runs of one seed lend in the same order.
+        if (stepFrame && _leaving.Count > 0)
+        {
+            _leaving.Sort(static (left, right) => string.CompareOrdinal(left.VehicleId, right.VehicleId));
+            foreach (RenderedVehicleInterval leaving in _leaving)
             {
-                Report.SampleDiscontinuity(from, to, _interpolator.RouteDistance(from, to));
-            }
-
-            // SUMO's reported angle at this instant, recorded beside the pose; and the body's own
-            // heading and velocity, from the path its bumper takes (PathHeading). The bumper stays where
-            // SUMO put it: the heading only turns the body about it.
-            double sumoAngle = AngleBetween(from.HeadingDegrees, to.HeadingDegrees, fraction);
-            _sumoAngles[vehicleId] = sumoAngle;
-            PathHeading.Step path = _headings.Advance(
-                vehicleId, _tickIndex, state.X, state.Y, state.SpeedMetresPerSecond, Clock.WorldDeltaSeconds,
-                PathHeading.RearAxleMetres(extent), sumoAngle,
-                restart: state.Case == LaneInterpolationCase.Discontinuous);
-            if (path.Held)
-            {
-                Report.HeadingsHeldAcrossAJump++;
-            }
-
-            // The lane the interpolation walked names the road the body is on, and where along it:
-            // SUMO's position alone does not, where a deck and the road beneath it share it.
-            VehiclePose? pose = _converter.Convert(vehicleId, extent, state.X, state.Y,
-                                                   path.HeadingDegrees,
-                                                   state.SpeedMetresPerSecond,
-                                                   state.LaneId, state.LanePositionMetres,
-                                                   path.Velocity);
-            if (pose is not { } applied)
-            {
-                Report.PosesRefusedForMissingGround++;
-
-                // A body already lent to this vehicle stays where its last pose put it, so it is
-                // told it is standing still rather than left reporting the speed of a pose it no
-                // longer follows.
-                if (_pool is { } holding && holding.TryGetHeld(vehicleId, out PooledBody stranded))
+                if (_previous.TryGetValue(leaving.VehicleId, out CoSimVehicleFrame last))
                 {
-                    _batch.HoldStill(stranded.Actor);
+                    PoseVehicle(leaving.VehicleId, last, last, 0.0, headlights, leaving: true);
                 }
-
-                continue;
             }
-
-            Report.PosesComputed++;
-            if (applied.SeatHeightWasApproximated)
-            {
-                Report.PosesOnAnApproximatedSeatHeight++;
-            }
-
-            Report.CountSeat(applied);
-
-            Report.WorstBumperResidualMetres = Math.Max(
-                Report.WorstBumperResidualMetres,
-                BumperResidual(applied, extent, state.X, state.Y));
-
-            ActorId actor = 0;
-            VehicleLightStateFlags lamps = VehicleLightStateFlags.None;
-            if (_pool is { } pool)
-            {
-                actor = pool.CheckOut(vehicleId, extent.BlueprintId).Actor;
-                if (_renderedSpans.TryAdd(vehicleId, (to.TypeId, null)))
-                {
-                    // A body newly lent changes the render set from this tick's frame on.
-                    _renderSetNow = null;
-                }
-
-                _batch.Pose(actor, applied);
-                _commanded.Add((vehicleId, actor, applied));
-                _appliedPoses.Add(applied);
-                // Where this pose came from, where it follows no step: a body not posed this tick is stale,
-                // and one whose step was too far to drive in one step is shown at SUMO's later position on
-                // every frame of it, a jump (NameThePoseSource).
-                _posedThisTick.Add(actor);
-                if (state.Case == LaneInterpolationCase.Discontinuous)
-                {
-                    _jumpedThisTick.Add(actor);
-                }
-                lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
-            }
-
-            _options.OnPose?.Invoke(new CoSimPoseRecord(
-                _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
-                state.Case, state.X, state.Y, sumoAngle, from.Signals, lamps,
-                state.LaneId, state.LanePositionMetres));
         }
 
         if (_pool is { } counted)
         {
             Report.BodiesSpawned = counted.Bodies.Count;
         }
+    }
+
+    /// <summary>
+    /// Compute one vehicle's pose for this tick, lend it a body where it has none, and put the pose, its
+    /// velocity and its lamps in the batch.
+    /// </summary>
+    /// <param name="vehicleId">SUMO's vehicle id.</param>
+    /// <param name="from">Its state at the earlier of the two buffered SUMO frames.</param>
+    /// <param name="to">
+    /// Its state at the later one; for a vehicle SUMO no longer has there, its state at the earlier one again.
+    /// </param>
+    /// <param name="fraction">How far this tick is between the two frames.</param>
+    /// <param name="headlights">The headlights every rendered vehicle shows this tick.</param>
+    /// <param name="leaving">
+    /// Whether SUMO no longer has the vehicle at the later frame: it is drawn at its last state, which is
+    /// SUMO's own on this frame, so nothing about it is a jump, whatever lane it was last reported on.
+    /// </param>
+    private void PoseVehicle(string vehicleId, in CoSimVehicleFrame from, in CoSimVehicleFrame to, double fraction,
+                             VehicleLightStateFlags headlights, bool leaving)
+    {
+        if (!_binder.TryBind(to.TypeId, out VehicleExtent extent))
+        {
+            Report.VehicleTicksWithNoMeasuredBody++;
+            return;
+        }
+
+        InterpolatedState state = _interpolator.Interpolate(from, to, fraction,
+                                                            Clock.SumoStepSeconds);
+        Report.CountCase(state.Case);
+        bool jumped = state.Case == LaneInterpolationCase.Discontinuous && !leaving;
+        if (jumped)
+        {
+            Report.SampleDiscontinuity(from, to, _interpolator.RouteDistance(from, to));
+        }
+
+        // SUMO's reported angle at this instant, recorded beside the pose; and the body's own
+        // heading and velocity, from the path its bumper takes (PathHeading). The bumper stays where
+        // SUMO put it: the heading only turns the body about it.
+        double sumoAngle = AngleBetween(from.HeadingDegrees, to.HeadingDegrees, fraction);
+        _sumoAngles[vehicleId] = sumoAngle;
+        PathHeading.Step path = _headings.Advance(
+            vehicleId, _tickIndex, state.X, state.Y, state.SpeedMetresPerSecond, Clock.WorldDeltaSeconds,
+            PathHeading.RearAxleMetres(extent), sumoAngle,
+            restart: state.Case == LaneInterpolationCase.Discontinuous);
+        if (path.Held)
+        {
+            Report.HeadingsHeldAcrossAJump++;
+        }
+
+        // The lane the interpolation walked names the road the body is on, and where along it:
+        // SUMO's position alone does not, where a deck and the road beneath it share it.
+        VehiclePose? pose = _converter.Convert(vehicleId, extent, state.X, state.Y,
+                                               path.HeadingDegrees,
+                                               state.SpeedMetresPerSecond,
+                                               state.LaneId, state.LanePositionMetres,
+                                               path.Velocity);
+        if (pose is not { } applied)
+        {
+            Report.PosesRefusedForMissingGround++;
+
+            // A body already lent to this vehicle stays where its last pose put it, so it is
+            // told it is standing still rather than left reporting the speed of a pose it no
+            // longer follows.
+            if (_pool is { } holding && holding.TryGetHeld(vehicleId, out PooledBody stranded))
+            {
+                _batch.HoldStill(stranded.Actor);
+            }
+
+            return;
+        }
+
+        Report.PosesComputed++;
+        if (applied.SeatHeightWasApproximated)
+        {
+            Report.PosesOnAnApproximatedSeatHeight++;
+        }
+
+        Report.CountSeat(applied);
+
+        Report.WorstBumperResidualMetres = Math.Max(
+            Report.WorstBumperResidualMetres,
+            BumperResidual(applied, extent, state.X, state.Y));
+
+        ActorId actor = 0;
+        VehicleLightStateFlags lamps = VehicleLightStateFlags.None;
+        if (_pool is { } pool)
+        {
+            actor = pool.CheckOut(vehicleId, extent.BlueprintId).Actor;
+            if (_renderedSpans.TryAdd(vehicleId, (to.TypeId, null)))
+            {
+                // A body newly lent changes the render set from this tick's frame on.
+                _renderSetNow = null;
+            }
+
+            _batch.Pose(actor, applied);
+            _commanded.Add((vehicleId, actor, applied));
+            _appliedPoses.Add(applied);
+            // Where this pose came from, where it follows no step: a body not posed this tick is stale,
+            // and one whose step was too far to drive in one step is shown at SUMO's later position on
+            // every frame of it, a jump (NameThePoseSource).
+            _posedThisTick.Add(actor);
+            if (jumped)
+            {
+                _jumpedThisTick.Add(actor);
+            }
+            lamps = WriteTheLamps(vehicleId, actor, from.Signals, headlights);
+        }
+
+        _options.OnPose?.Invoke(new CoSimPoseRecord(
+            _tickIndex, RenderedTimeSeconds, Clock.IsCaptureTick(_tickIndex), actor, applied,
+            state.Case, state.X, state.Y, sumoAngle, from.Signals, lamps,
+            state.LaneId, state.LanePositionMetres));
     }
 
     /// <summary>
@@ -2420,16 +2496,86 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// A vehicle has left the render set: take its body back and pass the interval on with the
-    /// body named.
+    /// A vehicle has left the render set: take its body back and pass the interval on with the body
+    /// named -- now, or, for a vehicle SUMO no longer has, once the frame of its last SUMO step has
+    /// rendered.
     /// </summary>
     /// <remarks>
-    /// The render set decides who is rendered and knows nothing about which body renders them, so
+    /// <para>The render set decides who is rendered and knows nothing about which body renders them, so
     /// the two facts meet here and nowhere else. A consumer holding a track in the imagery has an
     /// actor id and needs the vehicle; only the pair of instants tells it which of the succession of
-    /// vehicles that body carried was the one it is looking at.
+    /// vehicles that body carried was the one it is looking at.</para>
+    ///
+    /// <para><b>A vehicle SUMO removed is drawn on the frame of its last step</b> (the owner's ruling of
+    /// 2026-10-06). The pass that finds it gone reads the frame one step ahead of the rendered clock, and
+    /// the next frame rendered falls on the last step that had it, which shows every vehicle SUMO had then.
+    /// So it keeps its body for that frame, posed at that step's state (<see cref="ComputePoses"/>), and
+    /// gives it back once the frame has rendered (<see cref="GiveBackTheLeaving"/>): parked from the next
+    /// frame, and named parked to the server before that frame's cue. Its interval is handed out then,
+    /// ending at the next frame's instant, the first that does not draw it. A vehicle an optional limit
+    /// releases is still a vehicle SUMO has, and is given back at once, as it always was.</para>
     /// </remarks>
     private void Release(RenderedVehicleInterval interval)
+    {
+        if (interval.ReleaseReason is RenderSetReleaseReason.LeftTheSimulation or RenderSetReleaseReason.Vanished)
+        {
+            _leaving.Add(interval);
+            return;
+        }
+
+        GiveBack(interval);
+    }
+
+    /// <summary>
+    /// Give back the body of every vehicle SUMO removed at the frame last read, now that the frame of its
+    /// last step has rendered or the session is ending, and hand out each interval, ending at an instant.
+    /// </summary>
+    /// <param name="releasedAtSeconds">
+    /// The instant the interval ends: the next frame's, which is the first that does not draw the vehicle.
+    /// </param>
+    /// <returns>The intervals handed out, in the order of their vehicles' ids.</returns>
+    /// <remarks>
+    /// In the order of their ids, as the bodies go back to their blueprints' free bodies: the order they go
+    /// back in is the order the next vehicles borrow them in, so two runs of one seed lend them alike.
+    /// </remarks>
+    private List<RenderedVehicleInterval> GiveBackTheLeaving(double releasedAtSeconds)
+    {
+        List<RenderedVehicleInterval> handedOut = [];
+        if (_leaving.Count == 0)
+        {
+            return handedOut;
+        }
+
+        _leaving.Sort(static (left, right) => string.CompareOrdinal(left.VehicleId, right.VehicleId));
+        RenderedVehicleInterval[] left = [.. _leaving];
+        _leaving.Clear();
+        foreach (RenderedVehicleInterval interval in left)
+        {
+            handedOut.Add(GiveBack(interval with { ReleasedAtSeconds = releasedAtSeconds }));
+        }
+
+        return handedOut;
+    }
+
+    /// <summary>
+    /// The vehicles SUMO removed at the frame last read, as the session's end would release them now: each
+    /// with the body it holds, ending at the next frame's instant, the frame of its last step, which no
+    /// frame will draw once the run ends.
+    /// </summary>
+    /// <remarks>
+    /// For the run manifest's caller, who closes it before the session is disposed: the session's end gives
+    /// these bodies back at the same instant, unless the caller renders on.
+    /// </remarks>
+    private IReadOnlyList<RenderedVehicleInterval> LeavingReleasedNow() =>
+        [.. _leaving
+            .OrderBy(interval => interval.VehicleId, StringComparer.Ordinal)
+            .Select(interval => interval with { Actor = BodyOf(interval.VehicleId), ReleasedAtSeconds = RenderedTimeSeconds })];
+
+    /// <summary>
+    /// Take a vehicle's body back, park it at the head of the next tick's batch, and pass the interval on
+    /// with the body named; answer the interval handed out.
+    /// </summary>
+    private RenderedVehicleInterval GiveBack(RenderedVehicleInterval interval)
     {
         ActorId actor = 0;
         if (_pool is { } pool && pool.TryCheckIn(interval.VehicleId, out PooledBody body))
@@ -2454,6 +2600,7 @@ public sealed class SumoDriveSession : IDisposable
         RenderedVehicleInterval released = interval with { Actor = actor };
         _releasedThisFrame.Add(released);
         _options.OnRelease?.Invoke(released);
+        return released;
     }
 
     /// <summary>

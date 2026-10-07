@@ -24,9 +24,12 @@ namespace CarlaNet.CoSim;
 /// never released was still in the render set then, and a collision begun and never ended was still
 /// going on.</para>
 ///
-/// <para><b>The rows.</b> An admission, a release or an event is stamped (<c>sim_time_s</c>) with TraCI's
-/// clock for the SUMO frame it describes, never SUMO's own stamps, which are a step earlier; a solar row
-/// with the instant of the frame whose sun it reads, to the microsecond.</para>
+/// <para><b>The rows.</b> An admission or an event is stamped (<c>sim_time_s</c>) with TraCI's clock for the
+/// SUMO frame it describes, never SUMO's own stamps, which are a step earlier; a release with the end of the
+/// session's interval, the instant of the first frame that no longer draws the vehicle -- for a vehicle SUMO
+/// removed, the frame after the one of its last SUMO step -- so an interval holds the instants of exactly the
+/// frames that drew its vehicle; a solar row with the instant of the frame whose sun it reads, to the
+/// microsecond.</para>
 /// <list type="table">
 /// <item><term><c>manifest_opened</c></term><description>First, before anything is rendered: the header
 /// the caller handed over verbatim (<c>run</c>) -- the run's and the session's identity, the channels --
@@ -57,8 +60,10 @@ namespace CarlaNet.CoSim;
 /// place in the render set and giving it up (doc 04 C2 §4.1): admitted at the pass that admitted it, with
 /// why -- <c>rendering_began</c>, <c>inserted</c> or <c>entered_limit</c> -- and the frame and body that
 /// first drew it, written once that frame has rendered; released with the span and the reason the session
-/// hands <see cref="SumoDriveSessionOptions.OnRelease"/>. A vehicle still in the render set when the run
-/// ends is not released, and has an admission row alone.</description></item>
+/// hands <see cref="SumoDriveSessionOptions.OnRelease"/>, written as the session hands it out -- for a vehicle
+/// SUMO removed, once the frame of its last step has rendered, or at the close where the run ended before
+/// that frame. A vehicle still in the render set when the run ends is not released, and has an admission row
+/// alone.</description></item>
 /// <item><term><c>collision_began</c>, <c>collision_ended</c></term><description>A collision SUMO
 /// reported, written as it begins and again, as a span, when it is over.</description></item>
 /// <item><term><c>vehicle_not_inserted</c>, <c>emergency_stop</c>, <c>teleport</c></term><description>The
@@ -143,6 +148,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     private readonly SumoDriveSessionOptions _options;
     private readonly CoSimRunReport _report;
     private readonly Func<bool> _scenarioFinished;
+    private readonly Func<IReadOnlyList<RenderedVehicleInterval>> _leftAtAClose;
     private readonly double _pairingTolerance;
     private readonly List<Admission> _pending = [];
     private readonly Dictionary<string, string> _held = new(StringComparer.Ordinal);
@@ -163,7 +169,8 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     private bool _fileClosed;
 
     private RunManifestWriter(string path, FileStream file, SumoDriveSessionOptions options,
-                              CoSimRunReport report, Func<bool> scenarioFinished)
+                              CoSimRunReport report, Func<bool> scenarioFinished,
+                              Func<IReadOnlyList<RenderedVehicleInterval>> leftAtAClose)
     {
         Path = path;
         _file = file;
@@ -171,6 +178,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         _options = options;
         _report = report;
         _scenarioFinished = scenarioFinished;
+        _leftAtAClose = leftAtAClose;
         // Ticks are a running sum of the world's delta, so a frame reaches a SUMO frame's instant to within
         // rounding; the frames either side are a whole delta away.
         _pairingTolerance = report.Clock.WorldDeltaSeconds / 2.0;
@@ -253,9 +261,18 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     /// Create the manifest and write its opening row, refusing a path that cannot be written or already
     /// holds one.
     /// </summary>
+    /// <param name="path">Where the manifest is written.</param>
+    /// <param name="options">The session's options.</param>
+    /// <param name="report">The session's report.</param>
+    /// <param name="scenarioFinished">Whether SUMO had nothing left to simulate at the last advance.</param>
+    /// <param name="leftAtAClose">
+    /// The vehicles SUMO removed at the last SUMO frame read whose last step has not rendered, as the
+    /// session's end would release them now, for a close its caller makes before the session ends.
+    /// </param>
     /// <exception cref="CoSimSessionRefusedException">The file exists already, or cannot be written.</exception>
     internal static RunManifestWriter Open(string path, SumoDriveSessionOptions options, CoSimRunReport report,
-                                           Func<bool> scenarioFinished)
+                                           Func<bool> scenarioFinished,
+                                           Func<IReadOnlyList<RenderedVehicleInterval>> leftAtAClose)
     {
         RefuseAnExistingManifest(path);
         FileStream? file = null;
@@ -269,7 +286,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
             // Shared for reading, so a run is watched by reading the manifest as it grows.
             file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-            var writer = new RunManifestWriter(path, file, options, report, scenarioFinished);
+            var writer = new RunManifestWriter(path, file, options, report, scenarioFinished, leftAtAClose);
             writer.WriteOpened();
             writer.WritePlan();
             return writer;
@@ -536,8 +553,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     }
 
     /// <summary>
-    /// Close the manifest at the session's end, where its caller has not: the sun at the window's end, and
-    /// the terminal row.
+    /// Close the manifest at the session's end, where its caller has not: the releases of the vehicles SUMO
+    /// removed at the last SUMO frame read, which the end released (<see cref="SessionEndRecord.Released"/>),
+    /// the sun at the window's end, and the terminal row.
     /// </summary>
     public void OnSessionEnded(SessionEndRecord end)
     {
@@ -551,13 +569,15 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             : end.ScenarioFinished ? "scenario_finished"
             : "caller_stopped";
         WriteClosing(ended, end.Stopped, null, end.LastFrameSeconds,
-                     end.LastRenderedSeconds is { } rendered ? Rendered(rendered) : null, end.LastRenderedFrame);
+                     end.LastRenderedSeconds is { } rendered ? Rendered(rendered) : null, end.LastRenderedFrame,
+                     end.Released);
         CloseFile();
     }
 
     /// <summary>
-    /// Close the manifest now, saying why the run ended: the admissions still waiting on a frame, the sun
-    /// at the window's end, and the terminal row. Nothing is written after it.
+    /// Close the manifest now, saying why the run ended: the releases of the vehicles SUMO removed at the
+    /// last SUMO frame read, as the session's end releases them, the admissions still waiting on a frame,
+    /// the sun at the window's end, and the terminal row. Nothing is written after it.
     /// </summary>
     /// <param name="reason">
     /// The caller's own word for why it stopped -- its window closed, an operator stopped it -- written
@@ -580,7 +600,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             : "caller_stopped";
         WriteClosing(ended, _report.Stopped, reason, _lastSumoFrameSeconds,
                      _lastFrame is null ? null : Rendered(_lastFrame.SimulatedTimeSeconds),
-                     _lastFrame?.Frame);
+                     _lastFrame?.Frame, _leftAtAClose());
         CloseFile();
     }
 
@@ -869,8 +889,8 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
     private void WriteRelease(RenderedVehicleInterval released)
     {
-        // A vehicle released before any frame rendered its admission -- one SUMO had for a single frame --
-        // is admitted first, so its rows read in order.
+        // A vehicle released before any frame rendered its admission -- one SUMO had only at frames read
+        // after the last frame the run rendered -- is admitted first, so its rows read in order.
         int waiting = _pending.FindIndex(admission => admission.VehicleId == released.VehicleId);
         if (waiting >= 0)
         {
@@ -1018,10 +1038,18 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     }
 
     private void WriteClosing(string ended, CoSimRunStop? stopped, string? reason, double? lastSumoFrameSeconds,
-                              double? lastRenderedSeconds, ulong? lastRenderedFrame)
+                              double? lastRenderedSeconds, ulong? lastRenderedFrame,
+                              IReadOnlyList<RenderedVehicleInterval> left)
     {
         Guard(() =>
         {
+            // Removed by SUMO at the last SUMO frame read, and released by the run's end before the frame of
+            // their last step rendered.
+            foreach (RenderedVehicleInterval released in left)
+            {
+                WriteRelease(released);
+            }
+
             // Admitted at the SUMO frames read after the last frame rendered, which no frame drew.
             foreach (Admission admission in _pending)
             {

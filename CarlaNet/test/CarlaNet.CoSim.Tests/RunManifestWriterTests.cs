@@ -496,6 +496,46 @@ public sealed class RunManifestWriterTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void ACallerThatClosesTheManifestAfterTheLastStepWritesTheRemovalThatStepReadAtTheInstantTheEndReleasesIt()
+    {
+        // The last vehicle to leave leaves at the step that finishes the scenario, which the session reads one
+        // step ahead of the rendered clock. The frame of its last step, which would draw it, is never rendered,
+        // so the session's end releases it, at that frame's instant, the first that does not draw it; a caller
+        // that closes the manifest before disposing the session has that release written all the same.
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string manifest = Path.Combine(_directory, "manifest.jsonl");
+        var watcher = new Watcher();
+        List<RenderedVehicleInterval> released = [];
+        SumoDriveSessionOptions options = WorldLess(world, CoSimFixtures.DwellScenario, watcher);
+        options.RunManifestPath = manifest;
+        options.OnRelease = released.Add;
+
+        double endsAt;
+        int handedOutBeforeTheEnd;
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < StepLimit && session.Advance(); step++)
+            {
+            }
+
+            Assert.True(session.ScenarioFinished);
+            endsAt = session.RenderedTimeSeconds;
+            session.RunManifest!.Close("window_end");
+            handedOutBeforeTheEnd = released.Count;
+        }
+
+        List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+        Assert.Equal(2, released.Count);
+        Assert.True(handedOutBeforeTheEnd < released.Count, "every interval was handed out before the end");
+        AssertTheReleasesAreTheIntervals(rows, released);
+        Assert.Equal(endsAt, released[^1].ReleasedAtSeconds);
+        Assert.Equal(watcher.Frames[^1].SimulatedTimeSeconds + 0.05, released[^1].ReleasedAtSeconds, 9);
+        Assert.Equal(0, rows[^1].GetProperty("still_in_render_set").GetInt64());
+        Assert.Equal(("scenario_finished", "window_end"),
+                     (rows[^1].GetProperty("ended").GetString(), rows[^1].GetProperty("caller_reason").GetString()));
+    }
+
+    [RequiresSumoFact]
     public void ARunThatStopsIsClosedSayingWhereAndWhyWhetherOrNotItsCallerClosesIt()
     {
         foreach (bool callerCloses in (bool[])[false, true])

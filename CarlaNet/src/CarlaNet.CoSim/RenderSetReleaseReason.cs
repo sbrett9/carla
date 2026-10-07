@@ -26,8 +26,9 @@ public enum RenderSetReleaseReason
     /// subscription missed.
     /// </summary>
     /// <remarks>
-    /// The one release the lookahead cannot place: the vehicle is gone from SUMO before the bridge
-    /// learns of it, so its body leaves wherever it happened to be, possibly in frame. Recorded under
+    /// The one release SUMO's step does not explain: the vehicle is gone from SUMO without SUMO having
+    /// removed it. Its body is drawn on the frame of its last step where SUMO last reported it, as an
+    /// arrival's is, and is gone from the next frame, possibly in the middle of the picture. Recorded under
     /// its own reason so a consumer can count the tracks that end that way rather than infer them.
     /// </remarks>
     Vanished,

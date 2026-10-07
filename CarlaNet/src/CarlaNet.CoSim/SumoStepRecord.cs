@@ -69,10 +69,14 @@ public sealed record SumoStepRecord(
     SumoVehicleQueries Vehicles)
 {
     /// <summary>
-    /// The vehicles that left the render set at the frame's pass, each with the span it held a place
-    /// over, the body that drew it and why it left -- the intervals handed to
-    /// <see cref="SumoDriveSessionOptions.OnRelease"/>, in the order they were released. A vehicle still
-    /// in the render set when the session ends is released by the end, not by a frame, and is in none.
+    /// The intervals completed since the frame before, each with the span its vehicle held a place over,
+    /// the body that drew it and why it left -- the intervals handed to
+    /// <see cref="SumoDriveSessionOptions.OnRelease"/>, in the order they were handed out: those of the
+    /// vehicles SUMO removed at the frame before, in the order of their ids, each completed once the frame
+    /// of its last step had rendered, and those of the vehicles an optional limit released at this frame's
+    /// pass. A vehicle still in the render set when the session ends is released by the end, not by a
+    /// frame, and is in none; one SUMO removed at the last frame read is in the end's
+    /// (<see cref="SessionEndRecord.Released"/>).
     /// </summary>
     public IReadOnlyList<RenderedVehicleInterval> Released { get; init; } = [];
 }
