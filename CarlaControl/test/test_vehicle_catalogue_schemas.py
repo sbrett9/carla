@@ -1,7 +1,8 @@
 """The vehicle catalogue's three files are what their schemas say, and their loaders hold them to it.
 
   * `vehicles.catalogue.json` and `vehicle_body_widths.json` match the JSON Schemas
-    `VehicleCatalogueSchemas` generates, which are the published ones;
+    `VehicleCatalogueSchemas` generates, which `test_published_schemas` holds equal to the published
+    ones;
   * `vehicles.vtypes.rou.xml`, and the route file `SumoVehicleTypeWriter` writes from the catalogue now,
     match `vehicle_types.xsd`, whose attributes are the ones the writer writes;
   * `VehicleCatalogue.load` and `VehicleCatalogueBuilder.load_body_widths` refuse a file that departs
@@ -40,18 +41,10 @@ VEHICLE_TYPES = CATALOGUE_DIRECTORY / "vehicles.vtypes.rou.xml"
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
 VEHICLE_TYPES_SCHEMA = SCHEMAS / "vehicle_types.xsd"
 XSD = "{http://www.w3.org/2001/XMLSchema}"
-REGENERATE = ("regenerate with: python -c \"from carlacontrol.VehicleCatalogueSchemas import "
-              "VehicleCatalogueSchemas; VehicleCatalogueSchemas.write('CarlaControl/schemas')\"")
 
 
 def shipped() -> dict:
     return json.loads(CATALOGUE.read_text(encoding="utf-8"))
-
-
-@pytest.mark.parametrize("name", sorted(VehicleCatalogueSchemas.schemas()))
-def test_the_published_schema_is_the_generated_one(name):
-    assert (SCHEMAS / name).read_text(encoding="utf-8") == SchemaPublication.text(
-        VehicleCatalogueSchemas.schemas()[name]), REGENERATE
 
 
 def test_the_body_width_version_is_the_one_the_builder_reads():

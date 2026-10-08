@@ -24,9 +24,14 @@ with no closing row is noted as a run that was interrupted, which is not a failu
 Exit status: 0 when every file keeps its schema, 1 when any does not, 2 when the folder holds no file
 of a capture.
 
+`--write-schemas DIR` writes every published schema this release generates into DIR instead -- the ones
+generated in Python and the capture schemas the loaded CarlaNet generates -- which is how
+`CarlaControl/schemas` is regenerated after a writer or a reader changes (`PublishedSchemas`).
+
 Examples (from a checkout, `python CarlaControl/scripts/validate_capture.py` is the same tool):
     carla-validate Build/captures/cap-20261007-173433-41f49b
     carla-validate Build/captures/cap-20261007-173433-41f49b --show 200
+    carla-validate --write-schemas CarlaControl/schemas
 """
 import argparse
 import logging
@@ -36,6 +41,7 @@ from pathlib import Path
 
 from carlacontrol.CaptureSchemaSet import CaptureSchemaSet
 from carlacontrol.CaptureValidator import KINDS, CaptureValidator
+from carlacontrol.PublishedSchemas import PublishedSchemas
 from carlacontrol.ToolLayout import ToolLayout
 
 
@@ -43,7 +49,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=os.path.basename(sys.argv[0]), description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("capture", type=Path,
+    parser.add_argument("capture", type=Path, nargs="?",
                         help="a capture folder, or one camera's folder within it; or a folder of run "
                              "records, compiled scenarios or inputs")
     parser.add_argument("--show", type=int, default=50,
@@ -51,13 +57,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--schemas", type=Path, default=None,
                         help="the folder of schemas to check against (default: the ones installed with "
                              "carlacontrol, or the checkout's CarlaControl/schemas)")
-    return parser.parse_args(argv)
+    parser.add_argument("--write-schemas", type=Path, metavar="DIR", default=None,
+                        help="write every schema this release generates into DIR, and check nothing")
+    args = parser.parse_args(argv)
+    if args.capture is None and args.write_schemas is None:
+        parser.error("name a folder to check, or --write-schemas DIR")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    if args.write_schemas is not None:
+        try:
+            written = PublishedSchemas.write_every(args.write_schemas)
+        except RuntimeError as unavailable:
+            logging.error("%s", unavailable)
+            return 2
+        logging.info("wrote %d schemas into %s", len(written), args.write_schemas)
+        return 0
     if not args.capture.is_dir():
         logging.error("%s is not a folder", args.capture)
         return 2

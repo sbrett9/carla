@@ -1,15 +1,18 @@
 """Every schema we publish is its generator's output, a JSON Schema 2020-12 document named by its URN,
 checkable by the validator our readers use, and described on a page of its own.
 
-A schema is generated from the code that writes or reads its file and never edited by hand, so a
-checked-in copy that differs from its generator is a schema describing something the code no longer
-does. Its `$id` names the file kind and the format version the file declares, so a reader holding a
-file can tell which schema is its. Each schema uses only the keywords the readers' validator
-(`ScenarioSchema.validate_against`) enforces, so a published schema says no more than a reader checks.
+Every file in `CarlaControl/schemas/` is one `PublishedSchemas` lists: generated in Python, generated
+by the CarlaNet writers of what a capture writes, or written by hand. A generated schema comes from the
+code that writes or reads its file and is never edited, so a checked-in copy that differs from its
+generator, by a byte, is a schema describing something the code no longer does: each is held equal to
+what its generator makes now, the capture schemas to what the CarlaNet this suite loaded makes, and
+`carla-validate --write-schemas` writes them all. Its `$id` names the file kind and the format version
+the file declares, so a reader holding a file can tell which schema is its. Each schema uses only the
+keywords the readers' validator (`ScenarioSchema.validate_against`) enforces, so a published schema
+says no more than a reader checks.
 """
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
@@ -24,10 +27,12 @@ import clr  # noqa: E402
 from CarlaNet.CoSim import SolarEpoch  # noqa: E402
 from System.Reflection import BindingFlags  # noqa: E402
 
+from carlacontrol.commands.validate import main as validate  # noqa: E402
 from carlacontrol.ProducerRecord import ProducerRecord  # noqa: E402
 from carlacontrol.PublishedSchemas import (  # noqa: E402
-    RUN_SCHEMAS,
-    SCENARIO_SCHEMAS,
+    CAPTURE_SCHEMAS,
+    GENERATED,
+    HAND_WRITTEN,
     PublishedSchemas,
 )
 from carlacontrol.ResolutionReport import SECTIONS  # noqa: E402
@@ -71,26 +76,49 @@ def every_schema() -> dict[str, dict]:
     return schemas
 
 
+REGENERATE = "regenerate it with carla-validate --write-schemas CarlaControl/schemas"
+
+
+def test_every_file_in_the_schema_folder_is_listed_once():
+    groups = [*GENERATED.values(), CAPTURE_SCHEMAS, HAND_WRITTEN]
+    listed = [name for group in groups for name in group]
+    assert len(listed) == len(set(listed)), "a schema is listed in two groups"
+    assert sorted(path.name for path in SCHEMAS.iterdir()) == sorted(listed) == \
+        list(PublishedSchemas.files())
+
+
 @pytest.mark.parametrize("name", sorted(PublishedSchemas.all()))
-def test_the_checked_in_schema_is_its_generator_s(name):
+def test_the_checked_in_schema_is_its_generator_s_byte_for_byte(name):
     path = SCHEMAS / name
-    tool = "carla-capture" if name in RUN_SCHEMAS else "carla-compile-scenario"
-    assert path.is_file(), f"publish it with {tool} --write-schemas CarlaControl/schemas"
-    assert json.loads(path.read_text(encoding="utf-8")) == PublishedSchemas.all()[name](), \
-        f"{name} is not what its generator writes; regenerate it with {tool} --write-schemas"
+    assert path.is_file(), REGENERATE
+    assert path.read_text(encoding="utf-8") == SchemaPublication.text(PublishedSchemas.all()[name]()), \
+        f"{name} is not what its generator writes; {REGENERATE}"
 
 
-def test_the_two_tools_publish_different_schemas():
-    assert not set(RUN_SCHEMAS) & set(SCENARIO_SCHEMAS)
+@pytest.fixture(scope="module")
+def capture_texts() -> dict[str, str]:
+    return PublishedSchemas.capture_texts()
 
 
-def test_the_written_schemas_are_the_generated_ones(tmp_path):
-    written = PublishedSchemas.write(tmp_path, PublishedSchemas.all())
-    assert sorted(path.name for path in written) == sorted(PublishedSchemas.all())
-    for path in written:
-        text = path.read_bytes()
-        assert text.endswith(b"}\n") and b"\r\n" not in text
-        assert json.loads(text) == PublishedSchemas.all()[path.name]()
+def test_the_capture_schemas_listed_are_the_ones_carlanet_generates(capture_texts):
+    assert sorted(capture_texts) == sorted(CAPTURE_SCHEMAS)
+
+
+@pytest.mark.parametrize("name", CAPTURE_SCHEMAS)
+def test_each_capture_schema_is_what_the_carlanet_writers_generate(name, capture_texts):
+    assert (SCHEMAS / name).read_text(encoding="utf-8") == capture_texts[name], \
+        f"{name} is not what CarlaNet's writers generate; {REGENERATE}, or run CarlaNet's schema " \
+        "tests with CARLANET_WRITE_CAPTURE_SCHEMAS=1"
+
+
+def test_one_command_writes_every_generated_schema_as_it_is_checked_in(tmp_path):
+    assert validate(["--write-schemas", str(tmp_path)]) == 0
+    written = sorted(path.name for path in tmp_path.iterdir())
+    assert written == sorted([*PublishedSchemas.all(), *CAPTURE_SCHEMAS])
+    for name in written:
+        text = (tmp_path / name).read_bytes()
+        assert b"\r\n" not in text and text.endswith(b">\n" if name.endswith(".xsd") else b"}\n"), name
+        assert text == (SCHEMAS / name).read_bytes(), name
 
 
 @pytest.mark.parametrize("name", sorted(PAGES))

@@ -14,7 +14,7 @@ the XML file and the CSV. Then:
   * a CARLA vehicle's datagram, as carla-sctmv sends it with the capture tick and the sun, is valid too;
   * the legacy labels file and the gap sidecar written from it meet their schemas.
 
-Every published schema here is held equal to `TelemetrySchemas`.
+`test_published_schemas` holds every published schema here equal to `TelemetrySchemas`.
 """
 from __future__ import annotations
 
@@ -59,8 +59,6 @@ SHARED_PARTS = ("Instant", "CalendarDate", "TrueOrFalse", "Latitude", "Longitude
 CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 LEGACY_LABELS = _REPO / "CarlaControl" / "test" / "fixtures" / \
     "Shahid_Bahonar_Port_PatternOfLife.shipped.labels.json"
-REGENERATE = ("regenerate with: python -c \"from carlacontrol.TelemetrySchemas import "
-              "TelemetrySchemas; TelemetrySchemas.write('CarlaControl/schemas')\"")
 EPOCH = datetime(2026, 3, 21, 5, 0, tzinfo=UTC)
 
 # The vehicles the stand-in presents: SUMO id, type id, and that type's class, blueprint and vClass.
@@ -71,12 +69,6 @@ TYPES = {
 }
 ROSTER = [("traffic.0", "vehicle.lincoln.mkz"), ("traffic.1", "vehicle.ambulance.ford"),
           ("orbiter", "vehicle.lincoln.mkz"), ("freight.0", "hand_written_truck")]
-
-
-@pytest.mark.parametrize("name", sorted(TelemetrySchemas.schemas()))
-def test_the_published_schema_is_the_generated_one(name):
-    assert (SCHEMAS / name).read_text(encoding="utf-8") == SchemaPublication.text(
-        TelemetrySchemas.schemas()[name]), REGENERATE
 
 
 def test_the_table_schema_s_fields_are_the_bridge_s_columns_in_order():

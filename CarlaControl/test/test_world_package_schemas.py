@@ -2,8 +2,8 @@
 
 Checked here:
 
-  * every published schema of a world package's JSON entries is the one `WorldPackageSchemas` generates,
-    and each uses only what the reader's validator enforces;
+  * every schema of a world package's JSON entries uses only what the reader's validator enforces
+    (`test_published_schemas` holds each published one equal to what `WorldPackageSchemas` generates);
   * a package the authoring reference set was published into by the real writers -- the place index,
     the solar frame and a resolved area -- matches the schemas;
   * the world packages a world build wrote, under the main checkout's `Build/world-packages`, match
@@ -44,8 +44,6 @@ from carlacontrol.WorldPackageSchemas import (  # noqa: E402
 )
 
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
-REGENERATE = ("regenerate with: python -c \"from carlacontrol.WorldPackageSchemas import "
-              "WorldPackageSchemas; WorldPackageSchemas.write('CarlaControl/schemas')\"")
 
 
 
@@ -64,14 +62,6 @@ def built_package_folders() -> list[Path]:
 BUILT_PACKAGES = sorted({path.resolve() for folder in built_package_folders()
                          for path in folder.glob("*.cwp")})
 JSON_ENTRIES = [entry.name for entry in ENTRIES if entry.schema]
-
-
-@pytest.mark.parametrize("name", sorted(WorldPackageSchemas.schemas()))
-def test_the_published_schema_is_the_generated_one(name):
-    published = SCHEMAS / name
-    assert published.is_file(), REGENERATE
-    assert published.read_text(encoding="utf-8") == SchemaPublication.text(
-        WorldPackageSchemas.schemas()[name]), REGENERATE
 
 
 @pytest.mark.parametrize("name", sorted(WorldPackageSchemas.schemas()))

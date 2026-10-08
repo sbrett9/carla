@@ -3,7 +3,7 @@
 `PackageWorld.ps1` and `PackageWorld.sh` are run against a throwaway checkout holding one exported world
 whose cook is already staged, so `-SkipCook` / `--skip-cook` packages it without an engine. The
 `world.json` each writes into its zip is checked against `level_package_manifest.schema.json`, which
-is held equal to `LevelPackageSchema`.
+`test_published_schemas` holds equal to `LevelPackageSchema`.
 
 Both scripts write the manifest as UTF-8 without a byte-order mark -- `PackageWorld.ps1` under Windows
 PowerShell 5.1 too, where one is checked as well -- with `packagedAtUtc` to the millisecond, and every
@@ -79,12 +79,6 @@ def git(checkout: Path, *arguments: str) -> str:
                    "GIT_COMMITTER_NAME": "fixture", "GIT_COMMITTER_EMAIL": "f@example.com"}
     return subprocess.run(["git", "-C", str(checkout), *arguments], capture_output=True, text=True,
                           check=True, env=environment).stdout.strip()
-
-
-def test_the_published_schema_is_the_generated_one():
-    assert PUBLISHED.read_text(encoding="utf-8") == SchemaPublication.text(LevelPackageSchema.schema()), (
-        "regenerate with: python -c \"from carlacontrol.LevelPackageSchema import LevelPackageSchema; "
-        "LevelPackageSchema.write('CarlaControl/schemas')\"")
 
 
 # -- what PackageWorld writes -------------------------------------------------------------------------
