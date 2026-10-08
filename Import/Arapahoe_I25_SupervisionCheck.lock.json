@@ -11,11 +11,11 @@
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g4e7614850",
-    "carlanet": "unknown",
+    "tool_version": "0.10.0+g8ef0978cb",
+    "carlanet": "0.10.0+g7d218c48c",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:57:36.139Z"
+    "written_utc": "2026-10-08T02:15:44.761Z"
   },
   "files": {
     "routes": {
@@ -32,7 +32,7 @@
     },
     "supervision": {
       "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-      "sha256": "c866ffeb735103f2720f98a4f838af8a4415434406b009d49fb3599fe728cc99"
+      "sha256": "6d71f0ee219de43c7191dae7f3726644ef9663218d52fd4091c59c78fefc0f0c"
     }
   },
   "world": {
@@ -99,7 +99,7 @@
         "version": 1
       }
     ],
-    "vocabulary_digest": "55bb7d40e1f03e72428012dbf76a888d67da45e4e35ee8ba7802ca4153ce7a88"
+    "vocabulary_digest": "0fbcea06c4a28575486d05528b3bdf029d139a829c8ec7a3f0adc71527f9ece6"
   },
   "traffic": {
     "sumo_seed": 42,

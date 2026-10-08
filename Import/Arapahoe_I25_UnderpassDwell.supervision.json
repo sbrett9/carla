@@ -8,11 +8,11 @@
   "config_digest": "ead68759a136dddff82943cdcc2d7d897638d4f515a68c9fd346e4ca1b2b56ed",
   "additional_digest": "25260f609a53c8d3ac7fae8d7c7ccc15a6c2e1000d2affaae080e2b6c49dc119",
   "vocabulary_version": 3,
-  "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63",
+  "vocabulary_digest": "19936053b6fae2261e8b204ce9f0e330720a20864e2a3223cb6e761d6c1ac51b",
   "vocabulary": {
     "core": {
       "vocabulary_version": 3,
-      "source": "06_Truth_And_Annotation.md §3.7",
+      "source": "CarlaNet.Types.Supervision.CoreVocabulary",
       "terms": {
         "supervision_state": [
           "annotated",

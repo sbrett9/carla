@@ -11,11 +11,11 @@
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g4e7614850.dirty",
-    "carlanet": "unknown",
+    "tool_version": "0.10.0+g8ef0978cb.dirty",
+    "carlanet": "0.10.0+g7d218c48c",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:01:13.334Z"
+    "written_utc": "2026-10-08T02:19:46.778Z"
   },
   "files": {
     "routes": {
@@ -32,7 +32,7 @@
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-      "sha256": "977025dc0ed759f2695f896948e85d7dc36f93262242fed4764a3b112e768146"
+      "sha256": "980afbf96d0649d8e1137d9a8febe2c3c2284ca2cf2e1c53415ed2fc5aca2aab"
     }
   },
   "world": {
@@ -93,7 +93,7 @@
         "version": 2
       }
     ],
-    "vocabulary_digest": "1dde0ea3664cc7ebd7f8c8b4cde009a3042cce03af229fffec814134711186f6"
+    "vocabulary_digest": "d3c2af61bdd520654c08c8e0d6037f2b882072a1b7202ad0286e249e833830fb"
   },
   "traffic": {
     "sumo_seed": 42,

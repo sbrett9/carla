@@ -11,11 +11,11 @@
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g4e7614850.dirty",
-    "carlanet": "unknown",
+    "tool_version": "0.10.0+g8ef0978cb.dirty",
+    "carlanet": "0.10.0+g7d218c48c",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:57:41.897Z"
+    "written_utc": "2026-10-08T02:15:50.530Z"
   },
   "files": {
     "routes": {
@@ -32,7 +32,7 @@
     },
     "supervision": {
       "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-      "sha256": "2b705fbb748949979630d074543394c21c4996fe33eba55ac5cc4b0e65c9a83d"
+      "sha256": "d002bce1eaec5ff15e711478425ec2a1868a04b8be92aefcce902b66659eae61"
     }
   },
   "world": {
@@ -90,7 +90,7 @@
   "vocabulary": {
     "core_version": 3,
     "namespaces": [],
-    "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63"
+    "vocabulary_digest": "19936053b6fae2261e8b204ce9f0e330720a20864e2a3223cb6e761d6c1ac51b"
   },
   "traffic": {
     "sumo_seed": 42,

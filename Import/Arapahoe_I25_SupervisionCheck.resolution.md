@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:57:36.141Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8ef0978cb, carlanet 0.10.0+g7d218c48c, SUMO 1.27.0, at 2026-10-08T02:15:44.763Z
 
 Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.
 
@@ -39,7 +39,7 @@ Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -246,7 +246,7 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-    "sha256": "c866ffeb735103f2720f98a4f838af8a4415434406b009d49fb3599fe728cc99"
+    "sha256": "6d71f0ee219de43c7191dae7f3726644ef9663218d52fd4091c59c78fefc0f0c"
   }
 }
 ```

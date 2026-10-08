@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T02:01:13.342Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8ef0978cb.dirty, carlanet 0.10.0+g7d218c48c, SUMO 1.27.0, at 2026-10-08T02:19:46.790Z
 
 7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.
 
@@ -37,7 +37,7 @@ Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -1335,7 +1335,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "977025dc0ed759f2695f896948e85d7dc36f93262242fed4764a3b112e768146"
+    "sha256": "980afbf96d0649d8e1137d9a8febe2c3c2284ca2cf2e1c53415ed2fc5aca2aab"
   }
 }
 ```

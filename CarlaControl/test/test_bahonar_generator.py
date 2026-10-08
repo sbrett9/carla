@@ -333,7 +333,7 @@ def test_a_deviating_guard_parameter_its_term_does_not_declare_as_written_is_ref
     ([{"actor": SKIPPED, "role": "subject"}],
      f"participant '{SKIPPED}' is not an actor of this scenario"),
     ([], "has no participant. An instance is an assertion about one or more vehicles, and a label "
-         "follows its vehicle (06 §3.5); an omission is conveyed by labelling the vehicle that "
+         "follows its vehicle; an omission is conveyed by labeling the vehicle that "
          "deviates"),
 ])
 def test_a_label_on_the_skipped_posting_is_refused_because_no_vehicle_takes_it(tmp_path,

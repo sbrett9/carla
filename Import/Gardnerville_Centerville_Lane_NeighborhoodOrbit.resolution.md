@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:57:41.898Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8ef0978cb.dirty, carlanet 0.10.0+g7d218c48c, SUMO 1.27.0, at 2026-10-08T02:15:50.531Z
 
 One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.
 
@@ -31,7 +31,7 @@ Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -202,7 +202,7 @@ SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-    "sha256": "2b705fbb748949979630d074543394c21c4996fe33eba55ac5cc4b0e65c9a83d"
+    "sha256": "d002bce1eaec5ff15e711478425ec2a1868a04b8be92aefcce902b66659eae61"
   }
 }
 ```
