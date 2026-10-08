@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:display-convention:1",
+  "title": "CoT display convention",
+  "description": "How one run draws each vehicle population in Cursor-on-Target: the affiliation letter a TAK client colors its tracks by. A choice about display, not part of the scenario: kept beside the scenario as <scenario>.display.json, and read by carla-cot-telemetry. It names populations and never single vehicles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "convention_version",
+    "affiliation_by_type"
+  ],
+  "properties": {
+    "convention_version": {
+      "const": 1,
+      "description": "The format version of this file. A reader refuses any other."
+    },
+    "description": {
+      "type": "string",
+      "description": "What the convention is for, in a sentence or two. Not read."
+    },
+    "affiliation_by_type": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": [
+          "a",
+          "f",
+          "h",
+          "j",
+          "k",
+          "n",
+          "o",
+          "p",
+          "s",
+          "u",
+          "x"
+        ]
+      },
+      "description": "Each population's affiliation: the second letter of a CoT type. A population is a vehicle class id (a vType's carla:class_id) in a compiled scenario, or a vType id in a hand-written route file. A population left out takes the run's default."
+    }
+  }
+}

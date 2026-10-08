@@ -46,6 +46,10 @@ from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.version import __version__
 
 RESULT_VERSION = 1
+# The format versions of the two records written beside the result: the run's resolution report
+# (`run.resolution.json`) and its lock (`run.lock.json`).
+RUN_RESOLUTION_VERSION = 1
+RUN_LOCK_VERSION = 1
 # The component whose run the result records.
 TOOL = "carlacontrol.CaptureSession"
 OUTCOMES = {

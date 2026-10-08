@@ -54,14 +54,18 @@ from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.ScenarioCompiler import COMPILER, ScenarioCompiler
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioSchema import ScenarioSchema
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
 
 SWEEP_VERSION = 1
 SWEEP_CHECK = 43
 
 SWEEP_SCHEMA: dict = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://carla.local/schemas/sweep.schema.json",
+    "$schema": DIALECT,
+    "$id": SchemaIdentifier.urn("sweep", SWEEP_VERSION),
     "title": "Scenario sweep",
+    "description": "One base specification, axes varied over it, and counterfactual pairs. "
+                   "carla-compile-scenario --sweep checks a <sweep>.sweep.json against this schema "
+                   "(check 53) and compiles every member in full.",
     "type": "object", "additionalProperties": False,
     "required": ["sweep_version", "sweep_id", "base"],
     "properties": {

@@ -56,6 +56,7 @@ import os
 import sys
 
 from carlacontrol.CaptureSession import CaptureSession
+from carlacontrol.PublishedSchemas import RUN_SCHEMAS, PublishedSchemas
 from carlacontrol.RunConfiguration import RunConfiguration
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.ToolLayout import ToolLayout
@@ -95,6 +96,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "the resolution report and the lock")
     parser.add_argument("--write-schema", metavar="PATH",
                         help="write the run configuration's JSON schema and exit")
+    parser.add_argument("--write-schemas", metavar="DIR",
+                        help="write the schemas of the run configuration, the run's records (result, "
+                             "resolution report, lock, launch echo) and the site profile into DIR, "
+                             "and exit")
     parser.add_argument("--write-site-profile", metavar="PATH",
                         help="write this machine's site profile as a file to edit, and exit")
     parser.add_argument("--log-level", default="INFO",
@@ -116,8 +121,12 @@ def override_texts(args: argparse.Namespace) -> list[tuple[str, str]]:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=args.log_level, format="%(message)s", stream=sys.stdout)
-    if args.write_schema:
-        logging.info("wrote %s", RunConfiguration.write_schema(args.write_schema))
+    if args.write_schema or args.write_schemas:
+        if args.write_schema:
+            logging.info("wrote %s", RunConfiguration.write_schema(args.write_schema))
+        if args.write_schemas:
+            for path in PublishedSchemas.write(args.write_schemas, RUN_SCHEMAS):
+                logging.info("wrote %s", path)
         return 0
     try:
         site = SiteProfile.discover(LAYOUT, args.site_profile)

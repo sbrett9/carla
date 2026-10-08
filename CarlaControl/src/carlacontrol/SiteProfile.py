@@ -21,6 +21,14 @@ Where the values come from, in order:
    has none) -- the order the session itself searches (`CarlaNet.Sumo.SumoInstallation`). Where
    nothing holds a `sumo`, it is unset and the session searches `SUMO_HOME` and then `PATH`, which
    the profile records as a resolution the host decides.
+
+A profile file is also checked against its published schema (`schema()`, `site_profile.schema.json`),
+after the reader's own checks, so a value of the wrong type is refused in the schema's words before
+the launch reads it. The schema's field shapes and help are the run configuration's own
+(`RunConfiguration.FIELDS`), so the file and the run's record describe a field one way. A path may be
+empty or null in the file: the launch then refuses it by name (run check 37), which says more than a
+type error would. What a run's records carry of the profile -- every value with where it came from --
+is `to_record()`, whose shape is `record_schema()`.
 """
 from __future__ import annotations
 
@@ -30,6 +38,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from carlacontrol.RunConfiguration import RunConfiguration
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.ToolLayout import ToolLayout
 
 SITE_PROFILE_VERSION = 1
@@ -42,6 +52,14 @@ LAYOUT_PATHS = ("paths.scenario_root", "paths.world_package_root", "paths.catalo
                 "paths.capture_root", "paths.runs_root")
 FILE_FIELDS = ("server.host", "server.port", "server.timeout_s", "sumo.home",
                *LAYOUT_PATHS)
+# The blocks a profile file may hold besides its version.
+FILE_BLOCKS = ("server", "sumo", "paths", "environment", "note")
+_GROUP_DESCRIPTIONS = {
+    "server": "The CARLA server this machine runs against.",
+    "sumo": "The SUMO installation the session launches.",
+    "paths": "Where this machine keeps scenario packages, world packages, the vehicle catalogue, "
+             "captures and run records.",
+}
 
 
 @dataclass(frozen=True)
@@ -85,6 +103,7 @@ class SiteProfile:
             document = cls._read(profile_path)
             declared = tuple(document.get("environment", []))
             values.update(cls._from_file(document, profile_path))
+            cls._conform(document, profile_path)
             source = f"site profile {profile_path}"
         else:
             source = (f"the layout at {layout.checkout}" if layout.checkout is not None
@@ -127,7 +146,7 @@ class SiteProfile:
                 != SITE_PROFILE_VERSION:
             raise ValueError(f"{path} is not a site profile at site_profile_version "
                              f"{SITE_PROFILE_VERSION}")
-        known = {"site_profile_version", "server", "sumo", "paths", "environment", "note"}
+        known = {"site_profile_version", *FILE_BLOCKS}
         unknown = sorted(set(document) - known)
         if unknown:
             raise ValueError(f"{path}: {', '.join(unknown)} is not a site-profile block")
@@ -154,6 +173,94 @@ class SiteProfile:
             if extra:
                 raise ValueError(f"{path}: {', '.join(extra)} is not a field of '{group}'")
         return values
+
+    @classmethod
+    def _conform(cls, document: dict, path: Path) -> None:
+        """Refuse a profile file its schema does not accept, in the schema's words."""
+        schema = cls.schema()
+        problems = SchemaPublication.problems(document, schema)
+        if problems:
+            raise ValueError(SchemaPublication.refusal(path, schema, problems))
+
+    # -- the schemas ---------------------------------------------------------------------------------
+
+    @staticmethod
+    def schema() -> dict:
+        """The site-profile file's schema, as published: each field's shape and help from the run
+        configuration's field table, a path allowed to be empty or null for check 37 to refuse."""
+        groups: dict[str, dict] = {}
+        for field_path in FILE_FIELDS:
+            group, name = field_path.split(".", 1)
+            spec = RunConfiguration.FIELDS[field_path]
+            if group == "paths" or field_path == "sumo.home":
+                unset = ("Empty, the launch refuses it (run check 37)." if field_path == "sumo.home"
+                         else "Empty or null, the launch refuses it (run check 37).")
+                shape = {"type": ["string", "null"],
+                         "description": f"{spec.help} A relative path is relative to this file. "
+                                        f"{unset}"}
+            else:
+                shape = {**spec.schema, "description": spec.help}
+            if spec.has_default:
+                shape["default"] = spec.default
+            block = groups.setdefault(group, {"type": "object", "additionalProperties": False,
+                                              "description": _GROUP_DESCRIPTIONS[group],
+                                              "properties": {}})
+            block["properties"][name] = shape
+        return SchemaPublication.document(
+            "site-profile", SITE_PROFILE_VERSION, "Site profile",
+            "The facts about one machine that a capture run needs: the CARLA server's address, the "
+            "SUMO installation, and where packages, the catalogue, captures and run records live. "
+            "Read by carla-capture --site-profile; carla-capture --write-site-profile writes one to "
+            "edit. A field the file leaves out is derived from the layout the tool runs from.",
+            {"type": "object", "additionalProperties": False,
+             "required": ["site_profile_version"],
+             "properties": {
+                 "site_profile_version": {
+                     "const": SITE_PROFILE_VERSION,
+                     "description": "The format version of this file. A reader refuses any other."},
+                 "note": {"type": "string", "description": "A note for a person. Not read."},
+                 "environment": {
+                     "type": "array", "items": SchemaPublication.TEXT,
+                     "description": "The environment variables this profile allows a value to be "
+                                    "read from. A value read from a variable the list does not name "
+                                    "is reported at launch. Only sumo.home is read from one, "
+                                    f"{SUMO_OVERRIDE_VARIABLE}."},
+                 **groups}})
+
+    @staticmethod
+    def record_schema() -> dict:
+        """The shape of `to_record()`: the profile as a run's lock and resolution report record it."""
+        entry = {"type": "object", "additionalProperties": False,
+                 "required": ["value", "provenance", "environment_variable"],
+                 "properties": {
+                     "value": {"description": "The value the launch uses: text, a number, or null."},
+                     "provenance": SchemaPublication.described(
+                         SchemaPublication.TEXT, "Where the value came from: the profile file, the "
+                                                 "layout the tool runs from, or an environment "
+                                                 "variable."),
+                     "environment_variable": SchemaPublication.nullable(
+                         SchemaPublication.TEXT, "The environment variable the value was read "
+                                                 "from; null where it was read from none.")}}
+        return {"type": "object", "additionalProperties": False,
+                "required": ["source", "declared_environment", "host_searched", "values"],
+                "description": "This machine's facts as the launch resolved them, each with where "
+                               "it came from.",
+                "properties": {
+                    "source": SchemaPublication.described(
+                        SchemaPublication.TEXT, "The profile file the values were read from, or the "
+                                                "layout they were derived from."),
+                    "declared_environment": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "The environment variables the profile file names."},
+                    "host_searched": {
+                        "type": "array", "items": {"enum": list(SUMO_SEARCHED_VARIABLES)},
+                        "description": "The variables the session searches for SUMO because no "
+                                       "field names one; empty where a field does."},
+                    "values": {"type": "object", "additionalProperties": False,
+                               "required": [*LAYOUT_PATHS, "sumo.home"],
+                               "description": "Every machine fact, keyed by its run configuration "
+                                              "field.",
+                               "properties": {path: entry for path in FILE_FIELDS}}}}
 
     # -- reading -------------------------------------------------------------------------------------
 

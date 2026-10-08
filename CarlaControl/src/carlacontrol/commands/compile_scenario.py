@@ -14,7 +14,9 @@ compiles every member of a sweep into its own directory and writes `<sweep_id>.s
 
 `--write-checks`, `--write-schema` and `--write-sweep-schema` publish `checks.json`,
 `scenario.schema.json` and `sweep.schema.json`, generated from the compiler itself, for the authoring
-skill; `--write-vehicles-reference` publishes
+skill; `--write-schemas DIR` publishes the schemas of what the compiler writes (the lock, the
+resolution report, the supervision plan, the sweep index, `checks.json`) and of the epoch, a display
+convention and the areas of interest; `--write-vehicles-reference` publishes
 `references/vehicles.md`, the classes and bodies of the measured vehicle catalogue (`--catalogue`,
 this repository's from a checkout, the one installed with carlacontrol otherwise) with whether each
 body's headlights, brake lights and turn signals light up.
@@ -33,6 +35,7 @@ import os
 import sys
 from pathlib import Path
 
+from carlacontrol.PublishedSchemas import SCENARIO_SCHEMAS, PublishedSchemas
 from carlacontrol.ScenarioCheckCatalogue import ScenarioCheckCatalogue
 from carlacontrol.ScenarioCompiler import ScenarioCompiler
 from carlacontrol.ScenarioSchema import ScenarioSchema
@@ -71,6 +74,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="write scenario.schema.json, the compiler's own schema")
     parser.add_argument("--write-sweep-schema", type=Path, metavar="PATH",
                         help="write sweep.schema.json, the schema a sweep is checked against")
+    parser.add_argument("--write-schemas", type=Path, metavar="DIR",
+                        help="write into DIR the schemas of the compiler's lock, resolution report, "
+                             "supervision plan and sweep index, of checks.json, and of the epoch, "
+                             "a display convention and the areas of interest")
     parser.add_argument("--write-vehicles-reference", type=Path, metavar="PATH",
                         help="write references/vehicles.md, the catalogue's classes and bodies with "
                              "whether each body's headlights, brake lights and turn signals light up")
@@ -92,12 +99,15 @@ def main(argv: list[str] | None = None) -> int:
         logging.info("wrote %s", ScenarioSchema.write(args.write_schema))
     if args.write_sweep_schema:
         logging.info("wrote %s", ScenarioSweep.write_schema(args.write_sweep_schema))
+    if args.write_schemas:
+        for path in PublishedSchemas.write(args.write_schemas, SCENARIO_SCHEMAS):
+            logging.info("wrote %s", path)
     if args.write_vehicles_reference:
         logging.info("wrote %s", VehicleReference.write(args.write_vehicles_reference,
                                                         VehicleCatalogue.load(args.catalogue)))
     if args.specification is None and args.sweep is None:
         return 0 if (args.write_checks or args.write_schema or args.write_sweep_schema
-                     or args.write_vehicles_reference) else 2
+                     or args.write_schemas or args.write_vehicles_reference) else 2
     if args.out_dir is None:
         logging.error("--out-dir is required to compile")
         return 2

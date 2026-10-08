@@ -18,6 +18,13 @@ the refusal's problems attributed to checks 33 and 34, so a report can cite them
 **The offset is normative; the zone name is not.** `time_zone_id` is carried for a reader and never
 resolved: `zoneinfo` resolves zero zones on this machine, and two hosts with different databases would
 disagree about a corpus (`07_Scenario_Authoring.md` §2.8, §9.6).
+
+**The published schema** (`schema()`, `epoch.schema.json`) states the object's shape for a reader
+and for `carla-drive --epoch`, which checks a file against it before handing it to the session. It
+is a description of `SolarEpoch`'s rules, never a replacement: `SolarEpoch` still decides, and what
+a schema cannot say -- that the civil and UTC instants are one instant, that the civil offset is
+`utc_offset_hours` -- is only `SolarEpoch`'s. A test holds the schema's fields and version to
+`SolarEpoch`'s own.
 """
 from __future__ import annotations
 
@@ -28,8 +35,21 @@ from datetime import datetime, timedelta, timezone
 import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import names
 from CarlaNet.CoSim import CoSimSessionRefusedException, SolarEpoch
 
+from carlacontrol.SchemaPublication import SchemaPublication
+
 PRESENT_CHECK = 33
 OFFSET_CHECK = 34
+EPOCH_VERSION = int(SolarEpoch.SupportedVersion)
+
+# The civil offsets SolarEpoch accepts: whole quarter hours from -12 to +14.
+_EARLIEST_OFFSET_HOURS = -12.0
+_LATEST_OFFSET_HOURS = 14.0
+_OFFSET_STEP_HOURS = 0.25
+# An ISO-8601 date and time with an explicit offset, as SolarEpoch reads one: fractional seconds to
+# seven digits, then Z or a signed hh:mm. A UTC instant's offset is zero.
+_INSTANT = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?"
+_CIVIL_INSTANT = _INSTANT + r"(Z|[+-]\d{2}:\d{2})$"
+_UTC_INSTANT = _INSTANT + r"(Z|[+-]00:00)$"
 
 # SolarEpoch refuses with "The scenario epoch is refused. (1) ...; (2) ... ." A problem's own text may
 # contain "; ", so the split is on a separator followed by the next number in brackets.
@@ -73,6 +93,64 @@ class ScenarioEpoch:
             return cls(SolarEpoch.FromJson(json.dumps(declaration)))
         except CoSimSessionRefusedException as refusal:
             raise ScenarioEpochRefusedError(cls._attribute(str(refusal.Message))) from None
+
+    @staticmethod
+    def schema() -> dict:
+        """The epoch object's schema, as published: the fields SolarEpoch reads, and the shape of
+        each."""
+        nullable_text = SchemaPublication.nullable({"type": "string"})
+        return SchemaPublication.document(
+            "epoch", EPOCH_VERSION, "Scenario epoch",
+            "What simulated second zero means in civil time at the site: one instant, written in "
+            "civil time with its offset and again in UTC. A scenario carries it as its epoch "
+            "object; carla-drive --epoch reads it from a file of its own or from a scenario.json. "
+            "The offset is the declaration, daylight saving included; the zone name is carried for "
+            "a reader and never looked up.",
+            {"type": "object", "additionalProperties": False,
+             "required": ["epoch_version", "civil_datetime", "utc_offset_hours", "utc_datetime",
+                          "calendar_advances", "dst_in_effect"],
+             "properties": {
+                 "epoch_version": {"const": EPOCH_VERSION,
+                                   "description": "The format version of this object. A reader "
+                                                  "refuses any other."},
+                 "civil_datetime": {
+                     "type": "string", "pattern": _CIVIL_INSTANT,
+                     "examples": ["2026-03-21T00:00:00+03:30"],
+                     "description": "Simulated second zero in civil time, ISO 8601 with its offset, "
+                                    "which must equal utc_offset_hours. Z only where the offset is "
+                                    "zero."},
+                 "utc_offset_hours": {
+                     "type": "number", "minimum": _EARLIEST_OFFSET_HOURS,
+                     "maximum": _LATEST_OFFSET_HOURS, "multipleOf": _OFFSET_STEP_HOURS,
+                     "description": "The site's offset from UTC in hours, daylight saving included: "
+                                    "3.5 for +03:30. A whole number of quarter hours from -12 to "
+                                    "+14."},
+                 "utc_datetime": {
+                     "type": "string", "pattern": _UTC_INSTANT,
+                     "examples": ["2026-03-20T20:30:00Z"],
+                     "description": "The same instant in UTC, ISO 8601 with Z or +00:00. It must "
+                                    "agree with civil_datetime to the second."},
+                 "calendar_advances": {
+                     "type": "boolean",
+                     "description": "Whether the civil date advances when simulated time passes a "
+                                    "civil midnight. False holds the sun's date at the epoch's own "
+                                    "while the clock runs on."},
+                 "dst_in_effect": {
+                     "type": "boolean",
+                     "description": "Whether utc_offset_hours already includes daylight saving."},
+                 "time_zone_id": SchemaPublication.described(
+                     nullable_text, "The IANA time zone of the site, such as America/Denver, for a "
+                                    "reader. Never looked up."),
+                 "note": SchemaPublication.described(
+                     nullable_text, "One sentence saying what simulated second zero is in the "
+                                    "scenario's own terms."),
+             }})
+
+    @classmethod
+    def schema_problems(cls, declaration: object) -> list[str]:
+        """Every place an epoch object departs from the published schema; empty when it conforms.
+        `read` remains the authority on whether the epoch is accepted."""
+        return SchemaPublication.problems(declaration, cls.schema())
 
     @staticmethod
     def _attribute(message: str) -> list[tuple[int, str]]:

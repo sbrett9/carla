@@ -145,7 +145,7 @@ from carlacontrol.RunConfigurationValidator import (
     RGB_BLUEPRINT,
     RunConfigurationValidator,
 )
-from carlacontrol.RunResult import TOOL, RunResult
+from carlacontrol.RunResult import RUN_LOCK_VERSION, RUN_RESOLUTION_VERSION, TOOL, RunResult
 from carlacontrol.RunTerminationSequence import (
     CLOSE_RECORD,
     DRAIN_CAPTURE,
@@ -1263,7 +1263,7 @@ class CaptureSession:
     def _write_resolution_report(self, outcome: str) -> None:
         path = RunResult.sibling(self.result_path or self._result_path(), "resolution")
         document = {
-            "resolution_version": 1,
+            "resolution_version": RUN_RESOLUTION_VERSION,
             "producer": self.result.producer(),
             "outcome": outcome,
             "session_id": self.session_id,
@@ -1287,7 +1287,7 @@ class CaptureSession:
                                       PRODUCER_KEY: self.result.producer()})
         lock = RunResult.sibling(result_path, "lock")
         RunResult.write_json(lock, {
-            "lock_version": 1,
+            "lock_version": RUN_LOCK_VERSION,
             "producer": self.result.producer(),
             "session_id": self.session_id,
             "effective_configuration_sha256": effective.digest,

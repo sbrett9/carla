@@ -43,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ScenarioWorldFixture import ScenarioWorldFixture  # noqa: E402
 
+from carlacontrol.PublishedSchemas import PublishedSchemas  # noqa: E402
 from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
 from carlacontrol.RunConfigurationCheckCatalogue import RunConfigurationCheckCatalogue  # noqa: E402
 from carlacontrol.ScenarioCheckCatalogue import ScenarioCheckCatalogue  # noqa: E402
@@ -52,7 +53,7 @@ from carlacontrol.ScenarioSweep import SWEEP_SCHEMA  # noqa: E402
 
 PYPROJECT = _REPO / "CarlaControl" / "pyproject.toml"
 SKILL = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios"
-PUBLISHED = [_REPO / "CarlaControl" / "schemas" / "run_configuration.schema.json",
+PUBLISHED = [*(_REPO / "CarlaControl" / "schemas" / name for name in sorted(PublishedSchemas.all())),
              SKILL / "schemas" / "scenario.schema.json", SKILL / "schemas" / "sweep.schema.json",
              SKILL / "checks.json",
              *sorted((_REPO / "CarlaControl" / "schemas").glob("*.tableschema.json")),

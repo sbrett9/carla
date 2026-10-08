@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:epoch:1",
+  "title": "Scenario epoch",
+  "description": "What simulated second zero means in civil time at the site: one instant, written in civil time with its offset and again in UTC. A scenario carries it as its epoch object; carla-drive --epoch reads it from a file of its own or from a scenario.json. The offset is the declaration, daylight saving included; the zone name is carried for a reader and never looked up.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "epoch_version",
+    "civil_datetime",
+    "utc_offset_hours",
+    "utc_datetime",
+    "calendar_advances",
+    "dst_in_effect"
+  ],
+  "properties": {
+    "epoch_version": {
+      "const": 1,
+      "description": "The format version of this object. A reader refuses any other."
+    },
+    "civil_datetime": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?(Z|[+-]\\d{2}:\\d{2})$",
+      "examples": [
+        "2026-03-21T00:00:00+03:30"
+      ],
+      "description": "Simulated second zero in civil time, ISO 8601 with its offset, which must equal utc_offset_hours. Z only where the offset is zero."
+    },
+    "utc_offset_hours": {
+      "type": "number",
+      "minimum": -12.0,
+      "maximum": 14.0,
+      "multipleOf": 0.25,
+      "description": "The site's offset from UTC in hours, daylight saving included: 3.5 for +03:30. A whole number of quarter hours from -12 to +14."
+    },
+    "utc_datetime": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?(Z|[+-]00:00)$",
+      "examples": [
+        "2026-03-20T20:30:00Z"
+      ],
+      "description": "The same instant in UTC, ISO 8601 with Z or +00:00. It must agree with civil_datetime to the second."
+    },
+    "calendar_advances": {
+      "type": "boolean",
+      "description": "Whether the civil date advances when simulated time passes a civil midnight. False holds the sun's date at the epoch's own while the clock runs on."
+    },
+    "dst_in_effect": {
+      "type": "boolean",
+      "description": "Whether utc_offset_hours already includes daylight saving."
+    },
+    "time_zone_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The IANA time zone of the site, such as America/Denver, for a reader. Never looked up."
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "One sentence saying what simulated second zero is in the scenario's own terms."
+    }
+  }
+}

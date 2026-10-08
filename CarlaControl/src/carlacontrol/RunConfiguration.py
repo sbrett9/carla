@@ -52,6 +52,7 @@ from carlacontrol.RunConfigurationFindings import (
     RunConfigurationRefusedError,
 )
 from carlacontrol.ScenarioSchema import ScenarioSchema
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
 from carlacontrol.ViewReadiness import (
     PICTURE_CEILING_FRAMES,
     PICTURE_SETTLED_WAIT,
@@ -806,8 +807,8 @@ class RunConfiguration:
     @classmethod
     def schema(cls) -> dict:
         """The run configuration's schema, as published: every field's shape, default and class."""
-        root: dict = {"$schema": "https://json-schema.org/draft/2020-12/schema",
-                      "$id": "https://carla.local/schemas/run_configuration.schema.json",
+        root: dict = {"$schema": DIALECT,
+                      "$id": SchemaIdentifier.urn("run-configuration", RUN_CONFIGURATION_VERSION),
                       "title": "SUMO-driven capture run configuration",
                       "description": "One capture run's configuration: every field, its default, "
                                      "its mutability class and the layer that may supply it. "
