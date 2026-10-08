@@ -9,31 +9,25 @@
 
 ## What it is
 
-A site profile holds the facts about one machine that a capture run needs: the CARLA server's
-address, the SUMO installation, and where scenario packages, world packages, the vehicle catalog,
-captures and run records are kept. Keeping these out of the run configuration lets the same run
-configuration move between machines unchanged.
+A site profile holds the facts about one machine that a capture run needs: the CARLA server's address, the SUMO installation, and where scenario packages, world packages, the vehicle catalog, captures and run records are kept.\
+Keeping these out of the run configuration lets the same run configuration move between machines unchanged.
 
-Without a site profile, the values come from the layout the tool runs from. In a source checkout
-that is `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`,
-`Build/captures` and `Build/runs`. Installed, it is `scenarios`, `world-packages`, `captures` and
-`runs` under the current folder, and the catalog installed with carlacontrol. A profile file
-overrides only the fields it names.
+Without a site profile, the values come from the layout the tool runs from.\
+In a source checkout that is `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`, `Build/captures` and `Build/runs`.\
+Installed, it is `scenarios`, `world-packages`, `captures` and `runs` under the current folder, and the catalog installed with carlacontrol.\
+A profile file overrides only the fields it names.
 
-SUMO is found in this order when no profile names `sumo.home`: the `CARLANET_SUMO_HOME` environment
-variable, the checkout's staged SUMO, and then `SUMO_HOME` and `PATH`, which the session searches.
+SUMO is found in this order when no profile names `sumo.home`: the `CARLANET_SUMO_HOME` environment variable, the checkout's staged SUMO, and then `SUMO_HOME` and `PATH`, which the session searches.
 
 ## Who writes it and who reads it
 
-- **You write it**, usually once per machine. `carla-capture --write-site-profile PATH` writes this
-  machine's current values as a file to edit.
-- **`carla-capture --site-profile` reads it** before resolving the run. It refuses a file that is not
-  JSON, has no `site_profile_version` of 1, has a block or a field it does not know, or does not
-  conform to the schema. The refusal ends the launch with exit status 1, before a run begins, so
-  no run result is written.
+- **You write it**, usually once per machine.\
+  `carla-capture --write-site-profile PATH` writes this machine's current values as a file to edit.
+- **`carla-capture --site-profile` reads it** before resolving the run.\
+  It refuses a file that is not JSON, has no `site_profile_version` of 1, has a block or a field it does not know, or does not conform to the schema.\
+  The refusal ends the launch with exit status 1, before a run begins, so no run result is written.
 - A relative path in the file is relative to the file's own folder.
-- The values it gives are recorded, each with where it came from, in the run's lock and resolution
-  report (see [Run lock](Run_Lock.md#the-site-profile-record)).
+- The values it gives are recorded, each with where it came from, in the run's lock and resolution report (see [Run lock](Run_Lock.md#the-site-profile-record)).
 
 ## Fields
 
@@ -52,13 +46,14 @@ variable, the checkout's staged SUMO, and then `SUMO_HOME` and `PATH`, which the
 | `paths.capture_root` | string or null | | no | from the layout | Where captures are written: one folder per run. |
 | `paths.runs_root` | string or null | | no | from the layout | Where a run's result, resolution report and lock are written by default. |
 
-A path may be written empty or null. The launch then refuses it by name (run check 37), which says
-more than a type error would. `sumo.home` empty is refused the same way.
+A path may be written empty or null.\
+The launch then refuses it by name (run check 37), which says more than a type error would.\
+`sumo.home` empty is refused the same way.
 
 ## Versions
 
-This page describes version 1, the only version. A file with no `site_profile_version`, or any value
-other than 1, is refused.
+This page describes version 1, the only version.\
+A file with no `site_profile_version`, or any value other than 1, is refused.
 
 ## Example
 

@@ -1,43 +1,40 @@
 # World package manifest (`world.json` in a `.cwp`)
 
-`world.json` says what a generated world is: where it sits on the Earth, how its roads were seated on
-the photoreal imagery, which imagery it streams, where traffic may enter and leave, and how it was
-built. It is the one entry every world package must have. See [World_Package.md](World_Package.md) for
-the other entries.
+`world.json` says what a generated world is: where it sits on the Earth, how its roads were seated on the photoreal imagery, which imagery it streams, where traffic may enter and leave, and how it was built.\
+It is the one entry every world package must have.\
+See [World_Package.md](World_Package.md) for the other entries.
 
-This is a different file from the `world.json` in a level package. That one is described in
-[Level_Package_Manifest.md](Level_Package_Manifest.md).
+This is a different file from the `world.json` in a level package.\
+That one is described in [Level_Package_Manifest.md](Level_Package_Manifest.md).
 
 - Schema: `CarlaControl/schemas/world_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:world-package-manifest:1`
 
 ## Who writes it and who reads it
 
-CarlaNet's `WorldPackage.Write` writes it when the world build writes the package. The build reads the
-origin and the staging rectangle back from the server, so the file records what the world ended up
-with, not what was asked for. The file is indented JSON, UTF-8, with PascalCase keys. The writer writes
-every field, in the order of the table below.
+CarlaNet's `WorldPackage.Write` writes it when the world build writes the package.\
+The build reads the origin and the staging rectangle back from the server, so the file records what the world ended up with, not what was asked for.\
+The file is indented JSON, UTF-8, with PascalCase keys.\
+The writer writes every field, in the order of the table below.
 
 These read it:
 
-- CarlaNet's `WorldPackage.ReadManifest`, which a SUMO drive and a capture run use to check the
-  package against the world the server has loaded;
-- carlacontrol's `WorldPackageReader`, which the scenario compiler, the capture run's configuration
-  and `carla-publish-reference-set` use;
-- the Unreal Editor's World Package Importer, which copies the origin, the height settings, the imagery
-  layers, the staging rectangle and the provenance fields into the level's world settings asset.
+- CarlaNet's `WorldPackage.ReadManifest`, which a SUMO drive and a capture run use to check the package against the world the server has loaded;
+- carlacontrol's `WorldPackageReader`, which the scenario compiler, the capture run's configuration and `carla-publish-reference-set` use;
+- the Unreal Editor's World Package Importer, which copies the origin, the height settings, the imagery layers, the staging rectangle and the provenance fields into the level's world settings asset.
 
 ## Frames and units
 
-- Positions are in CARLA's frame: meters, x east, y south, z up. CARLA's (0, 0) is at
-  `OriginLatitude`, `OriginLongitude`.
-- Heights are WGS84 ellipsoidal heights in meters. CARLA's z = 0 is `OriginHeightMeters`.
+- Positions are in CARLA's frame: meters, x east, y south, z up.\
+  CARLA's (0, 0) is at `OriginLatitude`, `OriginLongitude`.
+- Heights are WGS84 ellipsoidal heights in meters.\
+  CARLA's z = 0 is `OriginHeightMeters`.
 - Latitude and longitude are WGS84 degrees.
 
 ## Fields
 
-"Required" means CarlaNet's reader refuses a manifest without the field. The current writer writes
-every field.
+"Required" means CarlaNet's reader refuses a manifest without the field.\
+The current writer writes every field.
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -79,7 +76,8 @@ every field.
 | `GeneratorVersion` | string | | no | Assembly version of the CarlaNet client that wrote the package, such as `1.0.0.0`. |
 | `NetconvertExtraArgs` | array of strings | | no | The arguments, among `NetconvertArgv`, that the build added to the standard set, such as the road filter. |
 
-No other field is allowed. The Cesium ion access token is never recorded.
+No other field is allowed.\
+The Cesium ion access token is never recorded.
 
 ### The height modes
 
@@ -89,12 +87,13 @@ No other field is allowed. The Cesium ion access token is never recorded.
 | `area`, `origin` | `false` | the one shift added to roads and ground | absent |
 | `drape` | `true` | 0 | present |
 
-In every mode the truth a capture records is bare-earth height. The shift exists only so that vehicles
-are drawn on the photoreal surface.
+In every mode the truth a capture records is bare-earth height.\
+The shift exists only so that vehicles are drawn on the photoreal surface.
 
 ### The producer record
 
-`Producer` is the record every file our tools write carries. Its keys are snake_case:
+`Producer` is the record every file our tools write carries.\
+Its keys are snake_case:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -105,28 +104,26 @@ are drawn on the photoreal surface.
 | `sumo` | string or null | yes | The SUMO release where SUMO ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was written, ISO 8601 UTC to the millisecond. |
 
-A server that answered has `available` `true` and `release`, `world_interface`, `build` (`package` or
-`editor`), `configuration`, `carla_commit`, `content_commit`, `engine_commit` and `commits_from`
-(`version_file`, `compiled` or `none`). A server that could not answer has `available` `false`,
-`release`, `world_interface` and `reason`. A value the server cannot know is the word `unknown`.
+A server that answered has `available` `true` and `release`, `world_interface`, `build` (`package` or `editor`), `configuration`, `carla_commit`, `content_commit`, `engine_commit` and `commits_from` (`version_file`, `compiled` or `none`).\
+A server that could not answer has `available` `false`, `release`, `world_interface` and `reason`.\
+A value the server cannot know is the word `unknown`.
 
 ## Format version
 
-`FormatVersion` is 1. A manifest that has no `FormatVersion` is read as version 1, which is the shape
-packages written before the field existed have.
+`FormatVersion` is 1.\
+A manifest that has no `FormatVersion` is read as version 1, which is the shape packages written before the field existed have.
 
-- CarlaNet's reader and carlacontrol's reader refuse a manifest whose `FormatVersion` is newer than
-  they support, or is not an integer. The message names the file, the version it declares and the
-  newest the reader supports. They check the version before any other field.
+- CarlaNet's reader and carlacontrol's reader refuse a manifest whose `FormatVersion` is newer than they support, or is not an integer.\
+  The message names the file, the version it declares and the newest the reader supports.\
+  They check the version before any other field.
 - The Unreal importer refuses a `FormatVersion` above 1.
-- carlacontrol's reader then checks every field the manifest carries against the schema, and refuses a
-  field of the wrong type or a field the schema does not name. It does not insist on the required
-  fields, because it reads only some of them.
+- carlacontrol's reader then checks every field the manifest carries against the schema, and refuses a field of the wrong type or a field the schema does not name.\
+  It does not insist on the required fields, because it reads only some of them.
 
 ## Example
 
-A draped world. The `Producer` values are typical of a package written by `carla-build-world`, which
-names itself and carlacontrol's release.
+A draped world.\
+The `Producer` values are typical of a package written by `carla-build-world`, which names itself and carlacontrol's release.
 
 ```json
 {
@@ -179,5 +176,5 @@ names itself and carlacontrol's release.
 }
 ```
 
-The writer escapes some characters as `\uXXXX` (a `+` is written `\u002B`, `<` is `\u003C`). Any JSON
-reader decodes them.
+The writer escapes some characters as `\uXXXX` (a `+` is written `\u002B`, `<` is `\u003C`).\
+Any JSON reader decodes them.

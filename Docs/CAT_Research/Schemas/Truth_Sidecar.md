@@ -1,37 +1,31 @@
 # Truth sidecar
 
-**Schema:** `CarlaControl/schemas/truth_sidecar.xsd` (XML Schema 1.0)
-**Identifier:** `urn:carla-sumo-capture:schema:truth-sidecar:1`
-**Format version described:** 1
+**Schema:** `CarlaControl/schemas/truth_sidecar.xsd` (XML Schema 1.0) **Identifier:** `urn:carla-sumo-capture:schema:truth-sidecar:1` **Format version described:** 1
 
 ## What the file is
 
-The truth sidecar is an XML file written beside every still. It holds the ground truth of the
-simulation frame the still was rendered on: where the camera was and how it was set up, the sun, and
-every vehicle with its position, motion, size and, for a vehicle in the picture, its box in pixels and
-in latitude, longitude and height.
+The truth sidecar is an XML file written beside every still.\
+It holds the ground truth of the simulation frame the still was rendered on: where the camera was and how it was set up, the sun, and every vehicle with its position, motion, size and, for a vehicle in the picture, its box in pixels and in latitude, longitude and height.
 
-The still and its sidecar share a name: `<camera>/<camera>_<local capture time>.png` and `.xml`, for
-example `Check_Overhead_1/Check_Overhead_1_2026.10.07_10.34.51.318.xml`. The time in the name is the
-capture computer's local clock, to the millisecond. The same instant in UTC is the `captured`
-attribute inside the file.
+The still and its sidecar share a name: `<camera>/<camera>_<local capture time>.png` and `.xml`, for example `Check_Overhead_1/Check_Overhead_1_2026.10.07_10.34.51.318.xml`.\
+The time in the name is the capture computer's local clock, to the millisecond.\
+The same instant in UTC is the `captured` attribute inside the file.
 
-The truth in a sidecar is always the truth of the still's own frame. A still whose frame's truth could
-not be read is not written at all, so a still is never paired with a neighboring frame's truth.
+The truth in a sidecar is always the truth of the still's own frame.\
+A still whose frame's truth could not be read is not written at all, so a still is never paired with a neighboring frame's truth.
 
-Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed
-sends, with extra detail elements whose names begin with `_`.
+Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed sends, with extra detail elements whose names begin with `_`.
 
 ## Who writes it, and when
 
-The CarlaNet recorder writes one sidecar for every still it saves, in the same moment as the PNG.
-`carla-capture` runs a recorder for each camera of a capture run and puts each camera's stills in a
-folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a
-checkout). `carla-drive` and `carla-sctmv` write stills and sidecars the same way.
+The CarlaNet recorder writes one sidecar for every still it saves, in the same moment as the PNG.\
+`carla-capture` runs a recorder for each camera of a capture run and puts each camera's stills in a folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a checkout).\
+`carla-drive` and `carla-sctmv` write stills and sidecars the same way.
 
 ## Structure
 
-Elements appear in this order. Elements marked "optional" may be absent.
+Elements appear in this order.\
+Elements marked "optional" may be absent.
 
 ```
 <events>                             the capture, one camera, one frame
@@ -50,26 +44,23 @@ Elements appear in this order. Elements marked "optional" may be absent.
 </events>
 ```
 
-The camera platform's `<detail>` begins with `<contact>`; a vehicle's begins with `<track>`. That is how
-the two kinds of event are told apart.
+The camera platform's `<detail>` begins with `<contact>`; a vehicle's begins with `<track>`.\
+That is how the two kinds of event are told apart.
 
 ## Conventions
 
 - **Positions** are WGS84 latitude and longitude in degrees.
-- **Heights** (`hae`) are meters above the WGS84 ellipsoid, in the bare-earth convention: the height of
-  the bare ground model the world was built on, without the offset that lines the road up with the
-  photographic terrain. A camera's physical height is its `hae` plus `align_offset_m`.
+- **Heights** (`hae`) are meters above the WGS84 ellipsoid, in the bare-earth convention: the height of the bare ground model the world was built on, without the offset that lines the road up with the photographic terrain.\
+  A camera's physical height is its `hae` plus `align_offset_m`.
 - **Directions** (`course`, `heading_deg`, `azimuth`) are degrees clockwise from true north.
 - **Velocities** (`vx`, `vy`, `vz`) are in CARLA's world frame: x east, y south, z up.
-- **Pixels** are counted from the picture's top-left corner: x to the right, y down. Boxes are not
-  clipped to the picture, so a coordinate can be negative or larger than the picture.
+- **Pixels** are counted from the picture's top-left corner: x to the right, y down.\
+  Boxes are not clipped to the picture, so a coordinate can be negative or larger than the picture.
 - **Times** are UTC to the millisecond, such as `2026-10-07T17:34:49.411Z`.
 - **True or false** is written `true` or `false`.
 
-In the tables, **Required** is "Yes" for an attribute every element of that kind carries, "No" for one
-that may be absent, and "In picture" for one that a vehicle carries exactly when its box fell in the
-picture (`in_frame` is `wholly` or `partly`) and never otherwise. The schema marks these last ones
-with `cap:onlyInPicture` and gives every unit in `cap:unit`.
+In the tables, **Required** is "Yes" for an attribute every element of that kind carries, "No" for one that may be absent, and "In picture" for one that a vehicle carries exactly when its box fell in the picture (`in_frame` is `wholly` or `partly`) and never otherwise.\
+The schema marks these last ones with `cap:onlyInPicture` and gives every unit in `cap:unit`.
 
 ## `<events>`: the capture
 
@@ -95,8 +86,8 @@ with `cap:onlyInPicture` and gives every unit in `cap:unit`.
 
 ## `<_producer>` and `<_server>`: what made the file
 
-`<_producer>` is the first child of `<events>` in every sidecar written since the producer record was
-added. A sidecar written before it has none.
+`<_producer>` is the first child of `<events>` in every sidecar written since the producer record was added.\
+A sidecar written before it has none.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -125,8 +116,8 @@ A value the server cannot know is `unknown`.
 
 ## `<_solar>`: the sun the world reported
 
-Written for every frame whose world reported a sun. The same values are in the still's `carla:solar`
-text chunk.
+Written for every frame whose world reported a sun.\
+The same values are in the still's `carla:solar` text chunk.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -143,15 +134,14 @@ text chunk.
 | `illumination_band` | word | | No | The sun's illumination band (see below); absent where the elevation is not a real sun's. |
 | `illumination_band_elevation` | word | | No | Which elevation the band was cut from: `refraction_corrected` wherever the block carries it, `geometric` otherwise. Written with `illumination_band`. |
 
-**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees: `day` above 6,
-`golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12, `astronomical_twilight`
-above -18, `night` at -18 and below. Each band includes its upper edge.
+**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12, `astronomical_twilight` above -18, `night` at -18 and below.\
+Each band includes its upper edge.
 
 ## `<_illumination>`: what the run declared the sun to be
 
-Written only in a run that declares its illumination. `<_solar>` is what the world did; this is what
-the run said it should be, and how far apart the two were. The same values are in the still's
-`carla:illumination` text chunk.
+Written only in a run that declares its illumination.\
+`<_solar>` is what the world did; this is what the run said it should be, and how far apart the two were.\
+The same values are in the still's `carla:illumination` text chunk.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -177,8 +167,8 @@ A civil time looks like `2026-09-29T07:27:00-06:00`, with a fraction of a second
 
 ## The camera platform's event
 
-Written first, before the vehicles, wherever the recorder was told about the camera platform. The same
-values are in the still's `carla:sensor` text chunk.
+Written first, before the vehicles, wherever the recorder was told about the camera platform.\
+The same values are in the still's `carla:sensor` text chunk.
 
 `<event>` attributes, for this event and every vehicle event:
 
@@ -218,8 +208,7 @@ The camera's `<contact>`, `<track>` and `<sensor>`:
 | `sensor/type` | text, always `EO` | | Yes | Electro-optical. |
 | `sensor/model` | text | | Yes | The camera blueprint, such as `sensor.camera.rgb`. |
 
-`<_carla_intrinsics>`: the camera's pinhole model, with square pixels and the principal point at the
-picture's center.
+`<_carla_intrinsics>`: the camera's pinhole model, with square pixels and the principal point at the picture's center.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -235,8 +224,8 @@ picture's center.
 | `distortion` | text | | Yes | `none` at CARLA's defaults, otherwise CARLA's own lens parameters. |
 | `align_offset_m` | decimal | meters | Yes | The height-align offset under the camera: its physical height is `hae` plus this. |
 
-`<_carla_exposure>`: the exposure the camera was given. Absent for a camera that does not publish its
-exposure.
+`<_carla_exposure>`: the exposure the camera was given.\
+Absent for a camera that does not publish its exposure.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -250,9 +239,8 @@ exposure.
 
 ## A vehicle's event
 
-A vehicle's `uid` is `CARLA-TRUTH-SUMO-<sumo_id>` where a SUMO drive lent the body, and
-`CARLA-TRUTH-<actor_id>` otherwise. During a SUMO drive one CARLA body draws a succession of vehicles
-over a run, so always follow a vehicle by its `uid` or `sumo_id`, never by `actor_id`.
+A vehicle's `uid` is `CARLA-TRUTH-SUMO-<sumo_id>` where a SUMO drive lent the body, and `CARLA-TRUTH-<actor_id>` otherwise.\
+During a SUMO drive one CARLA body draws a succession of vehicles over a run, so always follow a vehicle by its `uid` or `sumo_id`, never by `actor_id`.
 
 | Element and name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -299,16 +287,15 @@ over a run, so always follow a vehicle by its `uid` or `sumo_id`, never by `acto
 | `admitted_tick` | integer | | No | The frame on which this body began drawing this vehicle; written with `sumo_id`. |
 | `sumo_angle_deg` | decimal | degrees | No | The angle SUMO reported for the vehicle on this frame, clockwise from north, for comparison with `heading_deg`; written with `sumo_id` where the recorder knows it. |
 
-A vehicle whose box fell wholly beyond the draw distance is in the world and in the truth, but it is
-not in the image. Check `beyond_draw_distance` before treating a record as something the picture shows.
+A vehicle whose box fell wholly beyond the draw distance is in the world and in the truth, but it is not in the image.\
+Check `beyond_draw_distance` before treating a record as something the picture shows.
 
 ### `<_box3d frame="geodetic">`: the vehicle's box in the world
 
-Only for a vehicle in the picture. It holds exactly eight `<corner>` elements, converted to latitude,
-longitude and height exactly as the event's `<point>` is, in this order: `front_left_bottom`,
-`front_right_bottom`, `back_right_bottom`, `back_left_bottom`, `front_left_top`, `front_right_top`,
-`back_right_top`, `back_left_top`. Corner n + 4 is above corner n. Front is the way `heading_deg` points;
-left and right are as seen from the driver's seat.
+Only for a vehicle in the picture.\
+It holds exactly eight `<corner>` elements, converted to latitude, longitude and height exactly as the event's `<point>` is, in this order: `front_left_bottom`, `front_right_bottom`, `back_right_bottom`, `back_left_bottom`, `front_left_top`, `front_right_top`, `back_right_top`, `back_left_top`.\
+Corner n + 4 is above corner n.\
+Front is the way `heading_deg` points; left and right are as seen from the driver's seat.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -319,9 +306,8 @@ left and right are as seen from the driver's seat.
 
 ### `<_supervision>` and `<annotation>`: what the scenario's author asserts
 
-Written for every SUMO vehicle a frame drew, wherever a supervision plan was in force and its state
-for the frame was read. A vehicle the author says nothing about still gets one, with state
-`unlabelled`.
+Written for every SUMO vehicle a frame drew, wherever a supervision plan was in force and its state for the frame was read.\
+A vehicle the author says nothing about still gets one, with state `unlabelled`.
 
 | Element and name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -333,8 +319,8 @@ for the frame was read. A vehicle the author says nothing about still gets one, 
 | `annotation/phase` | text | | No | The phase of the instance's interval in force; absent where none is declared. |
 | `annotation/role` | text | | No | The vehicle's role in the instance, `subject` for a single-vehicle instance; absent where none is declared. |
 
-An `annotated` or `nominal` vehicle can carry several annotations, one per instance in force. The run
-manifest's `instance` and `interval_*` rows give the full plan and each interval's start and end.
+An `annotated` or `nominal` vehicle can carry several annotations, one per instance in force.\
+The run manifest's `instance` and `interval_*` rows give the full plan and each interval's start and end.
 
 ## Word lists
 
@@ -363,10 +349,9 @@ The schema takes each of these lists from the code that writes the words.
 | `beyond_depth_range` | Every sampled point lies at or beyond the depth camera's range. |
 | `no_sample` | No sampling ray met the box: the vehicle is narrower than the sampling step. |
 
-**`lights`** — `none`, or one word per light commanded on, in this order: `position`, `low_beam`,
-`high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`,
-`special2`. A light CARLA declares and no word names is written `bit<n>`, with its bit number. These are
-the lights commanded on; whether a blueprint draws a lamp for each is up to the 3D model.
+**`lights`** — `none`, or one word per light commanded on, in this order: `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`, `special2`.\
+A light CARLA declares and no word names is written `bit<n>`, with its bit number.\
+These are the lights commanded on; whether a blueprint draws a lamp for each is up to the 3D model.
 
 **`pose_source`**:
 
@@ -379,26 +364,24 @@ the lights commanded on; whether a blueprint draws a lamp for each is up to the 
 
 ## Joining a sidecar to the other files
 
-- To the still: same folder, same name, `.png` instead of `.xml`. The still's `carla:capture` chunk
-  carries the same `tick`.
+- To the still: same folder, same name, `.png` instead of `.xml`.\
+  The still's `carla:capture` chunk carries the same `tick`.
 - To the world truth track: by `sumo_id` and the frame (`tick` here, `frame` there).
-- To the run manifest: by `run_id`; the manifest's `instance` and `interval_*` rows explain the
-  `<annotation>`s.
+- To the run manifest: by `run_id`; the manifest's `instance` and `interval_*` rows explain the `<annotation>`s.
 
 ## Format version
 
-This page describes format version 1. A sidecar names its version in `format_version` on `<events>`; a
-sidecar without one was written before sidecars carried it and is version 1. The sample capture of
-2026-10-07, written before the version and the producer record, is valid against this schema.
+This page describes format version 1.\
+A sidecar names its version in `format_version` on `<events>`; a sidecar without one was written before sidecars carried it and is version 1.\
+The sample capture of 2026-10-07, written before the version and the producer record, is valid against this schema.
 
-A reader reads a version it knows. It refuses a newer version by name, saying the file was written by a
-newer release, rather than reading it in part, because a field that silently moved is worse than one
-that is missing. The CarlaControl readers and `carla-validate` follow this rule.
+A reader reads a version it knows.\
+It refuses a newer version by name, saying the file was written by a newer release, rather than reading it in part, because a field that silently moved is worse than one that is missing.\
+The CarlaControl readers and `carla-validate` follow this rule.
 
 ## Example
 
-A sidecar with the camera platform and one vehicle in the picture, shortened from a capture of the
-Arapahoe world:
+A sidecar with the camera platform and one vehicle in the picture, shortened from a capture of the Arapahoe world:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -441,8 +424,6 @@ Arapahoe world:
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks every sidecar of a capture against this schema, with every
-other file of the capture, and lists each failure with its file and line. Any XML Schema 1.0 validator
-can check a single sidecar, for example `xmllint --schema truth_sidecar.xsd <file>.xml`. The schema
-cannot check which attributes go together, such as the box appearing exactly when `in_frame` is
-`wholly` or `partly`; `carla-audit-sidecars` checks those rules across a capture.
+`carla-validate <capture folder>` checks every sidecar of a capture against this schema, with every other file of the capture, and lists each failure with its file and line.\
+Any XML Schema 1.0 validator can check a single sidecar, for example `xmllint --schema truth_sidecar.xsd <file>.xml`.\
+The schema cannot check which attributes go together, such as the box appearing exactly when `in_frame` is `wholly` or `partly`; `carla-audit-sidecars` checks those rules across a capture.

@@ -9,26 +9,25 @@
 
 ## What it is
 
-The sweep index lists what a sweep compiled. For every member it gives:
+The sweep index lists what a sweep compiled.\
+For every member it gives:
 
 - the axis values the member took;
 - its epoch and illumination;
 - the SHA-256 of each file its lock digests;
 - its capture windows, with their civil dates and the sun each opens under.
 
-It also lists every counterfactual pair and every finding. The index is how you find the member that
-holds a given combination of values, and how you tell two members apart.
+It also lists every counterfactual pair and every finding.\
+The index is how you find the member that holds a given combination of values, and how you tell two members apart.
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario --sweep FILE --out-dir DIR`** writes it into `DIR`, beside the members'
-  folders. Each member is compiled in full into `DIR/<member id>/`, with its own specification,
-  lock, resolution report and supervision plan.
-- It is written whether the sweep compiled or was refused. A sweep refused before its members were
-  made, for example by its own schema, has only `sweep_version`, `producer`, `sweep_id`, empty
-  `members` and `pairs`, its `findings` and the `outcome`.
-- No tool reads it as input. It is for a scenario developer and for the scripts that schedule
-  captures of the members.
+- **`carla-compile-scenario --sweep FILE --out-dir DIR`** writes it into `DIR`, beside the members' folders.\
+  Each member is compiled in full into `DIR/<member id>/`, with its own specification, lock, resolution report and supervision plan.
+- It is written whether the sweep compiled or was refused.\
+  A sweep refused before its members were made, for example by its own schema, has only `sweep_version`, `producer`, `sweep_id`, empty `members` and `pairs`, its `findings` and the `outcome`.
+- No tool reads it as input.\
+  It is for a scenario developer and for the scripts that schedule captures of the members.
 
 ## Fields
 
@@ -77,9 +76,11 @@ holds a given combination of values, and how you tell two members apart.
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads an index as input. A reader should
-read version 1 and refuse a newer version rather than read it in part. The skill's recorded example
-leaves out `producer`. It is still version 1.
+This page describes version 1, the only version.\
+No tool reads an index as input.\
+A reader should read version 1 and refuse a newer version rather than read it in part.\
+The skill's recorded example leaves out `producer`.\
+It is still version 1.
 
 ## Example
 

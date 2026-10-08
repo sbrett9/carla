@@ -9,23 +9,21 @@
 
 ## What it is
 
-The run resolution report records what one `carla-capture` launch resolved and what its checks
-found: every field with the layer that set it, every refusal and warning, the launch echo, and this
-machine's site profile. It is written whether the launch was accepted or refused, so a refused launch
-can always be read.
+The run resolution report records what one `carla-capture` launch resolved and what its checks found: every field with the layer that set it, every refusal and warning, the launch echo, and this machine's site profile.\
+It is written whether the launch was accepted or refused, so a refused launch can always be read.
 
-**This is not the compiler's resolution report.** The scenario compiler writes
-`<scenario_id>.resolution.json` about a compile (see
-[Scenario resolution report](Scenario_Resolution_Report.md)). This one is about a run, and is always
-named after the run result: `run.resolution.json` by default.
+**This is not the compiler's resolution report.**\
+The scenario compiler writes `<scenario_id>.resolution.json` about a compile (see [Scenario resolution report](Scenario_Resolution_Report.md)).\
+This one is about a run, and is always named after the run result: `run.resolution.json` by default.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** beside the run result, as `<stem>.resolution.json`. It is written on
-  every path that gets as far as reading the configuration: after a usage error, after the offline
-  checks refuse, and after they accept. It is written before any server is contacted.
+- **`carla-capture` writes it** beside the run result, as `<stem>.resolution.json`.\
+  It is written on every path that gets as far as reading the configuration: after a usage error, after the offline checks refuse, and after they accept.\
+  It is written before any server is contacted.
 - The run result names it in `resolution_report`.
-- No tool reads it back. It is for the person or script that launched the run.
+- No tool reads it back.\
+  It is for the person or script that launched the run.
 
 ## Fields
 
@@ -43,17 +41,15 @@ Every field is always present, except `producer` in a file written before Octobe
 | `effective_configuration` | object or null | Every field, its value, and where it came from. See [Run lock](Run_Lock.md#the-effective-configuration). Null when nothing could be resolved, as after an unknown key. |
 | `site_profile` | object | This machine's facts as resolved. See [Run lock](Run_Lock.md#the-site-profile-record). |
 
-The effective configuration here is the same block the run lock carries, with one difference: the
-report records what was resolved even when a check then refused it, so a value here may not have its
-field's type. An empty path in the site profile, for example, appears here as `""` and is the reason
-the launch was refused (run check 37).
+The effective configuration here is the same block the run lock carries, with one difference: the report records what was resolved even when a check then refused it, so a value here may not have its field's type.\
+An empty path in the site profile, for example, appears here as `""` and is the reason the launch was refused (run check 37).
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads the report back, so no tool refuses
-one. A reader should read version 1 and refuse a newer version rather than read it in part. A file
-written before October 7, 2026 has no `producer` and may name the check catalog differently; it is
-still version 1.
+This page describes version 1, the only version.\
+No tool reads the report back, so no tool refuses one.\
+A reader should read version 1 and refuse a newer version rather than read it in part.\
+A file written before October 7, 2026 has no `producer` and may name the check catalog differently; it is still version 1.
 
 ## Example
 

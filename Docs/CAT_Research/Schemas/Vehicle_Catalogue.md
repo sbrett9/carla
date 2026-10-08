@@ -1,17 +1,17 @@
 # Vehicle catalog (`vehicles.catalogue.json`)
 
-The vehicle catalog lists every vehicle body CARLA can draw, with its measurements, and groups the
-bodies into the classes a scenario asks for. It is the one source of three things:
+The vehicle catalog lists every vehicle body CARLA can draw, with its measurements, and groups the bodies into the classes a scenario asks for.\
+It is the one source of three things:
 
-- **What kind of vehicle each body is.** The truth records' `base_type` and `special_type` come from the
-  catalog's classes, not from what the content declares and not from SUMO's vehicle class.
-- **How big each body is.** SUMO reserves road space for the measured body, so the vehicle SUMO drives
-  and the body CARLA draws are the same size.
-- **How SUMO drives each class.** Every class states its acceleration, braking, speed and gap
-  explicitly.
+- **What kind of vehicle each body is.**\
+  The truth records' `base_type` and `special_type` come from the catalog's classes, not from what the content declares and not from SUMO's vehicle class.
+- **How big each body is.**\
+  SUMO reserves road space for the measured body, so the vehicle SUMO drives and the body CARLA draws are the same size.
+- **How SUMO drives each class.**\
+  Every class states its acceleration, braking, speed and gap explicitly.
 
-It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout, and an installed
-`carlacontrol` carries a copy. SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](Vehicle_Types.md).
+It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout, and an installed `carlacontrol` carries a copy.\
+SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](Vehicle_Types.md).\
 The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_Body_Widths.md).
 
 - Schema: `CarlaControl/schemas/vehicle_catalogue.schema.json`
@@ -19,37 +19,34 @@ The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_B
 
 ## Who writes it and who reads it
 
-`CarlaControl/scripts/make_vehicle_catalogue.py` (`VehicleCatalogueBuilder`) writes it against a
-running CARLA server. The script does these steps:
+`CarlaControl/scripts/make_vehicle_catalogue.py` (`VehicleCatalogueBuilder`) writes it against a running CARLA server.\
+The script does these steps:
 
 1. It spawns each vehicle blueprint alone, high above the map, reads its bounding box, and destroys it.
-2. It spawns each again with a color set and reads the server log to see whether the color reached the
-   body.
+2. It spawns each again with a color set and reads the server log to see whether the color reached the body.
 3. It renders each with every lamp commanded on and off and counts the pixels that change.
 4. It merges the body widths, checks the whole document, and computes its digest.
 5. It writes the catalog and the SUMO vehicle types.
 
-`CarlaControl/scripts/apply_vehicle_body_widths.py` merges a new body-width table into the existing
-catalog without a server.
+`CarlaControl/scripts/apply_vehicle_body_widths.py` merges a new body-width table into the existing catalog without a server.
 
 These read it:
 
-- the scenario compiler, which draws each vehicle's type from a class and records the catalog's
-  digest in the compiled scenario;
+- the scenario compiler, which draws each vehicle's type from a class and records the catalog's digest in the compiled scenario;
 - a capture run, which refuses a scenario compiled against another catalog;
-- the SUMO drive (CarlaNet's `VehicleCatalogue`), which places each SUMO vehicle's body from its
-  measured box;
+- the SUMO drive (CarlaNet's `VehicleCatalogue`), which places each SUMO vehicle's body from its measured box;
 - the truth recorder, which takes each vehicle's `base_type` and `special_type` from it;
 - `carla-cot-telemetry`, for the same two fields.
 
-The file is JSON in one canonical form: keys sorted, two-space indent, UTF-8, a final newline. The
-digest is defined over that form.
+The file is JSON in one canonical form: keys sorted, two-space indent, UTF-8, a final newline.\
+The digest is defined over that form.
 
 ## The classes
 
-A scenario asks for a class. SUMO draws a member body from it, with the member's weight as its chance.
-Every member of a class has the class's `base_type` and `special_type` in the truth, and SUMO drives it
-with the class's parameters. Each body belongs to exactly one class.
+A scenario asks for a class.\
+SUMO draws a member body from it, with the member's weight as its chance.\
+Every member of a class has the class's `base_type` and `special_type` in the truth, and SUMO drives it with the class's parameters.\
+Each body belongs to exactly one class.
 
 | Class | Description | SUMO vClass | `base_type` | `special_type` | Bodies |
 |---|---|---|---|---|---|
@@ -64,8 +61,8 @@ with the class's parameters. Each body belongs to exactly one class.
 | `ambulance` | Ambulances on a van chassis. | emergency | van | emergency | 1 |
 | `fire_appliance` | Fire trucks. The largest emergency body. | emergency | truck | emergency | 1 |
 
-The descriptions for `civ_truck`, `heavy_truck`, `bus`, `taxi` and `fire_appliance` are paraphrased
-here. The catalog holds the original wording.
+The descriptions for `civ_truck`, `heavy_truck`, `bus`, `taxi` and `fire_appliance` are paraphrased here.\
+The catalog holds the original wording.
 
 How SUMO drives each class:
 
@@ -82,23 +79,20 @@ How SUMO drives each class:
 | `ambulance` | 35 | 2.6 | 4.5 | 0.4 | 1 | 0.05 | 2.5 |
 | `fire_appliance` | 25 | 1.3 | 4.0 | 0.4 | 1 | 0.05 | 3.0 |
 
-The builder takes these from SUMO's own defaults for each vehicle class and writes them out, so none
-is left implicit. The top speeds are set for a mixed city and freeway network instead, and the bus
-takes a speed spread of 0.05 where SUMO's default is zero.
+The builder takes these from SUMO's own defaults for each vehicle class and writes them out, so none is left implicit.\
+The top speeds are set for a mixed city and freeway network instead, and the bus takes a speed spread of 0.05 where SUMO's default is zero.
 
 ### How a body's kind is decided
 
-The builder derives a base type from the measured box, then applies a short list of curated
-corrections:
+The builder derives a base type from the measured box, then applies a short list of curated corrections:
 
 - height under 2.0 m: `car`;
 - height under 3.0 m and length under 7.0 m: `van`;
-- otherwise: `truck`. The derivation never gives `bus`.
+- otherwise: `truck`.\
+  The derivation never gives `bus`.
 
-The corrections are for what a box cannot show: the Nissan Patrol is a sport utility vehicle on a car
-chassis whose 2.06 m roof reads as a van; the Fuso Rosa is a bus; the ambulance, the police car and
-the fire truck are `emergency`; the taxi is `taxi`. Each correction carries its reason in the builder's
-code.
+The corrections are for what a box cannot show: the Nissan Patrol is a sport utility vehicle on a car chassis whose 2.06 m roof reads as a van; the Fuso Rosa is a bus; the ambulance, the police car and the fire truck are `emergency`; the taxi is `taxi`.\
+Each correction carries its reason in the builder's code.
 
 ## The bodies
 
@@ -128,21 +122,21 @@ code.
 
 For a model developer reading a capture's truth:
 
-- A vehicle's `base_type` and `special_type` are its class's `cot_base_type` and `cot_special_type`.
-  An empty `special_type` is the normal case and means "no special type". A planted vehicle has the
-  same kind as any other vehicle of its body; which vehicles were planted is recorded separately.
-- A vehicle's `length_m`, `width_m` and `height_m` in the truth are the bounding box CARLA measures
-  on the drawn body. They match the catalog's `length_m`, `width_m` and `height_m`, so the width
-  includes the mirrors. SUMO was given `body_width_m`, the width without them.
-- A vehicle's `type_id` in the truth is its CARLA blueprint id. In a SUMO-driven capture, `vtype_id`
-  is the SUMO type, which for a compiled scenario names the blueprint, and the type's
-  `carla:class_id` parameter names the class.
-- SUMO reports a vehicle's position at the center of its front bumper. CARLA places the body's origin
-  behind it by `length_m / 2 + bbox_centre_m[0]` along the heading. The truth's latitude, longitude and
-  height are the body origin's.
-- The lights the truth records are the lights commanded on. `lamp_capability` says whether commanding
-  a lamp changed the image when the catalog was built. In this catalog the optical pass found
-  only one lamp that changes the image, the fire truck's high beams. Every other lamp is `unlit`.
+- A vehicle's `base_type` and `special_type` are its class's `cot_base_type` and `cot_special_type`.\
+  An empty `special_type` is the normal case and means "no special type".\
+  A planted vehicle has the same kind as any other vehicle of its body; which vehicles were planted is recorded separately.
+- A vehicle's `length_m`, `width_m` and `height_m` in the truth are the bounding box CARLA measures on the drawn body.\
+  They match the catalog's `length_m`, `width_m` and `height_m`, so the width includes the mirrors.\
+  SUMO was given `body_width_m`, the width without them.
+- A vehicle's `type_id` in the truth is its CARLA blueprint id.\
+  In a SUMO-driven capture, `vtype_id` is the SUMO type, which for a compiled scenario names the blueprint, and the type's `carla:class_id` parameter names the class.
+- SUMO reports a vehicle's position at the center of its front bumper.\
+  CARLA places the body's origin behind it by `length_m / 2 + bbox_centre_m[0]` along the heading.\
+  The truth's latitude, longitude and height are the body origin's.
+- The lights the truth records are the lights commanded on.\
+  `lamp_capability` says whether commanding a lamp changed the image when the catalog was built.\
+  In this catalog the optical pass found only one lamp that changes the image, the fire truck's high beams.\
+  Every other lamp is `unlit`.
 
 ## Fields
 
@@ -195,8 +189,8 @@ A measured entry also has:
 | `bbox_centre_m` | array of 3 numbers | meters | yes | The box's center in the vehicle's own frame: forward, right, up from the actor's origin. |
 | `body_width_m` | number | meters | no | Width of the body without mirrors, measured from the mesh. SUMO is given this width. Every measured entry has it in the current catalog; without it, no SUMO type can be written for the body. |
 
-A failed entry has `measurement_note`, the reason, instead, and no dimensions. A reader refuses to
-place a body whose measurement failed.
+A failed entry has `measurement_note`, the reason, instead, and no dimensions.\
+A reader refuses to place a body whose measurement failed.
 
 ### `classes[]`
 
@@ -238,20 +232,18 @@ place a body whose measurement failed.
 
 ## Format version
 
-`catalogue_version` is 1, and there is no other version. Every catalog the builder wrote carries it,
-so a file without it is not a catalog.
+`catalogue_version` is 1, and there is no other version.\
+Every catalog the builder wrote carries it, so a file without it is not a catalog.
 
-- carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that
-  declares 1. They refuse any other value, or none. For a newer version the message says the file was
-  written by a newer release.
-- `VehicleCatalogue.load` then checks the file against the schema and refuses it, naming each problem.
-  Every vehicle and class entry must be whole. A header field that is present must have the right
-  shape; one that is absent reads as empty.
+- carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that declares 1.\
+  They refuse any other value, or none.\
+  For a newer version the message says the file was written by a newer release.
+- `VehicleCatalogue.load` then checks the file against the schema and refuses it, naming each problem.\
+  Every vehicle and class entry must be whole.\
+  A header field that is present must have the right shape; one that is absent reads as empty.
 
-`carlacontrol.WorldFileValidator`, given the catalog's folder, checks the whole catalog against
-its schema and the builder's rules, checks that its digest is its content's, checks
-`vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives, and
-checks `vehicle_body_widths.json` where it is there. `carla-validate CarlaControl/catalogue` runs it.
+`carlacontrol.WorldFileValidator`, given the catalog's folder, checks the whole catalog against its schema and the builder's rules, checks that its digest is its content's, checks `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives, and checks `vehicle_body_widths.json` where it is there.\
+`carla-validate CarlaControl/catalogue` runs it.
 
 ## Example
 

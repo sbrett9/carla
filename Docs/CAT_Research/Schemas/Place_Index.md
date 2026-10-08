@@ -1,34 +1,32 @@
 # Place index (`places.json` in a `.cwp`)
 
-`places.json` lists which edges of a world's SUMO network carry which street name, and which way each
-edge heads. With it, a scenario that names a place as "eastbound on Centerville Lane" can be resolved to
-edges. The index also says how much of the network its names cover, because on some maps few roads are
-named.
+`places.json` lists which edges of a world's SUMO network carry which street name, and which way each edge heads.\
+With it, a scenario that names a place as "eastbound on Centerville Lane" can be resolved to edges.\
+The index also says how much of the network its names cover, because on some maps few roads are named.
 
 - Schema: `CarlaControl/schemas/place_index.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:place-index:1`
 
 ## Who writes it and who reads it
 
-carlacontrol's `PlaceIndex` writes it when the world build publishes the authoring reference set, or
-when `carla-publish-reference-set` publishes it again. It is made from `map.net.xml` alone, so it
-always describes the network beside it.
+carlacontrol's `PlaceIndex` writes it when the world build publishes the authoring reference set, or when `carla-publish-reference-set` publishes it again.\
+It is made from `map.net.xml` alone, so it always describes the network beside it.
 
-The scenario compiler reads it through `WorldPackageReader.place_index()` to resolve street places.
+The scenario compiler reads it through `WorldPackageReader.place_index()` to resolve street places.\
 A scenario author can read it to see what names a world has.
 
-The file is JSON, UTF-8, two-space indent, keys sorted. Non-Latin names are written as they are, not
-escaped.
+The file is JSON, UTF-8, two-space indent, keys sorted.\
+Non-Latin names are written as they are, not escaped.
 
 ## Which edges it covers
 
-Only normal edges: edges with no `function` attribute, or `function="normal"`. Edges inside junctions
-are left out. An edge is listed under its `name` attribute, which netconvert writes from the
-OpenStreetMap street names because the world build passes `--output.street-names`. An edge without a
-name is counted but not listed.
+Only normal edges: edges with no `function` attribute, or `function="normal"`.\
+Edges inside junctions are left out.\
+An edge is listed under its `name` attribute, which netconvert writes from the OpenStreetMap street names because the world build passes `--output.street-names`.\
+An edge without a name is counted but not listed.
 
-A name is not an edge. One street name is often carried by many edges, so a scenario narrows a
-street by direction and position before it names one edge.
+A name is not an edge.\
+One street name is often carried by many edges, so a scenario narrows a street by direction and position before it names one edge.
 
 ## Fields
 
@@ -81,15 +79,18 @@ street by direction and position before it names one edge.
 | `speed_mps` | number | meters per second | yes | The rightmost lane's speed limit. |
 | `extent_carla_m` | array of 4 numbers | meters | yes | The rectangle around the edge's lanes in CARLA's frame: min x, min y, max x, max y, rounded to 0.01 m. |
 
-CARLA's frame has x east and y south, so CARLA (x, y) = SUMO (x, −y). A bearing is the net direction
-of a whole edge. On a curving edge it says little about the heading at any one point.
+CARLA's frame has x east and y south, so CARLA (x, y) = SUMO (x, −y).\
+A bearing is the net direction of a whole edge.\
+On a curving edge it says little about the heading at any one point.
 
 ## Format version
 
-`place_index_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
-that declares a newer version. They name the version and the newest they read, rather than reading
-part of the file. `WorldPackageReader` then checks the file against the schema. If the file does not
-match, it refuses the file and names each problem.
+`place_index_version` is 1, and there is no other version.\
+A file without it is version 1.\
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
+They name the version and the newest they read, rather than reading part of the file.\
+`WorldPackageReader` then checks the file against the schema.\
+If the file does not match, it refuses the file and names each problem.
 
 ## Example
 

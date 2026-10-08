@@ -9,21 +9,21 @@
 
 ## What it is
 
-`checks.json` lists every check the scenario compiler runs, by its stable id, with what it compares
-and what it can conclude. A finding in a compile's resolution report cites a check by this id.
+`checks.json` lists every check the scenario compiler runs, by its stable id, with what it compares and what it can conclude.\
+A finding in a compile's resolution report cites a check by this id.
 
-An id is assigned once and never reused. A check that is removed stays in the list as retired, so a
-report written years ago still means what it said. The list is in the order the compiler runs the
-checks, which is why the ids are not in numeric order.
+An id is assigned once and never reused.\
+A check that is removed stays in the list as retired, so a report written years ago still means what it said.\
+The list is in the order the compiler runs the checks, which is why the ids are not in numeric order.
 
-These are the compiler's checks. A capture run's checks are a separate list with their own numbers,
-the carla-capture run checks, which a run's findings cite.
+These are the compiler's checks.\
+A capture run's checks are a separate list with their own numbers, the carla-capture run checks, which a run's findings cite.
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario --write-checks PATH`** writes it, generated from the compiler's own list.
+- **`carla-compile-scenario --write-checks PATH`** writes it, generated from the compiler's own list.\
   It ships with the authoring skill, and a test holds the shipped copy equal to the compiler's list.
-- **A scenario developer or the authoring skill reads it** to learn what a check id in a report means.
+- **A scenario developer or the authoring skill reads it** to learn what a check id in a report means.\
   No tool reads it as input.
 
 ## Fields
@@ -44,8 +44,9 @@ the carla-capture run checks, which a run's findings cite.
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads the file as input. A reader should
-read version 1 and refuse a newer version rather than read it in part.
+This page describes version 1, the only version.\
+No tool reads the file as input.\
+A reader should read version 1 and refuse a newer version rather than read it in part.
 
 ## Example
 

@@ -9,35 +9,30 @@
 
 ## What it is
 
-The scenario lock records what one compiled scenario is bound to. It holds:
+The scenario lock records what one compiled scenario is bound to.\
+It holds:
 
-- the SHA-256 of its specification and of every file the compile wrote that decides the traffic or the
-  labels;
+- the SHA-256 of its specification and of every file the compile wrote that decides the traffic or the labels;
 - the world it was compiled against, the vehicle catalog and the vocabulary;
 - SUMO's seed, step and options;
 - what a SUMO-only run of the compiled files showed;
 - the epoch, the illumination default and the capture windows.
 
-The same specification, seed and world give the same traffic. The lock is how a run proves that the
-files it is about to drive are the ones that were compiled.
+The same specification, seed and world give the same traffic.\
+The lock is how a run proves that the files it is about to drive are the ones that were compiled.
 
-**This is not the run lock.** A capture run writes `run.lock.json` about one run of the scenario (see
-[Run lock](Run_Lock.md)).
+**This is not the run lock.**\
+A capture run writes `run.lock.json` about one run of the scenario (see [Run lock](Run_Lock.md)).
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario` writes it** with the scenario's other files, and only when the compile
-  succeeds.
-- **`carla-capture` reads it** to bind the scenario: by id under `paths.scenario_root`, by folder, or
-  by path. It takes the epoch, the SUMO step, seed and end, the catalog digest and the illumination
-  default from it. It refuses a lock of another version (run check 6), a world that does not match
-  (run check 5), a catalog that does not match (run check 48), and a skipped SUMO-only run unless
-  the run accepts it (run check 54).
-- **The co-simulation session reads it** when it starts, under `carla-capture` and `carla-drive`
-  alike: the lock beside the `.sumocfg` it is given. It refuses a scenario whose configuration, route
-  file, network, lane closures or supervision plan is not the one the lock digests, or whose catalog
-  or epoch is not the one the lock records. A scenario with no lock beside it still runs, and the run
-  records it as uncompiled.
+- **`carla-compile-scenario` writes it** with the scenario's other files, and only when the compile succeeds.
+- **`carla-capture` reads it** to bind the scenario: by id under `paths.scenario_root`, by folder, or by path.\
+  It takes the epoch, the SUMO step, seed and end, the catalog digest and the illumination default from it.\
+  It refuses a lock of another version (run check 6), a world that does not match (run check 5), a catalog that does not match (run check 48), and a skipped SUMO-only run unless the run accepts it (run check 54).
+- **The co-simulation session reads it** when it starts, under `carla-capture` and `carla-drive` alike: the lock beside the `.sumocfg` it is given.\
+  It refuses a scenario whose configuration, route file, network, lane closures or supervision plan is not the one the lock digests, or whose catalog or epoch is not the one the lock records.\
+  A scenario with no lock beside it still runs, and the run records it as uncompiled.
 
 ## Fields
 
@@ -107,9 +102,9 @@ or `{"ran": false, "reason": "..."}` when the compile was run with `--skip-dry-r
 
 ## Versions
 
-This page describes version 1, the only version. `carla-capture` and the co-simulation session read
-only version 1 and refuse any other, including a lock with no version. A file written before
-October 7, 2026 has no `producer`; it is still version 1.
+This page describes version 1, the only version.\
+`carla-capture` and the co-simulation session read only version 1 and refuse any other, including a lock with no version.\
+A file written before October 7, 2026 has no `producer`; it is still version 1.
 
 ## Example
 

@@ -1,23 +1,20 @@
 # Schemas of the files our tools write and read
 
-Each page in this folder describes one kind of file: what writes it, what reads it, every field, and its
-format version. Most kinds also have a schema in `CarlaControl/schemas/`, which carlacontrol installs.
-Each schema names itself with a URN, `urn:carla-sumo-capture:schema:<kind>:<format version>`. The URN is
-a name, not an address, so nothing has to serve it.
+Each page in this folder describes one kind of file: what writes it, what reads it, every field, and its format version.\
+Most kinds also have a schema in `CarlaControl/schemas/`, which carlacontrol installs.\
+Each schema names itself with a URN, `urn:carla-sumo-capture:schema:<kind>:<format version>`.\
+The URN is a name, not an address, so nothing has to serve it.
 
-The schemas are generated from the code that writes or reads each file, so they say what the writers
-write. A few are written by hand and say so below. `carla-validate <path>` checks a capture folder, a
-world package, a vehicle catalog folder, or any folder holding the other files below, against them.
-`carla-validate --write-schemas CarlaControl/schemas` writes every generated schema again after a writer
-or a reader changes.
+The schemas are generated from the code that writes or reads each file, so they say what the writers write.\
+A few are written by hand and say so below.\
+`carla-validate <path>` checks a capture folder, a world package, a vehicle catalog folder, or any folder holding the other files below, against them.\
+`carla-validate --write-schemas CarlaControl/schemas` writes every generated schema again after a writer or a reader changes.
 
-The rule for format versions is the same for every file: a file that declares no version is version 1,
-and a reader refuses a version newer than it knows rather than reading it in part.
+The rule for format versions is the same for every file: a file that declares no version is version 1, and a reader refuses a version newer than it knows rather than reading it in part.
 
 ## What a capture writes
 
-The files in a capture folder: a PNG and a truth sidecar for every still, and under `truth/` the run
-manifest and the world truth track.
+The files in a capture folder: a PNG and a truth sidecar for every still, and under `truth/` the run manifest and the world truth track.
 
 | Page | Schema | URN | What it describes |
 |---|---|---|---|
@@ -89,8 +86,7 @@ What `carla-compile-scenario` writes for a scenario or a sweep.
 
 ## Telemetry
 
-What the tools send and write as Cursor-on-Target (CoT) telemetry, and the legacy files a SUMO bridge
-run reads or writes beside it.
+What the tools send and write as Cursor-on-Target (CoT) telemetry, and the legacy files a SUMO bridge run reads or writes beside it.
 
 | Page | Schema | URN | What it describes |
 |---|---|---|---|

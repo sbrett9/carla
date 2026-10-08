@@ -1,25 +1,25 @@
 # SUMO vehicle types (`vehicles.vtypes.rou.xml`)
 
-`vehicles.vtypes.rou.xml` is the [vehicle catalogue](Vehicle_Catalogue.md) as SUMO reads it. Each
-measured CARLA body is one SUMO vehicle type, `<vType>`, and each class is one type distribution,
-`<vTypeDistribution>`, over its members. A scenario asks for a class, SUMO draws a member from it, and the
-member is the CARLA body. So the size SUMO reserves on the road and the body CARLA draws are the same.
+`vehicles.vtypes.rou.xml` is the [vehicle catalogue](Vehicle_Catalogue.md) as SUMO reads it.\
+Each measured CARLA body is one SUMO vehicle type, `<vType>`, and each class is one type distribution, `<vTypeDistribution>`, over its members.\
+A scenario asks for a class, SUMO draws a member from it, and the member is the CARLA body.\
+So the size SUMO reserves on the road and the body CARLA draws are the same.
 
-The file is a SUMO route file that holds only types, so SUMO's own `routes_file.xsd` accepts it. Our
-schema is narrower: it describes exactly what the writer writes.
+The file is a SUMO route file that holds only types, so SUMO's own `routes_file.xsd` accepts it.\
+Our schema is narrower: it describes exactly what the writer writes.
 
 - Schema: `CarlaControl/schemas/vehicle_types.xsd` (XSD 1.0)
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-types:1`
 
 ## Who writes it and who reads it
 
-`SumoVehicleTypeWriter` writes it from the catalog, beside it, whenever the catalog is built
-(`make_vehicle_catalogue.py`) or its body widths are applied (`apply_vehicle_body_widths.py`). Do not edit
-it by hand. Edit the catalog and write it again.
+`SumoVehicleTypeWriter` writes it from the catalog, beside it, whenever the catalog is built (`make_vehicle_catalogue.py`) or its body widths are applied (`apply_vehicle_body_widths.py`).\
+Do not edit it by hand.\
+Edit the catalog and write it again.
 
-The scenario compiler writes the types a scenario draws into the scenario's own route file, with the
-same parameters. SUMO reads them. The SUMO drive and `carla-cot-telemetry` read the parameters back
-from the running simulation to find each vehicle's body, class and catalog.
+The scenario compiler writes the types a scenario draws into the scenario's own route file, with the same parameters.\
+SUMO reads them.\
+The SUMO drive and `carla-cot-telemetry` read the parameters back from the running simulation to find each vehicle's body, class and catalog.
 
 ## Structure
 
@@ -32,7 +32,8 @@ from the running simulation to find each vehicle's body, class and catalog.
 </routes>
 ```
 
-No element is in a namespace. The file is UTF-8 with a comment saying where it came from.
+No element is in a namespace.\
+The file is UTF-8 with a comment saying where it came from.
 
 ## `<vType>` attributes
 
@@ -59,11 +60,9 @@ Numbers are written with up to six significant digits and no trailing `.0`.
 
 ## `<param>` children: our parameters on a vehicle type
 
-A vehicle type is bound to the CARLA body it is drawn with through SUMO's generic
-`<param key="..." value="..."/>` element, which SUMO stores and never acts on. Two files carry these
-parameters, in the same keys: this one, and the route file the scenario compiler writes for each
-scenario (`<scenario_id>.rou.xml`, see [SUMO files](SUMO_Files.md)). They are the only parameters a
-compiled route file carries (check 52): labels never travel here, only in the supervision plan.
+A vehicle type is bound to the CARLA body it is drawn with through SUMO's generic `<param key="..." value="..."/>` element, which SUMO stores and never acts on.\
+Two files carry these parameters, in the same keys: this one, and the route file the scenario compiler writes for each scenario (`<scenario_id>.rou.xml`, see [SUMO files](SUMO_Files.md)).\
+They are the only parameters a compiled route file carries (check 52): labels never travel here, only in the supervision plan.
 
 Each `<vType>` has two or three of them, each key once:
 
@@ -73,8 +72,8 @@ Each `<vType>` has two or three of them, each key once:
 | `carla:class_id` | the class id, such as `civ_car` | always | The class the body was drawn for. A class draws several bodies, one type each; this tells a reader which population a vehicle belongs to. A run's display convention names a vehicle's population by it. |
 | `carla:catalogue_digest` | the catalog's `catalogue_digest` | when the catalog has one | The catalog the type was written from, so a reader holding a catalog can tell whether it is that one. `carla-cot-telemetry` warns once about a type written from another catalog. |
 
-In this file a type's id is its blueprint id. In a compiled route file it is `<class_id>.<blueprint>`,
-such as `car_quick.vehicle.ue4.audi.tt`:
+In this file a type's id is its blueprint id.\
+In a compiled route file it is `<class_id>.<blueprint>`, such as `car_quick.vehicle.ue4.audi.tt`:
 
 ```xml
 <vType id="car_quick.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9667" height="1.3853" maxSpeed="60" speedFactor="normc(1.18,0.06,1.05,1.35)" guiShape="passenger" color="#D9D9E6">
@@ -84,8 +83,7 @@ such as `car_quick.vehicle.ue4.audi.tt`:
 </vType>
 ```
 
-Either way the id is for a person reading the file; what binds the type to a body is its
-`carla:blueprint`.
+Either way the id is for a person reading the file; what binds the type to a body is its `carla:blueprint`.
 
 ## `<vTypeDistribution>` attributes
 
@@ -97,8 +95,9 @@ Either way the id is for a person reading the file; what binds the type to a bod
 
 ## Format version
 
-The file carries no version. It is version 1. Its shape changes only with the catalog's
-`catalogue_version`, and every type records which catalog it came from.
+The file carries no version.\
+It is version 1.\
+Its shape changes only with the catalog's `catalogue_version`, and every type records which catalog it came from.
 
 ## Example
 

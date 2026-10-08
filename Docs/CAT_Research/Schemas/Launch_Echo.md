@@ -9,24 +9,19 @@
 
 ## What it is
 
-The launch echo is what a capture run says it is about to do, before it acquires the world or starts
-SUMO: the simulated and civil span of the window, how many captures it will make, the sun it will
-set, the world, which vehicles get a body, the disk it will cost, where it writes, the wait for each
-camera's view, and the warnings raised. It lets you see that a run is not the run you
-meant before any time is spent.
+The launch echo is what a capture run says it is about to do, before it acquires the world or starts SUMO: the simulated and civil span of the window, how many captures it will make, the sun it will set, the world, which vehicles get a body, the disk it will cost, where it writes, the wait for each camera's view, and the warnings raised.\
+It lets you see that a run is not the run you meant before any time is spent.
 
-Every figure comes from the code that will act on it. It also says what it cannot predict, in
-`not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
+Every figure comes from the code that will act on it.\
+It also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` computes it** once, after the offline checks accept and before anything is
-  acquired. An attended run prints it at the terminal.
-- It is written into the run's resolution report and its result, as `launch_echo`. Both are null
-  when the offline checks refused before the echo was computed.
-- **An `expect` entry in the run configuration reads it**: `expect` can name any value here as
-  `launch_echo.<path>`, such as `launch_echo.captures.total`, and the launch is refused if the value
-  is not what the caller expected (run check 35).
+- **`carla-capture` computes it** once, after the offline checks accept and before anything is acquired.\
+  An attended run prints it at the terminal.
+- It is written into the run's resolution report and its result, as `launch_echo`.\
+  Both are null when the offline checks refused before the echo was computed.
+- **An `expect` entry in the run configuration reads it**: `expect` can name any value here as `launch_echo.<path>`, such as `launch_echo.captures.total`, and the launch is refused if the value is not what the caller expected (run check 35).
 
 ## Fields
 
@@ -100,13 +95,13 @@ Every figure comes from the code that will act on it. It also says what it canno
 | `warnings` | array of strings | | The codes of the warnings the offline checks raised. |
 | `not_predicted` | array of strings | | What the echo cannot say before the run. |
 
-`band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and
-`night`.
+`band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and `night`.
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads the echo back from a file. A reader
-should read version 1 and refuse a newer version rather than read it in part.
+This page describes version 1, the only version.\
+No tool reads the echo back from a file.\
+A reader should read version 1 and refuse a newer version rather than read it in part.
 
 ## Example
 

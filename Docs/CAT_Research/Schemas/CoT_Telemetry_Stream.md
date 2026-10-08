@@ -1,23 +1,24 @@
 # Cursor-on-Target telemetry stream (UDP)
 
-The tools can send each vehicle's position as a live Cursor-on-Target (CoT) feed over UDP, for a TAK
-client or any other CoT receiver. Each UDP datagram holds exactly one CoT `<event>`: one vehicle at one
-instant. The feed is a moving-map display. It carries what a display needs, and leaves out what only
-the truth files carry.
+The tools can send each vehicle's position as a live Cursor-on-Target (CoT) feed over UDP, for a TAK client or any other CoT receiver.\
+Each UDP datagram holds exactly one CoT `<event>`: one vehicle at one instant.\
+The feed is a moving-map display.\
+It carries what a display needs, and leaves out what only the truth files carry.
 
 - Schema: `CarlaControl/schemas/cot_telemetry.xsd` (XSD 1.0), root element `<event>`
 - Schema id: `urn:carla-sumo-capture:schema:cot-telemetry:1`
 
-A vehicle event has the same shape as a vehicle event in a capture's truth sidecar, and the attributes
-they share mean the same thing. Their meanings are given in full in [Truth_Sidecar.md](Truth_Sidecar.md).
-The schema does not repeat them: it includes `truth_sidecar.xsd` and takes `<point>`, `<track>`,
-`<contact>` and the simple types under them from it, so the two always match. The event's own
-parts are in `cot_event_body.xsd`, which the schema also includes. All three files must sit in one
-folder. This page lists the fields, and says where the stream differs from the sidecar.
+A vehicle event has the same shape as a vehicle event in a capture's truth sidecar, and the attributes they share mean the same thing.\
+Their meanings are given in full in [Truth_Sidecar.md](Truth_Sidecar.md).\
+The schema does not repeat them: it includes `truth_sidecar.xsd` and takes `<point>`, `<track>`, `<contact>` and the simple types under them from it, so the two always match.\
+The event's own parts are in `cot_event_body.xsd`, which the schema also includes.\
+All three files must sit in one folder.\
+This page lists the fields, and says where the stream differs from the sidecar.
 
 ## Who sends it and who receives it
 
-Two tools send it. Both format events with `carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot`.
+Two tools send it.\
+Both format events with `carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot`.
 
 | | `carla-sctmv` | `carla-cot-telemetry --udp HOST:PORT` |
 |---|---|---|
@@ -30,11 +31,11 @@ Two tools send it. Both format events with `carlacontrol.CotUdpEmitter.vehicle_t
 | Affiliation | `--affiliation`, default `n` | the run's display convention, by population; `--marked-affiliation` for planted vehicles, in the live feed only |
 | Extra detail | `_capture` (the frame) and `_solar` (the sun) | none |
 
-Multicast datagrams are sent with time-to-live `--ttl` (`carla-sctmv`) or `--udp-ttl`
-(`carla-cot-telemetry`), default 1.
+Multicast datagrams are sent with time-to-live `--ttl` (`carla-sctmv`) or `--udp-ttl` (`carla-cot-telemetry`), default 1.
 
-There is no handshake and no acknowledgment. A receiver listens on the port and parses each datagram
-as one XML document. Datagrams are UTF-8 and carry no XML declaration.
+There is no handshake and no acknowledgment.\
+A receiver listens on the port and parses each datagram as one XML document.\
+Datagrams are UTF-8 and carry no XML declaration.
 
 ## The event
 
@@ -116,24 +117,23 @@ as one XML document. Datagrams are UTF-8 and carry no XML declaration.
 
 ## How the stream differs from the truth sidecar
 
-- It never carries what depends on a picture: `in_frame`, the box fields, occlusion, `lights`,
-  `pose_source`, `<_box3d>` or `<_supervision>`.
-- A SUMO bridge datagram leaves out `type_id`, `special_type`, `role_name` and `marked`. Those are the
-  scenario author's names for its vehicle types and flows, and the vehicles it planted. The bridge's
-  XML and CSV files keep them.
-- `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed, so an
-  operator can see them. The written files never do.
-- It carries `_capture` and `_solar` inside each event's `<detail>`. A sidecar holds the solar state
-  once, on its container, and its `_solar` also has the latitude, longitude and the illumination band.
+- It never carries what depends on a picture: `in_frame`, the box fields, occlusion, `lights`, `pose_source`, `<_box3d>` or `<_supervision>`.
+- A SUMO bridge datagram leaves out `type_id`, `special_type`, `role_name` and `marked`.\
+  Those are the scenario author's names for its vehicle types and flows, and the vehicles it planted.\
+  The bridge's XML and CSV files keep them.
+- `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed, so an operator can see them.\
+  The written files never do.
+- It carries `_capture` and `_solar` inside each event's `<detail>`.\
+  A sidecar holds the solar state once, on its container, and its `_solar` also has the latitude, longitude and the illumination band.
 - There is no container, so no format version and no record of what made it.
-- The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper. CARLA's is
-  the height of the body's origin with the drape offset removed, so it includes the origin's height
-  above the ground.
+- The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper.\
+  CARLA's is the height of the body's origin with the drape offset removed, so it includes the origin's height above the ground.
 
 ## Format version
 
-A datagram carries no format version of ours. `version="2.0"` is the CoT event version. A receiver
-should ignore attributes and elements it does not know, as CoT receivers do.
+A datagram carries no format version of ours.\
+`version="2.0"` is the CoT event version.\
+A receiver should ignore attributes and elements it does not know, as CoT receivers do.
 
 ## Example
 

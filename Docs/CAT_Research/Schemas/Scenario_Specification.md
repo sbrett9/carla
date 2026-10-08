@@ -9,27 +9,25 @@
 
 ## What it is
 
-A scenario specification is a SUMO scenario as its author writes it. It describes the world the
-scenario runs in, what civil time simulated second zero is, the vehicles, the places they drive
-between, the actors and flows, schedules of repeated trips, lane closures, the windows worth
-capturing, and the labels the scenario asserts. You never write SUMO's XML. The compiler turns the
-specification into the SUMO files, routes every vehicle, and checks everything it can before a capture
-is run.
+A scenario specification is a SUMO scenario as its author writes it.\
+It describes the world the scenario runs in, what civil time simulated second zero is, the vehicles, the places they drive between, the actors and flows, schedules of repeated trips, lane closures, the windows worth capturing, and the labels the scenario asserts.\
+You never write SUMO's XML.\
+The compiler turns the specification into the SUMO files, routes every vehicle, and checks everything it can before a capture is run.
 
-Times are written as civil times and places by name, and the compiler resolves both. Its resolution
-report (see [Scenario resolution report](Scenario_Resolution_Report.md)) states what each became.
+Times are written as civil times and places by name, and the compiler resolves both.\
+Its resolution report (see [Scenario resolution report](Scenario_Resolution_Report.md)) states what each became.
 
 ## Who writes it and who reads it
 
-- **A scenario developer writes it**, by hand, from a script (the `make_*_scenario.py` examples), or
-  with the authoring skill's help.
-- **`carla-compile-scenario` reads it** and checks it against this schema first (check 53). A field
-  the schema does not name is refused. Every later check is listed in
-  [Scenario compiler checks](Scenario_Checks.md).
+- **A scenario developer writes it**, by hand, from a script (the `make_*_scenario.py` examples), or with the authoring skill's help.
+- **`carla-compile-scenario` reads it** and checks it against this schema first (check 53).\
+  A field the schema does not name is refused.\
+  Every later check is listed in [Scenario compiler checks](Scenario_Checks.md).
 - A sweep names a specification as its `base` (see [Sweep](Sweep.md)).
 - `carla-drive --epoch` can read the `epoch` and `illumination` blocks out of a specification.
 
-The schema ships with the authoring skill. `carla-compile-scenario --write-schema PATH` writes it.
+The schema ships with the authoring skill.\
+`carla-compile-scenario --write-schema PATH` writes it.
 
 ## Fields
 
@@ -41,8 +39,8 @@ A time can be written in any of these forms:
 - an ISO 8601 instant at the epoch's offset;
 - `{"instant": <name>}` or `{"at": <time>}`, either with `"plus": <duration>`.
 
-A duration is seconds or `"[Nd][Nh][Nm][Ns]"`, such as `"1h30m"`. Never write a SUMO `H:M:S` value:
-SUMO reads it as an offset from second zero.
+A duration is seconds or `"[Nd][Nh][Nm][Ns]"`, such as `"1h30m"`.\
+Never write a SUMO `H:M:S` value: SUMO reads it as an offset from second zero.
 
 ### Top level
 
@@ -87,9 +85,8 @@ SUMO reads it as an offset from second zero.
 | `gui_shape`, `gui_colour` | string | no | How `sumo-gui` draws the class. Nothing else reads them. |
 | `note` | string | no | A note written into the route file as a comment. |
 
-A named mix (`vehicle_mixes[]`) has an `id`, `shares` (class id to a weight above 0), and an optional
-`note`. A flow's or actor's `type` is a class id, one of its vehicle types, the whole mix, or a named
-mix (check 16).
+A named mix (`vehicle_mixes[]`) has an `id`, `shares` (class id to a weight above 0), and an optional `note`.\
+A flow's or actor's `type` is a class id, one of its vehicle types, the whole mix, or a named mix (check 16).
 
 ### A place (`places.<name>`)
 
@@ -170,18 +167,17 @@ A place takes exactly one of these forms:
 | `supervision.cohorts[]` | object | no | A flow's whole-life label: `flow`, `supervision` (`annotated`, `unlabelled` or `nominal`, which is refused), `labels`, `parameters`. |
 | `supervision.series[]` | object | no | A schedule read as a recurring series: `series_id`, `rota`, `member_role`, `slot_length`, `slot_aoi_refs`, `supervision`, and optional `labels`, `parameters`, `hard_negative_for`. |
 
-Every actor that no instance names, and every flow that no cohort names, is written into the
-supervision plan as `unlabelled`. See [Supervision plan](Supervision_Plan.md).
+Every actor that no instance names, and every flow that no cohort names, is written into the supervision plan as `unlabelled`.\
+See [Supervision plan](Supervision_Plan.md).
 
 ## Versions
 
-This page describes version 1, the only version. The compiler refuses a specification with no
-`spec_version` or any other value (check 53).
+This page describes version 1, the only version.\
+The compiler refuses a specification with no `spec_version` or any other value (check 53).
 
 ## Example
 
-The authoring skill's minimal example, `examples/minimal/street_layout_minimal.scenario.json`,
-shortened:
+The authoring skill's minimal example, `examples/minimal/street_layout_minimal.scenario.json`, shortened:
 
 ```json
 {

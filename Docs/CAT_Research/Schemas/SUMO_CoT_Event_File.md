@@ -1,33 +1,26 @@
 # SUMO bridge event file (`carla-cot-telemetry --xml`)
 
-`carla-cot-telemetry` runs a SUMO scenario through TraCI, with no CARLA server, and turns each vehicle's
-state into a Cursor-on-Target event at a chosen rate. Given `--xml <file>`, it writes every event of
-the run to one XML file. The file is truth: each event carries the whole record, including the
-scenario author's names for its vehicle types and flows, and which vehicles it planted.
+`carla-cot-telemetry` runs a SUMO scenario through TraCI, with no CARLA server, and turns each vehicle's state into a Cursor-on-Target event at a chosen rate.\
+Given `--xml <file>`, it writes every event of the run to one XML file.\
+The file is truth: each event carries the whole record, including the scenario author's names for its vehicle types and flows, and which vehicles it planted.
 
 - Schema: `CarlaControl/schemas/sumo_cot_events.xsd` (XSD 1.0), root element `<events>`
 - Schema id: `urn:carla-sumo-capture:schema:sumo-cot-events:1`
 
-The events have the shape of the live feed's events, described in
-[CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md); each one, taken alone, is also a valid datagram. The
-same run can also write a CSV, described in [SUMO_CoT_Table.md](SUMO_CoT_Table.md), and send the live
-feed.
+The events have the shape of the live feed's events, described in [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md); each one, taken alone, is also a valid datagram.\
+The same run can also write a CSV, described in [SUMO_CoT_Table.md](SUMO_CoT_Table.md), and send the live feed.
 
-The schema includes `cot_event_body.xsd`, the event's own parts, which the datagram schema includes
-too. It cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth
-sidecar's root are both `<events>`, with no namespace, and one schema can describe only one of them.
-So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types, and a
-test checks that each copy matches the sidecar's.
+The schema includes `cot_event_body.xsd`, the event's own parts, which the datagram schema includes too.\
+It cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth sidecar's root are both `<events>`, with no namespace, and one schema can describe only one of them.\
+So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types, and a test checks that each copy matches the sidecar's.
 
 ## Who writes it and who reads it
 
-`carlacontrol.SumoCotBridge` writes it as the run goes: the opening of `<events>`, the record of what
-made it, the display convention, then one line per event, and the closing tag when the run ends. A run
-that stops early leaves a file without its closing tag.
+`carlacontrol.SumoCotBridge` writes it as the run goes: the opening of `<events>`, the record of what made it, the display convention, then one line per event, and the closing tag when the run ends.\
+A run that stops early leaves a file without its closing tag.
 
-`carla-check-label-leaks --xml` reads it, to check that no field tells the planted vehicles from the
-others. `carla-validate`, given a folder holding it, checks it against this schema, and notes a file
-without its closing tag as a run that stopped early rather than failing it.
+`carla-check-label-leaks --xml` reads it, to check that no field tells the planted vehicles from the others.\
+`carla-validate`, given a folder holding it, checks it against this schema, and notes a file without its closing tag as a run that stopped early rather than failing it.
 
 ## Structure
 
@@ -52,8 +45,8 @@ without its closing tag as a run that stopped early rather than failing it.
 
 ### `<_producer>`
 
-What made the file, as every XML file our tools write records it: the truth sidecar's `Producer`, of
-which this schema holds a copy. Absent from files written before it was recorded.
+What made the file, as every XML file our tools write records it: the truth sidecar's `Producer`, of which this schema holds a copy.\
+Absent from files written before it was recorded.
 
 | Attribute | Type | Required | Meaning |
 |---|---|---|---|
@@ -63,13 +56,12 @@ which this schema holds a copy. Absent from files written before it was recorded
 | `sumo` | string | no | The SUMO release that ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was opened, ISO 8601 UTC to the millisecond. |
 
-A `<_server>` child records a CARLA server's identity in other files; the bridge uses no server and
-writes none.
+A `<_server>` child records a CARLA server's identity in other files; the bridge uses no server and writes none.
 
 ### `<_display_convention>`
 
-Which affiliation each vehicle population was drawn with. A population is a compiled scenario's
-vehicle class, from its types' `carla:class_id`, or a hand-written route file's vehicle type id.
+Which affiliation each vehicle population was drawn with.\
+A population is a compiled scenario's vehicle class, from its types' `carla:class_id`, or a hand-written route file's vehicle type id.
 
 | Attribute | Type | Required | Meaning |
 |---|---|---|---|
@@ -80,26 +72,23 @@ vehicle class, from its types' `carla:class_id`, or a hand-written route file's 
 
 ### `<event>`
 
-Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md), with these
-differences:
+Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md), with these differences:
 
 - `uid` is `<uid prefix>-<SUMO id>`; the prefix is `SUMO-TRUTH` unless `--uid-prefix` sets it.
-- `type` carries the population's affiliation. A planted vehicle gets the same affiliation as its
-  population; `--marked-affiliation` changes only the live feed.
+- `type` carries the population's affiliation.\
+  A planted vehicle gets the same affiliation as its population; `--marked-affiliation` changes only the live feed.
 - `time` is the epoch plus the simulation time of the update.
-- `hae` is the ground height under the vehicle from the world package's `bareearth.bin` (given by
-  `--bare-earth`), or `--hae`, 0 by default, when there is no grid or the vehicle is off it.
-- `<_carla>` carries `type_id` (the SUMO vehicle type), `special_type` (from the vehicle catalog),
-  `role_name` (the flow: the SUMO id before its last dot) and `marked` (`1` for a planted vehicle,
-  `0` otherwise), which the live feed leaves out. `actor_id` is the SUMO id. There is no `heading_deg`,
-  `sumo_id`, `vtype_id`, `admitted_tick`, `_capture` or `_solar`.
-- `course` is SUMO's heading, clockwise from north. It is formatted to one decimal, so a heading just
-  under 360 is written `360.0`.
+- `hae` is the ground height under the vehicle from the world package's `bareearth.bin` (given by `--bare-earth`), or `--hae`, 0 by default, when there is no grid or the vehicle is off it.
+- `<_carla>` carries `type_id` (the SUMO vehicle type), `special_type` (from the vehicle catalog), `role_name` (the flow: the SUMO id before its last dot) and `marked` (`1` for a planted vehicle, `0` otherwise), which the live feed leaves out.\
+  `actor_id` is the SUMO id.\
+  There is no `heading_deg`, `sumo_id`, `vtype_id`, `admitted_tick`, `_capture` or `_solar`.
+- `course` is SUMO's heading, clockwise from north.\
+  It is formatted to one decimal, so a heading just under 360 is written `360.0`.
 
 ## Format version
 
-`format_version` is 1. `carla-check-label-leaks` reads a file without it as version 1, and refuses a
-newer one, naming the file, the version and the newest it reads.
+`format_version` is 1.\
+`carla-check-label-leaks` reads a file without it as version 1, and refuses a newer one, naming the file, the version and the newest it reads.
 
 ## Example
 

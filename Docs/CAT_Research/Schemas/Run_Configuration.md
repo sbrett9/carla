@@ -9,43 +9,43 @@
 
 ## What it is
 
-A run configuration describes one capture run: which compiled scenario to bind, which window of
-simulated time to render, the cameras, and how the run is paced, lit and recorded. You pass it to
-`carla-capture --run`. Any field can also be set on the command line with `--set <path>=<value>`, and
-a few have short options such as `--window` and `--scenario`.
+A run configuration describes one capture run: which compiled scenario to bind, which window of simulated time to render, the cameras, and how the run is paced, lit and recorded.\
+You pass it to `carla-capture --run`.\
+Any field can also be set on the command line with `--set <path>=<value>`, and a few have short options such as `--window` and `--scenario`.
 
-A run is resolved from six layers, lowest first: the tool defaults, the site profile, the world
-package, the scenario package, the run configuration, and command-line overrides. A field the run
-configuration leaves out takes its value from a lower layer. Fields marked "world" or "scenario" in
-the table below are bound by those packages. You may restate a bound field only with the value the
-package gives it; any other value is refused (run check 3).
+A run is resolved from six layers, lowest first: the tool defaults, the site profile, the world package, the scenario package, the run configuration, and command-line overrides.\
+A field the run configuration leaves out takes its value from a lower layer.\
+Fields marked "world" or "scenario" in the table below are bound by those packages.\
+You may restate a bound field only with the value the package gives it; any other value is refused (run check 3).
 
-Every run also writes `run.effective.json` beside its result. It is a run configuration too: every
-field the run resolved, the scenario named by its id, and the machine facts (server, paths, SUMO)
-left out. Passing it back to `carla-capture --run` on any machine reproduces the run.
+Every run also writes `run.effective.json` beside its result.\
+It is a run configuration too: every field the run resolved, the scenario named by its id, and the machine facts (server, paths, SUMO) left out.\
+Passing it back to `carla-capture --run` on any machine reproduces the run.
 
-Positions are in CARLA's frame: meters, x east, y south. North is -y.
+Positions are in CARLA's frame: meters, x east, y south.\
+North is -y.
 
 ## Who writes it and who reads it
 
-- **You write it**, by hand or from a script. A scenario developer usually writes one per scenario
-  window; a camera or mission developer adds or changes the channels.
-- **`carla-capture` writes `run.effective.json`** beside the run result when the offline checks
-  accept the launch. It adds a `producer` record that says what wrote it.
-- **`carla-capture --run` reads it** before anything else. An unknown key is refused with the nearest
-  field names (run check 1). A camera blueprint attribute such as `iso` or `shutter_speed` is refused
-  with the name of the channel field that sets it. A `world_build` block is refused, because a
-  capture run never builds a world (run check 38).
+- **You write it**, by hand or from a script.\
+  A scenario developer usually writes one per scenario window; a camera or mission developer adds or changes the channels.
+- **`carla-capture` writes `run.effective.json`** beside the run result when the offline checks accept the launch.\
+  It adds a `producer` record that says what wrote it.
+- **`carla-capture --run` reads it** before anything else.\
+  An unknown key is refused with the nearest field names (run check 1).\
+  A camera blueprint attribute such as `iso` or `shutter_speed` is refused with the name of the channel field that sets it.\
+  A `world_build` block is refused, because a capture run never builds a world (run check 38).
 
-`carla-capture --help` prints every field with its default. `carla-capture --write-schema PATH` or
-`carla-capture --write-schemas DIR` writes the schema.
+`carla-capture --help` prints every field with its default.\
+`carla-capture --write-schema PATH` or `carla-capture --write-schemas DIR` writes the schema.
 
 ## Fields
 
-The document is a JSON object. Dotted paths below are nested objects: `capture.window` is
-`{"capture": {"window": ...}}`. No field is required by the schema itself. A field with no default
-must come from some layer, or the launch is refused (run check 2). "From" names the lower layer that
-normally supplies a field: the site profile, the world package or the scenario package.
+The document is a JSON object.\
+Dotted paths below are nested objects: `capture.window` is `{"capture": {"window": ...}}`.\
+No field is required by the schema itself.\
+A field with no default must come from some layer, or the launch is refused (run check 2).\
+"From" names the lower layer that normally supplies a field: the site profile, the world package or the scenario package.
 
 | Field | Type | Unit | Default | From | Meaning |
 |---|---|---|---|---|---|
@@ -156,14 +156,14 @@ Each object in `capture.channels` takes these fields:
 
 ## Versions
 
-This page describes version 1, the only version. A document without `run_configuration_version` is
-read as version 1. A document that declares a newer version is refused, and the message says to use
-the release that wrote it. Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).
+This page describes version 1, the only version.\
+A document without `run_configuration_version` is read as version 1.\
+A document that declares a newer version is refused, and the message says to use the release that wrote it.\
+Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).
 
 ## Example
 
-`Import/Arapahoe_I25_SupervisionCheck.run.json`: one stare camera 70 m above a point, 25 m back from
-it, looking east, over the scenario's `dwell_golden` window.
+`Import/Arapahoe_I25_SupervisionCheck.run.json`: one stare camera 70 m above a point, 25 m back from it, looking east, over the scenario's `dwell_golden` window.
 
 ```json
 {

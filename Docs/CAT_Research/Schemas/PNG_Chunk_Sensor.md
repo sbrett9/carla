@@ -1,23 +1,19 @@
 # PNG text chunk `carla:sensor`
 
-**Schema:** `CarlaControl/schemas/png_chunk_sensor.schema.json` (JSON Schema 2020-12)
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-sensor:1`
-**Format version described:** 1
+**Schema:** `CarlaControl/schemas/png_chunk_sensor.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:png-chunk-sensor:1` **Format version described:** 1
 
 ## What it is
 
-`carla:sensor` is where the camera was and where it pointed at the capture, with its pinhole
-intrinsics, so a still can be projected or placed on a map from the image file alone. It is the same
-pose the truth sidecar's camera platform event carries. The camera's exposure is in the sidecar's
-`<_carla_exposure>` only.
+`carla:sensor` is where the camera was and where it pointed at the capture, with its pinhole intrinsics, so a still can be projected or placed on a map from the image file alone.\
+It is the same pose the truth sidecar's camera platform event carries.\
+The camera's exposure is in the sidecar's `<_carla_exposure>` only.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:sensor`, holding one line of compact JSON.
 
 ## Who writes it, and when
 
-The CarlaNet recorder writes it into a still when it records the camera as a platform and the world's
-georeference is known. A recorder started through carlanet (`start_recording`), which every
-`carla-*` tool uses, always records the camera as a platform.
+The CarlaNet recorder writes it into a still when it records the camera as a platform and the world's georeference is known.\
+A recorder started through carlanet (`start_recording`), which every `carla-*` tool uses, always records the camera as a platform.
 
 ## Fields
 
@@ -54,14 +50,13 @@ georeference is known. A recorder started through carlanet (`start_recording`), 
 | `distortion` | string | | Yes | `none` at CARLA's defaults, otherwise CARLA's own lens parameters. |
 | `sensor_model` | string | | Yes | The camera blueprint, such as `sensor.camera.rgb`. |
 
-Some names differ from the sidecar's for the same value: `az_deg` and `el_deg` here are `azimuth` and
-`elevation` on the sidecar's `<sensor>`, and `intrinsics.sensor_model` is the `<sensor>`'s `model`.
+Some names differ from the sidecar's for the same value: `az_deg` and `el_deg` here are `azimuth` and `elevation` on the sidecar's `<sensor>`, and `intrinsics.sensor_model` is the `<sensor>`'s `model`.
 
 ## Format version
 
-This page describes format version 1. A chunk without `format_version` was written before chunks
-carried one and is version 1. Readers read a version they know, refuse a newer one by name rather than
-reading it in part, and read a chunk with no version as version 1.
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
 
 ## Example
 

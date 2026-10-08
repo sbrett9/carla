@@ -1,21 +1,17 @@
 # World truth track summary
 
-**Schema:** `CarlaControl/schemas/world_truth_track_summary.schema.json` (JSON Schema 2020-12)
-**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track-summary:2`
-**Format version described:** 2 (`world_truth_track_version`)
+**Schema:** `CarlaControl/schemas/world_truth_track_summary.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:world-truth-track-summary:2` **Format version described:** 2 (`world_truth_track_version`)
 
 ## What the file is
 
-The summary sits beside a world truth track, with the track's name and `.summary.json` for its
-extension: `truth/world_truth_track.summary.json` in a capture folder. It holds the track's format
-version, what made it, its columns and sampling rate, what it holds so far and why the run ended.
+The summary sits beside a world truth track, with the track's name and `.summary.json` for its extension: `truth/world_truth_track.summary.json` in a capture folder.\
+It holds the track's format version, what made it, its columns and sampling rate, what it holds so far and why the run ended.
 
 ## Who writes it, and when
 
-The SUMO drive session writes it with the track: once when the track opens, and again when the run ends.
-Each time it writes the whole file under a temporary name and renames it into place, so a reader never
-sees half a summary. A summary whose `ended` is null belongs to a track still being written, or to a run
-that was killed.
+The SUMO drive session writes it with the track: once when the track opens, and again when the run ends.\
+Each time it writes the whole file under a temporary name and renames it into place, so a reader never sees half a summary.\
+A summary whose `ended` is null belongs to a track still being written, or to a run that was killed.
 
 ## Fields
 
@@ -51,10 +47,10 @@ Once `ended` is set, `rows` equals the number of rows in the track.
 
 ## Format version
 
-This page describes `world_truth_track_version` 2, which is also the track's version. Summaries written
-before the producer record was added have no `producer` and are valid against this schema. A summary
-without `world_truth_track_version` is version 1, an older shape this schema does not describe. Readers
-read a version they know and refuse a newer one by name rather than reading it in part.
+This page describes `world_truth_track_version` 2, which is also the track's version.\
+Summaries written before the producer record was added have no `producer` and are valid against this schema.\
+A summary without `world_truth_track_version` is version 1, an older shape this schema does not describe.\
+Readers read a version they know and refuse a newer one by name rather than reading it in part.
 
 ## Example
 
@@ -110,5 +106,4 @@ The file lists each column on a line of its own; they are run together here.
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks the summary against this schema and, once the run has ended,
-that it counts the rows the track holds.
+`carla-validate <capture folder>` checks the summary against this schema and, once the run has ended, that it counts the rows the track holds.

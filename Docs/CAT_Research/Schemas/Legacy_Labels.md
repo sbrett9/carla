@@ -1,10 +1,9 @@
 # Legacy scenario labels (`*.labels.json`)
 
-Before scenarios were compiled, a scenario generator wrote its route file and, beside it, a labels file
-saying which vehicles it planted, which affiliation each vehicle type should be shown with, and which
-gaps it described. Nothing in the tools writes this file any more. A compiled scenario's labels are
-its compiled supervision plan. The tools still read a labels file, so that runs of the old scenarios
-can be repeated.
+Before scenarios were compiled, a scenario generator wrote its route file and, beside it, a labels file saying which vehicles it planted, which affiliation each vehicle type should be shown with, and which gaps it described.\
+Nothing in the tools writes this file any more.\
+A compiled scenario's labels are its compiled supervision plan.\
+The tools still read a labels file, so that runs of the old scenarios can be repeated.
 
 - Schema: `CarlaControl/schemas/legacy_labels.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:legacy-labels:1`
@@ -13,18 +12,17 @@ can be repeated.
 
 - `carla-cot-telemetry --labels <file>` reads all three keys:
   - `marked_ids`: the vehicles recorded as planted, in the `marked` field of its XML and CSV;
-  - `affiliation_by_type`: the display affiliations, used only when the run has no display convention.
-    The `u` the generator gave every anomaly type is withheld: it marked the answer, not a display
-    choice. Those types take `--affiliation`;
-  - `anomaly_notes`: the described gaps, written to a [gap file](Supervision_Gaps.md) beside the run's
-    output.
-- `carla-check-label-leaks --labels <file>` reads `marked_ids`, to group the run's records into
-  planted and not planted.
+  - `affiliation_by_type`: the display affiliations, used only when the run has no display convention.\
+    The `u` the generator gave every anomaly type is withheld: it marked the answer, not a display choice.\
+    Those types take `--affiliation`;
+  - `anomaly_notes`: the described gaps, written to a [gap file](Supervision_Gaps.md) beside the run's output.
+- `carla-check-label-leaks --labels <file>` reads `marked_ids`, to group the run's records into planted and not planted.
 - `carla-validate`, given a folder holding it, checks it against this schema.
 
 ## Fields
 
-Every key may be absent. A reader ignores a key it does not name.
+Every key may be absent.\
+A reader ignores a key it does not name.
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -34,8 +32,9 @@ Every key may be absent. A reader ignores a key it does not name.
 
 ## Format version
 
-The file carries no version. It is version 1, like any file written before its kind carried a
-version. No newer version will be made.
+The file carries no version.\
+It is version 1, like any file written before its kind carried a version.\
+No newer version will be made.
 
 ## Example
 

@@ -1,22 +1,19 @@
 # PNG text chunk `carla:solar`
 
-**Schema:** `CarlaControl/schemas/png_chunk_solar.schema.json` (JSON Schema 2020-12)
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-solar:1`
-**Format version described:** 1
+**Schema:** `CarlaControl/schemas/png_chunk_solar.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:png-chunk-solar:1` **Format version described:** 1
 
 ## What it is
 
-`carla:solar` is the sun the world reported on the tick nearest the still's pixels, and the
-illumination band of that sun. The band is worked out from the sun the world actually had, never from
-the time the run asked for. The truth sidecar's `<_solar>` element carries the same values.
+`carla:solar` is the sun the world reported on the tick nearest the still's pixels, and the illumination band of that sun.\
+The band is worked out from the sun the world actually had, never from the time the run asked for.\
+The truth sidecar's `<_solar>` element carries the same values.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:solar`, holding one line of compact JSON.
 
 ## Who writes it, and when
 
-The CarlaNet recorder writes it into a still whenever the world reported a sun for that frame. A still
-whose world reported no sun has no `carla:solar` chunk and no `<_solar>` in its sidecar; a capture run
-counts such stills and its closing checks require the count to be zero.
+The CarlaNet recorder writes it into a still whenever the world reported a sun for that frame.\
+A still whose world reported no sun has no `carla:solar` chunk and no `<_solar>` in its sidecar; a capture run counts such stills and its closing checks require the count to be zero.
 
 ## Fields
 
@@ -36,16 +33,14 @@ counts such stills and its closing checks require the count to be zero.
 | `illumination_band` | string | | No | The sun's illumination band (below); absent where the elevation is not a real sun's, such as the value the engine reports for a sun it could not compute. |
 | `illumination_band_elevation` | string | | No | Which elevation the band was cut from: `refraction_corrected` wherever the chunk carries it, `geometric` otherwise. Present exactly when `illumination_band` is. |
 
-**Illumination bands**, defined by the sun's refraction-corrected elevation in degrees, each including its
-upper edge: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12,
-`astronomical_twilight` above -18, `night` at -18 and below. The two elevations differ by up to a few
-tenths of a degree near the horizon, which is a large share of a low sun.
+**Illumination bands**, defined by the sun's refraction-corrected elevation in degrees, each including its upper edge: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12, `astronomical_twilight` above -18, `night` at -18 and below.\
+The two elevations differ by up to a few tenths of a degree near the horizon, which is a large share of a low sun.
 
 ## Format version
 
-This page describes format version 1. A chunk without `format_version` was written before chunks
-carried one and is version 1. Readers read a version they know, refuse a newer one by name rather than
-reading it in part, and read a chunk with no version as version 1.
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
 
 ## Example
 

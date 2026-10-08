@@ -1,33 +1,27 @@
 # Resolved areas of interest (`areas.resolved.json` in a `.cwp`)
 
-An area of interest is a named place where a scenario can put behavior and that a label can refer to:
-a guard post, a gate, a parking lot. An author declares areas in a GeoJSON file beside the
-OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude. `areas.resolved.json` holds
-those areas placed on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross,
-or pass near each one. The lane positions can be written straight into a SUMO `<stop>`.
+An area of interest is a named place where a scenario can put behavior and that a label can refer to: a guard post, a gate, a parking lot.\
+An author declares areas in a GeoJSON file beside the OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude.\
+`areas.resolved.json` holds those areas placed on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross, or pass near each one.\
+The lane positions can be written straight into a SUMO `<stop>`.
 
-The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md), and its schema is
-`area_of_interest.schema.json`. The package holds a byte-for-byte copy of the areas file as
-`areas.aoi.geojson`.
+The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md), and its schema is `area_of_interest.schema.json`.\
+The package holds a byte-for-byte copy of the areas file as `areas.aoi.geojson`.
 
 - Schema: `CarlaControl/schemas/areas_resolved.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:areas-resolved:1`
 
 ## Who writes it and who reads it
 
-carlacontrol's `AreaOfInterestResolver` writes it when the authoring reference set is published. It
-converts each vertex with SUMO's own projection, run by a SUMO process holding the world's network,
-and converts it again with the world's own geographic frame. If the two disagree by more than
-`geodesy_agreement_limit_m` at any vertex, the areas are refused and the package gets no
-`areas.resolved.json`; the build log names every problem.
+carlacontrol's `AreaOfInterestResolver` writes it when the authoring reference set is published.\
+It converts each vertex with SUMO's own projection, run by a SUMO process holding the world's network, and converts it again with the world's own geographic frame.\
+If the two disagree by more than `geodesy_agreement_limit_m` at any vertex, the areas are refused and the package gets no `areas.resolved.json`; the build log names every problem.
 
-The file is always written when the set is published and the areas are not refused. A world built with
-no areas declared gets a table with an empty `areas` list, so a world with no areas can be told apart from
-one that was never published.
+The file is always written when the set is published and the areas are not refused.\
+A world built with no areas declared gets a table with an empty `areas` list, so a world with no areas can be told apart from one that was never published.
 
-The scenario compiler reads it through `WorldPackageReader.areas_of_interest()`, to locate places named
-by area. The reader refuses the table when its `source_sha256` is not the digest of the
-`areas.aoi.geojson` beside it, because the table would then describe other areas.
+The scenario compiler reads it through `WorldPackageReader.areas_of_interest()`, to locate places named by area.\
+The reader refuses the table when its `source_sha256` is not the digest of the `areas.aoi.geojson` beside it, because the table would then describe other areas.
 
 The file is JSON, UTF-8, two-space indent, keys sorted.
 
@@ -36,13 +30,12 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 Every lane of a normal edge is tested against every area:
 
 - `inside`: the whole lane lies in the area.
-- `crossing`: part of the lane lies in the area. A lane that leaves a concave area and comes back has
-  more than one stretch in `intervals_m`.
+- `crossing`: part of the lane lies in the area.\
+  A lane that leaves a concave area and comes back has more than one stretch in `intervals_m`.
 - `near`: no part lies in the area, but the lane passes within `near_m` of it.
 
-Positions on a lane are SUMO lane positions in meters: the distance along the lane's shape, scaled by
-the lane's `length` over its shape length, as SUMO maps positions. An edge is `inside` when all its
-lanes are, `crossing` when any listed lane is inside or crossing, and `near` otherwise.
+Positions on a lane are SUMO lane positions in meters: the distance along the lane's shape, scaled by the lane's `length` over its shape length, as SUMO maps positions.\
+An edge is `inside` when all its lanes are, `crossing` when any listed lane is inside or crossing, and `near` otherwise.
 
 ## Fields
 
@@ -94,7 +87,8 @@ lanes are, `crossing` when any listed lane is inside or crossing, and `near` oth
 
 ### `areas[].sumo.lanes[]`
 
-Ordered by edge id, then lane id. A lane inside or crossing the area:
+Ordered by edge id, then lane id.\
+A lane inside or crossing the area:
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -116,16 +110,17 @@ A lane near the area:
 | `distance_m` | number | meters | yes | Shortest distance from the lane to the area, rounded to 0.01 m. |
 | `allowed_vclasses` | array of strings | | yes | As above. |
 
-The allowed classes are the world network's. A scenario that changes lane permissions checks its own
-network.
+The allowed classes are the world network's.\
+A scenario that changes lane permissions checks its own network.
 
 ## Format version
 
-`resolved_version` is 1, and there is no other version. A file without it is version 1.
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version. They
-name the version and the newest they read, rather than reading part of the file.
-`WorldPackageReader` then checks the file against the schema. If the file does not match, it refuses
-the file and names each problem.
+`resolved_version` is 1, and there is no other version.\
+A file without it is version 1.\
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
+They name the version and the newest they read, rather than reading part of the file.\
+`WorldPackageReader` then checks the file against the schema.\
+If the file does not match, it refuses the file and names each problem.
 
 ## Examples
 

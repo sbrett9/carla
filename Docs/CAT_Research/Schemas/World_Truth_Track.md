@@ -1,40 +1,37 @@
 # World truth track
 
-**Schema:** `CarlaControl/schemas/world_truth_track.tableschema.json` (Frictionless Table Schema)
-**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track:2`
-**Format version described:** 2 (declared in the summary beside the track)
+**Schema:** `CarlaControl/schemas/world_truth_track.tableschema.json` (Frictionless Table Schema) **Identifier:** `urn:carla-sumo-capture:schema:world-truth-track:2` **Format version described:** 2 (declared in the summary beside the track)
 
 ## What the file is
 
-The world truth track, `truth/world_truth_track.csv` in a capture folder, lists every vehicle SUMO had at
-each sampled SUMO frame inside the capture window, whether or not any camera drew it: one row per vehicle
-per sample. Within a sample, rows are in order of `sumo_id`.
+The world truth track, `truth/world_truth_track.csv` in a capture folder, lists every vehicle SUMO had at each sampled SUMO frame inside the capture window, whether or not any camera drew it: one row per vehicle per sample.\
+Within a sample, rows are in order of `sumo_id`.
 
-A truth sidecar lists the vehicles one frame drew. This file lists what the world contained, so counts
-over all the vehicles in the scene (how often a behavior happens, for example) are taken from here, not
-from the sidecars, which leave out every vehicle that had no body.
+A truth sidecar lists the vehicles one frame drew.\
+This file lists what the world contained, so counts over all the vehicles in the scene (how often a behavior happens, for example) are taken from here, not from the sidecars, which leave out every vehicle that had no body.
 
-Every value but a vehicle type's base type and kind is SUMO's own, read from the state the run already
-holds. A vehicle's drawn pose and box are in the sidecars; join a row to a sidecar's vehicle event by
-`sumo_id` and frame (this file's `frame`, the sidecar's `tick`).
+Every value but a vehicle type's base type and kind is SUMO's own, read from the state the run already holds.\
+A vehicle's drawn pose and box are in the sidecars; join a row to a sidecar's vehicle event by `sumo_id` and frame (this file's `frame`, the sidecar's `tick`).
 
-The file is plain CSV, UTF-8, with a header line and LF line endings. A field holding a comma, such as
-`color`, is quoted. An empty field is a missing value.
+The file is plain CSV, UTF-8, with a header line and LF line endings.\
+A field holding a comma, such as `color`, is quoted.\
+An empty field is a missing value.
 
 ## Who writes it, and when
 
-The SUMO drive session in CarlaNet writes it when its caller names a path. `carla-capture` always does, at
-`truth/world_truth_track.csv` under the capture folder. `carla-drive --world-truth-track <path>` writes
-one too, and `--world-truth-track-interval <seconds>` samples every few SUMO steps instead of every one.
+The SUMO drive session in CarlaNet writes it when its caller names a path.\
+`carla-capture` always does, at `truth/world_truth_track.csv` under the capture folder.\
+`carla-drive --world-truth-track <path>` writes one too, and `--world-truth-track-interval <seconds>` samples every few SUMO steps instead of every one.
 
-The header is written as the track opens. Each sample's rows are written when the CARLA frame that
-renders that SUMO frame completes, and flushed together. Frames before the capture window opens write
-nothing. A file cut off by a killed run is the rows already written, plus at most one line without its
-line break, which a reader ignores.
+The header is written as the track opens.\
+Each sample's rows are written when the CARLA frame that renders that SUMO frame completes, and flushed together.\
+Frames before the capture window opens write nothing.\
+A file cut off by a killed run is the rows already written, plus at most one line without its line break, which a reader ignores.
 
 ## Columns
 
-Every row has all 41 columns, in this order. **Required** "Yes" means the cell is never empty.
+Every row has all 41 columns, in this order.\
+**Required** "Yes" means the cell is never empty.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -93,24 +90,20 @@ The table's primary key is `(sumo_id, frame)`: no vehicle appears twice in one s
 | `no_ground` | It is off the world's ground grid, where no body can be placed. |
 | `not_drawn` | None of those: the frame drew no body for it, for a reason the track cannot name. |
 
-The annotation vocabulary also has `left_the_simulation` and `vanished`, which this track never writes: a
-vehicle's last SUMO frame is drawn like any other.
+The annotation vocabulary also has `left_the_simulation` and `vanished`, which this track never writes: a vehicle's last SUMO frame is drawn like any other.
 
-**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees, each including its
-upper edge: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12,
-`astronomical_twilight` above -18, `night` at -18 and below.
+**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees, each including its upper edge: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12, `astronomical_twilight` above -18, `night` at -18 and below.
 
-**Two things differ from a sidecar.** The track's dimensions and color are the SUMO type's, and the
-sidecar's are the CARLA body's, so they can differ slightly for the same vehicle. And the track's
-position is SUMO's, at the front bumper, where the sidecar's `<point>` is the CARLA body's origin.
+**Two things differ from a sidecar.**\
+The track's dimensions and color are the SUMO type's, and the sidecar's are the CARLA body's, so they can differ slightly for the same vehicle.\
+And the track's position is SUMO's, at the front bumper, where the sidecar's `<point>` is the CARLA body's origin.
 
 ## Format version
 
-The CSV carries no version of its own, so that its header stays the column names alone. Its version is
-the summary's `world_truth_track_version` (see the World truth track summary page), and this page
-describes version 2. A summary without that field is version 1, an older shape with fewer columns that
-this schema does not describe. Readers read a version they know and refuse a newer one by name rather
-than reading it in part.
+The CSV carries no version of its own, so that its header stays the column names alone.\
+Its version is the summary's `world_truth_track_version` (see the World truth track summary page), and this page describes version 2.\
+A summary without that field is version 1, an older shape with fewer columns that this schema does not describe.\
+Readers read a version they know and refuse a newer one by name rather than reading it in part.
 
 ## Example
 
@@ -121,7 +114,5 @@ time_utc,sim_time_s,uid,callsign,cot_type,how,lat,lon,hae_m,ce_m,le_m,course_deg
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks every row against this schema, the primary key, and that the
-summary written at the run's end counts the rows the track holds. Frictionless tools can also read the
-Table Schema directly; the schema adds two annotations, `x-unit` and `x-format-version`, that such tools
-ignore.
+`carla-validate <capture folder>` checks every row against this schema, the primary key, and that the summary written at the run's end counts the rows the track holds.\
+Frictionless tools can also read the Table Schema directly; the schema adds two annotations, `x-unit` and `x-format-version`, that such tools ignore.

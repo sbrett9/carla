@@ -9,22 +9,21 @@
 
 ## What it is
 
-The run lock records what one accepted capture run is bound to: the digests of its scenario, world,
-vehicle catalog and epoch; every field of its effective configuration with the layer that set it
-and where that layer read it; how each warning was handled; and this machine's site profile. It is
-the record to compare when two runs differ.
+The run lock records what one accepted capture run is bound to: the digests of its scenario, world, vehicle catalog and epoch; every field of its effective configuration with the layer that set it and where that layer read it; how each warning was handled; and this machine's site profile.\
+It is the record to compare when two runs differ.
 
-**This is not the scenario lock.** The scenario compiler writes `<scenario_id>.lock.json`, which
-records a compiled scenario (see [Scenario lock](Scenario_Lock.md)). A run lock records one run of
-that scenario, and is always named after the run result: `run.lock.json` by default.
+**This is not the scenario lock.**\
+The scenario compiler writes `<scenario_id>.lock.json`, which records a compiled scenario (see [Scenario lock](Scenario_Lock.md)).\
+A run lock records one run of that scenario, and is always named after the run result: `run.lock.json` by default.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** beside the run result, as `<stem>.lock.json`, only when the offline
-  checks accept the launch. It is written before any server is contacted, so its `producer` names no
-  server.
-- `run.effective.json` is written with it. That file reproduces the run; the lock explains it.
-- No tool reads it back. It is for people and for scripts that compare runs.
+- **`carla-capture` writes it** beside the run result, as `<stem>.lock.json`, only when the offline checks accept the launch.\
+  It is written before any server is contacted, so its `producer` names no server.
+- `run.effective.json` is written with it.\
+  That file reproduces the run; the lock explains it.
+- No tool reads it back.\
+  It is for people and for scripts that compare runs.
 
 ## Fields
 
@@ -56,8 +55,7 @@ Every field is always present, except `producer` in a file written before Octobe
 
 ### The effective configuration
 
-The `effective_configuration` object, which the [Run resolution report](Run_Resolution_Report.md)
-carries too:
+The `effective_configuration` object, which the [Run resolution report](Run_Resolution_Report.md) carries too:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -99,9 +97,10 @@ The `site_profile` object, which the run resolution report carries too:
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads a run lock back, so no tool refuses
-one. A reader should read version 1 and refuse a newer version rather than read it in part. A file
-written before October 7, 2026 has no `producer`; it is still version 1.
+This page describes version 1, the only version.\
+No tool reads a run lock back, so no tool refuses one.\
+A reader should read version 1 and refuse a newer version rather than read it in part.\
+A file written before October 7, 2026 has no `producer`; it is still version 1.
 
 ## Example
 

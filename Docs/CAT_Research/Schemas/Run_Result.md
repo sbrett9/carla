@@ -9,27 +9,24 @@
 
 ## What it is
 
-The run result says how one `carla-capture` run ended and where everything it wrote is. It records
-what was observed: how many captures each camera wrote, how each view became ready, each closing
-gate's observation against its threshold. It carries no overall pass or fail. A reader decides what
-matters to them from the parts they care about.
+The run result says how one `carla-capture` run ended and where everything it wrote is.\
+It records what was observed: how many captures each camera wrote, how each view became ready, each closing gate's observation against its threshold.\
+It carries no overall pass or fail.\
+A reader decides what matters to them from the parts they care about.
 
 The process exit status is read from `outcome`, so the file and the exit status always agree.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** in every outcome where the tool is not stopped first, including a refusal before any
-  server was contacted. It goes to `--result` (the `result_path` field), or by default to
-  `<paths.runs_root>/<session id>/run.result.json`. It is always outside the capture folder.
-- It is written under a temporary name ending in `.partial` and then renamed, so a reader never sees
-  a half-written result. If there is no result, the tool was stopped before it could write one.
-- Three other records are written beside it, named after it: `<stem>.resolution.json` (see
-  [Run resolution report](Run_Resolution_Report.md)), and, when the offline checks accept,
-  `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see
-  [Run configuration](Run_Configuration.md)). For the default name `run.result.json` the stem is
-  `run`.
-- **Readers**: a camera or mission developer's own scripts, which read the outcome, the capture
-  folder and the gate records. `carlacontrol.RunResult.read` reads it with the version rule below.
+- **`carla-capture` writes it** in every outcome where the tool is not stopped first, including a refusal before any server was contacted.\
+  It goes to `--result` (the `result_path` field), or by default to `<paths.runs_root>/<session id>/run.result.json`.\
+  It is always outside the capture folder.
+- It is written under a temporary name ending in `.partial` and then renamed, so a reader never sees a half-written result.\
+  If there is no result, the tool was stopped before it could write one.
+- Three other records are written beside it, named after it: `<stem>.resolution.json` (see [Run resolution report](Run_Resolution_Report.md)), and, when the offline checks accept, `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see [Run configuration](Run_Configuration.md)).\
+  For the default name `run.result.json` the stem is `run`.
+- **Readers**: a camera or mission developer's own scripts, which read the outcome, the capture folder and the gate records.\
+  `carlacontrol.RunResult.read` reads it with the version rule below.
 
 ## Fields
 
@@ -76,9 +73,7 @@ The outcomes and their exit statuses:
 | 6 | `run_stopped` | The run ended before its end. `closed_by` says why. |
 | 7 | `internal_error` | An unexpected fault. |
 
-`closed_by` is one of: `window_end`, `scenario_end`, `aborted_at_preroll`, `operator_stop`,
-`write_headroom`, `signal:<name>` (such as `signal:SIGINT`), `loud:<condition>` (an unattended run
-stopped by a loud condition such as `loud:recorder_dropped`), or `fault:<exception type>`.
+`closed_by` is one of: `window_end`, `scenario_end`, `aborted_at_preroll`, `operator_stop`, `write_headroom`, `signal:<name>` (such as `signal:SIGINT`), `loud:<condition>` (an unattended run stopped by a loud condition such as `loud:recorder_dropped`), or `fault:<exception type>`.
 
 ### A finding
 
@@ -97,9 +92,9 @@ Each entry of `refusals` and `warnings`:
 
 ### `produced`
 
-Present once the co-simulation session has started, whatever happened after. A run that was refused
-before that, offline or by the server, has `produced` null. Every field below is written; only
-`termination` is added at the very end.
+Present once the co-simulation session has started, whatever happened after.\
+A run that was refused before that, offline or by the server, has `produced` null.\
+Every field below is written; only `termination` is added at the very end.
 
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
@@ -123,8 +118,7 @@ before that, offline or by the server, has `produced` null. Every field below is
 | `recorder_run_id` | string | | The run id the recorders stamped on every still: the session id. |
 | `termination` | array | | The shutdown steps in order, each with `phase`, `step`, `ran`, `completed` and `failure`. |
 
-Each entry of `produced.channels` (every count is an integer, or null where this channel's recorder
-does not count it):
+Each entry of `produced.channels` (every count is an integer, or null where this channel's recorder does not count it):
 
 | Field | Meaning |
 |---|---|
@@ -179,9 +173,9 @@ Every file our tools write carries a `producer` object:
 
 ## Versions
 
-This page describes version 1, the only version. `RunResult.read` reads a result with no
-`result_version` as version 1 and refuses a newer version, saying to read it with the release that
-wrote it. A file written before October 7, 2026 has no `producer`; it is still version 1.
+This page describes version 1, the only version.\
+`RunResult.read` reads a result with no `result_version` as version 1 and refuses a newer version, saying to read it with the release that wrote it.\
+A file written before October 7, 2026 has no `producer`; it is still version 1.
 
 ## Example
 

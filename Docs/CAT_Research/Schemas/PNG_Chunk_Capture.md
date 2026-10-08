@@ -1,26 +1,24 @@
 # PNG text chunk `carla:capture`
 
-**Schema:** `CarlaControl/schemas/png_chunk_capture.schema.json` (JSON Schema 2020-12)
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-capture:1`
-**Format version described:** 1
+**Schema:** `CarlaControl/schemas/png_chunk_capture.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:png-chunk-capture:1` **Format version described:** 1
 
 ## What it is
 
-Every still a recorder writes is a PNG with up to four text chunks between its header and its pixels.
-`carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the
-run it belongs to, and what wrote it. It lets you trace a still to its frame, its run and the release that
-made it, even when the still has been separated from its truth sidecar.
+Every still a recorder writes is a PNG with up to four text chunks between its header and its pixels.\
+`carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the run it belongs to, and what wrote it.\
+It lets you trace a still to its frame, its run and the release that made it, even when the still has been separated from its truth sidecar.
 
-The chunk is a PNG `tEXt` chunk with the keyword `carla:capture`. Its text is one line of compact JSON.
+The chunk is a PNG `tEXt` chunk with the keyword `carla:capture`.\
+Its text is one line of compact JSON.\
 PNG text chunks are Latin-1; the writer replaces any character outside Latin-1 with `?`.
 
-Every still carries this chunk. The other three (`carla:solar`, `carla:illumination`, `carla:sensor`)
-are written only when there is something to say.
+Every still carries this chunk.\
+The other three (`carla:solar`, `carla:illumination`, `carla:sensor`) are written only when there is something to say.
 
 ## Who writes it, and when
 
-The CarlaNet recorder writes it into every still it saves, at the same moment it writes the still's
-truth sidecar. `carla-capture`, `carla-drive` and `carla-sctmv` all record through it.
+The CarlaNet recorder writes it into every still it saves, at the same moment it writes the still's truth sidecar.\
+`carla-capture`, `carla-drive` and `carla-sctmv` all record through it.
 
 ## Fields
 
@@ -45,7 +43,8 @@ truth sidecar. `carla-capture`, `carla-drive` and `carla-sctmv` all record throu
 | `sumo` | string or null | | Yes | The SUMO release where SUMO drove the vehicles; null where it did not. |
 | `written_utc` | string | | No | When the still was written, UTC to the millisecond, such as `2026-10-07T12:00:00.000Z`. |
 
-`server` has one of two shapes. A server that answered the build identity call:
+`server` has one of two shapes.\
+A server that answered the build identity call:
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -68,15 +67,14 @@ A server built before the call:
 | `world_interface` | string | | Yes | The world interface version it reported, or `unknown`. |
 | `reason` | string | | Yes | Why the identity is not available. |
 
-A value a server cannot know is `unknown`. The truth sidecar's `<_producer>` element, the run
-manifest's opening `producer` and the world truth track summary's `producer` use the same record
-with the same fields.
+A value a server cannot know is `unknown`.\
+The truth sidecar's `<_producer>` element, the run manifest's opening `producer` and the world truth track summary's `producer` use the same record with the same fields.
 
 ## Format version
 
-This page describes format version 1. A chunk without `format_version` was written before chunks
-carried one and is version 1; it has no `producer` either. Readers read a version they know, refuse a
-newer one by name rather than reading it in part, and read a chunk with no version as version 1.
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1; it has no `producer` either.\
+Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
 
 ## Example
 
@@ -94,6 +92,5 @@ As written before it, still valid as version 1:
 
 ## Checking a file
 
-`carla-validate <capture folder>` reads every still's text chunks without reading its pixels and checks
-each against its schema. To read the chunks yourself, any PNG library that lists `tEXt` chunks works,
-for example Pillow's `Image.open(path).text`.
+`carla-validate <capture folder>` reads every still's text chunks without reading its pixels and checks each against its schema.\
+To read the chunks yourself, any PNG library that lists `tEXt` chunks works, for example Pillow's `Image.open(path).text`.

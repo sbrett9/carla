@@ -9,8 +9,8 @@
 
 ## What it is
 
-The resolution report states what a scenario compile resolved, so its author can check it against
-what they meant. It lists:
+The resolution report states what a scenario compile resolved, so its author can check it against what they meant.\
+It lists:
 
 - every place and the edge or lane it became;
 - every named time with its second and its civil time;
@@ -24,27 +24,26 @@ what they meant. It lists:
 - every finding in full;
 - the lock.
 
-`sumo-gui` shows elapsed seconds and knows nothing about labels, dates or the sun. So this report is
-the one place to check a label, a date or a sun before a capture is run. The `.md` file is the
-same report formatted for reading.
+`sumo-gui` shows elapsed seconds and knows nothing about labels, dates or the sun.\
+So this report is the one place to check a label, a date or a sun before a capture is run.\
+The `.md` file is the same report formatted for reading.
 
-**This is not the run resolution report.** A capture run writes `run.resolution.json` about one
-launch (see [Run resolution report](Run_Resolution_Report.md)).
+**This is not the run resolution report.**\
+A capture run writes `run.resolution.json` about one launch (see [Run resolution report](Run_Resolution_Report.md)).
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario` writes it** into the output folder on every compile. A refused compile
-  writes only the report, marked `refused`, with every refusal. When the specification gives no
-  `scenario_id`, the report is named after the specification file instead.
-- **A scenario developer reads it**, and so does the authoring skill. The skill's examples keep a
-  recorded report beside each example, and a test compiles each example and compares.
+- **`carla-compile-scenario` writes it** into the output folder on every compile.\
+  A refused compile writes only the report, marked `refused`, with every refusal.\
+  When the specification gives no `scenario_id`, the report is named after the specification file instead.
+- **A scenario developer reads it**, and so does the authoring skill.\
+  The skill's examples keep a recorded report beside each example, and a test compiles each example and compares.
 - No tool reads it as input.
 
 ## Fields
 
-The report's sections appear in the order below, and only the sections the compile reached. A
-compile refused at its first stage has only `resolution_version`, `producer`, `outcome`, `scenario`
-and `findings`, and no `scenario` when the specification is not JSON.
+The report's sections appear in the order below, and only the sections the compile reached.\
+A compile refused at its first stage has only `resolution_version`, `producer`, `outcome`, `scenario` and `findings`, and no `scenario` when the specification is not JSON.
 
 | Section | Type | Meaning |
 |---|---|---|
@@ -69,9 +68,7 @@ and `findings`, and no `scenario` when the specification is not JSON.
 | `dry_run` | object | What the SUMO-only run showed. See below. |
 | `lock` | object | The scenario lock, as written. See [Scenario lock](Scenario_Lock.md). |
 
-A resolved time (`depart`, `begin`, `end` and the like) is `{authored, form, seconds, civil}`: what
-the specification wrote, which form it was written in, simulated seconds from zero, and the civil
-instant, ISO 8601 with the epoch's offset.
+A resolved time (`depart`, `begin`, `end` and the like) is `{authored, form, seconds, civil}`: what the specification wrote, which form it was written in, simulated seconds from zero, and the civil instant, ISO 8601 with the epoch's offset.
 
 ### A capture window (`capture_windows[]`)
 
@@ -130,18 +127,16 @@ instant, ISO 8601 with the epoch's offset.
 
 ### `dry_run`
 
-The lock's record (see [Scenario lock](Scenario_Lock.md)) and, beside it, `teleports`,
-`emergency_stops`, `emergency_braking`, `other_vehicles_discarded`, `other_vehicles_waiting_at_end`,
-`planned` (each planned vehicle: `vehicle_id`, `refs`, `declared_depart_s`, `declared_depart_civil`,
-`entrance`, `inserted`, `outcome`, `depart_s`, `waited_s`) and `collision_list` (each collision:
-`time_s`, `civil`, `type`, `collider`, `victim`, `lane`, `pos_m`). When the run was skipped it is
-`{"ran": false, "reason": "..."}`.
+The lock's record (see [Scenario lock](Scenario_Lock.md)) and, beside it, `teleports`, `emergency_stops`, `emergency_braking`, `other_vehicles_discarded`, `other_vehicles_waiting_at_end`, `planned` (each planned vehicle: `vehicle_id`, `refs`, `declared_depart_s`, `declared_depart_civil`, `entrance`, `inserted`, `outcome`, `depart_s`, `waited_s`) and `collision_list` (each collision: `time_s`, `civil`, `type`, `collider`, `victim`, `lane`, `pos_m`).\
+When the run was skipped it is `{"ran": false, "reason": "..."}`.
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads the report as input. A reader should
-read version 1 and refuse a newer version rather than read it in part. The skill's recorded examples
-leave out `producer`, which names the build and the time. They are still version 1.
+This page describes version 1, the only version.\
+No tool reads the report as input.\
+A reader should read version 1 and refuse a newer version rather than read it in part.\
+The skill's recorded examples leave out `producer`, which names the build and the time.\
+They are still version 1.
 
 ## Example
 
