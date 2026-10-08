@@ -69,6 +69,17 @@ SUMO decides the time the vehicle reaches the stop.\
 The route is 5251.8 m long.\
 At the speed limit it takes 257.9 s, without the stop.
 
+These are its times in a SUMO-only run of the compiled scenario:
+
+| Event | t (s) |
+|---|---|
+| Enters I-25 | 120.00 |
+| Reaches its stop | 450.60 |
+| Leaves its stop | 2250.60 |
+| Leaves the map | 2485.05 |
+
+The same specification, seed and world give the same times.
+
 The stop is the point 39.600357, -104.88649.\
 The compiler placed it on lane `218965860#0_0` of South Yosemite Street, 88.63 m along.\
 In CARLA's frame, the spot is at about (-171.6, -672.0).
@@ -107,7 +118,8 @@ A flow's vehicles are named `<flow id>.<n>`, such as `i25_north_through.0`.
 - The world package the level was made from, `Arapahoe_I25.cwp`, from <<FILL: where the world package is published>>.\
   A world package is one generated world in one file.\
   The compiler, `carla-drive` and `carla-capture` read it.
-- This folder, copied into the distribution's folder as `Arapahoe/`.
+- This folder.\
+  In a distribution, it is `Scenarios/Arapahoe/`.
 
 On Windows, in PowerShell:
 
@@ -179,17 +191,18 @@ To make sure that it loaded this world, read the log lines in [Checking it loade
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 You compile it from the specification in this folder.
 
-The specification names its world package and the vehicle catalog by paths relative to its own folder.\
-Those paths fit a source checkout, where the specification is in `Import/`.\
-In your copy, change them for the distribution:
+The specification names its world package as `../../world-packages/Arapahoe_I25.cwp`.\
+It names the vehicle catalog as `../../catalogue/vehicles.catalogue.json`.\
+The compiler reads both paths from the specification's own folder.\
+In a distribution, they lead to `world-packages/` and `catalogue/` in the distribution's folder.\
+So the specification compiles there as it is.\
+From a source checkout, compile the copy in `Import/` instead.\
+Its paths lead to `Build/world-packages/` and `CarlaControl/catalogue/`.
 
-- Set `world.package` to `../world-packages/Arapahoe_I25.cwp`.
-- Set `catalogue` to `../catalogue/vehicles.catalogue.json`.
-
-Then compile it:
+Compile it:
 
 ```
-carla-compile-scenario Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json --out-dir scenarios/Arapahoe_I25_UnderpassDwell
+carla-compile-scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json --out-dir scenarios/Arapahoe_I25_UnderpassDwell
 ```
 
 The compiler makes sure that the specification fits the world package.\
@@ -212,7 +225,7 @@ If check 1 refuses, the package's road network differs from the one the specific
 Start it in a terminal of its own:
 
 ```
-carla-drive --scenario scenarios/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg --world-package world-packages/Arapahoe_I25.cwp --epoch Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json --no-record --real-time-factor 1.0 --steps 0
+carla-drive --scenario scenarios/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg --world-package world-packages/Arapahoe_I25.cwp --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json --no-record --real-time-factor 1.0 --steps 0
 ```
 
 - `--epoch` names the specification.\
@@ -224,7 +237,7 @@ carla-drive --scenario scenarios/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_Underp
 
 Before it starts, the drive makes sure that the package describes the loaded world.\
 The marked vehicle enters at t = 120 s.\
-To start nearer its dwell, add `--warm-up 600`.\
+To start while it waits at its stop, add `--warm-up 600`.\
 SUMO then runs ahead to t = 600 s before the first tick and draws nothing on the way.
 
 To see the traffic, place a camera of your own from another terminal:
@@ -261,6 +274,7 @@ Set its `sumo.home` to `tools/sumo`.
 
 This run file, `underpass.run.json`, is the one [Running a capture](../../../../Docs/CAT_Research/Guides/Running_A_Capture.md#an-orbit-flown-by-the-server) uses for this scenario.\
 It records 240 s from t = 600 s.\
+In the SUMO-only run, the marked vehicle waits at its stop through the whole window.\
 Before that, it renders a 60 s prewarm: simulated time that gets the views ready and is not recorded.\
 One camera orbits the dwell spot.\
 The other stares at it from 150 m south and 150 m up, with its own exposure.
@@ -368,7 +382,7 @@ To keep the delivered package, move it out of `world-packages/` first.\
 Then build:
 
 ```
-carla-build-world --osm Arapahoe/Arapahoe_I25.osm --height-align drape --drape-cache-dir drape-cache
+carla-build-world --osm Scenarios/Arapahoe/Arapahoe_I25.osm --height-align drape --drape-cache-dir drape-cache
 ```
 
 - `--height-align drape` seats the roads on the photoreal imagery point by point.\

@@ -4,7 +4,7 @@
   "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
   "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
   "world": {
-    "package": "../Build/world-packages/Gardnerville_Centerville_Lane.cwp",
+    "package": "../../world-packages/Gardnerville_Centerville_Lane.cwp",
     "network_fingerprint": "a50ac5452330ef83485625a8ec89ff3dbec0d0d7b4fc7a9bfb50392ffb829bc6"
   },
   "epoch": {
@@ -28,7 +28,7 @@
     "end": 2220,
     "step_length_s": 0.05
   },
-  "catalogue": "../CarlaControl/catalogue/vehicles.catalogue.json",
+  "catalogue": "../../catalogue/vehicles.catalogue.json",
   "vehicle_classes": [
     {
       "class_id": "car",

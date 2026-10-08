@@ -70,6 +70,19 @@ The escort's route is 13720.5 m long.\
 Each gate probe's route is 9903.83 m long, 356 s at the speed limit without the halt.\
 SUMO decides the time each vehicle reaches its stop.
 
+These are the planted vehicles' times in a SUMO-only run of the compiled scenario, in seconds:
+
+| Vehicle | Departs | Reaches its stop | Leaves its stop | Ends its trip |
+|---|---|---|---|---|
+| `staybehind` | 90000 | 90087 | never, still parked at t = 604800 | never |
+| `probe_d2` | 187474 | 187791 | 188091 | 188219, off the map at the east end |
+| `escort_0` to `escort_4` | 270000 to 270016 | no stop | no stop | 271808 to 271852, at the drydock |
+| `offpost_d4_h7_t3` | 345600 | 346897 | 375697 | 376839, back at the apron |
+| `probe_d5` | 447085 | 447370 | 447670 | 447791, off the map at the east end |
+| `shadow` | 502200 | no stop | no stop | 512872, back at the apron |
+
+The same specification, seed and world give the same times.
+
 ### What the truth labels mark
 
 The supervision plan, the file that holds a scenario's labels, is `Shahid_Bahonar_Port_PatternOfLife.supervision.json`.\
@@ -111,7 +124,8 @@ Each vehicle record in a truth sidecar, the XML truth file beside each still, ca
 - The world package the level was made from, `Shahid_Bahonar_Port.cwp`, from <<FILL: where the world package is published>>.\
   A world package is one generated world in one file.\
   The compiler, `carla-drive` and `carla-capture` read it.
-- This folder, copied into the distribution's folder as `Bahonar/`.
+- This folder.\
+  In a distribution, it is `Scenarios/Bahonar/`.
 
 On Windows, in PowerShell:
 
@@ -183,17 +197,18 @@ To make sure that it loaded this world, read the log lines in [Checking it loade
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 You compile it from the specification in this folder.
 
-The specification names its world package and the vehicle catalog by paths relative to its own folder.\
-Those paths fit a source checkout, where the specification is in `Import/`.\
-In your copy, change them for the distribution:
+The specification names its world package as `../../world-packages/Shahid_Bahonar_Port.cwp`.\
+It names the vehicle catalog as `../../catalogue/vehicles.catalogue.json`.\
+The compiler reads both paths from the specification's own folder.\
+In a distribution, they lead to `world-packages/` and `catalogue/` in the distribution's folder.\
+So the specification compiles there as it is.\
+From a source checkout, compile the copy in `Import/` instead.\
+Its paths lead to `Build/world-packages/` and `CarlaControl/catalogue/`.
 
-- Set `world.package` to `../world-packages/Shahid_Bahonar_Port.cwp`.
-- Set `catalogue` to `../catalogue/vehicles.catalogue.json`.
-
-Then compile it:
+Compile it:
 
 ```
-carla-compile-scenario Bahonar/Shahid_Bahonar_Port_PatternOfLife.scenario.json --out-dir scenarios/Shahid_Bahonar_Port_PatternOfLife
+carla-compile-scenario Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife.scenario.json --out-dir scenarios/Shahid_Bahonar_Port_PatternOfLife
 ```
 
 The compiler makes sure that the specification fits the world package.\
@@ -220,7 +235,7 @@ So start the drive near the part you want to see.\
 This drive starts at the day 2 gate probe's departure:
 
 ```
-carla-drive --scenario scenarios/Shahid_Bahonar_Port_PatternOfLife/Shahid_Bahonar_Port_PatternOfLife.sumocfg --world-package world-packages/Shahid_Bahonar_Port.cwp --epoch Bahonar/Shahid_Bahonar_Port_PatternOfLife.scenario.json --no-record --real-time-factor 1.0 --steps 0 --warm-up 187474
+carla-drive --scenario scenarios/Shahid_Bahonar_Port_PatternOfLife/Shahid_Bahonar_Port_PatternOfLife.sumocfg --world-package world-packages/Shahid_Bahonar_Port.cwp --epoch Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife.scenario.json --no-record --real-time-factor 1.0 --steps 0 --warm-up 187474
 ```
 
 - `--epoch` names the specification.\
@@ -271,6 +286,7 @@ Set its `sumo.home` to `tools/sumo`.
 This run file, `gate_probe.run.json`, stares at the port gate on day 2.\
 The window opens at t = 187474 s, as `probe_d2` departs.\
 It lasts 900 s.\
+In the SUMO-only run, the probe's halt and its exit from the map both fall inside the window.\
 Before it, the run fast-forwards SUMO to the start of a 60 s prewarm and draws nothing on the way.\
 The prewarm is simulated time that gets the view ready and is not recorded.\
 The camera values are a starting point for your own view.
@@ -368,7 +384,7 @@ To keep the delivered package, move it out of `world-packages/` first.\
 Then build:
 
 ```
-carla-build-world --osm Bahonar/Shahid_Bahonar_Port.osm --height-align drape --no-road-filter --netconvert-arg "--remove-edges.by-type highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway" --drape-cache-dir drape-cache
+carla-build-world --osm Scenarios/Bahonar/Shahid_Bahonar_Port.osm --height-align drape --no-road-filter --netconvert-arg "--remove-edges.by-type highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway" --drape-cache-dir drape-cache
 ```
 
 - `--height-align drape` seats the roads on the photoreal imagery point by point.\

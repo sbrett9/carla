@@ -4,7 +4,7 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
   "world": {
-    "package": "../Build/world-packages/Shahid_Bahonar_Port.cwp",
+    "package": "../../world-packages/Shahid_Bahonar_Port.cwp",
     "network_fingerprint": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f"
   },
   "epoch": {
@@ -28,7 +28,7 @@
     "end": "d7 07:00",
     "step_length_s": 1.0
   },
-  "catalogue": "../CarlaControl/catalogue/vehicles.catalogue.json",
+  "catalogue": "../../catalogue/vehicles.catalogue.json",
   "vehicle_classes": [
     {
       "class_id": "civ_car",

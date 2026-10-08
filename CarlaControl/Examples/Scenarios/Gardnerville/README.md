@@ -62,6 +62,18 @@ The second phase repeats 20 times.\
 The whole route is 19616.4 m long.\
 SUMO decides the time the vehicle finishes each lap.
 
+These are its times in a SUMO-only run of the compiled scenario:
+
+| Event | t (s) |
+|---|---|
+| Enters Centerville Lane | 60.00 |
+| Leaves Cobblestone Drive for its first lap | 133.25 |
+| Finishes its 20th lap | 1825.10 |
+| Leaves the map | 1920.95 |
+
+Each lap took 84.30 to 88.80 s.\
+The same specification, seed and world give the same times.
+
 ### What the truth labels mark
 
 The scenario labels nothing.\
@@ -88,7 +100,8 @@ A flow's vehicles are named `<flow id>.<n>`, such as `corridor_west_to_east.0`.
 - The world package the level was made from, `Gardnerville_Centerville_Lane.cwp`, from <<FILL: where the world package is published>>.\
   A world package is one generated world in one file.\
   The compiler, `carla-drive` and `carla-capture` read it.
-- This folder, copied into the distribution's folder as `Gardnerville/`.
+- This folder.\
+  In a distribution, it is `Scenarios/Gardnerville/`.
 
 On Windows, in PowerShell:
 
@@ -160,17 +173,18 @@ To make sure that it loaded this world, read the log lines in [Checking it loade
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 You compile it from the specification in this folder.
 
-The specification names its world package and the vehicle catalog by paths relative to its own folder.\
-Those paths fit a source checkout, where the specification is in `Import/`.\
-In your copy, change them for the distribution:
+The specification names its world package as `../../world-packages/Gardnerville_Centerville_Lane.cwp`.\
+It names the vehicle catalog as `../../catalogue/vehicles.catalogue.json`.\
+The compiler reads both paths from the specification's own folder.\
+In a distribution, they lead to `world-packages/` and `catalogue/` in the distribution's folder.\
+So the specification compiles there as it is.\
+From a source checkout, compile the copy in `Import/` instead.\
+Its paths lead to `Build/world-packages/` and `CarlaControl/catalogue/`.
 
-- Set `world.package` to `../world-packages/Gardnerville_Centerville_Lane.cwp`.
-- Set `catalogue` to `../catalogue/vehicles.catalogue.json`.
-
-Then compile it:
+Compile it:
 
 ```
-carla-compile-scenario Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --out-dir scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit
+carla-compile-scenario Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --out-dir scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit
 ```
 
 The compiler makes sure that the specification fits the world package.\
@@ -193,7 +207,7 @@ If check 1 refuses, the package's road network differs from the one the specific
 Start it in a terminal of its own:
 
 ```
-carla-drive --scenario scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg --world-package world-packages/Gardnerville_Centerville_Lane.cwp --epoch Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --no-record --real-time-factor 1.0 --steps 0
+carla-drive --scenario scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg --world-package world-packages/Gardnerville_Centerville_Lane.cwp --epoch Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --no-record --real-time-factor 1.0 --steps 0
 ```
 
 - `--epoch` names the specification.\
@@ -241,6 +255,7 @@ Set its `sumo.home` to `tools/sumo`.
 
 This run file, `block_orbit.run.json`, flies one camera around the block.\
 It records 240 s from t = 600 s, one lap of the camera.\
+In the SUMO-only run, the orbiter drives its laps through the whole window.\
 Before that, it renders a 60 s prewarm: simulated time that gets the view ready and is not recorded.\
 The radius, the altitude and the period are the orbit's defaults.\
 The camera values are a starting point for your own view.
@@ -336,9 +351,15 @@ To keep the delivered package, move it out of `world-packages/` first.\
 Then build:
 
 ```
-carla-build-world --osm Gardnerville/Gardnerville_Centerville_Lane.osm --height-align drape --drape-cache-dir drape-cache
+carla-build-world --osm Scenarios/Gardnerville/Gardnerville_Centerville_Lane.osm --lat 38.91108 --lon -119.7645965 --height-align drape --drape-cache-dir drape-cache
 ```
 
+- `--lat` and `--lon` give the world's origin explicitly.\
+  Without them, the origin is the center of the extract's `<bounds>`.\
+  For this extract, that sum carries floating-point noise: -119.76459650000001.\
+  The noise changes the network's fingerprint.\
+  The compiler then refuses the specification (check 1).\
+  The explicit origin builds the network the specification was written against.
 - `--height-align drape` seats the roads on the photoreal imagery point by point.\
   It writes the ground height grids into the package.\
   A drive and a capture refuse a package without them.
