@@ -749,7 +749,7 @@ public sealed class CarlaClient : IAsyncDisposable
                     + $"{CarlaNet.Map.RampMeterProgram.GreenSeconds} s green per lane on a "
                     + $"{meter.CycleSeconds} s cycle");
             foreach (var (id, reason) in meters.NotMetered)
-                Console.WriteLine($"[ramp meters] {id}: kept netconvert's programme -- {reason}");
+                Console.WriteLine($"[ramp meters] {id}: kept netconvert's program -- {reason}");
         }
 
         // 1a) Join up the junctions that offer no choice of route. netconvert wraps every
@@ -2075,7 +2075,7 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             throw new ArgumentOutOfRangeException(
                 nameof(maxDrawDistanceMetres), maxDrawDistanceMetres,
-                "A draw distance is zero, for no limit, or a positive number of metres.");
+                "A draw distance is zero, for no limit, or a positive number of meters.");
         }
 
         return _rpc.CallAsync<uint>("set_actors_max_draw_distance", actorIds, maxDrawDistanceMetres);

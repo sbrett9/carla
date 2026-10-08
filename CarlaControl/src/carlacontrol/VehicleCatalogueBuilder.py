@@ -318,7 +318,7 @@ class VehicleCatalogueBuilder:
             entry["height_m"] = round(2.0 * box.extent.z, 4)
             entry["bbox_centre_m"] = [round(box.location.x, 4), round(box.location.y, 4),
                                       round(box.location.z, 4)]
-            logger.info("%s measured %.3f x %.3f x %.3f m, box centre (%.3f, %.3f, %.3f)",
+            logger.info("%s measured %.3f x %.3f x %.3f m, box center (%.3f, %.3f, %.3f)",
                         definition.id, entry["length_m"], entry["width_m"], entry["height_m"],
                         *entry["bbox_centre_m"])
         finally:
@@ -331,7 +331,7 @@ class VehicleCatalogueBuilder:
     def _apply_colour_verdicts(self, vehicles: list[dict], transform) -> None:
         """Spawn each blueprint again with a colour set and record whether it reached the body."""
         if self.server_log is None or not self.server_log.exists():
-            logger.warning("no server log to read, so every colour verdict stays 'unknown'")
+            logger.warning("no server log to read, so every color verdict stays 'unknown'")
             return
         for entry in vehicles:
             if entry["measurement"] != "measured" or not entry["colour_settable"]:
@@ -473,12 +473,12 @@ class VehicleCatalogueBuilder:
             f"  blueprint set digest {document['blueprint_set_digest']}",
             "",
             "Measured bodies. length, width and height are twice the spawned actor's bounding-box",
-            "extent, wing mirrors included; the box centre is in the actor's own frame and is what the",
+            "extent, wing mirrors included; the box center is in the actor's own frame and is what the",
             "bumper-to-origin shift is computed from. body is the width without the mirrors, measured",
             "in the editor, which SUMO is given.",
             "",
-            f"{'blueprint':32s} {'length':>7} {'width':>7} {'body':>7} {'height':>7} {'centre x':>9}"
-            f" {'centre y':>9} {'bumper':>7}  colour",
+            f"{'blueprint':32s} {'length':>7} {'width':>7} {'body':>7} {'height':>7} {'center x':>9}"
+            f" {'center y':>9} {'bumper':>7}  color",
         ]
         for entry in document["vehicles"]:
             if entry["measurement"] != "measured":

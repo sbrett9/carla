@@ -1,6 +1,5 @@
 """Reference CoT telemetry emitter — stream CARLA vehicle TRUTH as Cursor-on-Target
-events to a TAK endpoint (e.g. WinTAK) over UDP. Implements Docs/CAT_Research/Findings/
-09_Telemetry_CoT_Contract.md (v0).
+events to a TAK endpoint (e.g. WinTAK) over UDP.
 
 Truth is exact (ce=le=0, how=m-g). The SAME to_cot() will later serve the YOLO detection feed —
 only the record producer differs — so truth and detection are directly comparable in WinTAK / a

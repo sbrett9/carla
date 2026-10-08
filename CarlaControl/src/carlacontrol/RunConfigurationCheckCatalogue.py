@@ -41,7 +41,7 @@ PRE_ROLL = "pre_roll"
 CONTINUOUS = "continuous"
 PHASES = (RESOLUTION, OFFLINE, SERVER, AUTHORITY, PRE_ROLL, CONTINUOUS)
 
-CATALOGUE_NAME = "12_Operator_Control_Surface.md §6.2"
+CATALOGUE_NAME = "carla-capture run checks"
 
 _R = (REFUSE,)
 _W = (WARN,)
@@ -131,11 +131,11 @@ _CHECKS: tuple[RunCheck, ...] = (
              warning_code="exposure_follows_the_scene"),
     RunCheck(17, OFFLINE, "The observation and truth roots are distinct and disjoint", (),
              NOT_BUILT, "the recorder writes each capture's image and sidecar into one directory; "
-             "the two-root split is stage K's and no writer makes it"),
+             "no writer splits them into two roots yet"),
     RunCheck(18, OFFLINE, "Every seed has an explicit value", (), BY_CONSTRUCTION,
              "the only seed the run consumes is SUMO's, bound by the scenario package"),
     RunCheck(19, OFFLINE, "Free space under the capture root holds the window, in captured seconds",
-             _RW, RUN_CAPTURE, "RunConfigurationValidator, from doc 10's measured capture sizes",
+             _RW, RUN_CAPTURE, "RunConfigurationValidator, from a measured PNG size",
              warning_code="capture_may_outrun_disk"),
     RunCheck(34, OFFLINE, "Under caller unattended, every warning raised has an on_warning "
              "adjudication", _R, RUN_CAPTURE, "RunConfigurationValidator"),
@@ -153,7 +153,7 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(41, OFFLINE, "The pacing fields are consistent with pacing.mode", _R, RUN_CAPTURE,
              "RunConfigurationValidator"),
     RunCheck(42, OFFLINE, "Handover channels are declared channels; the transcript root lies "
-             "outside the corpus", (), NOT_BUILT, "no handover or transcript writer exists"),
+             "outside the dataset", (), NOT_BUILT, "no handover or transcript writer exists"),
     RunCheck(47, OFFLINE, "Every channel is a valid ChannelDescription, and a stare aimed at the "
              "rendered traffic has a prewarm of at least one SUMO step to measure it over; "
              "occlusion is measured on a stare and an orbit alike, against a depth camera "

@@ -72,9 +72,14 @@ SCHEMA: dict = {
                 "network_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             },
         },
-        "epoch": {"type": "object", "description": "04_Contracts.md §11.3; read by SolarEpoch"},
+        "epoch": {"type": "object",
+                  "description": "What simulated second zero is in civil time: the civil instant "
+                                 "with its UTC offset, the same instant in UTC, whether the calendar "
+                                 "advances and whether daylight saving is in effect; read by "
+                                 "SolarEpoch"},
         "illumination": {"type": "object",
-                         "description": "The authored default, 04_Contracts.md §11.5; read by "
+                         "description": "The authored default for what the sun does across a "
+                                        "capture window, which the operator may override; read by "
                                         "IlluminationPolicy"},
         "seeds": {"type": "object", "additionalProperties": False, "required": ["sumo"],
                   "properties": {"sumo": {"type": "integer", "minimum": 0}}},
@@ -292,7 +297,7 @@ SCHEMA: dict = {
                                "items": {"enum": ["entity", "cohort"]},
                                "description": "The kinds of subject the term may label: one authored "
                                               "vehicle, or every vehicle a flow emits. A label "
-                                              "follows a vehicle; nothing labels a place (06 §3.5)"},
+                                              "follows a vehicle; nothing labels a place"},
                 "since": {"type": "integer", "minimum": 1},
                 "status": {"enum": ["active", "deprecated"]},
                 "superseded_by": {"type": "string", "pattern": _TERM},
@@ -333,7 +338,7 @@ SCHEMA: dict = {
             "type": "object", "additionalProperties": False,
             "properties": {
                 "import": {"type": "array", "items": {"type": "string", "minLength": 1},
-                           "description": "Namespace documents travelling in the bundle, "
+                           "description": "Namespace documents traveling in the bundle, "
                                           "relative to this file"},
                 "namespaces": {"type": "array", "items": {"$ref": "#/$defs/namespace"}},
             },

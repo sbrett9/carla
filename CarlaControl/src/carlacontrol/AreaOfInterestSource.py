@@ -226,7 +226,7 @@ class AreaOfInterestSource:
                 problems.append(
                     f"V5.3 area '{area.area_id}': positions are outside WGS84 degree ranges "
                     "(longitude -180..180, latitude -90..90); RFC 7946 positions are "
-                    "[longitude, latitude] in degrees, not projected metres")
+                    "[longitude, latitude] in degrees, not projected meters")
             else:
                 problems.append(
                     f"V5.3 area '{area.area_id}' lies wholly outside the extract's bounds: its "

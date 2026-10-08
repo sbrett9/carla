@@ -14,7 +14,7 @@
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "A field nobody reads, which its author will later believe was honoured"
+      "prevents": "A field nobody reads, which its author will later believe was honored"
     },
     {
       "id": 1,
@@ -69,7 +69,7 @@
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "A network whose metres are displaced from the world's geographic frame"
+      "prevents": "A network whose meters are displaced from the world's geographic frame"
     },
     {
       "id": 6,
@@ -97,7 +97,7 @@
     {
       "id": 8,
       "group": "references",
-      "title": "Every reference names what the specification declares: places, instants, rotas, series, flows, counterfactuals and exemplar instances",
+      "title": "Every reference names what the specification declares: places, instants, schedules (rotas), series, flows, counterfactuals and exemplar instances",
       "against": "the specification",
       "outcomes": [
         "refuse"
@@ -108,7 +108,7 @@
     {
       "id": 54,
       "group": "references",
-      "title": "Every actor, rota entry, flow, lane closure and capture window id is unique",
+      "title": "Every actor, schedule (rotas) entry, flow, lane closure and capture window id is unique",
       "against": "the specification",
       "outcomes": [
         "refuse"
@@ -235,7 +235,7 @@
         "refuse"
       ],
       "status": "compiler",
-      "prevents": "A label spelled three ways in one corpus, or one no consumer can read"
+      "prevents": "A label spelled three ways in one dataset, or one no consumer can read"
     },
     {
       "id": 45,
@@ -340,7 +340,7 @@
       "id": 23,
       "group": "annotation",
       "title": "A cohort carries only a whole-life annotation, never an interval",
-      "against": "06 D6.2",
+      "against": "the specification",
       "outcomes": [
         "refuse"
       ],
@@ -351,7 +351,7 @@
       "id": 49,
       "group": "annotation",
       "title": "No cohort is nominal",
-      "against": "06 D6.2",
+      "against": "the specification",
       "outcomes": [
         "refuse"
       ],
@@ -362,7 +362,7 @@
       "id": 50,
       "group": "annotation",
       "title": "A one-participant instance names its participant subject",
-      "against": "06 §3.7 reserved words",
+      "against": "the reserved role subject",
       "outcomes": [
         "refuse"
       ],
@@ -378,13 +378,13 @@
         "warn"
       ],
       "status": "compiler",
-      "prevents": "A corpus with no hard negatives"
+      "prevents": "A dataset with no hard negatives"
     },
     {
       "id": 25,
       "group": "areas",
       "title": "Area ids unique, rings closed and not self-intersecting, radius positive",
-      "against": "04 C5 V5.1-V5.4",
+      "against": "the world build's area validation",
       "outcomes": [
         "refuse"
       ],
@@ -395,7 +395,7 @@
       "id": 26,
       "group": "areas",
       "title": "An area's envelope intersects the world",
-      "against": "04 C5",
+      "against": "the world build's area validation",
       "outcomes": [
         "refuse"
       ],
@@ -406,7 +406,7 @@
       "id": 27,
       "group": "areas",
       "title": "A referenced area is not in the staging ring",
-      "against": "the area table's V5.5 and V5.6 warnings",
+      "against": "the area table's staging-ring warnings",
       "outcomes": [
         "warn"
       ],
@@ -417,7 +417,7 @@
       "id": 28,
       "group": "areas",
       "title": "A referenced area can be reached by a road vehicle",
-      "against": "the area table's V5.7 warning",
+      "against": "the area table's reachability warning",
       "outcomes": [
         "warn"
       ],
@@ -427,7 +427,7 @@
     {
       "id": 33,
       "group": "epoch_and_illumination",
-      "title": "The epoch is present and accepted by CarlaNet.CoSim.SolarEpoch under every 04 C9 epoch rule",
+      "title": "The epoch is present and accepted by CarlaNet.CoSim.SolarEpoch under every epoch rule",
       "against": "the specification",
       "outcomes": [
         "refuse"
@@ -453,7 +453,7 @@
       "against": "none: time_zone_id is carried and never resolved",
       "outcomes": [],
       "status": "retired",
-      "prevents": "Retired: 04 §11.3 and 11 D11.1 make the zone name provenance only"
+      "prevents": "Retired: the zone name is carried for a reader and never resolved, so there is nothing to compare"
     },
     {
       "id": 47,
@@ -469,8 +469,8 @@
     {
       "id": 48,
       "group": "epoch_and_illumination",
-      "title": "Every rota expands to entries, and every skip matches an entry it would have produced",
-      "against": "the rota",
+      "title": "Every schedule (rotas) expands to entries, and every skip matches an entry it would have produced",
+      "against": "the schedule",
       "outcomes": [
         "refuse"
       ],
@@ -556,14 +556,14 @@
     {
       "id": 43,
       "group": "epoch_and_illumination",
-      "title": "A sweep holds illumination while it varies behaviour, varies only illumination when it says so, and names a crossed design; a counterfactual pair shares its base's epoch, windows and illumination unless displaced in time",
+      "title": "A sweep holds illumination while it varies behavior, varies only illumination when it says so, and names a crossed design; a counterfactual pair shares its base's epoch, windows and illumination unless displaced in time",
       "against": "the sweep",
       "outcomes": [
         "refuse",
         "warn"
       ],
       "status": "compiler",
-      "prevents": "A behaviour sweep captured under different light"
+      "prevents": "A behavior sweep captured under different light"
     },
     {
       "id": 29,
@@ -629,7 +629,7 @@
         "warn"
       ],
       "status": "compiler",
-      "prevents": "A behaviour truncated by the run ending"
+      "prevents": "A behavior truncated by the run ending"
     },
     {
       "id": 32,

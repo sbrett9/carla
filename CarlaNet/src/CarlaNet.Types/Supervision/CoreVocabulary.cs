@@ -39,8 +39,8 @@ public static class CoreVocabulary
     /// </summary>
     public const int Version = 3;
 
-    /// <summary>Where the core is defined.</summary>
-    public const string Source = "06_Truth_And_Annotation.md §3.7";
+    /// <summary>Where the core is defined: this class, which every reader and writer shares.</summary>
+    public const string Source = "CarlaNet.Types.Supervision.CoreVocabulary";
 
     /// <summary>The published spelling of <see cref="CadenceForm.Periodic"/>: the fields it is given by.</summary>
     public const string PeriodicCadence = "period_s + offsets_s[] + span";

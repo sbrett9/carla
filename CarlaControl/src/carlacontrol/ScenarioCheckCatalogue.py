@@ -27,7 +27,7 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(53, "specification", "The specification is well formed at a spec_version this "
                   "compiler implements: known fields only, each of its declared type",
                   "the specification schema", _R, COMPILER,
-                  "A field nobody reads, which its author will later believe was honoured"),
+                  "A field nobody reads, which its author will later believe was honored"),
     # -- world binding -----------------------------------------------------------------------------
     ScenarioCheck(1, "world_binding", "The network fingerprint the specification names equals the "
                   "world package's", "the world package", _R, COMPILER,
@@ -43,7 +43,7 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "GeoReferenceString", "map.net.xml and world.json", _R, COMPILER,
                   "Origin drift between the network and the world"),
     ScenarioCheck(5, "world_binding", "The network's netOffset is zero", "map.net.xml", _R, COMPILER,
-                  "A network whose metres are displaced from the world's geographic frame"),
+                  "A network whose meters are displaced from the world's geographic frame"),
     ScenarioCheck(6, "world_binding", "The SUMO release routing the scenario is the one that built "
                   "the world, by release number, unless the mismatch is explicitly accepted",
                   "world.json NetconvertVersion and the SUMO installation", _RW, COMPILER,
@@ -55,10 +55,11 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "the network, the place index and the area table", _R, COMPILER,
                   "An authored place that silently becomes a different place"),
     ScenarioCheck(8, "references", "Every reference names what the specification declares: places, "
-                  "instants, rotas, series, flows, counterfactuals and exemplar instances",
+                  "instants, schedules (rotas), series, flows, counterfactuals and exemplar "
+                  "instances",
                   "the specification", _R, COMPILER, "A typo becoming a valid-looking identifier"),
-    ScenarioCheck(54, "references", "Every actor, rota entry, flow, lane closure and capture window "
-                  "id is unique",
+    ScenarioCheck(54, "references", "Every actor, schedule (rotas) entry, flow, lane closure and "
+                  "capture window id is unique",
                   "the specification", _R, COMPILER,
                   "Two vehicles SUMO would read as one, or a window cited ambiguously"),
     ScenarioCheck(9, "references", "Every stop position lies within its lane's length",
@@ -98,7 +99,7 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(18, "annotation", "Every label is a declared term and every role but subject a "
                   "declared role; an annotation carries a label; the declarations resolve inside "
                   "the published vocabulary", "the vocabulary block", _R, COMPILER,
-                  "A label spelled three ways in one corpus, or one no consumer can read"),
+                  "A label spelled three ways in one dataset, or one no consumer can read"),
     ScenarioCheck(45, "annotation", "Every label's applies_to includes the subject kind: a vehicle, "
                   "or every vehicle of a flow", "the vocabulary block", _R, COMPILER,
                   "A per-member term on a flow, or a whole-flow term on one vehicle"),
@@ -132,42 +133,44 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "the resolved departures", _W, COMPILER,
                   "An interval no vehicle could have been in"),
     ScenarioCheck(23, "annotation", "A cohort carries only a whole-life annotation, never an "
-                  "interval", "06 D6.2", _R, COMPILER,
+                  "interval", "the specification", _R, COMPILER,
                   "A phase asserted over a generator whose members are unknown until the run"),
-    ScenarioCheck(49, "annotation", "No cohort is nominal", "06 D6.2", _R, COMPILER,
+    ScenarioCheck(49, "annotation", "No cohort is nominal", "the specification", _R, COMPILER,
                   "A negative asserted of vehicles nobody authored one by one"),
     ScenarioCheck(50, "annotation", "A one-participant instance names its participant subject",
-                  "06 §3.7 reserved words", _R, COMPILER,
+                  "the reserved role subject", _R, COMPILER,
                   "A consumer guessing which track an instance is about"),
     ScenarioCheck(24, "annotation", "Some subject is nominal when any is annotated",
-                  "the specification", _W, COMPILER, "A corpus with no hard negatives"),
+                  "the specification", _W, COMPILER, "A dataset with no hard negatives"),
     # -- areas -------------------------------------------------------------------------------------
     ScenarioCheck(25, "areas", "Area ids unique, rings closed and not self-intersecting, radius "
-                  "positive", "04 C5 V5.1-V5.4", _R, WORLD_BUILD,
+                  "positive", "the world build's area validation", _R, WORLD_BUILD,
                   "Undefined containment; the compiler reads only a table the world build validated"),
-    ScenarioCheck(26, "areas", "An area's envelope intersects the world", "04 C5", _R, WORLD_BUILD,
+    ScenarioCheck(26, "areas", "An area's envelope intersects the world",
+                  "the world build's area validation", _R, WORLD_BUILD,
                   "An area outside the world entirely"),
     ScenarioCheck(27, "areas", "A referenced area is not in the staging ring", "the area table's "
-                  "V5.5 and V5.6 warnings", _W, COMPILER,
+                  "staging-ring warnings", _W, COMPILER,
                   "A pattern sited where traffic spawns and despawns"),
     ScenarioCheck(28, "areas", "A referenced area can be reached by a road vehicle", "the area "
-                  "table's V5.7 warning", _W, COMPILER, "An area no vehicle can reach"),
+                  "table's reachability warning", _W, COMPILER, "An area no vehicle can reach"),
     # -- epoch and illumination --------------------------------------------------------------------
     ScenarioCheck(33, "epoch_and_illumination", "The epoch is present and accepted by "
-                  "CarlaNet.CoSim.SolarEpoch under every 04 C9 epoch rule", "the specification",
+                  "CarlaNet.CoSim.SolarEpoch under every epoch rule", "the specification",
                   _R, COMPILER, "A scenario whose seconds mean no civil time"),
     ScenarioCheck(34, "epoch_and_illumination", "utc_offset_hours is a whole number of quarter "
                   "hours in [-12, +14]", "the specification, through SolarEpoch", _R, COMPILER,
                   "An offset no civil zone uses, or one the engine would clamp"),
     ScenarioCheck(35, "epoch_and_illumination", "The zone name's offset agrees with utc_offset_hours",
                   "none: time_zone_id is carried and never resolved", (), RETIRED,
-                  "Retired: 04 §11.3 and 11 D11.1 make the zone name provenance only"),
+                  "Retired: the zone name is carried for a reader and never resolved, so there is "
+                  "nothing to compare"),
     ScenarioCheck(47, "epoch_and_illumination", "Every authored time is in an accepted form, names "
                   "its day on a multi-day scenario, and carries the epoch's offset when absolute",
                   "the specification", _R, COMPILER,
                   "A clock-shaped literal that is really an offset"),
-    ScenarioCheck(48, "epoch_and_illumination", "Every rota expands to entries, and every skip "
-                  "matches an entry it would have produced", "the rota", _R, COMPILER,
+    ScenarioCheck(48, "epoch_and_illumination", "Every schedule (rotas) expands to entries, and "
+                  "every skip matches an entry it would have produced", "the schedule", _R, COMPILER,
                   "A skip that removes nothing, so the schedule runs complete where its author meant "
                   "a gap"),
     ScenarioCheck(37, "epoch_and_illumination", "Every resolved instant lies in [0, end]",
@@ -194,10 +197,10 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "declared windows", "the resolved instants, the supervision plan and the sun",
                   _W, COMPILER, "Discovering after training that the light carried the label"),
     ScenarioCheck(43, "epoch_and_illumination", "A sweep holds illumination while it varies "
-                  "behaviour, varies only illumination when it says so, and names a crossed design; "
+                  "behavior, varies only illumination when it says so, and names a crossed design; "
                   "a counterfactual pair shares its base's epoch, windows and illumination unless "
                   "displaced in time", "the sweep", _RW, COMPILER,
-                  "A behaviour sweep captured under different light"),
+                  "A behavior sweep captured under different light"),
     # -- emission ----------------------------------------------------------------------------------
     ScenarioCheck(29, "emission", "The route file is departure-sorted", "the emitted file", _R,
                   COMPILER, "SUMO dropping out-of-order entries with only a warning"),
@@ -213,7 +216,7 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
                   "Supervision leaking into the route file, the channel it must never use"),
     ScenarioCheck(31, "emission", "The run ends after every declared interval and departure",
                   "the resolved instants", _W, COMPILER,
-                  "A behaviour truncated by the run ending"),
+                  "A behavior truncated by the run ending"),
     ScenarioCheck(32, "emission", "Every flow's window lies inside the run", "the specification", _W,
                   COMPILER, "A flow that never fires"),
     # -- dry run -----------------------------------------------------------------------------------

@@ -459,8 +459,7 @@ class CaptureSession:
             self.logger.warning("%s", warning)
         if not self.stdin_is_terminal():
             findings.refuse(34, "on_warning", f"warning(s) {', '.join(codes)} were raised and there "
-                            "is no terminal to ask. Adjudicate each with on_warning.<code> "
-                            "(12 §6.4)")
+                            "is no terminal to ask. Adjudicate each with on_warning.<code>")
             self.findings.extend(findings)
             return
         reply = self.answer(f"Proceed past {len(codes)} warning(s) ({', '.join(codes)})? "
@@ -659,7 +658,7 @@ class CaptureSession:
                  "sumo": f"{report.Sumo.Installation}; {report.Sumo.Verdict}",
                  "pace": str(report.Pacing),
                  "sun": str(session.Sun) if session.Sun is not None
-                 else "left as the world holds it; the run's lighting honours no epoch"}
+                 else "left as the world holds it; the run's lighting honors no epoch"}
         layers = report.LayerVisibility
         facts["layers"] = {str(key): bool(layers[key]) for key in layers.Keys}
         # Whether the server holds the drive lease for this run: without it nothing on the server
@@ -911,7 +910,7 @@ class CaptureSession:
             return 0.0, 0.0, "CARLA's origin: the world publishes no staging bounds"
         return ((float(bounds["min_x"]) + float(bounds["max_x"])) / 2.0,
                 (float(bounds["min_y"]) + float(bounds["max_y"])) / 2.0,
-                "the centre of the world's staging bounds")
+                "the center of the world's staging bounds")
 
     @staticmethod
     def _transform_of(aim: StareAim) -> carla.Transform:
@@ -1010,14 +1009,14 @@ class CaptureSession:
             self.logger.info("waiting for every channel's view from t=%g to the window's opening at "
                              "t=%g: its photoreal tiles in (ceiling %.0f s of wall clock); the "
                              "picture is not waited on (capture.picture_settled_wait is false); a "
-                             "view not ready by then refuses the run (03 §9.5.1)", rendered,
+                             "view not ready by then refuses the run", rendered,
                              self.effective.window.begin_s, TILES_CEILING_S)
             return
         self.logger.info("waiting for every channel's view from t=%g to the window's opening at "
                          "t=%g: its photoreal tiles in (ceiling %.0f s of wall clock), then its "
                          "picture settled within %g gray levels with its rendered vehicles left out "
                          "(ceiling %d of the camera's frames since its tiles); a view not ready by "
-                         "then refuses the run (03 §9.5.1)", rendered,
+                         "then refuses the run", rendered,
                          self.effective.window.begin_s, TILES_CEILING_S,
                          self.readiness.tolerance_levels, self.readiness.ceiling_frames)
 
@@ -1047,7 +1046,7 @@ class CaptureSession:
                                  channel.sensor_id, channel.tiles["in_at_frame"])
                 continue
             self.logger.info("channel %s: ready as the window opens -- tiles in at frame %d, picture "
-                             "settled at frame %d (%.2f grey levels, %.0f%% of its blocks judged)",
+                             "settled at frame %d (%.2f gray levels, %.0f%% of its blocks judged)",
                              channel.sensor_id, channel.tiles["in_at_frame"],
                              channel.picture["settled_at_frame"],
                              channel.picture["residual_levels"],
@@ -1109,7 +1108,7 @@ class CaptureSession:
                 "as_look_at_point": {"stare_look_at_x_m": point["x_m"],
                                      "stare_look_at_y_m": point["y_m"],
                                      "stare_look_at_z_m": point["z_m"]}})
-            self.logger.info("channel %s: aimed at %d rendered vehicles centred on (%.1f, %.1f, "
+            self.logger.info("channel %s: aimed at %d rendered vehicles centered on (%.1f, %.1f, "
                              "%.1f) m at t=%g; camera at %s, held from t=%g for its view to be "
                              "ready and for the window", rig.sensor_id, measured["vehicles"],
                              point["x_m"], point["y_m"], point["z_m"], measured["frame_s"],
@@ -1268,7 +1267,7 @@ class CaptureSession:
             "producer": self.result.producer(),
             "outcome": outcome,
             "session_id": self.session_id,
-            "check_catalogue": "12_Operator_Control_Surface.md §6.2",
+            "check_catalogue": "carla-capture run checks",
             "findings": self.findings.to_list(),
             "launch_echo": None if self.echo is None else self.echo.to_dict(),
             "effective_configuration": None if self.effective is None

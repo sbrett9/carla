@@ -24,11 +24,11 @@ The scenario this writes:
 The intent is that everything on the map behaves ordinarily except the vehicle parked under the
 bridge, which is the only thing doing something a traffic model would not produce on its own.
 
-**This script writes a specification, not SUMO XML** (`07_Scenario_Authoring.md` D7.2), and compiles
+**This script writes a specification, not SUMO XML**, and compiles
 it with the scenario compiler, so the generated scenario faces every check a hand-written one does.
 The specification, `<out-dir>/Arapahoe_I25_UnderpassDwell.scenario.json`, names every road it uses
 as a place: the four ends of I-25 as the world's own gateways on South Valley Highway, the dwell as
-the point it was surveyed at, and every other road as the edge it was reconnoitred on. The compiled
+the point it was surveyed at, and every other road as the edge it was reconnoitered on. The compiled
 package is written beside it: the `.sumocfg`, the routed `.rou.xml`, the incident as a SUMO rerouter
 in `.add.xml`, the world package's own network byte for byte, the supervision plan, the lock and the
 resolution report. The marked vehicle keeps its SUMO id, `marked`.
@@ -38,7 +38,7 @@ from the catalogue's spawn-and-measure sweep, so the vehicle SUMO reserves road 
 CARLA draws. The seven types this scenario was designed with keep their driving models -- the spread
 of `speedFactor` and the lane-change parameters that sort the freeway's lanes by speed -- and each is
 now the class of the bodies VEHICLE_CLASSES gives it, set against the size it was designed around.
-The content build has no articulated lorry, so the semitrailer is the heaviest rigid one.
+The content build has no articulated truck, so the semitrailer is the heaviest rigid one.
 
 **Routes.** The compiler routes each flow once, where the SUMO-XML version let SUMO route every
 vehicle as it entered, on travel times that follow the congestion. Ten flows are therefore held, by
@@ -51,11 +51,11 @@ compiler's three-second lane changes, peak 441 and median 345.
 Bahonar pattern of life, in the morning peak; the run lasts 45 minutes.
 
 **What a specification cannot carry.** The roadway under the bridge is one lane each way, and the
-SUMO-XML version of this scenario let a driver cross the centre line to pass something stopped there
+SUMO-XML version of this scenario let a driver cross the center line to pass something stopped there
 by naming the two directions as each other's opposite lanes -- an edit to the network. A compiled
 scenario runs the world's network byte for byte, so the pairs are not applied: the marked vehicle
 parks off the running lane, which is what keeps the underpass open, and under `--stop-in-lane` no
-lane lets a driver cross the centre line to pass it.
+lane lets a driver cross the center line to pass it.
 
 Usage:
     python make_arapahoe_scenario.py [--dwell-minutes 30] [--out-dir ../../Import]
@@ -399,14 +399,14 @@ VEHICLE_CLASSES = (
         behaviour={"maxSpeed": "35", "speedFactor": "normc(0.86,0.04,0.78,0.95)",
                    "lcSpeedGain": "0.4", "lcKeepRight": "4.0", "sigma": "0.5", "tau": "1.4"},
         gui_shape="truck", gui_colour="#99734D",
-        note="The two-axle box truck, 8.00 m, the catalogue's civilian lorry: 4.0 m shorter than "
-             "the 12.0 m rigid lorry this type was designed around."),
+        note="The two-axle box truck, 8.00 m, the catalogue's civilian truck: 4.0 m shorter than "
+             "the 12.0 m rigid truck this type was designed around."),
     VehicleClassSpec(
         class_id="semi", blueprints=("vehicle.carlamotors.european_hgv",), sumo_vclass="truck",
         behaviour={"maxSpeed": "32", "speedFactor": "normc(0.84,0.03,0.78,0.92)",
                    "lcSpeedGain": "0.3", "lcKeepRight": "5.0", "sigma": "0.5", "tau": "1.6"},
         gui_shape="truck", gui_colour="#735940",
-        note="The content build has no articulated lorry, so the 16.5 m semitrailer this type was "
+        note="The content build has no articulated truck, so the 16.5 m semitrailer this type was "
              "designed around is drawn as the heaviest rigid one, the three-axle heavy goods "
              "vehicle: 7.92 m, so each semitrailer reserves 8.6 m less road than designed. It keeps "
              "the slowest and most right-keeping driving model on the freeway."),
@@ -550,11 +550,11 @@ def parse_args() -> argparse.Namespace:
                              "map (default 120)")
     parser.add_argument("--stop-in-lane", action="store_true",
                         help="leave the marked vehicle standing in the running lane instead of "
-                             "pulling off it. Measured with overtaking across the centre line "
+                             "pulling off it. Measured with overtaking across the center line "
                              "allowed, doing so blocked the underpass for the whole dwell -- "
                              "traffic dropped from 12.9 m/s to 0.6 and queued in both directions. "
                              "The world's network names no opposite lanes there, so no lane lets a "
-                             "driver cross the centre line to pass it")
+                             "driver cross the center line to pass it")
     parser.add_argument("--incident-start", type=float, default=900.0,
                         help="second the northbound lane closure begins (default 900)")
     parser.add_argument("--incident-seconds", type=float, default=180.0,

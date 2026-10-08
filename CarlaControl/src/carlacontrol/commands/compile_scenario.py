@@ -14,7 +14,7 @@ compiles every member of a sweep into its own directory and writes `<sweep_id>.s
 
 `--write-checks`, `--write-schema` and `--write-sweep-schema` publish `checks.json`,
 `scenario.schema.json` and `sweep.schema.json`, generated from the compiler itself, for the authoring
-skill (`07_Scenario_Authoring.md` §8.3, §8.5); `--write-vehicles-reference` publishes
+skill; `--write-vehicles-reference` publishes
 `references/vehicles.md`, the classes and bodies of the measured vehicle catalogue (`--catalogue`,
 this repository's from a checkout, the one installed with carlacontrol otherwise) with whether each
 body's headlights, brake lights and turn signals light up.

@@ -263,7 +263,7 @@ public sealed class OsmConverter
                     var problems = RampMeterProgram.Verify(network, plan);
                     if (problems.Count > 0)
                         throw new InvalidOperationException(
-                            "netconvert did not give the ramp meters the programmes it was given:\n  "
+                            "netconvert did not give the ramp meters the programs it was given:\n  "
                             + string.Join("\n  ", problems));
                 }
             }

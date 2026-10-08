@@ -177,8 +177,8 @@ REFUSED = {
     "a pose missing its yaw": ({k: v for k, v in A_POSE.items() if k != "stare_yaw_deg"},
                                "stare_yaw_deg"),
     "a pitch past straight down": ({**A_POSE, "stare_pitch_deg": -120.0}, "stare_pitch_deg"),
-    "an orbit centre on a stare": ({**A_STARE, "orbit_centre_x_m": 5.0}, "orbit centre"),
-    "an orbit with no centre": ({"pattern": "orbit"}, "needs a centre"),
+    "an orbit centre on a stare": ({**A_STARE, "orbit_centre_x_m": 5.0}, "orbit center"),
+    "an orbit with no centre": ({"pattern": "orbit"}, "needs a center"),
     "an orbit centre missing y": ({"pattern": "orbit", "orbit_centre_x_m": 5.0},
                                   "orbit_centre_y_m"),
     "a look-at point on an orbit": ({**AN_ORBIT, **A_STARE}, "given for an orbit"),
@@ -201,5 +201,5 @@ def test_every_problem_is_named_in_one_refusal():
     with pytest.raises(ValueError) as refusal:
         ChannelDescription(pattern="orbit", width=0, fov=200.0)
     message = str(refusal.value)
-    for named in ("width", "fov", "needs a centre"):
+    for named in ("width", "fov", "needs a center"):
         assert named in message

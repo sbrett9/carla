@@ -437,10 +437,10 @@ class SumoCotBridge:
                                 100.0 * report.off_grid_heights / max(1, report.events))
         expected_marked = len(settings.marked_ids) or 1
         if report.marked_vehicles:
-            self.logger.info("%d of %d labelled vehicles appeared; the written files record which "
+            self.logger.info("%d of %d labeled vehicles appeared; the written files record which "
                              "in their marked field", report.marked_vehicles, expected_marked)
         elif settings.marked_ids:
-            self.logger.warning("none of the %d labelled vehicle ids appeared in the run: the "
+            self.logger.warning("none of the %d labeled vehicle ids appeared in the run: the "
                                 "labels and the route file name different vehicles",
                                 len(settings.marked_ids))
         return report

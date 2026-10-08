@@ -285,7 +285,7 @@ class RunConfigurationResolver:
                 if path == "solar.rate_sun_s_per_sim_s":
                     findings.refuse(3, path, f"{source} sets the sun's rate, which is not "
                                     "operator-settable: under advance it is pinned to one "
-                                    "sun-second per simulated second (12 D12.8), and no other "
+                                    "sun-second per simulated second, and no other "
                                     "policy takes one")
                 else:
                     findings.refuse(3, path, f"'{path}' is bound by a package, which supplies "
@@ -346,7 +346,7 @@ class RunConfigurationResolver:
             rate = resolved["solar.rate_sun_s_per_sim_s"]
             resolved["solar.rate_sun_s_per_sim_s"] = FieldResolution(
                 PINNED_RATE, LAYER_PINNED_BY_POLICY,
-                "advance pins the rate to one sun-second per simulated second (12 D12.8)",
+                "advance pins the rate to one sun-second per simulated second",
                 rate.tool_default, dropped=rate.dropped)
 
     @staticmethod

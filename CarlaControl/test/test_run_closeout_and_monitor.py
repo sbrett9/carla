@@ -153,7 +153,7 @@ def test_an_optional_render_set_limit_and_what_it_left_out_reach_the_closeout_an
     assert "of them left vehicles without a body, at most 3 at once and 3 shed for the capacity" in text
 
     rows = SessionMonitor.lines(snapshot)
-    assert any(row.startswith("sumo  population 7   eligible 7   drawn 4   shed 3   without a body 3")
+    assert any(row.startswith("sumo  population 7   in the render set 7   drawn 4   shed 3   without a body 3")
                for row in rows)
     assert "population 7, drawn 4, 3 without a body" in SessionMonitor.line(snapshot)
 
@@ -189,7 +189,7 @@ def test_a_still_dropped_for_want_of_its_own_frame_s_truth_is_a_gate_not_met(lay
     assert snapshot["channels"][0]["frame_unpaired"] == 2
     unpaired = gate(report.gates(snapshot, 0), "capture.frame_unpaired[OVERWATCH-1]")
     assert (unpaired["observed"], unpaired["threshold"], unpaired["met"]) == (2, 0, False)
-    assert unpaired["owner"] == "06 §8.2"
+    assert unpaired["owner"] == "truth pairing"
     assert "frame unpaired 2" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
 
 
@@ -231,7 +231,7 @@ def test_a_capture_written_with_its_supervision_unknown_is_a_gate_not_met(layout
     assert snapshot["channels"][0]["supervision_unpaired"] == 2
     unknown = gate(report.gates(snapshot, 0), "capture.supervision_unpaired[OVERWATCH-1]")
     assert (unknown["observed"], unknown["threshold"], unknown["met"]) == (2, 0, False)
-    assert unknown["owner"] == "06 §8.2"
+    assert unknown["owner"] == "truth pairing"
     assert f"supervision {recorder.SupervisionPaired} paired 2 unknown" in RunCloseoutReport.render(
         snapshot, report.gates(snapshot, 0))
 
@@ -264,7 +264,7 @@ def test_a_capture_written_without_a_solar_block_is_a_gate_not_met(layout):
     assert snapshot["channels"][0]["solar_block_missing"] == 2
     missing = gate(report.gates(snapshot, 0), "capture.solar_block_missing[OVERWATCH-1]")
     assert (missing["observed"], missing["threshold"], missing["met"]) == (2, 0, False)
-    assert missing["owner"] == "11 §8.4"
+    assert missing["owner"] == "illumination pairing"
     assert "solar block missing 2" in RunCloseoutReport.render(snapshot, report.gates(snapshot, 0))
 
 
@@ -285,7 +285,7 @@ def test_a_capture_written_with_its_lights_or_pose_source_unknown_is_a_gate_not_
     lights = gate(report.gates(snapshot, 0), "capture.lights_unknown[OVERWATCH-1]")
     poses = gate(report.gates(snapshot, 0), "capture.pose_source_unknown[OVERWATCH-1]")
     assert (lights["observed"], lights["met"], poses["observed"], poses["met"]) == (3, False, 2, False)
-    assert lights["owner"] == poses["owner"] == "08 §5.1"
+    assert lights["owner"] == poses["owner"] == "truth pairing"
     assert "lights unknown 3, pose source unknown 2" in RunCloseoutReport.render(snapshot,
                                                                                 report.gates(snapshot, 0))
 
@@ -408,7 +408,7 @@ def test_the_closing_record_gate_is_met_exactly_when_the_manifest_ends_with_its_
     manifest.write_text("\n".join(rows) + "\n", encoding="utf-8")
     record = closing()
     assert (record["observed"], record["threshold"], record["met"]) == (False, True, False)
-    assert record["owner"] == "04 §12.7"
+    assert record["owner"] == "run manifest"
 
     # The terminal row, then a kill part-way through a row that should never follow it: the last
     # complete row is what is read, and the cut line is left off.
@@ -485,7 +485,7 @@ def test_the_bridge_divergence_reaches_the_snapshot_the_closeout_and_both_gates_
             position["met"]) == (0.0001, 0.01, "at_most", True)
     assert (velocity["observed"], velocity["threshold"], velocity["comparison"],
             velocity["met"]) == (0.000006, 0.01, "at_most", True)
-    assert position["owner"] == velocity["owner"] == "06 §4.3"
+    assert position["owner"] == velocity["owner"] == "bridge"
 
     text = RunCloseoutReport.render(snapshot, gates)
     assert ("bridge divergence: worst position 0.000100 m on flow.0 at t=25201 s, mean 0.000020 m "

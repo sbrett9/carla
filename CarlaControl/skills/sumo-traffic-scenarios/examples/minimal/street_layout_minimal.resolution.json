@@ -45,7 +45,7 @@
     "declared_offset_hours": -6.0,
     "engine_time_zone_hours": -6.993333333333334,
     "difference_hours": 0.9933333333333341,
-    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone (04 D4.19)"
+    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone"
   },
   "illumination_default": {
     "declared": {
@@ -53,7 +53,7 @@
       "policy": "freeze_at_window_start"
     },
     "policy": "freeze_at_window_start",
-    "status": "an authored default the operator may override (07 §3.9)",
+    "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
   "capture_windows": [
@@ -89,13 +89,13 @@
         "elevation_deg": -1.948,
         "elevation_kind": "refraction_corrected",
         "band": "civil_twilight",
-        "band_source": "11_Time_And_Illumination.md §4.4"
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
       }
     }
   ],
   "illumination_label_association": {
     "statistic": "I(band; supervision) / H(supervision), base 2",
-    "band_source": "11_Time_And_Illumination.md §4.4",
+    "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below",
     "band_edges": [
       {
         "band": "day",
@@ -192,8 +192,8 @@
     "entries": 2,
     "measured_over": "windows",
     "remedies": [
-      "pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)",
-      "add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)",
+      "pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band",
+      "add a nominal twin inside the annotated band: a hard negative lit identically",
       "add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one"
     ]
   },
@@ -485,7 +485,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "2d93c1830cfa15a62ca8bb0bdd0aa7eabd6706fb921dba0c544ebd0b857fbcaa"
+        "sha256": "22b5943e5f7dd5542ecfd32b0f0e8190e0969a1edabb78fe1ac45e89ee20922a"
       }
     },
     "world": {
@@ -543,7 +543,7 @@
     "vocabulary": {
       "core_version": 3,
       "namespaces": [],
-      "vocabulary_digest": "8a8c14eca696a8764b2858bf82daaf7a945255ad279401cfde3f711c9cacdf63"
+      "vocabulary_digest": "19936053b6fae2261e8b204ce9f0e330720a20864e2a3223cb6e761d6c1ac51b"
     },
     "traffic": {
       "sumo_seed": 42,

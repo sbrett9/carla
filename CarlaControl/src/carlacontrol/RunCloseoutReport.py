@@ -369,8 +369,8 @@ class RunCloseoutReport:
             if channel["recorder_dropped"]:
                 loud.append((LOUD_RECORDER_DROPPED,
                              f"channel {channel['sensor_id']} has dropped "
-                             f"{channel['recorder_dropped']} capture(s): the corpus has a hole the "
-                             "coverage will not show (10 D10.7)"))
+                             f"{channel['recorder_dropped']} capture(s): the dataset has a hole the "
+                             "coverage will not show"))
         pacing = snapshot["pacing"]
         floor = self.effective.value("pacing.min_achieved_factor")
         if pacing and self.effective.value("pacing.mode") == "wall_clock" and floor is not None \
@@ -386,7 +386,7 @@ class RunCloseoutReport:
         gates = []
         for channel in snapshot["channels"]:
             gates.append(self._gate(f"capture.recorder_dropped[{channel['sensor_id']}]",
-                                    "captures the recorder's queue had no room for", "10 D10.7",
+                                    "captures the recorder's queue had no room for", "recorder",
                                     channel["recorder_dropped"], 0, "equals"))
             # A still the recorder did not write because the client held no truth of its own frame when
             # the image arrived: a still is written with its own frame's truth or not at all, so each is a
@@ -398,24 +398,24 @@ class RunCloseoutReport:
                 gates.append(self._skipped(unpaired_gate, unpaired_name,
                                            "the recorder was built before it dropped such stills"))
             else:
-                gates.append(self._gate(unpaired_gate, unpaired_name, "06 §8.2",
+                gates.append(self._gate(unpaired_gate, unpaired_name, "truth pairing",
                                         channel["frame_unpaired"], 0, "equals"))
             gates.append(self._gate(f"capture.illumination_unpaired[{channel['sensor_id']}]",
                                     "captures written without their frame's illumination "
-                                    "declaration", "12 §7.2", channel["illumination_unpaired"], 0,
-                                    "equals"))
+                                    "declaration", "illumination pairing",
+                                    channel["illumination_unpaired"], 0, "equals"))
             # A capture whose snapshot carried no sun: written with no _solar and no carla:solar, so
             # a still whose illumination, and band, nothing records, which a corpus can neither
             # stratify nor replay.
             gates.append(self._gate(f"capture.solar_block_missing[{channel['sensor_id']}]",
                                     "captures written without a solar block, so with no recorded "
-                                    "sun and no illumination band", "11 §8.4",
+                                    "sun and no illumination band", "illumination pairing",
                                     channel["solar_block_missing"], 0, "equals"))
             # A capture listed with no vehicles because its frame's render set had aged out: truth
             # missing from a still that shows vehicles, which a corpus has to know about.
             gates.append(self._gate(f"capture.render_set_unpaired[{channel['sensor_id']}]",
                                     "captures written with no vehicle list because their frame's "
-                                    "render set was no longer held", "06 §8.2",
+                                    "render set was no longer held", "truth pairing",
                                     channel["render_set_unpaired"], 0, "equals"))
             # A capture whose frame a plan was in force on, written with its supervision unknown because
             # the snapshot of its own frame was not to be had: a still whose vehicles' labels are missing,
@@ -427,7 +427,7 @@ class RunCloseoutReport:
                 gates.append(self._skipped(supervision_gate, supervision_name,
                                            "the recorder was built before it counted supervision"))
             else:
-                gates.append(self._gate(supervision_gate, supervision_name, "06 §8.2",
+                gates.append(self._gate(supervision_gate, supervision_name, "truth pairing",
                                         channel["supervision_unpaired"], 0, "equals"))
             # A capture whose frame's snapshot did not carry what a vehicle in the picture shows -- its
             # lights, or where a SUMO vehicle's drawn pose came from -- written without it rather than with
@@ -442,13 +442,14 @@ class RunCloseoutReport:
                     gates.append(self._skipped(field_gate, name,
                                                "the recorder was built before it wrote lights and pose sources"))
                 else:
-                    gates.append(self._gate(field_gate, name, "08 §5.1", channel[field], 0, "equals"))
+                    gates.append(self._gate(field_gate, name, "truth pairing", channel[field], 0,
+                                            "equals"))
             # A capture whose image header placed the camera somewhere the snapshot of its own frame
             # did not. The snapshot's pose is the one written, so the still is placed right, but the
             # server stamped the header after the frame, and a corpus has to know it was.
             gates.append(self._gate(f"capture.sensor_pose_header_disagreed[{channel['sensor_id']}]",
                                     "captures whose image header disagreed with the camera's pose "
-                                    "in their own frame's snapshot", "12 §9.6",
+                                    "in their own frame's snapshot", "camera pose",
                                     channel["sensor_pose_header_disagreed"], 0, "equals"))
             depth_gate = f"capture.depth_pose_header_disagreed[{channel['sensor_id']}]"
             depth_name = ("depth captures whose header disagreed with the depth camera's pose in "
@@ -457,15 +458,15 @@ class RunCloseoutReport:
                 gates.append(self._skipped(depth_gate, depth_name,
                                            "the channel measures occlusion against no depth camera"))
             else:
-                gates.append(self._gate(depth_gate, depth_name, "12 §9.6",
+                gates.append(self._gate(depth_gate, depth_name, "camera pose",
                                         channel["depth_pose_header_disagreed"], 0, "equals"))
         pacing = snapshot["pacing"]
         achieved = None if pacing is None else pacing["achieved_factor"]
         gates.append(self._gate("clock.ratio_recorded", "the achieved real-time factor is recorded",
-                                "12 §7.2", achieved is not None, True, "equals"))
+                                "pacing", achieved is not None, True, "equals"))
         if self.effective.value("pacing.mode") == "wall_clock":
             gates.append(self._gate("pacing.achieved_factor", "the achieved real-time factor held "
-                                    "its floor", "08 §11.1", achieved,
+                                    "its floor", "pacing", achieved,
                                     self.effective.value("pacing.min_achieved_factor"),
                                     "at_least"))
         audit = snapshot.get("solar_audit")
@@ -475,11 +476,11 @@ class RunCloseoutReport:
                                        "has not started"))
         else:
             gates.append(self._gate("solar.applied_equals_confirmed", "the world's sun is the "
-                                    "declared one: worst angle, degrees", "04 C9 §11.8.2",
+                                    "declared one: worst angle, degrees", "sun",
                                     audit["worst_angle_deg"], audit["tolerance_deg"], "at_most"))
         gates.extend(self._divergence_gates(snapshot.get("divergence")))
         gates.append(self._gate("launch.warnings_adjudicated", "warnings raised with no "
-                                "adjudication", "12 §6.4", unadjudicated_warnings, 0, "equals"))
+                                "adjudication", "launch", unadjudicated_warnings, 0, "equals"))
         closing_name = "the run manifest ends with its terminal row"
         if self.manifest is None:
             gates.append(self._skipped(MANIFEST_CLOSING_RECORD, closing_name,
@@ -487,7 +488,7 @@ class RunCloseoutReport:
         else:
             # A manifest whose run reached its end, and was closed, ends with manifest_closed; one without
             # it is a run that was interrupted, and every row before the cut is still valid.
-            gates.append(self._gate(MANIFEST_CLOSING_RECORD, closing_name, "04 §12.7",
+            gates.append(self._gate(MANIFEST_CLOSING_RECORD, closing_name, "run manifest",
                                     self.last_manifest_row(self.manifest) == MANIFEST_CLOSED_ROW, True,
                                     "equals"))
         for gate_id, (name, reason) in SKIPPED.items():
@@ -501,9 +502,9 @@ class RunCloseoutReport:
         written and read back by nothing, so a run that measured nothing never reads as one that
         measured zero."""
         position_name = ("the largest distance between a pose the bridge commanded and the one the "
-                         "world applied, metres")
+                         "world applied, meters")
         velocity_name = ("the largest difference between a velocity the bridge commanded and the one "
-                         "the world reported, metres per second")
+                         "the world reported, meters per second")
         if divergence is None:
             reason = "the session has not started"
             return [self._skipped(POSITION_DIVERGENCE, position_name, reason),
@@ -514,10 +515,10 @@ class RunCloseoutReport:
                       if unread else "no vehicle-tick was compared: no body was driven")
             return [self._skipped(POSITION_DIVERGENCE, position_name, reason),
                     self._skipped(VELOCITY_DIVERGENCE, velocity_name, reason)]
-        return [self._gate(POSITION_DIVERGENCE, position_name, "06 §4.3",
+        return [self._gate(POSITION_DIVERGENCE, position_name, "bridge",
                            divergence["worst_position_m"],
                            self.effective.value(POSITION_DIVERGENCE_LIMIT), "at_most"),
-                self._gate(VELOCITY_DIVERGENCE, velocity_name, "06 §4.3",
+                self._gate(VELOCITY_DIVERGENCE, velocity_name, "bridge",
                            divergence["worst_velocity_m_per_s"],
                            self.effective.value(VELOCITY_DIVERGENCE_LIMIT), "at_most")]
 
@@ -539,7 +540,7 @@ class RunCloseoutReport:
 
     @staticmethod
     def _skipped(gate_id: str, name: str, reason: str) -> dict:
-        return {"id": gate_id, "name": name, "owner": "12 §7.2", "status": "skipped",
+        return {"id": gate_id, "name": name, "owner": "closeout", "status": "skipped",
                 "observed": None, "threshold": None, "comparison": None, "met": None,
                 "skip_reason": reason}
 
@@ -573,7 +574,8 @@ class RunCloseoutReport:
             opening = admissions["at_window_open"]
             if opening is not None and opening.get("limited"):
                 lines.append(f"  admission at the window's begin, t={opening['sim_time_s']:g}: "
-                             f"population {opening['population']}, eligible {opening['eligible']}, "
+                             f"population {opening['population']}, in the render set "
+                             f"{opening['eligible']}, "
                              f"drawn {opening['admitted']}, shed {opening['shed']}; "
                              f"{opening['left_out']} without a body")
             elif opening is not None:

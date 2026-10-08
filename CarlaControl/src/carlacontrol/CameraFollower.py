@@ -190,9 +190,9 @@ class CameraFollower:
             speed=channel.orbit_period_s,
         )
         self.orbit.orbit_description = (
-            f"centre ({channel.orbit_centre_x_m:.1f}, {channel.orbit_centre_y_m:.1f}, "
+            f"center ({channel.orbit_centre_x_m:.1f}, {channel.orbit_centre_y_m:.1f}, "
             f"{channel.orbit_centre_z_m:.1f}) m, radius {channel.orbit_radius_m:.1f} m, "
-            f"{channel.orbit_altitude_m:.1f} m above the centre, "
+            f"{channel.orbit_altitude_m:.1f} m above the center, "
             f"{channel.orbit_period_s:.0f} s per revolution")
         self.orbit.set_enabled(True)
         if not self.orbit.orbit_enabled:

@@ -1,7 +1,7 @@
 """Watch a running CARLA world through one camera of your own, live, without driving anything.
 
-The camera either stares -- one fixed pose for as long as it runs -- or orbits a centre with its
-view held on that centre. Its picture is shown in a window with the camera's name, its pattern, and
+The camera either stares -- one fixed pose for as long as it runs -- or orbits a center with its
+view held on that center. Its picture is shown in a window with the camera's name, its pattern, and
 the frame number and simulated time stamped on each frame.
 
 This script never advances the world's clock, never changes the world's settings, sun, weather,
@@ -12,9 +12,8 @@ clock, frames at the server's own rate when nothing does. If no frame arrives fo
 says so once in the log, rather than looking frozen.
 
 It records nothing. A recorder in a separate process would read an empty annotation registry and
-write every vehicle as unlabelled (08_Collection_And_EPoL.md section 3.4). Recording from a viewer
-like this waits until the annotation state that section rules must be published to the server
-actually is; nothing publishes it yet. Record from the process that drives the world.
+write every vehicle as unlabelled: the annotation state is held by the process that drives the
+world, and nothing publishes it to the server yet. Record from the process that drives the world.
 
 The three steps of watching SUMO drive a world, each its own command:
 
@@ -24,7 +23,7 @@ The three steps of watching SUMO drive a world, each its own command:
 
 (From a checkout, `python CarlaControl/scripts/run_camera_follower.py` is the same tool.)
 
-Positions are in CARLA's frame: metres, x east, y SOUTH (north is -y), z up. carla-sctmv's
+Positions are in CARLA's frame: meters, x east, y SOUTH (north is -y), z up. carla-sctmv's
 heads-up display prints north as N = -y and height in feet above the ellipsoid, so convert before
 copying a position from it. Angles follow CARLA: yaw 0 faces east and -90 faces north, and a
 negative pitch looks down.
@@ -38,7 +37,7 @@ Stare from a pose found by flying there:
 
     carla-camera-follower --stare-pose 120 60 300 -37 -90
 
-Orbit a centre:
+Orbit a center:
 
     carla-camera-follower --pattern orbit --orbit-centre 120 -340 \\
         --orbit-radius-m 250 --orbit-altitude-m 400 --orbit-period-s 180
@@ -79,7 +78,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="a name for this camera, shown over its picture "
                              "(letters, digits and _ . : -, up to 63; default: none)")
     camera.add_argument("--pattern", choices=ChannelDescription.PATTERNS,
-                        help=f"'stare' holds one pose; 'orbit' circles a centre "
+                        help=f"'stare' holds one pose; 'orbit' circles a center "
                              f"(default {DEFAULT('pattern')})")
     camera.add_argument("--fov", type=float, metavar="DEGREES",
                         help=f"horizontal field of view, degrees (default {DEFAULT('fov')})")
@@ -91,37 +90,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     stare = parser.add_argument_group(
         "stare", "Give either a point to look at, or a full pose -- not both.")
     stare.add_argument("--stare-look-at", type=float, nargs=2, metavar=("X", "Y"),
-                       help="the point the camera looks at, metres")
-    stare.add_argument("--stare-look-at-z-m", type=float, metavar="METRES",
-                       help=f"the height of that point, metres "
+                       help="the point the camera looks at, meters")
+    stare.add_argument("--stare-look-at-z-m", type=float, metavar="METERS",
+                       help=f"the height of that point, meters "
                             f"(default {DEFAULT('stare_look_at_z_m')})")
-    stare.add_argument("--stare-altitude-m", type=float, metavar="METRES",
-                       help=f"how far above the point the camera sits, metres "
+    stare.add_argument("--stare-altitude-m", type=float, metavar="METERS",
+                       help=f"how far above the point the camera sits, meters "
                             f"(default {DEFAULT('stare_altitude_m')})")
-    stare.add_argument("--stare-standoff-m", type=float, metavar="METRES",
+    stare.add_argument("--stare-standoff-m", type=float, metavar="METERS",
                        help=f"how far back from the point the camera stands, measured along the "
-                            f"ground, metres; 0 looks straight down "
+                            f"ground, meters; 0 looks straight down "
                             f"(default {DEFAULT('stare_standoff_m')})")
     stare.add_argument("--stare-bearing-deg", type=float, metavar="DEGREES",
                        help=f"the compass direction the camera looks along, degrees clockwise from "
                             f"north (default {DEFAULT('stare_bearing_deg')}, looking north)")
     stare.add_argument("--stare-pose", type=float, nargs=5,
                        metavar=("X", "Y", "Z", "PITCH", "YAW"),
-                       help="an exact camera pose instead of a point to look at: metres, then "
+                       help="an exact camera pose instead of a point to look at: meters, then "
                             "degrees")
 
     orbit = parser.add_argument_group("orbit")
     orbit.add_argument("--orbit-centre", type=float, nargs=2, metavar=("X", "Y"),
-                       help="the point the orbit circles and looks at, metres "
+                       help="the point the orbit circles and looks at, meters "
                             "(required for an orbit)")
-    orbit.add_argument("--orbit-centre-z-m", type=float, metavar="METRES",
-                       help=f"the height the orbit's altitude is measured from, metres "
+    orbit.add_argument("--orbit-centre-z-m", type=float, metavar="METERS",
+                       help=f"the height the orbit's altitude is measured from, meters "
                             f"(default {DEFAULT('orbit_centre_z_m')})")
-    orbit.add_argument("--orbit-radius-m", type=float, metavar="METRES",
-                       help=f"radius of the circle, metres (default {DEFAULT('orbit_radius_m')}). "
-                            f"Metres, where carla-sctmv's --orbit-radius is feet")
-    orbit.add_argument("--orbit-altitude-m", type=float, metavar="METRES",
-                       help=f"height of the camera above the centre, metres "
+    orbit.add_argument("--orbit-radius-m", type=float, metavar="METERS",
+                       help=f"radius of the circle, meters (default {DEFAULT('orbit_radius_m')}). "
+                            f"Meters, where carla-sctmv's --orbit-radius is feet")
+    orbit.add_argument("--orbit-altitude-m", type=float, metavar="METERS",
+                       help=f"height of the camera above the center, meters "
                             f"(default {DEFAULT('orbit_altitude_m')})")
     orbit.add_argument("--orbit-period-s", type=float, metavar="SECONDS",
                        help=f"seconds per revolution (default {DEFAULT('orbit_period_s')})")

@@ -359,7 +359,7 @@ public sealed class FrameRecorder : IDisposable
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
         if (drawDistanceMetres is { } limit && (!double.IsFinite(limit) || limit <= 0.0))
             throw new ArgumentOutOfRangeException(nameof(drawDistanceMetres), limit,
-                                                  "a draw distance is a positive number of metres, or null for none");
+                                                  "a draw distance is a positive number of meters, or null for none");
         // Every vehicle of every capture is projected into the picture with this field of view, so
         // one the projection cannot be made with is refused here rather than failing every capture.
         if (platform is not null && !(platform.HFovDeg > 0.0 && platform.HFovDeg < 180.0))

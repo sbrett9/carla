@@ -400,4 +400,4 @@ def test_the_bahonar_world_carries_its_type_map_and_its_guard_rota_compiles_on_i
         tmp_path / "unfenced", installation)
     assert refused.refused
     assert {f.subject for f in refused.findings.by_check(10)} == \
-        {f"rota guard_posting entry {entry}" for entry in shipped_guard_postings()}
+        {f"rotas[guard_posting] entry {entry}" for entry in shipped_guard_postings()}

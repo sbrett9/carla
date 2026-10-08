@@ -50,7 +50,7 @@ class SumoVehicleTypeWriter:
             "<!-- Generated from vehicles.catalogue.json by carlacontrol.VehicleCatalogueBuilder.",
             "     Every length, width and height is a measurement of the rendered body; edit the",
             "     catalogue and re-run the sweep, never this file.",
-            "     A vType's colour is read by sumo-gui alone and never reaches the rendered vehicle. -->",
+            "     A vType's color is read by sumo-gui alone and never reaches the rendered vehicle. -->",
             "<routes>",
         ]
         for class_entry in self.document.get("classes", []):

@@ -75,8 +75,7 @@ public sealed record SupervisionPlan
                 reading.Problem("plan.vocabulary_digest",
                                 $"is {vocabularyDigest}, and the vocabulary the plan carries digests as {carried}: "
                                 + "a term's declaration was changed after the plan was compiled, so a label "
-                                + "would reach a consumer meaning something its digest does not say "
-                                + "(04 C3 V3.15)");
+                                + "would reach a consumer meaning something its digest does not say");
             }
         }
         else

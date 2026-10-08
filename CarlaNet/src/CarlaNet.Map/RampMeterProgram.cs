@@ -155,7 +155,7 @@ public static class RampMeterProgram
                 .Count(k => byIndex.TryGetValue(k, out var l) && !l.FromEdge.StartsWith(':'));
             if (stateLength == 0 || vehicleLinks != stateLength)
             {
-                notMetered.Add((id, $"{vehicleLinks} of the {stateLength} links of its programme are "
+                notMetered.Add((id, $"{vehicleLinks} of the {stateLength} links of its program are "
                                     + "vehicle movements off a road, so it also controls something "
                                     + "else, such as a pedestrian crossing"));
                 continue;
@@ -196,11 +196,11 @@ public static class RampMeterProgram
         {
             if (!programs.TryGetValue(meter.Id, out var program))
             {
-                problems.Add($"{meter.Id}: no programme in the network");
+                problems.Add($"{meter.Id}: no program in the network");
                 continue;
             }
             if (program.Type != ProgramType || program.ProgramId != meter.ProgramId)
-                problems.Add($"{meter.Id}: programme '{program.ProgramId}' is {program.Type}, "
+                problems.Add($"{meter.Id}: program '{program.ProgramId}' is {program.Type}, "
                              + $"expected '{meter.ProgramId}' {ProgramType}");
             var expected = meter.Phases.Select(p => (p.DurationSeconds * 1.0, p.State)).ToList();
             var actual = program.States.Zip(program.Durations, (s, d) => (d, s)).ToList();
@@ -212,7 +212,7 @@ public static class RampMeterProgram
                 .Select(k => byIndex.TryGetValue(k, out var l) ? l : (FromEdge: "?", FromLane: -1)).ToList();
             if (!built.SequenceEqual(meter.Links))
                 problems.Add($"{meter.Id}: its links leave {string.Join(" ", built)}, "
-                             + $"the programme was built for {string.Join(" ", meter.Links)}");
+                             + $"the program was built for {string.Join(" ", meter.Links)}");
         }
         return problems;
     }
@@ -250,7 +250,7 @@ public static class RampMeterProgram
         using (var writer = XmlWriter.Create(new StringWriterUtf8(text), settings))
         {
             writer.WriteStartDocument();
-            writer.WriteComment(" The ramp-meter programmes the world build gives every OSM "
+            writer.WriteComment(" The ramp-meter programs the world build gives every OSM "
                                 + "traffic_signals=ramp_meter signal: CarlaNet.Map.RampMeterProgram. ");
             document.WriteTo(writer);
             writer.WriteEndDocument();

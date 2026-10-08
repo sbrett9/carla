@@ -271,7 +271,7 @@ def test_the_plan_s_core_is_version_3_generated_from_the_enumerations_in_carlane
     core = result.plan["vocabulary"]["core"]
     assert core["vocabulary_version"] == result.plan["vocabulary_version"] == 3
     assert result.lock["vocabulary"]["core_version"] == 3
-    assert core["source"] == "06_Truth_And_Annotation.md §3.7"
+    assert core["source"] == "CarlaNet.Types.Supervision.CoreVocabulary"
     assert core["terms"] == {str(family.Family): [str(term) for term in family.Terms]
                              for family in CoreVocabulary.Families}
     assert set(core["terms"]) == {"supervision_state", "subject_kind", "interval_onset", "closed_by",
@@ -954,7 +954,7 @@ def test_an_instance_with_no_participant_is_refused_under_check_19(world, instal
     result = compile_spec(world, installation, tmp_path, supervision=block)
     assert 19 in checks(result)
     assert "has no participant" in messages(result, 19)
-    assert "labelling the vehicle that deviates" in messages(result, 19)
+    assert "labeling the vehicle that deviates" in messages(result, 19)
     assert "scenario-level note" not in messages(result, 19)
 
 

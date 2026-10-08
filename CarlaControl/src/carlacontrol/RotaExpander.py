@@ -89,7 +89,7 @@ class RotaExpander:
     def expand(self, rota: dict, subjects: list[str]) -> tuple[list[RotaEntry], list[RotaSkip]]:
         """The rota's entries and skips. Empty lists when it refuses."""
         rota_id = str(rota.get("id", ""))
-        where = f"rota {rota_id}"
+        where = f"rotas[{rota_id}]"
         days = self._days(rota.get("days"), where)
         clocks = self._clocks(rota.get("at"), where)
         pattern = rota.get("id_pattern")
@@ -138,7 +138,7 @@ class RotaExpander:
                                      "deliberate skip states its reason")
             if matched[n] == 0:
                 self.findings.refuse(ROTA_CHECK, where,
-                                     f"skip {skip} matches no occasion the rota produces, so it "
+                                     f"skip {skip} matches no occasion the schedule produces, so it "
                                      "removes nothing")
             elif matched[n] > 1:
                 self.findings.refuse(ROTA_CHECK, where,
@@ -189,7 +189,7 @@ class RotaExpander:
             clock = self._normal_clock(str(item))
             if clock is None:
                 self.findings.refuse(47, where, f"'at' entry {item!r} is not a civil clock "
-                                     "HH:MM[:SS]; a rota's day comes from 'days'")
+                                     "HH:MM[:SS]; a schedule's day comes from 'days'")
                 return None
             clocks.append(clock)
         if len(set(clocks)) != len(clocks):

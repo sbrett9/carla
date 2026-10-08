@@ -7,9 +7,8 @@ of three sinks, in a single pass:
   * one XML file holding every event,
   * a CSV with one row per vehicle per update, for use as a plain dataset.
 
-The events use the same formatter as the CARLA truth producer, so they follow the schema in
-`Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md` and can be compared with CARLA truth
-directly. Positions are converted by the running simulation itself, and heights come from the world
+The events use the same formatter as the CARLA truth producer, so they follow the same CoT schema
+and can be compared with CARLA truth directly. Positions are converted by the running simulation itself, and heights come from the world
 package's bare-earth grid when one is found next to the scenario.
 
 The XML and CSV are the truth sidecar and carry the whole record: the author's own names for its

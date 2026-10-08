@@ -229,7 +229,7 @@ class SpanRecorder:
             else:
                 self.state = self.OFF
                 self.tiles = None
-                self._tell("recording cancelled while waiting for the tiles")
+                self._tell("recording canceled while waiting for the tiles")
         elif self.state == self.RECORDING:
             if want:
                 self._watch_tiles()

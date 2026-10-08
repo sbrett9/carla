@@ -39,7 +39,7 @@
 
     The SUMO libraries are an explicit list read from what the binaries import, the Windows peer of
     the Linux script's ldd walk: the build directory holds release and debug variants of every
-    library in the SUMOLibraries bundle, and shipping the lot means a licence obligation for each.
+    library in the SUMOLibraries bundle, and shipping the lot means a license obligation for each.
     The assembled Build\Dist\<name>\ folder is runnable in place; the .zip is only for shipping to
     another machine -- pass -SkipArchive to skip it during local test iterations.
 
@@ -312,7 +312,7 @@ $licenseDir = Join-Path $dist 'licenses'
 function Copy-LicenseText {
     param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Name)
     if (-not (Test-Path $Source)) {
-        Write-Fail "[dist] WARNING: licence text not found at $Source; MANIFEST.md will record it as missing."
+        Write-Fail "[dist] WARNING: license text not found at $Source; MANIFEST.md will record it as missing."
         return $null
     }
     Copy-Item -Force $Source (Join-Path $licenseDir $Name)
@@ -541,10 +541,10 @@ The .osm extracts under osm\, and every OpenDRIVE (.xodr) road network this dist
 from one, are derived from OpenStreetMap.
 
   (c) OpenStreetMap contributors, available under the Open Database License (ODbL) v1.0.
-  Licence text: https://opendatacommons.org/licenses/odbl/1-0/
+  License text: https://opendatacommons.org/licenses/odbl/1-0/
   Attribution:  https://www.openstreetmap.org/copyright
 
-A generated road network is a Derivative Database under that licence. Anything published from it
+A generated road network is a Derivative Database under that license. Anything published from it
 must carry the attribution above.
 '@ | Set-Content -Path (Join-Path $licenseDir 'OpenStreetMap-ODbL-NOTICE.txt') -Encoding UTF8
 
@@ -576,17 +576,17 @@ if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoBinDest 'netcon
         'arrow.dll'           = @{ Component = 'Apache Arrow 22.0.0';     License = 'Apache-2.0'; Text = $apacheText }
         'parquet.dll'         = @{ Component = 'Apache Parquet C++ 22.0.0'; License = 'Apache-2.0'; Text = $apacheText }
         'thriftmd.dll'        = @{ Component = 'Apache Thrift 0.22.0';    License = 'Apache-2.0'; Text = $apacheText }
-        'proj_9.dll'          = @{ Component = 'PROJ 9.5.0';              License = 'PROJ licence (MIT-style)'; Text = @{ From = 'proj-9.5.0\LICENSE'; As = 'PROJ-LICENSE.txt' } }
+        'proj_9.dll'          = @{ Component = 'PROJ 9.5.0';              License = 'PROJ license (MIT-style)'; Text = @{ From = 'proj-9.5.0\LICENSE'; As = 'PROJ-LICENSE.txt' } }
         'sqlite3.dll'         = @{ Component = 'SQLite 3.46.1';           License = 'public domain'; Text = @{ From = '3rdPartyLibs\sqlite-3.46.1\LICENSE'; As = 'SQLite-LICENSE.txt' } }
-        'tiff.dll'            = @{ Component = 'libtiff 4.7.0';           License = 'libtiff licence (BSD-style)'; Text = @{ From = '3rdPartyLibs\tiff-4.7.0\LICENSE'; As = 'libtiff-LICENSE.txt' } }
-        'libcurl.dll'         = @{ Component = 'curl 8.10.1';             License = 'curl licence (MIT-style)'; Text = @{ From = '3rdPartyLibs\curl-8.10.1\LICENSE'; As = 'curl-LICENSE.txt' } }
+        'tiff.dll'            = @{ Component = 'libtiff 4.7.0';           License = 'libtiff license (BSD-style)'; Text = @{ From = '3rdPartyLibs\tiff-4.7.0\LICENSE'; As = 'libtiff-LICENSE.txt' } }
+        'libcurl.dll'         = @{ Component = 'curl 8.10.1';             License = 'curl license (MIT-style)'; Text = @{ From = '3rdPartyLibs\curl-8.10.1\LICENSE'; As = 'curl-LICENSE.txt' } }
         'libssh2.dll'         = @{ Component = 'libssh2 1.11.1';          License = 'BSD-3-Clause'; Text = @{ From = '3rdPartyLibs\libssh2-1.11.1\LICENSE'; As = 'libssh2-LICENSE.txt' } }
         'libssl-3-x64.dll'    = @{ Component = 'OpenSSL 3.3.2';           License = 'Apache-2.0'; Text = @{ From = '3rdPartyLibs\openssl-3.3.2\LICENSE'; As = 'OpenSSL-LICENSE.txt' } }
         'libcrypto-3-x64.dll' = @{ Component = 'OpenSSL 3.3.2';           License = 'Apache-2.0'; Text = @{ From = '3rdPartyLibs\openssl-3.3.2\LICENSE'; As = 'OpenSSL-LICENSE.txt' } }
         'zlib.dll'            = @{ Component = 'zlib 1.3.1';              License = 'Zlib'; Text = @{ From = '3rdPartyLibs\zlib-1.3.1\LICENSE'; As = 'zlib-LICENSE.txt' } }
-        'bz2-1.dll'           = @{ Component = 'bzip2 1.1.0';             License = 'bzip2 licence (BSD-style)'; Text = @{ From = '3rdPartyLibs\bzip2-1.1.0\LICENSE'; As = 'bzip2-LICENSE.txt' } }
+        'bz2-1.dll'           = @{ Component = 'bzip2 1.1.0';             License = 'bzip2 license (BSD-style)'; Text = @{ From = '3rdPartyLibs\bzip2-1.1.0\LICENSE'; As = 'bzip2-LICENSE.txt' } }
         'libpng16.dll'        = @{ Component = 'libpng 1.6.44';           License = 'PNG Reference Library License'; Text = @{ From = '3rdPartyLibs\libpng-1.6.44\LICENSE'; As = 'libpng-LICENSE.txt' } }
-        'freetype.dll'        = @{ Component = 'FreeType 2.13.3';         License = 'FreeType licence or GPL-2.0'; Text = @{ From = '3rdPartyLibs\freetype-2.13.3\LICENSE'; As = 'FreeType-LICENSE.txt' } }
+        'freetype.dll'        = @{ Component = 'FreeType 2.13.3';         License = 'FreeType license or GPL-2.0'; Text = @{ From = '3rdPartyLibs\freetype-2.13.3\LICENSE'; As = 'FreeType-LICENSE.txt' } }
         # GNU components: the bundle carries the text shown, which is the one that ships.
         'fox-16.dll'          = @{ Component = 'FOX toolkit 1.6.59 (SUMO GUI toolkit; sumo and duarouter import it, netconvert does not)'
                                    License = 'LGPL-2.1 with the addendum the project carries'
@@ -603,8 +603,8 @@ if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoBinDest 'netcon
     foreach ($library in $sumoNativeStaged) {
         $entry = $nativeLicenses[$library]
         if (-not $entry) {
-            Write-Fail "[dist] WARNING: $library has no licence row; MANIFEST.md will list it as unattributed."
-            Add-ManifestRow -Component "$library (UNATTRIBUTED - add it to the licence table)" `
+            Write-Fail "[dist] WARNING: $library has no license row; MANIFEST.md will list it as unattributed."
+            Add-ManifestRow -Component "$library (UNATTRIBUTED - add it to the license table)" `
                             -Provenance 'DLR-TS/SUMOLibraries bundle' -License 'unknown' -Location 'tools\sumo\bin\'
             continue
         }
@@ -628,7 +628,7 @@ if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoBinDest 'netcon
 
     if (Test-Path (Join-Path $sumoDest 'proj')) {
         Add-ManifestRow -Component 'PROJ coordinate database' -Provenance 'PROJ 9.5.0 data files' `
-                        -License 'PROJ licence (licenses\PROJ-LICENSE.txt)' -Location 'tools\sumo\proj\'
+                        -License 'PROJ license (licenses\PROJ-LICENSE.txt)' -Location 'tools\sumo\proj\'
     }
 }
 
@@ -751,8 +751,8 @@ distribution. ``world-tools\PackageWorld.ps1`` makes such a package; it needs th
 checkout at this distribution's commit: ``-CarlaRoot <checkout> -Distribution .``
 
 ## What is in here, and under what terms
-``MANIFEST.md`` lists every component this bundle carries, where it came from and its licence, with
-the licence texts themselves under ``licenses\``. Both are generated from what the packaging script
+``MANIFEST.md`` lists every component this bundle carries, where it came from and its license, with
+the license texts themselves under ``licenses\``. Both are generated from what the packaging script
 actually copied, so they describe this bundle rather than an intended one.
 "@
 Set-Content -Path (Join-Path $dist 'README.md') -Value $readme -Encoding UTF8
@@ -766,7 +766,7 @@ $versionSummary = if (Test-Path (Join-Path $dist 'VERSION')) {
 } else { 'no VERSION file was staged' }
 
 $manifest = [System.Text.StringBuilder]::new()
-[void]$manifest.AppendLine("# $pkgName - component and licence manifest")
+[void]$manifest.AppendLine("# $pkgName - component and license manifest")
 [void]$manifest.AppendLine('')
 [void]$manifest.AppendLine("Generated by ``Scripts\Windows\MakeDistribution.ps1`` on $(Get-Date -Format 'yyyy-MM-dd') from")
 [void]$manifest.AppendLine('what it copied into this bundle. It is not hand-maintained, and it is an inventory for a')
@@ -774,17 +774,17 @@ $manifest = [System.Text.StringBuilder]::new()
 [void]$manifest.AppendLine('')
 [void]$manifest.AppendLine("Build: $versionSummary")
 [void]$manifest.AppendLine('')
-[void]$manifest.AppendLine('| Component | Provenance | Licence | Location |')
+[void]$manifest.AppendLine('| Component | Provenance | License | Location |')
 [void]$manifest.AppendLine('|---|---|---|---|')
 foreach ($row in $manifestRows) {
     [void]$manifest.AppendLine("| $($row.Component) | $($row.Provenance) | $($row.License) | ``$($row.Location)`` |")
 }
 [void]$manifest.AppendLine('')
-[void]$manifest.AppendLine('Licence texts are under `licenses\`. Eclipse SUMO is distributed under the EPL-2.0, which')
+[void]$manifest.AppendLine('License texts are under `licenses\`. Eclipse SUMO is distributed under the EPL-2.0, which')
 [void]$manifest.AppendLine('carries a source offer: the exact commit every SUMO binary here was built from is named in')
 [void]$manifest.AppendLine('its row above, and its source is available from that commit at github.com/eclipse-sumo/sumo.')
 Set-Content -Path (Join-Path $dist 'MANIFEST.md') -Value $manifest.ToString() -Encoding UTF8
-Write-Info "[dist] MANIFEST.md: $($manifestRows.Count) components, $(@(Get-ChildItem "$licenseDir\*").Count) licence texts"
+Write-Info "[dist] MANIFEST.md: $($manifestRows.Count) components, $(@(Get-ChildItem "$licenseDir\*").Count) license texts"
 
 # ============================================================================
 #  9. Archive (.zip). Prefer 7-Zip (fast, multithreaded), else Windows' bundled

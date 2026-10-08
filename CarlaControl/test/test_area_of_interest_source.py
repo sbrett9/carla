@@ -218,7 +218,7 @@ def test_a_transposed_circle_is_diagnosed_too():
 def test_projected_metres_are_refused_as_not_degrees():
     metres = [[500.0, 500.0], [600.0, 500.0], [600.0, 600.0], [500.0, 600.0], [500.0, 500.0]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [metres]})))
-    assert any("V5.3" in p and "not projected metres" in p for p in problems)
+    assert any("V5.3" in p and "not projected meters" in p for p in problems)
 
 
 def test_every_problem_is_named_at_once():

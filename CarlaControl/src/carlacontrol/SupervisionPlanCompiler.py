@@ -177,8 +177,8 @@ class SupervisionPlanCompiler:
             rows.append({"entity_id": actor, "role": role, "sumo_id": actor})
         if not participants:
             self.findings.refuse(19, where, "has no participant. An instance is an assertion about "
-                                 "one or more vehicles, and a label follows its vehicle (06 §3.5); "
-                                 "an omission is conveyed by labelling the vehicle that deviates: give "
+                                 "one or more vehicles, and a label follows its vehicle; "
+                                 "an omission is conveyed by labeling the vehicle that deviates: give "
                                  "the vehicle that fails to arrive a route and a label of its own")
         if len(participants) == 1 and participants[0]["role"] != SUBJECT_ROLE:
             self.findings.refuse(50, where, f"has one participant, whose role is "
@@ -216,7 +216,7 @@ class SupervisionPlanCompiler:
         if "begin" not in entry:
             self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} gives neither a begin nor "
                                  "an anchor. An interval is declared by its civil begin, or by the "
-                                 "events of its participant that commit it (06 §3.3)")
+                                 "events of its participant that commit it")
             return None
         begin = self.resolver.instant(entry["begin"], f"{where} {phase} begin")
         end = None
@@ -275,7 +275,7 @@ class SupervisionPlanCompiler:
             self.findings.refuse(ANCHOR_CHECK, where, f"interval {phase} gives an anchor and "
                                  f"{', '.join(given)}. An anchored interval takes its bounds from "
                                  "its participant's events and its declared seconds from what "
-                                 "those events declare (06 D6.4); give one or the other")
+                                 "those events declare; give one or the other")
         if participant not in self._inputs.actor_departures:
             return None
         start = self._anchor_event(anchor["start"], participant, phase, where)
@@ -363,8 +363,8 @@ class SupervisionPlanCompiler:
         where = f"series {series_id}"
         rota_id = entry["rota"]
         if rota_id not in self._inputs.rota_templates:
-            self.findings.refuse(8, where, f"names rota '{rota_id}', which the specification does "
-                                 "not declare")
+            self.findings.refuse(8, where, f"names schedule '{rota_id}' in its `rota`, which no "
+                                 "entry of the specification's `rotas` declares")
             return None
         member_role = entry["member_role"]
         self.vocabulary.check_role(member_role, where)
@@ -385,7 +385,7 @@ class SupervisionPlanCompiler:
             aoi = aoi_by_subject.get(occasion.subject)
             if aoi is None:
                 self.findings.refuse(20, where, f"gives no area for subject '{occasion.subject}'; "
-                                     "a slot is sited at an area (06 §3.4)")
+                                     "a slot is sited at an area")
             elif aoi not in self._inputs.areas:
                 self.findings.refuse(20, where, f"sites subject '{occasion.subject}' at area "
                                      f"'{aoi}', which the world's area table does not hold")
@@ -430,16 +430,15 @@ class SupervisionPlanCompiler:
             supervision = entry["supervision"]
             if supervision == "nominal":
                 self.findings.refuse(49, where, "is nominal. A flow authors a population, not each "
-                                     "member's behaviour, so nothing can assert that every member is "
-                                     "executing no target pattern (06 D6.2)")
+                                     "member's behavior, so nothing can assert that every member is "
+                                     "executing no target pattern")
             if entry.get("intervals"):
                 self.findings.refuse(23, where, "carries intervals. A cohort's members are unknown "
-                                     "until the run, so it carries only a whole-life annotation "
-                                     "(06 D6.2)")
+                                     "until the run, so it carries only a whole-life annotation")
             if any(isinstance(i, dict) and "anchor" in i for i in entry.get("intervals", [])):
                 self.findings.refuse(ANCHOR_CHECK, where, "anchors an interval. An anchor names an "
                                      "event of one vehicle, and a flow's members are generated, "
-                                     "not authored one by one (06 §3.2)")
+                                     "not authored one by one")
             labels = list(entry.get("labels", []))
             if supervision == "annotated":
                 if not labels:
@@ -500,8 +499,7 @@ class SupervisionPlanCompiler:
             kind, ref = counterfactual["kind"], counterfactual["ref"]
             if ref not in known[kind]:
                 self.findings.refuse(8, where, f"counterfactual {kind} '{ref}' names nothing this "
-                                     "scenario declares; a counterfactual is a resolved reference "
-                                     "(06 §3.9(c))")
+                                     "scenario declares; a counterfactual is a resolved reference")
 
     def _check_exemplars(self, instances: list[dict]) -> None:
         """Check 8: every exemplar a term names is an instance of this plan (06 §3.8).
@@ -523,7 +521,7 @@ class SupervisionPlanCompiler:
                 self.findings.refuse(8, f"namespace {spelled.split(':', 1)[0]}",
                                      f"'{spelled}' exemplar_instances names '{ref}', which is no "
                                      f"instance of this scenario{hint}. An exemplar resolves or it "
-                                     "is prose (06 §3.8)")
+                                     "is prose")
 
     def _hard_negatives(self, entry: dict, supervision: str, labels: list[str],
                         where: str) -> list[str] | None:
@@ -539,12 +537,12 @@ class SupervisionPlanCompiler:
         if declared is not None and set(declared) != set(projected):
             if supervision != "nominal":
                 self.findings.refuse(57, where, f"is {supervision} and declares hard_negative_for "
-                                     f"{declared}. The field narrows a nominal subject's negative "
-                                     f"(06 §3.9(d)), and an {supervision} subject asserts none")
+                                     f"{declared}. The field narrows a nominal subject's negative, "
+                                     f"and an {supervision} subject asserts none")
             else:
                 self.findings.refuse(57, where, f"declares hard_negative_for {declared}, and its "
                                      f"labels' terms declare {projected or 'none'}. The term is the "
-                                     "authority and the row a copy of it (06 §3.9(d)): declare the "
+                                     "authority and the row a copy of it: declare the "
                                      "set on the term, and restate it here exactly or not at all")
         return projected or None
 
@@ -556,8 +554,7 @@ class SupervisionPlanCompiler:
         states |= {row["supervision"] for row in cohorts}
         if "annotated" in states and "nominal" not in states:
             self.findings.warn(24, "supervision", "annotates subjects and declares none nominal; "
-                               "hard negatives come only from authored entities (06 D6.2, "
-                               "doc 20 §2.7)")
+                               "hard negatives come only from authored entities")
 
     def _aoi_refs(self, refs: list[str], where: str) -> list[str]:
         for ref in refs:

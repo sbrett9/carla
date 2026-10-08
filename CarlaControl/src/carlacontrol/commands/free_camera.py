@@ -22,7 +22,7 @@ Controls (hold RIGHT MOUSE to fly):
     Space         back to the start pose
     Esc           quit, as does closing the window or Ctrl+C in the terminal
 
-Positions are in CARLA's frame: metres, x east, y SOUTH (north is -y). The start altitude is in feet
+Positions are in CARLA's frame: meters, x east, y SOUTH (north is -y). The start altitude is in feet
 above the world's origin, as carla-sctmv takes it, so a start pose copies across between the two.
 
     carla-free-camera --x 500 --y -1300 --z 1200
@@ -63,8 +63,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     server.add_argument("--timeout", type=float, default=20.0, metavar="SECONDS",
                         help="how long one server call may take")
     camera = parser.add_argument_group("camera")
-    camera.add_argument("--x", type=float, default=0.0, help="start x, CARLA metres (east)")
-    camera.add_argument("--y", type=float, default=0.0, help="start y, CARLA metres (-y is north)")
+    camera.add_argument("--x", type=float, default=0.0, help="start x, CARLA meters (east)")
+    camera.add_argument("--y", type=float, default=0.0, help="start y, CARLA meters (-y is north)")
     camera.add_argument("--z", type=float, default=1000.0,
                         help="start altitude in FEET above the world's origin (default 1000)")
     camera.add_argument("--fov", type=float, default=90.0, help="horizontal field of view, degrees")

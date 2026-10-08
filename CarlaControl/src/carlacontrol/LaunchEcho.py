@@ -70,9 +70,8 @@ NOT_PREDICTED = (
 NOT_PREDICTED_TRAFFIC_AIM = ("where a stare aimed at the rendered traffic will look: the point is "
                              "measured on the last frame before its camera holds for the window, "
                              "and the run result records it")
-PICTURE_NOT_WAITED_ON = ("not waited on: capture.picture_settled_wait is false, its default by the "
-                         "owner's ruling of 2026-10-06, so each view waits for its tiles only and "
-                         "no camera frame is compared")
+PICTURE_NOT_WAITED_ON = ("not waited on: capture.picture_settled_wait is false, its default, so "
+                         "each view waits for its tiles only and no camera frame is compared")
 
 
 class LaunchEcho:
@@ -125,8 +124,9 @@ class LaunchEcho:
             "cost": {"bytes_per_captured_second": bytes_per_captured_second,
                      "estimated_bytes": bytes_per_captured_second * window.length_s,
                      "free_bytes": free_bytes, "headroom_s": headroom_s,
-                     "basis": "doc 10 §4.6's measured PNG size; content-dependent; the truth "
-                              "sidecars, which grow with the traffic in frame, are not counted"},
+                     "basis": "a measured 2.25 MiB per 1280x720 PNG, scaled by pixel count; "
+                              "content-dependent; the truth sidecars, which grow with the "
+                              "traffic in frame, are not counted"},
             "writes": {"capture_directory": str(capture_directory),
                        "result_path": str(result_path)},
             "pacing": {"mode": effective.value("pacing.mode"),
@@ -159,7 +159,7 @@ class LaunchEcho:
         name = str(policy.Name)
         if not bool(policy.BindsTheSun):
             return {"policy": name, "binds": False,
-                    "statement": "left as the world holds it; the run's lighting honours no epoch"}
+                    "statement": "left as the world holds it; the run's lighting honors no epoch"}
         window = effective.window
         origin = (float(effective.value("world.origin_latitude")),
                   float(effective.value("world.origin_longitude")))

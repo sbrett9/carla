@@ -2,21 +2,21 @@
 """Write, and compile, the supervision check: a six-minute scenario on the Arapahoe / I-25 world that
 exercises the whole supervision path, from the plan to every capture's truth.
 
-The owner checks supervision live on Arapahoe, the world he has loaded, so this is written for it and
-for a camera placed over one kerb of South Yosemite Street, just north of East Arapahoe Road, where the
-northbound carriageway runs straight for 100 m in two lanes. All three planned vehicles enter from the
+Supervision is checked live on the Arapahoe world, so this is written for it and for a camera placed
+over one curb of South Yosemite Street, just north of East Arapahoe Road, where the
+northbound roadway runs straight for 100 m in two lanes. All three planned vehicles enter from the
 map's west edge on East Arapahoe Road and turn left up Yosemite at the signal; measured in SUMO alone:
 
-  * a car departing at 20 s pulls to the kerb at 109 s and waits two minutes, to 229 s -- an annotated
+  * a car departing at 20 s pulls to the curb at 109 s and waits two minutes, to 229 s -- an annotated
     **dwell**, its interval anchored to its stop, from arriving to leaving, so it declares its length
-    and no instant (`06_Truth_And_Annotation.md` §3.3, D6.4);
+    and no instant;
   * a second car departing at 90 s drives through, past the waiting car between 144 s and 160 s, and
     leaves the map's north edge at 259 s -- an annotated **transit**, anchored to its departure, its
-    route written in three phases so the stretch past the kerb is an interval of its own, from
+    route written in three phases so the stretch past the curb is an interval of its own, from
     entering that phase to entering the next;
-  * a van departing at 200 s pulls to the same kerb, 30 m short of where the car waited, from 254 s to
+  * a van departing at 200 s pulls to the same curb, 30 m short of where the car waited, from 254 s to
     274 s and drives on -- a **nominal** stop carrying a label that is a matched negative for the
-    dwell (`hard_negative_for`, §3.9(d));
+    dwell (`hard_negative_for`);
   * and around them, ordinary traffic on Arapahoe Road and South Yosemite Street, drawn from the
     Arapahoe dwell's own flows and vehicle classes at the rates that scenario was measured at.
 
@@ -26,13 +26,13 @@ be declared without inventing an area. The first scenario of a world that does p
 one.
 
 **Time.** Simulated second zero is 07:26:00 Mountain Daylight Time on 29 September 2026, the morning
-the Arapahoe dwell starts on, chosen so the sun crosses the +6 degree line between doc 11's `golden`
-and `day` bands between the two capture windows: the first opens at 07:27:00 under a 5.69 degree sun,
-the second at 07:30:00 under a 6.26 degree one. The dwell and the transit's pass lie in the first
+the Arapahoe dwell starts on, chosen so the sun crosses the +6 degree line between the `golden` and
+`day` illumination bands between the two capture windows: the first opens at 07:27:00 under a 5.69
+degree sun, the second at 07:30:00 under a 6.26 degree one. The dwell and the transit's pass lie in the first
 window and the van's stop in the second; the run lasts 360 s.
 
 **A run configuration is written beside the scenario**, `<scenario>.run.json`: `run_capture` captures
-the first window through one camera, `Check_Overhead_1`, looking down on the kerb from 70 m, and writes
+the first window through one camera, `Check_Overhead_1`, looking down on the curb from 70 m, and writes
 the capture's sidecars, its manifest with the plan's interval rows and the world truth track.
 
 Usage:
@@ -146,10 +146,10 @@ VOCABULARY = {"namespaces": [{
     "terms": [
         {"term": "check:kerbside_dwell", "since": 1, "status": "active",
          "applies_to": ["entity"],
-         "definition": "A car pulls to the kerb and waits there for minutes, with nothing to "
+         "definition": "A car pulls to the curb and waits there for minutes, with nothing to "
                        "deliver or collect, then drives on.",
          "parameters": {"dwell_s": {"type": "number", "unit": "s",
-                                    "definition": "the authored length of the wait at the kerb"}},
+                                    "definition": "the authored length of the wait at the curb"}},
          "contrast_with": ["check:brief_kerb_stop"],
          "counterfactual": {"kind": "term", "ref": "check:brief_kerb_stop"},
          "exemplar_instances": ["kerbside_dwell"]},
@@ -159,7 +159,7 @@ VOCABULARY = {"namespaces": [{
                        "Road and out to the north along South Yosemite Street."},
         {"term": "check:brief_kerb_stop", "since": 1, "status": "active",
          "applies_to": ["entity"],
-         "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a "
+         "definition": "A van pulls to the same curb for twenty seconds, as a delivery or a "
                        "pick-up does, and drives on: an ordinary stop where the dwell happens.",
          "hard_negative_for": ["check:kerbside_dwell"]},
     ],
@@ -186,8 +186,8 @@ class SupervisionCheckSpecification:
             "scenario_name": "Arapahoe supervision check",
             "description": (
                 "Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits "
-                "two minutes at the kerb, a second car drives through, and a van stops at the same "
-                "kerb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road "
+                "two minutes at the curb, a second car drives through, and a van stops at the same "
+                "curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road "
                 "and Yosemite, so every kind of supervision the plan carries for a vehicle can be "
                 "checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; "
                 "edit that, not this."),
@@ -263,7 +263,7 @@ def kerb_point(network_text: str, offset_m: float) -> tuple[float, float]:
             t = min(1.0, along / length) if length else 0.0
             return round(a[0] + t * (b[0] - a[0]), 1), round(-(a[1] + t * (b[1] - a[1])), 1)
         along -= length
-    raise ValueError("the kerb lane has no shape")
+    raise ValueError("the curb lane has no shape")
 
 
 def run_configuration(network_text: str) -> dict:

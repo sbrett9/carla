@@ -13,8 +13,9 @@ A run binds a **compiled** scenario package (`carla-compile-scenario`) and the w
 compiled against; it never compiles a scenario or builds a world. Everything the scenario already
 knows -- its epoch, its windows, its SUMO step and seed, its illumination default -- comes from its
 lock; everything about this machine comes from the site profile; the run configuration and the
-options below say the rest. Every field of the effective configuration records the layer that set it
-(12_Operator_Control_Surface.md §3.5-§3.7).
+options below say the rest. Every field of the effective configuration records the layer that set
+it: tool default, site profile, world package, scenario package, run configuration or operator
+override, the last of these taking precedence.
 
 Before anything is acquired the configuration is checked offline and the launch echo is
 printed: the civil span, the sun the session will bind and where, the captures and their cost, and

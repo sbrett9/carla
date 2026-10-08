@@ -113,7 +113,7 @@ public sealed record AdmissionPass(
             RenderSetRule.Circle => "by the circle",
             _ => "every vehicle",
         };
-        return $"{at}, eligible {Eligible}, drawn {Admitted}, shed {Shed}"
+        return $"{at}, in the render set {Eligible}, drawn {Admitted}, shed {Shed}"
                + (Capacity is { } capacity ? $", capacity {capacity}" : string.Empty)
                + $"; {Population - Admitted} without a body; {moved}; {by}";
     }

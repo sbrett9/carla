@@ -14,7 +14,7 @@ The scenario this writes:
     11 m/s, then comes back down Cobblestone Drive and leaves west along Centerville Lane at 1.25
     times its posted limit -- 25.2 m/s against a signed 20.1,
   * ambient traffic runs across the whole map, weighted to the Centerville Lane corridor, with a
-    share routed through the neighbourhood so the orbiting vehicle is not the only thing moving
+    share routed through the neighborhood so the orbiting vehicle is not the only thing moving
     there. Insertion totals about 700 vehicles/hour, directional as a real corridor is at peak:
     roughly 430 per hour east out of the west gateway against 180 coming back. That is well above
     the real peak for a connector of this class, and the lighter westbound side is what leaves the
@@ -26,7 +26,7 @@ spawn-and-measure sweep of that body, so the vehicle SUMO reserves road for is t
 draws; AMBIENT_CLASSES below sets each measured body against the size the traffic was designed
 around. The content build has no pickup, so this corridor has none.
 
-**This script writes a specification, not SUMO XML** (`07_Scenario_Authoring.md` D7.2), and compiles
+**This script writes a specification, not SUMO XML**, and compiles
 it with the scenario compiler, so the generated scenario faces every check a hand-written one does.
 The specification, `<out-dir>/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json`, names
 every edge it uses as a place; the orbit is one actor in three phases -- in, held to each edge's
@@ -224,10 +224,10 @@ AMBIENT_CLASSES = (
         behaviour={"maxSpeed": "35", "speedFactor": "normc(0.90,0.06,0.75,1.05)"},
         share=0.05,
         gui_shape="truck",
-        note="The two rigid lorries in the content build, a two-axle box truck measuring 8.00 m and "
+        note="The two rigid trucks in the content build, a two-axle box truck measuring 8.00 m and "
              "a three-axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m "
              "shorter than the 9.5 m this class was designed around. The Fuso Rosa is a light bus, "
-             "not a lorry, and is not drawn as one."),
+             "not a truck, and is not drawn as one."),
 )
 
 # The marked vehicle's body. Everything about how it drives is set from the command line and written
@@ -255,12 +255,12 @@ class GardnervilleOrbitSpecification:
         return {
             "spec_version": 1,
             "scenario_id": SCENARIO_NAME,
-            "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
+            "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
             "description": (
                 f"One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives "
                 f"the Rock Terrace Drive block {self.orbit.laps} times held to "
                 f"{self.orbit.loop_speed:g} m/s, and leaves west at {self.orbit.exit_speed_factor:g} "
-                "times the posted limit, among directional corridor traffic and neighbourhood "
+                "times the posted limit, among directional corridor traffic and neighborhood "
                 "through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, "
                 "not this."),
             "world": {"package": self._relative(world_package, base),
@@ -353,9 +353,9 @@ def parse_args() -> argparse.Namespace:
                              "the network this scenario runs; netconvert is not run here, because a "
                              "second run would produce a different graph")
     parser.add_argument("--laps", type=int, default=20,
-                        help="times round the neighbourhood (default 20)")
+                        help="times round the neighborhood (default 20)")
     parser.add_argument("--loop-speed", type=float, default=11.0,
-                        help="speed held while circling, in metres/second, about 25 mph "
+                        help="speed held while circling, in meters/second, about 25 mph "
                              "(default 11.0)")
     parser.add_argument("--exit-speed-factor", type=float, default=1.25,
                         help="multiple of the posted limit on the way out (default 1.25)")

@@ -3,7 +3,7 @@
 The `(instance_id, participant, phase)` triples a run manifest names are fixed by the compiled
 supervision plan before the run starts; a run may only bind them. Two runs of one scenario -- at
 another SUMO step, with the capture window opening later, under another sun -- must name the same
-triples, differing only in times and outcomes (`06_Truth_And_Annotation.md` D6.8). This compares the
+triples, differing only in times and outcomes. This compares the
 two manifests' triples and lists every one named by one and not the other, every triple a manifest
 names that its own plan does not declare, and every triple opened or closed twice. What the runs bound
 differently -- onsets, closing instants, how each interval closed -- is listed beside, and is not a

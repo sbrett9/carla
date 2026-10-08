@@ -96,7 +96,7 @@ def test_a_zero_prewarm_says_nothing_of_a_prewarm(layout):
 
 def test_an_ignored_sun_says_the_lighting_honours_no_epoch(layout):
     sun = echo_for(layout, ["solar.policy=ignore"]).to_dict()["sun"]
-    assert sun["binds"] is False and "honours no epoch" in sun["statement"]
+    assert sun["binds"] is False and "honors no epoch" in sun["statement"]
 
 
 def test_the_captures_are_counted_from_the_window_and_the_rate(layout):

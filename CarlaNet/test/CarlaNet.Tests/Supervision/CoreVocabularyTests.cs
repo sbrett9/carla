@@ -14,7 +14,7 @@ public class CoreVocabularyTests
     public void The_Core_Is_Version_3_And_Names_Its_Source()
     {
         Assert.Equal(3, CoreVocabulary.Version);
-        Assert.Equal("06_Truth_And_Annotation.md §3.7", CoreVocabulary.Source);
+        Assert.Equal("CarlaNet.Types.Supervision.CoreVocabulary", CoreVocabulary.Source);
     }
 
     [Fact]

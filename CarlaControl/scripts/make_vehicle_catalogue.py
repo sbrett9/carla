@@ -56,8 +56,8 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
                         help="version string of the cooked content being measured; a mismatch "
                              "against it at run start is the one staleness nothing else can detect")
     parser.add_argument("--server-log", type=Path, default=DEFAULT_SERVER_LOG,
-                        help="the running server's log, read to tell whether a requested colour "
-                             "reached the vehicle body; without it every colour verdict is unknown")
+                        help="the running server's log, read to tell whether a requested color "
+                             "reached the vehicle body; without it every color verdict is unknown")
     parser.add_argument("--vehicle-parameters", type=Path, default=DEFAULT_VEHICLE_PARAMETERS,
                         help="the content build's vehicle metadata, from which a corrected copy is "
                              "written beside the catalogue")

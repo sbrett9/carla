@@ -129,7 +129,8 @@ PICTURE_BLOCK_PX = PICTURE_BLOCK * PICTURE_DOWNSAMPLE
 VEHICLE_MARGIN_PX = 4
 # How long the window's opening waits for a camera's frames still in flight from the prewarm.
 FRAME_DRAIN_S = 5.0
-RULE = "03 §9.5.1"
+RULE = ("run check 50: every channel's view is ready as the window opens -- its photoreal tiles "
+        "in and, where capture.picture_settled_wait is true, its picture settled")
 # Points nearer than this to the camera are at or behind the lens, as in `OcclusionEstimator`.
 NEAR_PLANE_M = 0.1
 
@@ -146,9 +147,9 @@ PER_CAPTURE = ("not recorded: the server answers for the view as of the last tic
                "needs the server to publish it per frame, on the observer snapshot, which it does "
                "not; an orbit's readiness as the window opens says nothing of the ground it sweeps "
                "afterwards")
-PICTURE_WAIT_OFF = ("not run: capture.picture_settled_wait is false, its default by the owner's ruling "
-                    "of 2026-10-06, so each view waited for its tiles only and no camera frame was "
-                    "compared; the wait is kept, and runs where capture.picture_settled_wait is true")
+PICTURE_WAIT_OFF = ("not run: capture.picture_settled_wait is false, its default, so each view "
+                    "waited for its tiles only and no camera frame was compared; the wait is kept, "
+                    "and runs where capture.picture_settled_wait is true")
 VEHICLES = ("excluded: every 80-pixel block covered, in either frame of a comparison, by a rendered "
             "vehicle's box and its ground shadow, projected from the client's snapshot of that frame "
             f"with a {VEHICLE_MARGIN_PX}-pixel margin; a comparison left less than "
@@ -209,7 +210,7 @@ def describe_view(view: dict) -> str:
     elif picture:
         text += (f"; picture settled at frame {picture['settled_at_frame']}, its frame "
                  f"{picture['frames']} since its tiles ({picture['ticks_since_tiles']} ticks), worst "
-                 f"judged block {picture['residual_levels']:.2f} grey levels with "
+                 f"judged block {picture['residual_levels']:.2f} gray levels with "
                  f"{picture['judged_share']:.0%} of its blocks judged")
     elif tiles:
         comparison = view.get("last_comparison")
@@ -230,7 +231,7 @@ def comparison_outcome(comparison: dict) -> str:
         return (f"vehicles covered {comparison['excluded_blocks']} of {comparison['blocks']} "
                 f"blocks, {comparison['judged_share']:.0%} left against "
                 f"{PICTURE_MIN_JUDGED_SHARE:.0%}")
-    return (f"last {comparison['worst_block_levels']:.2f} grey levels with "
+    return (f"last {comparison['worst_block_levels']:.2f} gray levels with "
             f"{comparison['judged_share']:.0%} of its blocks judged")
 
 
@@ -696,7 +697,7 @@ class ChannelReadiness:
                 self.sensor_id, "tiles",
                 f"channel {self.sensor_id}: the server could not say whether camera "
                 f"{self.camera_id}'s photoreal tiles are in ({failure!r}), and a capture is not "
-                f"written before they are ({RULE})") from None
+                "written before they are") from None
         self._asked_ms.append((time.perf_counter() - started) * 1000.0)
         self.last_answer = answer
         frame = int(answer["frame"])
@@ -718,7 +719,7 @@ class ChannelReadiness:
                 raise ViewNotReadyError(
                     self.sensor_id, "tiles",
                     f"channel {self.sensor_id}: its photoreal tiles were not in within "
-                    f"{TILES_CEILING_S:.0f} s of wall clock ({RULE}): at frame {frame}, "
+                    f"{TILES_CEILING_S:.0f} s of wall clock: at frame {frame}, "
                     f"{ticks - self._tiles_wait_ticks} ticks and {waited:.1f} s into the wait, "
                     f"the tiles were {describe_tiles(answer)}{self._tilesets_text(answer)}")
             return said
@@ -797,7 +798,7 @@ class ChannelReadiness:
                              f"channel {self.sensor_id}: picture settled at frame {frame}, its "
                              f"frame {self._compared} since its tiles were in "
                              f"({frame - self._settle_from} ticks); worst judged 80-pixel block "
-                             f"{comparison['worst_block_levels']:.2f} grey levels from frame "
+                             f"{comparison['worst_block_levels']:.2f} gray levels from frame "
                              f"{older.frame}, {comparison['excluded_blocks']} of "
                              f"{comparison['blocks']} blocks left out for rendered vehicles")]
             if self._compared >= self.ceiling_frames:
@@ -805,7 +806,7 @@ class ChannelReadiness:
                     self.sensor_id, "picture",
                     f"channel {self.sensor_id}: its picture did not settle within "
                     f"{self.ceiling_frames} of its frames after its tiles were in at frame "
-                    f"{self._settle_from} ({RULE}): {self._comparison_text()}")
+                    f"{self._settle_from}: {self._comparison_text()}")
         return []
 
     def _keep(self, frame: int, small: np.ndarray, width: int, height: int,
@@ -891,7 +892,7 @@ class ChannelReadiness:
         x, y = comparison["worst_block_px"]
         return (f"frame {comparison['frame']} differs from frame {comparison['against_frame']}, "
                 f"{comparison['ticks_apart']} ticks earlier, by "
-                f"{comparison['worst_block_levels']:.2f} grey levels in its worst judged 80-pixel "
+                f"{comparison['worst_block_levels']:.2f} gray levels in its worst judged 80-pixel "
                 f"block (at x {x}, y {y}) against {self.tolerance_levels:g}, with "
                 f"{comparison['excluded_blocks']} of {comparison['blocks']} blocks left out for "
                 f"rendered vehicles{counts}{self._series_text()}")
@@ -904,7 +905,7 @@ class ChannelReadiness:
         if len(judged) < 2:
             return ""
         levels = ", ".join(f"{comparison['worst_block_levels']:.2f}" for comparison in judged)
-        return (f"; the {len(judged)} judged comparisons read {levels} grey levels in order, from "
+        return (f"; the {len(judged)} judged comparisons read {levels} gray levels in order, from "
                 f"the camera's frame {judged[0]['camera_frames'][0]} to its frame "
                 f"{judged[-1]['camera_frames'][0]}")
 
@@ -923,7 +924,7 @@ class ChannelReadiness:
     def not_ready_message(self, window_begin_s: float) -> str:
         """Why the view is not ready as the window opens, naming the witness and its state."""
         head = (f"channel {self.sensor_id}: its view was not ready when the window opened at "
-                f"t={window_begin_s:g} ({RULE})")
+                f"t={window_begin_s:g}")
         if self.state == NOT_STARTED:
             return f"{head}: its camera never held the pose the window opens on during the prewarm"
         if self.state == WAITING_FOR_TILES:

@@ -170,8 +170,8 @@ class CarlaControlArgumentParser:
             "--road-offset-east",
             type=float,
             default=0.0,
-            metavar="METRES",
-            help="slide the whole generated road network this many metres east of where the "
+            metavar="METERS",
+            help="slide the whole generated road network this many meters east of where the "
             "map data puts it (negative = west). For when the roads come out beside the "
             "roadway in the photoreal imagery rather than on it: the imagery and every "
             "latitude/longitude the telemetry reports stay pinned where they are, only the "
@@ -186,8 +186,8 @@ class CarlaControlArgumentParser:
             "--road-offset-north",
             type=float,
             default=0.0,
-            metavar="METRES",
-            help="slide the whole generated road network this many metres north (negative = "
+            metavar="METERS",
+            help="slide the whole generated road network this many meters north (negative = "
             "south). See --road-offset-east.",
         )
         build.add_argument(
@@ -254,7 +254,7 @@ class CarlaControlArgumentParser:
             help="areas of interest for this world, as GeoJSON (RFC 7946, positions "
             "[longitude, latitude]). Default: <extract>.aoi.geojson beside --osm, when one exists. "
             "Validated before the build starts, which a malformed file refuses; resolved to CARLA "
-            "metres and SUMO lanes and published with --emit-world-package",
+            "meters and SUMO lanes and published with --emit-world-package",
         )
         build.add_argument(
             "--type-map",
@@ -275,12 +275,12 @@ class CarlaControlArgumentParser:
         view.add_argument(
             "--z", type=float, default=1000.0, help="start altitude in FEET (default 1000)"
         )
-        view.add_argument("--x", type=float, default=0.0, help="camera start x (CARLA metres)")
+        view.add_argument("--x", type=float, default=0.0, help="camera start x (CARLA meters)")
         view.add_argument(
             "--y",
             type=float,
             default=0.0,
-            help="camera start y (CARLA metres; -Y is North)",
+            help="camera start y (CARLA meters; -Y is North)",
         )
         view.add_argument("--fov", type=float, default=90.0)
         view.add_argument(
@@ -330,13 +330,13 @@ class CarlaControlArgumentParser:
             "--depth-max-range",
             type=float,
             default=20000.0,
-            help="how far the depth camera can measure, in metres (default 20000). Depth is what "
+            help="how far the depth camera can measure, in meters (default 20000). Depth is what "
             "Ctrl+LMB measures a point with and what tells the recorder whether a vehicle is "
             "hidden behind something; anything further away than this reads the same as empty "
             "sky. CARLA's own default of 1000 runs out at about 3250 ft looking straight down, "
             "and sooner when the camera is tilted. Raising it costs no accuracy worth "
             "measuring, but accuracy does fall off with distance either way: a reading is short "
-            "by roughly 0.1%% of the distance for every kilometre of distance.",
+            "by roughly 0.1%% of the distance for every kilometer of distance.",
         )
 
     def _add_traffic_args(self, ap: argparse.ArgumentParser) -> None:
@@ -421,11 +421,11 @@ class CarlaControlArgumentParser:
             "--lane-spawn-spacing",
             type=float,
             default=15.0,
-            metavar="METRES",
+            metavar="METERS",
             help="place spawn sites this far apart along every drivable lane that passes through "
             "the staging ring, instead of relying only on the one point CARLA puts at each road "
-            "entry. A road clipped by the map edge otherwise offers just the few metres at its "
-            "entry, however much of the same carriageway lies inside the ring. 0 uses road-entry "
+            "entry. A road clipped by the map edge otherwise offers just the few meters at its "
+            "entry, however much of the same roadway lies inside the ring. 0 uses road-entry "
             "points only.",
         )
         traf.add_argument(
@@ -445,7 +445,7 @@ class CarlaControlArgumentParser:
             action="store_true",
             help="give each vehicle its road speed the instant it is created, instead of "
             "letting it accelerate from rest. OFF by default: this sets the body's "
-            "velocity while its wheels are still stationary, so the tyre model sees "
+            "velocity while its wheels are still stationary, so the tire model sees "
             "full slip and the vehicle briefly has no grip — which can carry it off "
             "the road before the traffic manager has any say.",
         )
@@ -458,7 +458,7 @@ class CarlaControlArgumentParser:
             "Lower it to run the whole fleet slower without flattening the "
             "differences between roads: 40 gives 40%% of the limit everywhere, so a "
             "65 mph freeway becomes 26 mph and a 25 mph street becomes 10. Useful "
-            "for telling apart behaviour that degrades with speed from behaviour "
+            "for telling apart behavior that degrades with speed from behavior "
             "that is wrong at any speed.",
         )
         traf.add_argument(
@@ -630,7 +630,7 @@ class CarlaControlArgumentParser:
             "--occlusion-margin",
             type=float,
             default=1.0,
-            help="metres nearer than a vehicle's own surface that something must be before it "
+            help="meters nearer than a vehicle's own surface that something must be before it "
             "counts as hiding it (default 1.0). Absorbs the gap between the vehicle's bounding "
             "box and its real bodywork; raise it if vehicles report occlusion with a clear view, "
             "lower it if an obstruction pressed right against a vehicle is being missed. The "
@@ -653,12 +653,12 @@ class CarlaControlArgumentParser:
             help="start with the orbit camera running instead of free flight; O toggles "
             "between the two at any time either way",
         )
-        orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA metres)")
+        orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA meters)")
         orbit.add_argument(
             "--orbit-y",
             type=float,
             default=None,
-            help="orbit center Y (CARLA metres; -Y is North)",
+            help="orbit center Y (CARLA meters; -Y is North)",
         )
         orbit.add_argument(
             "--orbit-lat",
@@ -682,7 +682,7 @@ class CarlaControlArgumentParser:
             "--orbit-altitude",
             type=float,
             default=1700,
-            help="camera altitude above the orbit centre, in FEET (default 1700).",
+            help="camera altitude above the orbit center, in FEET (default 1700).",
         )
         orbit.add_argument(
             "--orbit-speed",

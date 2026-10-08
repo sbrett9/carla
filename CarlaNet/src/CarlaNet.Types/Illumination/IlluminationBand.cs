@@ -69,8 +69,11 @@ public readonly record struct IlluminationBandEdge(IlluminationBand Band, string
 /// </remarks>
 public static class IlluminationBands
 {
-    /// <summary>Where the bands are defined.</summary>
-    public const string Source = "11_Time_And_Illumination.md §4.4";
+    /// <summary>How the bands are cut, as a record states it beside the bands it names.</summary>
+    public const string Source =
+        "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, "
+        + "civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, "
+        + "night at -18 and below";
 
     /// <summary>The elevation the edges are stated against.</summary>
     public const SolarElevationKind Elevation = SolarElevationKind.RefractionCorrected;

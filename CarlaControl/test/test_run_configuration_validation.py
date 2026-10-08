@@ -246,7 +246,7 @@ def test_an_advancing_sun_at_another_rate_is_refused(layout, tmp_path):
     illumination = {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 60.0}
     write_scenario_package(layout.scenario_root, illumination=illumination)
     *_, findings, _, _ = offline(layout)
-    assert "D12.8" in only(findings, 15).message
+    assert "disagree with the scenario's clock" in only(findings, 15).message
 
 
 def test_an_illumination_field_beside_the_wrong_policy_is_refused(layout):
@@ -258,7 +258,7 @@ def test_an_illumination_field_beside_the_wrong_policy_is_refused(layout):
 def test_the_ignore_policy_warns(layout):
     *_, findings, _, _ = offline(layout, overrides=["solar.policy=ignore"])
     finding = only(findings, 15)
-    assert finding.outcome == "warn" and "honours no epoch" in finding.message
+    assert finding.outcome == "warn" and "honors no epoch" in finding.message
 
 
 def test_a_scenario_with_no_epoch_is_refused(layout):
@@ -694,12 +694,13 @@ def test_an_exposure_value_the_camera_cannot_take_as_stated_is_refused_naming_th
     assert phrase in finding.message
 
 
-def test_histogram_warns_citing_d8_26_and_is_not_refused(layout):
+def test_histogram_warns_that_its_captures_are_not_comparable_and_is_not_refused(layout):
     *_, findings, _, _ = offline(layout, overrides=["capture.channels[0].exposure_method=histogram"])
     finding = only(findings, 16)
     assert finding.outcome == "warn" and not findings.refused
     assert finding.subject == "capture.channels[0].exposure_method"
-    assert "follows what is in the picture" in finding.message and "08 D8.26" in finding.message
+    assert "follows what is in the picture" in finding.message
+    assert "not for captures meant to be compared" in finding.message
     assert RunConfigurationFindings.warning_code(finding) == "exposure_follows_the_scene"
 
 

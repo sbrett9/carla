@@ -62,8 +62,8 @@ public sealed record PlanVocabulary
             reading.Problem($"{where}.vocabulary_version",
                             $"is {version}, and this session branches on the core at version "
                             + $"{CoreVocabulary.Version}: a plan compiled against another core may not define "
-                            + "a value the run writes, and a corpus carrying a term its published vocabulary "
-                            + "does not define is refused at release (06 D6.30)");
+                            + "a value the run writes, and a dataset carrying a term its published vocabulary "
+                            + "does not define is refused at release");
             return;
         }
 

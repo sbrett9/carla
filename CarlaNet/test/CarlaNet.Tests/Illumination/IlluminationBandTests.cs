@@ -15,7 +15,9 @@ public class IlluminationBandTests
                      IlluminationBands.Names);
         double?[] edges = [6.0, 0.0, -6.0, -12.0, -18.0, null];
         Assert.Equal(edges, IlluminationBands.Table.Select(edge => edge.AboveDegrees));
-        Assert.Equal("11_Time_And_Illumination.md §4.4", IlluminationBands.Source);
+        Assert.Equal("the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, "
+                     + "civil_twilight above -6, nautical_twilight above -12, astronomical_twilight "
+                     + "above -18, night at -18 and below", IlluminationBands.Source);
         // The enumeration runs in the table's order, and each band names itself as the table does.
         Assert.Equal(Enum.GetValues<IlluminationBand>(), IlluminationBands.Table.Select(edge => edge.Band));
         Assert.All(IlluminationBands.Table, edge => Assert.Equal(edge.Name, IlluminationBands.Name(edge.Band)));

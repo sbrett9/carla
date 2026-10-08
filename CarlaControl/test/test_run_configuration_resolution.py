@@ -138,7 +138,7 @@ def test_the_sun_s_rate_is_not_operator_settable(layout):
     raised = refused(layout, overrides=["solar.policy=advance",
                                         "solar.rate_sun_s_per_sim_s=2.0"])
     [finding] = raised.findings.refusals
-    assert finding.check_id == 3 and "D12.8" in finding.message
+    assert finding.check_id == 3 and "pinned to one sun-second per simulated second" in finding.message
 
 
 # -- dependent fields ----------------------------------------------------------------------------------

@@ -91,17 +91,17 @@ public record struct OrbitParameters(
     {
         if (!double.IsFinite(CentreXMetres) || !double.IsFinite(CentreYMetres) || !double.IsFinite(CentreZMetres))
         {
-            return "The centre is three finite numbers of metres.";
+            return "The center is three finite numbers of meters.";
         }
 
         if (!double.IsFinite(RadiusMetres) || RadiusMetres <= 0.0)
         {
-            return "The radius is a positive number of metres.";
+            return "The radius is a positive number of meters.";
         }
 
         if (!double.IsFinite(AltitudeMetres))
         {
-            return "The altitude is a finite number of metres above the centre.";
+            return "The altitude is a finite number of meters above the center.";
         }
 
         if (!double.IsFinite(PeriodSeconds) || PeriodSeconds <= 0.0)
