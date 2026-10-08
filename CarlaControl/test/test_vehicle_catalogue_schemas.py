@@ -181,3 +181,14 @@ def test_every_distribution_draws_only_types_the_file_holds(source):
         drawn = distribution.get("vTypes").split()
         assert set(drawn) <= held, distribution.get("id")
         assert len(distribution.get("probabilities").split()) == len(drawn)
+
+
+def test_the_fuso_bus_widths_vehicle_extent_gives_are_the_catalogue_s():
+    """`VehicleExtent`'s docstring names the bus's whole and body widths; they are the measured ones."""
+    from carlacontrol.VehicleCatalogue import VehicleExtent  # noqa: PLC0415
+
+    (bus,) = [entry for entry in shipped()["vehicles"]
+              if entry["blueprint_id"] == "vehicle.fuso.mitsubishi"]
+    words = " ".join(VehicleExtent.__doc__.split())
+    assert f"made the Fuso bus {bus['width_m']:.2f} m wide" in words
+    assert f"where its body is {bus['body_width_m']:.2f} m" in words
