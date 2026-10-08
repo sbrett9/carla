@@ -108,11 +108,18 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     private static readonly string NoGround = CoreVocabulary.Name(RenderReason.NoGround);
     private static readonly string NotDrawn = CoreVocabulary.Name(RenderReason.NotDrawn);
 
+    /// <summary>Every reason a row gives for a vehicle no body drew, in the order the first that holds is chosen.</summary>
+    internal static IReadOnlyList<string> RenderReasons { get; } =
+        [NoWorld, OutsideLimit, NoBlueprint, UnknownExtent, NoGround, NotDrawn];
+
     /// <summary>
     /// A sun elevation to a millionth of a degree, the solar block's precision, so a band read back from
     /// the written elevation is the band written beside it everywhere but within that of an edge.
     /// </summary>
     private const string ElevationFormat = "0.######";
+
+    /// <summary>The clock every row's instant is read on, as the summary names it: TraCI's, for the SUMO frame.</summary>
+    internal const string InstantClock = "traci_clock";
 
     private static readonly string[] ColumnNames =
     [
@@ -392,9 +399,9 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
             return;
         }
 
-        Ended = end.Stopped is not null ? "run_stopped"
-            : end.ScenarioFinished ? "scenario_finished"
-            : "caller_stopped";
+        Ended = end.Stopped is not null ? RunManifestWriter.RunStoppedEnding
+            : end.ScenarioFinished ? RunManifestWriter.ScenarioFinishedEnding
+            : RunManifestWriter.CallerStoppedEnding;
         Close();
         WriteSummary(end);
     }
@@ -610,7 +617,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
             }
 
             json.WriteEndArray();
-            json.WriteString("instant", "traci_clock");
+            json.WriteString("instant", InstantClock);
             json.WriteNumber("sumo_step_s", _sumoStepSeconds);
             json.WriteNumber("interval_s", IntervalSeconds);
             json.WriteNumber("every_sumo_steps", SumoStepsPerSample);

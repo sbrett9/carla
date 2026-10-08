@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="utf-8"?>
+<events captured="2026-10-07T17:34:59.201Z" count="38" source="truth" tick="24284" sim_time_s="224.679475" run_id="cap-20261007-173433-41f49b" vehicles="rendered" plan_id="Arapahoe_I25_SupervisionCheck" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197">
+  <_solar solar_time="7.45" date="2026-09-29" time_zone="-6" lat="39.5943100" lon="-104.8844900" sun_elevation_deg="5.549" sun_corrected_elevation_deg="5.694" sun_azimuth_deg="97.827" advancing="false" rate="0" illumination_band="golden" illumination_band_elevation="refraction_corrected" />
+  <_illumination policy="freeze_at_window_start" epoch_honoured="true" audited="true" epoch_digest="b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831" epoch_civil="2026-09-29T07:26:00-06:00" utc_offset_hours="-6" declared_civil="2026-09-29T07:27:30.5-06:00" declared_utc="2026-09-29T13:27:30.5Z" sun_declared="2026-09-29T07:27:00-06:00" sun_elevation_declared_deg="5.5491" sun_corrected_elevation_declared_deg="5.694" declared_elevation="refraction_corrected" residual_clock_s="0.001" residual_deg="0" residual_corrected_deg="0" />
+  <event version="2.0" uid="CARLA-SENSOR-107" type="a-f-A-M-F-Q" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5971345" lon="-104.8891363" hae="1818.06" ce="0.0" le="0.0" />
+    <detail>
+      <contact callsign="Check_Overhead_1" />
+      <track course="90.0" speed="0.00" />
+      <sensor azimuth="90" elevation="-70.346" roll="0" fov="50" vfov="29.395" range="0" type="EO" model="sensor.camera.rgb" />
+      <_carla_intrinsics width="1920" height="1080" fx="2058.73" fy="2058.73" cx="960" cy="540" hfov_deg="50" vfov_deg="29.395" model="pinhole" distortion="none" align_offset_m="-0.63" />
+      <_carla_exposure post_process_profile="Default" method="manual" iso="100" shutter_s="0.003125" fstop="4" compensation_ev="0" ev100="12.322" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5949202" lon="-104.8830359" hae="1743.19" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.4" speed="9.92" />
+      <contact callsign="van-arapahoe_east_to_west.0" />
+      <_carla source="truth" actor_id="109" type_id="vehicle.sprinter.mercedes" base_type="van" special_type="" length_m="5.92" width_m="1.99" height_m="2.73" color="233,234,236" role_name="sumo" vx="-9.68" vy="2.17" vz="-0.30" heading_deg="257.4" in_frame="none" apparent_width_px="63" apparent_height_px="68" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.0" vtype_id="van.vehicle.sprinter.mercedes" admitted_tick="22475" sumo_angle_deg="257.4" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_yosemite_north.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5996634" lon="-104.8808124" hae="1728.85" ce="0.0" le="0.0" />
+    <detail>
+      <track course="359.1" speed="25.24" />
+      <contact callsign="car-arapahoe_east_to_yosemite_north.0" />
+      <_carla source="truth" actor_id="110" type_id="vehicle.ue4.audi.tt" base_type="car" special_type="" length_m="4.18" width_m="1.99" height_m="1.39" color="0,0,0" role_name="sumo" vx="-0.41" vy="-25.24" vz="-1.07" heading_deg="358.3" in_frame="none" apparent_width_px="37" apparent_height_px="25" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_yosemite_north.0" vtype_id="car.vehicle.ue4.audi.tt" admitted_tick="22475" sumo_angle_deg="359.1" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_south_to_north.3" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5856531" lon="-104.8855198" hae="1744.17" ce="0.0" le="0.0" />
+    <detail>
+      <track course="0.7" speed="11.41" />
+      <contact callsign="car-yosemite_south_to_north.3" />
+      <_carla source="truth" actor_id="112" type_id="vehicle.ue4.bmw.grantourer" base_type="car" special_type="" length_m="4.61" width_m="2.24" height_m="1.67" color="0,0,0" role_name="sumo" vx="0.14" vy="-11.41" vz="0.15" heading_deg="0.7" in_frame="none" apparent_width_px="256" apparent_height_px="48" occlusion_unmeasured="outside_frame" sumo_id="yosemite_south_to_north.3" vtype_id="car.vehicle.ue4.bmw.grantourer" admitted_tick="24275" sumo_angle_deg="0.7" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-wabash_to_arapahoe_west.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5989328" lon="-104.8890352" hae="1735.73" ce="0.0" le="0.0" />
+    <detail>
+      <track course="170.6" speed="0.00" />
+      <contact callsign="car-wabash_to_arapahoe_west.0" />
+      <_carla source="truth" actor_id="113" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="170.6" in_frame="none" apparent_width_px="328" apparent_height_px="87" occlusion_unmeasured="outside_frame" sumo_id="wabash_to_arapahoe_west.0" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="22475" sumo_angle_deg="199.5" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_arapahoe_east.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5955540" lon="-104.8809134" hae="1746.46" ce="0.0" le="0.0" />
+    <detail>
+      <track course="179.0" speed="15.73" />
+      <contact callsign="car-yosemite_north_to_arapahoe_east.0" />
+      <_carla source="truth" actor_id="114" type_id="vehicle.dodge.charger" base_type="car" special_type="" length_m="5.01" width_m="1.88" height_m="1.54" color="0,0,0" role_name="sumo" vx="0.28" vy="15.72" vz="1.07" heading_deg="179.0" in_frame="none" apparent_width_px="42" apparent_height_px="33" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_arapahoe_east.0" vtype_id="car.vehicle.dodge.charger" admitted_tick="22475" sumo_angle_deg="179.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_south.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5966673" lon="-104.8889640" hae="1735.85" ce="0.0" le="0.0" />
+    <detail>
+      <track course="180.0" speed="0.00" />
+      <contact callsign="car-yosemite_north_to_south.0" />
+      <_carla source="truth" actor_id="115" type_id="vehicle.ue4.audi.tt" base_type="car" special_type="" length_m="4.18" width_m="1.99" height_m="1.39" color="0,0,0" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="180.0" in_frame="none" apparent_width_px="136" apparent_height_px="56" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_south.0" vtype_id="car.vehicle.ue4.audi.tt" admitted_tick="22475" sumo_angle_deg="180.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_south_to_north.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5944044" lon="-104.8888297" hae="1738.40" ce="0.0" le="0.0" />
+    <detail>
+      <track course="354.0" speed="15.44" />
+      <contact callsign="truck-yosemite_south_to_north.0" />
+      <_carla source="truth" actor_id="116" type_id="vehicle.carlacola.actors" base_type="truck" special_type="" length_m="8.00" width_m="2.91" height_m="4.05" color="149,0,14" role_name="sumo" vx="-1.62" vy="-15.35" vz="-0.36" heading_deg="353.5" in_frame="none" apparent_width_px="633" apparent_height_px="122" occlusion_unmeasured="outside_frame" sumo_id="yosemite_south_to_north.0" vtype_id="truck.vehicle.carlacola.actors" admitted_tick="22475" sumo_angle_deg="354.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-clinton_to_arapahoe_west.0" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5948524" lon="-104.8834232" hae="1742.22" ce="0.0" le="0.0" />
+    <detail>
+      <track course="256.6" speed="13.27" />
+      <contact callsign="car-clinton_to_arapahoe_west.0" />
+      <_carla source="truth" actor_id="117" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="-12.91" vy="3.07" vz="-0.33" heading_deg="256.7" in_frame="none" apparent_width_px="62" apparent_height_px="57" occlusion_unmeasured="outside_frame" sumo_id="clinton_to_arapahoe_west.0" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="22477" sumo_angle_deg="256.6" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5948873" lon="-104.8832259" hae="1742.72" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.4" speed="11.55" />
+      <contact callsign="car-arapahoe_east_to_west.1" />
+      <_carla source="truth" actor_id="118" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="-11.27" vy="2.53" vz="-0.32" heading_deg="257.4" in_frame="none" apparent_width_px="59" apparent_height_px="56" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.1" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="22681" sumo_angle_deg="257.4" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946333" lon="-104.8852158" hae="1739.44" ce="0.0" le="0.0" />
+    <detail>
+      <track course="90.0" speed="18.08" />
+      <contact callsign="car-arapahoe_west_to_east.1" />
+      <_carla source="truth" actor_id="119" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="18.08" vy="0.00" vz="0.27" heading_deg="90.4" in_frame="none" apparent_width_px="85" apparent_height_px="71" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.1" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="22694" sumo_angle_deg="90.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-dweller" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5964427" lon="-104.8888540" hae="1736.03" ce="0.0" le="0.0" />
+    <detail>
+      <track course="350.1" speed="0.00" />
+      <contact callsign="car-dweller" />
+      <_carla source="truth" actor_id="120" type_id="vehicle.ue4.ford.mustang" base_type="car" special_type="" length_m="4.72" width_m="1.89" height_m="1.30" color="0,0,0" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="350.1" in_frame="none" apparent_width_px="156" apparent_height_px="72" occlusion_unmeasured="outside_frame" sumo_id="dweller" vtype_id="car.vehicle.ue4.ford.mustang" admitted_tick="22875" sumo_angle_deg="350.8" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.2" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5947382" lon="-104.8838395" hae="1741.29" ce="0.0" le="0.0" />
+    <detail>
+      <track course="266.7" speed="19.32" />
+      <contact callsign="car-arapahoe_east_to_west.2" />
+      <_carla source="truth" actor_id="121" type_id="vehicle.ue4.audi.tt" base_type="car" special_type="" length_m="4.18" width_m="1.99" height_m="1.39" color="0,0,0" role_name="sumo" vx="-19.29" vy="1.11" vz="-0.41" heading_deg="267.1" in_frame="none" apparent_width_px="49" apparent_height_px="42" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.2" vtype_id="car.vehicle.ue4.audi.tt" admitted_tick="22887" sumo_angle_deg="266.7" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.2" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946030" lon="-104.8850281" hae="1741.39" ce="0.0" le="0.0" />
+    <detail>
+      <track course="90.0" speed="15.95" />
+      <contact callsign="van-arapahoe_west_to_east.2" />
+      <_carla source="truth" actor_id="122" type_id="vehicle.sprinter.mercedes" base_type="van" special_type="" length_m="5.92" width_m="1.99" height_m="2.73" color="233,234,236" role_name="sumo" vx="15.95" vy="0.00" vz="-0.12" heading_deg="90.0" in_frame="none" apparent_width_px="95" apparent_height_px="80" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.2" vtype_id="van.vehicle.sprinter.mercedes" admitted_tick="22912" sumo_angle_deg="90.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_south.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.6002820" lon="-104.8878295" hae="1735.66" ce="0.0" le="0.0" />
+    <detail>
+      <track course="250.6" speed="15.81" />
+      <contact callsign="car-yosemite_north_to_south.1" />
+      <_carla source="truth" actor_id="123" type_id="vehicle.ue4.audi.tt" base_type="car" special_type="" length_m="4.18" width_m="1.99" height_m="1.39" color="0,0,0" role_name="sumo" vx="-14.91" vy="5.26" vz="0.15" heading_deg="251.1" in_frame="none" apparent_width_px="167" apparent_height_px="83" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_south.1" vtype_id="car.vehicle.ue4.audi.tt" admitted_tick="23029" sumo_angle_deg="250.6" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_south_to_north.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5908167" lon="-104.8853167" hae="1737.21" ce="0.0" le="0.0" />
+    <detail>
+      <track course="359.0" speed="14.31" />
+      <contact callsign="car-yosemite_south_to_north.1" />
+      <_carla source="truth" actor_id="124" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="-0.25" vy="-14.31" vz="0.56" heading_deg="360.0" in_frame="none" apparent_width_px="167" apparent_height_px="54" occlusion_unmeasured="outside_frame" sumo_id="yosemite_south_to_north.1" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="23075" sumo_angle_deg="360.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.3" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5949500" lon="-104.8828628" hae="1743.65" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.6" speed="8.52" />
+      <contact callsign="car-arapahoe_east_to_west.3" />
+      <_carla source="truth" actor_id="125" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="-8.32" vy="1.83" vz="-0.13" heading_deg="257.6" in_frame="none" apparent_width_px="55" apparent_height_px="52" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.3" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="23093" sumo_angle_deg="257.6" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.3" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946433" lon="-104.8862846" hae="1738.96" ce="0.0" le="0.0" />
+    <detail>
+      <track course="85.7" speed="15.67" />
+      <contact callsign="car-arapahoe_west_to_east.3" />
+      <_carla source="truth" actor_id="126" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="15.62" vy="-1.17" vz="0.22" heading_deg="86.6" in_frame="none" apparent_width_px="120" apparent_height_px="81" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.3" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="23130" sumo_angle_deg="85.6" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_arapahoe_east.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.6008886" lon="-104.8809174" hae="1729.09" ce="0.0" le="0.0" />
+    <detail>
+      <track course="180.1" speed="29.58" />
+      <contact callsign="car-yosemite_north_to_arapahoe_east.1" />
+      <_carla source="truth" actor_id="127" type_id="vehicle.ue4.mercedes.ccc" base_type="car" special_type="" length_m="4.67" width_m="1.81" height_m="1.44" color="73,0,0" role_name="sumo" vx="-0.07" vy="29.58" vz="-0.56" heading_deg="180.1" in_frame="none" apparent_width_px="47" apparent_height_px="25" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_arapahoe_east.1" vtype_id="car.vehicle.ue4.mercedes.ccc" admitted_tick="23275" sumo_angle_deg="180.1" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.4" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5949347" lon="-104.8825894" hae="1744.37" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.6" speed="6.07" />
+      <contact callsign="car-arapahoe_east_to_west.4" />
+      <_carla source="truth" actor_id="128" type_id="vehicle.dodge.charger" base_type="car" special_type="" length_m="5.01" width_m="1.88" height_m="1.54" color="0,0,0" role_name="sumo" vx="-5.93" vy="1.31" vz="-0.18" heading_deg="257.8" in_frame="none" apparent_width_px="45" apparent_height_px="43" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.4" vtype_id="car.vehicle.dodge.charger" admitted_tick="23298" sumo_angle_deg="257.1" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_yosemite_north.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5985005" lon="-104.8807631" hae="1732.35" ce="0.0" le="0.0" />
+    <detail>
+      <track course="0.9" speed="0.00" />
+      <contact callsign="car-arapahoe_east_to_yosemite_north.1" />
+      <_carla source="truth" actor_id="129" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="0.9" in_frame="none" apparent_width_px="44" apparent_height_px="33" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_yosemite_north.1" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="23323" sumo_angle_deg="0.9" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.4" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946174" lon="-104.8860015" hae="1738.96" ce="0.0" le="0.0" />
+    <detail>
+      <track course="89.8" speed="15.19" />
+      <contact callsign="truck-arapahoe_west_to_east.4" />
+      <_carla source="truth" actor_id="130" type_id="vehicle.carlacola.actors" base_type="truck" special_type="" length_m="8.00" width_m="2.91" height_m="4.05" color="149,0,14" role_name="sumo" vx="15.19" vy="-0.05" vz="0.16" heading_deg="89.8" in_frame="none" apparent_width_px="178" apparent_height_px="136" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.4" vtype_id="truck.vehicle.carlacola.actors" admitted_tick="23348" sumo_angle_deg="89.8" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-clinton_to_arapahoe_west.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5948694" lon="-104.8831509" hae="1742.92" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.3" speed="6.39" />
+      <contact callsign="truck-clinton_to_arapahoe_west.1" />
+      <_carla source="truth" actor_id="131" type_id="vehicle.carlacola.actors" base_type="truck" special_type="" length_m="8.00" width_m="2.91" height_m="4.05" color="149,0,14" role_name="sumo" vx="-6.24" vy="1.40" vz="-0.17" heading_deg="257.4" in_frame="none" apparent_width_px="93" apparent_height_px="100" occlusion_unmeasured="outside_frame" sumo_id="clinton_to_arapahoe_west.1" vtype_id="truck.vehicle.carlacola.actors" admitted_tick="23436" sumo_angle_deg="257.3" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.5" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5948806" lon="-104.8829368" hae="1743.56" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.4" speed="6.23" />
+      <contact callsign="truck-arapahoe_east_to_west.5" />
+      <_carla source="truth" actor_id="132" type_id="vehicle.carlacola.actors" base_type="truck" special_type="" length_m="8.00" width_m="2.91" height_m="4.05" color="149,0,14" role_name="sumo" vx="-6.08" vy="1.37" vz="-0.26" heading_deg="249.5" in_frame="none" apparent_width_px="95" apparent_height_px="101" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.5" vtype_id="truck.vehicle.carlacola.actors" admitted_tick="23504" sumo_angle_deg="248.6" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_clinton.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946226" lon="-104.8865534" hae="1738.81" ce="0.0" le="0.0" />
+    <detail>
+      <track course="91.9" speed="15.06" />
+      <contact callsign="car-arapahoe_west_to_clinton.1" />
+      <_carla source="truth" actor_id="133" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="15.05" vy="0.49" vz="-0.00" heading_deg="92.0" in_frame="none" apparent_width_px="129" apparent_height_px="84" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_clinton.1" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="23504" sumo_angle_deg="92.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.5" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946317" lon="-104.8868086" hae="1738.77" ce="0.0" le="0.0" />
+    <detail>
+      <track course="94.4" speed="14.49" />
+      <contact callsign="car-arapahoe_west_to_east.5" />
+      <_carla source="truth" actor_id="134" type_id="vehicle.ue4.audi.tt" base_type="car" special_type="" length_m="4.18" width_m="1.99" height_m="1.39" color="0,0,0" role_name="sumo" vx="14.45" vy="1.10" vz="0.19" heading_deg="94.5" in_frame="none" apparent_width_px="102" apparent_height_px="65" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.5" vtype_id="car.vehicle.ue4.audi.tt" admitted_tick="23566" sumo_angle_deg="94.4" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_south.2" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.6003624" lon="-104.8872721" hae="1735.80" ce="0.0" le="0.0" />
+    <detail>
+      <track course="259.8" speed="14.36" />
+      <contact callsign="van-yosemite_north_to_south.2" />
+      <_carla source="truth" actor_id="135" type_id="vehicle.sprinter.mercedes" base_type="van" special_type="" length_m="5.92" width_m="1.99" height_m="2.73" color="233,234,236" role_name="sumo" vx="-14.13" vy="2.53" vz="0.28" heading_deg="260.9" in_frame="none" apparent_width_px="222" apparent_height_px="112" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_south.2" vtype_id="van.vehicle.sprinter.mercedes" admitted_tick="23583" sumo_angle_deg="262.2" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_south_to_north.2" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5891097" lon="-104.8852823" hae="1734.20" ce="0.0" le="0.0" />
+    <detail>
+      <track course="359.7" speed="12.24" />
+      <contact callsign="car-yosemite_south_to_north.2" />
+      <_carla source="truth" actor_id="136" type_id="vehicle.lincoln.mkz" base_type="car" special_type="" length_m="4.89" width_m="1.84" height_m="1.52" color="0,0,0" role_name="sumo" vx="-0.06" vy="-12.24" vz="-0.38" heading_deg="360.0" in_frame="none" apparent_width_px="162" apparent_height_px="42" occlusion_unmeasured="outside_frame" sumo_id="yosemite_south_to_north.2" vtype_id="car.vehicle.lincoln.mkz" admitted_tick="23675" sumo_angle_deg="359.7" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.6" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5949077" lon="-104.8827545" hae="1743.95" ce="0.0" le="0.0" />
+    <detail>
+      <track course="257.6" speed="6.05" />
+      <contact callsign="car-arapahoe_east_to_west.6" />
+      <_carla source="truth" actor_id="137" type_id="vehicle.nissan.patrol" base_type="car" special_type="" length_m="5.59" width_m="2.15" height_m="2.06" color="2,35,54" role_name="sumo" vx="-5.91" vy="1.30" vz="-0.17" heading_deg="255.2" in_frame="none" apparent_width_px="56" apparent_height_px="54" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.6" vtype_id="suv.vehicle.nissan.patrol" admitted_tick="23710" sumo_angle_deg="254.2" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.6" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5946151" lon="-104.8855244" hae="1739.45" ce="0.0" le="0.0" />
+    <detail>
+      <track course="94.0" speed="17.75" />
+      <contact callsign="car-arapahoe_west_to_east.6" />
+      <_carla source="truth" actor_id="138" type_id="vehicle.lincoln.mkz" base_type="car" special_type="" length_m="4.89" width_m="1.84" height_m="1.52" color="0,0,0" role_name="sumo" vx="17.71" vy="1.23" vz="0.14" heading_deg="93.4" in_frame="none" apparent_width_px="74" apparent_height_px="58" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.6" vtype_id="car.vehicle.lincoln.mkz" admitted_tick="23785" sumo_angle_deg="94.0" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.7" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5951629" lon="-104.8806191" hae="1748.67" ce="0.0" le="0.0" />
+    <detail>
+      <track course="263.2" speed="0.00" />
+      <contact callsign="car-arapahoe_east_to_west.7" />
+      <_carla source="truth" actor_id="139" type_id="vehicle.lincoln.mkz" base_type="car" special_type="" length_m="4.89" width_m="1.84" height_m="1.52" color="0,0,0" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="263.2" in_frame="none" apparent_width_px="28" apparent_height_px="37" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.7" vtype_id="car.vehicle.lincoln.mkz" admitted_tick="23916" sumo_angle_deg="300.8" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.7" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5948334" lon="-104.8891657" hae="1736.64" ce="0.0" le="0.0" />
+    <detail>
+      <track course="189.5" speed="1.00" />
+      <contact callsign="car-arapahoe_west_to_east.7" />
+      <_carla source="truth" actor_id="140" type_id="vehicle.mini.cooper" base_type="car" special_type="" length_m="4.55" width_m="2.10" height_m="1.77" color="0,0,0" role_name="sumo" vx="-0.17" vy="0.99" vz="-0.02" heading_deg="84.5" in_frame="none" apparent_width_px="371" apparent_height_px="142" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.7" vtype_id="car.vehicle.mini.cooper" admitted_tick="24003" sumo_angle_deg="122.9" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_arapahoe_east.2" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.6025029" lon="-104.8855852" hae="1722.33" ce="0.0" le="0.0" />
+    <detail>
+      <track course="183.0" speed="0.00" />
+      <contact callsign="car-yosemite_north_to_arapahoe_east.2" />
+      <_carla source="truth" actor_id="141" type_id="vehicle.ue4.chevrolet.impala" base_type="car" special_type="" length_m="5.36" width_m="2.03" height_m="1.41" color="0,146,255" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="183.0" in_frame="none" apparent_width_px="123" apparent_height_px="40" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_arapahoe_east.2" vtype_id="car.vehicle.ue4.chevrolet.impala" admitted_tick="24075" sumo_angle_deg="182.1" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_west.8" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5951367" lon="-104.8803881" hae="1748.77" ce="0.0" le="0.0" />
+    <detail>
+      <track course="262.4" speed="7.18" />
+      <contact callsign="car-arapahoe_east_to_west.8" />
+      <_carla source="truth" actor_id="142" type_id="vehicle.ue4.audi.tt" base_type="car" special_type="" length_m="4.18" width_m="1.99" height_m="1.39" color="0,0,0" role_name="sumo" vx="-7.11" vy="0.95" vz="0.26" heading_deg="263.4" in_frame="none" apparent_width_px="28" apparent_height_px="25" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_west.8" vtype_id="car.vehicle.ue4.audi.tt" admitted_tick="24121" sumo_angle_deg="263.6" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-yosemite_north_to_south.3" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.6025051" lon="-104.8856238" hae="1722.28" ce="0.0" le="0.0" />
+    <detail>
+      <track course="183.4" speed="0.00" />
+      <contact callsign="van-yosemite_north_to_south.3" />
+      <_carla source="truth" actor_id="143" type_id="vehicle.sprinter.mercedes" base_type="van" special_type="" length_m="5.92" width_m="1.99" height_m="2.73" color="233,234,236" role_name="sumo" vx="0.00" vy="0.00" vz="0.00" heading_deg="183.4" in_frame="none" apparent_width_px="169" apparent_height_px="59" occlusion_unmeasured="outside_frame" sumo_id="yosemite_north_to_south.3" vtype_id="van.vehicle.sprinter.mercedes" admitted_tick="24137" sumo_angle_deg="182.7" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_east_to_yosemite_north.2" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5952106" lon="-104.8800863" hae="1748.87" ce="0.0" le="0.0" />
+    <detail>
+      <track course="271.3" speed="16.94" />
+      <contact callsign="van-arapahoe_east_to_yosemite_north.2" />
+      <_carla source="truth" actor_id="144" type_id="vehicle.sprinter.mercedes" base_type="van" special_type="" length_m="5.92" width_m="1.99" height_m="2.73" color="233,234,236" role_name="sumo" vx="-16.94" vy="-0.39" vz="0.38" heading_deg="271.4" in_frame="none" apparent_width_px="31" apparent_height_px="47" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_east_to_yosemite_north.2" vtype_id="van.vehicle.sprinter.mercedes" admitted_tick="24170" sumo_angle_deg="271.3" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-arapahoe_west_to_east.8" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5948860" lon="-104.8895375" hae="1735.49" ce="0.0" le="0.0" />
+    <detail>
+      <track course="94.6" speed="9.16" />
+      <contact callsign="truck-arapahoe_west_to_east.8" />
+      <_carla source="truth" actor_id="145" type_id="vehicle.carlacola.actors" base_type="truck" special_type="" length_m="8.00" width_m="2.91" height_m="4.05" color="149,0,14" role_name="sumo" vx="9.13" vy="0.73" vz="0.40" heading_deg="100.9" in_frame="none" apparent_width_px="840" apparent_height_px="410" occlusion_unmeasured="outside_frame" sumo_id="arapahoe_west_to_east.8" vtype_id="truck.vehicle.carlacola.actors" admitted_tick="24221" sumo_angle_deg="93.2" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-transit" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.5950259" lon="-104.8899040" hae="1734.32" ce="0.0" le="0.0" />
+    <detail>
+      <track course="96.3" speed="19.65" />
+      <contact callsign="car-transit" />
+      <_carla source="truth" actor_id="146" type_id="vehicle.ue4.ford.mustang" base_type="car" special_type="" length_m="4.72" width_m="1.89" height_m="1.30" color="0,0,0" role_name="sumo" vx="19.53" vy="2.14" vz="0.97" heading_deg="95.8" in_frame="none" apparent_width_px="456" apparent_height_px="313" occlusion_unmeasured="outside_frame" sumo_id="transit" vtype_id="car.vehicle.ue4.ford.mustang" admitted_tick="24275" sumo_angle_deg="96.3" />
+      <_supervision state="annotated" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197">
+        <annotation instance="Arapahoe_I25_SupervisionCheck/through_transit" labels="check:through_transit" phase="transit" role="subject" />
+      </_supervision>
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-wabash_to_arapahoe_west.1" type="a-n-G-E-V" how="m-g" time="2026-10-07T17:34:59.201Z" start="2026-10-07T17:34:59.201Z" stale="2026-10-07T17:35:02.201Z">
+    <point lat="39.6029688" lon="-104.8891263" hae="1732.04" ce="0.0" le="0.0" />
+    <detail>
+      <track course="155.8" speed="11.18" />
+      <contact callsign="car-wabash_to_arapahoe_west.1" />
+      <_carla source="truth" actor_id="147" type_id="vehicle.ue4.ford.crown" base_type="car" special_type="" length_m="5.37" width_m="1.80" height_m="1.57" color="254,211,0" role_name="sumo" vx="4.58" vy="10.20" vz="0.12" heading_deg="155.8" in_frame="none" apparent_width_px="671" apparent_height_px="105" occlusion_unmeasured="outside_frame" sumo_id="wabash_to_arapahoe_west.1" vtype_id="car.vehicle.ue4.ford.crown" admitted_tick="24275" sumo_angle_deg="155.8" />
+      <_supervision state="unlabelled" vocabulary="3" vocabulary_digest="19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197" />
+    </detail>
+  </event>
+</events>

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:png-chunk-illumination:1",
+  "title": "PNG text chunk carla:illumination, format version 1",
+  "description": "What the run declared the sun to be for this frame -- the scenario's epoch, the illumination policy, the frame's civil instant and the sun declared for it -- and how far the world's sun was from it. Written only in a run that declares its illumination. This schema describes format version 1; a chunk with no format_version was written before chunks carried one and is version 1.",
+  "type": "object",
+  "properties": {
+    "format_version": {
+      "const": 1,
+      "description": "The chunk's format version. Absent from a chunk written before chunks carried one, which is version 1."
+    },
+    "policy": {
+      "type": "string",
+      "enum": [
+        "freeze_at_window_start",
+        "advance",
+        "freeze_at",
+        "ignore"
+      ],
+      "description": "The illumination policy the run followed."
+    },
+    "epoch_honoured": {
+      "type": "boolean",
+      "description": "Whether the frame was lit by the sun of its own declared civil instant."
+    },
+    "audited": {
+      "type": "boolean",
+      "description": "Whether the world's sun was compared against the declaration on this frame's tick."
+    },
+    "rate": {
+      "type": "number",
+      "description": "Sun-clock seconds per simulated second, under the advance policy only.",
+      "x-unit": "seconds per second"
+    },
+    "freeze_at_civil_time": {
+      "type": "string",
+      "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+      "description": "The civil time of day the sun is held at, under the freeze_at policy only."
+    },
+    "epoch_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the scenario's epoch, so a frame separated from its run still names it."
+    },
+    "epoch_civil": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?[+-][0-9]{2}:[0-9]{2}$",
+      "description": "The civil instant simulated second zero stands for, with its UTC offset."
+    },
+    "utc_offset_hours": {
+      "type": "number",
+      "description": "The epoch's declared UTC offset, hours.",
+      "x-unit": "hours"
+    },
+    "declared_civil": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?[+-][0-9]{2}:[0-9]{2}$",
+      "description": "This frame's simulated instant as a civil time, with its UTC offset."
+    },
+    "declared_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?Z$",
+      "description": "The same instant in UTC: the key to join this frame to anything outside the pipeline."
+    },
+    "sun_declared": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?[+-][0-9]{2}:[0-9]{2}$",
+      "description": "The date and clock the sun was declared to hold for this frame, with its UTC offset: the frame's civil instant under a policy that honors the epoch, the window's opening instant under a freeze."
+    },
+    "sun_elevation_declared_deg": {
+      "type": "number",
+      "description": "The geometric elevation of the declared sun.",
+      "x-unit": "degrees"
+    },
+    "sun_corrected_elevation_declared_deg": {
+      "type": "number",
+      "description": "The refraction-corrected elevation of the declared sun.",
+      "x-unit": "degrees"
+    },
+    "declared_elevation": {
+      "type": "string",
+      "enum": [
+        "geometric",
+        "refraction_corrected"
+      ],
+      "description": "Which of the two elevations a declared window elevation means."
+    },
+    "residual_clock_s": {
+      "type": "number",
+      "description": "The world's sun clock minus the declared one.",
+      "x-unit": "seconds"
+    },
+    "residual_deg": {
+      "type": "number",
+      "description": "The angle between the world's sun and the declared sun.",
+      "x-unit": "degrees"
+    },
+    "residual_corrected_deg": {
+      "type": "number",
+      "description": "The world's refraction-corrected elevation minus the declared one, where the world reports it.",
+      "x-unit": "degrees"
+    }
+  },
+  "required": [
+    "policy",
+    "epoch_honoured",
+    "audited"
+  ],
+  "additionalProperties": false
+}

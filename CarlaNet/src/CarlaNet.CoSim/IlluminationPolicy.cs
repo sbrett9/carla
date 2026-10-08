@@ -87,13 +87,16 @@ public sealed class IlluminationPolicy
     public string? Note { get; }
 
     /// <summary>The policy's name as the scenario contract spells it.</summary>
-    public string Name => Kind switch
+    public string Name => NameOf(Kind);
+
+    /// <summary>A policy kind's name as the scenario contract spells it, and every record writes it.</summary>
+    public static string NameOf(IlluminationPolicyKind kind) => kind switch
     {
         IlluminationPolicyKind.FreezeAtWindowStart => "freeze_at_window_start",
         IlluminationPolicyKind.Advance => "advance",
         IlluminationPolicyKind.FreezeAt => "freeze_at",
         IlluminationPolicyKind.Ignore => "ignore",
-        _ => throw new InvalidOperationException($"Unknown illumination policy {Kind}."),
+        _ => throw new InvalidOperationException($"Unknown illumination policy {kind}."),
     };
 
     /// <summary>Whether the session writes the sun at all.</summary>
