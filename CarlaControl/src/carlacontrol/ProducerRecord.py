@@ -24,7 +24,8 @@ and the server a `<_server>` child (`xml_element`).
 The C# writers -- the truth sidecar, the PNG's `carla:capture` chunk, the run manifest, the world truth
 track's summary, the world package -- write the same object (`CarlaNet.Types.Provenance.ProducerRecord`).
 A component that drives those writers declares itself (`declare_tool`), so a still a capture session's
-recorder writes names the session.
+recorder writes names the session, and each command whose run reaches them declares its own name
+(`carla-drive`, `carla-sctmv`, `carla-build-world`), so their files carry carlacontrol's release too.
 """
 from __future__ import annotations
 

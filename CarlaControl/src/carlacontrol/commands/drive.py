@@ -227,6 +227,7 @@ from CarlaNet.CoSim import CoSimSessionRefusedException
 
 # isort: split
 from carlacontrol.FreeView import FreeView
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.PyGameSensorController import PyGameSensorController
 from carlacontrol.RenderRegionCoverage import RenderRegionCoverage
 from carlacontrol.RunConfiguration import RunConfiguration
@@ -238,6 +239,9 @@ from carlacontrol.WorldPackageReader import WorldPackageReader
 # Where the defaults come from: the checkout this carlacontrol was imported from, or, installed, the
 # current folder and the catalogue installed with the package.
 LAYOUT = ToolLayout.current()
+
+# The tool every file a drive writes names, the CarlaNet writers' included: this command.
+TOOL = "carla-drive"
 
 # How long any one server call may take once the session is driving.
 RUN_TIMEOUT_S = 30.0
@@ -1062,6 +1066,9 @@ class FreeViewParts:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # First, so the stills, the world truth track and the run manifest all name this command and
+    # carlacontrol's release.
+    ProducerRecord.declare_tool(TOOL)
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     for label, path in (("scenario", args.scenario), ("world package", args.world_package),

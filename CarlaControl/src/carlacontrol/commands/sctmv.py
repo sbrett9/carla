@@ -74,7 +74,11 @@ from carlacontrol import (
     TrafficController,
     WorldBuilder,
 )
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.ToolLayout import ToolLayout
+
+# The tool every file this command writes names, the CarlaNet writers' included: this command.
+TOOL = "carla-sctmv"
 
 
 def configure_logging(log_path: str | None) -> None:
@@ -93,7 +97,11 @@ def configure_logging(log_path: str | None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Build-tool paths go on the environment first: netconvert, PROJ and SUMO for everything this
+    # First, so the world package a build writes and the stills a recording writes name this command
+    # and carlacontrol's release.
+    ProducerRecord.declare_tool(TOOL)
+
+    # Build-tool paths go on the environment next: netconvert, PROJ and SUMO for everything this
     # process starts. Prefer what the environment already names (a packaged distribution's
     # environment step names its bundled toolchain); from a checkout, fall back to the staged build.
     # The SUMO scenario tooling and traci both resolve their installation through SUMO_HOME, which

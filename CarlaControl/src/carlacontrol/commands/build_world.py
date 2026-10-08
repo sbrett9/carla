@@ -30,16 +30,22 @@ import carlanet as carla
 
 from carlacontrol.CarlaControlArgumentParser import CarlaControlArgumentParser
 from carlacontrol.commands.sctmv import configure_logging
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.ToolLayout import ToolLayout
 from carlacontrol.WorldBuilder import WorldBuilder
 
 # How long the first server calls may take, before the build sets its own --timeout.
 CONNECT_TIMEOUT_S = 15.0
 
+# The tool the world package names as what made it: this command.
+TOOL = "carla-build-world"
+
 logger = logging.getLogger("build_world")
 
 
 def main(argv: list[str] | None = None) -> int:
+    # First, so the world package names this command and carlacontrol's release.
+    ProducerRecord.declare_tool(TOOL)
     layout = ToolLayout.current()
     netconvert, proj = layout.apply_sumo_environment()
     args = CarlaControlArgumentParser(layout, description=__doc__).parse_args(argv)
