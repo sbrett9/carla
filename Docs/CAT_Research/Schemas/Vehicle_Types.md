@@ -1,6 +1,6 @@
 # SUMO vehicle types (`vehicles.vtypes.rou.xml`)
 
-`vehicles.vtypes.rou.xml` is the [vehicle catalogue](VehicleCatalogue.md) as SUMO reads it. Each
+`vehicles.vtypes.rou.xml` is the [vehicle catalogue](Vehicle_Catalogue.md) as SUMO reads it. Each
 measured CARLA body is one SUMO vehicle type, `<vType>`, and each class is one type distribution,
 `<vTypeDistribution>`, over its members. A scenario asks for a class; SUMO draws a member from it; the
 member is the CARLA body. So the size SUMO reserves on the road and the body CARLA draws are the same.

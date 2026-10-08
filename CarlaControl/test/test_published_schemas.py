@@ -48,22 +48,22 @@ SKILL_SCHEMAS = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios" / "
 PAGES_DIRECTORY = _REPO / "Docs" / "CAT_Research" / "Schemas"
 # Each schema's description page.
 PAGES = {
-    "run_configuration.schema.json": "RunConfiguration.md",
-    "run_result.schema.json": "RunResult.md",
-    "run_resolution.schema.json": "RunResolutionReport.md",
-    "run_lock.schema.json": "RunLock.md",
-    "launch_echo.schema.json": "LaunchEcho.md",
-    "site_profile.schema.json": "SiteProfile.md",
-    "scenario.schema.json": "ScenarioSpecification.md",
+    "run_configuration.schema.json": "Run_Configuration.md",
+    "run_result.schema.json": "Run_Result.md",
+    "run_resolution.schema.json": "Run_Resolution_Report.md",
+    "run_lock.schema.json": "Run_Lock.md",
+    "launch_echo.schema.json": "Launch_Echo.md",
+    "site_profile.schema.json": "Site_Profile.md",
+    "scenario.schema.json": "Scenario_Specification.md",
     "sweep.schema.json": "Sweep.md",
-    "scenario_lock.schema.json": "ScenarioLock.md",
-    "scenario_resolution.schema.json": "ScenarioResolutionReport.md",
-    "supervision_plan.schema.json": "SupervisionPlan.md",
-    "sweep_index.schema.json": "SweepIndex.md",
-    "scenario_checks.schema.json": "ScenarioChecks.md",
+    "scenario_lock.schema.json": "Scenario_Lock.md",
+    "scenario_resolution.schema.json": "Scenario_Resolution_Report.md",
+    "supervision_plan.schema.json": "Supervision_Plan.md",
+    "sweep_index.schema.json": "Sweep_Index.md",
+    "scenario_checks.schema.json": "Scenario_Checks.md",
     "epoch.schema.json": "Epoch.md",
-    "display_convention.schema.json": "DisplayConvention.md",
-    "area_of_interest.schema.json": "AreasOfInterest.md",
+    "display_convention.schema.json": "Display_Convention.md",
+    "area_of_interest.schema.json": "Areas_Of_Interest.md",
 }
 _URN = re.compile(r"^urn:carla-sumo-capture:schema:[a-z][a-z0-9]*(-[a-z0-9]+)*:[1-9][0-9]*$")
 

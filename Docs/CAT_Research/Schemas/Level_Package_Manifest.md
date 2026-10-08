@@ -6,7 +6,7 @@ package. It is a zip made by `PackageWorld`. It holds the world's cooked plugin 
 `InstallWorld` reads that file before it installs anything.
 
 This is a different file from the `world.json` inside a world package (`.cwp`), which is described in
-[WorldPackageManifest.md](WorldPackageManifest.md).
+[World_Package_Manifest.md](World_Package_Manifest.md).
 
 - Schema: `CarlaControl/schemas/level_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:level-package-manifest:1`
@@ -28,7 +28,7 @@ byte order mark, so a reader should accept one.
 
 `Scripts/Windows/InstallWorld.ps1` and `Scripts/Linux/InstallWorld.sh` read it. They check its
 `formatVersion` first, then the world interface version against the target package's (see
-[WorldInterfaceVersion.md](WorldInterfaceVersion.md)), then copy the world's folder into the package's
+[World_Interface_Version.md](World_Interface_Version.md)), then copy the world's folder into the package's
 `CarlaUnreal/Plugins/GeneratedWorlds/`. They print the `mapPackage` to load. They read
 `formatVersion`, `world`, `mapPackage`, `worldInterfaceMajor`, `worldInterfaceMinor` and
 `carlaGitHash`. The other fields identify the build for a person.

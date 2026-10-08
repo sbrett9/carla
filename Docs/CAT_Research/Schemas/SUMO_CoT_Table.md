@@ -1,7 +1,7 @@
 # SUMO bridge table (`carla-cot-telemetry --csv`) and its summary
 
 Given `--csv <file>`, `carla-cot-telemetry` writes one row per vehicle per update of a SUMO run: the
-same vehicles and instants as its [event file](SumoCotEventFile.md), as a plain table. Beside it, as it
+same vehicles and instants as its [event file](SUMO_CoT_Event_File.md), as a plain table. Beside it, as it
 opens the CSV, it writes `<file stem>.summary.json`, which records the CSV's format version, its columns
 and what made it. The CSV's own first line stays its header, so any CSV reader can read it.
 
@@ -66,7 +66,7 @@ labels file's `marked_ids`.
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `format_version` | integer, always 1 | yes | The CSV's format. |
-| `producer` | object | yes | What made the CSV: `tool` is `carlacontrol.SumoCotBridge`, `server` is null, `sumo` is the SUMO release. See the producer record in [WorldPackageManifest.md](WorldPackageManifest.md#the-producer-record). |
+| `producer` | object | yes | What made the CSV: `tool` is `carlacontrol.SumoCotBridge`, `server` is null, `sumo` is the SUMO release. See the producer record in [World_Package_Manifest.md](World_Package_Manifest.md#the-producer-record). |
 | `csv` | string | yes | The CSV's file name, without a folder. |
 | `columns` | array of strings | yes | The CSV's columns, in order: exactly its header. |
 

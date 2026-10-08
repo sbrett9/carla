@@ -33,7 +33,7 @@ variable, the checkout's staged SUMO, and then `SUMO_HOME` and `PATH`, which the
   no run result is written.
 - A relative path in the file is relative to the file's own folder.
 - The values it gives are recorded, each with where it came from, in the run's lock and resolution
-  report (see [Run lock](RunLock.md#the-site-profile-record)).
+  report (see [Run lock](Run_Lock.md#the-site-profile-record)).
 
 ## Fields
 

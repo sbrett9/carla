@@ -172,7 +172,7 @@ class BareEarthGrid:
             raise ValueError(f"{path} is not a bare-earth grid (magic {magic:#x})")
         count = cols * rows
         header_size = struct.calcsize(cls.HEADER)
-        # A grid is its header and two whole planes (Docs/CAT_Research/Schemas/BareEarthGrid.md); a
+        # A grid is its header and two whole planes (Docs/CAT_Research/Schemas/Bare_Earth_Grid.md); a
         # file of any other length was cut short or is not one, and a plane read short would be
         # heights from nowhere.
         if len(raw) != header_size + 8 * count:

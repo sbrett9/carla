@@ -7,7 +7,7 @@
 - the **ground** grid: the bare-earth ground height at each grid point.
 
 A world built with `--height-align drape` has the file. A world built in any other mode does not; its
-one height shift is `HeightAlignOffsetMeters` in [`world.json`](WorldPackageManifest.md).
+one height shift is `HeightAlignOffsetMeters` in [`world.json`](World_Package_Manifest.md).
 
 Tools use the grids to turn the height a vehicle is drawn at into its true bare-earth height, to seat
 SUMO-driven vehicles on the ground, and to give the SUMO bridge's telemetry a ground height.

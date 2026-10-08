@@ -16,7 +16,7 @@ asserts. You never write SUMO's XML. The compiler turns the specification into t
 every vehicle, and checks everything it can before a capture is spent.
 
 Times are written as civil times and places by name, and the compiler resolves both. Its resolution
-report (see [Scenario resolution report](ScenarioResolutionReport.md)) states what each became.
+report (see [Scenario resolution report](Scenario_Resolution_Report.md)) states what each became.
 
 ## Who writes it and who reads it
 
@@ -24,7 +24,7 @@ report (see [Scenario resolution report](ScenarioResolutionReport.md)) states wh
   with the authoring skill's help.
 - **`carla-compile-scenario` reads it** and checks it against this schema first (check 53). A field
   the schema does not name is refused. Every later check is listed in
-  [Scenario compiler checks](ScenarioChecks.md).
+  [Scenario compiler checks](Scenario_Checks.md).
 - A sweep names a specification as its `base` (see [Sweep](Sweep.md)).
 - `carla-drive --epoch` can read the `epoch` and `illumination` blocks out of a specification.
 
@@ -93,7 +93,7 @@ A place takes exactly one of these forms:
 |---|---|---|
 | Edge | `edge`, optional `offset_m` | A network edge by id, and a position along it in meters. |
 | Lane | `lane`, `offset_m` | A lane by id and a position along it. |
-| Area | `area` | An area of interest by id (see [Areas of interest](AreasOfInterest.md)). |
+| Area | `area` | An area of interest by id (see [Areas of interest](Areas_Of_Interest.md)). |
 | Street | `street`, `direction` (`north`, `east`, `south`, `west`), optional `at` (a cross street) or `near` (`{lat, lon}`) | One run of a named street, narrowed by direction and a cross street or a point. |
 | Point | `lat`, `lon`, `max_snap_m`, optional `vclass` | The position on the nearest lane the class may use, refused past `max_snap_m` meters. |
 | Gateway | `gateway` (a side), `travel` (`in` or `out`), optional `street` | Where a road enters or leaves the world on that side. |
@@ -165,7 +165,7 @@ A place takes exactly one of these forms:
 | `supervision.series[]` | object | no | A schedule read as a recurring series: `series_id`, `rota`, `member_role`, `slot_length`, `slot_aoi_refs`, `supervision`, and optional `labels`, `parameters`, `hard_negative_for`. |
 
 Every actor that no instance names, and every flow that no cohort names, is written into the
-supervision plan as `unlabelled`. See [Supervision plan](SupervisionPlan.md).
+supervision plan as `unlabelled`. See [Supervision plan](Supervision_Plan.md).
 
 ## Versions
 

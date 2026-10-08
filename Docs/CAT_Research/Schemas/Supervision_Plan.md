@@ -38,7 +38,7 @@ compiles of one specification write it byte for byte.
   reports each interval opening and closing in the run manifest, and each still's sidecar carries the
   supervision of its own frame.
 - The scenario resolution report repeats the plan's rows (see
-  [Scenario resolution report](ScenarioResolutionReport.md)).
+  [Scenario resolution report](Scenario_Resolution_Report.md)).
 
 ## Fields
 
@@ -55,7 +55,7 @@ compiles of one specification write it byte for byte.
 | `vocabulary_version` | integer | The core vocabulary's version. |
 | `vocabulary_digest` | string, 64 hex digits | SHA-256 of `vocabulary`, keys sorted, two-space indent. |
 | `vocabulary.core` | object | The closed core: `vocabulary_version`, `source`, and `terms`, the terms the pipeline's own code branches on, by family (`supervision_state`, `subject_kind`, `interval_onset`, `closed_by`, `illumination_band`, `cadence`, `reserved_role`, `interval_anchor`, `render_state`, `render_reason`). |
-| `vocabulary.namespaces` | array | Every author namespace, declared or imported, as the specification declares one (see [Scenario specification](ScenarioSpecification.md#the-vocabulary-and-the-supervision)). |
+| `vocabulary.namespaces` | array | Every author namespace, declared or imported, as the specification declares one (see [Scenario specification](Scenario_Specification.md#the-vocabulary-and-the-supervision)). |
 | `instances` | array | The instances. See below. |
 | `series` | array | The series. See below. |
 | `cohorts` | array | Every flow: `flow_id`, `supervision` (`annotated` or `unlabelled`), `labels` and `parameters`. |

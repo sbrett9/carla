@@ -2,11 +2,11 @@
 
 `world.json` says what a generated world is: where it sits on the Earth, how its roads were seated on
 the photoreal imagery, which imagery it streams, where traffic may enter and leave, and how it was
-built. It is the one entry every world package must have. See [WorldPackage.md](WorldPackage.md) for
+built. It is the one entry every world package must have. See [World_Package.md](World_Package.md) for
 the other entries.
 
 This is a different file from the `world.json` in a level package. That one is described in
-[LevelPackageManifest.md](LevelPackageManifest.md).
+[Level_Package_Manifest.md](Level_Package_Manifest.md).
 
 - Schema: `CarlaControl/schemas/world_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:world-package-manifest:1`

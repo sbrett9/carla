@@ -30,7 +30,7 @@ the member that holds a given combination of values, and how you tell two member
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `sweep_version` | constant `1` | yes | The format version of the sweep compiled, and of this index. |
-| `producer` | object | no | What wrote the file, with the SUMO release that routed the members. See [Run result](RunResult.md#the-producer-record). |
+| `producer` | object | no | What wrote the file, with the SUMO release that routed the members. See [Run result](Run_Result.md#the-producer-record). |
 | `sweep_id` | string or null | yes | The sweep's id. Null when the sweep file gave none. |
 | `members` | array | yes | Every member, the twins of counterfactual pairs included. See below. |
 | `pairs` | array | yes | Every counterfactual pair. See below. |

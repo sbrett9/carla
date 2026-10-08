@@ -11,7 +11,7 @@ the optional ones are present. The JSON entries each have a JSON Schema here, pu
   * `areas.resolved.json`, written by `AreaOfInterestResolver`.
 
 `bareearth.bin` is binary, and its layout is `BARE_EARTH_HEADER` here and the format page in
-`Docs/CAT_Research/Schemas/BareEarthGrid.md`. The OpenDRIVE and SUMO entries are external standards
+`Docs/CAT_Research/Schemas/Bare_Earth_Grid.md`. The OpenDRIVE and SUMO entries are external standards
 and have no schema of ours. `areas.aoi.geojson` is the author's input file copied byte for byte; its
 schema is the areas-of-interest input's, `area_of_interest.schema.json`.
 
@@ -84,7 +84,7 @@ ENTRIES: tuple[PackageEntry, ...] = (
     PackageEntry("map.net.xml", "SUMO network XML", False,
                  "every package written since the network was carried; a scenario cannot be built "
                  "against a package without it", "CarlaNet.Map.WorldPackage"),
-    PackageEntry("bareearth.bin", "binary, see BareEarthGrid.md", False,
+    PackageEntry("bareearth.bin", "binary, see Bare_Earth_Grid.md", False,
                  "when DrapeActive is true, and only then", "CarlaNet.Map.WorldPackage"),
     PackageEntry("map.tll.xml", "SUMO traffic light program XML", False,
                  "when the OpenStreetMap extract has ramp meters", "CarlaNet.Map.WorldPackage"),

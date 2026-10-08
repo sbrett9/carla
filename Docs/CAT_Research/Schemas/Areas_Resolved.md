@@ -6,7 +6,7 @@ extract, `<extract>.aoi.geojson`, in latitude and longitude. `areas.resolved.jso
 on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross, or pass near each
 one. The lane positions can be written straight into a SUMO `<stop>`.
 
-The areas file itself is described in [AreasOfInterest.md](AreasOfInterest.md), and its schema is
+The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md), and its schema is
 `area_of_interest.schema.json`. The package carries a copy
 of it, byte for byte, as `areas.aoi.geojson`.
 

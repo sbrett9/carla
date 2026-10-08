@@ -9,8 +9,8 @@ scenario author's names for its vehicle types and flows, and which vehicles it p
 - Schema id: `urn:carla-sumo-capture:schema:sumo-cot-events:1`
 
 The events have the shape of the live feed's events, described in
-[CotTelemetryStream.md](CotTelemetryStream.md); each one, taken alone, is also a valid datagram. The
-same run can also write a CSV, described in [SumoCotTable.md](SumoCotTable.md), and send the live
+[CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md); each one, taken alone, is also a valid datagram. The
+same run can also write a CSV, described in [SUMO_CoT_Table.md](SUMO_CoT_Table.md), and send the live
 feed.
 
 The schema includes `cot_event_body.xsd`, the event's own parts, which the datagram schema includes
@@ -79,7 +79,7 @@ vehicle class, from its types' `carla:class_id`, or a hand-written route file's 
 
 ### `<event>`
 
-Each event is a vehicle event as on [CotTelemetryStream.md](CotTelemetryStream.md), with these
+Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md), with these
 differences:
 
 - `uid` is `<uid prefix>-<SUMO id>`; the prefix is `SUMO-TRUTH` unless `--uid-prefix` sets it.

@@ -18,7 +18,7 @@ The same specification, seed and world give the same traffic. The lock is how a 
 files it is about to drive are the ones that were compiled.
 
 **This is not the run lock.** A capture run writes `run.lock.json` about one run of the scenario (see
-[Run lock](RunLock.md)).
+[Run lock](Run_Lock.md)).
 
 ## Who writes it and who reads it
 
@@ -49,7 +49,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `specification_sha256` | string, 64 hex digits | | SHA-256 of the specification's bytes. |
 | `compiler.name` | constant `"carlacontrol.ScenarioCompiler"` | | The compiler. |
 | `compiler.version` | string | | The compiler's release, without the commit, so recompiling at another commit of one release names the same compiler. |
-| `producer` | object | | What wrote the file, with the commit and the SUMO release that routed it. See [Run result](RunResult.md#the-producer-record). |
+| `producer` | object | | What wrote the file, with the commit and the SUMO release that routed it. See [Run result](Run_Result.md#the-producer-record). |
 | `files.routes` | `{path, sha256}` | | The route file, `<scenario_id>.rou.xml`. |
 | `files.config` | `{path, sha256}` | | The SUMO configuration, `<scenario_id>.sumocfg`. |
 | `files.network` | `{path, sha256}` | | The world's network, copied as `<MapName>.net.xml`. |

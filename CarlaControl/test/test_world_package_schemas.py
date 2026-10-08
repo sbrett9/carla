@@ -8,7 +8,7 @@ Checked here:
     the solar frame and a resolved area -- matches the schemas;
   * the world packages a world build wrote, under the main checkout's `Build/world-packages`, match
     the schemas, hold the entries `ENTRIES` says they hold and no other, all stored, and their
-    `bareearth.bin` is laid out as `BareEarthGrid.md` says: the header, its size, and the digests the
+    `bareearth.bin` is laid out as `Bare_Earth_Grid.md` says: the header, its size, and the digests the
     manifest records;
   * `WorldPackageReader` refuses an entry that departs from its schema, naming the departure, and still
     reads a manifest that carries only some fields; the SUMO bridge's grid reader refuses a grid that

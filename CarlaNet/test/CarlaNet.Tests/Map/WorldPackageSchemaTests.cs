@@ -6,7 +6,7 @@
 // names, each of the JSON type the schema gives it; the fields the schema requires are the record's
 // required members; and the record of what made the package has the schema's fields.
 //
-// The layout of bareearth.bin is described in words (Docs/CAT_Research/Schemas/BareEarthGrid.md) and
+// The layout of bareearth.bin is described in words (Docs/CAT_Research/Schemas/Bare_Earth_Grid.md) and
 // by carlacontrol.WorldPackageSchemas.BARE_EARTH_HEADER. The last test reads a written grid entry at
 // the byte offsets that page gives.
 using System;
@@ -215,7 +215,7 @@ public class WorldPackageSchemaTests : IDisposable
         byte[] grid = Entry(WritePackage(), "bareearth.bin");
         var (offset, ground) = Grids();
 
-        // Byte offsets as BareEarthGrid.md tabulates them; every value little-endian.
+        // Byte offsets as Bare_Earth_Grid.md tabulates them; every value little-endian.
         Assert.Equal(60 + 2 * 4 * Columns * Rows, grid.Length);
         Assert.Equal("1PWC", Encoding.ASCII.GetString(grid, 0, 4));
         Assert.Equal(0x43575031, BinaryPrimitives.ReadInt32LittleEndian(grid.AsSpan(0)));
