@@ -86,6 +86,13 @@ roads span more relief than the margin in one capture still bands correctly, bec
 follows the roads rather than a single height; `floor_hae` states the floor outright where a
 capture has no moving vehicle to measure it from.
 
+**And what made each sidecar.** A sidecar names its format on its container, `format_version`, and a
+recorder says what made it in a `<_producer>` first under the container: the tool and its release, the
+carlanet release, the server's build identity and the SUMO release. A sidecar of a format newer than
+this audit reads is refused by name rather than counted in part; one written before sidecars carried a
+version is version 1, and one with no `<_producer>` is counted, not faulted. The releases that made the
+capture are listed, so a capture that mixes two is plain to see.
+
 Counted, never corrected: the audit says what the sidecars hold and changes nothing.
 """
 from __future__ import annotations
@@ -95,6 +102,12 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from carlacontrol.FormatVersion import FormatVersion
+from carlacontrol.ProducerRecord import PRODUCER_ELEMENT, SERVER_ELEMENT
+
+# The newest sidecar format this audit reads (`CarlaNet.Recording.CotWriter.FormatVersion`).
+SIDECAR_FORMAT_VERSION = 1
 
 # A vehicle moving at least this fast (m/s) is on a road, which is what the ground band is drawn from.
 MOVING_MPS = 0.5
@@ -222,6 +235,10 @@ class SidecarAuditResult:
     sidecars_without_exposure: list[str] = field(default_factory=list)
     sidecars_with_malformed_exposure: list[str] = field(default_factory=list)
     cameras_with_several_exposures: list[str] = field(default_factory=list)
+    # What made the sidecars: how many sidecars each (tool, tool release, carlanet release, server
+    # release, SUMO release) wrote, and how many carry no record, written before sidecars had one.
+    producers: dict[tuple[str | None, ...], int] = field(default_factory=dict)
+    sidecars_without_producer: int = 0
 
     @property
     def cameras_with_exposure(self) -> list[str]:
@@ -368,11 +385,18 @@ class TruthSidecarAudit:
         return root.tag == "events" and root.get("source") == "truth"
 
     def audit(self, paths: Iterable[Path]) -> SidecarAuditResult:
-        """Read the sidecars and count what they hold."""
+        """Read the sidecars and count what they hold.
+
+        Raises:
+            FormatVersionError: a sidecar declares a format this audit does not read.
+        """
         result = SidecarAuditResult()
         for path in paths:
             root = ET.parse(path).getroot()
+            FormatVersion.check(path, "format_version", root.get("format_version"),
+                                SIDECAR_FORMAT_VERSION)
             result.sidecars += 1
+            self._producer(root, result)
             # The vehicle records are the truth of this tick and no other: a still whose own frame's
             # truth was not to be had is not written (2026-10-05), so there is no second frame to read.
             tick = root.get("tick")
@@ -414,6 +438,18 @@ class TruthSidecarAudit:
         result.actors_with_several_sumo_ids = {k: v for k, v in actor_to_sumo.items() if len(v) > 1}
         result.uids_lent_again_after_parking = self._lent_again_after_parking(result)
         return result
+
+    @staticmethod
+    def _producer(root: ET.Element, result: SidecarAuditResult) -> None:
+        """Count which release made one sidecar, or that it carries no record of it."""
+        producer = root.find(PRODUCER_ELEMENT)
+        if producer is None:
+            result.sidecars_without_producer += 1
+            return
+        server = producer.find(SERVER_ELEMENT)
+        key = (producer.get("tool"), producer.get("tool_version"), producer.get("carlanet"),
+               None if server is None else server.get("release"), producer.get("sumo"))
+        result.producers[key] = result.producers.get(key, 0) + 1
 
     @staticmethod
     def _supervision(path: Path, root: ET.Element, result: SidecarAuditResult) -> bool:
@@ -613,6 +649,12 @@ class TruthSidecarAudit:
         """The counts, a line each, for a person."""
         total = len(result.records)
         lines = [f"{result.sidecars} truth sidecars, {total} vehicle records"]
+        made_by = "; ".join(
+            f"{tool} {tool_version}, carlanet {carlanet}, server {server or '-'}, SUMO {sumo or '-'}: {count}"
+            for (tool, tool_version, carlanet, server, sumo), count in sorted(
+                result.producers.items(), key=lambda item: tuple(str(part) for part in item[0])))
+        lines.append(f"  made by: {made_by or 'no sidecar says'}; with no record of it: "
+                     f"{result.sidecars_without_producer}")
         lines.append(f"  listing their frame's rendered set: {result.sidecars_listing_rendered}; "
                      f"listing none because the frame's set was no longer held: "
                      f"{result.sidecars_listing_unknown}")

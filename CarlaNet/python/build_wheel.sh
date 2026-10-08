@@ -71,8 +71,17 @@ fi
 
 mkdir -p "$dlls_dir"
 
+# The distribution's release version, as setup.py stamps it into the wheel: given to the assemblies as
+# well, so the DLLs inside the wheel and the wheel itself carry one string (Directory.Build.props).
+release_version="$("$python_bin" "$carlanet_root/../Util/ReleaseVersion.py")"
+if [ -z "$release_version" ]; then
+    echo "[build_wheel] Util/ReleaseVersion.py printed no release version" >&2
+    exit 1
+fi
+echo "[build_wheel] release    : $release_version"
+
 echo "[build_wheel] running dotnet publish -> $dlls_dir"
-dotnet publish "$csproj" -c Release -o "$dlls_dir"
+dotnet publish "$csproj" -c Release -o "$dlls_dir" "-p:CarlaReleaseVersion=$release_version"
 
 # Shim is python/carlanet/__init__.py (canonical); no stray carlanet.py is published.
 

@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carlacontrol"
-version = "0.1.0"
+# The release version is stamped by setup.py from the top-level CMakeLists.txt.
+dynamic = ["version"]
 description = "High-level control and automation tools for CARLA simulator"
 requires-python = ">=3.11"
 license = {text = "Proprietary - Sierra Nevada Corporation"}

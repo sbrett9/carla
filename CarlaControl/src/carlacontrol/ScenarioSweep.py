@@ -49,7 +49,8 @@ from pathlib import Path
 
 from carlacontrol.CivilTimeResolver import CivilTimeResolver
 from carlacontrol.CompileFindings import CompileFindings
-from carlacontrol.ScenarioCompiler import ScenarioCompiler
+from carlacontrol.ProducerRecord import ProducerRecord
+from carlacontrol.ScenarioCompiler import COMPILER, ScenarioCompiler
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioSchema import ScenarioSchema
 
@@ -114,8 +115,10 @@ class ScenarioSweep:
         self.out_dir = Path(out_dir)
         self.findings = CompileFindings()
         sweep = json.loads(self.sweep_path.read_text(encoding="utf-8"))
-        index = {"sweep_version": SWEEP_VERSION, "sweep_id": sweep.get("sweep_id"),
-                 "members": [], "pairs": [], "findings": []}
+        # What made the index: the compiler every member went through, and the SUMO that routed them.
+        index = {"sweep_version": SWEEP_VERSION,
+                 "producer": ProducerRecord.record(COMPILER, sumo=self.installation.version),
+                 "sweep_id": sweep.get("sweep_id"), "members": [], "pairs": [], "findings": []}
         for problem in ScenarioSchema.validate_against(sweep, SWEEP_SCHEMA):
             self.findings.refuse(53, "sweep", problem)
         if self.findings.refused:

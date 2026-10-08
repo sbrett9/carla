@@ -37,6 +37,11 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from carlacontrol.FormatVersion import FormatVersion
+
+# The newest <events> file format this reads: a truth sidecar's and the SUMO bridge's are both 1.
+EVENTS_FORMAT_VERSION = 1
+
 # Fields that say what a vehicle is called and what it looks like. A planted vehicle that takes a
 # value here which nothing else takes has been labelled, whatever the scenario intended.
 LABEL_FIELDS = ("type_id", "special_type", "role_name", "marked", "color", "cot_type")
@@ -106,6 +111,9 @@ class CorpusLeakValidator:
         """
         parser = ET.iterparse(path, events=("start", "end"))
         _, root = next(parser)
+        # A truth sidecar and the SUMO bridge's file name their format on <events>; a newer one is
+        # refused rather than checked in part.
+        FormatVersion.check(path, "format_version", root.get("format_version"), EVENTS_FORMAT_VERSION)
         for kind, element in parser:
             if kind != "end" or element.tag != "event":
                 continue

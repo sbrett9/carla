@@ -35,6 +35,13 @@ import json
 import zipfile
 from pathlib import Path
 
+from carlacontrol.FormatVersion import FormatVersion
+
+# The newest `world.json` format this reader reads: `FormatVersion` in the manifest, as
+# `CarlaNet.Map.WorldPackage.FormatVersion` writes it. A package written before the manifest carried
+# one reads as version 1.
+MANIFEST_FORMAT_VERSION = 1
+
 # The schema shape each reference-set entry must declare to be read. A reader never reads one in part.
 IMPLEMENTED_VERSIONS = {
     "areas.resolved.json": ("resolved_version", 1),
@@ -65,6 +72,16 @@ class WorldPackageReader:
                 raise ValueError(f"not a world package, no {self.MANIFEST_ENTRY}: {self.path}")
             self.manifest: dict = json.loads(package.read(self.MANIFEST_ENTRY))
             self._entries = names
+        # A newer manifest is refused for what it is, before any field it may have moved is read.
+        self.format_version = FormatVersion.check(f"{self.path} ({self.MANIFEST_ENTRY})", "FormatVersion",
+                                                  self.manifest.get("FormatVersion"),
+                                                  MANIFEST_FORMAT_VERSION)
+
+    @property
+    def producer(self) -> dict | None:
+        """What made the package (`carlacontrol.ProducerRecord`'s shape); None on one built before it
+        was recorded."""
+        return self.manifest.get("Producer")
 
     @property
     def map_name(self) -> str:

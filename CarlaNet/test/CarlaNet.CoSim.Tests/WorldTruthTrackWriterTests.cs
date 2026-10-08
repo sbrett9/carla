@@ -154,6 +154,13 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
         using JsonDocument summary = ReadSummary(track);
         JsonElement root = summary.RootElement;
         Assert.Equal(2, root.GetProperty("world_truth_track_version").GetInt32());
+        // What made the track, in the summary so the CSV's header stays its columns: no world here, so no
+        // server, and the SUMO release the session launched.
+        JsonElement producer = root.GetProperty("producer");
+        Assert.Equal(CarlaNet.Types.Provenance.Producer.CarlaNetVersion, producer.GetProperty("carlanet").GetString());
+        Assert.Equal(JsonValueKind.Null, producer.GetProperty("server").ValueKind);
+        Assert.False(string.IsNullOrEmpty(producer.GetProperty("sumo").GetString()));
+        Assert.False(string.IsNullOrEmpty(producer.GetProperty("written_utc").GetString()));
         Assert.Equal("world_truth_track.csv", root.GetProperty("track").GetString());
         Assert.Equal(WorldTruthTrackWriter.Columns,
                      root.GetProperty("columns").EnumerateArray().Select(column => column.GetString()));

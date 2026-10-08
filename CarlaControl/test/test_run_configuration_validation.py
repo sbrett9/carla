@@ -543,6 +543,10 @@ def test_a_lock_of_another_version_is_refused(layout):
     write_scenario_package(layout.scenario_root, lock_version=2)
     *_, findings, _, _ = offline(layout)
     assert 6 in checks(findings)
+    # Named by its file, its version and what this tool reads, and said to be a newer release's.
+    message = only(findings, 6).message
+    assert ".lock.json declares lock_version 2, and this tool reads lock_version 1" in message
+    assert "written by a newer release" in message
 
 
 SKIPPED_DRY_RUN = {"ran": False, "reason": "skipped at the author's request: nothing established that "

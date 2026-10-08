@@ -17,6 +17,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using CarlaNet.Map.WorldPackage;
+using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.Tests.Map;
 
@@ -134,6 +135,8 @@ public class WorldPackageTests : IDisposable
             NetconvertArgv = ["--osm-files", "TestArea.osm", "--output-file", "TestArea.net.xml"],
             NetconvertPath = @"C:\sumo\bin\netconvert.exe",
             NetconvertVersion = "Eclipse SUMO netconvert Version 1.27.0",
+            Producer = Producer.Now(ServerBuildIdentity.NotAnswered("a server built before the call", "0.10.0", "1.0"),
+                                    "1.27.0"),
         };
 
         WorldPackage.Write(_dir, manifest, Xodr, Net, offset, ground);
@@ -229,6 +232,60 @@ public class WorldPackageTests : IDisposable
         var read = WorldPackage.ReadManifest(Pkg);
         Assert.Equal(string.Empty, read.BareEarthOffsetSha1);
         Assert.Equal(string.Empty, read.BareEarthDtmSha1);
+    }
+
+    [Fact]
+    public void AWrittenPackageNamesItsFormatAndWhatMadeIt()
+    {
+        WriteWorld();
+
+        System.Text.Json.Nodes.JsonObject written = WrittenManifest();
+        Assert.Equal(1, (int)written["FormatVersion"]!);
+        // The record keeps its own snake_case shape inside the manifest's PascalCase.
+        Assert.Equal(Producer.CarlaNetVersion, (string?)written["Producer"]!["carlanet"]);
+        Assert.NotNull(written["Producer"]!["written_utc"]);
+
+        WorldPackageManifest read = WorldPackage.ReadManifest(Pkg);
+        Assert.Equal(WorldPackage.FormatVersion, read.FormatVersion);
+        Assert.Equal(Producer.CarlaNetVersion, read.Producer!.CarlaNet);
+    }
+
+    [Fact]
+    public void APackageWrittenBeforeItsFormatWasRecordedReadsAsVersionOneWithNoProducer()
+    {
+        WriteWorld();
+        System.Text.Json.Nodes.JsonObject manifest = WrittenManifest();
+        manifest.Remove("FormatVersion");
+        manifest.Remove("Producer");
+        Publish(("world.json", Utf8(manifest.ToJsonString())));
+
+        WorldPackageManifest read = WorldPackage.ReadManifest(Pkg);
+        Assert.Equal(1, read.FormatVersion);
+        Assert.Null(read.Producer);
+        Assert.Equal("TestArea", read.MapName);
+    }
+
+    [Fact]
+    public void AManifestOfANewerFormatIsRefusedByNameBeforeAnyFieldIsRead()
+    {
+        WriteWorld();
+        System.Text.Json.Nodes.JsonObject manifest = WrittenManifest();
+        manifest["FormatVersion"] = 2;
+        // A field whose shape moved: refused for the version it declares, not for this.
+        manifest["OriginLatitude"] = "38.91 N";
+        Publish(("world.json", Utf8(manifest.ToJsonString())));
+
+        InvalidDataException refused = Assert.Throws<InvalidDataException>(() => WorldPackage.ReadManifest(Pkg));
+        Assert.Contains(Pkg, refused.Message);
+        Assert.Contains("declares FormatVersion 2", refused.Message);
+        Assert.Contains("supports FormatVersion 1 and earlier", refused.Message);
+    }
+
+    private System.Text.Json.Nodes.JsonObject WrittenManifest()
+    {
+        using var archive = ZipFile.OpenRead(Pkg);
+        using var reader = new StreamReader(archive.GetEntry("world.json")!.Open());
+        return System.Text.Json.Nodes.JsonNode.Parse(reader.ReadToEnd())!.AsObject();
     }
 
     [Fact]

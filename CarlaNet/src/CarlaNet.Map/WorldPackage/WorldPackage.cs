@@ -55,6 +55,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.Map.WorldPackage;
 
@@ -63,12 +64,28 @@ namespace CarlaNet.Map.WorldPackage;
 /// plus enough provenance to identify what produced it.
 /// </summary>
 /// <remarks>
-/// <see cref="HeightAlignMode"/> and <see cref="HeightAlignOffsetMeters"/> describe the constant-shift
+/// <para><see cref="HeightAlignMode"/> and <see cref="HeightAlignOffsetMeters"/> describe the constant-shift
 /// modes; when <see cref="DrapeActive"/> the shift varies per cell and the grids in the companion
-/// binary are authoritative instead.
+/// binary are authoritative instead.</para>
+///
+/// <para>The manifest names its own format (<see cref="FormatVersion"/>) and what made the package
+/// (<see cref="Producer"/>): the tool and its release, the carlanet release and the server's build
+/// identity, so a package can be traced to the release of the distribution that built it.</para>
 /// </remarks>
 public sealed record WorldPackageManifest
 {
+    /// <summary>
+    /// The format of <c>world.json</c> (<see cref="WorldPackage.FormatVersion"/>). A package written
+    /// before the manifest carried one is version 1, which is what an absent field reads as.
+    /// </summary>
+    public int FormatVersion { get; init; } = WorldPackage.FormatVersion;
+
+    /// <summary>
+    /// What made the package (<see cref="ProducerRecord"/>), written by <see cref="WorldPackage.Write"/>.
+    /// Null on a package written before it was recorded.
+    /// </summary>
+    public ProducerRecord? Producer { get; init; }
+
     public required string MapName { get; init; }
 
     // Datum. Local (0,0) is pinned to this latitude/longitude, and local Z 0 is this height.
@@ -219,6 +236,12 @@ public sealed record WorldPackageManifest
 /// </summary>
 public static class WorldPackage
 {
+    /// <summary>
+    /// The format of <c>world.json</c> this writes, and the newest <see cref="ReadManifest"/> reads:
+    /// <c>FormatVersion</c> in the manifest. Independent of the grid binary's own version, below.
+    /// </summary>
+    public const int FormatVersion = 1;
+
     /// "CWP1" — the grid binary's magic number; the trailing digit is the format version.
     private const int GridMagic = 0x43575031;
 
@@ -305,9 +328,13 @@ public static class WorldPackage
             }
         }
 
-        // The digests describe the grids this call writes, whatever the caller's manifest carried.
+        // The digests describe the grids this call writes, whatever the caller's manifest carried; the
+        // format is the one this writer writes; and a package always says what made it, the caller's
+        // record where it gave one, which names the server it built the world against.
         manifest = manifest with
         {
+            FormatVersion = FormatVersion,
+            Producer = manifest.Producer ?? Producer.Now(),
             BareEarthOffsetSha1 = manifest.DrapeActive ? HashGrid(offsetMeters) : string.Empty,
             BareEarthDtmSha1 = manifest.DrapeActive ? HashGrid(bareEarthDtmMeters) : string.Empty,
         };
@@ -372,14 +399,35 @@ public static class WorldPackage
         writer.Write(content);
     }
 
-    /// <summary>Read a package's manifest. Throws if it is absent or unparseable.</summary>
+    /// <summary>
+    /// Read a package's manifest. Throws if it is absent or unparseable, or declares a
+    /// <c>FormatVersion</c> newer than <see cref="FormatVersion"/>; one that declares none is version 1.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The manifest is absent or empty, or is a format this reader
+    /// does not know: newer than it supports, or not an integer.</exception>
     public static WorldPackageManifest ReadManifest(string packagePath)
     {
         using var archive = ZipFile.OpenRead(packagePath);
         ZipArchiveEntry entry = archive.GetEntry(ManifestEntry)
             ?? throw new InvalidDataException($"not a world package, no {ManifestEntry}: {packagePath}");
         using var reader = new StreamReader(entry.Open(), new UTF8Encoding(false));
-        return JsonSerializer.Deserialize<WorldPackageManifest>(reader.ReadToEnd(), ManifestJson)
+        string text = reader.ReadToEnd();
+
+        // The version is read before the rest, so a newer manifest is refused for what it is rather than
+        // for whichever of its fields first fails to bind.
+        using (JsonDocument document = JsonDocument.Parse(text))
+        {
+            string file = $"{packagePath} ({ManifestEntry})";
+            int? declared = FormatVersions.Declared(document.RootElement, file, nameof(WorldPackageManifest.FormatVersion),
+                                                    out string? malformed);
+            if ((malformed ?? FormatVersions.Refusal(file, nameof(WorldPackageManifest.FormatVersion), declared,
+                                                     FormatVersion)) is { } refusal)
+            {
+                throw new InvalidDataException(refusal);
+            }
+        }
+
+        return JsonSerializer.Deserialize<WorldPackageManifest>(text, ManifestJson)
             ?? throw new InvalidDataException($"empty world manifest: {packagePath}");
     }
 

@@ -15,10 +15,13 @@ namespace CarlaNet.CoSim;
 /// needs the last few: an image arrives within a handful of ticks of its frame, and a declaration the
 /// recorder never asks for is dropped once it is <see cref="Capacity"/> frames old.</para>
 /// </remarks>
-public sealed class IlluminationFrames : IIlluminationSource
+public sealed class IlluminationFrames : IIlluminationSource, ISumoDriven
 {
     /// <summary>Frames kept: seconds of history at a 0.05 s tick, a few tens of kilobytes.</summary>
     public const int Capacity = 256;
+
+    /// <inheritdoc/>
+    public string? SumoRelease { get; internal set; }
 
     private readonly object _lock = new();
     private readonly Dictionary<ulong, IlluminationDeclaration> _byFrame = [];

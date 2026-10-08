@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
 
@@ -37,6 +38,9 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
 
     /// <inheritdoc/>
     public LoadedWorld DescribeLoadedWorld() => Guard(nameof(DescribeLoadedWorld), _world.DescribeLoadedWorld);
+
+    /// <inheritdoc/>
+    public ServerBuildIdentity DescribeServerBuild() => Guard(nameof(DescribeServerBuild), _world.DescribeServerBuild);
 
     /// <inheritdoc/>
     public bool AdoptBareEarthGrids(string packagePath) =>

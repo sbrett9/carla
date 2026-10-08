@@ -10,11 +10,13 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using CarlaNet.Recording;
 using CarlaNet.Sensors;
 using CarlaNet.Transport;
 using CarlaNet.Transport.MsgPackRpc.Server;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Tests.Recording;
@@ -60,6 +62,18 @@ public sealed class FrameRecorderSolarBlockTests : IAsyncLifetime
                              () => Ok(new EpisodeInfo(1UL, new RawToken(_streams.Token(ObserverStream)))));
         _rpc.RegisterHandler("get_bare_earth_reference",
                              () => Ok(new[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }));
+        _rpc.RegisterHandler("get_build_identity", () => Ok(new Dictionary<string, string>
+        {
+            ["identity_version"] = "1",
+            ["release"] = "0.10.0",
+            ["world_interface"] = "1.0",
+            ["build"] = "editor",
+            ["configuration"] = "Development",
+            ["carla_commit"] = "025443a83eaf1bb82f18795d608fca50eb77a452",
+            ["content_commit"] = "unknown",
+            ["engine_commit"] = "unknown",
+            ["commits_from"] = "compiled",
+        }));
         await _rpc.StartAsync();
         _client = new CarlaClient("127.0.0.1", port, Patience);
     }
@@ -110,6 +124,64 @@ public sealed class FrameRecorderSolarBlockTests : IAsyncLifetime
         Assert.Equal(1, recorder.SolarBlockMissing);
     }
 
+    [Fact]
+    public async Task A_Still_Says_What_Made_It_In_Its_Sidecar_And_Its_Capture_Chunk_Alike()
+    {
+        await Observe(100, Dawn);
+
+        (FrameRecorder recorder, string stem) = await RecordOneImage(100, sumoVersion: "1.27.0");
+
+        Assert.True(recorder.ServerIdentity.Available);
+        XElement events = XDocument.Load(stem + ".xml").Root!;
+        Assert.Equal("1", (string?)events.Attribute("format_version"));
+        // First under the container, so it is the first thing a reader meets.
+        XElement producer = events.Elements().First();
+        Assert.Equal("_producer", producer.Name.LocalName);
+        Assert.Equal(Producer.CarlaNetVersion, (string?)producer.Attribute("carlanet"));
+        Assert.Equal("1.27.0", (string?)producer.Attribute("sumo"));
+        Assert.NotNull(producer.Attribute("tool"));
+        XElement server = Assert.Single(producer.Elements("_server"));
+        Assert.Equal("editor", (string?)server.Attribute("build"));
+        Assert.Equal("compiled", (string?)server.Attribute("commits_from"));
+        Assert.Equal("025443a83eaf1bb82f18795d608fca50eb77a452", (string?)server.Attribute("carla_commit"));
+
+        // The PNG keeps its chunks; the capture chunk carries its format and the same record, and every
+        // other chunk its format.
+        Dictionary<string, string> chunks = TextChunks(stem + ".png");
+        Assert.Equal(["carla:capture", "carla:solar"], chunks.Keys.Order().ToArray());
+        using JsonDocument capture = JsonDocument.Parse(chunks["carla:capture"]);
+        Assert.Equal(1, capture.RootElement.GetProperty("format_version").GetInt32());
+        Assert.Equal(100UL, capture.RootElement.GetProperty("tick").GetUInt64());
+        ProducerRecord stillRecord = ProducerRecord.ReadJson(capture.RootElement.GetProperty("producer"));
+        Assert.Equal((string?)producer.Attribute("written_utc"), ProducerRecord.Iso(stillRecord.WrittenUtc!.Value));
+        Assert.Equal("1.27.0", stillRecord.Sumo);
+        Assert.Equal("compiled", stillRecord.Server!.CommitsFrom);
+        using JsonDocument solar = JsonDocument.Parse(chunks["carla:solar"]);
+        Assert.Equal(1, solar.RootElement.GetProperty("format_version").GetInt32());
+    }
+
+    /// Every tEXt chunk of a PNG, by keyword.
+    private static Dictionary<string, string> TextChunks(string path)
+    {
+        byte[] png = File.ReadAllBytes(path);
+        var chunks = new Dictionary<string, string>();
+        for (int at = 8; at + 8 <= png.Length;)
+        {
+            int length = BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(at, 4));
+            string type = Encoding.ASCII.GetString(png, at + 4, 4);
+            if (type == "tEXt")
+            {
+                ReadOnlySpan<byte> data = png.AsSpan(at + 8, length);
+                int separator = data.IndexOf((byte)0);
+                chunks[Encoding.Latin1.GetString(data[..separator])] = Encoding.Latin1.GetString(data[(separator + 1)..]);
+            }
+
+            at += 12 + length;
+        }
+
+        return chunks;
+    }
+
     /// The world observer streams <paramref name="frame"/> with the given sun, or with none, and the
     /// client has it before this returns.
     private async Task Observe(ulong frame, double[]? sun)
@@ -122,10 +194,10 @@ public sealed class FrameRecorderSolarBlockTests : IAsyncLifetime
 
     /// Records the camera, streams it one image of <paramref name="frame"/>, and returns the flushed
     /// recorder and the path of the capture without its extension.
-    private async Task<(FrameRecorder Recorder, string Stem)> RecordOneImage(ulong frame)
+    private async Task<(FrameRecorder Recorder, string Stem)> RecordOneImage(ulong frame, string? sumoVersion = null)
     {
         var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0,
-                                         cameraName: RecordedCamera);
+                                         cameraName: RecordedCamera, sumoVersion: sumoVersion);
         try
         {
             await _streams.SendAsync(CameraStream, frame, frame * DeltaSeconds, default, Image());

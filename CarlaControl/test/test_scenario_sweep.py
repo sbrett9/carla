@@ -96,6 +96,9 @@ def test_sweeping_the_date_moves_the_sun_and_leaves_the_traffic_byte_identical(w
     index = sweep(world, installation, tmp_path, "seasons", illumination="vary",
                   axes=[{"path": "epoch.date", "values": ["2026-03-21", "2026-06-21", "2026-09-21"]}])
     assert index["outcome"] == "compiled", index["findings"]
+    # The index says what made it: the compiler every member went through, and the SUMO that routed them.
+    assert (index["producer"]["tool"], index["producer"]["sumo"]) == ("carlacontrol.ScenarioCompiler",
+                                                                      installation.version)
     members = index["members"]
     elevations = [m["windows"][0]["sun_open"]["elevation_deg"] for m in members]
     assert len({round(e, 1) for e in elevations}) == 3, elevations

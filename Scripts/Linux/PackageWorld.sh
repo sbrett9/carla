@@ -233,6 +233,7 @@ cat > "$staging/world.json" <<EOF
   "worldInterfaceMajor": $iface_major,
   "worldInterfaceMinor": $iface_minor,
   "basedOnRelease": "$based_on_release",
+  "releaseVersion": "$(for part in MAJOR MINOR PATCH; do sed -nE "s/^[[:space:]]*set[[:space:]]*\([[:space:]]*CARLA_VERSION_${part}[[:space:]]+([0-9]+)[[:space:]]*\).*/\1/p" "$carla_root/CMakeLists.txt" | head -1; done | paste -sd. -)",
   "config": "$config",
   "platform": "$platform",
   "carlaGitHash": "$(git_hash "$carla_root")",

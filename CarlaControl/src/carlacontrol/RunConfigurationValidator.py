@@ -170,9 +170,15 @@ class RunConfigurationValidator:
                       findings: RunConfigurationFindings) -> None:
         version = effective.scenario.lock_version
         if version not in READABLE_LOCK_VERSIONS:
+            # Every lock the compiler wrote declares its version, so one with none is not a lock.
+            newer = isinstance(version, int) and not isinstance(version, bool) \
+                and version > max(READABLE_LOCK_VERSIONS)
             findings.refuse(6, f"scenario {effective.scenario.describe()}",
-                            f"lock_version {version!r} is not one this tool reads "
-                            f"({', '.join(map(str, READABLE_LOCK_VERSIONS))})")
+                            f"{effective.scenario.lock_path} declares lock_version {version!r}, and "
+                            f"this tool reads lock_version "
+                            f"{', '.join(map(str, READABLE_LOCK_VERSIONS))}"
+                            + ("; it was written by a newer release, so run it with that release's "
+                               "tools" if newer else ""))
 
     # -- check 5 ----------------------------------------------------------------------------------
     @staticmethod

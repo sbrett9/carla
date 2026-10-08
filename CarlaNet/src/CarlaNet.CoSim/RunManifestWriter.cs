@@ -6,6 +6,7 @@ using System.Text.Json;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
 using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Supervision;
 
 namespace CarlaNet.CoSim;
@@ -31,7 +32,8 @@ namespace CarlaNet.CoSim;
 /// frames that drew its vehicle; a solar row with the instant of the frame whose sun it reads, to the
 /// microsecond.</para>
 /// <list type="table">
-/// <item><term><c>manifest_opened</c></term><description>First, before anything is rendered: the header
+/// <item><term><c>manifest_opened</c></term><description>First, before anything is rendered: the manifest's
+/// format (<c>manifest_version</c>) and what made it (<c>producer</c>, <see cref="ProducerRecord"/>), the header
 /// the caller handed over verbatim (<c>run</c>) -- the run's and the session's identity, the channels --
 /// beside what the session established itself: the scenario's files and digests from its compile lock,
 /// the supervision plan and its vocabulary, the SUMO settings the session checked and runs under, the
@@ -675,6 +677,10 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         WriteRow(OpenedRow, json =>
         {
             json.WriteNumber("manifest_version", FormatVersion);
+            // What made the manifest: the tool and its release, the carlanet release, the server's
+            // build identity and the SUMO release the session launched.
+            json.WritePropertyName("producer");
+            Producer.Now(report.Server, report.Sumo.Release).WriteJson(json);
             json.WriteString("opened_wall_utc", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
             json.WritePropertyName("run");
             if (_options.RunManifestHeader is { } header)

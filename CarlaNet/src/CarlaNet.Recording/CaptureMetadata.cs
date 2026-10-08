@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.Recording;
 
@@ -22,6 +23,13 @@ namespace CarlaNet.Recording;
 /// <param name="ScenarioId">The scenario being executed, where one is driving the run.</param>
 /// <param name="Seed">Seed the run was started with, for reproducing it. Numeric because it seeds
 /// pseudo-random generators; typing it so removes any need to validate it downstream.</param>
+/// <remarks>
+/// The <c>carla:capture</c> chunk also carries its <c>format_version</c> and, where the recorder gave one,
+/// what made the still (<see cref="Producer"/>, <c>producer</c>): the chunk that says which capture a
+/// still is says what wrote it too, so a still separated from everything else can be traced to the
+/// release of the distribution that made it, and the PNG keeps its four chunks
+/// (<c>04_Contracts.md</c> rev 42).
+/// </remarks>
 public sealed record CaptureIdentity(
     ulong Tick,
     double SimTimeSeconds,
@@ -29,6 +37,12 @@ public sealed record CaptureIdentity(
     string? ScenarioId = null,
     long? Seed = null)
 {
+    /// <summary>The format of the <c>carla:capture</c> chunk, written in it as <c>format_version</c>.</summary>
+    public const int FormatVersion = 1;
+
+    /// <summary>What made the still, written in its <c>carla:capture</c> chunk; null writes none.</summary>
+    public ProducerRecord? Producer { get; init; }
+
     /// PNG tEXt chunk carrying the capture identity, so a still is self-describing even once separated
     /// from its sidecar.
     public IEnumerable<(string Keyword, string Text)> PngTextChunks()
@@ -40,12 +54,15 @@ public sealed record CaptureIdentity(
     public string ToJson()
     {
         var sb = new StringBuilder("{");
-        sb.Append("\"tick\":").Append(Tick.ToString(CultureInfo.InvariantCulture));
+        sb.Append("\"format_version\":").Append(FormatVersion.ToString(CultureInfo.InvariantCulture));
+        sb.Append(",\"tick\":").Append(Tick.ToString(CultureInfo.InvariantCulture));
         sb.Append(",\"sim_time_s\":").Append(F(SimTimeSeconds));
         Append(sb, "run_id", RunId);
         Append(sb, "scenario_id", ScenarioId);
         if (Seed.HasValue)
             sb.Append(",\"seed\":").Append(Seed.Value.ToString(CultureInfo.InvariantCulture));
+        if (Producer is not null)
+            sb.Append(",\"producer\":").Append(Producer.ToJson());
         return sb.Append('}').ToString();
     }
 

@@ -9,11 +9,25 @@
 #include "Developer/Settings/Public/ISettingsContainer.h"
 #include "Interfaces/IPluginManager.h"
 #include "Engine/World.h"        // GWorld, when refusing to unmount the live world
+#include "Misc/App.h"            // FApp::GetBuildConfiguration
 #include "Misc/ConfigCacheIni.h" // GConfig
+#include "Misc/FileHelper.h"     // FFileHelper::LoadFileToStringArray
 #include "Misc/PackageName.h"    // FPackageName::MountPointExists
 #include "Misc/Paths.h"          // FPaths::ProjectConfigDir
 #include "UObject/Package.h"     // UWorld::GetOutermost
 #include <util/ue-header-guard-end.h>
+
+// The CARLA commit this build is made from, written by LibCarla's build (LibCarla/WriteBuildCommit.cmake)
+// beside Version.h. A tree whose LibCarla was last built before that step existed has no such header,
+// and the commit is then unknown rather than missing from the build.
+#if defined(__has_include)
+#if __has_include(<carla/BuildCommit.h>)
+#include <carla/BuildCommit.h>
+#endif
+#endif
+#ifndef CARLA_BUILD_COMMIT
+#define CARLA_BUILD_COMMIT "unknown"
+#endif
 
 #define LOCTEXT_NAMESPACE "FCarlaModule"
 
@@ -42,6 +56,115 @@ FString GetCarlaWorldInterfaceVersion()
 		return TEXT("0.0");
 	}
 	return FString::Printf(TEXT("%d.%d"), Major, Minor);
+}
+
+namespace
+{
+	const TCHAR* const BuildIdentityUnknown = TEXT("unknown");
+
+#if !WITH_EDITOR
+	/**
+	 * The VERSION file a cooked package carries, or an empty string where there is none.
+	 *
+	 * The package step writes it at the archive root, one level above the platform folder that holds
+	 * the launcher: Build/Package/Carla-<ver>-<platform>-<config>/VERSION beside Windows/ or Linux/, and
+	 * MakeDistribution copies it beside CarlaServer/. FPaths::RootDir() is that platform folder, so the
+	 * file is its parent's; the folder itself is looked in too, for a package someone flattened.
+	 */
+	FString FindPackageVersionFile()
+	{
+		const FString Root = FPaths::ConvertRelativePathToFull(FPaths::RootDir());
+		TArray<FString> Candidates;
+		Candidates.Add(FPaths::Combine(Root, TEXT(".."), TEXT("VERSION")));
+		Candidates.Add(FPaths::Combine(Root, TEXT("VERSION")));
+		for (FString& Candidate : Candidates)
+		{
+			FPaths::CollapseRelativeDirectories(Candidate);
+			if (FPaths::FileExists(Candidate))
+			{
+				return Candidate;
+			}
+		}
+		return FString();
+	}
+
+	/**
+	 * The three commits a VERSION file names, by the keys the identity reports them under. A line the
+	 * file leaves empty -- git could not be asked when the package was made -- stays unknown.
+	 */
+	bool ReadPackageVersionFile(const FString& Path, TMap<FString, FString>& InOutIdentity)
+	{
+		TArray<FString> Lines;
+		if (!FFileHelper::LoadFileToStringArray(Lines, *Path))
+		{
+			return false;
+		}
+		TMap<FString, FString> KeyOf;
+		KeyOf.Add(TEXT("Carla git hash"), TEXT("carla_commit"));
+		KeyOf.Add(TEXT("Content git hash"), TEXT("content_commit"));
+		KeyOf.Add(TEXT("UnrealEngine git hash"), TEXT("engine_commit"));
+		for (const FString& Line : Lines)
+		{
+			FString Name;
+			FString Value;
+			if (!Line.Split(TEXT(":"), &Name, &Value))
+			{
+				continue;
+			}
+			Name.TrimStartAndEndInline();
+			Value.TrimStartAndEndInline();
+			if (const FString* Key = KeyOf.Find(Name))
+			{
+				if (!Value.IsEmpty())
+				{
+					InOutIdentity.Add(*Key, Value);
+				}
+			}
+		}
+		return true;
+	}
+#endif // !WITH_EDITOR
+}
+
+TMap<FString, FString> GetCarlaBuildIdentity()
+{
+	TMap<FString, FString> Identity;
+	Identity.Add(TEXT("world_interface"), GetCarlaWorldInterfaceVersion());
+	Identity.Add(TEXT("configuration"), LexToString(FApp::GetBuildConfiguration()));
+	Identity.Add(TEXT("carla_commit"), BuildIdentityUnknown);
+	Identity.Add(TEXT("content_commit"), BuildIdentityUnknown);
+	Identity.Add(TEXT("engine_commit"), BuildIdentityUnknown);
+	Identity.Add(TEXT("commits_from"), TEXT("none"));
+
+	// Whether this is the editor's binary or a cooked package is decided when it is compiled, so an
+	// editor run with -game, which has no package and no VERSION, still says editor.
+#if WITH_EDITOR
+	Identity.Add(TEXT("build"), TEXT("editor"));
+	// The editor never reads a VERSION file: its root is the engine's, and a file found above that
+	// would describe something else.
+#else
+	Identity.Add(TEXT("build"), TEXT("package"));
+	// A package names all three commits in the VERSION file it was made with.
+	const FString VersionFile = FindPackageVersionFile();
+	if (!VersionFile.IsEmpty() && ReadPackageVersionFile(VersionFile, Identity))
+	{
+		Identity.Add(TEXT("commits_from"), TEXT("version_file"));
+		return Identity;
+	}
+	UE_LOG(LogCarla, Warning,
+		TEXT("[Carla] this package carries no readable VERSION file beside %s; its content and engine "
+			 "commits are unknown."), *FPaths::ConvertRelativePathToFull(FPaths::RootDir()));
+#endif
+
+	// What was compiled in: the CARLA commit LibCarla's build recorded. Content and engine are not
+	// compiled into the binary, so nothing here can say which were loaded.
+	const FString Compiled = UTF8_TO_TCHAR(CARLA_BUILD_COMMIT);
+	if (!Compiled.IsEmpty() && Compiled != BuildIdentityUnknown)
+	{
+		Identity.Add(TEXT("carla_commit"), Compiled);
+		Identity.Add(TEXT("commits_from"), TEXT("compiled"));
+	}
+	return Identity;
 }
 
 namespace

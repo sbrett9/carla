@@ -358,6 +358,7 @@ class _Keyed(dict):
 
 class _Sumo:
     Installation = "fake SUMO 1.27.0"
+    Release = "1.27.0"
     Verdict = "agrees with the world's converter"
     Agrees = True
 
@@ -985,6 +986,13 @@ class FakeServer:
         self.names_cameras = True
         self.cameras_named = 0
         self.cameras_of_other_clients: dict[int, str] = {}
+        # What the server says it was built from, as `Client.get_build_identity` hands it over: a
+        # package, its commits read from its VERSION file.
+        self.build_identity = {
+            "available": True, "release": "0.10.0", "world_interface": "1.0", "build": "package",
+            "configuration": "Shipping", "carla_commit": "025443a83eaf1bb82f18795d608fca50eb77a452",
+            "content_commit": "6bcd042a91a54d9a2f2f002869fbf1c75f3768f4",
+            "engine_commit": "e5e266de195a2400a6a74180402fb1a3e8f75472", "commits_from": "version_file"}
         # Whether the server flies orbits (False: a server built before it carried the orbit mover,
         # which binds no set_orbit and refuses every orbit call as the shim says it).
         self.flies_orbits = True
@@ -1092,3 +1100,6 @@ class FakeClient:
 
     def get_server_version(self) -> str:
         return "0.10.0-fake"
+
+    def get_build_identity(self) -> dict:
+        return dict(self.server.build_identity)

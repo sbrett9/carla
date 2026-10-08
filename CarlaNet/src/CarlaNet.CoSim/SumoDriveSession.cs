@@ -4,6 +4,7 @@ using CarlaNet.Map.WorldPackage;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Lighting;
 using CarlaNet.Types.Streaming;
@@ -193,7 +194,8 @@ public sealed class SumoDriveSession : IDisposable
                              VehicleBodyPool? pool,
                              (double Latitude, double Longitude) origin,
                              long seed,
-                             int trackSumoStepsPerSample)
+                             int trackSumoStepsPerSample,
+                             ServerBuildIdentity? server)
     {
         _options = options;
         _world = world;
@@ -238,6 +240,7 @@ public sealed class SumoDriveSession : IDisposable
             WorldPackagePath = options.WorldPackagePath,
             CatalogueDigest = catalogue.CatalogueDigest,
             Sumo = release,
+            Server = server,
             CompileLock = compiled,
             Teleporting = teleporting,
             RouteErrors = routeErrors,
@@ -263,12 +266,17 @@ public sealed class SumoDriveSession : IDisposable
         };
         _vehicleQueries = new SumoVehicleQueries(sumo.Vehicles, Report);
 
+        // A recorder handed either source names the SUMO release driving its vehicles on every still.
+        _illumination.SumoRelease = release.Release;
+        _renderSets.SumoRelease = release.Release;
+
         // Last, so nothing after them can leave the files they create behind a constructor that threw.
         // Both are told ahead of the caller's observers, so none of theirs that fails can starve them.
         _track = options.WorldTruthTrackPath is { } trackPath
             ? WorldTruthTrackWriter.Open(trackPath, trackSumoStepsPerSample, clock,
                                          typeId => WorldTruthVehicleType.Read(sumo.TraCI, _binder, catalogue, typeId),
-                                         ground, origin, options.Epoch)
+                                         ground, origin, options.Epoch,
+                                         () => Producer.Now(server, release.Release))
             : null;
         try
         {
@@ -684,7 +692,19 @@ public sealed class SumoDriveSession : IDisposable
         // failed is told apart from a file that could not be read on the way.
         ICarlaWorld? world = options.World is { } given ? new WorldConnectionGuard(given) : null;
 
-        WorldPackageManifest manifest = WorldPackage.ReadManifest(options.WorldPackagePath);
+        WorldPackageManifest manifest;
+        try
+        {
+            manifest = WorldPackage.ReadManifest(options.WorldPackagePath);
+        }
+        catch (InvalidDataException unreadable)
+        {
+            // A package that is not one, or is of a format newer than this session reads, is refused
+            // before anything starts, in the reader's own words.
+            throw new CoSimSessionRefusedException(
+                $"The world package {options.WorldPackagePath} cannot be read: {unreadable.Message}", unreadable);
+        }
+
         GroundSurface ground = GroundSurface.FromWorldPackage(options.WorldPackagePath);
         SumoRoadNetwork network = SumoRoadNetwork.FromWorldPackage(options.WorldPackagePath);
         VehicleCatalogue catalogue = VehicleCatalogue.Load(options.CataloguePath);
@@ -692,9 +712,14 @@ public sealed class SumoDriveSession : IDisposable
         // Before SUMO is started and before anything on the server is written: a package that is not
         // the loaded world's is refused with the world exactly as it was found, and it costs no
         // process to find out.
+        ServerBuildIdentity? server = null;
         if (world is { } loaded)
         {
             LoadedWorldCheck.Require(options.WorldPackagePath, loaded.DescribeLoadedWorld());
+
+            // What the server was built from, for the run's records of what made them. Never refuses:
+            // a server that cannot say is recorded as such.
+            server = loaded.DescribeServerBuild();
 
             // The package's grids are now known to be the record's, so the truth telemetry beside the
             // session takes them from the package instead of fetching them. It writes nothing to the
@@ -851,7 +876,7 @@ public sealed class SumoDriveSession : IDisposable
                                                    network, ground, roads, catalogue, lease, drive,
                                                    settings, layers, pool,
                                                    (manifest.OriginLatitude, manifest.OriginLongitude),
-                                                   seed, trackSumoStepsPerSample);
+                                                   seed, trackSumoStepsPerSample, server);
                     session.Prime();
                     session.BindTheSun();
                     return session;

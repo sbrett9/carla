@@ -39,10 +39,16 @@ for the CARLA blueprint a vehicle's type names, where the bridge is given the ca
 the capture path's truth takes them; only a type that names none of the catalogue's blueprints has
 its base type read from its vehicle class. A compiled scenario marks nothing here; its labels are its
 `*.supervision.json`, joined to the sidecar by vehicle id.
+
+**Both files name their format and what made them.** The XML's `<events>` carries `format_version` and,
+first inside it, a `<_producer>` (`ProducerRecord`): the bridge and its release, and the SUMO release
+that ran. The CSV's header stays its columns, so every reader of it reads it as before; its format and
+the same record are in `<name>.summary.json` beside it, written as the CSV is opened.
 """
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import math
 import struct
@@ -56,6 +62,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.SumoInstallation import SumoInstallation
 from carlacontrol.VehicleCatalogue import (
     BLUEPRINT_PARAM,
@@ -63,6 +70,14 @@ from carlacontrol.VehicleCatalogue import (
     CLASS_PARAM,
     VehicleCatalogue,
 )
+
+# The component the files' record of what made them names.
+TOOL = "carlacontrol.SumoCotBridge"
+# The format of the XML file (on its <events>) and of the CSV (in its summary). Independent of the
+# release version; a file written before either carried one is version 1.
+XML_FORMAT_VERSION = 1
+CSV_FORMAT_VERSION = 1
+CSV_SUMMARY_SUFFIX = ".summary.json"
 
 # SUMO's own vehicle classes as the contract's base_type, for a vehicle whose type names no blueprint
 # the catalogue curates: a type that names one takes the catalogue's base type, because a class says
@@ -311,14 +326,20 @@ class SumoCotBridge:
         xml_file = open(settings.xml_path, "w", encoding="utf-8") if settings.xml_path else None
         csv_file = open(settings.csv_path, "w", encoding="utf-8", newline="") \
             if settings.csv_path else None
+        # What made the files: this bridge and the SUMO release it runs; no CARLA server is used.
+        producer = ProducerRecord.record(TOOL, sumo=getattr(self.installation, "version", None))
         csv_writer = None
         if csv_file:
             csv_writer = csv.DictWriter(csv_file, fieldnames=CSV_COLUMNS)
             csv_writer.writeheader()
+            self.write_csv_summary(Path(settings.csv_path), producer)
         if xml_file:
             xml_file.write('<?xml version="1.0" encoding="UTF-8"?>\n<events source="sumo" '
+                           f'format_version="{XML_FORMAT_VERSION}" '
                            f'scenario="{self.config_path.stem}" '
                            f'epoch="{CotUdpEmitter.format_cot_timestamp(epoch)}">\n')
+            xml_file.write("  " + ET.tostring(ProducerRecord.xml_element(producer), encoding="unicode")
+                           + "\n")
             xml_file.write("  " + self._display_convention_xml(settings) + "\n")
         for name, on in (("UDP", udp), ("XML", xml_file), ("CSV", csv_file)):
             if on:
@@ -532,6 +553,22 @@ class SumoCotBridge:
             population = traci.vehicletype.getParameter(type_id, CLASS_PARAM) or type_id
             self._population_of[type_id] = population
         return settings.affiliation_by_type.get(population, settings.affiliation)
+
+    @staticmethod
+    def csv_summary_path(csv_path: Path) -> Path:
+        """Where a CSV's summary is written: its name with `.summary.json` for its extension."""
+        return Path(csv_path).with_suffix(CSV_SUMMARY_SUFFIX)
+
+    @classmethod
+    def write_csv_summary(cls, csv_path: Path, producer: dict) -> Path:
+        """The CSV's format, its columns and what made it, beside it, so the CSV's own header stays
+        the columns every reader of it already reads."""
+        path = cls.csv_summary_path(csv_path)
+        path.write_text(json.dumps({"format_version": CSV_FORMAT_VERSION, "producer": producer,
+                                    "csv": Path(csv_path).name, "columns": CSV_COLUMNS},
+                                   indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+                        newline="\n")
+        return path
 
     @staticmethod
     def _display_convention_xml(settings: CotOutputSettings) -> str:

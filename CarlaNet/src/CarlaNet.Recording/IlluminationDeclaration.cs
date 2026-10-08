@@ -73,6 +73,9 @@ public sealed record IlluminationDeclaration(string Policy, bool EpochHonoured, 
     /// <summary>The world's corrected elevation minus the declared one, where it was carried.</summary>
     public double? ResidualCorrectedDegrees { get; init; }
 
+    /// <summary>The format of the <c>carla:illumination</c> chunk, written in it as <c>format_version</c>.</summary>
+    public const int FormatVersion = 1;
+
     /// <summary>The PNG tEXt chunk carrying the declaration, so a still names it even apart from its sidecar.</summary>
     public IEnumerable<(string Keyword, string Text)> PngTextChunks()
     {
@@ -83,7 +86,8 @@ public sealed record IlluminationDeclaration(string Policy, bool EpochHonoured, 
     public string ToJson()
     {
         var json = new StringBuilder("{");
-        json.Append("\"policy\":\"").Append(Escape(Policy)).Append('"');
+        json.Append("\"format_version\":").Append(FormatVersion.ToString(CultureInfo.InvariantCulture));
+        json.Append(",\"policy\":\"").Append(Escape(Policy)).Append('"');
         json.Append(",\"epoch_honoured\":").Append(EpochHonoured ? "true" : "false");
         json.Append(",\"audited\":").Append(Audited ? "true" : "false");
         foreach ((string name, string value, bool quoted) in Fields())

@@ -3,6 +3,7 @@
 using System.Xml.Linq;
 using CarlaNet.Recording;
 using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Streaming;
 using CarlaNet.Types.Supervision;
 
@@ -35,6 +36,40 @@ public class CotWriterTests
             CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), records,
                                   capture: capture);
             return File.ReadAllText(path);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void A_Sidecar_Names_Its_Format_And_Says_What_Made_It_Before_Anything_Else()
+    {
+        var producer = new ProducerRecord("carlacontrol.CaptureSession", "0.10.0+g1a2b3c4d5", "0.10.0+g1a2b3c4d5",
+                                          ServerBuildIdentity.NotAnswered("built before the call", "0.10.0", "1.0"),
+                                          "1.27.0", new DateTime(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc));
+        double[] sun = [7.0, 2026, 3, 21, 3.5, 27.15012, 56.18065, 4.981, 119.56, 0.0, 0.0];
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        try
+        {
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [Saloon()],
+                                  solar: sun, capture: new CaptureIdentity(100, 5.0, "run-1"), producer: producer);
+            XElement events = XDocument.Load(path).Root!;
+
+            Assert.Equal(CotWriter.FormatVersion.ToString(), (string?)events.Attribute("format_version"));
+            Assert.Equal("format_version", events.Attributes().First().Name.LocalName);
+            XElement first = events.Elements().First();
+            Assert.Equal("_producer", first.Name.LocalName);
+            Assert.Equal("carlacontrol.CaptureSession", (string?)first.Attribute("tool"));
+            Assert.Equal("0.10.0+g1a2b3c4d5", (string?)first.Attribute("carlanet"));
+            Assert.Equal("1.27.0", (string?)first.Attribute("sumo"));
+            Assert.Equal("2026-10-07T12:00:00.000Z", (string?)first.Attribute("written_utc"));
+            Assert.Equal("false", (string?)Assert.Single(first.Elements("_server")).Attribute("available"));
+            Assert.Equal("_solar", first.ElementsAfterSelf().First().Name.LocalName);
+
+            // A writer given no record writes none, and still names its format.
+            CotWriter.WriteToFile(path, new DateTime(2026, 7, 10, 18, 0, 0, DateTimeKind.Utc), [Saloon()]);
+            XElement bare = XDocument.Load(path).Root!;
+            Assert.Equal("1", (string?)bare.Attribute("format_version"));
+            Assert.Empty(bare.Elements("_producer"));
         }
         finally { File.Delete(path); }
     }
@@ -178,14 +213,15 @@ public class CotWriterTests
     {
         (string keyword, string json) = Assert.Single(PortWindow().PngTextChunks());
         Assert.Equal("carla:illumination", keyword);
-        Assert.StartsWith("{\"policy\":\"freeze_at_window_start\",\"epoch_honoured\":true,\"audited\":true", json);
+        Assert.StartsWith("{\"format_version\":1,\"policy\":\"freeze_at_window_start\",\"epoch_honoured\":true,"
+                          + "\"audited\":true", json);
         Assert.Contains("\"epoch_digest\":\"979f424f6f03", json);
         Assert.Contains("\"utc_offset_hours\":3.5", json);
         Assert.Contains("\"residual_clock_s\":0.001", json);
         Assert.DoesNotContain("\"rate\"", json);
 
         string ignored = new IlluminationDeclaration("ignore", false, false).ToJson();
-        Assert.Equal("{\"policy\":\"ignore\",\"epoch_honoured\":false,\"audited\":false}", ignored);
+        Assert.Equal("{\"format_version\":1,\"policy\":\"ignore\",\"epoch_honoured\":false,\"audited\":false}", ignored);
     }
 
     [Fact]
@@ -197,7 +233,7 @@ public class CotWriterTests
         Assert.Contains("tick=\"260042\"", xml);
         Assert.DoesNotContain("telemetry_tick", xml);
         Assert.DoesNotContain("telemetry_tick", new CaptureIdentity(260042, 310.21974, "run-1", null, 103).ToJson());
-        Assert.Equal("{\"tick\":7,\"sim_time_s\":0}", new CaptureIdentity(7, 0.0).ToJson());
+        Assert.Equal("{\"format_version\":1,\"tick\":7,\"sim_time_s\":0}", new CaptureIdentity(7, 0.0).ToJson());
     }
 
     [Fact]
@@ -229,7 +265,8 @@ public class CotWriterTests
         // What a traffic-manager run writes: no render-set source, so every vehicle actor is listed,
         // keyed by its actor id, with nothing on the container saying which vehicles they are. Taken
         // byte for byte from the writer as it stood before the render set was introduced; its sun has
-        // since gained the band it falls in, after the attributes it always carried.
+        // since gained the band it falls in, after the attributes it always carried, and its container
+        // the sidecar's format version, before them.
         var parked = new VehicleTelemetry(
             8, "vehicle.fuso.mitsubishi", "truck", "", "10,20,30", "autopilot",
             37.7801234, -122.4507890, -238.8, 58.0,
@@ -249,7 +286,7 @@ public class CotWriterTests
             Assert.Equal(
                 """
                 <?xml version="1.0" encoding="utf-8"?>
-                <events captured="2026-07-10T18:00:00.000Z" count="2" source="truth" tick="260042" sim_time_s="310.21974" run_id="run-1" seed="103">
+                <events format_version="1" captured="2026-07-10T18:00:00.000Z" count="2" source="truth" tick="260042" sim_time_s="310.21974" run_id="run-1" seed="103">
                   <_solar solar_time="7" date="2026-03-21" time_zone="3.5" lat="27.1501200" lon="56.1806500" sun_elevation_deg="4.981" sun_azimuth_deg="119.56" advancing="false" rate="0" illumination_band="golden" illumination_band_elevation="geometric" />
                   <event version="2.0" uid="CARLA-TRUTH-7" type="a-n-G-E-V" how="m-g" time="2026-07-10T18:00:00.000Z" start="2026-07-10T18:00:00.000Z" stale="2026-07-10T18:00:03.000Z">
                     <point lat="37.7841234" lon="-122.4567890" hae="61.20" ce="0.0" le="0.0" />
@@ -358,7 +395,7 @@ public class CotWriterTests
 
         Assert.Contains(
             """
-            <events captured="2026-07-10T18:00:00.000Z" count="4" source="truth" tick="1044000" sim_time_s="370800" run_id="cap-1" seed="42" vehicles="rendered" plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
+            <events format_version="1" captured="2026-07-10T18:00:00.000Z" count="4" source="truth" tick="1044000" sim_time_s="370800" run_id="cap-1" seed="42" vehicles="rendered" plan_id="Shahid_Bahonar_Port_PatternOfLife" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
             """.ReplaceLineEndings(), xml);
         Assert.Contains(
             """

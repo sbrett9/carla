@@ -45,6 +45,8 @@ from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
 from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
 from carlacontrol.SumoDryRun import SumoDryRun  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
+from carlacontrol.version import RELEASE  # noqa: E402
+from carlacontrol.version import __version__ as carlacontrol_version  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -169,6 +171,29 @@ def test_the_lock_binds_the_four_files_the_epoch_and_the_traffic(world, installa
     assert plan["config_digest"] == lock["files"]["config"]["sha256"]
     # No lane closure, so no additional file for the plan to be bound to.
     assert plan["additional_digest"] is None
+
+
+def test_the_lock_and_the_report_say_what_made_them_and_the_files_two_compiles_share_carry_no_commit(
+        world, installation, tmp_path):
+    result = compile_spec(world, installation, tmp_path)
+    lock = json.loads(result.files["lock"].read_text(encoding="utf-8"))
+    report = json.loads(result.files["resolution"].read_text(encoding="utf-8"))
+
+    for document in (lock, report):
+        producer = document["producer"]
+        assert producer["tool"] == "carlacontrol.ScenarioCompiler"
+        assert producer["tool_version"] == carlacontrol_version
+        assert producer["sumo"] == installation.version
+        assert producer["server"] is None and producer["written_utc"]
+    assert lock["compiler"] == {"name": "carlacontrol.ScenarioCompiler", "version": carlacontrol_version}
+    assert "**Produced by:** carlacontrol.ScenarioCompiler" in result.files["resolution_md"].read_text(
+        encoding="utf-8")
+    # The supervision plan, digested by the lock and compared across runs, carries no record of the
+    # commit that wrote it; nor does the route file's header name more than the release.
+    assert "producer" not in json.loads(result.files["supervision"].read_text(encoding="utf-8"))
+    routes = result.files["routes"].read_text(encoding="utf-8")
+    assert f"compiled by carlacontrol.ScenarioCompiler {RELEASE} from" in routes
+    assert carlacontrol_version == RELEASE or carlacontrol_version not in routes
 
 
 def test_a_lane_change_takes_three_seconds_and_the_lock_and_the_report_say_so(world, installation,

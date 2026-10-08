@@ -1037,6 +1037,13 @@
           "x-supplied-by": "tool"
         }
       }
+    },
+    "producer": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "What wrote the document, where a tool did: the tool and its release, the carlanet release, the server and the SUMO release where used, and when. Provenance, never read as configuration and outside its digest; a run's run.effective.json carries it."
     }
   }
 }

@@ -533,6 +533,23 @@ void FCarlaServer::FPimpl::BindActions()
     return carla::rpc::FromFString(GetCarlaWorldInterfaceVersion());
   };
 
+  // What this server was built from, so a file a client writes can record it: the release version
+  // compiled in, the world interface version, package or editor, the configuration, and the CARLA,
+  // content and engine commits, each "unknown" where the server cannot know it (GetCarlaBuildIdentity).
+  // A map of strings, so a later server can add a name without breaking a client that reads these;
+  // identity_version is the map's own format, raised only if a name's meaning changes.
+  BIND_ASYNC(get_build_identity) << [] () -> R<std::map<std::string, std::string>>
+  {
+    std::map<std::string, std::string> Identity;
+    for (const TPair<FString, FString>& Entry : GetCarlaBuildIdentity())
+    {
+      Identity[carla::rpc::FromFString(Entry.Key)] = carla::rpc::FromFString(Entry.Value);
+    }
+    Identity["identity_version"] = "1";
+    Identity["release"] = carla::version();
+    return Identity;
+  };
+
   // ~~ Delivered worlds ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   //
   // A world delivered on its own arrives as a content plugin copied into the package. The engine

@@ -159,3 +159,24 @@ def test_a_sweep_that_leaves_the_world_as_it_found_it_gets_past_the_leak_check()
     builder = VehicleCatalogueBuilder(_Client(), world)
     with pytest.raises(ValueError, match="which the sweep did not measure"):
         builder.build(probe_lamps=False)
+
+
+def test_the_catalogue_records_what_the_server_was_built_from_or_that_it_could_not_say():
+    # A client from before get_build_identity: the server's release is what `version` says, and the
+    # rest is said to be unavailable rather than guessed.
+    builder = VehicleCatalogueBuilder(_Client(), _World(leak_after=None))
+    assert builder.server_identity == {
+        "available": False, "release": "0.10.0", "world_interface": "unknown",
+        "reason": "the carlanet client offers no get_build_identity: it was built before the call"}
+
+    producer = {"tool": "carlacontrol.VehicleCatalogueBuilder", "tool_version": "0.10.0+g1a2b3c4d5",
+                "carlanet": "0.10.0+g1a2b3c4d5", "written_utc": "2026-10-07T12:00:00.000Z",
+                "server": {"available": True, "release": "0.10.0", "build": "package",
+                           "carla_commit": "025443a83", "content_commit": "6bcd042a9"}}
+    assert VehicleCatalogueBuilder._producer_lines(producer) == [
+        "  produced by carlacontrol.VehicleCatalogueBuilder 0.10.0+g1a2b3c4d5, carlanet 0.10.0+g1a2b3c4d5",
+        "  server build package at CARLA 025443a83, content 6bcd042a9"]
+    producer["server"] = builder.server_identity
+    assert VehicleCatalogueBuilder._producer_lines(producer)[1].startswith("  server build not stated (")
+    # A catalogue built before the record says nothing of it.
+    assert VehicleCatalogueBuilder._producer_lines(None) == []

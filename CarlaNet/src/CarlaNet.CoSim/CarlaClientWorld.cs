@@ -1,6 +1,7 @@
 using CarlaNet.Transport;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Actors;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Enums;
@@ -72,6 +73,9 @@ public sealed class CarlaClientWorld : ICarlaWorld
             client.GetActorDefinitionsAsync().GetAwaiter().GetResult();
         return new CarlaClientWorld(client, definitions);
     }
+
+    /// <inheritdoc/>
+    public ServerBuildIdentity DescribeServerBuild() => _client.GetBuildIdentity();
 
     /// <inheritdoc/>
     /// <remarks>

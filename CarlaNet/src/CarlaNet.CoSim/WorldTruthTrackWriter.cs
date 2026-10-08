@@ -4,6 +4,7 @@ using System.Text.Json;
 using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Supervision;
 
 namespace CarlaNet.CoSim;
@@ -78,7 +79,10 @@ namespace CarlaNet.CoSim;
 /// loses at most the rows of the frame being written. The summary beside it (<see cref="SummaryPath"/>)
 /// is written whole under a temporary name and renamed into place (W1): at the start with the rate and
 /// the columns, and again when the session ends with what the track holds and why it ended. A summary
-/// whose <c>ended</c> is null is a track still being written, or one whose run was killed.</para>
+/// whose <c>ended</c> is null is a track still being written, or one whose run was killed. The summary
+/// holds the track's format version, <c>world_truth_track_version</c>, so the CSV's own header stays the
+/// columns alone and every reader of it reads it as before, and what made the track (<c>producer</c>,
+/// <see cref="ProducerRecord"/>).</para>
 ///
 /// <para>Built and registered by the session (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>),
 /// ahead of every observer the caller registered. Every call comes from the tick thread.</para>
@@ -131,6 +135,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     private readonly GroundSurface _ground;
     private readonly GeoLocation _origin;
     private readonly SolarEpoch? _epoch;
+    private readonly Func<ProducerRecord> _producer;
     private readonly Queue<Sample> _waiting = new();
     private readonly Stack<Sample> _spare = new();
     private readonly Dictionary<string, uint> _actorOf = new(StringComparer.Ordinal);
@@ -140,9 +145,11 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
 
     private WorldTruthTrackWriter(string path, FileStream file, int sumoStepsPerSample, CoSimClock clock,
                                   Func<string, WorldTruthVehicleType> describe, GroundSurface ground,
-                                  (double Latitude, double Longitude) origin, SolarEpoch? epoch)
+                                  (double Latitude, double Longitude) origin, SolarEpoch? epoch,
+                                  Func<ProducerRecord> producer)
     {
         Path = path;
+        _producer = producer;
         SummaryPath = SummaryPathFor(path);
         _file = file;
         _writer = new StreamWriter(file, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)) { NewLine = "\n" };
@@ -226,10 +233,12 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     /// Create the track and its summary, refusing a path that cannot be written or already holds one.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">Either file exists already, or cannot be written.</exception>
+    /// <param name="producer">What makes the track, stamped each time the summary is written; null writes
+    /// the record with no server and no SUMO.</param>
     internal static WorldTruthTrackWriter Open(string path, int sumoStepsPerSample, CoSimClock clock,
                                                Func<string, WorldTruthVehicleType> describe,
                                                GroundSurface ground, (double Latitude, double Longitude) origin,
-                                               SolarEpoch? epoch)
+                                               SolarEpoch? epoch, Func<ProducerRecord>? producer = null)
     {
         RefuseAnExistingTrack(path);
         FileStream? file = null;
@@ -244,7 +253,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
             // Shared for reading, so a run is watched by reading the track as it grows.
             file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
             var writer = new WorldTruthTrackWriter(path, file, sumoStepsPerSample, clock, describe, ground,
-                                                   origin, epoch);
+                                                   origin, epoch, producer ?? (() => Producer.Now()));
             writer.WriteHeader();
             writer.WriteSummary(null);
             return writer;
@@ -590,6 +599,9 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         {
             json.WriteStartObject();
             json.WriteNumber("world_truth_track_version", FormatVersion);
+            // What made the track, stamped as this summary is written.
+            json.WritePropertyName("producer");
+            _producer().WriteJson(json);
             json.WriteString("track", System.IO.Path.GetFileName(Path));
             json.WriteStartArray("columns");
             foreach (string column in ColumnNames)

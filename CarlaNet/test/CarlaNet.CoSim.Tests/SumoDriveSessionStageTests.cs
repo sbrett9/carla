@@ -48,6 +48,39 @@ public sealed class SumoDriveSessionStageTests : IDisposable
         Assert.Empty(carla.SettingsWrites);
     }
 
+    [Fact]
+    public void AWorldPackageOfANewerFormatIsRefusedAtValidationByItsVersionAndTouchesNothing()
+    {
+        using SyntheticWorld world = Fixture();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        // The package as a later release would write it: a manifest format this session does not read.
+        using (var archive = System.IO.Compression.ZipFile.Open(world.PackagePath,
+                                                                System.IO.Compression.ZipArchiveMode.Update))
+        {
+            System.IO.Compression.ZipArchiveEntry entry = archive.GetEntry("world.json")!;
+            string text;
+            using (var reader = new StreamReader(entry.Open()))
+            {
+                text = reader.ReadToEnd();
+            }
+
+            System.Text.Json.Nodes.JsonObject manifest = System.Text.Json.Nodes.JsonNode.Parse(text)!.AsObject();
+            manifest["FormatVersion"] = 2;
+            entry.Delete();
+            using var writer = new StreamWriter(archive.CreateEntry("world.json",
+                                                                    System.IO.Compression.CompressionLevel.NoCompression).Open());
+            writer.Write(manifest.ToJsonString());
+        }
+
+        CoSimSessionRefusedException refused = Refusal(Driving(world, carla));
+
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+        Assert.Contains(world.PackagePath, refused.Message);
+        Assert.Contains("declares FormatVersion 2", refused.Message);
+        Assert.Contains("supports FormatVersion 1 and earlier", refused.Message);
+        Assert.Empty(carla.SettingsWrites);
+    }
+
     [RequiresSumoFact]
     public void ANetworkOutsideTheWorldSFrameIsRefusedAtValidationBeforeSumoStarts()
     {

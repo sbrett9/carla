@@ -62,6 +62,7 @@ from carlacontrol.RunTerminationSequence import RunTerminationSequence  # noqa: 
 from carlacontrol.SessionMonitor import SessionMonitor  # noqa: E402
 from carlacontrol.SiteProfile import SiteProfile  # noqa: E402
 from carlacontrol.StareAim import StareAim  # noqa: E402
+from carlacontrol.version import __version__ as carlacontrol_version  # noqa: E402
 
 Usage = namedtuple("Usage", "total used free")
 SESSION_ID = "cap-test"
@@ -988,3 +989,28 @@ def test_the_replayable_configuration_reproduces_the_run_s_digest(layout, server
     second_session, second = capture(layout, FakeServer(), replay)
     assert second.effective_configuration_digest == first.effective_configuration_digest
     assert second.outcome == "run_finished"
+
+
+# -- what made each record ------------------------------------------------------------------------------
+
+def test_every_record_the_run_writes_says_what_made_it_and_the_recorders_name_the_sumo_release(
+        layout, server):
+    _, result = capture(layout, server)
+    assert result.outcome == "run_finished"
+    records = {kind: json.loads((layout.runs_root / SESSION_ID / f"run.{kind}.json").read_text("utf-8"))
+               for kind in ("result", "lock", "effective", "resolution")}
+
+    for kind, document in records.items():
+        producer = document["producer"]
+        assert producer["tool"] == "carlacontrol.CaptureSession", kind
+        assert producer["tool_version"] == carlacontrol_version, kind
+        assert producer["written_utc"], kind
+    # The server and the SUMO release, once the run had reached them: the result is written at the end.
+    assert records["result"]["producer"]["server"] == server.build_identity
+    assert records["result"]["producer"]["sumo"] == "1.27.0"
+    assert records["result"]["tool_version"] == carlacontrol_version
+    # The lock and the resolution report are written before any server is reached.
+    assert records["lock"]["producer"]["server"] is None
+    assert records["resolution"]["producer"]["server"] is None
+    # Every recorder is told the SUMO release, so every still names it.
+    assert {start[4]["sumo_version"] for start in server.events.of("start_recording")} == {"1.27.0"}

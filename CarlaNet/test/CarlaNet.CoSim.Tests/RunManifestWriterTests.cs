@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using CarlaNet.Recording;
 using CarlaNet.Sumo;
+using CarlaNet.Types.Provenance;
 using Xunit.Abstractions;
 
 namespace CarlaNet.CoSim.Tests;
@@ -76,6 +77,12 @@ public sealed class RunManifestWriterTests : IDisposable
         // The header the caller handed over, verbatim, beside what the session established itself.
         JsonElement opened = rows[0];
         Assert.Equal(1, opened.GetProperty("manifest_version").GetInt32());
+        // What made it: no world, so no server, and the SUMO release the session launched.
+        JsonElement producer = opened.GetProperty("producer");
+        Assert.Equal(Producer.CarlaNetVersion, producer.GetProperty("carlanet").GetString());
+        Assert.Equal(JsonValueKind.Null, producer.GetProperty("server").ValueKind);
+        Assert.Equal(opened.GetProperty("sumo").GetProperty("release").GetString(), producer.GetProperty("sumo").GetString());
+        Assert.False(string.IsNullOrEmpty(producer.GetProperty("written_utc").GetString()));
         Assert.Equal("cap-test", opened.GetProperty("run").GetProperty("run_id").GetString());
         Assert.Equal("deck", opened.GetProperty("run").GetProperty("sensors")[0].GetProperty("sensor_id").GetString());
         Assert.Equal(CoSimFixtures.DwellScenario, opened.GetProperty("scenario").GetProperty("config_path").GetString());
@@ -335,6 +342,17 @@ public sealed class RunManifestWriterTests : IDisposable
         JsonElement sensor = Assert.Single(rows, row => Kind(row) == "sensor_placed");
         Assert.Equal(("deck", 4121u), (sensor.GetProperty("sensor_id").GetString(), sensor.GetProperty("camera_actor_id").GetUInt32()));
         Assert.Equal(1, rows.IndexOf(sensor));
+
+        // What made the manifest: the world's server as it described its build when the session started,
+        // and the SUMO release the session launched.
+        JsonElement producer = rows[0].GetProperty("producer");
+        Assert.Equal(Producer.CarlaNetVersion, producer.GetProperty("carlanet").GetString());
+        Assert.Equal(rows[0].GetProperty("sumo").GetProperty("release").GetString(), producer.GetProperty("sumo").GetString());
+        JsonElement server = producer.GetProperty("server");
+        Assert.True(server.GetProperty("available").GetBoolean());
+        Assert.Equal("package", server.GetProperty("build").GetString());
+        Assert.Equal("025443a83eaf1bb82f18795d608fca50eb77a452", server.GetProperty("carla_commit").GetString());
+        Assert.Equal("version_file", server.GetProperty("commits_from").GetString());
 
         // Every vehicle the run admitted was released by SUMO, and each release is the session's interval.
         AssertTheReleasesAreTheIntervals(rows, released);

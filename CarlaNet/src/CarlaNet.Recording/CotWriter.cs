@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Xml;
 using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.Recording;
 
@@ -57,15 +58,24 @@ namespace CarlaNet.Recording;
 /// <c>&lt;annotation&gt;</c> per pattern instance in force. One whose frame's supervision is not to be had
 /// says <c>supervision="unknown"</c> on its container and writes none. A capture of a frame no plan was
 /// in force on is written exactly as before.</para>
+///
+/// <para>Every sidecar names its format on its container, <c>format_version</c> (<see cref="FormatVersion"/>);
+/// one written before it did is version 1. And every sidecar a recorder writes says what made it, in a
+/// <c>&lt;_producer&gt;</c> first under the container (<see cref="ProducerRecord"/>): the tool and its
+/// release, the carlanet release, the server's build identity and the SUMO release where SUMO ran, and
+/// when it was written, so a single sidecar can be traced to the release that made it.</para>
 /// </remarks>
 public static class CotWriter
 {
+    /// <summary>The sidecar's format, written on its container as <c>format_version</c>.</summary>
+    public const int FormatVersion = 1;
+
     public static void WriteToFile(string path, DateTime capturedUtc,
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
         IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
         CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null,
         SidecarVehicles vehicles = SidecarVehicles.World, double? drawDistanceMetres = null,
-        CaptureSupervision? supervision = null)
+        CaptureSupervision? supervision = null, ProducerRecord? producer = null)
     {
         supervision ??= CaptureSupervision.NotInForce;
         var settings = new XmlWriterSettings
@@ -81,6 +91,7 @@ public static class CotWriter
 
         w.WriteStartDocument();
         w.WriteStartElement("events");
+        w.WriteAttributeString("format_version", FormatVersion.ToString(CultureInfo.InvariantCulture));
         w.WriteAttributeString("captured", time);
         w.WriteAttributeString("count", recs.Count.ToString(CultureInfo.InvariantCulture));
         w.WriteAttributeString("source", "truth");
@@ -127,6 +138,9 @@ public static class CotWriter
             w.WriteAttributeString("lights", "unknown");
         if (PoseSourceUnknown(recs))
             w.WriteAttributeString("pose_source", "unknown");
+
+        // What made this sidecar, first under the container, so it is the first thing a reader meets.
+        producer?.WriteXml(w);
 
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
         // once here, before the per-vehicle events, so it is present even for a vehicle-free frame. A

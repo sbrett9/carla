@@ -32,6 +32,48 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir in sys.path:
     sys.path.remove(_this_dir)
 
+
+# ── Release version ───────────────────────────────────────────────────────────
+# The distribution's one release number, which carlacontrol and the server carry too: CARLA_VERSION
+# in the top-level CMakeLists.txt, with the short CARLA commit as a PEP 440 local part on a build that
+# is not the tagged release (0.10.0+g1a2b3c4d5). A wheel reads what its build stamped into
+# carlanet/_version.py (python/setup.py); the shim run from a checkout, which holds no stamp, reads the
+# checkout it sits in (Util/ReleaseVersion.py); outside both it is "unknown", never a guess. The
+# assemblies loaded below carry the same number as their informational version, which
+# CarlaNet.Types.Provenance.Producer.CarlaNetVersion reads.
+def _release_version_from_checkout():
+    import importlib.util as _importlib_util
+    # CarlaNet/python/carlanet/__init__.py: the checkout's root is three directories up.
+    checkout = os.path.normpath(os.path.join(_this_dir, "..", "..", ".."))
+    path = os.path.join(checkout, "Util", "ReleaseVersion.py")
+    if not os.path.isfile(path):
+        return "unknown"
+    try:
+        spec = _importlib_util.spec_from_file_location("carla_release_version", path)
+        module = _importlib_util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if not module.ReleaseVersion.is_checkout_root(checkout):
+            return "unknown"
+        return module.ReleaseVersion.of_checkout(checkout)
+    except Exception:
+        return "unknown"
+
+
+def _stamped_release_version():
+    # Read as text beside this file rather than imported, so a shim loaded by path under another name
+    # never imports an installed carlanet to find it.
+    path = os.path.join(_this_dir, "_version.py")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as stamped:
+        for line in stamped:
+            if line.startswith("__version__"):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    return None
+
+
+__version__ = _stamped_release_version() or _release_version_from_checkout()
+
 # ── .NET runtime selection ────────────────────────────────────────────────────
 import clr_loader
 import pythonnet as _pythonnet
@@ -121,6 +163,24 @@ try:
     _CARLANET_COSIM_AVAILABLE = True
 except FileNotFoundError:
     _CARLANET_COSIM_AVAILABLE = False
+
+# ── What made a file ──────────────────────────────────────────────────────────
+# Every file the CarlaNet writers produce records the tool that ran them (CarlaNet.Types.Provenance).
+# A component that runs as a tool declares itself -- carlacontrol's capture session declares
+# carlacontrol.CaptureSession and its release -- and until one does, the program's own name stands,
+# with no version, since a script's release cannot be told from its name.
+def _program_name():
+    argv0 = sys.argv[0] if sys.argv and sys.argv[0] else ""
+    stem = os.path.splitext(os.path.basename(argv0))[0]
+    return stem or "python"
+
+
+try:
+    from CarlaNet.Types.Provenance import Producer as _Producer
+    _Producer.DeclareDefaultTool(_program_name(), None)
+except Exception:
+    # Assemblies built before the record existed: their writers record nothing of who ran them.
+    _Producer = None
 
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
@@ -2222,7 +2282,7 @@ class World:
                         platform_callsign=None, platform_uid=None, distortion="none",
                         run_id=None, scenario_id=None, seed=None, depth_camera=None,
                         occlusion_margin_m=1.0, occlusion_samples=24, illumination=None,
-                        render_set=None, draw_distance_m=None, camera_name=None):
+                        render_set=None, draw_distance_m=None, camera_name=None, sumo_version=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
@@ -2324,7 +2384,15 @@ class World:
         `SensorPoseHeaderDisagreed` those among them whose header said otherwise (zero from a server
         that stamps the header when it captures the frame), and `SensorPoseFromHeader` those whose
         frame the client no longer held, written from the header; `OcclusionDepthPose*` count the
-        same for the depth captures."""
+        same for the depth captures.
+
+        Every still says what made it -- a `<_producer>` first under the sidecar's container, and a
+        `producer` object in the PNG's `carla:capture` chunk, beside each file's `format_version`:
+        the tool this process declared (the program's name until a component declares itself), its
+        release, the carlanet release, the server's build identity (`Client.get_build_identity`,
+        asked once as the recorder starts; a server built before it says it could not), and
+        `sumo_version`, the SUMO release driving the vehicles, which a SUMO drive session's
+        `render_set` or `illumination` gives where it is not given here."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
@@ -2358,7 +2426,7 @@ class World:
                                        int(camera.id),
                                        None if depth_camera is None else int(depth_camera.id),
                                        None if draw_distance_m is None else float(draw_distance_m),
-                                       name)
+                                       name, None if sumo_version is None else str(sumo_version))
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):
@@ -3201,6 +3269,19 @@ class Client:
         into it.
         """
         return str(_sync(self._inner.GetWorldInterfaceVersionAsync()))
+
+    def get_build_identity(self) -> dict:
+        """What the server was built from, as every file's record of what made it holds it.
+
+        A dict: `available`, then `release` (the release version compiled in), `world_interface`, and,
+        where available, `build` (`package` or `editor`), `configuration`, `carla_commit`,
+        `content_commit`, `engine_commit` and `commits_from` (`version_file`, the package's VERSION;
+        `compiled`, the CARLA commit compiled into an editor build; or `none`). A value the server
+        cannot know is "unknown", never a guess. A server built before the call -- or one that cannot
+        be reached -- gives `available` false and a `reason`, with the release and world interface its
+        older calls still answer; this never raises for that, so a caller records it and carries on.
+        Asked once per connection."""
+        return _json.loads(str(_sync(self._inner.GetBuildIdentityAsync()).ToJson()))
 
     def list_delivered_worlds(self) -> list[str]:
         """Worlds delivered into this server's package, each marked "(mounted)" when loadable.

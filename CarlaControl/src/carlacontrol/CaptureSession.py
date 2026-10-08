@@ -101,6 +101,13 @@ world (D1.12):
 The recorders are not given the scenario id or the seed: both would enter every PNG's `carla:capture`
 chunk, and whether the observation side may carry either is open (`04_Contracts.md` open question 15);
 the run result and the lock carry both.
+
+**Every file the run writes says what made it** (`ProducerRecord`): the session declares itself the
+tool, `carlacontrol.CaptureSession`, so the CarlaNet writers -- each still's sidecar and PNG, the run
+manifest, the world truth track's summary -- name it and carlacontrol's release; the server's build
+identity is asked once the server is reached, and the SUMO release once the session has started one,
+and both go on the run result and on every still. The resolution report and the lock, written before
+any server is reached, carry no server.
 """
 from __future__ import annotations
 
@@ -124,9 +131,10 @@ from carlacontrol.ChannelExposure import ChannelExposure
 from carlacontrol.EffectiveRunConfiguration import EffectiveRunConfiguration
 from carlacontrol.LaunchEcho import LaunchEcho
 from carlacontrol.OrbitSensorController import OrbitSensorController
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.RenderedTrafficCentre import RenderedTrafficCentre
 from carlacontrol.RunCloseoutReport import ChannelCapture, RunCloseoutReport
-from carlacontrol.RunConfiguration import RunConfiguration
+from carlacontrol.RunConfiguration import PRODUCER_KEY, RunConfiguration
 from carlacontrol.RunConfigurationFindings import (
     RunConfigurationFindings,
     RunConfigurationRefusedError,
@@ -137,7 +145,7 @@ from carlacontrol.RunConfigurationValidator import (
     RGB_BLUEPRINT,
     RunConfigurationValidator,
 )
-from carlacontrol.RunResult import RunResult
+from carlacontrol.RunResult import TOOL, RunResult
 from carlacontrol.RunTerminationSequence import (
     CLOSE_RECORD,
     DRAIN_CAPTURE,
@@ -276,6 +284,8 @@ class CaptureSession:
         self.preroll_pace: float | None = None
         self.readiness: ViewReadinessGate | None = None
         self.hold_from_s: float | None = None
+        # The tool every file this run writes names, the CarlaNet writers' included.
+        ProducerRecord.declare_tool(TOOL)
 
     @staticmethod
     def new_session_id() -> str:
@@ -476,6 +486,11 @@ class CaptureSession:
         except Exception as failure:
             raise _RefusedError("refused_server", f"could not reach the CARLA server at {host}:{port}: "
                            f"{failure!r}") from None
+        # What the server was built from, for every record of what made a file from here on. Never
+        # refuses: a server that cannot say is recorded as such.
+        self.result.server = ProducerRecord.server_identity(self.client)
+        server = self.result.server or {}
+        self.logger.info("server build: %s", ", ".join(f"{key} {value}" for key, value in server.items()))
         findings = self.validator.validate_against_server(effective, world)
         self.findings.extend(findings)
         if findings.refused:
@@ -531,6 +546,9 @@ class CaptureSession:
             raise _RefusedError("refused_server", "the co-simulation assemblies are not loaded "
                            "(CarlaNet.CoSim)")
         self.session = session
+        # The SUMO release the session launched, for the run result and every still.
+        release = getattr(getattr(getattr(session, "Report", None), "Sumo", None), "Release", None)
+        self.result.sumo = None if release is None else str(release)
         self.termination.add_step(RELEASE_WORLD, "dispose the session", session.Dispose,
                                   DISPOSE_TIMEOUT_S, ORDER_SESSION)
         self.termination.add_step(RELEASE_WORLD, "report the session", self._log_session_report,
@@ -1113,7 +1131,8 @@ class CaptureSession:
                 occlusion_margin_m=float(effective.value("occlusion.margin_m")),
                 occlusion_samples=int(effective.value("occlusion.samples")),
                 illumination=self.session.Illumination,
-                render_set=self.session.RenderSet)
+                render_set=self.session.RenderSet,
+                sumo_version=self.result.sumo)
             if rig.recorder is None:
                 raise _RefusedError("refused_preroll", "native recording is unavailable "
                                "(CarlaNet.Recording)", closed_by="aborted_at_preroll")
@@ -1246,6 +1265,7 @@ class CaptureSession:
         path = RunResult.sibling(self.result_path or self._result_path(), "resolution")
         document = {
             "resolution_version": 1,
+            "producer": self.result.producer(),
             "outcome": outcome,
             "session_id": self.session_id,
             "check_catalogue": "12_Operator_Control_Surface.md §6.2",
@@ -1262,10 +1282,14 @@ class CaptureSession:
         effective = self.effective
         result_path = self.result_path
         replay = RunResult.sibling(result_path, "effective")
-        RunResult.write_json(replay, effective.to_run_configuration())
+        # Replayable as a run configuration, which reads the record of what wrote it as provenance and
+        # leaves it out of the configuration's digest.
+        RunResult.write_json(replay, {**effective.to_run_configuration(),
+                                      PRODUCER_KEY: self.result.producer()})
         lock = RunResult.sibling(result_path, "lock")
         RunResult.write_json(lock, {
             "lock_version": 1,
+            "producer": self.result.producer(),
             "session_id": self.session_id,
             "effective_configuration_sha256": effective.digest,
             "tool_version": effective.tool_version,

@@ -77,6 +77,7 @@ from carlacontrol.IlluminationLabelAssociation import (
 )
 from carlacontrol.NetworkFingerprint import NetworkFingerprint
 from carlacontrol.PlaceResolver import PlaceResolver
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.ResolutionReport import ResolutionReport
 from carlacontrol.RotaExpander import RotaEntry, RotaExpander, RotaSkip
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator
@@ -96,7 +97,7 @@ from carlacontrol.SupervisionPlanCompiler import (
     SupervisionPlanCompiler,
 )
 from carlacontrol.VehicleCatalogue import BLUEPRINT_PARAM, VehicleCatalogue
-from carlacontrol.version import __version__
+from carlacontrol.version import RELEASE, __version__
 from carlacontrol.WindowSun import WindowSun
 from carlacontrol.WorldPackageReader import WorldPackageReader
 
@@ -1061,7 +1062,7 @@ class ScenarioCompiler:
             entries.append((actor["depart"].seconds, self._vehicle_xml(actor)))
         entries.sort(key=lambda item: item[0])
         header = self._comment(
-            f"{self.spec['scenario_name']}: compiled by {COMPILER} {__version__} from the "
+            f"{self.spec['scenario_name']}: compiled by {COMPILER} {RELEASE} from the "
             f"specification of {self.scenario_id}; edit that, not this. The epoch that gives these "
             f"seconds their civil meaning is stated in {self.scenario_id}.sumocfg. Every time "
             "in this file is simulated seconds from t = 0. Supervision is not in this file: it is "
@@ -1130,7 +1131,7 @@ class ScenarioCompiler:
                 "        </interval>",
                 "    </rerouter>"]))
         header = self._comment(
-            f"{self.spec['scenario_name']}: the lane closures, compiled by {COMPILER} {__version__} "
+            f"{self.spec['scenario_name']}: the lane closures, compiled by {COMPILER} {RELEASE} "
             f"from the specification of {self.scenario_id}; edit that, not this. Every time in this "
             "file is simulated seconds from t = 0; the epoch that gives them their civil meaning is "
             f"stated in {self.scenario_id}.sumocfg.")
@@ -1258,6 +1259,10 @@ class ScenarioCompiler:
             "specification": self.spec_path.name,
             "specification_sha256": self.spec_sha256,
             "compiler": {"name": COMPILER, "version": __version__},
+            # What made the compile: the compiler and its release, the carlanet release, and the SUMO
+            # release that routed it. The supervision plan this lock binds by digest carries none: two
+            # compiles of one specification write it byte for byte, at any commit of one release.
+            "producer": ProducerRecord.record(COMPILER, sumo=self.installation.version),
             "files": {role: {"path": paths[role].name, "sha256": digest}
                       for role, digest in digests.items()},
             "world": {"package": self.package.path.name, "map_name": self.package.map_name,
@@ -1332,6 +1337,7 @@ class ScenarioCompiler:
             name = self.spec_path.stem.replace(".scenario", "")
         else:
             name = self.spec["scenario_id"]
+        self.report.set("producer", ProducerRecord.record(COMPILER, sumo=self.installation.version))
         self.report.set("outcome", "refused" if self.findings.refused else "compiled")
         self.report.set("findings", self.findings.to_list())
         self.out_dir.mkdir(parents=True, exist_ok=True)
