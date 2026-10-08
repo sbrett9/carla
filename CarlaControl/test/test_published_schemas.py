@@ -13,6 +13,7 @@ says no more than a reader checks.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -46,8 +47,17 @@ from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
 SKILL_SCHEMAS = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios" / "schemas"
 PAGES_DIRECTORY = _REPO / "Docs" / "CAT_Research" / "Schemas"
-# Each schema's description page.
+INDEX = PAGES_DIRECTORY / "README.md"
+# Each schema's description page: every schema in CarlaControl/schemas, and the authoring skill's two.
 PAGES = {
+    "truth_sidecar.xsd": "Truth_Sidecar.md",
+    "png_chunk_capture.schema.json": "PNG_Chunk_Capture.md",
+    "png_chunk_solar.schema.json": "PNG_Chunk_Solar.md",
+    "png_chunk_illumination.schema.json": "PNG_Chunk_Illumination.md",
+    "png_chunk_sensor.schema.json": "PNG_Chunk_Sensor.md",
+    "run_manifest.schema.json": "Run_Manifest.md",
+    "world_truth_track.tableschema.json": "World_Truth_Track.md",
+    "world_truth_track_summary.schema.json": "World_Truth_Track_Summary.md",
     "run_configuration.schema.json": "Run_Configuration.md",
     "run_result.schema.json": "Run_Result.md",
     "run_resolution.schema.json": "Run_Resolution_Report.md",
@@ -64,16 +74,49 @@ PAGES = {
     "epoch.schema.json": "Epoch.md",
     "display_convention.schema.json": "Display_Convention.md",
     "area_of_interest.schema.json": "Areas_Of_Interest.md",
+    "world_package_manifest.schema.json": "World_Package_Manifest.md",
+    "place_index.schema.json": "Place_Index.md",
+    "solar_frame.schema.json": "Solar_Frame.md",
+    "areas_resolved.schema.json": "Areas_Resolved.md",
+    "level_package_manifest.schema.json": "Level_Package_Manifest.md",
+    "vehicle_catalogue.schema.json": "Vehicle_Catalogue.md",
+    "vehicle_body_widths.schema.json": "Vehicle_Body_Widths.md",
+    "vehicle_types.xsd": "Vehicle_Types.md",
+    "cot_telemetry.xsd": "CoT_Telemetry_Stream.md",
+    "cot_event_body.xsd": "CoT_Telemetry_Stream.md",
+    "sumo_cot_events.xsd": "SUMO_CoT_Event_File.md",
+    "sumo_cot_telemetry.tableschema.json": "SUMO_CoT_Table.md",
+    "sumo_cot_telemetry_summary.schema.json": "SUMO_CoT_Table.md",
+    "supervision_gaps.schema.json": "Supervision_Gaps.md",
+    "legacy_labels.schema.json": "Legacy_Labels.md",
 }
+# A page's name: Title_Case_With_Underscores, each word capitalized or an acronym in its own capitals.
+PAGE_NAME = re.compile(r"^([A-Z][a-z0-9]*|[A-Z]{2,}|CoT)(_([A-Z][a-z0-9]*|[A-Z]{2,}|CoT))*\.md$")
+_XSD_URN = re.compile(r"<cap:id>(urn:[^<]+)</cap:id>")
 _URN = re.compile(r"^urn:carla-sumo-capture:schema:[a-z][a-z0-9]*(-[a-z0-9]+)*:[1-9][0-9]*$")
 
 
 def every_schema() -> dict[str, dict]:
-    """Every schema we publish by file name: this package's and the authoring skill's."""
+    """Every schema generated in Python by file name: this package's and the authoring skill's."""
     schemas = {name: generate() for name, generate in PublishedSchemas.all().items()}
     schemas["scenario.schema.json"] = SCHEMA
     schemas["sweep.schema.json"] = SWEEP_SCHEMA
     return schemas
+
+
+# The JSON Schemas generated in Python, which the readers' validator checks: every one but the
+# Table Schema of the SUMO bridge's CSV, which TableSchemaCheck reads.
+JSON_SCHEMAS = sorted(name for name in every_schema() if name.endswith(".schema.json"))
+
+
+def urn_of(name: str) -> str | None:
+    """The URN a published schema names itself with; None for an XSD part that has none."""
+    path = SCHEMAS / name if (SCHEMAS / name).is_file() else SKILL_SCHEMAS / name
+    text = path.read_text(encoding="utf-8")
+    if name.endswith(".xsd"):
+        found = _XSD_URN.search(text)
+        return found.group(1) if found else None
+    return json.loads(text)["$id"]
 
 
 REGENERATE = "regenerate it with carla-validate --write-schemas CarlaControl/schemas"
@@ -121,7 +164,7 @@ def test_one_command_writes_every_generated_schema_as_it_is_checked_in(tmp_path)
         assert text == (SCHEMAS / name).read_bytes(), name
 
 
-@pytest.mark.parametrize("name", sorted(PAGES))
+@pytest.mark.parametrize("name", JSON_SCHEMAS)
 def test_each_schema_is_2020_12_and_named_by_the_urn_of_its_format_version(name):
     schema = every_schema()[name]
     assert schema["$schema"] == DIALECT
@@ -139,22 +182,46 @@ def test_each_schema_is_2020_12_and_named_by_the_urn_of_its_format_version(name)
 
 
 def test_no_two_schemas_share_an_identifier():
-    identifiers = [schema["$id"] for schema in every_schema().values()]
+    identifiers = [urn_of(name) for name in PAGES if urn_of(name)]
     assert len(identifiers) == len(set(identifiers))
+    assert all(_URN.match(identifier) for identifier in identifiers), identifiers
 
 
-@pytest.mark.parametrize("name", sorted(PAGES))
+@pytest.mark.parametrize("name", JSON_SCHEMAS)
 def test_each_schema_says_no_more_than_the_readers_validator_checks(name):
     # The validator refuses to run on a keyword it does not enforce.
     ScenarioSchema.validate_against({}, every_schema()[name])
 
 
+def test_every_schema_has_a_page():
+    assert sorted(PAGES) == sorted([*PublishedSchemas.files(), "scenario.schema.json",
+                                    "sweep.schema.json"])
+
+
 @pytest.mark.parametrize("name", sorted(PAGES))
-def test_each_schema_has_a_description_page_naming_it(name):
+def test_each_schema_has_a_description_page_naming_it_and_its_urn(name):
     page = PAGES_DIRECTORY / PAGES[name]
     assert page.is_file(), f"describe {name} in {page}"
     text = page.read_text(encoding="utf-8")
-    assert name in text and every_schema()[name]["$id"] in text
+    assert name in text
+    if urn_of(name):
+        assert urn_of(name) in text
+
+
+def test_every_page_is_named_title_case_with_underscores():
+    pages = sorted(path.name for path in PAGES_DIRECTORY.glob("*.md") if path != INDEX)
+    assert pages and [name for name in pages if not PAGE_NAME.match(name)] == []
+
+
+def test_the_index_lists_every_page_and_every_schema_with_its_urn():
+    index = INDEX.read_text(encoding="utf-8")
+    for page in PAGES_DIRECTORY.glob("*.md"):
+        if page != INDEX:
+            assert f"]({page.name})" in index, f"the index does not link {page.name}"
+    for name in PAGES:
+        assert f"`{name}`" in index, f"the index does not list {name}"
+        if urn_of(name):
+            assert f"`{urn_of(name)}`" in index, f"the index does not give {name}'s URN"
 
 
 def test_the_scenario_resolution_schema_states_the_report_s_sections_in_order():
