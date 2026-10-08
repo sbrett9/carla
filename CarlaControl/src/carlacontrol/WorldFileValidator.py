@@ -84,12 +84,14 @@ class WorldFileFailure:
 
 @dataclass
 class WorldFileValidation:
-    """How many files of each kind were checked and failed, and every failure."""
+    """How many files of each kind were checked and failed, every failure, and notes that are not
+    failures: the shape of `CaptureValidation`, so `carla-validate` reports both alike."""
 
     root: Path
     checked: Counter = field(default_factory=Counter)
     failed_files: Counter = field(default_factory=Counter)
     failures: list[WorldFileFailure] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:

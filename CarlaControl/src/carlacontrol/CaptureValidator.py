@@ -4,7 +4,9 @@ A capture folder holds, per camera, a PNG and a truth sidecar for every still, a
 run manifest and the world truth track with its summary. Each kind of file has a published schema
 (`carlacontrol.CaptureSchemaSet`):
 
-* every `*.xml` is a truth sidecar, checked against `truth_sidecar.xsd`;
+* every `*.xml` whose root is `<events>` is a truth sidecar, checked against `truth_sidecar.xsd`, and
+  so is any other `*.xml` beside a still of its name; the SUMO bridge's event file, whose `<events>`
+  says `source="sumo"`, is `TelemetryValidator`'s, and any other XML file is not a capture's;
 * every `*.png` carries text chunks, each `carla:<name>` chunk checked against
   `png_chunk_<name>.schema.json`; a still must carry `carla:capture`, and a `carla:` chunk with no
   schema is a failure;
@@ -20,8 +22,9 @@ schema describes is reported as written by a newer release and checked no furthe
 declares none is version 1. The pixels are not checked.
 
 The files that live beside a capture rather than in it -- a run's records, a compiled scenario's files,
-the inputs a user writes -- are found in the same folder by `RecordValidator`, each checked against
-its own schema and reported as its own kind.
+the inputs a user writes -- are found in the same folder by `RecordValidator`, and what the SUMO bridge
+writes, with the legacy files beside it, by `TelemetryValidator`; each is checked against its own
+schema and reported as its own kind.
 """
 from __future__ import annotations
 
@@ -37,6 +40,8 @@ from carlacontrol.FormatVersion import LEGACY, FormatVersion, FormatVersionError
 from carlacontrol.PngTextChunks import PngTextChunks, PngTextChunksError
 from carlacontrol.RecordValidator import KINDS as RECORD_KINDS
 from carlacontrol.RecordValidator import RecordValidator
+from carlacontrol.TelemetryValidator import KINDS as TELEMETRY_KINDS
+from carlacontrol.TelemetryValidator import TelemetryValidator
 
 CAPTURE_CHUNK = "carla:capture"
 MANIFEST_FILE = "manifest.jsonl"
@@ -49,7 +54,7 @@ STILLS = "PNG text chunks"
 MANIFESTS = "run manifests"
 TRACKS = "world truth tracks"
 SUMMARIES = "world truth track summaries"
-KINDS = (SIDECARS, STILLS, MANIFESTS, TRACKS, SUMMARIES, *RECORD_KINDS)
+KINDS = (SIDECARS, STILLS, MANIFESTS, TRACKS, SUMMARIES, *RECORD_KINDS, *TELEMETRY_KINDS)
 
 
 @dataclass(frozen=True)
@@ -103,13 +108,15 @@ class CaptureValidator:
         self.schemas = schemas
         self.failures_per_file = failures_per_file
         self.records = RecordValidator(schemas.folder)
+        self.telemetry = TelemetryValidator(schemas.folder)
 
     def validate(self, folder: str | Path) -> CaptureValidation:
         """Every file of the capture under `folder`, checked against its schema."""
         root = Path(folder)
         result = CaptureValidation(root)
         for path in sorted(root.rglob("*.xml")):
-            self._counted(SIDECARS, result, lambda: self._sidecar(path, result))
+            if self._is_sidecar(path):
+                self._counted(SIDECARS, result, lambda: self._sidecar(path, result))
         for path in sorted(root.rglob("*.png")):
             self._counted(STILLS, result, lambda: self._still(path, result))
         for path in sorted(root.rglob(MANIFEST_FILE)):
@@ -119,7 +126,20 @@ class CaptureValidator:
         for record in self.records.files(root):
             self._counted(record.kind, result, lambda: self.records.check(
                 record, lambda where, message: result.fail(record.kind, record.path, where, message)))
+        for file in self.telemetry.files(root):
+            self._counted(file.kind, result, lambda: self.telemetry.check(
+                file, lambda where, message: result.fail(file.kind, file.path, where, message),
+                result.notes.append))
         return result
+
+    @staticmethod
+    def _is_sidecar(path: Path) -> bool:
+        """Whether an XML file is a still's truth sidecar: its root is `<events>` and not the SUMO
+        bridge's, or, whatever it holds, a still of its name is beside it."""
+        if path.with_suffix(".png").is_file():
+            return True
+        root = TelemetryValidator.root_element(path)
+        return root is not None and root.tag == "events" and not TelemetryValidator.is_event_file(path)
 
     # -- truth sidecars ---------------------------------------------------------------------------
 

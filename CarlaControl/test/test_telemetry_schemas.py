@@ -12,7 +12,10 @@ the XML file and the CSV. Then:
     by `TableSchemaCheck`, the check `carla-validate` holds every table to; and its `.summary.json`
     meets its schema;
   * a CARLA vehicle's datagram, as carla-sctmv sends it with the capture tick and the sun, is valid too;
-  * the legacy labels file and the gap sidecar written from it meet their schemas.
+  * the legacy labels file and the gap sidecar written from it meet their schemas;
+  * `carla-validate`, given the folders that hold them, checks each against its schema
+    (`TelemetryValidator`), names a file that breaks it, and tells the bridge's event file from a
+    truth sidecar and a gap file from a compiled supervision plan.
 
 `test_published_schemas` holds every published schema here equal to `TelemetrySchemas`.
 """
@@ -20,6 +23,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 import sys
 import types
 from datetime import UTC, datetime
@@ -31,6 +35,7 @@ from lxml import etree
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
+from carlacontrol.commands.validate import main as validate  # noqa: E402
 from carlacontrol.CotUdpEmitter import CotUdpEmitter  # noqa: E402
 from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoCotBridge import (  # noqa: E402
@@ -42,6 +47,13 @@ from carlacontrol.SumoCotBridge import (  # noqa: E402
 from carlacontrol.SupervisionSidecar import SupervisionSidecar  # noqa: E402
 from carlacontrol.TableSchemaCheck import TableSchemaCheck  # noqa: E402
 from carlacontrol.TelemetrySchemas import CSV_TABLE_SCHEMA, TelemetrySchemas  # noqa: E402
+from carlacontrol.TelemetryValidator import (  # noqa: E402
+    EVENT_FILES,
+    GAP_FILES,
+    LABELS_FILES,
+    TABLE_SUMMARIES,
+    TABLES,
+)
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
@@ -314,3 +326,101 @@ def test_a_gap_sidecar_with_a_malformed_window_is_refused():
                 "supervision_gaps": [{"kind": "guard_no_show", "begin_utc": "d4 00:00"}]}
     problems = SchemaPublication.problems(document, TelemetrySchemas.supervision_gaps())
     assert problems and "begin_utc" in problems[0]
+
+
+# -- carla-validate -----------------------------------------------------------------------------------
+
+def checked(kind: str, count: int, failed: int = 0) -> str:
+    """How carla-validate reports a kind it checked."""
+    return f"{kind:<28s} {count:6d} checked, {failed} failed"
+
+
+def validated(folder: Path, caplog) -> tuple[int, str]:
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        status = validate([str(folder)])
+    return status, caplog.text
+
+
+@pytest.fixture
+def bridge_output(run, tmp_path) -> Path:
+    """A copy of the bridge run's files, to break one at a time."""
+    folder = tmp_path / "bridge"
+    shutil.copytree(run.directory, folder)
+    return folder
+
+
+def test_carla_validate_checks_every_file_the_bridge_wrote(bridge_output, caplog):
+    status, text = validated(bridge_output, caplog)
+    assert status == 0, text
+    for kind in (EVENT_FILES, TABLES, TABLE_SUMMARIES):
+        assert checked(kind, 1) in text, text
+    # The bridge's event file has an <events> root, and is not a truth sidecar.
+    assert "truth sidecars" not in text
+
+
+def test_carla_validate_names_an_event_a_table_row_and_a_summary_that_break_their_schemas(
+        bridge_output, caplog):
+    events = bridge_output / "fixture.xml"
+    events.write_text(events.read_text(encoding="utf-8").replace('how="m-g"', 'how="h-e"', 1),
+                      encoding="utf-8")
+    table = bridge_output / "fixture.csv"
+    lines = table.read_text(encoding="utf-8").split("\n")
+    lines[1] = lines[1].replace(",m-g,", ",h-e,", 1)
+    table.write_text("\n".join(lines), encoding="utf-8", newline="")
+    summary = bridge_output / "fixture.summary.json"
+    document = json.loads(summary.read_text(encoding="utf-8"))
+    document["csv"] = ""
+    summary.write_text(json.dumps(document), encoding="utf-8")
+    status, text = validated(bridge_output, caplog)
+    assert status == 1
+    assert checked(EVENT_FILES, 1, 1) in text and checked(TABLES, 1, 1) in text
+    assert "FAILED: fixture.xml: line " in text and "'h-e'" in text
+    assert "FAILED: fixture.csv: line 2, how: 'h-e' is not one of ['m-g']" in text
+    assert "FAILED: fixture.summary.json: $.csv: must not be empty" in text
+
+
+def test_a_table_whose_summary_declares_a_newer_format_is_named_and_its_rows_left_unchecked(
+        bridge_output, caplog):
+    summary = bridge_output / "fixture.summary.json"
+    document = json.loads(summary.read_text(encoding="utf-8"))
+    summary.write_text(json.dumps({**document, "format_version": 2}), encoding="utf-8")
+    status, text = validated(bridge_output, caplog)
+    assert status == 1
+    assert "FAILED: fixture.csv: fixture.csv declares format_version 2, and this reader supports " \
+           "format_version 1 and earlier" in text
+    assert "line 2" not in text
+
+
+def test_an_event_file_cut_off_by_an_interrupted_run_is_noted_and_does_not_fail(bridge_output, caplog):
+    events = bridge_output / "fixture.xml"
+    events.write_text(events.read_text(encoding="utf-8").replace("</events>\n", ""), encoding="utf-8")
+    status, text = validated(bridge_output, caplog)
+    assert status == 0, text
+    assert checked(EVENT_FILES, 1) in text
+    assert "is cut off before its closing </events>, so its run was interrupted" in text
+
+
+def test_carla_validate_checks_the_legacy_labels_and_gaps_and_leaves_a_plan_to_the_records(
+        tmp_path, caplog):
+    folder = tmp_path / "legacy"
+    folder.mkdir()
+    shutil.copy(LEGACY_LABELS, folder / "Shahid_Bahonar_Port_PatternOfLife.labels.json")
+    labels = json.loads(LEGACY_LABELS.read_text(encoding="utf-8"))
+    SupervisionSidecar.from_labels(labels, scenario="Shahid_Bahonar_Port_PatternOfLife", epoch=EPOCH,
+                                   labels_path=LEGACY_LABELS).write(folder / "run.supervision.json")
+    plan = "Arapahoe_I25_SupervisionCheck.supervision.json"
+    shutil.copy(_REPO / "Import" / plan, folder / plan)
+    status, text = validated(folder, caplog)
+    assert status == 0, text
+    assert checked(LABELS_FILES, 1) in text and checked(GAP_FILES, 1) in text
+    assert checked("supervision plans", 1) in text
+    gaps = folder / "run.supervision.json"
+    document = json.loads(gaps.read_text(encoding="utf-8"))
+    document["supervision_gaps"][0]["begin_utc"] = "d4 00:00"
+    gaps.write_text(json.dumps(document), encoding="utf-8")
+    status, text = validated(folder, caplog)
+    assert status == 1
+    assert "FAILED: run.supervision.json: $.supervision_gaps[0].begin_utc: 'd4 00:00' does not match" \
+        in text
+
