@@ -2,11 +2,14 @@
 
 `CARLA_VERSION` in the top-level `CMakeLists.txt` is the number (`Util/ReleaseVersion.py`). A build that
 is not the tagged release names its commit as a PEP 440 local part, `0.10.0+g1a2b3c4d5`, with `.dirty`
-where tracked files had changes, and `+unknown` where git cannot be asked. Asserted against throwaway
-git checkouts, so nothing depends on the state of this one:
+where tracked files that can alter the software had changes, and `+unknown` where git cannot be asked.
+Asserted against throwaway git checkouts, so nothing depends on the state of this one:
 
   * the number is read from CMakeLists.txt as text, with no CMake;
   * the local part follows the commit, the changes on top, the release tag, and git's absence;
+  * only a change that can alter the built software makes a build `.dirty`: a regenerated scenario
+    under `Import/`, a document, or a recorded skill example leaves it clean, and an edited source
+    file does not;
   * both wheels built from one checkout report one version, the release plus the commit, stamped as
     `_version.py` in the built package and never in the source tree; a wheel built from a source
     distribution, which has no CMakeLists.txt, reads the stamp it carries; a tree with neither fails;
@@ -104,6 +107,66 @@ def test_a_build_names_its_commit_its_changes_and_only_the_clean_tagged_release_
     git(root, "tag", "-d", "v1.4.2")
     git(root, "tag", "1.4.1")
     assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}"
+
+
+# Files of a checkout that can alter the built software, and files that cannot: the shipped scenarios
+# their generators rewrite in place, the documentation, and the skill's recorded examples.
+SOFTWARE = ("CarlaControl/src/carlacontrol/ScenarioCompiler.py", "CarlaNet/src/Session.cs",
+            "CarlaControl/skills/sumo-traffic-scenarios/checks.json",
+            # Only the top-level Import/ holds the shipped scenarios; a folder of that name elsewhere
+            # is software like any other.
+            "CarlaNet/Import/Reader.py")
+NOT_SOFTWARE = ("Import/Arapahoe_I25_UnderpassDwell.lock.json", "Import/Arapahoe_I25.osm",
+                "Docs/CAT_Research/notes.txt", "README.md", "CarlaControl/skills/x/SKILL.MD",
+                "CarlaControl/skills/sumo-traffic-scenarios/examples/minimal/m.resolution.json")
+
+
+def _with_files(root: Path, names) -> Path:
+    for name in names:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("first\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "files")
+    return root
+
+
+@needs_git
+@pytest.mark.parametrize("name", NOT_SOFTWARE)
+def test_a_change_to_data_or_documentation_leaves_the_build_clean(tmp_path, name):
+    root = _with_files(checkout(tmp_path / "carla", (1, 4, 2)), SOFTWARE + NOT_SOFTWARE)
+    commit = git(root, "rev-parse", "--short=9", "HEAD")
+
+    (root / name).write_text("regenerated\n", encoding="utf-8")
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}"
+    # Staged, and on the tagged release, alike.
+    git(root, "add", name)
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}"
+    git(root, "tag", "v1.4.2")
+    assert ReleaseVersion.of_checkout(root) == "1.4.2"
+
+
+@needs_git
+@pytest.mark.parametrize("name", SOFTWARE)
+def test_a_change_to_the_software_makes_the_build_dirty(tmp_path, name):
+    root = _with_files(checkout(tmp_path / "carla", (1, 4, 2)), SOFTWARE + NOT_SOFTWARE)
+    commit = git(root, "rev-parse", "--short=9", "HEAD")
+
+    (root / name).write_text("edited\n", encoding="utf-8")
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}.dirty"
+    git(root, "add", name)
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}.dirty"
+    git(root, "tag", "v1.4.2")
+    assert ReleaseVersion.of_checkout(root) == "1.4.2+dirty"
+
+
+@needs_git
+def test_a_regenerated_scenario_beside_an_edited_source_file_is_still_dirty(tmp_path):
+    root = _with_files(checkout(tmp_path / "carla", (1, 4, 2)), SOFTWARE + NOT_SOFTWARE)
+    commit = git(root, "rev-parse", "--short=9", "HEAD")
+
+    (root / NOT_SOFTWARE[0]).write_text("regenerated\n", encoding="utf-8")
+    (root / "CarlaControl" / "src" / "carlacontrol" / "ScenarioCompiler.py").unlink()
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}.dirty"
 
 
 def test_a_tree_git_cannot_name_is_not_taken_for_the_release(tmp_path):
