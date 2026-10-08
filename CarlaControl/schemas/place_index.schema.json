@@ -6,7 +6,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "place_index_version",
     "network_fingerprint",
     "coverage",
     "warnings",
@@ -15,7 +14,7 @@
   "properties": {
     "place_index_version": {
       "const": 1,
-      "description": "The format of this file."
+      "description": "The format of this file. An index without it is version 1."
     },
     "network_fingerprint": {
       "type": "string",

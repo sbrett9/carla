@@ -265,6 +265,24 @@ public static class WorldPackage
     /// <summary>The resolved area table of the authoring reference set.</summary>
     public const string AreasOfInterestEntry = "areas.resolved.json";
 
+    /// <summary>
+    /// The newest format of <see cref="AreasOfInterestEntry"/> this reads: <c>resolved_version</c> in it. A
+    /// table that declares none is version 1, and a newer one is refused.
+    /// </summary>
+    public const int AreasOfInterestVersion = 1;
+
+    /// <summary>
+    /// The newest format of <see cref="PlaceIndexEntry"/> this reads: <c>place_index_version</c> in it. An
+    /// index that declares none is version 1, and a newer one is refused.
+    /// </summary>
+    public const int PlaceIndexVersion = 1;
+
+    /// <summary>
+    /// The newest format of <see cref="SolarFrameEntry"/> this reads: <c>solar_frame_version</c> in it. A
+    /// frame that declares none is version 1, and a newer one is refused.
+    /// </summary>
+    public const int SolarFrameVersion = 1;
+
     /// <summary>The GeoJSON the area table was resolved from, byte for byte.</summary>
     public const string AreasOfInterestSourceEntry = "areas.aoi.geojson";
 
@@ -480,7 +498,8 @@ public static class WorldPackage
     /// <remarks>
     /// Throws when the table's <c>source_sha256</c> does not match the GeoJSON carried beside it
     /// (C5 V5.11): the table would then describe areas other than the ones the package declares, and
-    /// a reader that returned it anyway would be the one component nobody checks.
+    /// a reader that returned it anyway would be the one component nobody checks. Throws too when the
+    /// table declares a <c>resolved_version</c> newer than <see cref="AreasOfInterestVersion"/>.
     /// </remarks>
     public static bool TryReadAreasOfInterest(string packagePath, out string resolvedJson)
     {
@@ -499,6 +518,8 @@ public static class WorldPackage
         string recorded;
         using (JsonDocument document = JsonDocument.Parse(resolvedJson))
         {
+            RefuseANewerFormat(document.RootElement, packagePath, AreasOfInterestEntry, "resolved_version",
+                               AreasOfInterestVersion);
             recorded = document.RootElement.TryGetProperty("source_sha256", out JsonElement digest)
                 ? digest.GetString() ?? string.Empty
                 : string.Empty;
@@ -539,12 +560,46 @@ public static class WorldPackage
     }
 
     /// <summary>The place index, as JSON text. False when the package has no reference set.</summary>
+    /// <exception cref="InvalidDataException">The index declares a <c>place_index_version</c> newer than
+    /// <see cref="PlaceIndexVersion"/>, or one that is not an integer.</exception>
     public static bool TryReadPlaceIndex(string packagePath, out string placeIndexJson)
-        => TryReadText(packagePath, PlaceIndexEntry, out placeIndexJson);
+        => TryReadVersionedJson(packagePath, PlaceIndexEntry, "place_index_version", PlaceIndexVersion,
+                                out placeIndexJson);
 
     /// <summary>The solar frame, as JSON text. False when the package has no reference set.</summary>
+    /// <exception cref="InvalidDataException">The frame declares a <c>solar_frame_version</c> newer than
+    /// <see cref="SolarFrameVersion"/>, or one that is not an integer.</exception>
     public static bool TryReadSolarFrame(string packagePath, out string solarFrameJson)
-        => TryReadText(packagePath, SolarFrameEntry, out solarFrameJson);
+        => TryReadVersionedJson(packagePath, SolarFrameEntry, "solar_frame_version", SolarFrameVersion,
+                                out solarFrameJson);
+
+    private static bool TryReadVersionedJson(string packagePath, string entryName, string versionField,
+                                             int supported, out string json)
+    {
+        if (!TryReadText(packagePath, entryName, out json))
+        {
+            return false;
+        }
+        using JsonDocument document = JsonDocument.Parse(json);
+        RefuseANewerFormat(document.RootElement, packagePath, entryName, versionField, supported);
+        return true;
+    }
+
+    /// <summary>
+    /// Refuse a reference-set entry of a format this reader does not know, before anything of it is read:
+    /// the rule every reader of our files keeps (<see cref="FormatVersions"/>), so one that declares no
+    /// version is version 1 and a newer one is refused by name.
+    /// </summary>
+    private static void RefuseANewerFormat(JsonElement root, string packagePath, string entryName,
+                                           string versionField, int supported)
+    {
+        string file = $"{packagePath} ({entryName})";
+        int? declared = FormatVersions.Declared(root, file, versionField, out string? malformed);
+        if ((malformed ?? FormatVersions.Refusal(file, versionField, declared, supported)) is { } refusal)
+        {
+            throw new InvalidDataException(refusal);
+        }
+    }
 
     /// <summary>
     /// The ramp meters' programme file the world's netconvert run read. False when it read none.

@@ -50,7 +50,7 @@ lanes are, `crossing` when any listed lane is inside or crossing, and `near` oth
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `resolved_version` | integer, always 1 | | yes | The format of this file. |
+| `resolved_version` | integer, always 1 | | no | The format of this file. A table without it is version 1. |
 | `source_file_name` | string | | yes | The areas file's name. Empty when no areas were declared. |
 | `source_sha256` | string | | yes | SHA-256, lowercase hexadecimal, of `areas.aoi.geojson`'s bytes. Empty when no areas were declared. |
 | `world_map_name` | string | | yes | `MapName` from `world.json`. |
@@ -121,9 +121,10 @@ network.
 
 ## Format version
 
-`resolved_version` is 1, and there is no other version. `WorldPackageReader` reads only a file that
-declares exactly 1. It refuses any other value, or none. It then checks the file against the schema
-and refuses it, naming each problem, if it does not match.
+`resolved_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
+that declares a newer version, naming the version and the newest they read, rather than reading
+part of it. `WorldPackageReader` then checks the
+file against the schema and refuses it, naming each problem, if it does not match.
 
 ## Examples
 

@@ -510,6 +510,43 @@ public class WorldPackageTests : IDisposable
     }
 
     [Fact]
+    public void AReferenceSetEntryThatDeclaresNoVersionIsVersionOne()
+    {
+        WriteWorld();
+        const string places = "{\"streets\": []}";
+        const string solar = "{\"engine_time_zone\": \"+03:44:43\"}";
+        const string table = "{\"source_sha256\": \"\", \"areas\": []}";
+        Publish((WorldPackage.PlaceIndexEntry, Utf8(places)), (WorldPackage.SolarFrameEntry, Utf8(solar)),
+                (WorldPackage.AreasOfInterestEntry, Utf8(table)));
+
+        Assert.True(WorldPackage.TryReadPlaceIndex(Pkg, out string readPlaces));
+        Assert.Equal(places, readPlaces);
+        Assert.True(WorldPackage.TryReadSolarFrame(Pkg, out string readSolar));
+        Assert.Equal(solar, readSolar);
+        Assert.True(WorldPackage.TryReadAreasOfInterest(Pkg, out string readTable));
+        Assert.Equal(table, readTable);
+    }
+
+    [Theory]
+    [InlineData("places.json", "place_index_version")]
+    [InlineData("solar.json", "solar_frame_version")]
+    [InlineData("areas.resolved.json", "resolved_version")]
+    public void AReferenceSetEntryOfANewerFormatIsRefusedByName(string entry, string field)
+    {
+        WriteWorld();
+        Publish((entry, Utf8("{\"" + field + "\": 2, \"source_sha256\": \"\"}")));
+
+        InvalidDataException refused = Assert.Throws<InvalidDataException>(() => _ = entry switch
+        {
+            "places.json" => WorldPackage.TryReadPlaceIndex(Pkg, out _),
+            "solar.json" => WorldPackage.TryReadSolarFrame(Pkg, out _),
+            _ => WorldPackage.TryReadAreasOfInterest(Pkg, out _),
+        });
+        Assert.Contains($"({entry}) declares {field} 2, and this reader supports {field} 1 and earlier",
+                        refused.Message);
+    }
+
+    [Fact]
     public void AnEmptyAreaTableCarriesNoSource()
     {
         WriteWorld();

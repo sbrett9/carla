@@ -28,7 +28,7 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `solar_frame_version` | integer, always 1 | | yes | The format of this file. |
+| `solar_frame_version` | integer, always 1 | | no | The format of this file. A frame without it is version 1. |
 | `origin_latitude` | number | degrees | yes | WGS84 latitude of the world's origin, from `world.json`. From −90 to 90. |
 | `origin_longitude` | number | degrees | yes | WGS84 longitude of the world's origin. From −180 to 180. |
 | `engine_time_zone_hours` | number | hours east of UTC | yes | The zone the engine sets: `origin_longitude / 15`. |
@@ -39,9 +39,10 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 
 ## Format version
 
-`solar_frame_version` is 1, and there is no other version. `WorldPackageReader` reads only a file that
-declares exactly 1. It refuses any other value, or none. It then checks the file against the schema
-and refuses it, naming each problem, if it does not match.
+`solar_frame_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
+that declares a newer version, naming the version and the newest they read, rather than reading
+part of it. `WorldPackageReader` then checks the
+file against the schema and refuses it, naming each problem, if it does not match.
 
 ## Example
 

@@ -36,7 +36,7 @@ street by direction and position before it names one edge.
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `place_index_version` | integer, always 1 | | yes | The format of this file. |
+| `place_index_version` | integer, always 1 | | no | The format of this file. An index without it is version 1. |
 | `network_fingerprint` | string | | yes | Fingerprint of the network the index was made from, the same as `NetworkFingerprint` in `world.json`. |
 | `coverage` | object | | yes | How much of the network the names cover. |
 | `warnings` | array of strings | | yes | What the index warned about when it was made. |
@@ -86,10 +86,10 @@ of a whole edge. On a curving edge it says little about the heading at any one p
 
 ## Format version
 
-`place_index_version` is 1, and there is no other version. `WorldPackageReader` reads only a file that
-declares exactly 1. It refuses one that declares any other value, or none, rather than reading part of
-it. It then checks the file against the schema and refuses it, naming each problem, if it does not
-match.
+`place_index_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
+that declares a newer version, naming the version and the newest they read, rather than reading
+part of it. `WorldPackageReader` then checks the
+file against the schema and refuses it, naming each problem, if it does not match.
 
 ## Example
 

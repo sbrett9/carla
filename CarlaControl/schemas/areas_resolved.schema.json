@@ -6,7 +6,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "resolved_version",
     "source_file_name",
     "source_sha256",
     "world_map_name",
@@ -21,7 +20,7 @@
   "properties": {
     "resolved_version": {
       "const": 1,
-      "description": "The format of this file."
+      "description": "The format of this file. A table without it is version 1."
     },
     "source_file_name": {
       "description": "The areas file's name. Empty when no areas were declared.",

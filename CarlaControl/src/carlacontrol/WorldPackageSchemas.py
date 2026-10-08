@@ -315,11 +315,11 @@ class WorldPackageSchemas:
                            "which way they head. Derived from map.net.xml alone.",
             "type": "object",
             "additionalProperties": False,
-            "required": ["place_index_version", "network_fingerprint", "coverage", "warnings",
-                         "streets"],
+            "required": ["network_fingerprint", "coverage", "warnings", "streets"],
             "properties": {
                 "place_index_version": {"const": PLACE_INDEX_VERSION,
-                                        "description": "The format of this file."},
+                                        "description": "The format of this file. An index without "
+                                                       "it is version 1."},
                 "network_fingerprint": {"type": "string", "pattern": SHA256_HEX,
                                         "description": "Fingerprint of the network the index was "
                                                        "made from."},
@@ -374,12 +374,13 @@ class WorldPackageSchemas:
                            "and the time zone the engine sets from its longitude.",
             "type": "object",
             "additionalProperties": False,
-            "required": ["solar_frame_version", "origin_latitude", "origin_longitude",
-                         "engine_time_zone_hours", "engine_time_zone", "engine_time_zone_rule",
-                         "engine_daylight_saving", "engine_solar_time_at_configure_hours"],
+            "required": ["origin_latitude", "origin_longitude", "engine_time_zone_hours",
+                         "engine_time_zone", "engine_time_zone_rule", "engine_daylight_saving",
+                         "engine_solar_time_at_configure_hours"],
             "properties": {
                 "solar_frame_version": {"const": SOLAR_FRAME_VERSION,
-                                        "description": "The format of this file."},
+                                        "description": "The format of this file. A frame without "
+                                                       "it is version 1."},
                 "origin_latitude": {"type": "number", "minimum": -90,
                                     "description": "WGS84 latitude, degrees, of the world's "
                                                    "origin."},
@@ -510,12 +511,13 @@ class WorldPackageSchemas:
                            "declared, the list is empty.",
             "type": "object",
             "additionalProperties": False,
-            "required": ["resolved_version", "source_file_name", "source_sha256", "world_map_name",
+            "required": ["source_file_name", "source_sha256", "world_map_name",
                          "world_georeference", "world_origin_latitude", "world_origin_longitude",
                          "network_fingerprint", "near_m", "frame", "areas"],
             "properties": {
                 "resolved_version": {"const": RESOLVED_VERSION,
-                                     "description": "The format of this file."},
+                                     "description": "The format of this file. A table without it "
+                                                    "is version 1."},
                 "source_file_name": JsonSchemaFile.described(
                     TEXT, "The areas file's name. Empty when no areas were declared."),
                 "source_sha256": {"type": "string", "pattern": SHA256_HEX_OR_EMPTY,

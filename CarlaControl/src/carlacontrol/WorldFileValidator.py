@@ -56,7 +56,8 @@ VEHICLE_TYPES_FILE = "vehicles.vtypes.rou.xml"
 BODY_WIDTHS_FILE = "vehicle_body_widths.json"
 VEHICLE_TYPES_SCHEMA = "vehicle_types.xsd"
 
-# The version field each reference-set entry declares; the reader reads exactly the schema's version.
+# The version field each reference-set entry declares. One that declares none is version 1, and one
+# newer than its schema describes is refused, as the reader refuses it.
 REFERENCE_VERSIONS = {"places.json": "place_index_version", "solar.json": "solar_frame_version",
                       "areas.resolved.json": "resolved_version"}
 # How many of one file's schema departures are reported; the rest are counted in the last.
@@ -200,11 +201,14 @@ class WorldFileValidator:
             document = documents.get(name)
             if not isinstance(document, dict):
                 continue
-            expected = WorldPackageSchemas.entry_schema(name)["properties"][version_field]["const"]
-            if document.get(version_field) != expected:
-                result.fail(WORLD_PACKAGES, path, name,
-                            f"declares {version_field} {document.get(version_field)!r}; this release "
-                            f"reads {expected} only")
+            described = WorldPackageSchemas.entry_schema(name)["properties"][version_field]["const"]
+            try:
+                FormatVersion.check(f"{path} ({name})", version_field, document.get(version_field),
+                                    described)
+            except FormatVersionError as refused:
+                # A newer entry is reported for what it is, and not held to a schema of an older one.
+                result.fail(WORLD_PACKAGES, path, name, str(refused))
+                del documents[name]
         return True
 
     @staticmethod

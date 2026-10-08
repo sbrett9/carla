@@ -193,6 +193,24 @@ def test_a_manifest_missing_a_required_field_or_of_a_newer_format_is_named(valid
     assert any("declares FormatVersion 2" in line for line in newer)
 
 
+@pytest.mark.parametrize(("entry", "field"), [("places.json", "place_index_version"),
+                                              ("solar.json", "solar_frame_version"),
+                                              ("areas.resolved.json", "resolved_version")])
+def test_a_reference_entry_without_a_version_is_version_one_and_a_newer_one_is_named(
+        validator, package, tmp_path, entry, field):
+    with zipfile.ZipFile(package) as archive:
+        document = json.loads(archive.read(entry))
+    del document[field]
+    assert failures(validator, damaged(package, tmp_path, replace={
+        entry: json.dumps(document).encode()})) == []
+    newer = failures(validator, damaged(package, tmp_path, replace={
+        entry: json.dumps({**document, field: 2}).encode()}))
+    assert [line for line in newer if line.startswith(f"Damaged.cwp: {entry}:")] == [
+        f"Damaged.cwp: {entry}: {tmp_path / 'Damaged.cwp'} ({entry}) declares {field} 2, and this "
+        f"reader supports {field} 1 and earlier. It was written by a newer release; read it with "
+        "that release's tools."]
+
+
 @pytest.mark.skipif(not BUILT_PACKAGES, reason="no world package a world build wrote")
 def test_the_packages_a_world_build_wrote_are_sound(validator):
     for folder in built_package_folders():
