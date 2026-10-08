@@ -157,7 +157,8 @@ class TelemetryValidator:
     @staticmethod
     def _is_gap_file(path: Path) -> bool:
         try:
-            document = json.loads(path.read_text(encoding="utf-8"))
+            # Read as RecordValidator reads it, so the two never both take one file.
+            document = json.loads(path.read_text(encoding="utf-8-sig"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             return True
         return not (isinstance(document, dict) and PLAN_VERSION_KEY in document)
