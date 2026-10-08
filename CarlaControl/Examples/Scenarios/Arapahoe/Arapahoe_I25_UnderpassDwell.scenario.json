@@ -1,0 +1,1049 @@
+{
+  "spec_version": 1,
+  "scenario_id": "Arapahoe_I25_UnderpassDwell",
+  "scenario_name": "Arapahoe I-25 underpass dwell",
+  "description": "One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.",
+  "world": {
+    "package": "../../world-packages/Arapahoe_I25.cwp",
+    "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc"
+  },
+  "epoch": {
+    "epoch_version": 1,
+    "civil_datetime": "2026-09-29T07:00:00-06:00",
+    "utc_offset_hours": -6,
+    "utc_datetime": "2026-09-29T13:00:00Z",
+    "calendar_advances": true,
+    "dst_in_effect": true,
+    "time_zone_id": "America/Denver",
+    "note": "Arapahoe County, Colorado: simulated second zero is 07:00 Mountain Daylight Time on 29 September 2026, in the morning peak"
+  },
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start"
+  },
+  "seeds": {
+    "sumo": 42
+  },
+  "simulation": {
+    "end": 2700,
+    "step_length_s": 0.05
+  },
+  "catalogue": "../../catalogue/vehicles.catalogue.json",
+  "vehicle_classes": [
+    {
+      "class_id": "car_quick",
+      "blueprints": [
+        "vehicle.ue4.audi.tt",
+        "vehicle.mini.cooper",
+        "vehicle.ue4.bmw.grantourer",
+        "vehicle.ue4.mercedes.ccc",
+        "vehicle.ue4.ford.mustang",
+        "vehicle.lincoln.mkz",
+        "vehicle.dodge.charger",
+        "vehicle.ue4.chevrolet.impala",
+        "vehicle.ue4.ford.crown"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "60",
+        "speedFactor": "normc(1.18,0.06,1.05,1.35)",
+        "lcSpeedGain": "3.0",
+        "lcKeepRight": "0.3",
+        "lcAssertive": "1.5",
+        "sigma": "0.4",
+        "tau": "0.9"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#D9D9E6",
+      "note": "Quick freeway drivers, who work their way to the left lanes. A driver, not a body: they draw the same nine measured cars as car, so a fast vehicle is not told apart by its shape. Designed around a 4.6 m car; the nine bodies run 4.18 m to 5.37 m and average 4.82 m."
+    },
+    {
+      "class_id": "car",
+      "blueprints": [
+        "vehicle.ue4.audi.tt",
+        "vehicle.mini.cooper",
+        "vehicle.ue4.bmw.grantourer",
+        "vehicle.ue4.mercedes.ccc",
+        "vehicle.ue4.ford.mustang",
+        "vehicle.lincoln.mkz",
+        "vehicle.dodge.charger",
+        "vehicle.ue4.chevrolet.impala",
+        "vehicle.ue4.ford.crown"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "55",
+        "speedFactor": "normc(1.02,0.06,0.90,1.15)",
+        "lcSpeedGain": "1.2",
+        "lcKeepRight": "1.0",
+        "sigma": "0.5",
+        "tau": "1.1"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#B3B8C7",
+      "note": "Ordinary cars: saloons, hatchbacks and coupes, the nine measured bodies car_quick draws too. Designed around a 4.6 m car; they average 4.82 m."
+    },
+    {
+      "class_id": "suv",
+      "blueprints": [
+        "vehicle.nissan.patrol"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "52",
+        "speedFactor": "normc(1.00,0.06,0.88,1.12)",
+        "lcSpeedGain": "1.0",
+        "lcKeepRight": "1.5",
+        "sigma": "0.5",
+        "tau": "1.1"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#596673",
+      "note": "The full-size sport utility: a 5.59 x 2.15 m body against the 5.0 x 1.95 m this type was designed around, so every SUV is 0.59 m longer than intended. One body, so every SUV on the map looks the same: a property of the content."
+    },
+    {
+      "class_id": "van",
+      "blueprints": [
+        "vehicle.sprinter.mercedes"
+      ],
+      "sumo_vclass": "delivery",
+      "behaviour": {
+        "maxSpeed": "45",
+        "speedFactor": "normc(0.94,0.05,0.82,1.05)",
+        "lcSpeedGain": "0.6",
+        "lcKeepRight": "2.5",
+        "sigma": "0.5",
+        "tau": "1.2"
+      },
+      "share": 0.0,
+      "gui_shape": "delivery",
+      "gui_colour": "#E6E6E6",
+      "note": "A panel van measuring 5.92 m against the 5.9 m designed around. The ambulance is a van too, and liveried, so it is not drawn as one."
+    },
+    {
+      "class_id": "truck",
+      "blueprints": [
+        "vehicle.carlacola.actors"
+      ],
+      "sumo_vclass": "truck",
+      "behaviour": {
+        "maxSpeed": "35",
+        "speedFactor": "normc(0.86,0.04,0.78,0.95)",
+        "lcSpeedGain": "0.4",
+        "lcKeepRight": "4.0",
+        "sigma": "0.5",
+        "tau": "1.4"
+      },
+      "share": 0.0,
+      "gui_shape": "truck",
+      "gui_colour": "#99734D",
+      "note": "The two-axle box truck, 8.00 m, the catalogue's civilian truck: 4.0 m shorter than the 12.0 m rigid truck this type was designed around."
+    },
+    {
+      "class_id": "semi",
+      "blueprints": [
+        "vehicle.carlamotors.european_hgv"
+      ],
+      "sumo_vclass": "truck",
+      "behaviour": {
+        "maxSpeed": "32",
+        "speedFactor": "normc(0.84,0.03,0.78,0.92)",
+        "lcSpeedGain": "0.3",
+        "lcKeepRight": "5.0",
+        "sigma": "0.5",
+        "tau": "1.6"
+      },
+      "share": 0.0,
+      "gui_shape": "truck",
+      "gui_colour": "#735940",
+      "note": "The content build has no articulated truck, so the 16.5 m semitrailer this type was designed around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping driving model on the freeway."
+    },
+    {
+      "class_id": "marked",
+      "blueprints": [
+        "vehicle.jeep.wrangler_rubicon"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "55",
+        "speedFactor": "1.00",
+        "speedDev": "0",
+        "sigma": "0.20",
+        "tau": "1.20"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#FF8C00",
+      "note": "The marked vehicle, the Jeep Wrangler: 3.87 m against the 4.8 m it was designed around. speedDev is zeroed so it holds the posted limit exactly."
+    }
+  ],
+  "vehicle_mixes": [
+    {
+      "id": "freeway_mix",
+      "shares": {
+        "car_quick": 0.26,
+        "car": 0.35,
+        "suv": 0.2,
+        "van": 0.08,
+        "truck": 0.07,
+        "semi": 0.04
+      },
+      "note": "Freeway mix: mostly cars, a realistic tail of heavy vehicles."
+    },
+    {
+      "id": "arterial_mix",
+      "shares": {
+        "car": 0.45,
+        "suv": 0.24,
+        "van": 0.2,
+        "truck": 0.11
+      },
+      "note": "Arterial mix: Arapahoe Road is lined with commercial frontage, so vans and box trucks make up a much larger share of it than they do of the freeway."
+    },
+    {
+      "id": "residential_mix",
+      "shares": {
+        "car": 0.58,
+        "suv": 0.33,
+        "van": 0.09
+      },
+      "note": "Residential mix: commuters, nothing heavy."
+    }
+  ],
+  "places": {
+    "i25_north_in": {
+      "gateway": "south",
+      "travel": "in",
+      "street": "South Valley Highway"
+    },
+    "i25_north_out": {
+      "gateway": "north",
+      "travel": "out",
+      "street": "South Valley Highway"
+    },
+    "i25_south_in": {
+      "gateway": "north",
+      "travel": "in",
+      "street": "South Valley Highway"
+    },
+    "i25_south_out": {
+      "gateway": "south",
+      "travel": "out",
+      "street": "South Valley Highway"
+    },
+    "i25_north_short_of_arapahoe": {
+      "edge": "907700111"
+    },
+    "i25_north_past_arapahoe": {
+      "edge": "1001791386"
+    },
+    "i25_north_at_loop_merge": {
+      "edge": "1342047649"
+    },
+    "arapahoe_east_in": {
+      "edge": "131933384"
+    },
+    "arapahoe_east_out": {
+      "edge": "427819527"
+    },
+    "arapahoe_west_in": {
+      "edge": "427819540#0"
+    },
+    "arapahoe_west_out": {
+      "edge": "427819541#0"
+    },
+    "arapahoe_westbound_west_of_i25": {
+      "edge": "629675735"
+    },
+    "i25_north_exit_to_arapahoe_east": {
+      "edge": "131933449#0"
+    },
+    "xanthia_street_northbound": {
+      "edge": "-17003602#7"
+    },
+    "arapahoe_westbound_at_yosemite": {
+      "edge": "427819537#1"
+    },
+    "yosemite_northbound_from_arapahoe": {
+      "edge": "1026993839#0"
+    },
+    "underpass_westbound": {
+      "edge": "218965860#0"
+    },
+    "underpass_eastbound": {
+      "edge": "-223315781"
+    },
+    "underpass_dwell": {
+      "lat": 39.600357,
+      "lon": -104.88649,
+      "max_snap_m": 2.0,
+      "vclass": "passenger"
+    },
+    "yosemite_north_in": {
+      "edge": "427819547"
+    },
+    "yosemite_north_out": {
+      "edge": "-427819547"
+    },
+    "yosemite_south_in": {
+      "edge": "-629629570"
+    },
+    "yosemite_south_out": {
+      "edge": "629629570"
+    },
+    "clinton_in": {
+      "edge": "-629634784"
+    },
+    "clinton_out": {
+      "edge": "629634784"
+    },
+    "caley_in": {
+      "edge": "132833790"
+    },
+    "caley_out": {
+      "edge": "629653938"
+    },
+    "peakview_west_in": {
+      "edge": "16999218"
+    },
+    "peakview_east_out": {
+      "edge": "292396861#1"
+    },
+    "peakview_east_in": {
+      "edge": "633447921"
+    },
+    "peakview_west_out": {
+      "edge": "46107902#0"
+    },
+    "boston_court_in": {
+      "edge": "17000739"
+    },
+    "arbor_in": {
+      "edge": "16998684#0"
+    },
+    "willow_in": {
+      "edge": "550665536#0"
+    },
+    "wabash_in": {
+      "edge": "427479206"
+    },
+    "davies_avenue_in": {
+      "edge": "16993828#0"
+    },
+    "davies_avenue_out": {
+      "edge": "-16993828#0"
+    },
+    "costilla_place_in": {
+      "edge": "16996647"
+    },
+    "costilla_place_out": {
+      "edge": "-16996647"
+    },
+    "costilla_avenue_in": {
+      "edge": "16996898"
+    },
+    "costilla_avenue_out": {
+      "edge": "-16996898"
+    },
+    "davies_place_in": {
+      "edge": "17001552#0"
+    },
+    "davies_place_out": {
+      "edge": "-17001552#1"
+    },
+    "briarwood_place_in": {
+      "edge": "17003522"
+    },
+    "briarwood_place_out": {
+      "edge": "-17003522"
+    },
+    "briarwood_boulevard_in": {
+      "edge": "17007347#0"
+    },
+    "briarwood_boulevard_out": {
+      "edge": "-17007347#0"
+    },
+    "briarwood_avenue_in": {
+      "edge": "224876698"
+    },
+    "briarwood_avenue_out": {
+      "edge": "-224876698"
+    },
+    "easter_place_in": {
+      "edge": "17006662#0"
+    },
+    "easter_place_out": {
+      "edge": "-17006662#0"
+    },
+    "fremont_circle_in": {
+      "edge": "-16991914"
+    },
+    "fremont_circle_out": {
+      "edge": "16991914"
+    },
+    "xanthia_street_in": {
+      "edge": "-17003598#2"
+    },
+    "xanthia_way_in": {
+      "edge": "-17006541"
+    },
+    "alton_way_in": {
+      "edge": "-17003147#17"
+    },
+    "alton_way_out": {
+      "edge": "17003147#12"
+    }
+  },
+  "flows": [
+    {
+      "id": "i25_north_through",
+      "type": "freeway_mix",
+      "from": "i25_north_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 3300,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "i25_north_past_arapahoe"
+      ]
+    },
+    {
+      "id": "i25_south_through",
+      "type": "freeway_mix",
+      "from": "i25_south_in",
+      "to": "i25_south_out",
+      "vehs_per_hour": 3000,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_north_to_arapahoe_east",
+      "type": "freeway_mix",
+      "from": "i25_north_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 150,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "i25_north_exit_to_arapahoe_east"
+      ]
+    },
+    {
+      "id": "i25_north_to_arapahoe_west",
+      "type": "freeway_mix",
+      "from": "i25_north_in",
+      "to": "arapahoe_west_out",
+      "vehs_per_hour": 130,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_south_to_arapahoe_east",
+      "type": "freeway_mix",
+      "from": "i25_south_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 130,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_south_to_arapahoe_west",
+      "type": "freeway_mix",
+      "from": "i25_south_in",
+      "to": "arapahoe_west_out",
+      "vehs_per_hour": 120,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_east_to_i25_north",
+      "type": "freeway_mix",
+      "from": "arapahoe_east_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 140,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_west_to_i25_north",
+      "type": "freeway_mix",
+      "from": "arapahoe_west_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 130,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_east_to_i25_south",
+      "type": "freeway_mix",
+      "from": "arapahoe_east_in",
+      "to": "i25_south_out",
+      "vehs_per_hour": 120,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "arapahoe_westbound_west_of_i25"
+      ]
+    },
+    {
+      "id": "arapahoe_west_to_i25_south",
+      "type": "freeway_mix",
+      "from": "arapahoe_west_in",
+      "to": "i25_south_out",
+      "vehs_per_hour": 110,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_east_to_west",
+      "type": "arterial_mix",
+      "from": "arapahoe_east_in",
+      "to": "arapahoe_west_out",
+      "vehs_per_hour": 350,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_west_to_east",
+      "type": "arterial_mix",
+      "from": "arapahoe_west_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 330,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "yosemite_north_to_south",
+      "type": "arterial_mix",
+      "from": "yosemite_north_in",
+      "to": "yosemite_south_out",
+      "vehs_per_hour": 130,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "yosemite_south_to_north",
+      "type": "arterial_mix",
+      "from": "yosemite_south_in",
+      "to": "yosemite_north_out",
+      "vehs_per_hour": 120,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "yosemite_north_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "yosemite_north_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 90,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_east_to_yosemite_north",
+      "type": "arterial_mix",
+      "from": "arapahoe_east_in",
+      "to": "yosemite_north_out",
+      "vehs_per_hour": 85,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "clinton_to_arapahoe_west",
+      "type": "arterial_mix",
+      "from": "clinton_in",
+      "to": "arapahoe_west_out",
+      "vehs_per_hour": 75,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_west_to_clinton",
+      "type": "arterial_mix",
+      "from": "arapahoe_west_in",
+      "to": "clinton_out",
+      "vehs_per_hour": 70,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "caley_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "caley_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 65,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arapahoe_east_to_caley",
+      "type": "arterial_mix",
+      "from": "arapahoe_east_in",
+      "to": "caley_out",
+      "vehs_per_hour": 60,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "peakview_west_to_east",
+      "type": "arterial_mix",
+      "from": "peakview_west_in",
+      "to": "peakview_east_out",
+      "vehs_per_hour": 75,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "peakview_east_to_west",
+      "type": "arterial_mix",
+      "from": "peakview_east_in",
+      "to": "peakview_west_out",
+      "vehs_per_hour": 70,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "boston_court_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "boston_court_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 45,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "arbor_to_arapahoe_east",
+      "type": "arterial_mix",
+      "from": "arbor_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 40,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "willow_to_yosemite_south",
+      "type": "arterial_mix",
+      "from": "willow_in",
+      "to": "yosemite_south_out",
+      "vehs_per_hour": 45,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "wabash_to_arapahoe_west",
+      "type": "arterial_mix",
+      "from": "wabash_in",
+      "to": "arapahoe_west_out",
+      "vehs_per_hour": 40,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "underpass_north_to_south",
+      "type": "arterial_mix",
+      "from": "yosemite_north_in",
+      "to": "yosemite_south_out",
+      "vehs_per_hour": 120,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "underpass_westbound"
+      ]
+    },
+    {
+      "id": "underpass_south_to_north",
+      "type": "arterial_mix",
+      "from": "yosemite_south_in",
+      "to": "yosemite_north_out",
+      "vehs_per_hour": 110,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "underpass_eastbound"
+      ]
+    },
+    {
+      "id": "underpass_caley_to_yosemite",
+      "type": "arterial_mix",
+      "from": "caley_in",
+      "to": "yosemite_south_out",
+      "vehs_per_hour": 80,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "underpass_westbound"
+      ]
+    },
+    {
+      "id": "davies_avenue_to_i25_north",
+      "type": "residential_mix",
+      "from": "davies_avenue_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 32,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "i25_south_to_davies_avenue",
+      "type": "residential_mix",
+      "from": "i25_south_in",
+      "to": "davies_avenue_out",
+      "vehs_per_hour": 30,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "costilla_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "costilla_place_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 27,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_south_to_costilla_place",
+      "type": "residential_mix",
+      "from": "i25_south_in",
+      "to": "costilla_place_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "costilla_avenue_to_i25_south",
+      "type": "residential_mix",
+      "from": "costilla_avenue_in",
+      "to": "i25_south_out",
+      "vehs_per_hour": 27,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_north_to_costilla_avenue",
+      "type": "residential_mix",
+      "from": "i25_north_in",
+      "to": "costilla_avenue_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "davies_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "davies_place_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "i25_south_to_davies_place",
+      "type": "residential_mix",
+      "from": "i25_south_in",
+      "to": "davies_place_out",
+      "vehs_per_hour": 22,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "briarwood_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "briarwood_place_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 27,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_south_to_briarwood_place",
+      "type": "residential_mix",
+      "from": "i25_south_in",
+      "to": "briarwood_place_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "briarwood_boulevard_to_i25_south",
+      "type": "residential_mix",
+      "from": "briarwood_boulevard_in",
+      "to": "i25_south_out",
+      "vehs_per_hour": 27,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "i25_north_to_briarwood_boulevard",
+      "type": "residential_mix",
+      "from": "i25_north_in",
+      "to": "briarwood_boulevard_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "briarwood_avenue_to_arapahoe_east",
+      "type": "residential_mix",
+      "from": "briarwood_avenue_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 32,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "arapahoe_east_to_briarwood_avenue",
+      "type": "residential_mix",
+      "from": "arapahoe_east_in",
+      "to": "briarwood_avenue_out",
+      "vehs_per_hour": 30,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "easter_place_to_i25_north",
+      "type": "residential_mix",
+      "from": "easter_place_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 22,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "i25_south_to_easter_place",
+      "type": "residential_mix",
+      "from": "i25_south_in",
+      "to": "easter_place_out",
+      "vehs_per_hour": 20,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "fremont_circle_to_i25_north",
+      "type": "residential_mix",
+      "from": "fremont_circle_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "i25_south_to_fremont_circle",
+      "type": "residential_mix",
+      "from": "i25_south_in",
+      "to": "fremont_circle_out",
+      "vehs_per_hour": 22,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "xanthia_street_to_arapahoe_east",
+      "type": "residential_mix",
+      "from": "xanthia_street_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 22,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "xanthia_way_to_i25_north",
+      "type": "residential_mix",
+      "from": "xanthia_way_in",
+      "to": "i25_north_out",
+      "vehs_per_hour": 20,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "alton_way_to_arapahoe_east",
+      "type": "residential_mix",
+      "from": "alton_way_in",
+      "to": "arapahoe_east_out",
+      "vehs_per_hour": 25,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "xanthia_street_northbound"
+      ]
+    },
+    {
+      "id": "arapahoe_east_to_alton_way",
+      "type": "residential_mix",
+      "from": "arapahoe_east_in",
+      "to": "alton_way_out",
+      "vehs_per_hour": 22,
+      "begin": 0,
+      "end": 2700,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    }
+  ],
+  "actors": [
+    {
+      "id": "marked",
+      "type": "marked",
+      "depart": 120,
+      "from": "i25_north_in",
+      "to": "i25_north_out",
+      "via": [
+        "arapahoe_westbound_west_of_i25",
+        "arapahoe_westbound_at_yosemite",
+        "yosemite_northbound_from_arapahoe",
+        "underpass_westbound"
+      ],
+      "stops": [
+        {
+          "place": "underpass_dwell",
+          "duration": 1800.0,
+          "parking": true
+        }
+      ],
+      "depart_lane": "best",
+      "depart_speed": "max",
+      "arrival_speed": "current"
+    }
+  ],
+  "lane_closures": [
+    {
+      "id": "incident",
+      "place": "i25_north_past_arapahoe",
+      "lanes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "notify": [
+        "i25_north_short_of_arapahoe",
+        "i25_north_at_loop_merge"
+      ],
+      "begin": 900.0,
+      "end": 1080.0
+    }
+  ]
+}
