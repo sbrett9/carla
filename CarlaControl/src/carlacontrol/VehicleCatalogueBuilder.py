@@ -45,9 +45,11 @@ from pathlib import Path
 
 import carlanet
 
+from carlacontrol.JsonSchemaFile import JsonSchemaFile
 from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter
 from carlacontrol.VehicleCatalogue import LAMP_NAMES, VehicleCatalogue
+from carlacontrol.VehicleCatalogueSchemas import VehicleCatalogueSchemas
 from carlacontrol.VehicleCatalogueValidator import VehicleCatalogueValidator
 from carlacontrol.VehicleClassAssignment import VehicleClassAssignment
 from carlacontrol.VehicleLampProbe import LampProbeResult, VehicleLampProbe
@@ -205,11 +207,17 @@ class VehicleCatalogueBuilder:
 
     @staticmethod
     def load_body_widths(path: Path) -> dict:
-        """The editor-side body-width table, refused when it is not a version this reader knows."""
+        """The editor-side body-width table, refused when it is not a version this reader knows or
+        does not match its published schema (`VehicleCatalogueSchemas.body_widths`)."""
         table = json.loads(Path(path).read_text(encoding="utf-8"))
         if table.get("body_widths_version") != BODY_WIDTHS_VERSION:
             raise ValueError(f"{path} declares body_widths_version {table.get('body_widths_version')!r}, "
                              f"and {BODY_WIDTHS_VERSION} is the only one this reader implements")
+        schema = VehicleCatalogueSchemas.body_widths()
+        problems = JsonSchemaFile.problems(table, schema)
+        if problems:
+            raise ValueError(f"{path} does not match the body-width table's schema "
+                             f"({schema['$id']}): " + "; ".join(problems))
         return table
 
     @staticmethod

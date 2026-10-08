@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:place-index:1",
+  "title": "Place index (places.json in a .cwp)",
+  "description": "Which edges of the world's SUMO network carry which street name, and which way they head. Derived from map.net.xml alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "place_index_version",
+    "network_fingerprint",
+    "coverage",
+    "warnings",
+    "streets"
+  ],
+  "properties": {
+    "place_index_version": {
+      "const": 1,
+      "description": "The format of this file."
+    },
+    "network_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Fingerprint of the network the index was made from."
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How much of the network the names cover.",
+      "required": [
+        "normal_edges",
+        "named_edges",
+        "named_fraction",
+        "distinct_names",
+        "names_by_script",
+        "largest_name",
+        "warn_below_named_fraction"
+      ],
+      "properties": {
+        "normal_edges": {
+          "description": "Edges that are not inside a junction.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "named_edges": {
+          "description": "Of those, the edges with a street name.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "named_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "description": "named_edges / normal_edges, to four decimals."
+        },
+        "distinct_names": {
+          "description": "Different names.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "names_by_script": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Names per writing system. NONE counts names with no letters."
+        },
+        "largest_name": {
+          "description": "The name carried by the most edges. Null when no edge is named.",
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "edge_count"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "edge_count": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warn_below_named_fraction": {
+          "description": "Below this named_fraction the index warns that names contribute little.",
+          "type": "number"
+        }
+      }
+    },
+    "warnings": {
+      "description": "What the index warned about when it was built.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "streets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "scripts",
+          "edge_count",
+          "length_m",
+          "extent_carla_m",
+          "directions",
+          "edges"
+        ],
+        "properties": {
+          "name": {
+            "description": "The street name the edges carry.",
+            "type": "string",
+            "minLength": 1
+          },
+          "scripts": {
+            "description": "The writing systems of the name's letters, by Unicode name: LATIN, ARABIC and so on.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "edge_count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Edges carrying the name."
+          },
+          "length_m": {
+            "description": "Their lengths added up, meters.",
+            "type": "number"
+          },
+          "extent_carla_m": {
+            "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south.",
+            "type": "array",
+            "minItems": 4,
+            "items": {
+              "type": "number"
+            }
+          },
+          "directions": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "The edges heading each way, each list in the order a vehicle traveling that way meets them. A direction with no edge is left out.",
+            "properties": {
+              "north": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "east": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "south": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "west": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "edges": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "edge_id",
+                "from_junction",
+                "to_junction",
+                "bearing_deg",
+                "direction",
+                "length_m",
+                "lane_count",
+                "lane_ids",
+                "speed_mps",
+                "extent_carla_m"
+              ],
+              "properties": {
+                "edge_id": {
+                  "description": "The SUMO edge id.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "from_junction": {
+                  "description": "The SUMO junction it leaves.",
+                  "type": "string"
+                },
+                "to_junction": {
+                  "description": "The SUMO junction it reaches.",
+                  "type": "string"
+                },
+                "bearing_deg": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Compass bearing, degrees clockwise from grid north, of the rightmost lane's first point to its last, from 0 up to but not including 360."
+                },
+                "direction": {
+                  "enum": [
+                    "north",
+                    "east",
+                    "south",
+                    "west"
+                  ],
+                  "description": "The quarter of the compass the bearing falls in."
+                },
+                "length_m": {
+                  "description": "SUMO length of the rightmost lane, meters.",
+                  "type": "number"
+                },
+                "lane_count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Lanes on the edge."
+                },
+                "lane_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "The SUMO lane ids, rightmost first."
+                },
+                "speed_mps": {
+                  "description": "Speed limit of the rightmost lane, meters per second.",
+                  "type": "number"
+                },
+                "extent_carla_m": {
+                  "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south.",
+                  "type": "array",
+                  "minItems": 4,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "description": "Every edge carrying the name, ordered by edge id."
+          }
+        }
+      },
+      "description": "One entry per street name, ordered by name."
+    }
+  }
+}

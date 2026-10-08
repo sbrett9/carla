@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:solar-frame:1",
+  "title": "Solar frame (solar.json in a .cwp)",
+  "description": "The facts about the world's sun that a scenario's start time is checked against without a server: the origin the engine computes the sun from, and the time zone the engine sets from its longitude.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "solar_frame_version",
+    "origin_latitude",
+    "origin_longitude",
+    "engine_time_zone_hours",
+    "engine_time_zone",
+    "engine_time_zone_rule",
+    "engine_daylight_saving",
+    "engine_solar_time_at_configure_hours"
+  ],
+  "properties": {
+    "solar_frame_version": {
+      "const": 1,
+      "description": "The format of this file."
+    },
+    "origin_latitude": {
+      "type": "number",
+      "minimum": -90,
+      "description": "WGS84 latitude, degrees, of the world's origin."
+    },
+    "origin_longitude": {
+      "type": "number",
+      "minimum": -180,
+      "description": "WGS84 longitude, degrees, of the world's origin."
+    },
+    "engine_time_zone_hours": {
+      "description": "The zone the engine sets, hours east of UTC: origin_longitude / 15. Local mean solar time, not the site's civil zone.",
+      "type": "number"
+    },
+    "engine_time_zone": {
+      "type": "string",
+      "pattern": "^[+-][0-9]{2}:[0-9]{2}:[0-9]{2}$",
+      "description": "The same zone as a signed offset, hours:minutes:seconds."
+    },
+    "engine_time_zone_rule": {
+      "description": "The rule in words.",
+      "type": "string",
+      "minLength": 1
+    },
+    "engine_daylight_saving": {
+      "description": "Whether the engine applies daylight saving. It does not.",
+      "type": "boolean"
+    },
+    "engine_solar_time_at_configure_hours": {
+      "description": "The solar time, hours, the engine sets when the world's georeference is configured.",
+      "type": "number"
+    }
+  }
+}

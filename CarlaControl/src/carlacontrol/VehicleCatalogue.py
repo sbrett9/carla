@@ -175,16 +175,7 @@ class VehicleCatalogue:
     """
 
     def __init__(self, document: Mapping, source: object = "the catalogue") -> None:
-        version = document.get("catalogue_version")
-        if version != SUPPORTED_CATALOGUE_VERSION:
-            # Every catalogue the sweep wrote carries its version, so one without is not a catalogue.
-            newer = isinstance(version, int) and not isinstance(version, bool) \
-                and version > SUPPORTED_CATALOGUE_VERSION
-            raise ValueError(
-                f"{source} declares catalogue_version {version!r}, and version "
-                f"{SUPPORTED_CATALOGUE_VERSION} is the only shape this reader implements"
-                + ("; it was written by a newer release, so read it with that release's tools"
-                   if newer else ""))
+        self.check_version(document, source)
         self.document = document
         self.catalogue_id: str = document.get("catalogue_id", "")
         self.catalogue_digest: str = document.get("catalogue_digest", "")
@@ -221,10 +212,44 @@ class VehicleCatalogue:
             member["blueprint_id"]: entry.get("cot_special_type", "")
             for entry in self.classes.values() for member in entry.get("members", [])}
 
+    @staticmethod
+    def check_version(document: Mapping, source: object = "the catalogue") -> None:
+        """Refuse a catalogue that does not declare the one version this reader implements."""
+        version = document.get("catalogue_version")
+        if version != SUPPORTED_CATALOGUE_VERSION:
+            # Every catalogue the sweep wrote carries its version, so one without is not a catalogue.
+            newer = isinstance(version, int) and not isinstance(version, bool) \
+                and version > SUPPORTED_CATALOGUE_VERSION
+            raise ValueError(
+                f"{source} declares catalogue_version {version!r}, and version "
+                f"{SUPPORTED_CATALOGUE_VERSION} is the only shape this reader implements"
+                + ("; it was written by a newer release, so read it with that release's tools"
+                   if newer else ""))
+
     @classmethod
     def load(cls, path: str | Path) -> VehicleCatalogue:
-        """Read a catalogue from disk. The file is UTF-8 JSON as the sweep writes it."""
-        return cls(json.loads(Path(path).read_text(encoding="utf-8")), source=path)
+        """Read a catalogue from disk. The file is UTF-8 JSON as the sweep writes it.
+
+        Its version is checked first, so a newer catalogue is refused for what it is; then the
+        document against the published schema (`VehicleCatalogueSchemas`), refused naming every place
+        it departs from it, so a hand-edited or damaged catalogue never reaches a placement. Every
+        vehicle and class entry must be whole; of the header, every field present must have the shape
+        the schema gives it, and one absent reads as empty, as it always has here.
+        """
+        # Imported here rather than at the top: the schema module reads this module's lamp
+        # vocabulary, so importing it before this module is defined would be circular.
+        from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: PLC0415
+        from carlacontrol.VehicleCatalogueSchemas import VehicleCatalogueSchemas  # noqa: PLC0415
+
+        document = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(document, Mapping):
+            cls.check_version(document, path)
+        schema = VehicleCatalogueSchemas.catalogue()
+        problems = JsonSchemaFile.problems(document, schema, top_level_required=False)
+        if problems:
+            raise ValueError(f"{path} does not match the vehicle catalogue's schema "
+                             f"({schema['$id']}): " + "; ".join(problems))
+        return cls(document, source=path)
 
     @staticmethod
     def canonical_json(document: Mapping) -> str:

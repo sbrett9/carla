@@ -1,0 +1,93 @@
+# Level package manifest (`world.json` in a level package)
+
+A level package is one generated world delivered on its own, as add-on content for an existing CARLA
+package. It is a zip made by `PackageWorld`. It holds the world's cooked plugin folder and, beside it, a
+`world.json` that says what the world is and what it needs from the package it is installed into.
+`InstallWorld` reads that file before it installs anything.
+
+This is a different file from the `world.json` inside a world package (`.cwp`), which is described in
+[WorldPackageManifest.md](WorldPackageManifest.md).
+
+- Schema: `CarlaControl/schemas/level_package_manifest.schema.json`
+- Schema id: `urn:carla-sumo-capture:schema:level-package-manifest:1`
+
+## Who writes it and who reads it
+
+An Unreal tech artist imports a `.cwp` into a level with the World Package Importer and exports it as a
+plugin under `Unreal/CarlaUnreal/Plugins/GeneratedWorlds/<World>/`. A world marked for separate
+delivery, with a `DeliverSeparately.txt` in that folder, is then cooked on its own against the base
+release by `PackageWorld`:
+
+- `Scripts/Windows/PackageWorld.ps1` writes it for Windows (platform `Win64`);
+- `Scripts/Linux/PackageWorld.sh` writes it for Linux (platform `Linux`).
+
+Both write the same keys in the same order. The file is indented JSON with camelCase keys. When
+`PackageWorld.ps1` runs under Windows PowerShell 5.1 rather than PowerShell 7, the file begins with a
+UTF-8 byte order mark, so a reader should accept one.
+
+`Scripts/Windows/InstallWorld.ps1` and `Scripts/Linux/InstallWorld.sh` read it. They check the world
+interface version against the target package's (see [WorldInterfaceVersion.md](WorldInterfaceVersion.md)),
+then copy the world's folder into the package's `CarlaUnreal/Plugins/GeneratedWorlds/`. They print the
+`mapPackage` to load. They read `world`, `mapPackage`, `worldInterfaceMajor`, `worldInterfaceMinor` and
+`carlaGitHash`. The other fields identify the build for a person.
+
+## The zip
+
+```
+<World>.zip
+  world.json
+  <World>/           the world's cooked plugin folder, as the cook staged it:
+    <World>.uplugin  its descriptor, and below it the cooked level (.umap) and assets (.uasset, .uexp)
+```
+
+`PackageWorld` refuses to make the zip when the cook staged no level or no asset, which is what
+happens when the world is already part of the base release.
+
+## Fields
+
+Every field is required: both scripts write all of them.
+
+| Field | Type | Unit | Required | Meaning |
+|---|---|---|---|---|
+| `formatVersion` | integer, always 1 | | yes | The format of this file. |
+| `world` | string | | yes | The world's name. It is the plugin folder's name, which the zip holds beside this file. |
+| `mapPackage` | string | | yes | The level's Unreal package path, `/<world>/Maps/<world>`. Load the world by this name. |
+| `worldInterfaceMajor` | integer | | yes | The Major of the world interface version of the checkout that cooked the world. The package it is installed into must declare the same Major. |
+| `worldInterfaceMinor` | integer | | yes | The Minor of that version. The package must declare this Minor or a later one. |
+| `basedOnRelease` | string | | yes | The base release the world was cooked against: by default the short CARLA commit, which is how the base cook names its release. |
+| `releaseVersion` | string | | yes | The CARLA release version of the checkout that cooked the world, such as `0.10.0`, from `CARLA_VERSION_MAJOR`, `_MINOR` and `_PATCH` in `CMakeLists.txt`. |
+| `config` | string | | yes | The build configuration the world was cooked in: `Development`, `Shipping` or `Debug`. It must be the package's. |
+| `platform` | string | | yes | `Win64` or `Linux`. |
+| `carlaGitHash` | string | | yes | The full CARLA commit of the checkout that cooked the world. Empty when git could not say. |
+| `contentGitHash` | string | | yes | The full commit of `Unreal/CarlaUnreal/Content/Carla`. Empty when git could not say. |
+| `unrealGitHash` | string | | yes | The full Unreal Engine commit. Empty when the engine folder is not a git checkout. |
+| `packagedAtUtc` | string | | yes | When the zip was made, ISO 8601 UTC. `PackageWorld.ps1` writes seven decimal places of a second; `PackageWorld.sh` writes whole seconds. |
+
+The three commit hashes identify the build. No tool compares them; what decides whether a world
+installs is the world interface version.
+
+## Format version
+
+`formatVersion` is 1, and there is no other version. `InstallWorld.ps1` and `InstallWorld.sh` do not
+read `formatVersion` today: they read the fields above from any `world.json` in the zip. A reader that
+meets a `formatVersion` it does not know should refuse the file.
+
+## Example
+
+```json
+{
+  "formatVersion": 1,
+  "world": "Arapahoe_I25",
+  "mapPackage": "/Arapahoe_I25/Maps/Arapahoe_I25",
+  "worldInterfaceMajor": 1,
+  "worldInterfaceMinor": 0,
+  "basedOnRelease": "025443a83",
+  "releaseVersion": "0.10.0",
+  "config": "Development",
+  "platform": "Win64",
+  "carlaGitHash": "025443a834b1f3c9d1e2a4b5c6d7e8f901234567",
+  "contentGitHash": "6bcd042a91a54d9a2f2f002869fbf1c75f3768f4",
+  "unrealGitHash": "e5e266de195a2400a6a74180402fb1a3e8f75472",
+  "packagedAtUtc": "2026-10-07T17:40:12.3456789Z"
+}
+```
