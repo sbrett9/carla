@@ -11,6 +11,12 @@ with carlacontrol:
   truth/world_truth_track.csv                  world_truth_track.tableschema.json
   truth/world_truth_track.summary.json         world_truth_track_summary.schema.json
 
+The files that live beside a capture are checked too, wherever the folder holds them: a run's records
+(run.result.json, run.resolution.json, run.lock.json, run.effective.json), a compiled scenario's lock,
+resolution report, supervision plan and sweep index, the authoring skill's checks.json, and the files a
+user writes -- run files, site profiles, specifications, sweeps, epochs, display conventions and areas
+of interest -- each against the schema of its kind in the same folder of schemas.
+
 The pixels are not checked. A file that declares a format version newer than its schema describes was
 written by a newer release and is reported as such; a file that declares none is version 1. A manifest
 with no closing row is noted as a run that was interrupted, which is not a failure.
@@ -37,7 +43,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=os.path.basename(sys.argv[0]), description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("capture", type=Path, help="a capture folder, or one camera's folder within it")
+    parser.add_argument("capture", type=Path,
+                        help="a capture folder, or one camera's folder within it; or a folder of run "
+                             "records, compiled scenarios or inputs")
     parser.add_argument("--show", type=int, default=50,
                         help="how many failures to list (default 50); every one is counted")
     parser.add_argument("--schemas", type=Path, default=None,

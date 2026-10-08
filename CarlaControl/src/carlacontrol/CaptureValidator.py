@@ -18,6 +18,10 @@ run manifest and the world truth track with its summary. Each kind of file has a
 Every file is held to the format version rule first: a file that declares a version newer than its
 schema describes is reported as written by a newer release and checked no further, and a file that
 declares none is version 1. The pixels are not checked.
+
+The files that live beside a capture rather than in it -- a run's records, a compiled scenario's files,
+the inputs a user writes -- are found in the same folder by `RecordValidator`, each checked against
+its own schema and reported as its own kind.
 """
 from __future__ import annotations
 
@@ -31,6 +35,8 @@ from lxml import etree
 from carlacontrol.CaptureSchemaSet import CHUNK_PREFIX, OPENED_ROW, CaptureSchemaSet
 from carlacontrol.FormatVersion import LEGACY, FormatVersion, FormatVersionError
 from carlacontrol.PngTextChunks import PngTextChunks, PngTextChunksError
+from carlacontrol.RecordValidator import KINDS as RECORD_KINDS
+from carlacontrol.RecordValidator import RecordValidator
 
 CAPTURE_CHUNK = "carla:capture"
 MANIFEST_FILE = "manifest.jsonl"
@@ -43,7 +49,7 @@ STILLS = "PNG text chunks"
 MANIFESTS = "run manifests"
 TRACKS = "world truth tracks"
 SUMMARIES = "world truth track summaries"
-KINDS = (SIDECARS, STILLS, MANIFESTS, TRACKS, SUMMARIES)
+KINDS = (SIDECARS, STILLS, MANIFESTS, TRACKS, SUMMARIES, *RECORD_KINDS)
 
 
 @dataclass(frozen=True)
@@ -96,6 +102,7 @@ class CaptureValidator:
         """
         self.schemas = schemas
         self.failures_per_file = failures_per_file
+        self.records = RecordValidator(schemas.folder)
 
     def validate(self, folder: str | Path) -> CaptureValidation:
         """Every file of the capture under `folder`, checked against its schema."""
@@ -109,6 +116,9 @@ class CaptureValidator:
             self._counted(MANIFESTS, result, lambda: self._manifest(path, result))
         for path in sorted(root.rglob(TRACK_FILE)):
             self._track(path, result)
+        for record in self.records.files(root):
+            self._counted(record.kind, result, lambda: self.records.check(
+                record, lambda where, message: result.fail(record.kind, record.path, where, message)))
         return result
 
     # -- truth sidecars ---------------------------------------------------------------------------
