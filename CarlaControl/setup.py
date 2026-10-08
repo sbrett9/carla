@@ -1,10 +1,15 @@
-"""Stamps the distribution's release version into the carlacontrol wheel.
+"""Stamps the distribution's release version into the carlacontrol wheel, and requires its carlanet.
 
 Everything else about the package is in pyproject.toml. The version is not: it is the release number
 the top-level CMakeLists.txt sets (`Util/ReleaseVersion.py`), with the short CARLA commit as a PEP 440
 local part on a build that is not the tagged release, so carlacontrol, carlanet and the server carry
 one number. It is written into the built package as `carlacontrol/_version.py`, never into the source
 tree, so a checkout never holds a stale one; `carlacontrol.version` reads it.
+
+The dependencies are not in pyproject.toml either, because one of them is that same number:
+carlacontrol requires the carlanet of its own release, `carlanet==0.10.0` for any build of 0.10.0. The
+requirement has no local part, so under PEP 440 it matches every build of that release --
+`0.10.0`, `0.10.0+g1a2b3c4d5`, `0.10.0+g1a2b3c4d5.dirty` -- and no other release.
 
 Built from a checkout, the number is read from CMakeLists.txt; CMake itself is not needed. Built from a
 source distribution, which carries the `_version.py` stamped when it was made, that is read instead.
@@ -54,6 +59,20 @@ def _resolve() -> tuple[str, str]:
 
 
 VERSION, SOURCE = _resolve()
+# The release alone, MAJOR.MINOR.PATCH, without the commit.
+RELEASE = VERSION.split("+", 1)[0]
+
+DEPENDENCIES = [
+    # The carlanet of this release, whichever commit built it.
+    f"carlanet=={RELEASE}",
+    # The scenario compiler and the SUMO vehicle-type writer parse and write XML with it.
+    "lxml>=5.0",
+    "numpy>=1.24.0",
+    # The pygame API, from the maintained pygame-ce distribution: it publishes wheels for every
+    # Python this package supports, where the original pygame has none past 3.13. Both install the
+    # same `pygame` module, so an environment holds one or the other, never both.
+    "pygame-ce>=2.5",
+]
 
 
 def _stamp(directory: Path) -> None:
@@ -84,4 +103,5 @@ class StampedSdist(sdist):
         _stamp(Path(base_dir) / "src" / PACKAGE)
 
 
-setup(version=VERSION, cmdclass={"build_py": StampedBuildPy, "sdist": StampedSdist})
+setup(version=VERSION, install_requires=DEPENDENCIES,
+      cmdclass={"build_py": StampedBuildPy, "sdist": StampedSdist})

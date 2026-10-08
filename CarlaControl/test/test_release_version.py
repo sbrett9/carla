@@ -2,14 +2,19 @@
 
 `CARLA_VERSION` in the top-level `CMakeLists.txt` is the number (`Util/ReleaseVersion.py`). A build that
 is not the tagged release names its commit as a PEP 440 local part, `0.10.0+g1a2b3c4d5`, with `.dirty`
-where tracked files had changes, and `+unknown` where git cannot be asked. Asserted against throwaway
-git checkouts, so nothing depends on the state of this one:
+where tracked files that can alter the software had changes, and `+unknown` where git cannot be asked.
+Asserted against throwaway git checkouts, so nothing depends on the state of this one:
 
   * the number is read from CMakeLists.txt as text, with no CMake;
   * the local part follows the commit, the changes on top, the release tag, and git's absence;
+  * only a change that can alter the built software makes a build `.dirty`: a regenerated scenario
+    under `Import/`, a document, or a recorded skill example leaves it clean, and an edited source
+    file does not;
   * both wheels built from one checkout report one version, the release plus the commit, stamped as
     `_version.py` in the built package and never in the source tree; a wheel built from a source
     distribution, which has no CMakeLists.txt, reads the stamp it carries; a tree with neither fails;
+  * carlacontrol requires the carlanet of its own release, `carlanet==0.10.0`, which takes every
+    build of 0.10.0 whatever its local part and no other release;
   * carlacontrol run from this checkout reports this checkout's version, and `RELEASE` its release.
 
 The wheel builds need the `build` package and pip's access to setuptools, as the owner's wheel build
@@ -22,6 +27,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
+import types
 import zipfile
 from pathlib import Path
 
@@ -106,6 +113,66 @@ def test_a_build_names_its_commit_its_changes_and_only_the_clean_tagged_release_
     assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}"
 
 
+# Files of a checkout that can alter the built software, and files that cannot: the shipped scenarios
+# their generators rewrite in place, the documentation, and the skill's recorded examples.
+SOFTWARE = ("CarlaControl/src/carlacontrol/ScenarioCompiler.py", "CarlaNet/src/Session.cs",
+            "CarlaControl/skills/sumo-traffic-scenarios/checks.json",
+            # Only the top-level Import/ holds the shipped scenarios; a folder of that name elsewhere
+            # is software like any other.
+            "CarlaNet/Import/Reader.py")
+NOT_SOFTWARE = ("Import/Arapahoe_I25_UnderpassDwell.lock.json", "Import/Arapahoe_I25.osm",
+                "Docs/CAT_Research/notes.txt", "README.md", "CarlaControl/skills/x/SKILL.MD",
+                "CarlaControl/skills/sumo-traffic-scenarios/examples/minimal/m.resolution.json")
+
+
+def _with_files(root: Path, names) -> Path:
+    for name in names:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("first\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "files")
+    return root
+
+
+@needs_git
+@pytest.mark.parametrize("name", NOT_SOFTWARE)
+def test_a_change_to_data_or_documentation_leaves_the_build_clean(tmp_path, name):
+    root = _with_files(checkout(tmp_path / "carla", (1, 4, 2)), SOFTWARE + NOT_SOFTWARE)
+    commit = git(root, "rev-parse", "--short=9", "HEAD")
+
+    (root / name).write_text("regenerated\n", encoding="utf-8")
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}"
+    # Staged, and on the tagged release, alike.
+    git(root, "add", name)
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}"
+    git(root, "tag", "v1.4.2")
+    assert ReleaseVersion.of_checkout(root) == "1.4.2"
+
+
+@needs_git
+@pytest.mark.parametrize("name", SOFTWARE)
+def test_a_change_to_the_software_makes_the_build_dirty(tmp_path, name):
+    root = _with_files(checkout(tmp_path / "carla", (1, 4, 2)), SOFTWARE + NOT_SOFTWARE)
+    commit = git(root, "rev-parse", "--short=9", "HEAD")
+
+    (root / name).write_text("edited\n", encoding="utf-8")
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}.dirty"
+    git(root, "add", name)
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}.dirty"
+    git(root, "tag", "v1.4.2")
+    assert ReleaseVersion.of_checkout(root) == "1.4.2+dirty"
+
+
+@needs_git
+def test_a_regenerated_scenario_beside_an_edited_source_file_is_still_dirty(tmp_path):
+    root = _with_files(checkout(tmp_path / "carla", (1, 4, 2)), SOFTWARE + NOT_SOFTWARE)
+    commit = git(root, "rev-parse", "--short=9", "HEAD")
+
+    (root / NOT_SOFTWARE[0]).write_text("regenerated\n", encoding="utf-8")
+    (root / "CarlaControl" / "src" / "carlacontrol" / "ScenarioCompiler.py").unlink()
+    assert ReleaseVersion.of_checkout(root) == f"1.4.2+g{commit}.dirty"
+
+
 def test_a_tree_git_cannot_name_is_not_taken_for_the_release(tmp_path):
     (tmp_path / "CMakeLists.txt").write_text(CMAKE.format(major=0, minor=10, patch=0), encoding="utf-8")
     assert ReleaseVersion.of_checkout(tmp_path) == "0.10.0+unknown"
@@ -116,6 +183,57 @@ def test_carlacontrol_run_from_this_checkout_reports_this_checkout_s_version():
         pytest.skip("a stamp sits in the source tree; the build never writes one there")
     assert carlacontrol_version.__version__ == ReleaseVersion.of_checkout(_REPO)
     assert carlacontrol_version.RELEASE == ReleaseVersion.read_carla_version(_REPO / "CMakeLists.txt")
+
+
+# -- carlacontrol requires the carlanet of its own release ---------------------------------------------
+
+def _setup_arguments(monkeypatch) -> dict:
+    """What CarlaControl/setup.py hands setuptools, read with setuptools stood in for, so nothing is
+    built and no setuptools need be installed."""
+    handed: dict = {}
+    setuptools = types.ModuleType("setuptools")
+    setuptools.setup = lambda **arguments: handed.update(arguments)
+    command = types.ModuleType("setuptools.command")
+    build_py = types.ModuleType("setuptools.command.build_py")
+    build_py.build_py = type("build_py", (), {})
+    sdist = types.ModuleType("setuptools.command.sdist")
+    sdist.sdist = type("sdist", (), {})
+    for module in (setuptools, command, build_py, sdist):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    spec = importlib.util.spec_from_file_location("carlacontrol_setup_under_test",
+                                                  _REPO / "CarlaControl" / "setup.py")
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
+    return handed
+
+
+def test_carlacontrol_requires_the_carlanet_of_the_release_it_is_stamped_with(monkeypatch):
+    requirement = pytest.importorskip("packaging.requirements")
+    handed = _setup_arguments(monkeypatch)
+    release = ReleaseVersion.read_carla_version(_REPO / "CMakeLists.txt")
+
+    assert handed["version"] == ReleaseVersion.of_checkout(_REPO)
+    carlanet = [requirement.Requirement(text) for text in handed["install_requires"]
+                if requirement.Requirement(text).name == "carlanet"]
+    assert [str(required) for required in carlanet] == [f"carlanet=={release}"]
+    # A carlanet built from this checkout -- the same stamp -- is the one it accepts.
+    assert carlanet[0].specifier.contains(handed["version"])
+    # The release number lives in CMakeLists.txt alone: pyproject.toml leaves the dependencies to
+    # setup.py rather than state a carlanet of its own.
+    project = tomllib.loads((_REPO / "CarlaControl" / "pyproject.toml").read_text("utf-8"))["project"]
+    assert "dependencies" in project["dynamic"] and "dependencies" not in project
+
+
+def test_a_requirement_with_no_local_part_takes_every_build_of_its_release_and_no_other():
+    specifiers = pytest.importorskip("packaging.specifiers")
+    version = pytest.importorskip("packaging.version")
+    pinned = specifiers.SpecifierSet("==0.10.0")
+
+    for build in ("0.10.0", "0.10.0+g1a2b3c4d5", "0.10.0+g1a2b3c4d5.dirty", "0.10.0+dirty",
+                  "0.10.0+unknown"):
+        assert pinned.contains(version.Version(build)), build
+    for other in ("0.10.1", "0.10.1+g1a2b3c4d5", "0.9.0+g1a2b3c4d5", "0.11.0", "0.1.0",
+                  "0.10.0rc1", "0.10.0.post1"):
+        assert not pinned.contains(version.Version(other), prereleases=True), other
 
 
 # -- the wheels ---------------------------------------------------------------------------------------
@@ -200,6 +318,21 @@ def test_both_wheels_carry_the_release_cmakelists_sets_with_the_commit_that_buil
     # Stamped into what was built, never into the sources.
     assert not (root / "CarlaNet" / "python" / "carlanet" / "_version.py").exists()
     assert not (root / "CarlaControl" / "src" / "carlacontrol" / "_version.py").exists()
+
+
+def test_the_carlacontrol_wheel_requires_the_carlanet_wheel_built_beside_it(built):
+    requirement = pytest.importorskip("packaging.requirements")
+    root, wheels = built
+    with zipfile.ZipFile(wheels["carlacontrol"]) as archive:
+        metadata = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        required = re.findall(r"^Requires-Dist: (.+?)\s*$", archive.read(metadata).decode("utf-8"),
+                              re.MULTILINE)
+    carlanet = [requirement.Requirement(text) for text in required
+                if requirement.Requirement(text).name == "carlanet"]
+    release = ReleaseVersion.read_carla_version(root / "CMakeLists.txt")
+
+    assert [str(pin) for pin in carlanet] == [f"carlanet=={release}"]
+    assert carlanet[0].specifier.contains(_wheel_version(wheels["carlanet"], "carlanet")[0])
 
 
 def test_a_tree_with_no_cmakelists_and_no_stamp_will_not_build_a_wheel(built, tmp_path):

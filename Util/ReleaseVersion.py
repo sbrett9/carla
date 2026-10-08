@@ -10,9 +10,13 @@ A build that is not a tagged release says which commit made it, as a PEP 440 loc
 
 * `0.10.0` -- the checkout's HEAD carries the release tag, `0.10.0` or `v0.10.0`, and has no changes;
 * `0.10.0+g1a2b3c4d5` -- any other commit, by its short hash;
-* `0.10.0+g1a2b3c4d5.dirty` -- that commit with changes to tracked files on top, so the build is not
-  exactly any commit (`0.10.0+dirty` on the tagged release);
+* `0.10.0+g1a2b3c4d5.dirty` -- that commit with changes on top to tracked files that can alter the
+  built software, so the build is not exactly any commit (`0.10.0+dirty` on the tagged release);
 * `0.10.0+unknown` -- git could not be asked, so whether this is the release cannot be said.
+
+"Dirty" means the software changed, not its data: a change to the shipped scenarios under `Import/`,
+which their generators rewrite in place, to the documentation, or to the authoring skill's recorded
+examples leaves a build named by its commit alone (`SOFTWARE_PATHSPEC`). Untracked files never count.
 
 CMake is not involved: the number is read from `CMakeLists.txt` as text, so a checkout that was never
 configured gives the same answer. A tree with no `CMakeLists.txt` -- an unpacked source distribution --
@@ -37,6 +41,25 @@ SHORT_HASH_LENGTH = 9
 
 # The local part of a build whose commit git could not name.
 UNKNOWN_COMMIT = "unknown"
+
+# The tracked files whose changes make a build `.dirty`, as git pathspecs relative to the checkout's
+# root: all of them but those that cannot alter the built software. The one rule every build reads --
+# both wheels' stamps (`setup.py`), the assemblies a wheel carries (`build_wheel`), and carlanet and
+# carlacontrol run from a checkout -- so they agree on whether a tree is dirty.
+#
+#   * `Import/` -- the shipped OSM extracts and scenarios, which their generators rewrite in place one
+#     after another, so a regenerated scenario would otherwise record its compiler as dirty;
+#   * `Docs/` and every Markdown file anywhere -- documentation;
+#   * `CarlaControl/skills/**/examples/` -- the authoring skill's worked examples and the reports
+#     recorded from compiling them, which a test compares and rerecords: a test's inputs and expected
+#     results, never part of a build.
+SOFTWARE_PATHSPEC = (
+    ".",
+    ":(exclude)Import",
+    ":(exclude)Docs",
+    ":(exclude,glob,icase)**/*.md",
+    ":(exclude,glob)CarlaControl/skills/**/examples/**",
+)
 
 
 class ReleaseVersionError(RuntimeError):
@@ -92,14 +115,21 @@ class ReleaseVersion:
         return done.stdout.strip()
 
     @classmethod
+    def software_changed(cls, root: Path) -> bool:
+        """Whether the checkout at `root` has changes to tracked files that can alter the built
+        software (`SOFTWARE_PATHSPEC`), staged or not. A tree whose state git would not report is not
+        known to be clean, so it counts as changed."""
+        changed = cls.git(root, "status", "--porcelain", "--untracked-files=no", "--",
+                          *SOFTWARE_PATHSPEC)
+        return changed is None or changed != ""
+
+    @classmethod
     def local_part(cls, root: Path, release: str) -> str | None:
         """The PEP 440 local part of the checkout at `root`: None for the clean, tagged release."""
         commit = cls.git(root, "rev-parse", f"--short={SHORT_HASH_LENGTH}", "HEAD")
         if not commit:
             return UNKNOWN_COMMIT
-        changed = cls.git(root, "status", "--porcelain", "--untracked-files=no")
-        # A tree whose state git would not report is not known to be clean.
-        dirty = changed is None or changed != ""
+        dirty = cls.software_changed(root)
         tags = cls.git(root, "tag", "--points-at", "HEAD") or ""
         tagged = bool({release, f"v{release}"} & set(tags.split()))
         if tagged:

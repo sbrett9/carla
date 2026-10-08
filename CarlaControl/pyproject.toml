@@ -4,22 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carlacontrol"
-# The release version is stamped by setup.py from the top-level CMakeLists.txt.
-dynamic = ["version"]
+# The release version is stamped by setup.py from the top-level CMakeLists.txt, and the dependencies
+# are listed there, because one of them is that release: carlacontrol requires the carlanet of its own
+# release (carlanet==0.10.0 for any build of 0.10.0).
+dynamic = ["version", "dependencies"]
 description = "High-level control and automation tools for CARLA simulator"
 requires-python = ">=3.11"
 license = {text = "Proprietary - Sierra Nevada Corporation"}
 authors = [{ name = "SNC Team" }]
-dependencies = [
-    "carlanet>=0.1.0",
-    # The scenario compiler and the SUMO vehicle-type writer parse and write XML with it.
-    "lxml>=5.0",
-    "numpy>=1.24.0",
-    # The pygame API, from the maintained pygame-ce distribution: it publishes wheels for every
-    # Python this package supports, where the original pygame has none past 3.13. Both install the
-    # same `pygame` module, so an environment holds one or the other, never both.
-    "pygame-ce>=2.5",
-]
 
 # The user tools, one console command each. Every command's code is carlacontrol.commands.<module>;
 # the scripts under CarlaControl/scripts/ and CarlaNet/python/run_sumo_drive.py run the same main()
