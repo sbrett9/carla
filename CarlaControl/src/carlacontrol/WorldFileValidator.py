@@ -31,8 +31,8 @@ from pathlib import Path
 from lxml import etree
 
 from carlacontrol.FormatVersion import FormatVersion, FormatVersionError
-from carlacontrol.JsonSchemaFile import JsonSchemaFile
 from carlacontrol.NetworkFingerprint import NetworkFingerprint
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter
 from carlacontrol.VehicleCatalogue import VehicleCatalogue
 from carlacontrol.VehicleCatalogueSchemas import VehicleCatalogueSchemas
@@ -175,7 +175,7 @@ class WorldFileValidator:
             if manifest is not None and not self._versions(path, documents, result):
                 return
             for name, document in documents.items():
-                self._schema_failures(result, kind, path, name, JsonSchemaFile.problems(
+                self._schema_failures(result, kind, path, name, SchemaPublication.problems(
                     document, WorldPackageSchemas.entry_schema(name)))
             if not isinstance(manifest, dict):
                 return
@@ -291,7 +291,7 @@ class WorldFileValidator:
         except (ValueError, AttributeError) as refused:
             result.fail(kind, path, "", str(refused))
             return
-        problems = JsonSchemaFile.problems(document, VehicleCatalogueSchemas.catalogue())
+        problems = SchemaPublication.problems(document, VehicleCatalogueSchemas.catalogue())
         self._schema_failures(result, kind, path, "", problems)
         if problems:
             return
@@ -307,7 +307,7 @@ class WorldFileValidator:
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as broken:
                 result.fail(kind, widths, "", f"is not readable JSON: {broken}")
             else:
-                self._schema_failures(result, kind, widths, "", JsonSchemaFile.problems(
+                self._schema_failures(result, kind, widths, "", SchemaPublication.problems(
                     table, VehicleCatalogueSchemas.body_widths()))
 
     def _vehicle_type_file(self, path: Path, document: dict, result: WorldFileValidation) -> None:

@@ -32,7 +32,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.CotUdpEmitter import CotUdpEmitter  # noqa: E402
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoCotBridge import (  # noqa: E402
     AUTHORED_TRUTH_FIELDS,
     CSV_COLUMNS,
@@ -74,7 +74,7 @@ ROSTER = [("traffic.0", "vehicle.lincoln.mkz"), ("traffic.1", "vehicle.ambulance
 
 @pytest.mark.parametrize("name", sorted(TelemetrySchemas.schemas()))
 def test_the_published_schema_is_the_generated_one(name):
-    assert (SCHEMAS / name).read_text(encoding="utf-8") == JsonSchemaFile.text(
+    assert (SCHEMAS / name).read_text(encoding="utf-8") == SchemaPublication.text(
         TelemetrySchemas.schemas()[name]), REGENERATE
 
 
@@ -295,7 +295,7 @@ def test_a_table_checker_that_accepts_anything_would_fail_here():
 
 def test_the_csv_summary_meets_its_schema(run):
     summary = json.loads((run.directory / "fixture.summary.json").read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(summary, TelemetrySchemas.csv_summary()) == []
+    assert SchemaPublication.problems(summary, TelemetrySchemas.csv_summary()) == []
     assert summary["csv"] == "fixture.csv"
 
 
@@ -342,7 +342,7 @@ def test_an_event_the_schema_does_not_describe_is_refused(events_schema):
 
 def test_the_shipped_legacy_labels_meet_their_schema():
     labels = json.loads(LEGACY_LABELS.read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(labels, TelemetrySchemas.legacy_labels()) == []
+    assert SchemaPublication.problems(labels, TelemetrySchemas.legacy_labels()) == []
 
 
 def test_the_gap_sidecar_written_from_them_meets_its_schema(tmp_path):
@@ -350,7 +350,7 @@ def test_the_gap_sidecar_written_from_them_meets_its_schema(tmp_path):
     sidecar = SupervisionSidecar.from_labels(labels, scenario="Shahid_Bahonar_Port_PatternOfLife",
                                              epoch=EPOCH, labels_path=LEGACY_LABELS)
     written = json.loads(sidecar.write(tmp_path / "run.supervision.json").read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(written, TelemetrySchemas.supervision_gaps()) == []
+    assert SchemaPublication.problems(written, TelemetrySchemas.supervision_gaps()) == []
     (gap,) = written["supervision_gaps"]
     assert gap["begin_utc"] == "2026-03-25T12:00:00.000Z"
 
@@ -358,5 +358,5 @@ def test_the_gap_sidecar_written_from_them_meets_its_schema(tmp_path):
 def test_a_gap_sidecar_with_a_malformed_window_is_refused():
     document = {"scenario": "s", "epoch": "2026-03-21T05:00:00.000Z", "source_labels": None,
                 "supervision_gaps": [{"kind": "guard_no_show", "begin_utc": "d4 00:00"}]}
-    problems = JsonSchemaFile.problems(document, TelemetrySchemas.supervision_gaps())
+    problems = SchemaPublication.problems(document, TelemetrySchemas.supervision_gaps())
     assert problems and "begin_utc" in problems[0]

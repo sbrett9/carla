@@ -21,7 +21,7 @@ from lxml import etree
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.VehicleCatalogueBuilder import (  # noqa: E402
@@ -50,7 +50,7 @@ def shipped() -> dict:
 
 @pytest.mark.parametrize("name", sorted(VehicleCatalogueSchemas.schemas()))
 def test_the_published_schema_is_the_generated_one(name):
-    assert (SCHEMAS / name).read_text(encoding="utf-8") == JsonSchemaFile.text(
+    assert (SCHEMAS / name).read_text(encoding="utf-8") == SchemaPublication.text(
         VehicleCatalogueSchemas.schemas()[name]), REGENERATE
 
 
@@ -64,12 +64,12 @@ def test_the_body_width_version_is_the_one_the_builder_reads():
 
 
 def test_the_shipped_catalogue_matches_its_schema():
-    assert JsonSchemaFile.problems(shipped(), VehicleCatalogueSchemas.catalogue()) == []
+    assert SchemaPublication.problems(shipped(), VehicleCatalogueSchemas.catalogue()) == []
 
 
 def test_the_shipped_body_widths_match_their_schema():
     table = json.loads(BODY_WIDTHS.read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(table, VehicleCatalogueSchemas.body_widths()) == []
+    assert SchemaPublication.problems(table, VehicleCatalogueSchemas.body_widths()) == []
 
 
 def test_every_class_parameter_the_validator_requires_is_described():

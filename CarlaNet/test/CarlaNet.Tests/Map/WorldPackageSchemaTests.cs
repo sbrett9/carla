@@ -190,7 +190,9 @@ public class WorldPackageSchemaTests : IDisposable
     public void TheRecordOfWhatMadeThePackageHasTheSchemasFields()
     {
         JsonElement written = JsonDocument.Parse(Entry(WritePackage(), "world.json")).RootElement;
-        JsonElement producer = Schema().GetProperty("$defs").GetProperty("producer");
+        // The manifest's Producer is the record, or null; the record's server is null, a server that
+        // answered, or one that did not.
+        JsonElement producer = Schema().GetProperty("properties").GetProperty("Producer").GetProperty("anyOf")[0];
         var allowed = producer.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToHashSet();
         var required = producer.GetProperty("required").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
 
@@ -198,7 +200,10 @@ public class WorldPackageSchemaTests : IDisposable
         Assert.Subset(allowed, names);
         Assert.Superset(required, names);
 
-        JsonElement unavailable = Schema().GetProperty("$defs").GetProperty("server_identity_unavailable");
+        JsonElement unavailable = producer.GetProperty("properties").GetProperty("server").GetProperty("anyOf")
+            .EnumerateArray()
+            .Single(form => form.TryGetProperty("properties", out JsonElement members)
+                            && members.TryGetProperty("reason", out _));
         var serverNames = written.GetProperty("Producer").GetProperty("server").EnumerateObject().Select(p => p.Name);
         Assert.Equal(unavailable.GetProperty("required").EnumerateArray().Select(e => e.GetString()!).OrderBy(n => n, StringComparer.Ordinal),
                      serverNames.OrderBy(n => n, StringComparer.Ordinal));

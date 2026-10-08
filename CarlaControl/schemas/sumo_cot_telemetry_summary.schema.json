@@ -17,12 +17,169 @@
       "description": "The CSV's format."
     },
     "producer": {
-      "$ref": "#/$defs/producer"
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "description": "What made the CSV.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+        },
+        "carlanet": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "build",
+                "configuration",
+                "carla_commit",
+                "content_commit",
+                "engine_commit",
+                "commits_from"
+              ],
+              "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+              "properties": {
+                "available": {
+                  "const": true
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release the server was compiled with."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version the server declares, Major.Minor."
+                },
+                "build": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "package for a cooked server, editor for one run from the editor."
+                },
+                "configuration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The build configuration, such as Development or Shipping."
+                },
+                "carla_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA commit."
+                },
+                "content_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content commit."
+                },
+                "engine_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The Unreal Engine commit."
+                },
+                "commits_from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "reason"
+              ],
+              "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+              "properties": {
+                "available": {
+                  "const": false
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release, or unknown."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version, or unknown."
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Why the identity is not available."
+                }
+              }
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used. Null where none was."
+        },
+        "sumo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+        }
+      }
     },
     "csv": {
-      "description": "The CSV's file name, without a folder.",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "The CSV's file name, without a folder."
     },
     "columns": {
       "const": [
@@ -59,177 +216,6 @@
         "carla_y"
       ],
       "description": "The CSV's columns, in order: its header."
-    }
-  },
-  "$defs": {
-    "producer": {
-      "title": "What made the file",
-      "description": "The tool that wrote the file and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "tool",
-        "tool_version",
-        "carlanet",
-        "server",
-        "sumo"
-      ],
-      "properties": {
-        "tool": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The component that wrote the file, such as carlacontrol.SumoCotBridge, or the program's name where no component declared itself."
-        },
-        "tool_version": {
-          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say.",
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "carlanet": {
-          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet.",
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "server": {
-          "description": "The CARLA server's build identity, where a server was used. Null where none was.",
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "$ref": "#/$defs/server_identity"
-            },
-            {
-              "$ref": "#/$defs/server_identity_unavailable"
-            }
-          ]
-        },
-        "sumo": {
-          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not.",
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "written_utc": {
-          "type": "string",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
-          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
-        }
-      }
-    },
-    "server_identity": {
-      "title": "A server's build identity",
-      "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "available",
-        "release",
-        "world_interface",
-        "build",
-        "configuration",
-        "carla_commit",
-        "content_commit",
-        "engine_commit",
-        "commits_from"
-      ],
-      "properties": {
-        "available": {
-          "const": true
-        },
-        "release": {
-          "description": "The CARLA release the server was compiled with.",
-          "type": "string",
-          "minLength": 1
-        },
-        "world_interface": {
-          "description": "The world interface version the server declares, Major.Minor.",
-          "type": "string",
-          "minLength": 1
-        },
-        "build": {
-          "description": "package for a cooked server, editor for one run from the editor.",
-          "type": "string",
-          "minLength": 1
-        },
-        "configuration": {
-          "description": "The build configuration, such as Development or Shipping.",
-          "type": "string",
-          "minLength": 1
-        },
-        "carla_commit": {
-          "description": "The CARLA commit.",
-          "type": "string",
-          "minLength": 1
-        },
-        "content_commit": {
-          "description": "The content commit.",
-          "type": "string",
-          "minLength": 1
-        },
-        "engine_commit": {
-          "description": "The Unreal Engine commit.",
-          "type": "string",
-          "minLength": 1
-        },
-        "commits_from": {
-          "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none.",
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "server_identity_unavailable": {
-      "title": "A server that could not say what it was built from",
-      "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "available",
-        "release",
-        "world_interface",
-        "reason"
-      ],
-      "properties": {
-        "available": {
-          "const": false
-        },
-        "release": {
-          "description": "The CARLA release, or unknown.",
-          "type": "string",
-          "minLength": 1
-        },
-        "world_interface": {
-          "description": "The world interface version, or unknown.",
-          "type": "string",
-          "minLength": 1
-        },
-        "reason": {
-          "description": "Why the identity is not available.",
-          "type": "string",
-          "minLength": 1
-        }
-      }
     }
   }
 }

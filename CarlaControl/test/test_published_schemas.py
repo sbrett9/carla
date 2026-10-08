@@ -140,16 +140,54 @@ def test_the_epoch_schema_names_the_fields_and_version_solar_epoch_reads():
     assert EPOCH_VERSION == int(SolarEpoch.SupportedVersion)
 
 
+# A server's build identity as `get_build_identity` gives it.
+ANSWERED = {"available": True, "release": "0.10.0", "world_interface": "1.0", "build": "package",
+            "configuration": "Shipping", "carla_commit": "025443a83eaf1bb82f18795d608fca50eb77a452",
+            "content_commit": "unknown", "engine_commit": "unknown", "commits_from": "version_file"}
+
+
 @pytest.mark.parametrize("record", [
     ProducerRecord.record("carlacontrol.ScenarioCompiler", sumo="1.27.0"),
     ProducerRecord.record("carlacontrol.ScenarioCompiler", timed=False),
-    ProducerRecord.record("carlacontrol.CaptureSession", server={"available": True,
-                                                                 "release": "0.10.0"}),
+    ProducerRecord.record("carlacontrol.CaptureSession", server=ANSWERED),
     ProducerRecord.record("carlacontrol.CaptureSession",
                           server=ProducerRecord.unavailable("no call", "0.10.0", "1.0")),
 ])
 def test_the_producer_record_conforms_to_its_schema(record):
     assert SchemaPublication.problems(record, SchemaPublication.producer()) == []
+
+
+def test_a_server_identity_that_is_neither_an_answer_nor_a_reason_is_refused():
+    """One definition of the record for every schema, holding the server to the two shapes it has."""
+    partial = ProducerRecord.record("carlacontrol.CaptureSession",
+                                    server={"available": True, "release": "0.10.0"})
+    (problem,) = SchemaPublication.problems(partial, SchemaPublication.producer())
+    assert problem.startswith("$.server: matches none of the accepted forms")
+    assert "'commits_from' is required" in problem
+
+
+def test_every_generated_schema_that_names_a_producer_gives_it_the_one_definition():
+    def producers(node: object) -> list[object]:
+        if isinstance(node, dict):
+            found = [value for key, value in node.items() if key in ("producer", "Producer")]
+            return found + [item for value in node.values() for item in producers(value)]
+        if isinstance(node, list):
+            return [item for value in node for item in producers(value)]
+        return []
+
+    definition = SchemaPublication.producer()
+    checked = 0
+    for name, schema in every_schema().items():
+        for found in producers(schema.get("properties", {})) + producers(schema.get("$defs", {})):
+            if isinstance(found, dict) and "anyOf" in found and "properties" not in found:
+                found = next(form for form in found["anyOf"] if form.get("type") == "object")
+            # A run configuration's producer is provenance its reader keeps without reading, so its
+            # schema leaves it an open object.
+            if "properties" not in found:
+                continue
+            assert {**found, "description": None} == {**definition, "description": None}, name
+            checked += 1
+    assert checked >= 6
 
 
 def test_a_document_with_an_unknown_field_is_refused_by_the_schema_s_words():

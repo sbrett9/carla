@@ -29,19 +29,18 @@ from pathlib import Path
 
 from carlacontrol.AreaOfInterestResolver import RESOLVED_VERSION
 from carlacontrol.AreaOfInterestSource import AREA_ID_PATTERN, GEOMETRY_TYPES
-from carlacontrol.JsonSchemaFile import (
-    DRAFT,
-    LOCAL_REFERENCE,
+from carlacontrol.PlaceIndex import CARDINALS, PLACE_INDEX_VERSION
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
+from carlacontrol.SchemaPublication import (
     NON_EMPTY_TEXT,
     NON_NEGATIVE_INTEGER,
     NUMBER,
     SHA1_HEX_OR_EMPTY,
     SHA256_HEX,
     SHA256_HEX_OR_EMPTY,
-    TEXT,
-    JsonSchemaFile,
+    STRING,
+    SchemaPublication,
 )
-from carlacontrol.PlaceIndex import CARDINALS, PLACE_INDEX_VERSION
 from carlacontrol.SolarFrame import SOLAR_FRAME_VERSION
 
 # The format of `world.json` this package reads: `FormatVersion` in the manifest, as
@@ -100,8 +99,8 @@ ENTRIES: tuple[PackageEntry, ...] = (
                  "carlacontrol.AuthoringReferenceSet", SOLAR_FRAME_SCHEMA),
 )
 
-_EXTENT = JsonSchemaFile.numbers(4, "A rectangle in CARLA meters: four numbers, min x, min y, max x, "
-                                    "max y. CARLA's frame has x east and y south.")
+_EXTENT = SchemaPublication.numbers(4, "A rectangle in CARLA meters: four numbers, min x, min y, max x, "
+                                       "max y. CARLA's frame has x east and y south.")
 _STRINGS = {"type": "array", "items": {"type": "string"}}
 _NON_EMPTY_STRINGS = {"type": "array", "items": NON_EMPTY_TEXT}
 
@@ -122,7 +121,7 @@ class WorldPackageSchemas:
     @classmethod
     def write(cls, directory: str | Path) -> list[Path]:
         """Publish every schema into `directory`."""
-        return [JsonSchemaFile.write(schema, Path(directory) / name)
+        return [SchemaPublication.write(Path(directory) / name, schema)
                 for name, schema in cls.schemas().items()]
 
     @classmethod
@@ -140,8 +139,8 @@ class WorldPackageSchemas:
         """`world.json`, as `CarlaNet.Map.WorldPackage.Write` writes it."""
         meters = {"type": "number"}
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("world_package_manifest", MANIFEST_FORMAT_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("world-package-manifest", MANIFEST_FORMAT_VERSION),
             "title": "World package manifest (world.json in a .cwp)",
             "description": "What a generated world is: its geographic origin, how its roads were "
                            "seated on the photoreal imagery, the imagery layers, the traffic "
@@ -156,20 +155,20 @@ class WorldPackageSchemas:
                 "FormatVersion": {"const": MANIFEST_FORMAT_VERSION,
                                   "description": "The format of this file. A manifest without it "
                                                  "is version 1."},
-                "Producer": JsonSchemaFile.nullable(
-                    {"$ref": f"{LOCAL_REFERENCE}producer"},
+                "Producer": SchemaPublication.nullable(
+                    SchemaPublication.producer(),
                     "What made the package. Absent from a package written before it was recorded."),
                 "MapName": {"type": "string", "minLength": 1,
                             "description": "The world's name. The package file is <MapName>.cwp."},
-                "OriginLatitude": JsonSchemaFile.described(
+                "OriginLatitude": SchemaPublication.described(
                     NUMBER, "WGS84 latitude, degrees, of CARLA's (0, 0)."),
-                "OriginLongitude": JsonSchemaFile.described(
+                "OriginLongitude": SchemaPublication.described(
                     NUMBER, "WGS84 longitude, degrees, of CARLA's (0, 0)."),
-                "OriginHeightMeters": JsonSchemaFile.described(
+                "OriginHeightMeters": SchemaPublication.described(
                     meters, "Ellipsoidal height, meters, that CARLA's z = 0 stands for."),
-                "GeoReferenceString": JsonSchemaFile.described(
-                    TEXT, "The OpenDRIVE geoReference projection, a PROJ string, copied verbatim "
-                          "from map.xodr. Empty when the OpenDRIVE carries none."),
+                "GeoReferenceString": SchemaPublication.described(
+                    STRING, "The OpenDRIVE geoReference projection, a PROJ string, copied verbatim "
+                            "from map.xodr. Empty when the OpenDRIVE carries none."),
                 "HeightAlignMode": {"enum": list(HEIGHT_ALIGN_MODES),
                                     "description": "How roads were seated on the photoreal "
                                                    "imagery: none, area, origin or drape."},
@@ -177,18 +176,18 @@ class WorldPackageSchemas:
                                 "description": "True when the drivable surface was fitted to the "
                                                "imagery cell by cell, and bareearth.bin holds the "
                                                "grids."},
-                "HeightAlignOffsetMeters": JsonSchemaFile.described(
+                "HeightAlignOffsetMeters": SchemaPublication.described(
                     meters, "The one height, meters, added to the road surface by the area and "
                             "origin modes. 0 for none and for drape."),
-                "GridMinXMeters": JsonSchemaFile.described(
+                "GridMinXMeters": SchemaPublication.described(
                     meters, "CARLA x, meters, of the grid's first column. 0 when there is no grid."),
-                "GridMinYMeters": JsonSchemaFile.described(
+                "GridMinYMeters": SchemaPublication.described(
                     meters, "CARLA y, meters, of the grid's first row. 0 when there is no grid."),
-                "GridCellSizeMeters": JsonSchemaFile.described(
+                "GridCellSizeMeters": SchemaPublication.described(
                     meters, "Spacing, meters, between grid points. 0 when there is no grid."),
-                "GridNumCols": JsonSchemaFile.described(
+                "GridNumCols": SchemaPublication.described(
                     NON_NEGATIVE_INTEGER, "Grid points along x. 0 when there is no grid."),
-                "GridNumRows": JsonSchemaFile.described(
+                "GridNumRows": SchemaPublication.described(
                     NON_NEGATIVE_INTEGER, "Grid points along y. 0 when there is no grid."),
                 "BareEarthOffsetSha1": {"type": "string", "pattern": SHA1_HEX_OR_EMPTY,
                                         "description": "SHA-1, lowercase hexadecimal, of the "
@@ -199,25 +198,25 @@ class WorldPackageSchemas:
                                      "description": "SHA-1, lowercase hexadecimal, of the ground "
                                                     "height plane's bytes in bareearth.bin. Empty "
                                                     "when there is no grid, and on older packages."},
-                "PhotorealIonAssetId": JsonSchemaFile.described(
+                "PhotorealIonAssetId": SchemaPublication.described(
                     {"type": "integer"}, "Cesium ion asset id of the photoreal imagery tileset."),
-                "GroundIonAssetId": JsonSchemaFile.described(
+                "GroundIonAssetId": SchemaPublication.described(
                     {"type": "integer"}, "Cesium ion asset id of the bare-earth terrain the road "
-                                         "heights were taken from. 1 is Cesium World Terrain; 0 "
-                                         "means heights came from the photoreal surface."),
-                "StagingMinXMeters": JsonSchemaFile.described(
+                                            "heights were taken from. 1 is Cesium World Terrain; 0 "
+                                            "means heights came from the photoreal surface."),
+                "StagingMinXMeters": SchemaPublication.described(
                     meters, "CARLA x, meters, of the staging rectangle's west edge."),
-                "StagingMinYMeters": JsonSchemaFile.described(
+                "StagingMinYMeters": SchemaPublication.described(
                     meters, "CARLA y, meters, of the staging rectangle's north edge."),
-                "StagingMaxXMeters": JsonSchemaFile.described(
+                "StagingMaxXMeters": SchemaPublication.described(
                     meters, "CARLA x, meters, of the staging rectangle's east edge."),
-                "StagingMaxYMeters": JsonSchemaFile.described(
+                "StagingMaxYMeters": SchemaPublication.described(
                     meters, "CARLA y, meters, of the staging rectangle's south edge."),
-                "StagingMarginMeters": JsonSchemaFile.described(
+                "StagingMarginMeters": SchemaPublication.described(
                     meters, "Width, meters, of the ring inside the staging rectangle where traffic "
                             "enters and leaves."),
-                "SourceOsmFileName": JsonSchemaFile.described(
-                    TEXT, "File name of the OpenStreetMap extract the world was built from."),
+                "SourceOsmFileName": SchemaPublication.described(
+                    STRING, "File name of the OpenStreetMap extract the world was built from."),
                 "SourceOsmSha256": {"type": "string", "pattern": SHA256_HEX_OR_EMPTY,
                                     "description": "Fingerprint of that extract: SHA-256 over its "
                                                    "parsed content, not its bytes. Older packages "
@@ -229,29 +228,28 @@ class WorldPackageSchemas:
                                        "description": "Fingerprint of map.net.xml: SHA-256 over "
                                                       "its parsed content. Empty on a package "
                                                       "without a network."},
-                "NetconvertArgv": JsonSchemaFile.described(
+                "NetconvertArgv": SchemaPublication.described(
                     _STRINGS, "Every argument netconvert was given, in order. Its output files "
                               "are named <opendrive-output>, <output-file> and <tllogic-files>."),
-                "NetconvertPath": JsonSchemaFile.described(
-                    TEXT, "The netconvert executable that ran. Empty on older packages."),
-                "NetconvertVersion": JsonSchemaFile.described(
-                    TEXT, "What that netconvert reported as its version, such as Eclipse SUMO "
-                          "netconvert 1.27.0. Empty on older packages."),
-                "SampleStepMeters": JsonSchemaFile.described(
+                "NetconvertPath": SchemaPublication.described(
+                    STRING, "The netconvert executable that ran. Empty on older packages."),
+                "NetconvertVersion": SchemaPublication.described(
+                    STRING, "What that netconvert reported as its version, such as Eclipse SUMO "
+                            "netconvert 1.27.0. Empty on older packages."),
+                "SampleStepMeters": SchemaPublication.described(
                     meters, "Spacing, meters, of the road reference-line height samples."),
-                "TerrainResolutionMeters": JsonSchemaFile.described(
+                "TerrainResolutionMeters": SchemaPublication.described(
                     meters, "Spacing, meters, of the drivable surface points in drape mode."),
-                "TerrainMarginMeters": JsonSchemaFile.described(
+                "TerrainMarginMeters": SchemaPublication.described(
                     meters, "The staging margin the build was asked for, meters."),
-                "GeneratedAtUtc": JsonSchemaFile.described(
-                    TEXT, "When the package was written, ISO 8601 UTC."),
-                "GeneratorVersion": JsonSchemaFile.described(
-                    TEXT, "Assembly version of the CarlaNet client that wrote the package."),
-                "NetconvertExtraArgs": JsonSchemaFile.described(
+                "GeneratedAtUtc": SchemaPublication.described(
+                    STRING, "When the package was written, ISO 8601 UTC."),
+                "GeneratorVersion": SchemaPublication.described(
+                    STRING, "Assembly version of the CarlaNet client that wrote the package."),
+                "NetconvertExtraArgs": SchemaPublication.described(
                     _STRINGS, "The arguments, among NetconvertArgv, that the caller added to the "
                               "standard set."),
             },
-            "$defs": JsonSchemaFile.producer_definitions(),
         }
 
     # -- places.json ----------------------------------------------------------------------------
@@ -264,22 +262,22 @@ class WorldPackageSchemas:
             "required": ["edge_id", "from_junction", "to_junction", "bearing_deg", "direction",
                          "length_m", "lane_count", "lane_ids", "speed_mps", "extent_carla_m"],
             "properties": {
-                "edge_id": JsonSchemaFile.described(NON_EMPTY_TEXT, "The SUMO edge id."),
-                "from_junction": JsonSchemaFile.described(TEXT, "The SUMO junction it leaves."),
-                "to_junction": JsonSchemaFile.described(TEXT, "The SUMO junction it reaches."),
+                "edge_id": SchemaPublication.described(NON_EMPTY_TEXT, "The SUMO edge id."),
+                "from_junction": SchemaPublication.described(STRING, "The SUMO junction it leaves."),
+                "to_junction": SchemaPublication.described(STRING, "The SUMO junction it reaches."),
                 "bearing_deg": {"type": "number", "minimum": 0,
                                 "description": "Compass bearing, degrees clockwise from grid "
                                                "north, of the rightmost lane's first point to its "
                                                "last, from 0 up to but not including 360."},
                 "direction": {"enum": list(CARDINALS),
                               "description": "The quarter of the compass the bearing falls in."},
-                "length_m": JsonSchemaFile.described(NUMBER, "SUMO length of the rightmost lane, "
-                                                             "meters."),
+                "length_m": SchemaPublication.described(NUMBER, "SUMO length of the rightmost lane, "
+                                                                "meters."),
                 "lane_count": {"type": "integer", "minimum": 1, "description": "Lanes on the edge."},
                 "lane_ids": {"type": "array", "minItems": 1, "items": NON_EMPTY_TEXT,
                              "description": "The SUMO lane ids, rightmost first."},
-                "speed_mps": JsonSchemaFile.described(NUMBER, "Speed limit of the rightmost lane, "
-                                                              "meters per second."),
+                "speed_mps": SchemaPublication.described(NUMBER, "Speed limit of the rightmost lane, "
+                                                                 "meters per second."),
                 "extent_carla_m": _EXTENT,
             },
         }
@@ -293,14 +291,14 @@ class WorldPackageSchemas:
             "required": ["name", "scripts", "edge_count", "length_m", "extent_carla_m",
                          "directions", "edges"],
             "properties": {
-                "name": JsonSchemaFile.described(NON_EMPTY_TEXT, "The street name the edges "
-                                                                 "carry."),
-                "scripts": JsonSchemaFile.described(_STRINGS, "The writing systems of the name's "
-                                                              "letters, by Unicode name: LATIN, "
-                                                              "ARABIC and so on."),
+                "name": SchemaPublication.described(NON_EMPTY_TEXT, "The street name the edges "
+                                                                    "carry."),
+                "scripts": SchemaPublication.described(_STRINGS, "The writing systems of the name's "
+                                                                 "letters, by Unicode name: LATIN, "
+                                                                 "ARABIC and so on."),
                 "edge_count": {"type": "integer", "minimum": 1,
                                "description": "Edges carrying the name."},
-                "length_m": JsonSchemaFile.described(NUMBER, "Their lengths added up, meters."),
+                "length_m": SchemaPublication.described(NUMBER, "Their lengths added up, meters."),
                 "extent_carla_m": _EXTENT,
                 "directions": directions,
                 "edges": {"type": "array", "minItems": 1, "items": edge,
@@ -308,8 +306,8 @@ class WorldPackageSchemas:
             },
         }
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("place_index", PLACE_INDEX_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("place-index", PLACE_INDEX_VERSION),
             "title": "Place index (places.json in a .cwp)",
             "description": "Which edges of the world's SUMO network carry which street name, and "
                            "which way they head. Derived from map.net.xml alone.",
@@ -329,32 +327,32 @@ class WorldPackageSchemas:
                     "required": ["normal_edges", "named_edges", "named_fraction", "distinct_names",
                                  "names_by_script", "largest_name", "warn_below_named_fraction"],
                     "properties": {
-                        "normal_edges": JsonSchemaFile.described(
+                        "normal_edges": SchemaPublication.described(
                             NON_NEGATIVE_INTEGER, "Edges that are not inside a junction."),
-                        "named_edges": JsonSchemaFile.described(
+                        "named_edges": SchemaPublication.described(
                             NON_NEGATIVE_INTEGER, "Of those, the edges with a street name."),
                         "named_fraction": {"type": "number", "minimum": 0,
                                            "description": "named_edges / normal_edges, to four "
                                                           "decimals."},
-                        "distinct_names": JsonSchemaFile.described(NON_NEGATIVE_INTEGER,
-                                                                   "Different names."),
+                        "distinct_names": SchemaPublication.described(NON_NEGATIVE_INTEGER,
+                                                                      "Different names."),
                         "names_by_script": {"type": "object",
                                             "additionalProperties": NON_NEGATIVE_INTEGER,
                                             "description": "Names per writing system. NONE "
                                                            "counts names with no letters."},
-                        "largest_name": JsonSchemaFile.nullable(
+                        "largest_name": SchemaPublication.nullable(
                             {"type": "object", "additionalProperties": False,
                              "required": ["name", "edge_count"],
                              "properties": {"name": NON_EMPTY_TEXT,
-                                            "edge_count": {"type": "integer", "minimum": 1}}},
+                                               "edge_count": {"type": "integer", "minimum": 1}}},
                             "The name carried by the most edges. Null when no edge is named."),
-                        "warn_below_named_fraction": JsonSchemaFile.described(
+                        "warn_below_named_fraction": SchemaPublication.described(
                             NUMBER, "Below this named_fraction the index warns that names "
                                     "contribute little."),
                     },
                 },
-                "warnings": JsonSchemaFile.described(_STRINGS, "What the index warned about when "
-                                                               "it was built."),
+                "warnings": SchemaPublication.described(_STRINGS, "What the index warned about when "
+                                                                  "it was built."),
                 "streets": {"type": "array", "items": street,
                             "description": "One entry per street name, ordered by name."},
             },
@@ -366,8 +364,8 @@ class WorldPackageSchemas:
     def solar_frame() -> dict:
         """`solar.json`, as `SolarFrame.to_dict` writes it."""
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("solar_frame", SOLAR_FRAME_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("solar-frame", SOLAR_FRAME_VERSION),
             "title": "Solar frame (solar.json in a .cwp)",
             "description": "The facts about the world's sun that a scenario's start time is checked "
                            "against without a server: the origin the engine computes the sun from, "
@@ -387,17 +385,17 @@ class WorldPackageSchemas:
                 "origin_longitude": {"type": "number", "minimum": -180,
                                      "description": "WGS84 longitude, degrees, of the world's "
                                                     "origin."},
-                "engine_time_zone_hours": JsonSchemaFile.described(
+                "engine_time_zone_hours": SchemaPublication.described(
                     NUMBER, "The zone the engine sets, hours east of UTC: origin_longitude / 15. "
                             "Local mean solar time, not the site's civil zone."),
                 "engine_time_zone": {"type": "string", "pattern": r"^[+-][0-9]{2}:[0-9]{2}:[0-9]{2}$",
                                      "description": "The same zone as a signed offset, "
                                                     "hours:minutes:seconds."},
-                "engine_time_zone_rule": JsonSchemaFile.described(
+                "engine_time_zone_rule": SchemaPublication.described(
                     NON_EMPTY_TEXT, "The rule in words."),
-                "engine_daylight_saving": JsonSchemaFile.described(
+                "engine_daylight_saving": SchemaPublication.described(
                     {"type": "boolean"}, "Whether the engine applies daylight saving. It does not."),
-                "engine_solar_time_at_configure_hours": JsonSchemaFile.described(
+                "engine_solar_time_at_configure_hours": SchemaPublication.described(
                     NUMBER, "The solar time, hours, the engine sets when the world's georeference "
                             "is configured."),
             },
@@ -408,7 +406,7 @@ class WorldPackageSchemas:
     @staticmethod
     def areas_resolved() -> dict:
         """`areas.resolved.json`, as `AreaOfInterestResolver` writes it."""
-        point = JsonSchemaFile.numbers(2, "A CARLA position: two numbers, x and y, meters.")
+        point = SchemaPublication.numbers(2, "A CARLA position: two numbers, x and y, meters.")
         ring = {"type": "array", "minItems": 4, "items": point,
                 "description": "A closed ring of CARLA positions, first and last the same."}
         carla_local = {
@@ -428,9 +426,9 @@ class WorldPackageSchemas:
                                                           "items": ring}}}},
             ],
         }
-        vclasses = JsonSchemaFile.described(
+        vclasses = SchemaPublication.described(
             _NON_EMPTY_STRINGS, "SUMO vehicle classes allowed on the lane; all when the lane "
-                                "declares no restriction.")
+                                   "declares no restriction.")
         lane = {
             "description": "A lane inside, crossing, or near the area.",
             "anyOf": [
@@ -440,14 +438,14 @@ class WorldPackageSchemas:
                  "properties": {
                      "lane_id": NON_EMPTY_TEXT, "edge_id": NON_EMPTY_TEXT,
                      "containment": {"enum": ["inside", "crossing"]},
-                     "s_begin_m": JsonSchemaFile.described(
+                     "s_begin_m": SchemaPublication.described(
                          {"type": "number", "minimum": 0},
                          "SUMO lane position, meters, where the first stretch inside begins."),
-                     "s_end_m": JsonSchemaFile.described(
+                     "s_end_m": SchemaPublication.described(
                          {"type": "number", "minimum": 0},
                          "SUMO lane position, meters, where the last stretch inside ends."),
                      "intervals_m": {"type": "array", "minItems": 1,
-                                     "items": JsonSchemaFile.numbers(
+                                     "items": SchemaPublication.numbers(
                                          2, "Begin and end, SUMO lane positions in meters."),
                                      "description": "Every stretch of the lane inside the area."},
                      "allowed_vclasses": vclasses}},
@@ -456,7 +454,7 @@ class WorldPackageSchemas:
                  "properties": {
                      "lane_id": NON_EMPTY_TEXT, "edge_id": NON_EMPTY_TEXT,
                      "containment": {"const": "near"},
-                     "distance_m": JsonSchemaFile.described(
+                     "distance_m": SchemaPublication.described(
                          {"type": "number", "minimum": 0},
                          "Shortest distance, meters, from the lane to the area."),
                      "allowed_vclasses": vclasses}},
@@ -469,9 +467,9 @@ class WorldPackageSchemas:
             "properties": {
                 "id": {"type": "string", "pattern": f"^{AREA_ID_PATTERN.pattern}$",
                        "description": "The area's id, as the areas file declares it."},
-                "name": JsonSchemaFile.described(NON_EMPTY_TEXT, "The area's name."),
-                "kind": JsonSchemaFile.nullable(NON_EMPTY_TEXT, "The area's kind, or null when "
-                                                                "the areas file gives none."),
+                "name": SchemaPublication.described(NON_EMPTY_TEXT, "The area's name."),
+                "kind": SchemaPublication.nullable(NON_EMPTY_TEXT, "The area's kind, or null when "
+                                                                   "the areas file gives none."),
                 "geographic": {"type": "object",
                                "description": "The area's GeoJSON geometry, copied from the areas "
                                               "file: [longitude, latitude] in WGS84 degrees. The "
@@ -497,13 +495,13 @@ class WorldPackageSchemas:
                                                       "inside or crossing, near otherwise."},
                              "lanes": {"type": "array", "items": lane,
                                        "description": "Ordered by edge id, then lane id."}}},
-                "warnings": JsonSchemaFile.described(_STRINGS, "What resolving the area warned "
-                                                               "about."),
+                "warnings": SchemaPublication.described(_STRINGS, "What resolving the area warned "
+                                                                  "about."),
             },
         }
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("areas_resolved", RESOLVED_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("areas-resolved", RESOLVED_VERSION),
             "title": "Resolved areas of interest (areas.resolved.json in a .cwp)",
             "description": "The declared areas of interest placed on the built world: in CARLA "
                            "meters, and on the SUMO lanes inside, crossing or near each one. "
@@ -518,19 +516,19 @@ class WorldPackageSchemas:
                 "resolved_version": {"const": RESOLVED_VERSION,
                                      "description": "The format of this file. A table without it "
                                                     "is version 1."},
-                "source_file_name": JsonSchemaFile.described(
-                    TEXT, "The areas file's name. Empty when no areas were declared."),
+                "source_file_name": SchemaPublication.described(
+                    STRING, "The areas file's name. Empty when no areas were declared."),
                 "source_sha256": {"type": "string", "pattern": SHA256_HEX_OR_EMPTY,
                                   "description": "SHA-256 of areas.aoi.geojson's bytes. Empty when "
                                                  "no areas were declared. A reader refuses the "
                                                  "table when this differs from the entry beside "
                                                  "it."},
-                "world_map_name": JsonSchemaFile.described(TEXT, "MapName from world.json."),
-                "world_georeference": JsonSchemaFile.described(
-                    TEXT, "GeoReferenceString from world.json."),
-                "world_origin_latitude": JsonSchemaFile.nullable(
+                "world_map_name": SchemaPublication.described(STRING, "MapName from world.json."),
+                "world_georeference": SchemaPublication.described(
+                    STRING, "GeoReferenceString from world.json."),
+                "world_origin_latitude": SchemaPublication.nullable(
                     NUMBER, "OriginLatitude from world.json, degrees."),
-                "world_origin_longitude": JsonSchemaFile.nullable(
+                "world_origin_longitude": SchemaPublication.nullable(
                     NUMBER, "OriginLongitude from world.json, degrees."),
                 "network_fingerprint": {"type": "string", "pattern": SHA256_HEX,
                                         "description": "Fingerprint of the network the lanes are "
@@ -543,19 +541,19 @@ class WorldPackageSchemas:
                     "required": ["carla_from_sumo", "projected_by", "net_offset_m",
                                  "geodesy_agreement_limit_m", "geodesy_worst_residual_m"],
                     "properties": {
-                        "carla_from_sumo": JsonSchemaFile.described(
+                        "carla_from_sumo": SchemaPublication.described(
                             NON_EMPTY_TEXT, "How a SUMO position becomes a CARLA one: "
-                                            "carla(x, y) = sumo(x, -y)."),
-                        "projected_by": JsonSchemaFile.described(
-                            TEXT, "What converted the areas' degrees to SUMO meters. Empty when "
-                                  "no areas were declared."),
-                        "net_offset_m": JsonSchemaFile.numbers(
+                                               "carla(x, y) = sumo(x, -y)."),
+                        "projected_by": SchemaPublication.described(
+                            STRING, "What converted the areas' degrees to SUMO meters. Empty when "
+                                    "no areas were declared."),
+                        "net_offset_m": SchemaPublication.numbers(
                             2, "The network's netOffset, two numbers in meters. 0, 0 unless the "
                                "roads were deliberately shifted."),
-                        "geodesy_agreement_limit_m": JsonSchemaFile.described(
+                        "geodesy_agreement_limit_m": SchemaPublication.described(
                             NUMBER, "How far apart, meters, SUMO's projection and the world's own "
                                     "may place one vertex before the table is refused."),
-                        "geodesy_worst_residual_m": JsonSchemaFile.nullable(
+                        "geodesy_worst_residual_m": SchemaPublication.nullable(
                             NUMBER, "The largest such distance measured, meters. Null when no "
                                     "areas were declared."),
                     },

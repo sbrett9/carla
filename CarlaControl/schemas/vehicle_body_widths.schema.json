@@ -17,14 +17,14 @@
       "description": "The format of this file."
     },
     "method": {
-      "description": "How the widths were measured.",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "How the widths were measured."
     },
     "measured": {
-      "description": "When, and from what.",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "When, and from what."
     },
     "vehicles": {
       "type": "object",
@@ -39,24 +39,24 @@
         ],
         "properties": {
           "length_m": {
-            "description": "The mesh's length, meters.",
             "type": "number",
-            "exclusiveMinimum": 0
+            "exclusiveMinimum": 0,
+            "description": "The mesh's length, meters."
           },
           "full_width_m": {
-            "description": "The mesh's whole width, meters, mirrors included. Must equal the catalogue's width_m to within a millimeter.",
             "type": "number",
-            "exclusiveMinimum": 0
+            "exclusiveMinimum": 0,
+            "description": "The mesh's whole width, meters, mirrors included. Must equal the catalogue's width_m to within a millimeter."
           },
           "body_width_m": {
-            "description": "The width without mirrors and other short protrusions, meters.",
             "type": "number",
-            "exclusiveMinimum": 0
+            "exclusiveMinimum": 0,
+            "description": "The width without mirrors and other short protrusions, meters."
           },
           "height_m": {
-            "description": "The mesh's height, meters.",
             "type": "number",
-            "exclusiveMinimum": 0
+            "exclusiveMinimum": 0,
+            "description": "The mesh's height, meters."
           }
         }
       },

@@ -23,8 +23,8 @@
       "description": "The format of this file. A table without it is version 1."
     },
     "source_file_name": {
-      "description": "The areas file's name. Empty when no areas were declared.",
-      "type": "string"
+      "type": "string",
+      "description": "The areas file's name. Empty when no areas were declared."
     },
     "source_sha256": {
       "type": "string",
@@ -32,15 +32,14 @@
       "description": "SHA-256 of areas.aoi.geojson's bytes. Empty when no areas were declared. A reader refuses the table when this differs from the entry beside it."
     },
     "world_map_name": {
-      "description": "MapName from world.json.",
-      "type": "string"
+      "type": "string",
+      "description": "MapName from world.json."
     },
     "world_georeference": {
-      "description": "GeoReferenceString from world.json.",
-      "type": "string"
+      "type": "string",
+      "description": "GeoReferenceString from world.json."
     },
     "world_origin_latitude": {
-      "description": "OriginLatitude from world.json, degrees.",
       "anyOf": [
         {
           "type": "number"
@@ -48,10 +47,10 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "description": "OriginLatitude from world.json, degrees."
     },
     "world_origin_longitude": {
-      "description": "OriginLongitude from world.json, degrees.",
       "anyOf": [
         {
           "type": "number"
@@ -59,7 +58,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "description": "OriginLongitude from world.json, degrees."
     },
     "network_fingerprint": {
       "type": "string",
@@ -83,28 +83,27 @@
       ],
       "properties": {
         "carla_from_sumo": {
-          "description": "How a SUMO position becomes a CARLA one: carla(x, y) = sumo(x, -y).",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "How a SUMO position becomes a CARLA one: carla(x, y) = sumo(x, -y)."
         },
         "projected_by": {
-          "description": "What converted the areas' degrees to SUMO meters. Empty when no areas were declared.",
-          "type": "string"
+          "type": "string",
+          "description": "What converted the areas' degrees to SUMO meters. Empty when no areas were declared."
         },
         "net_offset_m": {
-          "description": "The network's netOffset, two numbers in meters. 0, 0 unless the roads were deliberately shifted.",
           "type": "array",
           "minItems": 2,
           "items": {
             "type": "number"
-          }
+          },
+          "description": "The network's netOffset, two numbers in meters. 0, 0 unless the roads were deliberately shifted."
         },
         "geodesy_agreement_limit_m": {
-          "description": "How far apart, meters, SUMO's projection and the world's own may place one vertex before the table is refused.",
-          "type": "number"
+          "type": "number",
+          "description": "How far apart, meters, SUMO's projection and the world's own may place one vertex before the table is refused."
         },
         "geodesy_worst_residual_m": {
-          "description": "The largest such distance measured, meters. Null when no areas were declared.",
           "anyOf": [
             {
               "type": "number"
@@ -112,7 +111,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The largest such distance measured, meters. Null when no areas were declared."
         }
       }
     },
@@ -138,12 +138,11 @@
             "description": "The area's id, as the areas file declares it."
           },
           "name": {
-            "description": "The area's name.",
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The area's name."
           },
           "kind": {
-            "description": "The area's kind, or null when the areas file gives none.",
             "anyOf": [
               {
                 "type": "string",
@@ -152,7 +151,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The area's kind, or null when the areas file gives none."
           },
           "geographic": {
             "type": "object",
@@ -190,12 +190,12 @@
                     "const": "Circle"
                   },
                   "centre": {
-                    "description": "A CARLA position: two numbers, x and y, meters.",
                     "type": "array",
                     "minItems": 2,
                     "items": {
                       "type": "number"
-                    }
+                    },
+                    "description": "A CARLA position: two numbers, x and y, meters."
                   },
                   "radius_m": {
                     "type": "number",
@@ -221,12 +221,12 @@
                       "type": "array",
                       "minItems": 4,
                       "items": {
-                        "description": "A CARLA position: two numbers, x and y, meters.",
                         "type": "array",
                         "minItems": 2,
                         "items": {
                           "type": "number"
-                        }
+                        },
+                        "description": "A CARLA position: two numbers, x and y, meters."
                       },
                       "description": "A closed ring of CARLA positions, first and last the same."
                     }
@@ -254,12 +254,12 @@
                         "type": "array",
                         "minItems": 4,
                         "items": {
-                          "description": "A CARLA position: two numbers, x and y, meters.",
                           "type": "array",
                           "minItems": 2,
                           "items": {
                             "type": "number"
-                          }
+                          },
+                          "description": "A CARLA position: two numbers, x and y, meters."
                         },
                         "description": "A closed ring of CARLA positions, first and last the same."
                       }
@@ -270,12 +270,12 @@
             ]
           },
           "envelope_carla_m": {
-            "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south.",
             "type": "array",
             "minItems": 4,
             "items": {
               "type": "number"
-            }
+            },
+            "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south."
           },
           "sumo": {
             "type": "object",
@@ -343,35 +343,35 @@
                           ]
                         },
                         "s_begin_m": {
-                          "description": "SUMO lane position, meters, where the first stretch inside begins.",
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "SUMO lane position, meters, where the first stretch inside begins."
                         },
                         "s_end_m": {
-                          "description": "SUMO lane position, meters, where the last stretch inside ends.",
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "SUMO lane position, meters, where the last stretch inside ends."
                         },
                         "intervals_m": {
                           "type": "array",
                           "minItems": 1,
                           "items": {
-                            "description": "Begin and end, SUMO lane positions in meters.",
                             "type": "array",
                             "minItems": 2,
                             "items": {
                               "type": "number"
-                            }
+                            },
+                            "description": "Begin and end, SUMO lane positions in meters."
                           },
                           "description": "Every stretch of the lane inside the area."
                         },
                         "allowed_vclasses": {
-                          "description": "SUMO vehicle classes allowed on the lane; all when the lane declares no restriction.",
                           "type": "array",
                           "items": {
                             "type": "string",
                             "minLength": 1
-                          }
+                          },
+                          "description": "SUMO vehicle classes allowed on the lane; all when the lane declares no restriction."
                         }
                       }
                     },
@@ -398,17 +398,17 @@
                           "const": "near"
                         },
                         "distance_m": {
-                          "description": "Shortest distance, meters, from the lane to the area.",
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "Shortest distance, meters, from the lane to the area."
                         },
                         "allowed_vclasses": {
-                          "description": "SUMO vehicle classes allowed on the lane; all when the lane declares no restriction.",
                           "type": "array",
                           "items": {
                             "type": "string",
                             "minLength": 1
-                          }
+                          },
+                          "description": "SUMO vehicle classes allowed on the lane; all when the lane declares no restriction."
                         }
                       }
                     }
@@ -419,11 +419,11 @@
             }
           },
           "warnings": {
-            "description": "What resolving the area warned about.",
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "What resolving the area warned about."
           }
         }
       },

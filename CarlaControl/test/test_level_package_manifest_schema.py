@@ -36,8 +36,8 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
 from carlacontrol.LevelPackageSchema import LEVEL_MANIFEST_SCHEMA, LevelPackageSchema  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 
 WORLD = "Fixture_World"
 SCRIPTS = _REPO / "Scripts"
@@ -82,7 +82,7 @@ def git(checkout: Path, *arguments: str) -> str:
 
 
 def test_the_published_schema_is_the_generated_one():
-    assert PUBLISHED.read_text(encoding="utf-8") == JsonSchemaFile.text(LevelPackageSchema.schema()), (
+    assert PUBLISHED.read_text(encoding="utf-8") == SchemaPublication.text(LevelPackageSchema.schema()), (
         "regenerate with: python -c \"from carlacontrol.LevelPackageSchema import LevelPackageSchema; "
         "LevelPackageSchema.write('CarlaControl/schemas')\"")
 
@@ -183,7 +183,7 @@ def package_world(launcher: str, tmp_path: Path, interface_ini: str | None = Non
 def test_package_world_writes_a_manifest_its_schema_accepts(launcher, tmp_path):
     manifest = package_world(launcher, tmp_path)
     commit, release = manifest.pop("_checkout_commit"), manifest.pop("_release")
-    assert JsonSchemaFile.problems(manifest, LevelPackageSchema.schema()) == []
+    assert SchemaPublication.problems(manifest, LevelPackageSchema.schema()) == []
     # Both scripts stamp the manifest to the millisecond.
     assert UTC_MILLISECONDS.fullmatch(manifest["packagedAtUtc"]), manifest["packagedAtUtc"]
     assert manifest["world"] == WORLD
@@ -238,11 +238,11 @@ def test_a_manifest_missing_a_field_or_naming_another_platform_is_refused():
                 "releaseVersion": "0.10.0", "config": "Development", "platform": "Mac",
                 "carlaGitHash": "", "contentGitHash": "", "unrealGitHash": "",
                 "packagedAtUtc": "2026-10-07T12:00:00Z"}
-    problems = JsonSchemaFile.problems(manifest, LevelPackageSchema.schema())
+    problems = SchemaPublication.problems(manifest, LevelPackageSchema.schema())
     assert problems == ["$.platform: \"Mac\" is not one of ['Win64', 'Linux']"]
     del manifest["basedOnRelease"]
     manifest["platform"] = "Win64"
-    assert JsonSchemaFile.problems(manifest, LevelPackageSchema.schema()) == [
+    assert SchemaPublication.problems(manifest, LevelPackageSchema.schema()) == [
         "$: 'basedOnRelease' is required"]
 
 
@@ -257,7 +257,7 @@ def world_zip(path: Path, major: int, minor: int, format_version: int | None = 1
     if format_version is None:
         del manifest["formatVersion"]
     elif format_version == 1:
-        assert JsonSchemaFile.problems(manifest, LevelPackageSchema.schema()) == []
+        assert SchemaPublication.problems(manifest, LevelPackageSchema.schema()) == []
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("world.json", json.dumps(manifest, indent=2))
         archive.writestr(f"{WORLD}/{WORLD}.uplugin", "{}\n")

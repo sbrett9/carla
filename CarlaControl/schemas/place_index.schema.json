@@ -36,14 +36,14 @@
       ],
       "properties": {
         "normal_edges": {
-          "description": "Edges that are not inside a junction.",
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Edges that are not inside a junction."
         },
         "named_edges": {
-          "description": "Of those, the edges with a street name.",
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Of those, the edges with a street name."
         },
         "named_fraction": {
           "type": "number",
@@ -51,9 +51,9 @@
           "description": "named_edges / normal_edges, to four decimals."
         },
         "distinct_names": {
-          "description": "Different names.",
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Different names."
         },
         "names_by_script": {
           "type": "object",
@@ -64,7 +64,6 @@
           "description": "Names per writing system. NONE counts names with no letters."
         },
         "largest_name": {
-          "description": "The name carried by the most edges. Null when no edge is named.",
           "anyOf": [
             {
               "type": "object",
@@ -87,20 +86,21 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The name carried by the most edges. Null when no edge is named."
         },
         "warn_below_named_fraction": {
-          "description": "Below this named_fraction the index warns that names contribute little.",
-          "type": "number"
+          "type": "number",
+          "description": "Below this named_fraction the index warns that names contribute little."
         }
       }
     },
     "warnings": {
-      "description": "What the index warned about when it was built.",
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "description": "What the index warned about when it was built."
     },
     "streets": {
       "type": "array",
@@ -118,16 +118,16 @@
         ],
         "properties": {
           "name": {
-            "description": "The street name the edges carry.",
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The street name the edges carry."
           },
           "scripts": {
-            "description": "The writing systems of the name's letters, by Unicode name: LATIN, ARABIC and so on.",
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "The writing systems of the name's letters, by Unicode name: LATIN, ARABIC and so on."
           },
           "edge_count": {
             "type": "integer",
@@ -135,16 +135,16 @@
             "description": "Edges carrying the name."
           },
           "length_m": {
-            "description": "Their lengths added up, meters.",
-            "type": "number"
+            "type": "number",
+            "description": "Their lengths added up, meters."
           },
           "extent_carla_m": {
-            "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south.",
             "type": "array",
             "minItems": 4,
             "items": {
               "type": "number"
-            }
+            },
+            "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south."
           },
           "directions": {
             "type": "object",
@@ -201,17 +201,17 @@
               ],
               "properties": {
                 "edge_id": {
-                  "description": "The SUMO edge id.",
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "The SUMO edge id."
                 },
                 "from_junction": {
-                  "description": "The SUMO junction it leaves.",
-                  "type": "string"
+                  "type": "string",
+                  "description": "The SUMO junction it leaves."
                 },
                 "to_junction": {
-                  "description": "The SUMO junction it reaches.",
-                  "type": "string"
+                  "type": "string",
+                  "description": "The SUMO junction it reaches."
                 },
                 "bearing_deg": {
                   "type": "number",
@@ -228,8 +228,8 @@
                   "description": "The quarter of the compass the bearing falls in."
                 },
                 "length_m": {
-                  "description": "SUMO length of the rightmost lane, meters.",
-                  "type": "number"
+                  "type": "number",
+                  "description": "SUMO length of the rightmost lane, meters."
                 },
                 "lane_count": {
                   "type": "integer",
@@ -246,16 +246,16 @@
                   "description": "The SUMO lane ids, rightmost first."
                 },
                 "speed_mps": {
-                  "description": "Speed limit of the rightmost lane, meters per second.",
-                  "type": "number"
+                  "type": "number",
+                  "description": "Speed limit of the rightmost lane, meters per second."
                 },
                 "extent_carla_m": {
-                  "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south.",
                   "type": "array",
                   "minItems": 4,
                   "items": {
                     "type": "number"
-                  }
+                  },
+                  "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south."
                 }
               }
             },

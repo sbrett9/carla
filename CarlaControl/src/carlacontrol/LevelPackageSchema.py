@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from carlacontrol.JsonSchemaFile import DRAFT, GIT_COMMIT_OR_EMPTY, UTC_INSTANT, JsonSchemaFile
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
+from carlacontrol.SchemaPublication import GIT_COMMIT_OR_EMPTY, UTC_INSTANT, SchemaPublication
 
 LEVEL_MANIFEST_FORMAT_VERSION = 1
 LEVEL_MANIFEST_SCHEMA = "level_package_manifest.schema.json"
@@ -34,8 +35,8 @@ class LevelPackageSchema:
         """`world.json` in a level package, as `PackageWorld` writes it."""
         version_part = {"type": "integer", "minimum": 0}
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("level_package_manifest", LEVEL_MANIFEST_FORMAT_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("level-package-manifest", LEVEL_MANIFEST_FORMAT_VERSION),
             "title": "Level package manifest (world.json in a PackageWorld zip)",
             "description": "What one separately delivered world is and what it needs from the CARLA "
                            "package it is installed into. An installer compares the world interface "
@@ -56,10 +57,10 @@ class LevelPackageSchema:
                 "mapPackage": {"type": "string", "pattern": "^/[^/]+/Maps/[^/]+$",
                                "description": "The level's Unreal package path, /<world>/Maps/"
                                               "<world>, which loads it."},
-                "worldInterfaceMajor": JsonSchemaFile.described(
+                "worldInterfaceMajor": SchemaPublication.described(
                     version_part, "The Major of the world interface version the world was cooked "
                                   "against. The package installed into must declare the same Major."),
-                "worldInterfaceMinor": JsonSchemaFile.described(
+                "worldInterfaceMinor": SchemaPublication.described(
                     version_part, "The Minor of that version. The package installed into must "
                                   "declare this Minor or a later one."),
                 "basedOnRelease": {"type": "string", "minLength": 1,
@@ -96,4 +97,4 @@ class LevelPackageSchema:
     @classmethod
     def write(cls, directory: str | Path) -> list[Path]:
         """Publish the schema into `directory`."""
-        return [JsonSchemaFile.write(cls.schema(), Path(directory) / LEVEL_MANIFEST_SCHEMA)]
+        return [SchemaPublication.write(Path(directory) / LEVEL_MANIFEST_SCHEMA, cls.schema())]

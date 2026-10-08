@@ -45,8 +45,8 @@ from pathlib import Path
 
 import carlanet
 
-from carlacontrol.JsonSchemaFile import JsonSchemaFile
 from carlacontrol.ProducerRecord import ProducerRecord
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter
 from carlacontrol.VehicleCatalogue import LAMP_NAMES, VehicleCatalogue
 from carlacontrol.VehicleCatalogueSchemas import VehicleCatalogueSchemas
@@ -214,7 +214,7 @@ class VehicleCatalogueBuilder:
             raise ValueError(f"{path} declares body_widths_version {table.get('body_widths_version')!r}, "
                              f"and {BODY_WIDTHS_VERSION} is the only one this reader implements")
         schema = VehicleCatalogueSchemas.body_widths()
-        problems = JsonSchemaFile.problems(table, schema)
+        problems = SchemaPublication.problems(table, schema)
         if problems:
             raise ValueError(f"{path} does not match the body-width table's schema "
                              f"({schema['$id']}): " + "; ".join(problems))

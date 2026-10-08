@@ -41,7 +41,7 @@ import zipfile
 from pathlib import Path
 
 from carlacontrol.FormatVersion import FormatVersion
-from carlacontrol.JsonSchemaFile import JsonSchemaFile
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.WorldPackageSchemas import MANIFEST_FORMAT_VERSION, WorldPackageSchemas
 
 # `MANIFEST_FORMAT_VERSION` is the newest `world.json` format this reader reads: `FormatVersion` in the
@@ -221,8 +221,8 @@ class WorldPackageReader:
 
     def _refuse_malformed(self, name: str, document: object, *, top_level_required: bool = True) -> None:
         """Refuse an entry that departs from its published schema, naming every departure."""
-        problems = JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name),
-                                           top_level_required=top_level_required)
+        problems = SchemaPublication.problems(document, WorldPackageSchemas.entry_schema(name),
+                                              top_level_required=top_level_required)
         if not problems:
             return
         shown = "; ".join(problems[:SHOWN_PROBLEMS])

@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ScenarioWorldFixture import ScenarioWorldFixture  # noqa: E402
 
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoCotBridge import BareEarthGrid  # noqa: E402
 from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
 from carlacontrol.WorldPackageSchemas import (  # noqa: E402
@@ -70,7 +70,7 @@ JSON_ENTRIES = [entry.name for entry in ENTRIES if entry.schema]
 def test_the_published_schema_is_the_generated_one(name):
     published = SCHEMAS / name
     assert published.is_file(), REGENERATE
-    assert published.read_text(encoding="utf-8") == JsonSchemaFile.text(
+    assert published.read_text(encoding="utf-8") == SchemaPublication.text(
         WorldPackageSchemas.schemas()[name]), REGENERATE
 
 
@@ -79,7 +79,7 @@ def test_every_schema_says_only_what_the_reader_enforces(name):
     schema = WorldPackageSchemas.schemas()[name]
     assert schema["$id"].startswith("urn:carla-sumo-capture:schema:")
     # The validator refuses to run on a keyword it does not enforce.
-    JsonSchemaFile.problems({}, schema)
+    SchemaPublication.problems({}, schema)
 
 
 def test_every_entry_the_reader_names_is_a_listed_entry():
@@ -107,7 +107,7 @@ def test_a_published_reference_set_matches_its_schemas(published):
         assert {"places.json", "solar.json", "areas.resolved.json", "areas.aoi.geojson"} <= names
         for name in ("places.json", "solar.json", "areas.resolved.json"):
             document = json.loads(package.read(name))
-            assert JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name)) == [], name
+            assert SchemaPublication.problems(document, WorldPackageSchemas.entry_schema(name)) == [], name
         areas = json.loads(package.read("areas.resolved.json"))
     (kerb,) = areas["areas"]
     assert kerb["carla_local"]["type"] == "Circle"
@@ -133,7 +133,7 @@ def test_a_built_package_s_json_entries_match_their_schemas(package):
         for name in JSON_ENTRIES:
             if name in archive.namelist():
                 document = json.loads(archive.read(name))
-                assert JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name)) == [], \
+                assert SchemaPublication.problems(document, WorldPackageSchemas.entry_schema(name)) == [], \
                     name
 
 

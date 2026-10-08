@@ -35,14 +35,14 @@
       "description": "The level's Unreal package path, /<world>/Maps/<world>, which loads it."
     },
     "worldInterfaceMajor": {
-      "description": "The Major of the world interface version the world was cooked against. The package installed into must declare the same Major.",
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "description": "The Major of the world interface version the world was cooked against. The package installed into must declare the same Major."
     },
     "worldInterfaceMinor": {
-      "description": "The Minor of that version. The package installed into must declare this Minor or a later one.",
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "description": "The Minor of that version. The package installed into must declare this Minor or a later one."
     },
     "basedOnRelease": {
       "type": "string",
