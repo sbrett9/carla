@@ -1,0 +1,650 @@
+{
+  "spec_version": 1,
+  "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
+  "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
+  "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
+  "world": {
+    "package": "../Build/world-packages/Gardnerville_Centerville_Lane.cwp",
+    "network_fingerprint": "a50ac5452330ef83485625a8ec89ff3dbec0d0d7b4fc7a9bfb50392ffb829bc6"
+  },
+  "epoch": {
+    "epoch_version": 1,
+    "civil_datetime": "2026-06-21T10:00:00-07:00",
+    "utc_offset_hours": -7,
+    "utc_datetime": "2026-06-21T17:00:00Z",
+    "calendar_advances": false,
+    "dst_in_effect": true,
+    "time_zone_id": "America/Los_Angeles",
+    "note": "Gardnerville, Nevada: simulated second zero is 10:00 Pacific Daylight Time on the summer solstice"
+  },
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start"
+  },
+  "seeds": {
+    "sumo": 42
+  },
+  "simulation": {
+    "end": 2220,
+    "step_length_s": 0.05
+  },
+  "catalogue": "../CarlaControl/catalogue/vehicles.catalogue.json",
+  "vehicle_classes": [
+    {
+      "class_id": "car",
+      "blueprints": [
+        "vehicle.ue4.audi.tt",
+        "vehicle.mini.cooper",
+        "vehicle.ue4.bmw.grantourer",
+        "vehicle.ue4.mercedes.ccc",
+        "vehicle.ue4.ford.mustang",
+        "vehicle.lincoln.mkz",
+        "vehicle.dodge.charger",
+        "vehicle.ue4.chevrolet.impala",
+        "vehicle.ue4.ford.crown"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "55",
+        "speedFactor": "normc(1.00,0.10,0.80,1.20)"
+      },
+      "share": 0.45,
+      "gui_shape": "passenger",
+      "note": "Saloons, hatchbacks and coupes. Designed around a 4.6 m car; the nine measured bodies run 4.18 m to 5.37 m and average 4.82 m, so the class is 0.22 m longer on average than it was drawn up as and considerably more varied than the single body it used to be."
+    },
+    {
+      "class_id": "suv",
+      "blueprints": [
+        "vehicle.nissan.patrol"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "52",
+        "speedFactor": "normc(1.00,0.10,0.80,1.20)"
+      },
+      "share": 0.18,
+      "gui_shape": "passenger",
+      "note": "The only sport utility in the content build: a 5.59 x 2.15 x 2.06 m body, against the 5.0 x 1.95 m this class was designed around, so every SUV here is 0.59 m longer than intended. One body means every SUV on the map looks the same, which is a property of the content and not of this scenario."
+    },
+    {
+      "class_id": "van",
+      "blueprints": [
+        "vehicle.sprinter.mercedes"
+      ],
+      "sumo_vclass": "delivery",
+      "behaviour": {
+        "maxSpeed": "45",
+        "speedFactor": "normc(0.95,0.08,0.75,1.10)"
+      },
+      "share": 0.07,
+      "gui_shape": "delivery",
+      "note": "A panel van measuring 5.92 m against the 5.9 m designed around: the closest agreement of any class here, at 0.02 m."
+    },
+    {
+      "class_id": "truck",
+      "blueprints": [
+        "vehicle.carlacola.actors",
+        "vehicle.carlamotors.european_hgv"
+      ],
+      "sumo_vclass": "truck",
+      "behaviour": {
+        "maxSpeed": "35",
+        "speedFactor": "normc(0.90,0.06,0.75,1.05)"
+      },
+      "share": 0.05,
+      "gui_shape": "truck",
+      "note": "The two rigid trucks in the content build, a two-axle box truck measuring 8.00 m and a three-axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m shorter than the 9.5 m this class was designed around. The Fuso Rosa is a light bus, not a truck, and is not drawn as one."
+    },
+    {
+      "class_id": "orbiter",
+      "blueprints": [
+        "vehicle.lincoln.mkz"
+      ],
+      "sumo_vclass": "passenger",
+      "behaviour": {
+        "maxSpeed": "55",
+        "speedFactor": "1.25",
+        "speedDev": "0",
+        "sigma": "0.20",
+        "tau": "1.20"
+      },
+      "share": 0.0,
+      "gui_shape": "passenger",
+      "gui_colour": "#FF8C00",
+      "note": "The marked vehicle. speedDev is zeroed so its speed multiple is exact rather than drawn from a distribution around it."
+    }
+  ],
+  "vehicle_mix": "ambient_mix",
+  "places": {
+    "108141475#0": {
+      "edge": "108141475#0"
+    },
+    "108141475#2": {
+      "edge": "108141475#2"
+    },
+    "108141475#3": {
+      "edge": "108141475#3"
+    },
+    "108141475#4": {
+      "edge": "108141475#4"
+    },
+    "-219060582#2": {
+      "edge": "-219060582#2"
+    },
+    "219060581#4": {
+      "edge": "219060581#4"
+    },
+    "-219060584#0": {
+      "edge": "-219060584#0"
+    },
+    "219060581#1": {
+      "edge": "219060581#1"
+    },
+    "219060581#2": {
+      "edge": "219060581#2"
+    },
+    "219060581#3": {
+      "edge": "219060581#3"
+    },
+    "219060582#2": {
+      "edge": "219060582#2"
+    },
+    "-108141475#4": {
+      "edge": "-108141475#4"
+    },
+    "-108141475#3": {
+      "edge": "-108141475#3"
+    },
+    "-108141475#2": {
+      "edge": "-108141475#2"
+    },
+    "-108141475#1": {
+      "edge": "-108141475#1"
+    },
+    "1236933617#2": {
+      "edge": "1236933617#2"
+    },
+    "-1236933617#2": {
+      "edge": "-1236933617#2"
+    },
+    "1419984783#1": {
+      "edge": "1419984783#1"
+    },
+    "-1419984783#1": {
+      "edge": "-1419984783#1"
+    },
+    "14286827": {
+      "edge": "14286827"
+    },
+    "-14286827": {
+      "edge": "-14286827"
+    },
+    "14288285": {
+      "edge": "14288285"
+    },
+    "-14288285": {
+      "edge": "-14288285"
+    },
+    "14289737": {
+      "edge": "14289737"
+    },
+    "-14289737": {
+      "edge": "-14289737"
+    },
+    "-14286316": {
+      "edge": "-14286316"
+    },
+    "14286316": {
+      "edge": "14286316"
+    },
+    "-1428171646": {
+      "edge": "-1428171646"
+    },
+    "1428171646": {
+      "edge": "1428171646"
+    },
+    "14285460": {
+      "edge": "14285460"
+    },
+    "-14285460": {
+      "edge": "-14285460"
+    },
+    "219060581#0": {
+      "edge": "219060581#0"
+    },
+    "-219060581#2": {
+      "edge": "-219060581#2"
+    },
+    "-219060581#1": {
+      "edge": "-219060581#1"
+    },
+    "-219060581#0": {
+      "edge": "-219060581#0"
+    },
+    "219060584#0": {
+      "edge": "219060584#0"
+    },
+    "-219060581#3": {
+      "edge": "-219060581#3"
+    },
+    "-219060582#1": {
+      "edge": "-219060582#1"
+    },
+    "-219060582#0": {
+      "edge": "-219060582#0"
+    },
+    "219060582#0": {
+      "edge": "219060582#0"
+    },
+    "219060583": {
+      "edge": "219060583"
+    },
+    "-219060583": {
+      "edge": "-219060583"
+    },
+    "-219060581#4": {
+      "edge": "-219060581#4"
+    },
+    "-219060584#1": {
+      "edge": "-219060584#1"
+    },
+    "219060584#1": {
+      "edge": "219060584#1"
+    }
+  },
+  "flows": [
+    {
+      "id": "corridor_west_to_northeast",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "1236933617#2",
+      "vehs_per_hour": 210,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_northeast_to_west",
+      "type": "ambient_mix",
+      "from": "-1236933617#2",
+      "to": "-108141475#1",
+      "vehs_per_hour": 55,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_west_to_east",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "1419984783#1",
+      "vehs_per_hour": 240,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_east_to_west",
+      "type": "ambient_mix",
+      "from": "-1419984783#1",
+      "to": "-108141475#1",
+      "vehs_per_hour": 60,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_northeast_to_east",
+      "type": "ambient_mix",
+      "from": "-1236933617#2",
+      "to": "1419984783#1",
+      "vehs_per_hour": 55,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "corridor_east_to_northeast",
+      "type": "ambient_mix",
+      "from": "-1419984783#1",
+      "to": "1236933617#2",
+      "vehs_per_hour": 55,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "edna_to_west",
+      "type": "ambient_mix",
+      "from": "14286827",
+      "to": "-108141475#1",
+      "vehs_per_hour": 8,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "west_to_edna",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "-14286827",
+      "vehs_per_hour": 25,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "marianne_to_east",
+      "type": "ambient_mix",
+      "from": "14288285",
+      "to": "1419984783#1",
+      "vehs_per_hour": 28,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "west_to_marianne",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "-14288285",
+      "vehs_per_hour": 28,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "rubio_to_west",
+      "type": "ambient_mix",
+      "from": "14289737",
+      "to": "-108141475#1",
+      "vehs_per_hour": 9,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "east_to_rubio",
+      "type": "ambient_mix",
+      "from": "-1419984783#1",
+      "to": "-14289737",
+      "vehs_per_hour": 28,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "heavenlyview_to_west",
+      "type": "ambient_mix",
+      "from": "-14286316",
+      "to": "-108141475#1",
+      "vehs_per_hour": 8,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "west_to_heavenlyview",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "14286316",
+      "vehs_per_hour": 25,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "northstub_to_west",
+      "type": "ambient_mix",
+      "from": "-1428171646",
+      "to": "-108141475#1",
+      "vehs_per_hour": 9,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "west_to_northstub",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "1428171646",
+      "vehs_per_hour": 28,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "turningcircle_to_east",
+      "type": "ambient_mix",
+      "from": "14285460",
+      "to": "1419984783#1",
+      "vehs_per_hour": 20,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "east_to_turningcircle",
+      "type": "ambient_mix",
+      "from": "-1419984783#1",
+      "to": "-14285460",
+      "vehs_per_hour": 20,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "neighbourhood_through_north",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "1428171646",
+      "vehs_per_hour": 40,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "219060581#0",
+        "219060581#1",
+        "219060581#2"
+      ]
+    },
+    {
+      "id": "neighbourhood_through_west",
+      "type": "ambient_mix",
+      "from": "-1236933617#2",
+      "to": "-108141475#1",
+      "vehs_per_hour": 20,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "-219060581#2",
+        "-219060581#1",
+        "-219060581#0"
+      ]
+    },
+    {
+      "id": "neighbourhood_south_to_north",
+      "type": "ambient_mix",
+      "from": "14288285",
+      "to": "1428171646",
+      "vehs_per_hour": 30,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "219060581#0",
+        "219060584#0",
+        "219060581#4",
+        "-219060581#3"
+      ]
+    },
+    {
+      "id": "neighbourhood_north_to_south",
+      "type": "ambient_mix",
+      "from": "-1428171646",
+      "to": "-14288285",
+      "vehs_per_hour": 30,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max",
+      "via": [
+        "219060581#3",
+        "-219060582#1",
+        "-219060582#0"
+      ]
+    },
+    {
+      "id": "cobblestone_to_east",
+      "type": "ambient_mix",
+      "from": "219060582#0",
+      "to": "1419984783#1",
+      "vehs_per_hour": 30,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "east_to_cobblestone",
+      "type": "ambient_mix",
+      "from": "-1419984783#1",
+      "to": "-219060582#0",
+      "vehs_per_hour": 30,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "lostriver_to_east",
+      "type": "ambient_mix",
+      "from": "219060583",
+      "to": "1419984783#1",
+      "vehs_per_hour": 25,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "west_to_lostriver",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "-219060583",
+      "vehs_per_hour": 25,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "rockterrace_local_north",
+      "type": "ambient_mix",
+      "from": "-219060581#4",
+      "to": "1428171646",
+      "vehs_per_hour": 25,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "rockterrace_local_in",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "219060581#2",
+      "vehs_per_hour": 25,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "keystone_to_west",
+      "type": "ambient_mix",
+      "from": "-219060584#1",
+      "to": "-108141475#1",
+      "vehs_per_hour": 12,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    },
+    {
+      "id": "west_to_keystone",
+      "type": "ambient_mix",
+      "from": "108141475#0",
+      "to": "219060584#1",
+      "vehs_per_hour": 30,
+      "begin": 0.0,
+      "end": 2220,
+      "depart_lane": "free",
+      "depart_speed": "max"
+    }
+  ],
+  "actors": [
+    {
+      "id": "orbiter",
+      "type": "orbiter",
+      "depart": 60,
+      "depart_lane": "free",
+      "depart_speed": "20.12",
+      "arrival_speed": "current",
+      "phases": [
+        {
+          "route": [
+            "108141475#0",
+            "108141475#2",
+            "108141475#3",
+            "108141475#4",
+            "-219060582#2"
+          ],
+          "hold": "posted"
+        },
+        {
+          "route": [
+            "219060581#4",
+            "-219060584#0",
+            "219060581#1",
+            "219060581#2",
+            "219060581#3"
+          ],
+          "repeat": 20,
+          "hold": 11.0
+        },
+        {
+          "route": [
+            "219060582#2",
+            "-108141475#4",
+            "-108141475#3",
+            "-108141475#2",
+            "-108141475#1"
+          ]
+        }
+      ]
+    }
+  ]
+}
