@@ -27,6 +27,11 @@ computation, so a second run with byte-identical flags produces a different grap
 Arapahoe extract, 743 of 4,978 canonical rows differ and lane lengths move by up to 3.3 m while the
 map's boundary matches exactly. A scenario authored against a rebuilt network binds to edges the
 rendered world does not have, and nothing downstream notices.
+
+Every JSON entry is checked against its published schema (`WorldPackageSchemas`) as it is read, after
+its format version, and refused naming each departure. `world.json` is checked field by field without
+insisting on the fields CarlaNet requires, since this reader reads only some of them: a field it carries
+must have the shape the schema gives it, and a field the schema does not name is refused.
 """
 from __future__ import annotations
 
@@ -36,11 +41,15 @@ import zipfile
 from pathlib import Path
 
 from carlacontrol.FormatVersion import FormatVersion
+from carlacontrol.JsonSchemaFile import JsonSchemaFile
+from carlacontrol.WorldPackageSchemas import MANIFEST_FORMAT_VERSION, WorldPackageSchemas
 
-# The newest `world.json` format this reader reads: `FormatVersion` in the manifest, as
-# `CarlaNet.Map.WorldPackage.FormatVersion` writes it. A package written before the manifest carried
-# one reads as version 1.
-MANIFEST_FORMAT_VERSION = 1
+# `MANIFEST_FORMAT_VERSION` is the newest `world.json` format this reader reads: `FormatVersion` in the
+# manifest, as `CarlaNet.Map.WorldPackage.FormatVersion` writes it. A package written before the
+# manifest carried one reads as version 1. It is defined beside the schema of that format.
+
+# How many of an entry's departures from its schema a refusal names before it says how many more.
+SHOWN_PROBLEMS = 12
 
 # The schema shape each reference-set entry must declare to be read. A reader never reads one in part.
 IMPLEMENTED_VERSIONS = {
@@ -76,6 +85,7 @@ class WorldPackageReader:
         self.format_version = FormatVersion.check(f"{self.path} ({self.MANIFEST_ENTRY})", "FormatVersion",
                                                   self.manifest.get("FormatVersion"),
                                                   MANIFEST_FORMAT_VERSION)
+        self._refuse_malformed(self.MANIFEST_ENTRY, self.manifest, top_level_required=False)
 
     @property
     def producer(self) -> dict | None:
@@ -205,4 +215,17 @@ class WorldPackageReader:
         if document.get(field) != implemented:
             raise ValueError(f"{self.path}: {name} declares {field} {document.get(field)!r}; this "
                              f"reader implements {implemented} and does not read one in part")
+        self._refuse_malformed(name, document)
         return document
+
+    def _refuse_malformed(self, name: str, document: object, *, top_level_required: bool = True) -> None:
+        """Refuse an entry that departs from its published schema, naming every departure."""
+        problems = JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name),
+                                           top_level_required=top_level_required)
+        if not problems:
+            return
+        shown = "; ".join(problems[:SHOWN_PROBLEMS])
+        more = len(problems) - SHOWN_PROBLEMS
+        raise ValueError(f"{self.path}: {name} does not match its schema "
+                         f"({WorldPackageSchemas.entry_schema(name)['$id']}): {shown}"
+                         + (f"; and {more} more" if more > 0 else ""))

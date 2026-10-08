@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cursor-on-Target telemetry: the live feed and the SUMO bridge's XML file.
+
+  Identifier: urn:carla-sumo-capture:schema:cot_telemetry:1
+
+  Two documents are described here, each by its root element:
+
+    * <event> is one datagram of the live feed. Every UDP datagram holds exactly one event, UTF-8,
+      with no XML declaration. carla-sctmv sends CARLA vehicles (TelemetryController). The SUMO
+      bridge, carla-cot-telemetry given a UDP address, sends SUMO vehicles (SumoCotBridge). Both
+      format events with carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot.
+
+    * <events> is the file carla-cot-telemetry writes when given an XML path: the run's record of
+      what made it, the display convention, then every event of the run, each carrying every field
+      of the vehicle's record.
+
+  A vehicle event has the shape of a vehicle event in a capture's truth sidecar, whose schema is
+  truth_sidecar.xsd, and the attributes they share mean the same thing there and here. A datagram
+  differs from a sidecar event in what it leaves out: it never carries the picture's fields (in_frame,
+  the box, occlusion, lights, pose source), _box3d or _supervision; a SUMO vehicle's datagram leaves
+  out type_id, special_type, role_name and marked, which the bridge's files keep. It also carries
+  _capture and _solar inside each event's <detail>, where a sidecar holds the solar state once on its
+  container. This schema is complete on its own so that a receiver can check a datagram with it alone.
+
+  No element is in a namespace. Every number except _solar's rate is written in fixed-point decimal.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified"
+           attributeFormDefault="unqualified" version="1">
+
+  <!-- ===== Document roots =============================================================== -->
+
+  <xs:element name="event" type="VehicleEvent">
+    <xs:annotation>
+      <xs:documentation>One vehicle at one instant: a datagram of the live feed, or one event of
+        the SUMO bridge's XML file.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <xs:element name="events" type="SumoEventFile">
+    <xs:annotation>
+      <xs:documentation>The file carla-cot-telemetry --xml writes.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <!-- ===== Simple types ================================================================== -->
+
+  <xs:simpleType name="CotInstant">
+    <xs:annotation>
+      <xs:documentation>ISO 8601 UTC to the millisecond, such as 2026-03-21T12:00:00.000Z.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="GroundVehicleType">
+    <xs:annotation>
+      <xs:documentation>a-&lt;affiliation&gt;-G-E-V: a ground vehicle. The affiliation letter is
+        p, u, a, f, n, s, h, j, k, o or x.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="a-[puafnshjkox]-G-E-V"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Rgb">
+    <xs:annotation>
+      <xs:documentation>R,G,B, each 0 to 255.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{1,3},[0-9]{1,3},[0-9]{1,3}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ZeroOrOne">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="0"/>
+      <xs:enumeration value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TrueOrFalse">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===== One vehicle event ============================================================= -->
+
+  <xs:complexType name="VehicleEvent">
+    <xs:sequence>
+      <xs:element name="point" type="Point"/>
+      <xs:element name="detail" type="VehicleDetail"/>
+    </xs:sequence>
+    <xs:attribute name="version" type="xs:string" use="required" fixed="2.0">
+      <xs:annotation><xs:documentation>The CoT event version.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="uid" use="required">
+      <xs:annotation>
+        <xs:documentation>The track id. A CARLA vehicle is &lt;prefix&gt;-&lt;actor id&gt;; a vehicle
+          a SUMO drive lent a CARLA body is &lt;prefix&gt;-SUMO-&lt;SUMO id&gt;; the SUMO bridge's is
+          &lt;prefix&gt;-&lt;SUMO id&gt;. The prefix is CARLA-TRUTH from carla-sctmv and SUMO-TRUTH
+          from the bridge unless --uid-prefix sets it.</xs:documentation>
+      </xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:minLength value="1"/></xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="type" type="GroundVehicleType" use="required"/>
+    <xs:attribute name="how" use="required">
+      <xs:annotation>
+        <xs:documentation>m-g, machine-generated truth. m-f, fused, is reserved for a producer that
+          is not truth; no tool here writes it.</xs:documentation>
+      </xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="m-g"/>
+          <xs:enumeration value="m-f"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="time" type="CotInstant" use="required">
+      <xs:annotation><xs:documentation>When the vehicle was where the point says.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="start" type="CotInstant" use="required">
+      <xs:annotation><xs:documentation>The same instant as time.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="stale" type="CotInstant" use="required">
+      <xs:annotation><xs:documentation>time plus the staleness, 3 seconds unless --stale sets it.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Point">
+    <xs:attribute name="lat" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>WGS84 latitude, degrees, seven decimals.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lon" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>WGS84 longitude, degrees, seven decimals.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="hae" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>WGS84 ellipsoidal height, meters, two decimals: bare-earth
+        truth, not the height the body was drawn at.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ce" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Horizontal error, meters. 0.0 for truth.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="le" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Vertical error, meters. 0.0 for truth.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="VehicleDetail">
+    <xs:sequence>
+      <xs:element name="track" type="Track"/>
+      <xs:element name="contact" type="Contact"/>
+      <xs:element name="_carla" type="CarlaVehicle"/>
+      <xs:element name="_capture" type="Capture" minOccurs="0"/>
+      <xs:element name="_solar" type="EventSolar" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Track">
+    <xs:attribute name="course" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Direction of travel, degrees clockwise from north, one decimal.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="speed" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Speed, meters per second, two decimals.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Contact">
+    <xs:attribute name="callsign" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>&lt;base_type&gt;-&lt;track&gt;, the track being the actor id or
+        the SUMO id the uid ends with.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="CarlaVehicle">
+    <xs:annotation>
+      <xs:documentation>The vehicle's truth beyond CoT's own fields. Each attribute means what it
+        means in the truth sidecar's _carla.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="source" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>truth.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="actor_id" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>The CARLA actor id of the body that drew the vehicle. The SUMO
+        bridge, which has no CARLA actor, writes the SUMO vehicle id.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="type_id" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>The CARLA blueprint id, or the SUMO vehicle type id in the
+        bridge's file. Left out of a SUMO vehicle's datagram.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="base_type" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>car, van, truck, bus, motorcycle or bicycle, from the
+        vehicle catalogue.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="special_type" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>emergency, taxi, electric, or empty. Left out of a SUMO
+        vehicle's datagram.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="length_m" type="xs:decimal" use="required"/>
+    <xs:attribute name="width_m" type="xs:decimal" use="required"/>
+    <xs:attribute name="height_m" type="xs:decimal" use="required"/>
+    <xs:attribute name="color" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>R,G,B. CARLA's body color, or the SUMO type's sumo-gui
+        color from the bridge.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="role_name" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>The CARLA role name, or the SUMO flow in the bridge's file.
+        Left out of a SUMO vehicle's datagram.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="marked" type="ZeroOrOne" use="optional">
+      <xs:annotation><xs:documentation>1 when the scenario planted the vehicle. Only in the SUMO
+        bridge's file.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vx" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Velocity east, meters per second.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vy" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Velocity south, meters per second (CARLA's y).</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vz" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Velocity up, meters per second.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="heading_deg" type="xs:decimal" use="optional">
+      <xs:annotation><xs:documentation>The direction the body points, degrees clockwise from north.
+        CARLA vehicles only.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sumo_id" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>The SUMO vehicle a SUMO drive lent this body to.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vtype_id" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>That vehicle's SUMO type.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="admitted_tick" type="xs:integer" use="optional">
+      <xs:annotation><xs:documentation>The frame on which the body began drawing that vehicle.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Capture">
+    <xs:annotation><xs:documentation>Which simulation frame the event was taken on. carla-sctmv only.</xs:documentation></xs:annotation>
+    <xs:attribute name="tick" type="xs:integer" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="EventSolar">
+    <xs:annotation><xs:documentation>The sun when the event was taken, as the server reported it.
+      carla-sctmv only.</xs:documentation></xs:annotation>
+    <xs:attribute name="solar_time" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Local solar time, hours.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="date" type="xs:date" use="required"/>
+    <xs:attribute name="time_zone" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>The engine's time zone, hours east of UTC.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_elevation_deg" type="xs:decimal" use="required"/>
+    <xs:attribute name="sun_azimuth_deg" type="xs:decimal" use="required"/>
+    <xs:attribute name="advancing" type="TrueOrFalse" use="required">
+      <xs:annotation><xs:documentation>Whether the sun's clock is running.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="rate" type="xs:double" use="required">
+      <xs:annotation><xs:documentation>Solar seconds per simulation second.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <!-- ===== The SUMO bridge's XML file =================================================== -->
+
+  <xs:complexType name="SumoEventFile">
+    <xs:sequence>
+      <xs:element name="_producer" type="Producer" minOccurs="0">
+        <xs:annotation><xs:documentation>What made the file. Absent from a file written before it
+          was recorded.</xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="_display_convention" type="DisplayConvention" minOccurs="0"/>
+      <xs:element name="event" type="VehicleEvent" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="source" type="xs:string" use="required" fixed="sumo"/>
+    <xs:attribute name="format_version" type="xs:string" use="optional" fixed="1">
+      <xs:annotation><xs:documentation>The file's format. A file without it is version 1.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="scenario" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>The .sumocfg file's name without extension.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="epoch" type="CotInstant" use="required">
+      <xs:annotation><xs:documentation>The UTC instant simulation time 0 was stamped with.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Producer">
+    <xs:annotation><xs:documentation>The record of what made a file, as every XML file our tools
+      write carries it.</xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="_server" type="ServerIdentity" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="tool" type="xs:string" use="required"/>
+    <xs:attribute name="tool_version" type="xs:string" use="optional"/>
+    <xs:attribute name="carlanet" type="xs:string" use="optional"/>
+    <xs:attribute name="sumo" type="xs:string" use="optional"/>
+    <xs:attribute name="written_utc" type="CotInstant" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="ServerIdentity">
+    <xs:attribute name="available" type="TrueOrFalse" use="required"/>
+    <xs:attribute name="release" type="xs:string" use="required"/>
+    <xs:attribute name="world_interface" type="xs:string" use="required"/>
+    <xs:attribute name="build" type="xs:string" use="optional"/>
+    <xs:attribute name="configuration" type="xs:string" use="optional"/>
+    <xs:attribute name="carla_commit" type="xs:string" use="optional"/>
+    <xs:attribute name="content_commit" type="xs:string" use="optional"/>
+    <xs:attribute name="engine_commit" type="xs:string" use="optional"/>
+    <xs:attribute name="commits_from" type="xs:string" use="optional"/>
+    <xs:attribute name="reason" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="DisplayConvention">
+    <xs:annotation><xs:documentation>The affiliation each vehicle population was drawn with, and
+      the file that said so.</xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="population" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="type" type="xs:string" use="required">
+            <xs:annotation><xs:documentation>A vehicle class id or a SUMO vehicle type id.</xs:documentation></xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="affiliation" use="required">
+            <xs:simpleType>
+              <xs:restriction base="xs:string"><xs:pattern value="[puafnshjkox]"/></xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="source" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>The convention file's name. Empty when the run had none.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="default_affiliation" use="required">
+      <xs:annotation><xs:documentation>The affiliation of every population the convention does not name.</xs:documentation></xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:pattern value="[puafnshjkox]"/></xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+</xs:schema>

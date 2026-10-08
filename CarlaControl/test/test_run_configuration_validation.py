@@ -610,8 +610,11 @@ def test_a_dry_run_that_ran_needs_no_acceptance_and_the_echo_states_what_it_foun
 
 def test_a_catalogue_of_another_digest_is_refused(layout, tmp_path):
     other = tmp_path / "other.catalogue.json"
-    other.write_text(CATALOGUE.read_text(encoding="utf-8").replace(
-        '"catalogue_digest": "', '"catalogue_digest": "0'), encoding="utf-8")
+    # Another catalogue's digest: still a SHA-256, so the catalogue reads, and not this one's.
+    document = json.loads(CATALOGUE.read_text(encoding="utf-8"))
+    digest = document["catalogue_digest"]
+    document["catalogue_digest"] = ("1" if digest[0] == "0" else "0") + digest[1:]
+    other.write_text(json.dumps(document), encoding="utf-8")
     profile = layout.profile_document()
     profile["paths"]["catalogue"] = str(other)
     path = tmp_path / "profile.json"

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:legacy_labels:1",
+  "title": "Legacy scenario labels (*.labels.json)",
+  "description": "What a scenario made before compiled scenarios planted: the planted vehicles, an affiliation per vehicle type, and the described gaps. Nothing writes this file any more; a compiled scenario's labels are its supervision plan. Every key may be absent, and a reader ignores a key it does not name.",
+  "type": "object",
+  "properties": {
+    "marked_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "SUMO ids of the vehicles the scenario planted."
+    },
+    "affiliation_by_type": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": [
+          "a",
+          "f",
+          "h",
+          "j",
+          "k",
+          "n",
+          "o",
+          "p",
+          "s",
+          "u",
+          "x"
+        ]
+      },
+      "description": "A CoT affiliation letter per SUMO vehicle type. u marks an anomaly type; a reader withholds those and uses the rest only when the run has no display convention."
+    },
+    "anomaly_notes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "The described gaps, each an object with the author's own keys; begin_s and end_s, when given, are seconds of simulation time."
+    }
+  }
+}

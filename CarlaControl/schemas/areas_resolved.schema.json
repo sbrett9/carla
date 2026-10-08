@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:areas_resolved:1",
+  "title": "Resolved areas of interest (areas.resolved.json in a .cwp)",
+  "description": "The declared areas of interest placed on the built world: in CARLA meters, and on the SUMO lanes inside, crossing or near each one. Always written when the reference set is published; with no areas declared, the list is empty.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "resolved_version",
+    "source_file_name",
+    "source_sha256",
+    "world_map_name",
+    "world_georeference",
+    "world_origin_latitude",
+    "world_origin_longitude",
+    "network_fingerprint",
+    "near_m",
+    "frame",
+    "areas"
+  ],
+  "properties": {
+    "resolved_version": {
+      "const": 1,
+      "description": "The format of this file."
+    },
+    "source_file_name": {
+      "description": "The areas file's name. Empty when no areas were declared.",
+      "type": "string"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64})?$",
+      "description": "SHA-256 of areas.aoi.geojson's bytes. Empty when no areas were declared. A reader refuses the table when this differs from the entry beside it."
+    },
+    "world_map_name": {
+      "description": "MapName from world.json.",
+      "type": "string"
+    },
+    "world_georeference": {
+      "description": "GeoReferenceString from world.json.",
+      "type": "string"
+    },
+    "world_origin_latitude": {
+      "description": "OriginLatitude from world.json, degrees.",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "world_origin_longitude": {
+      "description": "OriginLongitude from world.json, degrees.",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "network_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Fingerprint of the network the lanes are from."
+    },
+    "near_m": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "A lane within this distance, meters, of an area is near it."
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carla_from_sumo",
+        "projected_by",
+        "net_offset_m",
+        "geodesy_agreement_limit_m",
+        "geodesy_worst_residual_m"
+      ],
+      "properties": {
+        "carla_from_sumo": {
+          "description": "How a SUMO position becomes a CARLA one: carla(x, y) = sumo(x, -y).",
+          "type": "string",
+          "minLength": 1
+        },
+        "projected_by": {
+          "description": "What converted the areas' degrees to SUMO meters. Empty when no areas were declared.",
+          "type": "string"
+        },
+        "net_offset_m": {
+          "description": "The network's netOffset, two numbers in meters. 0, 0 unless the roads were deliberately shifted.",
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number"
+          }
+        },
+        "geodesy_agreement_limit_m": {
+          "description": "How far apart, meters, SUMO's projection and the world's own may place one vertex before the table is refused.",
+          "type": "number"
+        },
+        "geodesy_worst_residual_m": {
+          "description": "The largest such distance measured, meters. Null when no areas were declared.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "areas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "geographic",
+          "carla_local",
+          "envelope_carla_m",
+          "sumo",
+          "warnings"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "description": "The area's id, as the areas file declares it."
+          },
+          "name": {
+            "description": "The area's name.",
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "description": "The area's kind, or null when the areas file gives none.",
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geographic": {
+            "type": "object",
+            "description": "The area's GeoJSON geometry, copied from the areas file: [longitude, latitude] in WGS84 degrees.",
+            "required": [
+              "type",
+              "coordinates"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "Polygon",
+                  "MultiPolygon",
+                  "Point"
+                ]
+              },
+              "coordinates": {
+                "type": "array"
+              }
+            }
+          },
+          "carla_local": {
+            "description": "The area in CARLA meters, rounded to the millimeter.",
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "centre",
+                  "radius_m"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "Circle"
+                  },
+                  "centre": {
+                    "description": "A CARLA position: two numbers, x and y, meters.",
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "radius_m": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "Polygon"
+                  },
+                  "coordinates": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "array",
+                      "minItems": 4,
+                      "items": {
+                        "description": "A CARLA position: two numbers, x and y, meters.",
+                        "type": "array",
+                        "minItems": 2,
+                        "items": {
+                          "type": "number"
+                        }
+                      },
+                      "description": "A closed ring of CARLA positions, first and last the same."
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "MultiPolygon"
+                  },
+                  "coordinates": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "array",
+                        "minItems": 4,
+                        "items": {
+                          "description": "A CARLA position: two numbers, x and y, meters.",
+                          "type": "array",
+                          "minItems": 2,
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "description": "A closed ring of CARLA positions, first and last the same."
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "envelope_carla_m": {
+            "description": "A rectangle in CARLA meters: four numbers, min x, min y, max x, max y. CARLA's frame has x east and y south.",
+            "type": "array",
+            "minItems": 4,
+            "items": {
+              "type": "number"
+            }
+          },
+          "sumo": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "edges",
+              "lanes"
+            ],
+            "properties": {
+              "edges": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_id",
+                    "containment"
+                  ],
+                  "properties": {
+                    "edge_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "containment": {
+                      "enum": [
+                        "inside",
+                        "crossing",
+                        "near"
+                      ]
+                    }
+                  }
+                },
+                "description": "Each edge with a listed lane: inside when every lane is, crossing when any lane is inside or crossing, near otherwise."
+              },
+              "lanes": {
+                "type": "array",
+                "items": {
+                  "description": "A lane inside, crossing, or near the area.",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "lane_id",
+                        "edge_id",
+                        "containment",
+                        "s_begin_m",
+                        "s_end_m",
+                        "intervals_m",
+                        "allowed_vclasses"
+                      ],
+                      "properties": {
+                        "lane_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "edge_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "containment": {
+                          "enum": [
+                            "inside",
+                            "crossing"
+                          ]
+                        },
+                        "s_begin_m": {
+                          "description": "SUMO lane position, meters, where the first stretch inside begins.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "s_end_m": {
+                          "description": "SUMO lane position, meters, where the last stretch inside ends.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "intervals_m": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "description": "Begin and end, SUMO lane positions in meters.",
+                            "type": "array",
+                            "minItems": 2,
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "description": "Every stretch of the lane inside the area."
+                        },
+                        "allowed_vclasses": {
+                          "description": "SUMO vehicle classes allowed on the lane; all when the lane declares no restriction.",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "lane_id",
+                        "edge_id",
+                        "containment",
+                        "distance_m",
+                        "allowed_vclasses"
+                      ],
+                      "properties": {
+                        "lane_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "edge_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "containment": {
+                          "const": "near"
+                        },
+                        "distance_m": {
+                          "description": "Shortest distance, meters, from the lane to the area.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "allowed_vclasses": {
+                          "description": "SUMO vehicle classes allowed on the lane; all when the lane declares no restriction.",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "description": "Ordered by edge id, then lane id."
+              }
+            }
+          },
+          "warnings": {
+            "description": "What resolving the area warned about.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "One entry per declared area, in the areas file's order."
+    }
+  }
+}

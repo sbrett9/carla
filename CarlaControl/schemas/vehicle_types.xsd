@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The SUMO vehicle types generated from the vehicle catalogue: vehicles.vtypes.rou.xml.
+
+  Identifier: urn:carla-sumo-capture:schema:vehicle_types:1
+
+  The file is a SUMO route file holding only vehicle types, so SUMO's own data/xsd/routes_file.xsd
+  accepts it too. This schema is narrower: it describes exactly what
+  carlacontrol.SumoVehicleTypeWriter writes. Each measured CARLA blueprint is one <vType>, whose id is
+  the blueprint id; each authoring class is one <vTypeDistribution> over its members' types, whose id
+  is the class id. Every attribute is written on every type.
+
+  A type's length, width and height are the measured body's: length and height from its bounding box,
+  width without its mirrors where the catalogue measured that. Its driving parameters are its class's.
+  Its color and guiShape are read by sumo-gui only and never reach the rendered vehicle.
+
+  Three parameters link a type back to the catalogue:
+    carla:blueprint         the CARLA blueprint the type renders as;
+    carla:class_id          the authoring class the type was drawn for;
+    carla:catalogue_digest  the catalogue_digest of the catalogue the file was written from,
+                            written when the catalogue has one.
+
+  No element is in a namespace. The file carries no format version: it is version 1.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified"
+           attributeFormDefault="unqualified" version="1">
+
+  <xs:element name="routes">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="vType" type="VehicleType" minOccurs="0" maxOccurs="unbounded">
+          <xs:unique name="EachParameterOnce">
+            <xs:selector xpath="param"/>
+            <xs:field xpath="@key"/>
+          </xs:unique>
+        </xs:element>
+        <xs:element name="vTypeDistribution" type="VehicleTypeDistribution" minOccurs="0"
+                    maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="Positive">
+    <xs:restriction base="xs:double">
+      <xs:minExclusive value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NonNegative">
+    <xs:restriction base="xs:double">
+      <xs:minInclusive value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="BlueprintId">
+    <xs:annotation><xs:documentation>A CARLA vehicle blueprint id, such as vehicle.lincoln.mkz.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:ID">
+      <xs:pattern value="vehicle\.[a-z0-9_.]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ClassId">
+    <xs:annotation><xs:documentation>An authoring class id, such as civ_car.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:ID">
+      <xs:pattern value="[a-z][a-z0-9_]{0,31}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="VehicleType">
+    <xs:sequence>
+      <xs:element name="param" type="CatalogueParameter" minOccurs="2" maxOccurs="3"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="BlueprintId" use="required"/>
+    <xs:attribute name="vClass" type="xs:token" use="required">
+      <xs:annotation><xs:documentation>The class's sumo_vclass.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="length" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The catalogue's length_m, meters.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="width" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The catalogue's body_width_m, meters; its width_m where it
+        holds no body width.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="height" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The catalogue's height_m, meters.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="minGap" type="NonNegative" use="required">
+      <xs:annotation><xs:documentation>The class's min_gap_m, meters.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="maxSpeed" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The class's max_speed_mps, meters per second.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="accel" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The class's accel_mps2, meters per second squared.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="decel" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The class's decel_mps2, meters per second squared.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sigma" type="NonNegative" use="required">
+      <xs:annotation><xs:documentation>The class's sigma, 0 to 1.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="speedFactor" type="Positive" use="required">
+      <xs:annotation><xs:documentation>The class's speed_factor_mean.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="speedDev" type="NonNegative" use="required">
+      <xs:annotation><xs:documentation>The class's speed_factor_dev.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="guiShape" type="xs:token" use="required">
+      <xs:annotation><xs:documentation>The class's gui_shape. sumo-gui only.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="color" use="required">
+      <xs:annotation><xs:documentation>The class's gui_colour, #RRGGBB. sumo-gui only.</xs:documentation></xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:pattern value="#[0-9A-Fa-f]{6}"/></xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="CatalogueParameter">
+    <xs:attribute name="key" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="carla:blueprint"/>
+          <xs:enumeration value="carla:class_id"/>
+          <xs:enumeration value="carla:catalogue_digest"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="value" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:minLength value="1"/></xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="VehicleTypeDistribution">
+    <xs:attribute name="id" type="ClassId" use="required"/>
+    <xs:attribute name="vTypes" type="xs:IDREFS" use="required">
+      <xs:annotation><xs:documentation>The class's members, by type id, separated by spaces. Each
+        names a vType in the same file. Some validators, libxml2 among them, do not check that.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="probabilities" use="required">
+      <xs:annotation><xs:documentation>Each member's weight, in the same order.</xs:documentation></xs:annotation>
+      <xs:simpleType>
+        <xs:list itemType="Positive"/>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+</xs:schema>
