@@ -122,7 +122,7 @@ class VehicleExtent:
 
     `body_width_m` is the body's width without its mirrors, measured separately (`body_width` in the
     catalogue's header says how), where it was: SUMO's width is the body's, and the mirrors' extent
-    made the Fuso bus 3.93 m wide on 3.35 m lanes, where its body is 3.18 m.
+    made the Fuso bus 3.93 m wide on 3.35 m lanes, where its body is 3.23 m.
     """
 
     blueprint_id: str
