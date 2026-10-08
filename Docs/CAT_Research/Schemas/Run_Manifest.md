@@ -1,6 +1,8 @@
 # Run manifest
 
-**Schema:** `CarlaControl/schemas/run_manifest.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:run-manifest:1` **Format version described:** 1 (`manifest_version`)
+**Schema:** `CarlaControl/schemas/run_manifest.schema.json` (JSON Schema 2020-12)\
+**Identifier:** `urn:carla-sumo-capture:schema:run-manifest:1`\
+**Format version described:** 1 (`manifest_version`)
 
 ## What the file is
 
@@ -22,7 +24,8 @@ Every line of the file must be valid against it.
 
 **Reading a manifest.**\
 Each row is written as one whole line, so a manifest stays readable even if the run was killed partway.\
-Read only the lines that end in a line break, and ignore a last line that does not.\
+Read only the lines that end in a line break, and ignore a last line that does not.
+
 The last row of a run that reached its end is `manifest_closed`.\
 A manifest without it is a run that was interrupted: a vehicle admitted and never released was still being drawn then, and an interval opened and never closed was still open.
 
@@ -273,9 +276,20 @@ Every vehicle a SUMO flow emits, as declared.
 | `actor_id` | integer or null | | Yes | The body that drew it; null where none did. |
 | `admitted_s` | number | seconds | Released only | When it was admitted. |
 
-Admission reasons: `rendering_began`, the vehicle was already in SUMO on the first frame the run rendered, after it fast-forwarded SUMO; `inserted`, SUMO inserted it at this frame; `entered_limit`, it was already simulated and entered the render set later, as under an optional limit.
+Admission reasons:
 
-Release reasons: `left_the_simulation`, SUMO reported it arriving or removed it during the step; `session_ended`, the session ended while it was drawn; `vanished`, it stopped reporting a state without SUMO listing it among the arrivals; `left_the_region`, under an optional limit it left the region or every camera's footprint; `capacity`, the optional limit on how many vehicles are drawn left it out.\
+- `rendering_began`: the vehicle was already in SUMO on the first frame the run rendered, after it fast-forwarded SUMO;
+- `inserted`: SUMO inserted it at this frame;
+- `entered_limit`: it was already simulated and entered the render set later, as under an optional limit.
+
+Release reasons:
+
+- `left_the_simulation`: SUMO reported it arriving or removed it during the step;
+- `session_ended`: the session ended while it was drawn;
+- `vanished`: it stopped reporting a state without SUMO listing it among the arrivals;
+- `left_the_region`: under an optional limit it left the region or every camera's footprint;
+- `capacity`: the optional limit on how many vehicles are drawn left it out.
+
 A vehicle still drawn when the run ends has an admission row and no release row.
 
 ## `collision_began` and `collision_ended`
@@ -369,7 +383,16 @@ An interval whose participant SUMO never inserted closes without having opened.
 | `committed_end_s` | number or null | seconds | Closed only | When SUMO committed its end; null where it did not. |
 | `not_drawn` | array | | Closed only | The spans its participant was not drawn while it was open, each `{"from_s": number, "to_s": number}`. |
 
-`closed_by` words: `trigger` (the authored condition ended it), `entity_arrived` (the vehicle reached its destination and SUMO removed it), `sumo_removed` (SUMO removed it for another reason), `never_inserted` (declared, and discarded before it existed), `physical_predicate_never_held` (SUMO committed it and the drawn body never did), `render_released` (CARLA lost the body while SUMO still had the vehicle), `capture_window_end` (the window closed while it was open), `scenario_end` (the simulation ended while it was open).
+`closed_by` words:
+
+- `trigger`: the authored condition ended it;
+- `entity_arrived`: the vehicle reached its destination and SUMO removed it;
+- `sumo_removed`: SUMO removed it for another reason;
+- `never_inserted`: declared, and discarded before it existed;
+- `physical_predicate_never_held`: SUMO committed it and the drawn body never did;
+- `render_released`: CARLA lost the body while SUMO still had the vehicle;
+- `capture_window_end`: the window closed while it was open;
+- `scenario_end`: the simulation ended while it was open.
 
 ## `supervision_defect`
 
@@ -440,5 +463,6 @@ The opening row is long and is left out here; it holds every field in its tables
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks every row against this schema and the file as a whole: that it opens with `manifest_opened`, that nothing follows `manifest_closed`, and it notes a manifest with no closing row as an interrupted run.\
+`carla-validate <capture folder>` checks every row against this schema, and checks the file as a whole: that it opens with `manifest_opened` and that nothing follows `manifest_closed`.\
+It notes a manifest with no closing row as an interrupted run.\
 `carla-diff-manifests` compares the supervision rows of two runs of one scenario.

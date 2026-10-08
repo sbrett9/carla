@@ -1,7 +1,8 @@
 # Legacy scenario labels (`*.labels.json`)
 
-Before scenarios were compiled, a scenario generator wrote its route file and, beside it, a labels file saying which vehicles it planted, which affiliation each vehicle type should be shown with, and which gaps it described.\
-Nothing in the tools writes this file any more.\
+Before scenarios were compiled, a scenario generator wrote its route file and, beside it, a labels file saying which vehicles it planted, which affiliation each vehicle type should be shown with, and which gaps it described.
+
+Nothing in the tools writes this file anymore.\
 A compiled scenario's labels are its compiled supervision plan.\
 The tools still read a labels file, so that runs of the old scenarios can be repeated.
 

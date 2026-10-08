@@ -1,12 +1,13 @@
 # What a capture folder holds
 
-This page is for people who build pattern-of-life models from our captures.\
-It says what a capture folder holds, how its files relate, and how to read the truth about one vehicle.\
+This page is for people who build pattern-of-life models from the captures these tools make.\
+It says what a capture folder holds, how its files relate, and how to read the truth about one vehicle.
+
 The labels are described on [Behavioral annotations](Behavioral_Annotations.md), and the vehicles on [The vehicles behind the truth](Vehicle_Catalogue.md).\
 Every field is described in full on the schema pages listed in [`../Schemas/README.md`](../Schemas/README.md).\
 This page links them rather than repeating them.
 
-**We label; we never score.**\
+**The files hold labels and truth, never scores or verdicts.**\
 A truth file holds only what a scenario's author declared, what happened in the simulation, and what was measured.\
 No file holds a pass mark, a quality score or a judgment of whether a still or a label is good enough.\
 Those depend on your model, and they are yours to make.
@@ -60,16 +61,32 @@ Two things a capture depends on are kept outside the folder:
 The PNG holds the picture and up to four text chunks.\
 [`carla:capture`](../Schemas/PNG_Chunk_Capture.md) is always there: it names the frame (`tick`), the run and the release that wrote the file.\
 [`carla:solar`](../Schemas/PNG_Chunk_Solar.md), [`carla:illumination`](../Schemas/PNG_Chunk_Illumination.md) and [`carla:sensor`](../Schemas/PNG_Chunk_Sensor.md) repeat the sun and the camera from the sidecar.\
-So a picture separated from its sidecar still says where it came from.\
+So a picture separated from its sidecar still says where it came from.
+
 The sidecar ([Truth sidecar](../Schemas/Truth_Sidecar.md)) holds the truth of the still's own frame: the camera's position, direction, lens and exposure; the sun; and a record for every vehicle the frame drew, with its labels.\
 A still whose frame's truth could not be read is not written at all.\
 So a picture never comes with another frame's truth.
 
 **Per run.**\
 The manifest records the run as it happened, one JSON object per line.\
-It says what the run was: the scenario and the digests of its files, the SUMO settings, the clocks, the rule the vehicle lights follow, and the sun.\
+It says what the run was:
+
+- the scenario and the digests of its files
+- the SUMO settings
+- the clocks
+- the rule the vehicle lights follow
+- the sun
+
 It lists the plan's labels.\
-Then it records each camera, every vehicle that started or stopped being drawn, SUMO's events (collisions, emergency stops, teleports), the sun at the window's first and last capture, every label interval opening and closing, and why the run ended.\
+Then it records:
+
+- each camera
+- every vehicle that started or stopped being drawn
+- SUMO's events (collisions, emergency stops, teleports)
+- the sun at the window's first and last capture
+- every label interval opening and closing
+- why the run ended
+
 The world truth track lists every vehicle SUMO had at each SUMO step of the capture window, whether a body drew it or not.
 
 ## Reading a vehicle record in a sidecar
@@ -107,8 +124,7 @@ Here is the container of the still at frame 151288, and the record of the car ca
   </event>
 ```
 
-Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md) page, in its table for [`<_carla>`](../Schemas/Truth_Sidecar.md#_carla-the-vehicles-truth-record) and its [word lists](../Schemas/Truth_Sidecar.md#word-lists).\
-What follows is how to read them.
+Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md) page, in its table for [`<_carla>`](../Schemas/Truth_Sidecar.md#_carla-the-vehicles-truth-record) and its [word lists](../Schemas/Truth_Sidecar.md#word-lists).
 
 ### Which vehicle it is
 
@@ -281,7 +297,13 @@ Its `lane` is empty because the car is parked off the lane, at the curb.
 ## How to tell which release made a file
 
 **The producer record.**\
-Every file a capture writes says what made it: the sidecar in `<_producer>`, the PNG in its `carla:capture` chunk's `producer`, the manifest in its first row's `producer`, and the track in its summary's `producer`.\
+Every file a capture writes says what made it:
+
+- the sidecar in `<_producer>`
+- the PNG in its `carla:capture` chunk's `producer`
+- the manifest in its first row's `producer`
+- the track in its summary's `producer`
+
 The record has the same fields everywhere ([`<_producer>`](../Schemas/Truth_Sidecar.md#_producer-and-_server-what-made-the-file), [`carla:capture`](../Schemas/PNG_Chunk_Capture.md)).\
 From the sample:
 
@@ -304,7 +326,7 @@ From the sample:
 **The format version.**\
 Each file names its format: the sidecar's and the chunk's `format_version`, the manifest's `manifest_version`, and the summary's `world_truth_track_version`, which is also the track's.\
 A file that names no version is version 1.\
-Our readers refuse a version newer than they know, by name, rather than reading it in part.
+The readers in these tools refuse a version newer than they know, by name, rather than reading it in part.
 
 **`carla-validate`** checks every file of a capture folder against its schema.\
 It is installed with carlacontrol.\
@@ -321,7 +343,8 @@ every file keeps its schema
 ```
 
 It exits with 0 when every file keeps its schema, 1 when any does not, and 2 when the folder holds no file a schema describes.\
-It reports a file of a newer format version as written by a newer release.\
+It reports a file of a newer format version as written by a newer release.
+
 It does not check the pixels.\
 `carla-audit-sidecars <folder>` checks the rules a schema cannot, such as a box appearing exactly when the vehicle is in the picture.
 
@@ -346,7 +369,8 @@ See [The clocks](#the-clocks).
 The track's `lat` and `lon` are SUMO's position for the vehicle: the middle of its front bumper.\
 The sidecar's `<point>` is the CARLA body's origin, which lies behind the bumper by about half the body's length.\
 For the `dweller` at frame 151288 the two points are 2.39 m apart.\
-The track's point is the middle of the front face of the sidecar's `<_box3d>`.\
+The track's point is the middle of the front face of the sidecar's `<_box3d>`.
+
 The heights differ too: the track's `hae_m` is the bare ground under the bumper point, and the sidecar's `hae` is the body origin's.
 
 **Size and color.**\

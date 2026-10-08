@@ -25,7 +25,11 @@ The index is how you find the member that holds a given combination of values, a
 - **`carla-compile-scenario --sweep FILE --out-dir DIR`** writes it into `DIR`, beside the members' folders.\
   Each member is compiled in full into `DIR/<member id>/`, with its own specification, lock, resolution report and supervision plan.
 - It is written whether the sweep compiled or was refused.\
-  A sweep refused before its members were made, for example by its own schema, has only `sweep_version`, `producer`, `sweep_id`, empty `members` and `pairs`, its `findings` and the `outcome`.
+  A sweep refused before its members were made, for example by its own schema, has only:
+  - `sweep_version`, `producer` and `sweep_id`;
+  - empty `members` and `pairs`;
+  - its `findings`;
+  - the `outcome`.
 - No tool reads it as input.\
   It is for a scenario developer and for the scripts that schedule captures of the members.
 
@@ -78,9 +82,9 @@ The index is how you find the member that holds a given combination of values, a
 
 This page describes version 1, the only version.\
 No tool reads an index as input.\
-A reader should read version 1 and refuse a newer version rather than read it in part.\
-The skill's recorded example leaves out `producer`.\
-It is still version 1.
+A reader should read version 1 and refuse a newer version rather than read it in part.
+
+The skill's recorded example leaves out `producer` but is still version 1.
 
 ## Example
 

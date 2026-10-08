@@ -18,7 +18,8 @@ It is not part of the scenario, is not covered by the scenario's digests, and is
 
 A convention names **populations, never single vehicles**.\
 In a compiled scenario a population is a vehicle class: the `carla:class_id` parameter of its vehicle types (see [SUMO files](SUMO_Files.md)).\
-In a hand-written route file, whose types name no class, it is the vehicle type's id.\
+In a hand-written route file, whose types name no class, it is the vehicle type's id.
+
 A population the convention does not name takes the run's default, `carla-cot-telemetry --affiliation`.
 
 ## Who writes it and who reads it
@@ -43,7 +44,19 @@ A population the convention does not name takes the run's default, `carla-cot-te
 | `description` | string | no | What the convention is for, in a sentence or two. Not read. |
 | `affiliation_by_type` | object of population to letter | yes | Each population's affiliation letter, the second part of a CoT type. |
 
-The affiliation letters, as a CoT type spells them: `p` pending, `u` unknown, `a` assumed friend, `f` friend, `n` neutral, `s` suspect, `h` hostile, `j` joker, `k` faker, `o` none specified, `x` other.
+The affiliation letters, as a CoT type spells them:
+
+- `p` pending
+- `u` unknown
+- `a` assumed friend
+- `f` friend
+- `n` neutral
+- `s` suspect
+- `h` hostile
+- `j` joker
+- `k` faker
+- `o` none specified
+- `x` other
 
 ## Versions
 

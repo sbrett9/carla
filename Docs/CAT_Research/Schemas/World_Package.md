@@ -1,7 +1,13 @@
 # World package (`.cwp`)
 
 A world package is one generated world in one file.\
-It holds the road network, the SUMO network that was built with it, the bare-earth height grids, and what a scenario author needs to know about the world before writing a scenario.\
+It holds:
+
+- the road network;
+- the SUMO network that was built with it;
+- the bare-earth height grids;
+- what a scenario author needs to know about the world before writing a scenario.
+
 The file is named `<MapName>.cwp`.
 
 A `.cwp` file is a zip archive.\
@@ -75,13 +81,20 @@ An entry that is absent means something different from an entry that is empty:
 ## Format version
 
 The container has no version of its own.\
-Each JSON entry carries one, and `bareearth.bin` carries its version in its first four bytes.\
+Each JSON entry carries one, and `bareearth.bin` carries its version in its first four bytes.
+
 Readers check each entry's version before they read the entry.\
 Each entry's page says what a reader does with an older or newer version.
 
 `WorldPackageReader` (Python) also checks every JSON entry against its published schema in `CarlaControl/schemas/`, and refuses an entry that does not match, naming each problem.
 
-`carlacontrol.WorldFileValidator` checks a whole package: the entries it holds and how they are stored, every JSON entry against its schema and version, `bareearth.bin` against its format page and the digests in `world.json`, and the network fingerprints and area digest the entries record.\
+`carlacontrol.WorldFileValidator` checks a whole package:
+
+- the entries it holds and how they are stored;
+- every JSON entry against its schema and version;
+- `bareearth.bin` against its format page and the digests in `world.json`;
+- the network fingerprints and area digest the entries record.
+
 Given a folder, it checks every package in it.\
 `carla-validate <name>.cwp`, or `carla-validate` given a folder holding packages, runs it.
 

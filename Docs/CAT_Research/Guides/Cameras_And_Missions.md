@@ -16,7 +16,8 @@ These pages use the installed command names.\
 ## Where things are
 
 Positions are in CARLA's frame: meters, x east, y **south**, z up.\
-North is -y.\
+North is -y.
+
 Angles follow CARLA: yaw 0 faces east and -90 faces north, and a negative pitch looks down.\
 A bearing is a compass direction, in degrees clockwise from north, so a bearing maps to a yaw as `yaw = bearing - 90`.
 
@@ -77,8 +78,10 @@ print(world.camera_exposure(camera).ToJson())   # the exposure the camera was gi
 
 The pose works out to (-171.6, -522.0, 150.0) m, pitch -45, yaw -90.
 
-**The exposure attributes** are CARLA's own names and units.\
-Note that `shutter_speed` is per second, so `320` is 1/320 s, where a run file's `exposure_shutter_s` is in seconds.\
+**The exposure attributes.**\
+They are CARLA's own names and units.\
+`shutter_speed` is per second, so `320` is 1/320 s, where a run file's `exposure_shutter_s` is in seconds.
+
 The camera applies them over its post-process profile.\
 Give `post_process_profile` with its file's case, `Default`, `GoPro`, `Town10HD_Opt` or `Town_C`.\
 [Exposure](Running_A_Capture.md#exposure) explains each value and why `histogram` is not for captures you mean to compare.
@@ -98,7 +101,8 @@ print(exposure.ev100)   # 12.94
 **The camera's name.**\
 `world.spawn_camera(blueprint, transform, name=...)` spawns a camera under a name.\
 Every still recorded from it begins with that name, and it is the callsign of the camera's track.\
-`name` follows the rules in [The camera's name](Running_A_Capture.md#the-cameras-name-sensor_id), and `carla.camera_name_problem(name)` says why a name breaks them, or returns `None`.\
+`name` follows the rules in [The camera's name](Running_A_Capture.md#the-cameras-name-sensor_id), and `carla.camera_name_problem(name)` says why a name breaks them, or returns `None`.
+
 The server refuses a name a live camera already holds, and `spawn_camera` then raises `ValueError` with the server's reason.\
 With no name, the server names the camera `Camera_<n>`.\
 Either way, `world.camera_name(camera)` reads back the name the camera holds, so every client agrees on it.
@@ -152,7 +156,8 @@ camera.set_orbit_enabled(False)   # stop flying it; the camera stays where it is
 
 The angle advances by each tick's simulated time, so a lap takes `period` simulated seconds whatever the pace.\
 While the orbit is enabled, the server owns the camera's pose, even when paused.\
-Call `set_orbit_enabled(False)` before you move the camera yourself.\
+Call `set_orbit_enabled(False)` before you move the camera yourself.
+
 A server built before it could fly orbits raises `carlanet.OrbitNotOnServerError`; nothing in the client moves the camera in its place.
 
 **`OrbitSensorController`** is the `carlacontrol` class that `carla-camera-follower` and `carla-capture` use to give a camera its orbit.\
@@ -171,8 +176,15 @@ orbit.set_paused(False)
 orbit.set_enabled(False)
 ```
 
-`set_orbit_params` takes `center_x`, `center_y`, `center_z`, `radius` and `altitude` in meters, `speed` in **seconds per lap** (it is a period, despite its name), `angle` in radians and `clockwise`.\
-It also takes `radius_feet` and `altitude_feet`, and `center_lat` and `center_lon`, which it converts with the world's georeference when it was given `world`.\
+`set_orbit_params` takes:
+
+- `center_x`, `center_y`, `center_z`, `radius` and `altitude`, in meters;
+- `speed`, in **seconds per lap** (it is a period, despite its name);
+- `angle`, in radians;
+- `clockwise`.
+
+It also takes `radius_feet` and `altitude_feet`, and `center_lat` and `center_lon`, which it converts with the world's georeference when it was given `world`.
+
 New parameters take effect the next time the orbit is enabled.\
 If the server refuses the orbit, `set_enabled(True)` logs the reason and leaves `orbit.orbit_enabled` false.\
 `OrbitSensorController.orbit_transform(...)` gives the pose at any angle, by the same rule the server uses.
@@ -184,7 +196,8 @@ Over each frame it prints the camera's name, its pattern, the frame number and t
 
 It changes nothing else.\
 It never advances the world's clock, never changes the world's settings, sun, weather, layers or map, never starts a traffic manager, and removes its camera when it closes.\
-So you can start it before, during or after a drive.\
+So you can start it before, during or after a drive.
+
 While a drive owns the clock, frames arrive at the drive's tick rate; when nothing does, at the server's own rate.\
 If no frame arrives for 3 seconds it says so once in the log, rather than look frozen.
 
@@ -233,20 +246,19 @@ These are the same channel fields a run file takes, with the same defaults.
 ### Worked example: the Arapahoe underpass
 
 The `Arapahoe_I25_UnderpassDwell` scenario sends one marked vehicle north on I-25, off at Arapahoe Road, west on Arapahoe and north up South Yosemite Street, where it waits 30 minutes under the Yosemite Street bridge, among heavy freeway and arterial traffic.\
-The dwell spot is at about (-171.6, -672.0) in CARLA's frame.\
+The dwell spot is at about (-171.6, -672.0) in CARLA's frame.
+
 This example orbits a camera over that spot while SUMO drives the traffic.\
 The drive runs headless: with `--no-record` it opens no window and spawns no camera of its own.
 
 The paths are from the repository's root, where the compiled scenario is in `Import/` and the world package in `Build/world-packages/`.\
 With an installed distribution, give the paths to your own copies.
 
-**1.\
-Start the server with the Arapahoe world loaded.**\
-See [Getting started](Getting_Started.md#set-up).\
-The server runs without a window.
+1. **Start the server with the Arapahoe world loaded.**\
+   See [Getting started](Getting_Started.md#set-up).\
+   The server runs without a window.
 
-**2.\
-Start the follower** in a terminal of its own, orbiting the dwell spot at the follower's defaults, a 200 m radius, 518.2 m up, 240 s per lap:
+2. **Start the follower** in a terminal of its own, orbiting the dwell spot at the follower's defaults, a 200 m radius, 518.2 m up, 240 s per lap:
 
 ```sh
 carla-camera-follower --sensor-id Underpass_Orbit_1 --pattern orbit --orbit-centre -171.6 -672.0
@@ -255,13 +267,12 @@ carla-camera-follower --sensor-id Underpass_Orbit_1 --pattern orbit --orbit-cent
 A window opens and shows the camera's picture.\
 Until a drive ticks the world, frames come at the server's own rate.
 
-**3.\
-Start the drive** in another terminal.\
-`--no-record` spawns no camera of the drive's own.\
-`--real-time-factor 1.0` holds the ticks to the wall clock, so the traffic moves at its real pace and a lap takes 240 s on your clock too, as long as the machine keeps up.\
-The drive prints the pace it held.\
-`--steps 0` runs until the scenario ends.\
-The drive reads the epoch and the sun's policy from the scenario's specification, so leave out `--illumination`; giving both is refused.
+3. **Start the drive** in another terminal.\
+   `--no-record` spawns no camera of the drive's own.\
+   `--real-time-factor 1.0` holds the ticks to the wall clock, so the traffic moves at its real pace and a lap takes 240 s on your clock too, as long as the machine keeps up.\
+   The drive prints the pace it held.\
+   `--steps 0` runs until the scenario ends.\
+   The drive reads the epoch and the sun's policy from the scenario's specification, so leave out `--illumination`; giving both is refused.
 
 ```sh
 carla-drive \
@@ -275,11 +286,10 @@ While the drive owns the clock, the follower's frames arrive at the drive's tick
 The marked vehicle leaves at t = 120 s.\
 To start the picture nearer its dwell, add `--warm-up 600`, which fast-forwards SUMO to t = 600 s, without drawing, before the first tick.
 
-**4.\
-Stop.**\
-Press Ctrl+C in the drive's terminal, and Esc in the follower's window.\
-The order does not matter.\
-When the drive ends, it gives the clock back, and the follower keeps showing frames at the server's own rate until you close it.
+4. **Stop.**\
+   Press Ctrl+C in the drive's terminal, and Esc in the follower's window.\
+   The order does not matter.\
+   When the drive ends, it gives the clock back, and the follower keeps showing frames at the server's own rate until you close it.
 
 To stare at the spot instead of orbiting it, replace step 2 with:
 
@@ -354,14 +364,16 @@ The options that shape the flown camera and its recording:
 | `--world-truth-track PATH`, `--run-manifest PATH` | not written | Write the world truth track and the run manifest too. `carla-capture` always writes both. |
 
 `carla-drive` sets no exposure of its own: its cameras take the camera's default, the `Default` profile's exposure.\
-For a stated exposure, use `carla-capture`.\
+For a stated exposure, use `carla-capture`.
+
 `carla-drive --help` lists every option, including the sun, the render set and SUMO's settings.\
 On Linux, the window needs a display.
 
 ### Recording from your own process
 
 `world.start_recording(camera, record_dir, ...)` in `carlanet` is the recorder the commands use.\
-A recorder in a process of your own writes the supervision the server holds for each frame, the same as any other.\
+A recorder in a process of your own writes the supervision the server holds for each frame, the same as any other.
+
 But the list of which bodies each frame drew, and the declared sun, belong to the process that drives SUMO.\
 Without them, a recorder lists every vehicle actor in the world, including the bodies parked out of sight between uses, which `carla-audit-sidecars` then reports as standing below the ground.\
 Record SUMO-driven traffic from `carla-capture` or `carla-drive`.
@@ -370,7 +382,8 @@ Record SUMO-driven traffic from `carla-capture` or `carla-drive`.
 
 While a SUMO drive runs, no other traffic client may drive vehicles.\
 Before SUMO starts, the drive takes the world's drive lease on the server, as `<holder> (process <pid> on <machine>)`.\
-`carla-capture` and `carla-drive` both take it.\
+`carla-capture` and `carla-drive` both take it.
+
 While it is held, the server refuses these calls for every actor and every client, naming the holder:
 
 - turning autopilot on (`set_autopilot(True)`);
@@ -391,8 +404,10 @@ if holder is not None:
     print(f"{holder} is driving this world")
 ```
 
-A traffic tool should ask before it spawns anything, as `PythonAPI/examples/generate_traffic_carlanet.py` does.\
+A traffic tool should ask before it spawns anything, as `PythonAPI/examples/generate_traffic_carlanet.py` does.
+
 The drive gives the lease back when it ends.\
 A drive that dies without giving it back leaves it held until the world is reloaded, or until `world.break_drive_lease()` ends it.\
-That call returns the holder whose lease it ended, and the server logs it as a warning.\
+That call returns the holder whose lease it ended, and the server logs it as a warning.
+
 A server built before the lease answers `None` to both calls, and nothing on it stops another traffic system.

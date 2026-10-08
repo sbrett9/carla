@@ -1,6 +1,8 @@
 # World truth track
 
-**Schema:** `CarlaControl/schemas/world_truth_track.tableschema.json` (Frictionless Table Schema) **Identifier:** `urn:carla-sumo-capture:schema:world-truth-track:2` **Format version described:** 2 (declared in the summary beside the track)
+**Schema:** `CarlaControl/schemas/world_truth_track.tableschema.json` (Frictionless Table Schema)\
+**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track:2`\
+**Format version described:** 2 (declared in the summary beside the track)
 
 ## What the file is
 
@@ -25,7 +27,8 @@ The SUMO drive session in CarlaNet writes it when its caller names a path.\
 
 The header is written as the track opens.\
 Each sample's rows are written when the CARLA frame that renders that SUMO frame completes, and flushed together.\
-Frames before the capture window opens write nothing.\
+Frames before the capture window opens write nothing.
+
 A file cut off by a killed run is the rows already written, plus at most one line without its line break, which a reader ignores.
 
 ## Columns
@@ -51,9 +54,9 @@ Every row has all 41 columns, in this order.\
 | `vx` | number | meters per second | Yes | Velocity east, from SUMO's speed and heading, in CARLA's frame (x east, y south). |
 | `vy` | number | meters per second | Yes | Velocity south. |
 | `vz` | number, always 0 | meters per second | Yes | Velocity up: SUMO moves vehicles on the plane. |
-| `base_type` | string | | Yes | The vehicle's base type, such as `car`, `van` or `truck`: the vehicle catalogue's for the blueprint its SUMO type names, or the one its SUMO vehicle class maps to. |
+| `base_type` | string | | Yes | The vehicle's base type, such as `car`, `van` or `truck`: the vehicle catalog's for the blueprint its SUMO type names, or the one its SUMO vehicle class maps to. |
 | `type_id` | string | | Yes | The SUMO vehicle type. A sidecar calls this `vtype_id`; the sidecar's own `type_id` is the CARLA blueprint. |
-| `special_type` | string | | No | The vehicle's kind from the catalogue; empty where it has none. |
+| `special_type` | string | | No | The vehicle's kind from the catalog; empty where it has none. |
 | `length_m` | number | meters | Yes | The length the SUMO type declares, which SUMO's car-following used. |
 | `width_m` | number | meters | Yes | The width the SUMO type declares. |
 | `height_m` | number | meters | Yes | The height the SUMO type declares. |
@@ -92,7 +95,14 @@ The table's primary key is `(sumo_id, frame)`: no vehicle appears twice in one s
 
 The annotation vocabulary also has `left_the_simulation` and `vanished`, which this track never writes: a vehicle's last SUMO frame is drawn like any other.
 
-**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees, each including its upper edge: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12, `astronomical_twilight` above -18, `night` at -18 and below.
+**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees, each including its upper edge:
+
+- `day` above 6;
+- `golden` above 0;
+- `civil_twilight` above -6;
+- `nautical_twilight` above -12;
+- `astronomical_twilight` above -18;
+- `night` at -18 and below.
 
 **Two things differ from a sidecar.**\
 The track's dimensions and color are the SUMO type's, and the sidecar's are the CARLA body's, so they can differ slightly for the same vehicle.\
@@ -101,7 +111,8 @@ And the track's position is SUMO's, at the front bumper, where the sidecar's `<p
 ## Format version
 
 The CSV carries no version of its own, so that its header stays the column names alone.\
-Its version is the summary's `world_truth_track_version` (see the World truth track summary page), and this page describes version 2.\
+Its version is the summary's `world_truth_track_version` (see the World truth track summary page), and this page describes version 2.
+
 A summary without that field is version 1, an older shape with fewer columns that this schema does not describe.\
 Readers read a version they know and refuse a newer one by name rather than reading it in part.
 

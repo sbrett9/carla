@@ -10,7 +10,8 @@
 ## What it is
 
 The supervision plan carries a scenario's labels, and it is the only place they travel.\
-Every labeled assertion about authored vehicles and flows is fixed here at compile time.\
+Every labeled assertion about authored vehicles and flows is fixed here at compile time.
+
 A run only binds these rows to the vehicles as they appear; it never adds one.\
 The route file carries no labels, and the compiler refuses one that does (check 52).
 

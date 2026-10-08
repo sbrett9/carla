@@ -9,8 +9,14 @@
 
 ## What it is
 
-The run lock records what one accepted capture run is bound to: the digests of its scenario, world, vehicle catalog and epoch; every field of its effective configuration with the layer that set it and where that layer read it; how each warning was handled; and this machine's site profile.\
-It is the record to compare when two runs differ.
+The run lock records what one accepted capture run is bound to:
+
+- the digests of its scenario, world, vehicle catalog and epoch;
+- every field of its effective configuration, with the layer that set it and where that layer read it;
+- how each warning was handled;
+- this machine's site profile.
+
+The run lock is the record to compare when two runs differ.
 
 **This is not the scenario lock.**\
 The scenario compiler writes `<scenario_id>.lock.json`, which records a compiled scenario (see [Scenario lock](Scenario_Lock.md)).\
@@ -98,9 +104,10 @@ The `site_profile` object, which the run resolution report carries too:
 ## Versions
 
 This page describes version 1, the only version.\
-No tool reads a run lock back, so no tool refuses one.\
-A reader should read version 1 and refuse a newer version rather than read it in part.\
 A file written before October 7, 2026 has no `producer`; it is still version 1.
+
+No tool reads a run lock back, so no tool refuses one.\
+A reader should read version 1 and refuse a newer version rather than read it in part.
 
 ## Example
 

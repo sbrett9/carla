@@ -14,7 +14,7 @@ You declare areas in GeoJSON (RFC 7946) beside the OpenStreetMap extract a world
 `Import/Arapahoe_I25.osm` has its areas in `Import/Arapahoe_I25.aoi.geojson`.
 
 An area is one of three shapes: a `Polygon`, a `MultiPolygon` (holes are allowed in either), or a `Point` with a radius, which is a circle.\
-GeoJSON has no circle, so the radius is a property we define.
+GeoJSON has no circle, so the radius is a property these tools define.
 
 Positions are `[longitude, latitude]` in WGS84 degrees, in that order.\
 If swapping the two would put an area inside the extract, the reader names the likely mistake, `[latitude, longitude]`.
@@ -61,7 +61,7 @@ The reader also checks what the schema cannot say:
 ## Versions
 
 The file is GeoJSON and carries no version of its own.\
-Every file is read as version 1 of the properties we define, which this page describes.
+Every file is read as version 1 of the properties these tools define, which this page describes.
 
 ## Example
 

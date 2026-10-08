@@ -1,7 +1,8 @@
 # Legacy supervision gaps (`<name>.supervision.json` beside a SUMO bridge run)
 
 Some of what a scenario asserts is an absence: a guard who never arrives at a tower.\
-No vehicle record can carry it, because there is no vehicle.\
+No vehicle record can carry it, because there is no vehicle.
+
 A legacy scenario's labels file describes such gaps in its `anomaly_notes`.\
 When `carla-cot-telemetry` runs that scenario, it writes the gaps to this file, each with its time window placed on the run's own clock, so whoever holds the run's output can find the hours a gap covers.
 
@@ -15,11 +16,13 @@ A compiled scenario states its supervision in its compiled supervision plan, a d
 
 `carla-cot-telemetry --labels <file>.labels.json` writes it (`carlacontrol.SupervisionSidecar`) when the labels describe at least one gap.\
 It goes to `--supervision <file>` when given; otherwise beside the `--xml` or `--csv` output, named for its stem: `orbit_cot.xml` gets `orbit_cot.supervision.json`.\
-A run with neither file prints the gaps to the log instead.\
+A run with neither file prints the gaps to the log instead.
+
 The gaps are never written into the event file or the CSV, because the answer a behavior model is asked for is a note saying which post stood unmanned, and when.
 
 Nothing in the tools reads it.\
-It is for whoever scores a model against the run.\
+It is for whoever scores a model against the run.
+
 Given a folder holding it, `carla-validate` checks it against this schema.\
 A `.supervision.json` that declares `supervision_plan_version` is a compiled [supervision plan](Supervision_Plan.md) instead.
 

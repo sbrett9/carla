@@ -1,7 +1,8 @@
 # Resolved areas of interest (`areas.resolved.json` in a `.cwp`)
 
 An area of interest is a named place where a scenario can put behavior and that a label can refer to: a guard post, a gate, a parking lot.\
-An author declares areas in a GeoJSON file beside the OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude.\
+An author declares areas in a GeoJSON file beside the OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude.
+
 `areas.resolved.json` holds those areas placed on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross, or pass near each one.\
 The lane positions can be written straight into a SUMO `<stop>`.
 
@@ -116,7 +117,8 @@ A scenario that changes lane permissions checks its own network.
 ## Format version
 
 `resolved_version` is 1, and there is no other version.\
-A file without it is version 1.\
+A file without it is version 1.
+
 `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
 They name the version and the newest they read, rather than reading part of the file.\
 `WorldPackageReader` then checks the file against the schema.\

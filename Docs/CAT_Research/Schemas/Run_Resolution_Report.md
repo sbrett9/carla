@@ -9,7 +9,13 @@
 
 ## What it is
 
-The run resolution report records what one `carla-capture` launch resolved and what its checks found: every field with the layer that set it, every refusal and warning, the launch echo, and this machine's site profile.\
+The run resolution report records what one `carla-capture` launch resolved and what its checks found:
+
+- every field with the layer that set it;
+- every refusal and warning;
+- the launch echo;
+- this machine's site profile.
+
 It is written whether the launch was accepted or refused, so a refused launch can always be read.
 
 **This is not the compiler's resolution report.**\
@@ -48,7 +54,8 @@ An empty path in the site profile, for example, appears here as `""` and is the 
 
 This page describes version 1, the only version.\
 No tool reads the report back, so no tool refuses one.\
-A reader should read version 1 and refuse a newer version rather than read it in part.\
+A reader should read version 1 and refuse a newer version rather than read it in part.
+
 A file written before October 7, 2026 has no `producer` and may name the check catalog differently; it is still version 1.
 
 ## Example

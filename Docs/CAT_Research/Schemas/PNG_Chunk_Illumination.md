@@ -1,11 +1,19 @@
 # PNG text chunk `carla:illumination`
 
-**Schema:** `CarlaControl/schemas/png_chunk_illumination.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:png-chunk-illumination:1` **Format version described:** 1
+**Schema:** `CarlaControl/schemas/png_chunk_illumination.schema.json` (JSON Schema 2020-12)\
+**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-illumination:1`\
+**Format version described:** 1
 
 ## What it is
 
-`carla:illumination` is what the run declared the sun to be for this still's frame: the scenario's epoch (the civil time that simulated second zero stands for), the illumination policy, the frame's civil time and the sun declared for it, and how far the world's sun was from that declaration.\
-`carla:solar` says what the sun was; this says what it was meant to be, so a still's lighting can be traced to the declaration it was checked against.\
+`carla:illumination` is what the run declared the sun to be for this still's frame:
+
+- the scenario's epoch (the civil time that simulated second zero stands for);
+- the illumination policy;
+- the frame's civil time and the sun declared for it;
+- how far the world's sun was from that declaration.
+
+`carla:solar` says what the sun was; this chunk says what it was meant to be, so a still's lighting can be traced to the declaration it was checked against.\
 The truth sidecar's `<_illumination>` element carries the same values.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:illumination`, holding one line of compact JSON.
@@ -41,7 +49,12 @@ Fields that need an epoch, or an audit of the frame, are left out where there is
 
 A civil time looks like `2026-09-29T07:27:00-06:00`, with a fraction of a second where there is one.
 
-**The policies:** `freeze_at_window_start` holds the sun at the civil time the capture window opens; `advance` starts it there and carries it forward at `rate`; `freeze_at` holds it at a declared time of day; `ignore` leaves the world's sun alone.
+**The policies:**
+
+- `freeze_at_window_start` holds the sun at the civil time the capture window opens;
+- `advance` starts it there and carries it forward at `rate`;
+- `freeze_at` holds it at a declared time of day;
+- `ignore` leaves the world's sun alone.
 
 ## Format version
 

@@ -2,9 +2,10 @@
 
 A vehicle body's bounding box includes its mirrors.\
 SUMO's width is the body without them.\
-On a bus the difference is large: the Fuso Rosa's box is 3.93 m wide and its body 3.23 m, on 3.35 m lanes.\
+On a bus the difference is large: the Fuso Rosa's box is 3.93 m wide and its body 3.23 m, on 3.35 m lanes.
+
 A server cannot see a mesh's vertices, so the width without mirrors is measured from the mesh in the Unreal Editor and kept in this table.\
-The [vehicle catalogue](Vehicle_Catalogue.md) merges it as `body_width_m`, and the [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
+The [vehicle catalog](Vehicle_Catalogue.md) merges it as `body_width_m`, and the [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 
 - Schema: `CarlaControl/schemas/vehicle_body_widths.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-body-widths:1`
@@ -23,7 +24,8 @@ The merge refuses the table when a row's `full_width_m` differs from the catalog
 Every vertex of the mesh's first level of detail is binned along the vehicle's length in 5 cm bins, each side separately.\
 A side's body half-width is the largest half-width held over at least 0.6 m of length, which removes mirrors and other short protrusions.\
 The body width is the two half-widths added.\
-The full width is the plain vertex extent.\
+The full width is the plain vertex extent.
+
 The table's `method` says the same.
 
 ## Fields

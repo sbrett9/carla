@@ -1,6 +1,8 @@
 # Truth sidecar
 
-**Schema:** `CarlaControl/schemas/truth_sidecar.xsd` (XML Schema 1.0) **Identifier:** `urn:carla-sumo-capture:schema:truth-sidecar:1` **Format version described:** 1
+**Schema:** `CarlaControl/schemas/truth_sidecar.xsd` (XML Schema 1.0)\
+**Identifier:** `urn:carla-sumo-capture:schema:truth-sidecar:1`\
+**Format version described:** 1
 
 ## What the file is
 
@@ -59,8 +61,13 @@ That is how the two kinds of event are told apart.
 - **Times** are UTC to the millisecond, such as `2026-10-07T17:34:49.411Z`.
 - **True or false** is written `true` or `false`.
 
-In the tables, **Required** is "Yes" for an attribute every element of that kind carries, "No" for one that may be absent, and "In picture" for one that a vehicle carries exactly when its box fell in the picture (`in_frame` is `wholly` or `partly`) and never otherwise.\
-The schema marks these last ones with `cap:onlyInPicture` and gives every unit in `cap:unit`.
+In the tables, **Required** is:
+
+- "Yes" for an attribute every element of that kind carries;
+- "No" for one that may be absent;
+- "In picture" for one that a vehicle carries exactly when its box fell in the picture (`in_frame` is `wholly` or `partly`) and never otherwise.
+
+The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives every unit in `cap:unit`.
 
 ## `<events>`: the capture
 
@@ -134,7 +141,15 @@ The same values are in the still's `carla:solar` text chunk.
 | `illumination_band` | word | | No | The sun's illumination band (see below); absent where the elevation is not a real sun's. |
 | `illumination_band_elevation` | word | | No | Which elevation the band was cut from: `refraction_corrected` wherever the block carries it, `geometric` otherwise. Written with `illumination_band`. |
 
-**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12, `astronomical_twilight` above -18, `night` at -18 and below.\
+**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees:
+
+- `day` above 6;
+- `golden` above 0;
+- `civil_twilight` above -6;
+- `nautical_twilight` above -12;
+- `astronomical_twilight` above -18;
+- `night` at -18 and below.
+
 Each band includes its upper edge.
 
 ## `<_illumination>`: what the run declared the sun to be
@@ -293,7 +308,17 @@ Check `beyond_draw_distance` before treating a record as something the picture s
 ### `<_box3d frame="geodetic">`: the vehicle's box in the world
 
 Only for a vehicle in the picture.\
-It holds exactly eight `<corner>` elements, converted to latitude, longitude and height exactly as the event's `<point>` is, in this order: `front_left_bottom`, `front_right_bottom`, `back_right_bottom`, `back_left_bottom`, `front_left_top`, `front_right_top`, `back_right_top`, `back_left_top`.\
+It holds exactly eight `<corner>` elements, converted to latitude, longitude and height exactly as the event's `<point>` is, in this order:
+
+- `front_left_bottom`
+- `front_right_bottom`
+- `back_right_bottom`
+- `back_left_bottom`
+- `front_left_top`
+- `front_right_top`
+- `back_right_top`
+- `back_left_top`
+
 Corner n + 4 is above corner n.\
 Front is the way `heading_deg` points; left and right are as seen from the driver's seat.
 
@@ -326,7 +351,7 @@ The run manifest's `instance` and `interval_*` rows give the full plan and each 
 
 The schema takes each of these lists from the code that writes the words.
 
-**`in_frame`** — where the box's eight corners, projected through the camera, fell:
+**`in_frame`**: where the box's eight corners, projected through the camera, fell.
 
 | Word | Meaning |
 |---|---|
@@ -335,7 +360,7 @@ The schema takes each of these lists from the code that writes the words.
 | `none` | The box is wholly outside the picture. |
 | `behind_camera` | A corner is at or behind the lens, so the box has no projection. |
 
-**`occlusion_unmeasured`** — the reason nearest the vehicle where several hold:
+**`occlusion_unmeasured`**: the reason nearest the vehicle where several hold.
 
 | Word | Meaning |
 |---|---|
@@ -349,7 +374,20 @@ The schema takes each of these lists from the code that writes the words.
 | `beyond_depth_range` | Every sampled point lies at or beyond the depth camera's range. |
 | `no_sample` | No sampling ray met the box: the vehicle is narrower than the sampling step. |
 
-**`lights`** — `none`, or one word per light commanded on, in this order: `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`, `special2`.\
+**`lights`**: `none`, or one word per light commanded on, in this order:
+
+- `position`
+- `low_beam`
+- `high_beam`
+- `brake`
+- `right_blinker`
+- `left_blinker`
+- `reverse`
+- `fog`
+- `interior`
+- `special1`
+- `special2`
+
 A light CARLA declares and no word names is written `bit<n>`, with its bit number.\
 These are the lights commanded on; whether a blueprint draws a lamp for each is up to the 3D model.
 

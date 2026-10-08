@@ -1,12 +1,13 @@
 # The vehicles behind the truth
 
-This page is for people who build pattern-of-life models from our captures.\
+This page is for people who build pattern-of-life models from the captures these tools make.\
 Every vehicle in a capture is drawn with one of a small set of measured CARLA bodies, and the vehicle catalog lists them.\
-This page explains what the vehicle fields of a truth record mean in terms of those bodies.\
+This page explains what the vehicle fields of a truth record mean in terms of those bodies.
+
 Every field of the catalog is described on the schema page [Vehicle catalogue](../Schemas/Vehicle_Catalogue.md).\
 The files are described on [What a capture folder holds](Capture_Folder.md), and the labels on [Behavioral annotations](Behavioral_Annotations.md).
 
-**We label; we never score.**\
+**The files hold labels and truth, never scores or verdicts.**\
 The catalog records measurements of each body.\
 It says nothing about how well a body suits a behavior or a model.
 
@@ -15,7 +16,8 @@ It says nothing about how well a body suits a behavior or a model.
 The catalog is `CarlaControl/catalogue/vehicles.catalogue.json`.\
 The current one is `carla-0.10.0-windows`, with the digest `6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d`.\
 A run records the digest of the catalog it used on the manifest's first row, as `scenario.catalogue_digest`.\
-The sample capture `cap-20261008-041347-270d6d` used this one.\
+The sample capture `cap-20261008-041347-270d6d` used this one.
+
 `carla-validate CarlaControl/catalogue` checks the catalog against its schema.
 
 ## The classes and their bodies
@@ -55,7 +57,8 @@ The Arapahoe supervision check has `car_quick`, `car`, `suv`, `van`, `truck` and
 These are nine of the catalog's ten `civ_car` bodies: the scenario draws the tenth, `vehicle.nissan.patrol`, as its `suv` class.
 
 The scenario's class is the first part of the SUMO vehicle type: `vtype_id` in a sidecar and `type_id` in the world truth track.\
-A compiled scenario names each type `<class>.<blueprint>`, such as `suv.vehicle.nissan.patrol`.\
+A compiled scenario names each type `<class>.<blueprint>`, such as `suv.vehicle.nissan.patrol`.
+
 The truth still gives that vehicle the catalog's kind.\
 In the sample capture, a record with `vtype_id="suv.vehicle.nissan.patrol"` has `base_type="car"`.
 
@@ -117,7 +120,12 @@ The sidecar writes `special1` and `special2`; the catalog writes `special_1` and
 - **The color attribute may not be the paint.**\
   Where the catalog says `colour_applied` is `false`, setting a color did not reach the body when the catalog was built.\
   For those bodies the recorded `color` may not be what the picture shows.\
-  In this catalog they are `vehicle.dodgecop.charger`, `vehicle.fuso.mitsubishi`, `vehicle.lincoln.mkz`, `vehicle.mini.cooper` and `vehicle.sprinter.mercedes`.
+  In this catalog they are:
+  - `vehicle.dodgecop.charger`
+  - `vehicle.fuso.mitsubishi`
+  - `vehicle.lincoln.mkz`
+  - `vehicle.mini.cooper`
+  - `vehicle.sprinter.mercedes`
 - **In the world truth track**, `color` is the color sumo-gui draws the SUMO vehicle type in: the scenario class's `gui_colour`.\
   It never reaches the picture.\
   The Arapahoe check's `car` class is `#B3B8C7`, so every one of its cars is `179,184,199` in the track.
@@ -130,4 +138,4 @@ The sidecar writes `special1` and `special2`; the catalog writes `special_1` and
   You can also join the row to a sidecar record by `sumo_id` and frame.
 - From there, the body's entry in `vehicles[]` gives its size, `bbox_centre_m`, `body_width_m`, `colour_palette`, `colour_applied` and `lamp_capability`.\
   Its class in `classes[]` gives the `base_type` and `special_type`.\
-  See [How the catalogue meets the truth](../Schemas/Vehicle_Catalogue.md#how-the-catalogue-meets-the-truth).
+  See [How the catalog meets the truth](../Schemas/Vehicle_Catalogue.md#how-the-catalog-meets-the-truth).

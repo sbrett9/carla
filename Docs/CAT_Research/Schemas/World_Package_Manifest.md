@@ -1,6 +1,13 @@
 # World package manifest (`world.json` in a `.cwp`)
 
-`world.json` says what a generated world is: where it sits on the Earth, how its roads were seated on the photoreal imagery, which imagery it streams, where traffic may enter and leave, and how it was built.\
+`world.json` says what a generated world is:
+
+- where it sits on the Earth;
+- how its roads were seated on the photoreal imagery;
+- which imagery it streams;
+- where traffic may enter and leave;
+- how it was built.
+
 It is the one entry every world package must have.\
 See [World_Package.md](World_Package.md) for the other entries.
 
@@ -13,7 +20,8 @@ That one is described in [Level_Package_Manifest.md](Level_Package_Manifest.md).
 ## Who writes it and who reads it
 
 CarlaNet's `WorldPackage.Write` writes it when the world build writes the package.\
-The build reads the origin and the staging rectangle back from the server, so the file records what the world ended up with, not what was asked for.\
+The build reads the origin and the staging rectangle back from the server, so the file records what the world ended up with, not what was asked for.
+
 The file is indented JSON, UTF-8, with PascalCase keys.\
 The writer writes every field, in the order of the table below.
 
@@ -92,7 +100,7 @@ The shift exists only so that vehicles are drawn on the photoreal surface.
 
 ### The producer record
 
-`Producer` is the record every file our tools write carries.\
+`Producer` is the record every file these tools write carries.\
 Its keys are snake_case:
 
 | Field | Type | Required | Meaning |
@@ -104,7 +112,15 @@ Its keys are snake_case:
 | `sumo` | string or null | yes | The SUMO release where SUMO ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was written, ISO 8601 UTC to the millisecond. |
 
-A server that answered has `available` `true` and `release`, `world_interface`, `build` (`package` or `editor`), `configuration`, `carla_commit`, `content_commit`, `engine_commit` and `commits_from` (`version_file`, `compiled` or `none`).\
+A server that answered has `available` `true` and:
+
+- `release`;
+- `world_interface`;
+- `build` (`package` or `editor`);
+- `configuration`;
+- `carla_commit`, `content_commit` and `engine_commit`;
+- `commits_from` (`version_file`, `compiled` or `none`).
+
 A server that could not answer has `available` `false`, `release`, `world_interface` and `reason`.\
 A value the server cannot know is the word `unknown`.
 

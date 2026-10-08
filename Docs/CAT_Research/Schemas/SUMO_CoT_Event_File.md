@@ -16,7 +16,14 @@ So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_ser
 
 ## Who writes it and who reads it
 
-`carlacontrol.SumoCotBridge` writes it as the run goes: the opening of `<events>`, the record of what made it, the display convention, then one line per event, and the closing tag when the run ends.\
+`carlacontrol.SumoCotBridge` writes it as the run goes, in this order:
+
+- the opening of `<events>`;
+- the record of what made it;
+- the display convention;
+- one line per event;
+- the closing tag, when the run ends.
+
 A run that stops early leaves a file without its closing tag.
 
 `carla-check-label-leaks --xml` reads it, to check that no field tells the planted vehicles from the others.\
@@ -45,7 +52,7 @@ A run that stops early leaves a file without its closing tag.
 
 ### `<_producer>`
 
-What made the file, as every XML file our tools write records it: the truth sidecar's `Producer`, of which this schema holds a copy.\
+What made the file, as every XML file these tools write records it: the truth sidecar's `Producer`, of which this schema holds a copy.\
 Absent from files written before it was recorded.
 
 | Attribute | Type | Required | Meaning |
@@ -79,7 +86,12 @@ Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stre
   A planted vehicle gets the same affiliation as its population; `--marked-affiliation` changes only the live feed.
 - `time` is the epoch plus the simulation time of the update.
 - `hae` is the ground height under the vehicle from the world package's `bareearth.bin` (given by `--bare-earth`), or `--hae`, 0 by default, when there is no grid or the vehicle is off it.
-- `<_carla>` carries `type_id` (the SUMO vehicle type), `special_type` (from the vehicle catalog), `role_name` (the flow: the SUMO id before its last dot) and `marked` (`1` for a planted vehicle, `0` otherwise), which the live feed leaves out.\
+- `<_carla>` carries these attributes, which the live feed leaves out:
+  - `type_id` (the SUMO vehicle type);
+  - `special_type` (from the vehicle catalog);
+  - `role_name` (the flow: the SUMO id before its last dot);
+  - `marked` (`1` for a planted vehicle, `0` otherwise).
+
   `actor_id` is the SUMO id.\
   There is no `heading_deg`, `sumo_id`, `vtype_id`, `admitted_tick`, `_capture` or `_solar`.
 - `course` is SUMO's heading, clockwise from north.\

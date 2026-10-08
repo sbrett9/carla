@@ -1,10 +1,10 @@
-# Matching your tracks to our truth
+# Matching your tracks to the truth
 
-This page is for teams that receive capture folders from SUMO-driven captures and want to carry our labels onto their own detector's tracks.
+This page is for teams that receive capture folders from SUMO-driven captures and want to carry the captures' labels onto their own detector's tracks.
 
-**We label; we never match and never score.**\
-Matching a track to a truth vehicle needs your detector's output, and no part of this system ever sees it.\
-So we do two things only: we write truth in a form that can be matched by position and time, and we publish the rule below so every team matches the same way.\
+**The files hold labels and truth, never scores or verdicts.**\
+Matching a track to a truth vehicle is your job: it needs your detector's output, and no part of this system ever sees it.\
+So this system does two things only: it writes truth in a form that can be matched by position and time, and it publishes the rule below so every team matches the same way.\
 Nothing in a capture folder depends on a model having run.
 
 [What a capture folder holds](../EPOL/Capture_Folder.md) explains the files, and [Behavioral annotations](../EPOL/Behavioral_Annotations.md) explains the labels.\
@@ -34,17 +34,17 @@ Beside `<_carla>`, the eight corners of the 3D box are in `<_box3d frame="geodet
 ## The rule, per camera and per still
 
 1. **Match by position and time, never by id.**\
-   Our ids (`uid`, which is `CARLA-TRUTH-SUMO-<sumo_id>`, `sumo_id` and `actor_id`) are for joining truth to truth.\
+   The ids in the truth files (`uid`, which is `CARLA-TRUTH-SUMO-<sumo_id>`, `sumo_id` and `actor_id`) are for joining truth to truth.\
    Your tracks carry none of them.\
-   If one of our ids ever turns up in your detector's output, it leaked from what we handed over: please tell us.\
+   If one of these ids ever turns up in your detector's output, it leaked from the capture folders you received: please tell whoever sent them.\
    `actor_id` does not even name one vehicle: a CARLA body draws a series of vehicles over a run.
 2. **Compare in the image, not on the ground.**\
-   Take the distance in pixels between your box's center and our `box_px` center, divided by our vehicle's apparent size.\
+   Take the distance in pixels between your box's center and the truth record's `box_px` center, divided by the truth vehicle's apparent size.\
    A distance on the ground mixes up two different mistakes: matching the wrong vehicle, and matching the right vehicle but locating it poorly.\
    Only the first gives a wrong label.
 3. **Use a match radius that grows with apparent size:** `max(g_min, k × max(apparent_width_px, apparent_height_px))`.\
    A fixed radius in pixels is wrong across the frame, because the same vehicle looks several times larger at one edge of a steep oblique view than at the other.\
-   You choose `g_min` and `k`; we set no values.
+   You choose `g_min` and `k`; the rule sets no values for them.
 4. **Assign all the pairs at once, not nearest first.**\
    Use a minimum-cost assignment over every pair inside the radius.\
    Nearest-first matching in dense traffic gives one vehicle's label to another vehicle's track.

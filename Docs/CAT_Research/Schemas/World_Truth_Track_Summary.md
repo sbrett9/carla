@@ -1,11 +1,19 @@
 # World truth track summary
 
-**Schema:** `CarlaControl/schemas/world_truth_track_summary.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:world-truth-track-summary:2` **Format version described:** 2 (`world_truth_track_version`)
+**Schema:** `CarlaControl/schemas/world_truth_track_summary.schema.json` (JSON Schema 2020-12)\
+**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track-summary:2`\
+**Format version described:** 2 (`world_truth_track_version`)
 
 ## What the file is
 
 The summary sits beside a world truth track, with the track's name and `.summary.json` for its extension: `truth/world_truth_track.summary.json` in a capture folder.\
-It holds the track's format version, what made it, its columns and sampling rate, what it holds so far and why the run ended.
+It holds:
+
+- the track's format version;
+- what made it;
+- its columns and sampling rate;
+- what it holds so far;
+- why the run ended.
 
 ## Who writes it, and when
 
@@ -48,7 +56,8 @@ Once `ended` is set, `rows` equals the number of rows in the track.
 ## Format version
 
 This page describes `world_truth_track_version` 2, which is also the track's version.\
-Summaries written before the producer record was added have no `producer` and are valid against this schema.\
+Summaries written before the producer record was added have no `producer` and are valid against this schema.
+
 A summary without `world_truth_track_version` is version 1, an older shape this schema does not describe.\
 Readers read a version they know and refuse a newer one by name rather than reading it in part.
 

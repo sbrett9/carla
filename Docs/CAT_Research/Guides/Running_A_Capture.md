@@ -1,11 +1,11 @@
 # Running a capture
 
 `carla-capture` renders one window of a compiled scenario's simulated time through cameras you describe.\
-SUMO moves the vehicles and CARLA draws them.\
-For every capture of every camera it writes a PNG still and a truth sidecar, which holds each vehicle's position, size and box in pixels.\
+SUMO moves the vehicles and CARLA draws them.
+
+For every capture of every camera, the command writes a PNG still and a truth sidecar, which holds each vehicle's position, size and box in pixels.\
 It also writes a truth track of every vehicle SUMO had, and a manifest of the run.
 
-This page covers the run file, the camera channels, the timing before and during the window, the two ways to run, and what a run leaves behind.\
 [Getting started](Getting_Started.md) covers the install and the site profile.\
 These pages use the installed command names; Getting started lists the script each one is in a checkout.
 
@@ -119,7 +119,15 @@ The fields you set most often are these:
 | `capture.channels` | The cameras, one object each. See [Camera channels](#camera-channels). |
 | `caller`, `result_path`, `on_warning`, `expect` | How the run is watched and judged. See [Attended and unattended runs](#attended-and-unattended-runs). |
 
-A run is resolved from six layers, lowest first: the tool defaults, the site profile, the world package, the scenario package, the run file, and the command line.\
+A run is resolved from six layers, lowest first:
+
+- the tool defaults
+- the site profile
+- the world package
+- the scenario package
+- the run file
+- the command line
+
 A higher layer wins.\
 Fields the world and scenario packages bind, such as the epoch, the SUMO step and seed, and the world's fingerprint, can be restated only with the value the package gives.\
 Any other value is refused (run check 3).
@@ -173,14 +181,16 @@ The other options:
 ## Camera channels
 
 Each object in `capture.channels` is one camera, a channel.\
-Every channel records at the same rate, `capture.capture_hz` (2 per simulated second by default).\
+Every channel records at the same rate, `capture.capture_hz` (2 per simulated second by default).
+
 Each camera also carries a depth camera, attached at the same pose with the same picture size and field of view.\
 The depth camera measures how much of each vehicle something hides, and nothing turns it off.
 
 ### Where things are
 
 Positions are in CARLA's frame: meters, x east, y **south**, z up.\
-North is -y.\
+North is -y.
+
 Angles follow CARLA: yaw 0 faces east and -90 faces north, and a negative pitch looks down.\
 A bearing is a compass direction, in degrees clockwise from north.
 
@@ -351,7 +361,8 @@ The scenario declares no windows, so the window is given as seconds:
 | `fov` | `90.0` | Horizontal field of view, degrees, above 0 and below 180. The vertical field follows from the picture's shape. |
 
 Bigger pictures cost disk.\
-The launch echo estimates the run's size from a measured 2.25 MiB per 1280 x 720 PNG, scaled by pixel count, and says how many hours of capture the free space holds.\
+The launch echo estimates the run's size from a measured 2.25 MiB per 1280 x 720 PNG, scaled by pixel count, and says how many hours of capture the free space holds.
+
 When the free space under the capture root cannot hold the window, run check 19 warns (`capture_may_outrun_disk`).\
 While the run goes on, it stops itself cleanly when the free space falls below `write_headroom_floor_s` of capture, 600 s by default (run check 46).
 
@@ -373,7 +384,8 @@ The exposure is set over the channel's post-process profile, which sets the rest
 The defaults are the `Default` profile's own: manual, ISO 100, 1/320 s, f/4 and no compensation, which is an EV100 of 12.32.\
 A channel that sets none of these renders as the `Default` profile does.
 
-**Values the camera cannot take are refused** (run check 16): an ISO below 1, a shutter outside 1/8000 s to 100 s, an f-stop outside 1 to 32, or a compensation beyond 15 EV.\
+**Values the camera cannot take are refused.**\
+Run check 16 refuses an ISO below 1, a shutter outside 1/8000 s to 100 s, an f-stop outside 1 to 32, or a compensation beyond 15 EV.\
 A common mistake is the shutter as a rate.\
 The camera's own `shutter_speed` attribute is per second, but the run file's field is in seconds:
 
@@ -388,8 +400,17 @@ That suits an operator's live picture, not captures you mean to compare.\
 Each capture then records the method and no EV100.
 
 **Where the exposure is recorded.**\
-Every still's sidecar carries the exposure its camera was given, in a `<_carla_exposure>` element: the profile, the method, ISO, shutter in seconds, f-stop, compensation, and under `manual` the EV100.\
-The run result records it per camera under `produced.cameras[].exposure`, and `carla-audit-sidecars` checks that every still of a camera carries the same one.
+Every still's sidecar carries the exposure its camera was given, in a `<_carla_exposure>` element:
+
+- the profile
+- the method
+- ISO
+- shutter in seconds
+- f-stop
+- compensation
+- under `manual`, the EV100
+
+The run result records the exposure per camera under `produced.cameras[].exposure`, and `carla-audit-sidecars` checks that every still of a camera carries the same one.
 
 ## Timing
 
@@ -460,14 +481,17 @@ For a stare at the traffic, lengthen `capture.tiles_hold_s` as well, because its
 It is `false` by default, and it is best left that way.\
 It has proved too strict, and with many ticks to a SUMO step, such as 20 ticks at a 1 s step, every comparison comes back unknown and the run is refused.
 
-When it is `true`, two more fields are read.\
-`capture.picture_ceiling_frames` (60 by default, 30 s at 2 per second) is how many of its own frames a camera has to settle.\
-`capture.picture_tolerance_levels` (0.5 gray levels by default) is how far a frame may differ from the frame ten ticks earlier, in its worst 80-pixel block that no vehicle covers, and count as settled.\
+When it is `true`, two more fields are read:
+
+- `capture.picture_ceiling_frames` (60 by default, 30 s at 2 per second) is how many of its own frames a camera has to settle.
+- `capture.picture_tolerance_levels` (0.5 gray levels by default) is how far a frame may differ from the frame ten ticks earlier, in its worst 80-pixel block that no vehicle covers, and count as settled.
+
 The prewarm must then hold the ceiling's frames (run check 51), and `capture.tiles_hold_s` is not read.
 
 ### Pacing
 
-By default (`pacing.mode` `as_available`) the world ticks as fast as the machine allows.\
+By default (`pacing.mode` `as_available`) the world ticks as fast as the machine allows.
+
 To hold the ticks to the wall clock, set `pacing.mode` to `wall_clock`, `pacing.real_time_factor` to the simulated seconds per wall-clock second, and `pacing.min_achieved_factor` to the pace below which the run has failed.\
 `pacing.min_achieved_factor` is required under `wall_clock` (run check 2).\
 A prewarm that does not hold it refuses the window (run check 44).
@@ -548,8 +572,16 @@ The run's lock records who allowed each warning: the run file, or "the operator 
 
 ### While it runs
 
-The monitor shows how the run is going: the simulated time and how far through the window it is, the civil time, the sun's elevation, the pace, the population, and each channel's stills written and dropped.\
-On a terminal it is a panel; otherwise it is a log line every few seconds, like this one:
+The monitor shows how the run is going:
+
+- the simulated time, and how far through the window it is
+- the civil time
+- the sun's elevation
+- the pace
+- the population
+- each channel's stills written and dropped
+
+On a terminal the monitor is a panel; otherwise it is a log line every few seconds, like this one:
 
 ```text
 t=103.8 (24.4%) civil 2026-09-29T07:27:43.8-06:00 sun +5.69 deg; pace 3.456; population 43, all rendered; Check_Overhead_1 87 written 0 dropped
@@ -578,7 +610,8 @@ A second signal abandons the rest of the shutdown and exits at once, leaving the
 
 Every run writes a run result, `run.result.json`, in every outcome the tool survives.\
 That includes a refusal before any server was contacted.\
-The one exception is a `--validate-only` launch that the checks accept, which writes the other records and no result.\
+The one exception is a `--validate-only` launch that the checks accept, which writes the other records and no result.
+
 The [Run result](../Schemas/Run_Result.md) page describes every field.\
 The command's exit status is read from the result's `outcome`, so the two always agree:
 
@@ -765,5 +798,11 @@ The exposure line names the camera by its track's id, `CARLA-SENSOR-<actor id>`,
 ## What a capture folder holds
 
 The estimated pattern of life (EPoL) pages describe a capture folder file by file, and how to read the truth for training and testing: see [What a capture folder holds](../EPOL/Capture_Folder.md).\
-The schema pages describe each file's fields: [Truth sidecar](../Schemas/Truth_Sidecar.md), the four PNG text chunks ([`carla:capture`](../Schemas/PNG_Chunk_Capture.md), [`carla:solar`](../Schemas/PNG_Chunk_Solar.md), [`carla:illumination`](../Schemas/PNG_Chunk_Illumination.md), [`carla:sensor`](../Schemas/PNG_Chunk_Sensor.md)), [Run manifest](../Schemas/Run_Manifest.md), [World truth track](../Schemas/World_Truth_Track.md) and [its summary](../Schemas/World_Truth_Track_Summary.md).\
+The schema pages describe each file's fields:
+
+- [Truth sidecar](../Schemas/Truth_Sidecar.md)
+- the four PNG text chunks: [`carla:capture`](../Schemas/PNG_Chunk_Capture.md), [`carla:solar`](../Schemas/PNG_Chunk_Solar.md), [`carla:illumination`](../Schemas/PNG_Chunk_Illumination.md), [`carla:sensor`](../Schemas/PNG_Chunk_Sensor.md)
+- [Run manifest](../Schemas/Run_Manifest.md)
+- [World truth track](../Schemas/World_Truth_Track.md) and [its summary](../Schemas/World_Truth_Track_Summary.md)
+
 The [schema index](../Schemas/README.md#what-a-capture-writes) lists them all.

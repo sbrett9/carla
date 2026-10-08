@@ -1,7 +1,6 @@
 # Getting started
 
-This page is for the person who installs the tool suite and for the developer who sets up cameras with it.\
-It covers what the distribution holds, what the machine needs, how to set it up, the settings to make once, and how to check that it works.
+This page is for the person who installs the tool suite and for the developer who sets up cameras with it.
 
 Two more pages follow on from this one:
 
@@ -215,7 +214,8 @@ A relative path is relative to the profile's own folder, so a profile kept in th
 
 The `catalogue/vehicles.catalogue.json` in the distribution is the same file as the one installed with `carlacontrol`.
 
-**Use it** on every capture:
+**Use it.**\
+Pass it on every capture:
 
 ```sh
 carla-capture --site-profile site.json --run my_capture.run.json
@@ -223,7 +223,8 @@ carla-capture --site-profile site.json --run my_capture.run.json
 
 The capture refuses a profile that is not JSON, has another `site_profile_version`, holds a block or field it does not know, or does not fit its schema.\
 That refusal ends the launch with exit status 1, before a run begins, so no run result is written.\
-Every value the capture uses is recorded, with where it came from, in the run's lock and resolution report.\
+Every value the capture uses is recorded, with where it came from, in the run's lock and resolution report.
+
 To check the file without starting a run, give `carla-validate` the folder that holds it.\
 It checks every site profile and run file in the folder against its schema.\
 It does not take a single `.json` file.
@@ -231,7 +232,8 @@ It does not take a single `.json` file.
 ### World packages
 
 `carla-capture` binds the world package (`.cwp`) the scenario was compiled against.\
-It finds it by the name the scenario's lock records, under `paths.world_package_root`.\
+It finds it by the name the scenario's lock records, under `paths.world_package_root`.
+
 `carla-build-world` writes the package to `world-packages/` under the folder it is run from.\
 A world installed from a `PackageWorld` zip does not bring its `.cwp` with it, so copy the `.cwp` the world was built as into that folder.
 

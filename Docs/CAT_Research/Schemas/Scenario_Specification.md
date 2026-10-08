@@ -10,7 +10,18 @@
 ## What it is
 
 A scenario specification is a SUMO scenario as its author writes it.\
-It describes the world the scenario runs in, what civil time simulated second zero is, the vehicles, the places they drive between, the actors and flows, schedules of repeated trips, lane closures, the windows worth capturing, and the labels the scenario asserts.\
+It describes:
+
+- the world the scenario runs in;
+- what civil time simulated second zero is;
+- the vehicles;
+- the places they drive between;
+- the actors and flows;
+- schedules of repeated trips;
+- lane closures;
+- the windows worth capturing;
+- the labels the scenario asserts.
+
 You never write SUMO's XML.\
 The compiler turns the specification into the SUMO files, routes every vehicle, and checks everything it can before a capture is run.
 

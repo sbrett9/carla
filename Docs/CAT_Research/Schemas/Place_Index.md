@@ -21,7 +21,8 @@ Non-Latin names are written as they are, not escaped.
 ## Which edges it covers
 
 Only normal edges: edges with no `function` attribute, or `function="normal"`.\
-Edges inside junctions are left out.\
+Edges inside junctions are left out.
+
 An edge is listed under its `name` attribute, which netconvert writes from the OpenStreetMap street names because the world build passes `--output.street-names`.\
 An edge without a name is counted but not listed.
 
@@ -86,7 +87,8 @@ On a curving edge it says little about the heading at any one point.
 ## Format version
 
 `place_index_version` is 1, and there is no other version.\
-A file without it is version 1.\
+A file without it is version 1.
+
 `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
 They name the version and the newest they read, rather than reading part of the file.\
 `WorldPackageReader` then checks the file against the schema.\

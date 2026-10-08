@@ -10,7 +10,8 @@
 ## What it is
 
 The run result says how one `carla-capture` run ended and where everything it wrote is.\
-It records what was observed: how many captures each camera wrote, how each view became ready, each closing gate's observation against its threshold.\
+It records what was observed: how many captures each camera wrote, how each view became ready, each closing gate's observation against its threshold.
+
 It carries no overall pass or fail.\
 A reader decides what matters to them from the parts they care about.
 
@@ -73,7 +74,16 @@ The outcomes and their exit statuses:
 | 6 | `run_stopped` | The run ended before its end. `closed_by` says why. |
 | 7 | `internal_error` | An unexpected fault. |
 
-`closed_by` is one of: `window_end`, `scenario_end`, `aborted_at_preroll`, `operator_stop`, `write_headroom`, `signal:<name>` (such as `signal:SIGINT`), `loud:<condition>` (an unattended run stopped by a loud condition such as `loud:recorder_dropped`), or `fault:<exception type>`.
+`closed_by` is one of:
+
+- `window_end`;
+- `scenario_end`;
+- `aborted_at_preroll`;
+- `operator_stop`;
+- `write_headroom`;
+- `signal:<name>` (such as `signal:SIGINT`);
+- `loud:<condition>` (an unattended run stopped by a loud condition such as `loud:recorder_dropped`);
+- `fault:<exception type>`.
 
 ### A finding
 
@@ -160,7 +170,7 @@ Each entry of `produced.gates`:
 
 ## The producer record
 
-Every file our tools write carries a `producer` object:
+Every file these tools write carries a `producer` object:
 
 | Field | Type | Meaning |
 |---|---|---|

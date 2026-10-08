@@ -7,7 +7,8 @@
 
 The engine's time zone is local mean solar time, `longitude / 15` hours.\
 It is not the site's civil time zone.\
-At a site near 56.2° E it is +03:44:43, while the local civil time is +03:30.\
+At a site near 56.2° E it is +03:44:43, while the local civil time is +03:30.
+
 The scenario compiler reports the difference between the two.\
 The file never claims a civil time zone.
 
@@ -44,7 +45,8 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 ## Format version
 
 `solar_frame_version` is 1, and there is no other version.\
-A file without it is version 1.\
+A file without it is version 1.
+
 `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, naming the version and the newest they read, rather than reading part of it.\
 `WorldPackageReader` then checks the file against the schema.\
 If the file does not match, it refuses the file and names each problem.

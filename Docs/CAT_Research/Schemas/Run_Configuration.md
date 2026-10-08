@@ -13,7 +13,15 @@ A run configuration describes one capture run: which compiled scenario to bind, 
 You pass it to `carla-capture --run`.\
 Any field can also be set on the command line with `--set <path>=<value>`, and a few have short options such as `--window` and `--scenario`.
 
-A run is resolved from six layers, lowest first: the tool defaults, the site profile, the world package, the scenario package, the run configuration, and command-line overrides.\
+A run is resolved from six layers, lowest first:
+
+- the tool defaults;
+- the site profile;
+- the world package;
+- the scenario package;
+- the run configuration;
+- command-line overrides.
+
 A field the run configuration leaves out takes its value from a lower layer.\
 Fields marked "world" or "scenario" in the table below are bound by those packages.\
 You may restate a bound field only with the value the package gives it; any other value is refused (run check 3).
@@ -42,7 +50,8 @@ North is -y.
 ## Fields
 
 The document is a JSON object.\
-Dotted paths below are nested objects: `capture.window` is `{"capture": {"window": ...}}`.\
+Dotted paths below are nested objects: `capture.window` is `{"capture": {"window": ...}}`.
+
 No field is required by the schema itself.\
 A field with no default must come from some layer, or the launch is refused (run check 2).\
 "From" names the lower layer that normally supplies a field: the site profile, the world package or the scenario package.
@@ -157,7 +166,8 @@ Each object in `capture.channels` takes these fields:
 ## Versions
 
 This page describes version 1, the only version.\
-A document without `run_configuration_version` is read as version 1.\
+A document without `run_configuration_version` is read as version 1.
+
 A document that declares a newer version is refused, and the message says to use the release that wrote it.\
 Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).
 

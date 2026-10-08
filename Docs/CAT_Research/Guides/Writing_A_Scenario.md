@@ -7,7 +7,6 @@ You write a scenario as one JSON file, a scenario specification, named `<name>.s
 You never write SUMO's XML.\
 `carla-compile-scenario` checks the file against its world package, routes every vehicle, and writes the SUMO files and a report of what everything resolved to.
 
-This page covers the file, its labels, compiling it, sweeps, and running it.\
 Every field is listed on [Scenario specification](../Schemas/Scenario_Specification.md).\
 This page explains how to use them.
 
@@ -29,7 +28,8 @@ You need:
   python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('Build/world-packages/Arapahoe_I25.cwp').read('world.json'))['NetworkFingerprint'])"
   ```
 
-- **The vehicle catalog**, `vehicles.catalogue.json`: every vehicle body CARLA can draw, measured.\
+- **The vehicle catalog**, `vehicles.catalogue.json`.\
+  It lists every vehicle body CARLA can draw, each one measured.\
   It is `CarlaControl/catalogue/vehicles.catalogue.json` in a source checkout and `catalogue/vehicles.catalogue.json` in a distribution.\
   [The vehicles reference](../../../CarlaControl/skills/sumo-traffic-scenarios/references/vehicles.md) lists every class and body in it.
 - **SUMO 1.27.0**, the release that built the shipped worlds.\
@@ -50,7 +50,8 @@ The 09:00 delivery is not made: the van due then leaves on time and parks on Cro
 
 It is written for StreetLayout, a small test world that the compiler's tests build (`CarlaControl/test/ScenarioWorldFixture.py`).\
 West Street and East Street run east and west through the origin.\
-Cross Street crosses East Street at a signal about 100 m east of the origin.\
+Cross Street crosses East Street at a signal about 100 m east of the origin.
+
 The example needs one area of interest, `shop_front`, on East Street's eastbound lane, published into the package from the areas file on [Building a world](Building_A_World.md#areas-of-interest).\
 The scenario file is in `Import/` and the package in `Build/world-packages/`.
 
@@ -162,8 +163,7 @@ Compile it:
 carla-compile-scenario Import/shop_deliveries.scenario.json --out-dir Build/scenarios/shop_deliveries
 ```
 
-It compiles with two warnings, which [Reading the resolution report](#reading-the-resolution-report) explains.\
-The sections below go through the file block by block.
+It compiles with two warnings, which [Reading the resolution report](#reading-the-resolution-report) explains.
 
 ### Name, world, seed and run
 
@@ -199,7 +199,8 @@ Every time you write is read against it, and the sun is computed from it.
 - `note` is one sentence saying what second zero is.
 
 Second zero need not be midnight.\
-In the example it is 07:30, when the traffic starts, so the run does not simulate an empty road from midnight.\
+In the example it is 07:30, when the traffic starts, so the run does not simulate an empty road from midnight.
+
 Half-hour offsets are ordinary: Iran is +03:30.\
 The compiler warns when your offset is more than an hour from the one the world's longitude gives (check 40).\
 See [Epoch](../Schemas/Epoch.md).
@@ -256,7 +257,8 @@ That way the vehicle SUMO makes room for is the vehicle CARLA draws.
 
 `vehicle_mix` names the whole mix, drawn from every class by its `share`.\
 `vehicle_mixes` declares more mixes, each with its own `shares`.\
-In the example, the eastbound flow draws `ambient_mix` (cars and vans) and the northbound flow draws `cars_only`.\
+In the example, the eastbound flow draws `ambient_mix` (cars and vans) and the northbound flow draws `cars_only`.
+
 A flow's or actor's `type` is a class, one of its vehicle types, the whole mix, or a named mix.
 
 Things to know:
@@ -303,7 +305,14 @@ Only 4.5% of the Shahid Bahonar port's edges have a name.
 
 ### Flows
 
-A flow is a stream of vehicles at a rate: `id`, `type`, `from`, `to`, an optional `via`, `vehs_per_hour`, `begin` and `end`.\
+A flow is a stream of vehicles at a rate.\
+It has:
+
+- an `id` and a `type`;
+- `from`, `to` and an optional `via`;
+- `vehs_per_hour`;
+- `begin` and `end`.
+
 `depart_lane` and `depart_speed` default to SUMO's `best` and `max`.
 
 The compiler routes each flow with SUMO's `duarouter`, and every vehicle of the flow takes that route.
@@ -355,7 +364,14 @@ A window must lie inside the run and may not cut through a labeled interval (che
 
 ### Lane closures
 
-`lane_closures` takes lanes out of service for a time, as an incident does: the edge, the lanes counted from 0 on the right, the edges where vehicles learn of the closure, and the begin and end times.\
+`lane_closures` takes lanes out of service for a time, as an incident does.\
+Each closure gives:
+
+- the edge;
+- the lanes, counted from 0 on the right;
+- the edges where vehicles learn of the closure;
+- the begin and end times.
+
 A closed lane admits only the `authority` class.\
 See [Scenario specification](../Schemas/Scenario_Specification.md).\
 The Arapahoe underpass dwell closes five of the six northbound lanes of I-25 for three minutes.
@@ -363,7 +379,8 @@ The Arapahoe underpass dwell closes five of the six northbound lanes of I-25 for
 ## The labels
 
 Labels are what the scenario asserts about its vehicles, for whoever trains a model on the result.\
-They go in the `supervision` block, and the terms they use go in the `vocabulary` block.\
+They go in the `supervision` block, and the terms they use go in the `vocabulary` block.
+
 The compiler writes them only into `<scenario_id>.supervision.json`, the supervision plan.\
 The SUMO files carry none (check 52).\
 See [Supervision plan](../Schemas/Supervision_Plan.md).
@@ -383,7 +400,13 @@ The compiler warns when nothing is (check 24).
 
 The terms are yours.\
 Declare them in `vocabulary.namespaces`.\
-A namespace has a lower-case `namespace`, a `version`, an `authority`, its `terms`, and optionally `roles` and `area_kinds`.
+A namespace has:
+
+- a lower-case `namespace`;
+- a `version`;
+- an `authority`;
+- its `terms`;
+- optionally, `roles` and `area_kinds`.
 
 A term has:
 
@@ -423,7 +446,8 @@ An anchor ties the interval to the vehicle's own events:
 - `stop_end:0`, ...: when it leaves that stop;
 - `phase:0`, ...: when it enters that part of a `phases` route.
 
-Indexes count from 0.\
+Indexes count from 0.
+
 Use an anchor for a stop.\
 SUMO decides when a vehicle arrives, so a civil begin time for a stop is a guess.\
 The run records when each anchored interval actually opened and closed.
@@ -519,12 +543,28 @@ You do not set them:
 
 ### What the compiler checks
 
-The compiler runs its checks in stages: the file's shape, the world, the epoch, times, places and vehicles, the routes, the labels, the light, the files it writes, and a run in SUMO alone.\
+The compiler runs its checks in stages:
+
+- the file's shape;
+- the world;
+- the epoch, times, places and vehicles;
+- the routes;
+- the labels;
+- the light;
+- the files it writes;
+- a run in SUMO alone.
+
 Every check in a stage runs, so one compile reports all the problems that stage can see.\
 A stage that refuses stops the compile.
 
 `CarlaControl/skills/sumo-traffic-scenarios/checks.json` lists every check, by a number that never changes.\
-Each entry says what the check establishes, what it compares against, whether it refuses or warns, and the failure it prevents.\
+Each entry says:
+
+- what the check establishes;
+- what it compares against;
+- whether it refuses or warns;
+- the failure it prevents.
+
 A finding in a report cites a check by that number.\
 See [Scenario compiler checks](../Schemas/Scenario_Checks.md).
 
@@ -536,7 +576,8 @@ See [Scenario compiler checks](../Schemas/Scenario_Checks.md).
 ### Reading the resolution report
 
 Read the report after every compile and check it against what you meant.\
-`sumo-gui` shows elapsed seconds and knows nothing of labels, dates or the sun, so the report is the one place to check them.\
+`sumo-gui` shows elapsed seconds and knows nothing of labels, dates or the sun, so the report is the one place to check them.
+
 `<scenario_id>.resolution.md` is laid out for reading.\
 `<scenario_id>.resolution.json` holds every field.\
 See [Scenario resolution report](../Schemas/Scenario_Resolution_Report.md).
@@ -664,8 +705,10 @@ This sweep has nine members: three seeds, and for each seed the base and two cou
   Its trajectories are not expected to match, because the vehicles behind react to what is in front of them.
 
 The compiler writes each member into `<out-dir>/<member id>/`, with the member's own scenario file, and writes `<sweep_id>.sweep-index.json` into the output folder.\
-The index lists every member, its axis values, its outcome and its findings, and every pair.\
-A member's id is the base scenario's id and a short code for its values, such as `shop_deliveries.mcb1102d16d`; a twin adds `.cf.<actor>.<mode>`.\
+The index lists every member, its axis values, its outcome and its findings, and every pair.
+
+A member's id is the base scenario's id and a short code for its values, such as `shop_deliveries.mcb1102d16d`; a twin adds `.cf.<actor>.<mode>`.
+
 The console does not print a member's warnings.\
 Read them in the index.\
 See [Sweep](../Schemas/Sweep.md) and [Sweep index](../Schemas/Sweep_Index.md).
@@ -700,7 +743,7 @@ The date moves the sun and leaves the traffic alone; the hour moves both.
 
 An axis's `kind` says what you mean it to vary.\
 An axis declared `behaviour` that changes the light is refused.\
-The example's window then opens with the sun at 34.2, 36.2 and 23.4 degrees.
+Across this sweep, the example's window opens with the sun at 34.2, 36.2 and 23.4 degrees.
 
 A parameter that holds a civil date is text.\
 An `epoch.date` sweep does not change it: in every member above, `expected_time` still reads `2026-05-12T09:00:00-06:00`.\
@@ -800,7 +843,13 @@ See [Running a capture](Running_A_Capture.md).
 
 The `sumo-traffic-scenarios` skill is a set of instructions an AI coding assistant loads to write and compile scenarios with you.\
 It is `CarlaControl/skills/sumo-traffic-scenarios/` in a source checkout and `skills/sumo-traffic-scenarios/` in a distribution.\
-It holds [`SKILL.md`](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md), `checks.json`, the scenario and sweep schemas, the examples above, and references on places and times, the epoch, illumination, vehicles, and known SUMO problems.
+It holds:
+
+- [`SKILL.md`](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md);
+- `checks.json`;
+- the scenario and sweep schemas;
+- the examples above;
+- references on places and times, the epoch, illumination, vehicles, and known SUMO problems.
 
 What to expect from an assistant that uses it:
 

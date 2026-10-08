@@ -1,6 +1,8 @@
 # PNG text chunk `carla:capture`
 
-**Schema:** `CarlaControl/schemas/png_chunk_capture.schema.json` (JSON Schema 2020-12) **Identifier:** `urn:carla-sumo-capture:schema:png-chunk-capture:1` **Format version described:** 1
+**Schema:** `CarlaControl/schemas/png_chunk_capture.schema.json` (JSON Schema 2020-12)\
+**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-capture:1`\
+**Format version described:** 1
 
 ## What it is
 

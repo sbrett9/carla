@@ -1,10 +1,10 @@
 # Behavioral annotations
 
-This page is for people who build pattern-of-life models from our captures.\
+This page is for people who build pattern-of-life models from the captures these tools make.\
 It explains the labels a scenario's author writes into a scenario, how a run carries them onto the vehicles, and where you find them in a capture.\
 [What a capture folder holds](Capture_Folder.md) explains the files, and [The vehicles behind the truth](Vehicle_Catalogue.md) explains the vehicles.
 
-**We label; we never score.**\
+**The files hold labels and truth, never scores or verdicts.**\
 A label states what the author declared, and the truth around it states what the simulation did and what was measured.\
 No label carries a confidence, a pass mark or a judgment of how well a picture shows the behavior.\
 Whether a labeled behavior can be seen in a still is for your model to find out.
@@ -20,7 +20,7 @@ It only binds the plan's labels to the vehicles as SUMO drives them, and records
 A label is a **term**, spelled `namespace:name`, such as `check:kerbside_dwell`.\
 The vocabulary has two parts:
 
-- **The core**: a closed set of words our own code acts on, such as the supervision states and the reasons an interval closes.\
+- **The core**: a closed set of words that the tools themselves act on, such as the supervision states and the reasons an interval closes.\
   Its version is the `vocabulary` number on every sidecar and in the manifest: 3 in current captures.\
   The plan lists every core word by family, in `vocabulary.core`.
 - **Author namespaces**: the terms a scenario's author declares, such as `check` (version 1) in the Arapahoe supervision check and `bahonar` (version 2) in the Shahid Bahonar Port scenario.\
@@ -91,15 +91,22 @@ A plan holds three kinds of label rows ([Supervision plan](../Schemas/Supervisio
 ### Phases and intervals
 
 An instance can declare **intervals**: the stretches of time its labels hold, one for each participant and **phase**.\
-The author names the phases, such as `dwell`, `transit` and `past_the_kerb`.\
+The author names the phases, such as `dwell`, `transit` and `past_the_kerb`.
+
 An interval is named by three things together: its instance, its participant and its phase.\
 Two runs of one scenario share these names.
 
 An interval starts and ends in one of two ways:
 
-- **On the vehicle's own events**, which the scenario calls anchors: `depart`, its insertion; `stop:<i>`, arriving at its stop number `i`; `stop_end:<i>`, leaving that stop; `phase:<i>`, entering the part of its route numbered `i`.\
+- **On the vehicle's own events**, which the scenario calls anchors:
+  - `depart`: its insertion.
+  - `stop:<i>`: arriving at its stop number `i`.
+  - `stop_end:<i>`: leaving that stop.
+  - `phase:<i>`: entering the part of its route numbered `i`.
+
   Numbers count from 0.\
   An interval with no end anchor stays open until the vehicle leaves the simulation or the run ends.
+
 - **At declared times**: a civil start and end, or a duration.
 
 When a vehicle carries an instance's labels:
@@ -138,7 +145,17 @@ Read it from the `interval_closed` row.
 
 ### Why an interval closed
 
-The `interval_closed` row's `closed_by` is a core word: `trigger` (the authored end happened), `entity_arrived`, `sumo_removed`, `never_inserted`, `physical_predicate_never_held` (SUMO committed a stop and the drawn body never stood still: a defect, not a behavior), `render_released`, `capture_window_end` or `scenario_end`.\
+The `interval_closed` row's `closed_by` is a core word, one of these:
+
+- `trigger` (the authored end happened)
+- `entity_arrived`
+- `sumo_removed`
+- `never_inserted`
+- `physical_predicate_never_held` (SUMO committed a stop and the drawn body never stood still: a defect, not a behavior)
+- `render_released`
+- `capture_window_end`
+- `scenario_end`
+
 Each is defined on the [Run manifest](../Schemas/Run_Manifest.md#interval_opened-and-interval_closed) page.\
 The row's `not_drawn` lists the spans in which no body drew the vehicle while the interval was open.
 
@@ -148,7 +165,8 @@ A `nominal` row asserts that its vehicles carry out none of the target behaviors
 A **hard negative** is a nominal vehicle the author chose because it looks like a target behavior and is not one.
 
 `hard_negative_for` lists the behaviors a nominal row is a matched negative for.\
-The list comes from the definition of the row's own labels: the term declares it, and the row carries a copy.\
+The list comes from the definition of the row's own labels: the term declares it, and the row carries a copy.
+
 `null` means not specified.\
 It does not mean "a negative for nothing".
 
@@ -184,7 +202,8 @@ The Bahonar scenario shows this.\
 Its schedule sends a guard to each of 16 towers at 07:00, 15:00 and 23:00 on each of 7 days: 336 postings.\
 On day 4 at 07:00 the guard due at tower 3 does not take up the post.\
 The schedule skips that posting, so the series has 335 slots and no vehicle is sent to tower 3.\
-Nothing is labeled about the empty tower.\
+Nothing is labeled about the empty tower.
+
 The guard vehicle that was due, `offpost_d4_h7_t3`, departs on time and parks on the west apron spur for the eight-hour shift.\
 It carries the label, with parameters that name the tower and the shift it missed:
 
@@ -229,7 +248,8 @@ It holds what was in force for that vehicle on that frame, and nothing from any 
   - `role`: the vehicle's role; absent where the row declares none, as a cohort does not.
 
 A vehicle that one row labels `annotated` and another `nominal` is `annotated`, and only its annotated rows are listed.\
-An `unlabelled` vehicle has no `<annotation>`.\
+An `unlabelled` vehicle has no `<annotation>`.
+
 The `<events>` container names the plan in force, `plan_id`, with `vocabulary` and `vocabulary_digest`.\
 A container that says `supervision="unknown"` means a plan was in force but the frame's labels could not be read, so no vehicle in that still carries any.\
 Do not read those vehicles as `unlabelled`.
@@ -247,10 +267,14 @@ In the sample capture, the car `transit` carries two annotations while it passes
 
 The [run manifest](../Schemas/Run_Manifest.md) records the plan as declared and the run as it bound it:
 
-- **`instance`, `series` and `cohort` rows**, right after the first row: every row of the plan, as declared, with its state, labels, parameters, `hard_negative_for`, participants and roles, and an instance's intervals with their anchors and declared times.
-- **`interval_opened` and `interval_closed` rows**, as each interval opens and closes: the three onsets, whether it began before the capture window opened, and on closing, `closed_by`, the committed end and `not_drawn`.
+- **`instance`, `series` and `cohort` rows**, right after the first row.\
+  They hold every row of the plan, as declared, with its state, labels, parameters, `hard_negative_for`, participants and roles, and an instance's intervals with their anchors and declared times.
+- **`interval_opened` and `interval_closed` rows**, as each interval opens and closes.\
+  They hold the three onsets and whether the interval began before the capture window opened, and the closing row adds `closed_by`, the committed end and `not_drawn`.
 - **`supervision_defect` rows**: a fault in how the run carried out the plan, in words, such as a stop the drawn body never stood still for.
-- **The last row, `manifest_closed`**: `open_intervals`, the intervals still open as the run ended, with `open_intervals_close_as`, the reason they close with; and `never_opened`, the intervals nothing in the run opened or closed.\
+- **The last row, `manifest_closed`.**\
+  Its `open_intervals` lists the intervals still open as the run ended, and `open_intervals_close_as` gives the reason they close with.\
+  Its `never_opened` lists the intervals nothing in the run opened or closed.\
   With the interval rows, a closed manifest names every interval the plan declares.
 
 Times in the manifest are on SUMO's clock.\
@@ -293,7 +317,8 @@ Here is what the record shows, on SUMO's clock:
 | 240 s | The window closes. The `transit` interval is still open and closes as `capture_window_end`. The `brief_stop` interval never opened. | `manifest_closed`: `open_intervals`, `never_opened` |
 
 In numbers: 539 vehicle records in the 360 stills are `annotated`: 240 for the `dweller`'s dwell and 299 for `transit`.\
-The other 17,453 are `unlabelled`.\
+The other 17,453 are `unlabelled`.
+
 No record is `nominal`, because the van's stop had not begun when the window closed.\
 Its `never_opened` entry is the record of that.
 

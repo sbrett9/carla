@@ -1,8 +1,9 @@
 # Level package manifest (`world.json` in a level package)
 
 A level package is one generated world delivered on its own, as add-on content for an existing CARLA package.\
-It is a zip made by `PackageWorld`.\
-It holds the world's cooked plugin folder and, beside it, a `world.json` that says what the world is and what it needs from the package it is installed into.\
+It is a zip made by `PackageWorld`.
+
+The zip holds the world's cooked plugin folder and, beside it, a `world.json` that says what the world is and what it needs from the package it is installed into.\
 `InstallWorld` reads that file before it installs anything.
 
 This is a different file from the `world.json` inside a world package (`.cwp`), which is described in [World_Package_Manifest.md](World_Package_Manifest.md).
@@ -24,8 +25,17 @@ A manifest written by `PackageWorld.ps1` under Windows PowerShell 5.1 before 202
 
 `Scripts/Windows/InstallWorld.ps1` and `Scripts/Linux/InstallWorld.sh` read it.\
 They check its `formatVersion` first, then the world interface version against the target package's (see [World_Interface_Version.md](World_Interface_Version.md)), then copy the world's folder into the package's `CarlaUnreal/Plugins/GeneratedWorlds/`.\
-They print the `mapPackage` to load.\
-They read `formatVersion`, `world`, `mapPackage`, `worldInterfaceMajor`, `worldInterfaceMinor` and `carlaGitHash`.\
+They print the `mapPackage` to load.
+
+The scripts read these fields:
+
+- `formatVersion`
+- `world`
+- `mapPackage`
+- `worldInterfaceMajor`
+- `worldInterfaceMinor`
+- `carlaGitHash`
+
 The other fields identify the build for a person.
 
 ## The zip

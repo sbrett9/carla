@@ -1,7 +1,8 @@
 # World interface version
 
 A generated world can be delivered on its own, as a level package, and installed into a CARLA package that was built separately.\
-The world interface version says which of those pairings work.\
+The world interface version says which of those pairings work.
+
 It is a promise a CARLA build makes about what a delivered world can rely on: the content, the asset classes and the cooked format that a world's files refer to.\
 It is not a build number or a commit hash.
 
@@ -65,7 +66,13 @@ Minor goes back to 0 when Major goes up.
 Worlds built before the addition keep working.\
 Worlds built after it need a package that has it.
 
-**Neither changes** for anything a delivered world cannot observe: gameplay code, server calls, tools, how a material looks, or new maps in the base package.
+**Neither changes** for anything a delivered world cannot observe:
+
+- gameplay code;
+- server calls;
+- tools;
+- how a material looks;
+- new maps in the base package.
 
 ## For an Unreal tech artist making a level
 

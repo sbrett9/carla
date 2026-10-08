@@ -1,7 +1,8 @@
 # SUMO bridge table (`carla-cot-telemetry --csv`) and its summary
 
 Given `--csv <file>`, `carla-cot-telemetry` writes one row per vehicle per update of a SUMO run.\
-The rows hold the same vehicles and instants as its [event file](SUMO_CoT_Event_File.md), as a plain table.\
+The rows hold the same vehicles and instants as its [event file](SUMO_CoT_Event_File.md), as a plain table.
+
 When it opens the CSV, it also writes `<file stem>.summary.json` beside it.\
 The summary records the CSV's format version, its columns and what made it.\
 The CSV's own first line stays its header, so any CSV reader can read it.
@@ -23,7 +24,8 @@ A CSV with no summary beside it is noted as format version 1.
 ## The CSV
 
 Comma separated, UTF-8, with a header line.\
-A value with a comma in it, such as `color`, is quoted.\
+A value with a comma in it, such as `color`, is quoted.
+
 An empty cell is the empty string, a value, never a missing one: `special_type` is empty for most vehicles.\
 Every column is present in every row.
 
@@ -78,7 +80,8 @@ It is written when the CSV is opened, so it exists even when the run stops early
 ## Format version
 
 The CSV's format version is in its summary: `format_version` 1.\
-A CSV with no summary beside it was written before summaries existed and is version 1.\
+A CSV with no summary beside it was written before summaries existed and is version 1.
+
 Nothing checks the version today.\
 A reader that meets a version it does not know should refuse the CSV.
 

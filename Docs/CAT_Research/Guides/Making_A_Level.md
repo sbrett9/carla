@@ -18,14 +18,16 @@ The steps, in order:
 9. Load it and check that it loaded.
 
 The commands are for PowerShell on Windows.\
-Run them from the top of the CARLA checkout unless a step says otherwise.\
+Run them from the top of the CARLA checkout unless a step says otherwise.
+
 Each script prints its options with `-Help`.\
 For `PackageWorld.ps1` and `InstallWorld.ps1`, run `Get-Help <script> -Detailed` instead: their `-Help` first asks for their required option.
 
 **On Linux.**\
 Every script in this guide except `OpenCarlaEditor.ps1` has a Linux twin with the same name ending in `.sh`.\
 `CarlaSetup.sh` is at the top of the checkout, and the others are in `Scripts/Linux/`.\
-A Linux distribution has `run-server.sh` and the `.sh` world tools.\
+A Linux distribution has `run-server.sh` and the `.sh` world tools.
+
 The Linux scripts spell their options in lower case with two dashes, such as `--world` and `--distribution`.\
 A level cooked on Windows goes into a Windows distribution, and a level cooked on Linux goes into a Linux one.
 
@@ -33,7 +35,11 @@ A level cooked on Windows goes into a Windows distribution, and a level cooked o
 
 - **Distribution**: the CARLA bundle made by `Scripts/Windows/MakeDistribution.ps1`.\
   It is a folder named `Carla-<version>-Win64-<configuration>`, such as `Carla-0.10.0-Win64-Development`.\
-  It holds the cooked server in `CarlaServer\`, the world tools in `world-tools\`, `run-server.ps1`, and a `VERSION` file.
+  It holds:
+  - the cooked server, in `CarlaServer\`;
+  - the world tools, in `world-tools\`;
+  - `run-server.ps1`;
+  - a `VERSION` file.
 - **World package**: one generated world in one `.cwp` file, written by the world build.
 - **Exported world**: the level and its assets, copied into a content-only plugin under `Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
   This is the copy that ships.
@@ -119,8 +125,13 @@ git -C Unreal\CarlaUnreal\Content\Carla checkout <Content git hash>
 
 What these steps do:
 
-- `CarlaSetup.ps1` sets up the checkout.\
-  It installs the prerequisites, clones the content repository into `Unreal\CarlaUnreal\Content\Carla` (on its `ue5-dev` branch, which is why you check out the content commit next), builds the SUMO toolchain, builds Cesium for Unreal from source, and then configures and builds CARLA.\
+- `CarlaSetup.ps1` sets up the checkout:
+  - It installs the prerequisites.
+  - It clones the content repository into `Unreal\CarlaUnreal\Content\Carla` (on its `ue5-dev` branch, which is why you check out the content commit next).
+  - It builds the SUMO toolchain.
+  - It builds Cesium for Unreal from source.
+  - Then it configures and builds CARLA.
+
   The first run takes a long time.\
   `-SkipPrerequisites` skips the prerequisites on a machine that already has them.\
   `-Vs 2022` picks Visual Studio 2022 when more than one version is installed.
@@ -153,7 +164,8 @@ The importer reads three of its entries: `world.json` (where the world sits on t
 - **Keep the `.cwp`.**\
   Scenarios are compiled against it, and a SUMO drive or a capture checks the loaded level against it before it starts.\
   Whoever runs scenarios on your level needs this same file.
-- **Put it where the importer looks first:** `Build\world-packages\` in the checkout.\
+- **Put it where the importer looks first.**\
+  That folder is `Build\world-packages\` in the checkout.\
   The importer fills in the first package it finds there.
 - If you have the `carla-*` commands installed, `carla-validate <World>.cwp` checks the package before you import it.
 
@@ -179,7 +191,8 @@ The panel's code is in `Unreal/CarlaUnreal/Plugins/CarlaTools/Source/CarlaTools/
 | Cesium ion token | Optional. **Leave it empty for a level you will ship.** A token typed here is saved in the level's imagery layers, so it is in the exported plugin and in the DLC, where anyone who installs the level can read it. With the field empty, the editor streams imagery with the project's own token, and a server uses the `CESIUM_ION_TOKEN` environment variable. |
 
 Click **Import**.\
-The line at the bottom of the panel reports the result, such as `Imported to /Game/Carla/Maps/Generated/Arapahoe_I25. ... Packaged builds will include it (...)`.\
+The line at the bottom of the panel reports the result, such as `Imported to /Game/Carla/Maps/Generated/Arapahoe_I25. ... Packaged builds will include it (...)`.
+
 The level is written but not opened.\
 Open it from the Content Browser.
 
@@ -259,7 +272,8 @@ The cook fails on anything else (section 7).
 **The folder decides a mesh's segmentation label.**\
 CARLA labels a mesh by the fourth folder of its path.\
 `/Game/Carla/Static/Road/<World>/SM_RoadSurface_0` is labeled `Road`, and so is its exported copy `/<World>/Carla/Static/Road/<World>/SM_RoadSurface_0`.\
-Keep the road pieces in their `Road` and `SideWalk` folders.\
+Keep the road pieces in their `Road` and `SideWalk` folders.
+
 To give a new mesh a label, put the label in the fourth folder of its path, for example `/<World>/Detail/Static/Vegetation/SM_Hedge_01` for `Vegetation`.\
 The folder names CARLA recognizes are in `ATagger::GetLabelByFolderName`, in `Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Game/Tagger.cpp`.\
 A mesh whose fourth folder is not one of those names has no label.
@@ -403,7 +417,8 @@ The installed worlds are the folders in `<distribution>\CarlaServer\CarlaUnreal\
 ## 7. Cooking it as DLC with `PackageWorld`
 
 `Scripts/Windows/PackageWorld.ps1` cooks one exported world on its own and packages it as one `.zip` of about 100 MB.\
-The recipient does not need the whole distribution again, which is over 30 GB.\
+The recipient does not need the whole distribution again, which is over 30 GB.
+
 Save your work first.\
 The cook reads the files on disk.
 
@@ -488,7 +503,14 @@ The ones you are likely to see:
     Content\...            the cooked level (.umap) and assets (.uasset, .uexp, .ubulk)
 ```
 
-`world.json` says what the world is and what it needs from the distribution it is installed into: the world's name, the map to load, the world interface version, the configuration and the platform.\
+`world.json` says what the world is and what it needs from the distribution it is installed into:
+
+- the world's name;
+- the map to load;
+- the world interface version;
+- the configuration;
+- the platform.
+
 Its fields are described in [Level package manifest](../Schemas/Level_Package_Manifest.md).
 
 At the end, `PackageWorld` prints the file, its size, what it needs, and the command to install it:
@@ -544,7 +566,8 @@ At the end, `InstallWorld` prints the command that loads the world.
 
 ### The world interface version
 
-The world interface version is a promise a CARLA build makes about what a delivered world can rely on: the content, the asset classes and the cooked format that a world's files refer to.\
+The world interface version is a promise a CARLA build makes about what a delivered world can rely on: the content, the asset classes and the cooked format that a world's files refer to.
+
 It is written by hand in `Unreal/CarlaUnreal/Config/DefaultWorldInterface.ini` as `Major` and `Minor`, and it is `1.0` today.\
 A distribution shows it in its `VERSION` file and in `CarlaServer\CarlaUnreal\Config\DefaultWorldInterface.ini`.\
 Your level records the version of the checkout it was cooked in.
@@ -609,7 +632,8 @@ Any other arguments are passed to the server.
 ```
 
 `-Level <name>` loads a world by its name.\
-It expands to `-Map /<name>/Maps/<name>`.\
+It expands to `-Map /<name>/Maps/<name>`.
+
 `RunCarlaServer` starts the editor binary headless against the checkout's project, so it loads the exported plugin in `Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`, not a cooked level.\
 Use it to check the exported level before you cook it.
 

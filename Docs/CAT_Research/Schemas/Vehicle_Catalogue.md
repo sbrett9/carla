@@ -44,7 +44,8 @@ The digest is defined over that form.
 ## The classes
 
 A scenario asks for a class.\
-SUMO draws a member body from it, with the member's weight as its chance.\
+SUMO draws a member body from it, with the member's weight as its chance.
+
 Every member of a class has the class's `base_type` and `special_type` in the truth, and SUMO drives it with the class's parameters.\
 Each body belongs to exactly one class.
 
@@ -88,10 +89,16 @@ The builder derives a base type from the measured box, then applies a short list
 
 - height under 2.0 m: `car`;
 - height under 3.0 m and length under 7.0 m: `van`;
-- otherwise: `truck`.\
-  The derivation never gives `bus`.
+- otherwise: `truck`.
 
-The corrections are for what a box cannot show: the Nissan Patrol is a sport utility vehicle on a car chassis whose 2.06 m roof reads as a van; the Fuso Rosa is a bus; the ambulance, the police car and the fire truck are `emergency`; the taxi is `taxi`.\
+The derivation never gives `bus`.\
+The corrections are for what a box cannot show:
+
+- the Nissan Patrol is a sport utility vehicle on a car chassis whose 2.06 m roof reads as a van;
+- the Fuso Rosa is a bus;
+- the ambulance, the police car and the fire truck are `emergency`;
+- the taxi is `taxi`.
+
 Each correction carries its reason in the builder's code.
 
 ## The bodies
@@ -118,7 +125,7 @@ Each correction carries its reason in the builder's code.
 | `vehicle.ue4.ford.mustang` | `civ_car` | 4.72 | 1.89 | 1.84 | 1.30 |
 | `vehicle.ue4.mercedes.ccc` | `civ_car` | 4.67 | 1.81 | 1.80 | 1.44 |
 
-## How the catalogue meets the truth
+## How the catalog meets the truth
 
 For a model developer reading a capture's truth:
 
@@ -242,7 +249,13 @@ Every catalog the builder wrote carries it, so a file without it is not a catalo
   Every vehicle and class entry must be whole.\
   A header field that is present must have the right shape; one that is absent reads as empty.
 
-`carlacontrol.WorldFileValidator`, given the catalog's folder, checks the whole catalog against its schema and the builder's rules, checks that its digest is its content's, checks `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives, and checks `vehicle_body_widths.json` where it is there.\
+`carlacontrol.WorldFileValidator`, given the catalog's folder, checks:
+
+- the whole catalog against its schema and the builder's rules;
+- that its digest is its content's;
+- `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives;
+- `vehicle_body_widths.json`, where it is present.
+
 `carla-validate CarlaControl/catalogue` runs it.
 
 ## Example

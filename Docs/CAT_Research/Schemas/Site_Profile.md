@@ -12,12 +12,18 @@
 A site profile holds the facts about one machine that a capture run needs: the CARLA server's address, the SUMO installation, and where scenario packages, world packages, the vehicle catalog, captures and run records are kept.\
 Keeping these out of the run configuration lets the same run configuration move between machines unchanged.
 
-Without a site profile, the values come from the layout the tool runs from.\
-In a source checkout that is `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`, `Build/captures` and `Build/runs`.\
-Installed, it is `scenarios`, `world-packages`, `captures` and `runs` under the current folder, and the catalog installed with carlacontrol.\
+Without a site profile, the values come from the layout the tool runs from:
+
+- in a source checkout, `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`, `Build/captures` and `Build/runs`;
+- installed, `scenarios`, `world-packages`, `captures` and `runs` under the current folder, and the catalog installed with carlacontrol.
+
 A profile file overrides only the fields it names.
 
-SUMO is found in this order when no profile names `sumo.home`: the `CARLANET_SUMO_HOME` environment variable, the checkout's staged SUMO, and then `SUMO_HOME` and `PATH`, which the session searches.
+SUMO is found in this order when no profile names `sumo.home`:
+
+- the `CARLANET_SUMO_HOME` environment variable;
+- the checkout's staged SUMO;
+- `SUMO_HOME` and `PATH`, which the session searches.
 
 ## Who writes it and who reads it
 

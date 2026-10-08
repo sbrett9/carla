@@ -1,7 +1,7 @@
 # Building a world
 
-This page shows how to turn an OpenStreetMap extract into a world package with `carla-build-world`.\
-A scenario runs on a world package, so this is the first step for a new location.
+`carla-build-world` turns an OpenStreetMap extract into a world package.\
+A scenario runs on a world package, so building one is the first step for a new location.
 
 The commands on this page are installed with the carlacontrol wheel.\
 From a source checkout, the same tools are `python CarlaControl/scripts/build_world.py`, `python CarlaControl/scripts/publish_reference_set.py` and `python CarlaControl/scripts/validate_capture.py` (for `carla-validate`).\
@@ -20,7 +20,11 @@ It holds:
 - `map.net.xml`, the SUMO network from the same netconvert run as `map.xodr`;
 - `bareearth.bin`, the ground height grids, in a draped world;
 - `map.tll.xml`, the ramp meter signal programs, when the extract has ramp meters;
-- the authoring reference set: `places.json` (which edges carry which street name), `solar.json` (facts about the world's sun), `areas.resolved.json` (the areas of interest placed on the roads) and `areas.aoi.geojson` (the areas file you wrote, when you wrote one).
+- the authoring reference set:
+  - `places.json`, which edges carry which street name;
+  - `solar.json`, facts about the world's sun;
+  - `areas.resolved.json`, the areas of interest placed on the roads;
+  - `areas.aoi.geojson`, the areas file you wrote, when you wrote one.
 
 The SUMO network in the package is the network every scenario on this world runs, byte for byte.\
 A scenario names it by its fingerprint, and the scenario compiler refuses a scenario whose fingerprint is not the package's.
@@ -34,15 +38,18 @@ For every entry, see [World package](../Schemas/World_Package.md) and [World pac
   Start it headless: `run-server.ps1` or `run-server.sh` in a CARLA distribution, or `Scripts/Windows/RunCarlaServer.ps1` or `Scripts/Linux/RunCarlaServer.sh` in a source checkout.\
   The build connects to `127.0.0.1:2000` unless you give `--host` and `--port`.\
   It builds the world on the server and leaves it loaded there.
-- **A Cesium ion access token**, in the `CESIUM_ION_TOKEN` environment variable, or given with `--ion-token`.\
+- **A Cesium ion access token.**\
+  Set it in the `CESIUM_ION_TOKEN` environment variable, or give it with `--ion-token`.\
   The build streams the photoreal imagery and the terrain heights from Cesium ion.\
   Without a token, the build warns and the height sampling fails.
-- **The extract**: an OpenStreetMap `.osm` file with a `<bounds>` element.\
+- **The extract.**\
+  It is an OpenStreetMap `.osm` file with a `<bounds>` element.\
   An extract taken with the OpenStreetMap website's Export button has one.\
   The build cuts the roads at those bounds, and the draped ground needs them.\
   In a source checkout, keep extracts in `Import/`.\
   A distribution ships examples in `osm/`.
-- **netconvert**, which the build runs to convert the extract.\
+- **netconvert.**\
+  The build runs it to convert the extract.\
   From a source checkout it is the one under `Build/sumo-install`, which `CarlaSetup` builds.\
   In a distribution, dot-source `carla-env.ps1` (or source `carla-env.sh`) first: it sets `CARLA_NETCONVERT` and `SUMO_HOME`.
 
@@ -63,7 +70,14 @@ A SUMO drive and a capture take each vehicle's height, pitch and roll from those
 They refuse a package built without them.\
 The default, `none`, builds a world you can fly over but not drive SUMO traffic in.
 
-The build prints what it found before it starts: the origin, whether the road filter is on, the areas of interest, the road types, and whether the token is set.\
+The build prints what it found before it starts:
+
+- the origin
+- whether the road filter is on
+- the areas of interest
+- the road types
+- whether the token is set
+
 Read those lines.\
 When it finishes, the last line names the package: `world built; its package is <path of the .cwp>`.
 
@@ -87,7 +101,7 @@ That removes every road that SUMO's own type map closes to passenger cars:
 
 netconvert does not read `access=private`, so a private residential road stays in.
 
-**Turn the filter off with `--no-road-filter`** when your scenario needs those roads.\
+**Turn the filter off with `--no-road-filter` when your scenario needs those roads.**\
 A port, an airfield or a depot often has its whole interior mapped as service roads.\
 With the filter on, the interior is gone.\
 A delivery van stopping at a loading dock on a service road needs the filter off too.
@@ -132,7 +146,8 @@ Positions are `[longitude, latitude]`, in that order.
 ```
 
 The build checks the file before it builds anything, and refuses a file with a problem, naming every problem.\
-It then places each area on the world's lanes and publishes it into the package.\
+It then places each area on the world's lanes and publishes it into the package.
+
 A scenario uses an area as a place (`{"area": "shop_front"}`).\
 A stop at an area needs the area to hold exactly one lane, so keep a stop's area small.
 
@@ -145,7 +160,8 @@ The type map says which vehicle classes each kind of road admits.\
 It is a SUMO `<types>` file beside the extract, named `<name>.typ.xml`, or named with `--type-map`.
 
 The build gives netconvert SUMO's own OSM type map first, and then yours.\
-Your file changes only the attributes it states, so a line can change one road type's permissions and leave its lanes and speed alone.\
+Your file changes only the attributes it states, so a line can change one road type's permissions and leave its lanes and speed alone.
+
 The Shahid Bahonar port's `Import/Shahid_Bahonar_Port.typ.xml` sets one road type.\
 Without its comment, it reads:
 
@@ -166,7 +182,8 @@ Things to know:
 
 - A type map cannot key on `access`.\
   It sets what every road of a type admits, private or not.
-- The build refuses a file that is not XML, a root other than `<types>`, and a `<type>` without an `id`. netconvert refuses an unknown vehicle class when the conversion starts.
+- The build refuses a file that is not XML, a root other than `<types>`, and a `<type>` without an `id`.\
+  netconvert refuses an unknown vehicle class when the conversion starts.
 - Do not also pass `--type-files` through `--netconvert-arg`.\
   The build refuses the two together.
 - A type map is often needed together with `--no-road-filter`.\
@@ -257,7 +274,8 @@ carla-publish-reference-set --package Build/world-packages/Gardnerville_Centervi
 | `--sumo-home` | The SUMO installation to place the areas with. |
 | `--allow-version-mismatch` | Continue when that SUMO is not the release that built the world. |
 
-Publishing replaces the whole reference set.\
+Publishing replaces the whole reference set.
+
 The command exits 1 when the areas file has a problem or an area cannot be placed, and names every problem.\
 A file with a problem publishes nothing.\
 When the file is sound but an area cannot be placed, the place index and the solar frame are still published.

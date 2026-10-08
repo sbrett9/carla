@@ -24,8 +24,7 @@ These read it:
 
 ## Layout
 
-All values are little-endian.\
-There is no padding.\
+All values are little-endian, and there is no padding.\
 The header is 60 bytes.\
 Then come the two grids, each `N = columns × rows` 32-bit floats.\
 The file is exactly `60 + 8 × N` bytes long.
@@ -62,7 +61,8 @@ Point `(c, r)` is at:
 
 CARLA's frame has x east and y south.\
 So column 0 is the west edge, row 0 is the north edge, and rows run from north to south.\
-The last point is at minimum x + (columns − 1) × cell size and minimum y + (rows − 1) × cell size.\
+The last point is at minimum x + (columns − 1) × cell size and minimum y + (rows − 1) × cell size.
+
 The grid's points span the staging rectangle in `world.json`: in every package built so far the minimum corner equals `StagingMinXMeters`, `StagingMinYMeters` and the far corner equals `StagingMaxXMeters`, `StagingMaxYMeters`.\
 The cell size is `TerrainResolutionMeters`.
 

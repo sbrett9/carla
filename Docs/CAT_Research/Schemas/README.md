@@ -1,13 +1,15 @@
-# Schemas of the files our tools write and read
+# Schemas of the files these tools write and read
 
 Each page in this folder describes one kind of file: what writes it, what reads it, every field, and its format version.\
-Most kinds also have a schema in `CarlaControl/schemas/`, which carlacontrol installs.\
+Most kinds also have a schema in `CarlaControl/schemas/`, which carlacontrol installs.
+
 Each schema names itself with a URN, `urn:carla-sumo-capture:schema:<kind>:<format version>`.\
 The URN is a name, not an address, so nothing has to serve it.
 
 The schemas are generated from the code that writes or reads each file, so they say what the writers write.\
-A few are written by hand and say so below.\
-`carla-validate <path>` checks a capture folder, a world package, a vehicle catalog folder, or any folder holding the other files below, against them.\
+A few are written by hand and say so below.
+
+`carla-validate <path>` checks a capture folder, a world package, a vehicle catalog folder, or any folder holding the other files below, against the schemas.\
 `carla-validate --write-schemas CarlaControl/schemas` writes every generated schema again after a writer or a reader changes.
 
 The rule for format versions is the same for every file: a file that declares no version is version 1, and a reader refuses a version newer than it knows rather than reading it in part.
@@ -61,7 +63,7 @@ What `carla-compile-scenario` writes for a scenario or a sweep.
 | [Supervision plan](Supervision_Plan.md) | `supervision_plan.schema.json` | `urn:carla-sumo-capture:schema:supervision-plan:1` | `<scenario_id>.supervision.json`: the scenario's labels, fixed when it is compiled, and the only place they travel. |
 | [Sweep index](Sweep_Index.md) | `sweep_index.schema.json` | `urn:carla-sumo-capture:schema:sweep-index:1` | `<sweep_id>.sweep-index.json`: every member of a compiled sweep, its axis values, and every finding. |
 | [Scenario compiler checks](Scenario_Checks.md) | `scenario_checks.schema.json` | `urn:carla-sumo-capture:schema:scenario-checks:1` | `checks.json` beside the authoring skill: every check the compiler runs, by its stable id. |
-| [SUMO files](SUMO_Files.md) | none of ours: SUMO's own XSDs | none | The route, additional, configuration, network and type files, in SUMO's own formats. |
+| [SUMO files](SUMO_Files.md) | none from these tools: SUMO's own XSDs | none | The route, additional, configuration, network and type files, in SUMO's own formats. |
 
 ## World and level packages
 
@@ -80,9 +82,9 @@ What `carla-compile-scenario` writes for a scenario or a sweep.
 
 | Page | Schema | URN | What it describes |
 |---|---|---|---|
-| [Vehicle catalogue](Vehicle_Catalogue.md) | `vehicle_catalogue.schema.json` | `urn:carla-sumo-capture:schema:vehicle-catalogue:1` | `vehicles.catalogue.json`: every vehicle body CARLA can draw, measured, and the classes a scenario asks for. |
+| [Vehicle catalog](Vehicle_Catalogue.md) | `vehicle_catalogue.schema.json` | `urn:carla-sumo-capture:schema:vehicle-catalogue:1` | `vehicles.catalogue.json`: every vehicle body CARLA can draw, measured, and the classes a scenario asks for. |
 | [Vehicle body widths](Vehicle_Body_Widths.md) | `vehicle_body_widths.schema.json` | `urn:carla-sumo-capture:schema:vehicle-body-widths:1` | `vehicle_body_widths.json`: each body's width without its mirrors, measured from the mesh. |
-| [Vehicle types](Vehicle_Types.md) | `vehicle_types.xsd`, written by hand | `urn:carla-sumo-capture:schema:vehicle-types:1` | `vehicles.vtypes.rou.xml`: the catalog as SUMO reads it, and our parameters on a vehicle type. |
+| [Vehicle types](Vehicle_Types.md) | `vehicle_types.xsd`, written by hand | `urn:carla-sumo-capture:schema:vehicle-types:1` | `vehicles.vtypes.rou.xml`: the catalog as SUMO reads it, and the parameters these tools set on a vehicle type. |
 
 ## Telemetry
 
@@ -95,4 +97,4 @@ What the tools send and write as Cursor-on-Target (CoT) telemetry, and the legac
 | [SUMO bridge table](SUMO_CoT_Table.md) | `sumo_cot_telemetry.tableschema.json` | `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1` | The file `carla-cot-telemetry --csv` writes: one row per vehicle per update. |
 | [SUMO bridge table](SUMO_CoT_Table.md), its summary | `sumo_cot_telemetry_summary.schema.json` | `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1` | `<name>.summary.json` beside the table: its format, its columns and what made it. |
 | [Legacy supervision gaps](Supervision_Gaps.md) | `supervision_gaps.schema.json` | `urn:carla-sumo-capture:schema:supervision-gaps:1` | `<name>.supervision.json` beside a bridge run: the described gaps of a legacy scenario, placed on the run's clock. |
-| [Legacy scenario labels](Legacy_Labels.md) | `legacy_labels.schema.json` | `urn:carla-sumo-capture:schema:legacy-labels:1` | `*.labels.json`: what a scenario generator wrote before scenarios were compiled. Nothing writes it any more. |
+| [Legacy scenario labels](Legacy_Labels.md) | `legacy_labels.schema.json` | `urn:carla-sumo-capture:schema:legacy-labels:1` | `*.labels.json`: what a scenario generator wrote before scenarios were compiled. Nothing writes it anymore. |

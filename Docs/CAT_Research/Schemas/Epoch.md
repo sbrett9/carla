@@ -19,8 +19,9 @@ This check catches the most likely mistake, an offset applied in the wrong direc
 
 The offset is the declared value.\
 It includes daylight saving when daylight saving is in force, and `dst_in_effect` says whether it is.\
-The time zone name is carried for a reader and never looked up, so two machines with different time zone databases always agree.\
 Half-hour and quarter-hour offsets are ordinary: Iran is +03:30.
+
+The time zone name is carried for a reader and never looked up, so two machines with different time zone databases always agree.
 
 ## Who writes it and who reads it
 
