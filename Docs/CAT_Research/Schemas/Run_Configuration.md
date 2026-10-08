@@ -136,7 +136,7 @@ Each object in `capture.channels` takes these fields:
 | `orbit_centre_z_m` | number | m | `0.0` | Orbit: the height the altitude is measured from. |
 | `orbit_radius_m` | number | m | `200.0` | Orbit: radius. |
 | `orbit_altitude_m` | number | m | `518.2` | Orbit: height above the center. |
-| `orbit_period_s` | number | s | `240.0` | Orbit: wall-clock seconds per revolution. |
+| `orbit_period_s` | number | s | `240.0` | Orbit: simulated seconds per revolution. |
 | `stare_look_at_x_m` | number or null | m | `null` | Stare: x of the point looked at. |
 | `stare_look_at_y_m` | number or null | m | `null` | Stare: y of the point looked at (south). |
 | `stare_look_at_z_m` | number | m | `0.0` | Stare: height of the point looked at. |

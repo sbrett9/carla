@@ -688,7 +688,7 @@ class CarlaControlArgumentParser:
             "--orbit-speed",
             type=float,
             default=240.0,
-            help="orbit speed in seconds (default 240 = 4 min)",
+            help="simulated seconds per revolution of the orbit (default 240 = 4 min)",
         )
 
     def parse(self, args: list[str] | None = None) -> dict:

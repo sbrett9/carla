@@ -474,7 +474,7 @@ _CHANNEL_HELP = {
     "orbit_centre_z_m": "Orbit: the height the altitude is measured from, meters.",
     "orbit_radius_m": "Orbit: radius, meters.",
     "orbit_altitude_m": "Orbit: height above the center, meters.",
-    "orbit_period_s": "Orbit: wall-clock seconds per revolution.",
+    "orbit_period_s": "Orbit: simulated seconds per revolution.",
     "stare_look_at_x_m": "Stare: the point looked at, x meters; with stare_look_at_y_m. Or name "
                          "stare_look_at_target, or give the five stare pose fields instead.",
     "stare_look_at_y_m": "Stare: the point looked at, y meters (south).",

@@ -426,7 +426,7 @@
               },
               "orbit_period_s": {
                 "type": "number",
-                "description": "Orbit: wall-clock seconds per revolution.",
+                "description": "Orbit: simulated seconds per revolution.",
                 "default": 240.0,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"

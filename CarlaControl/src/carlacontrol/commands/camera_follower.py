@@ -123,7 +123,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                        help=f"height of the camera above the center, meters "
                             f"(default {DEFAULT('orbit_altitude_m')})")
     orbit.add_argument("--orbit-period-s", type=float, metavar="SECONDS",
-                       help=f"seconds per revolution (default {DEFAULT('orbit_period_s')})")
+                       help=f"simulated seconds per revolution (default {DEFAULT('orbit_period_s')})")
     return parser.parse_args(argv)
 
 
