@@ -143,6 +143,12 @@ def test_the_shipped_vehicle_types_match_their_schema(vehicle_types_schema):
     assert vehicle_types_schema.validate(document), vehicle_types_schema.error_log
 
 
+def test_the_shipped_vehicle_types_are_what_the_writer_writes_from_the_shipped_catalogue():
+    """Byte for byte, its header comment included: the file is never edited by hand."""
+    assert VEHICLE_TYPES.read_text(encoding="utf-8") == SumoVehicleTypeWriter(shipped()).to_xml(), (
+        "write it again with SumoVehicleTypeWriter(catalogue).write(path)")
+
+
 def test_the_vehicle_types_written_now_match_their_schema(vehicle_types_schema):
     written = etree.fromstring(SumoVehicleTypeWriter(shipped()).to_xml().encode("utf-8"))
     assert vehicle_types_schema.validate(written), vehicle_types_schema.error_log
