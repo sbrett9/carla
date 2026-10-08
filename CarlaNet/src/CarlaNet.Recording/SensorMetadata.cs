@@ -9,6 +9,9 @@ namespace CarlaNet.Recording;
 /// </summary>
 public static class SensorMetadata
 {
+    /// <summary>The format of the <c>carla:sensor</c> chunk, written in it as <c>format_version</c>.</summary>
+    public const int FormatVersion = 1;
+
     /// PNG tEXt chunks to embed: one "carla:sensor" JSON chunk. Empty when there is no pose, so a frame is
     /// never tagged with a bogus platform.
     public static IEnumerable<(string Keyword, string Text)> PngTextChunks(SensorPose? s)
@@ -20,6 +23,7 @@ public static class SensorMetadata
     /// <summary>Compact JSON of the platform pose + intrinsics (ASCII, safe for a PNG tEXt value).</summary>
     public static string ToJson(SensorPose s) =>
         "{"
+        + $"\"format_version\":{FormatVersion.ToString(CultureInfo.InvariantCulture)},"
         + $"\"uid\":\"{Esc(s.Uid)}\",\"type\":\"{Esc(s.CotType)}\",\"callsign\":\"{Esc(s.Callsign)}\","
         + $"\"lat\":{F(s.Lat, "0.0000000")},\"lon\":{F(s.Lon, "0.0000000")},\"hae\":{F(s.Hae, "0.00")},"
         + $"\"align_offset_m\":{F(s.AlignOffsetM, "0.00")},"

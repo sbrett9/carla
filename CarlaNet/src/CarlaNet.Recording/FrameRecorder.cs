@@ -4,6 +4,7 @@ using CarlaNet.Sensors;
 using CarlaNet.Transport;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Recording;
@@ -83,6 +84,8 @@ public sealed class FrameRecorder : IDisposable
     private readonly RenderSetPairing? _renderSet;
     private readonly SensorPoseCheck? _sensorPose;
     private readonly double? _drawDistance;
+    private readonly ServerBuildIdentity _server;
+    private readonly string? _sumo;
 
     private readonly Channel<Arrival> _arrivals;
     private readonly Task _preparation;
@@ -127,6 +130,9 @@ public sealed class FrameRecorder : IDisposable
     /// <summary>The recorded camera's name: every still's file name begins with it, and it is the
     /// callsign of the camera's platform track (<see cref="CameraName"/>).</summary>
     public string Name => _name;
+
+    /// <summary>The server's build identity, as every still's record of what made it names it.</summary>
+    public ServerBuildIdentity ServerIdentity => _server;
 
     /// <summary>
     /// Stills dropped because the truth of their own frame was not to be had: the client held no snapshot
@@ -325,10 +331,19 @@ public sealed class FrameRecorder : IDisposable
     /// refused. A name the rule refuses as a camera's (<see cref="CameraName.HeldProblem"/>) is refused
     /// here, and so is one another recorder in this process holds: the recorder holds its name until
     /// it is disposed.</param>
+    /// <param name="sumoVersion">The SUMO release driving the vehicles this recorder captures, where a SUMO
+    /// drive is: every still's record of what made it names it. Null takes the release the
+    /// <paramref name="renderSet"/> or <paramref name="illumination"/> source knows (<see cref="ISumoDriven"/>),
+    /// a SUMO drive session's, and names none where neither is one.</param>
     /// <remarks>
-    /// The supervision in force is given by no parameter: it is held on the server and carried on every
+    /// <para>The supervision in force is given by no parameter: it is held on the server and carried on every
     /// world-observer snapshot, and each capture takes its own frame's from the snapshot its vehicles are
-    /// read from (<see cref="CaptureSupervision"/>), so a recorder in any process writes the same.
+    /// read from (<see cref="CaptureSupervision"/>), so a recorder in any process writes the same.</para>
+    ///
+    /// <para>Every still says what made it, in its sidecar's <c>&lt;_producer&gt;</c> and its PNG's
+    /// <c>carla:capture</c> chunk (<see cref="ProducerRecord"/>): the tool this process declared, the
+    /// carlanet release, the server's build identity, asked once here (<see cref="CarlaClient.GetBuildIdentity"/>;
+    /// a server built before the call is recorded as not having said), and <paramref name="sumoVersion"/>.</para>
     /// </remarks>
     public FrameRecorder(CarlaClient client, byte[] streamToken, string dir, double hz,
                          string affiliation = "n", double staleSeconds = 3.0,
@@ -337,7 +352,8 @@ public sealed class FrameRecorder : IDisposable
                          byte[]? depthStreamToken = null, OcclusionOptions? occlusion = null,
                          IIlluminationSource? illumination = null, IRenderSetSource? renderSet = null,
                          ActorId? cameraActorId = null, ActorId? depthActorId = null,
-                         double? drawDistanceMetres = null, string? cameraName = null)
+                         double? drawDistanceMetres = null, string? cameraName = null,
+                         string? sumoVersion = null)
     {
         if (streamToken is not { Length: 24 })
             throw new ArgumentException("streamToken must be a 24-byte sensor stream token", nameof(streamToken));
@@ -392,6 +408,13 @@ public sealed class FrameRecorder : IDisposable
             _renderSet = renderSet is null ? null : new RenderSetPairing(renderSet);
             _sensorPose = cameraActorId is { } camera ? new SensorPoseCheck(client.GetSnapshotFrame, camera) : null;
             _drawDistance = drawDistanceMetres;
+            // Asked here, on the caller's thread, and never from the stream thread; it never throws, and a
+            // server that cannot say is recorded as such on every still.
+            _server = client.GetBuildIdentity();
+            // Given, or known to the session that handed over the render set or the illumination.
+            string? sumo = sumoVersion ?? (renderSet as ISumoDriven)?.SumoRelease
+                           ?? (illumination as ISumoDriven)?.SumoRelease;
+            _sumo = string.IsNullOrWhiteSpace(sumo) ? null : sumo;
 
             int n = workers > 0 ? workers : Math.Max(2, Environment.ProcessorCount / 2);
             _channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(Math.Max(4, n * 2))
@@ -695,18 +718,21 @@ public sealed class FrameRecorder : IDisposable
                     IlluminationDeclaration? illumination = await DeclarationForAsync(job.Capture.Tick)
                         .ConfigureAwait(false);
                     string stem = CameraName.StillStem(_name, job.CapturedUtc);
-                    // The still carries its sun, its declaration, its pose and its identity, and never
-                    // any supervision: truth stays out of the observation artifact (doc 04 D4.20).
+                    // One record of what made the still, for its image and its sidecar alike.
+                    ProducerRecord producer = Producer.Now(_server, _sumo);
+                    // The still carries its sun, its declaration, its pose and its identity, with what
+                    // made it, and never any supervision: truth stays out of the observation artifact
+                    // (doc 04 D4.20).
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
                                                Path.Combine(_dir, stem + ".png"),
                                                SolarMetadata.PngTextChunks(job.Solar)
                                                    .Concat(illumination?.PngTextChunks() ?? [])
                                                    .Concat(SensorMetadata.PngTextChunks(job.Sensor))
-                                                   .Concat(job.Capture.PngTextChunks()));
+                                                   .Concat((job.Capture with { Producer = producer }).PngTextChunks()));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
                                           job.CapturedUtc, job.Telemetry, _affiliation, _stale,
                                           job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles,
-                                          job.DrawDistance, job.Supervision);
+                                          job.DrawDistance, job.Supervision, producer);
                     // Both writers leave the sun out of a capture whose block holds none, which is
                     // right for the frame and wrong for the run: counted, so it is never silent.
                     if (!SolarMetadata.HasData(job.Solar))

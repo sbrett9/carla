@@ -13,7 +13,8 @@ warning in full, what a SUMO-only run of the compiled files showed, the SUMO opt
 and the lock.
 
 `<scenario>.resolution.json` is the record; `<scenario>.resolution.md` renders it for reading. A
-refused compile writes the report too, marked refused, with every refusal.
+refused compile writes the report too, marked refused, with every refusal. Both say what made them
+(`producer`, `carlacontrol.ProducerRecord`).
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ import json
 RESOLUTION_VERSION = 1
 
 # Section order: what a reader checks first comes first.
-SECTIONS = ("resolution_version", "outcome", "scenario", "findings", "epoch", "zone",
+SECTIONS = ("resolution_version", "producer", "outcome", "scenario", "findings", "epoch", "zone",
             "illumination_default", "capture_windows", "illumination_label_association", "world",
             "instants", "places", "rotas", "routes", "lane_closures", "vehicle_types",
             "supervision", "dry_run", "lock")
@@ -50,6 +51,11 @@ class ResolutionReport:
         scenario = d.get("scenario", {}) or {}
         lines = [f"# Resolution report: {scenario.get('scenario_id') or 'unnamed scenario'}", "",
                  f"**Outcome:** {d.get('outcome', 'unknown')}", ""]
+        producer = d.get("producer")
+        if producer:
+            lines += [f"**Produced by:** {producer.get('tool')} {producer.get('tool_version')}, carlanet "
+                      f"{producer.get('carlanet') or 'not loaded'}, SUMO {producer.get('sumo') or 'none'}, "
+                      f"at {producer.get('written_utc')}", ""]
         if scenario.get("description"):
             lines += [str(scenario["description"]), ""]
         lines += self._findings(d.get("findings", []))

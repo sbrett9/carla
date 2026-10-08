@@ -47,6 +47,7 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
+from carlacontrol.FormatVersion import FormatVersionError  # noqa: E402  (needs the path above)
 from carlacontrol.TruthSidecarAudit import TruthSidecarAudit  # noqa: E402  (needs the path above)
 
 SENSOR = """  <event version="2.0" uid="CARLA-SENSOR-32" type="a-f-A-M-F-Q" how="m-g" time="t" start="t" stale="t">
@@ -750,3 +751,54 @@ def test_a_camera_carrying_two_exposures_over_the_capture_is_a_defect(tmp_path):
     assert result.defects(sumo_drive=False) == [
         "1 camera(s) carry more than one exposure over the capture, where a camera's exposure is set "
         "once, when it is spawned"]
+
+
+# -- what made each sidecar ------------------------------------------------------------------------
+
+PRODUCER = ('  <_producer tool="carlacontrol.CaptureSession" tool_version="0.10.0+g1a2b3c4d5" '
+            'carlanet="0.10.0+g1a2b3c4d5" sumo="1.27.0" written_utc="2026-10-07T12:00:00.000Z">\n'
+            '    <_server available="true" release="0.10.0" world_interface="1.0" build="package" '
+            'configuration="Shipping" carla_commit="025443a83eaf1bb82f18795d608fca50eb77a452" '
+            'content_commit="6bcd042a91a54d9a2f2f002869fbf1c75f3768f4" '
+            'engine_commit="e5e266de195a2400a6a74180402fb1a3e8f75472" commits_from="version_file" />\n'
+            '  </_producer>\n')
+
+
+def versioned_sidecar(directory: Path, tick: int, format_version: str) -> Path:
+    """A sidecar as the recorder writes one now: its format on the container, what made it first."""
+    path = directory / f"OVERWATCH-1_{tick}.xml"
+    path.write_text('<?xml version="1.0" encoding="utf-8"?>\n'
+                    f'<events format_version="{format_version}" captured="t" count="1" source="truth" '
+                    f'tick="{tick}" sim_time_s="{tick * 0.05:.3f}">\n'
+                    + PRODUCER + sensor()
+                    + vehicle("CARLA-TRUTH-40", 40, ROAD, 9.0) + "</events>\n", encoding="utf-8")
+    return path
+
+
+def test_the_releases_that_made_a_capture_are_counted_and_a_sidecar_from_before_them_is_not_faulted(
+        tmp_path):
+    versioned_sidecar(tmp_path, 100, "1")
+    versioned_sidecar(tmp_path, 110, "1")
+    # As the recorder wrote sidecars before they carried a version or a record of what made them.
+    sidecar(tmp_path, 120, [vehicle("CARLA-TRUTH-40", 40, ROAD, 9.0)], platform=sensor())
+
+    result = audit(tmp_path)
+
+    assert result.sidecars == 3
+    assert result.producers == {("carlacontrol.CaptureSession", "0.10.0+g1a2b3c4d5", "0.10.0+g1a2b3c4d5",
+                                 "0.10.0", "1.27.0"): 2}
+    assert result.sidecars_without_producer == 1
+    assert result.defects(sumo_drive=False) == []
+    made_by = next(line for line in TruthSidecarAudit.describe(result) if "made by" in line)
+    assert "carlacontrol.CaptureSession 0.10.0+g1a2b3c4d5" in made_by and made_by.endswith(": 1")
+
+
+def test_a_sidecar_of_a_newer_format_is_refused_by_name_rather_than_counted_in_part(tmp_path):
+    newer = versioned_sidecar(tmp_path, 100, "2")
+
+    with pytest.raises(FormatVersionError) as refused:
+        audit(tmp_path)
+
+    message = str(refused.value)
+    assert str(newer) in message
+    assert "declares format_version 2" in message and "supports format_version 1 and earlier" in message

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace CarlaNet.CoSim;
@@ -41,14 +42,21 @@ public sealed class VehicleCatalogue
     private readonly Dictionary<string, string> _baseTypes = [];
     private readonly Dictionary<string, string> _specialTypes = [];
 
-    private VehicleCatalogue(JsonElement document)
+    private VehicleCatalogue(JsonElement document, string source = "The catalogue")
     {
-        if (!document.TryGetProperty("catalogue_version", out JsonElement version)
-            || version.GetInt32() != SupportedCatalogueVersion)
+        // Every catalogue the sweep wrote carries its version, so one without is not a catalogue.
+        int? declared = document.TryGetProperty("catalogue_version", out JsonElement version)
+                        && version.ValueKind == JsonValueKind.Number && version.TryGetInt32(out int number)
+            ? number
+            : null;
+        if (declared != SupportedCatalogueVersion)
         {
             throw new CoSimSessionRefusedException(
-                $"The catalogue declares version {(version.ValueKind == JsonValueKind.Number ? version.GetInt32() : -1)}, "
-                + $"and version {SupportedCatalogueVersion} is the only shape this reader implements.");
+                $"{source} declares catalogue_version {declared?.ToString(CultureInfo.InvariantCulture) ?? "none"}, "
+                + $"and version {SupportedCatalogueVersion} is the only shape this reader implements."
+                + (declared > SupportedCatalogueVersion
+                    ? " It was written by a newer release; read it with that release's tools."
+                    : string.Empty));
         }
 
         CatalogueId = Text(document, "catalogue_id");
@@ -160,7 +168,7 @@ public sealed class VehicleCatalogue
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
-        return new VehicleCatalogue(document.RootElement.Clone());
+        return new VehicleCatalogue(document.RootElement.Clone(), $"The catalogue {path}");
     }
 
     /// <summary>Read a catalogue from its JSON text.</summary>

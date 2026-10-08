@@ -1,5 +1,6 @@
 using System.Text;
 using CarlaNet.Sumo;
+using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.CoSim;
 
@@ -52,6 +53,13 @@ public sealed class CoSimRunReport
     /// both run, and both are named here rather than left for a log nobody kept.
     /// </remarks>
     public required SumoReleaseCheck Sumo { get; init; }
+
+    /// <summary>
+    /// What the server was built from, as it said when the session started (<see cref="ICarlaWorld.DescribeServerBuild"/>);
+    /// null for a session that drove no world. The run manifest's and the world truth track's records of
+    /// what made them carry it.
+    /// </summary>
+    public ServerBuildIdentity? Server { get; init; }
 
     /// <summary>
     /// The scenario's compile lock: whether one sat beside the configuration, and where it did, the

@@ -174,12 +174,17 @@ class VehicleCatalogue:
     built at load time rather than a scan of the document.
     """
 
-    def __init__(self, document: Mapping) -> None:
+    def __init__(self, document: Mapping, source: object = "the catalogue") -> None:
         version = document.get("catalogue_version")
         if version != SUPPORTED_CATALOGUE_VERSION:
+            # Every catalogue the sweep wrote carries its version, so one without is not a catalogue.
+            newer = isinstance(version, int) and not isinstance(version, bool) \
+                and version > SUPPORTED_CATALOGUE_VERSION
             raise ValueError(
-                f"catalogue_version {version!r} is not version {SUPPORTED_CATALOGUE_VERSION}, "
-                "which is the only shape this reader implements")
+                f"{source} declares catalogue_version {version!r}, and version "
+                f"{SUPPORTED_CATALOGUE_VERSION} is the only shape this reader implements"
+                + ("; it was written by a newer release, so read it with that release's tools"
+                   if newer else ""))
         self.document = document
         self.catalogue_id: str = document.get("catalogue_id", "")
         self.catalogue_digest: str = document.get("catalogue_digest", "")
@@ -219,7 +224,7 @@ class VehicleCatalogue:
     @classmethod
     def load(cls, path: str | Path) -> VehicleCatalogue:
         """Read a catalogue from disk. The file is UTF-8 JSON as the sweep writes it."""
-        return cls(json.loads(Path(path).read_text(encoding="utf-8")))
+        return cls(json.loads(Path(path).read_text(encoding="utf-8")), source=path)
 
     @staticmethod
     def canonical_json(document: Mapping) -> str:

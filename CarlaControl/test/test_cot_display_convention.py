@@ -71,6 +71,7 @@ from carlacontrol.VehicleCatalogue import (  # noqa: E402
     CLASS_PARAM,
     VehicleCatalogue,
 )
+from carlacontrol.version import __version__ as carlacontrol_version  # noqa: E402
 
 SCENARIO = "Shahid_Bahonar_Port_PatternOfLife"
 SPECIFICATION = _REPO / "Import" / f"{SCENARIO}.scenario.json"
@@ -193,6 +194,7 @@ class _Installation:
 
     sumo = Path("sumo")
     sumo_gui = Path("sumo-gui")
+    version = "1.27.0"
 
 
 def _specification() -> dict:
@@ -468,6 +470,19 @@ def test_no_planted_vehicle_is_told_apart_by_its_cot_type_in_any_sink(tmp_path, 
     assert header.get("default_affiliation") == "n"
     assert {p.get("type"): p.get("affiliation") for p in header.findall("population")} == \
         convention.affiliation_by_type
+
+    # Both files name their format and what made them: the XML on its container and first inside it,
+    # the CSV in a summary beside it, so its header stays the columns every reader reads.
+    events = ET.parse(xml_path).getroot()
+    assert events.get("format_version") == "1"
+    producer = events[0]
+    assert producer.tag == "_producer"
+    assert producer.get("tool") == "carlacontrol.SumoCotBridge"
+    assert producer.get("tool_version") == carlacontrol_version
+    assert producer.get("sumo") == "1.27.0" and producer.find("_server") is None
+    summary = json.loads(SumoCotBridge.csv_summary_path(xml_path.with_suffix(".csv")).read_text("utf-8"))
+    assert summary["format_version"] == 1 and summary["csv"] == "corpus.csv"
+    assert summary["columns"] == list(rows[0]) and summary["producer"]["sumo"] == producer.get("sumo")
 
 
 @pytest.mark.parametrize("crawl, field", [("u", "cot_type"), ("n", KIND_AND_TYPE)])

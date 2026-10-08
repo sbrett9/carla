@@ -448,6 +448,8 @@ $manifest = [ordered]@{
     worldInterfaceMajor   = $Interface.Major
     worldInterfaceMinor   = $Interface.Minor
     basedOnRelease        = $BasedOnRelease
+    # The distribution's release version, CARLA_VERSION in the top-level CMakeLists.txt.
+    releaseVersion        = (@('MAJOR', 'MINOR', 'PATCH') | ForEach-Object { if ((Get-Content (Join-Path $CarlaRoot 'CMakeLists.txt') -Raw) -match "set\s*\(\s*CARLA_VERSION_$_\s+(\d+)") { $Matches[1] } }) -join '.'
     config                = $Config
     platform              = $Platform
     # Identification only. Never compared -- see the note above.

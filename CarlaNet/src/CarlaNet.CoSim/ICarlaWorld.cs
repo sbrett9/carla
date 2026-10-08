@@ -1,4 +1,5 @@
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
 
@@ -10,7 +11,8 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Twenty-three operations. The bridge asks which world is loaded, hands the world's truth
+/// <para>Twenty-four operations. The bridge asks which world is loaded and what the server was built
+/// from, hands the world's truth
 /// telemetry the package's ground and the catalogue's base types and vehicle kinds once the package
 /// is established as that world's, takes and gives back the world's drive lease, places bodies,
 /// writes their poses and velocities in one batch, names to the server which bodies are lent and
@@ -44,6 +46,16 @@ public interface ICarlaWorld
     /// 153 s to fetch -- and their digests prove equality as strictly.
     /// </remarks>
     LoadedWorld DescribeLoadedWorld();
+
+    /// <summary>
+    /// What the server was built from (<see cref="ServerBuildIdentity"/>), for the run's records of
+    /// what made them: the run manifest and the world truth track's summary.
+    /// </summary>
+    /// <remarks>
+    /// Asked once, when a session starts. Never fails: a server built before the call, or one that
+    /// cannot say, is described as not available, with the reason.
+    /// </remarks>
+    ServerBuildIdentity DescribeServerBuild();
 
     /// <summary>
     /// Give the world's truth telemetry the bare-earth grids of a world package, so that nothing on

@@ -1,4 +1,5 @@
 using CarlaNet.Types.Geom;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
 using CarlaNet.Types.Rpc.Environment;
 using CarlaNet.Types.Rpc.Lighting;
@@ -325,6 +326,26 @@ internal class RecordedWorld : ICarlaWorld
         Descriptions++;
         return Loaded;
     }
+
+    /// <summary>
+    /// What the world answers when asked what the server was built from: a package of release 0.10.0 by
+    /// default, its commits read from its VERSION file.
+    /// </summary>
+    public ServerBuildIdentity BuildIdentity { get; set; } = ServerBuildIdentity.FromAnswer(new Dictionary<string, string>
+    {
+        ["release"] = "0.10.0",
+        ["world_interface"] = "1.0",
+        ["build"] = "package",
+        ["configuration"] = "Development",
+        ["carla_commit"] = "025443a83eaf1bb82f18795d608fca50eb77a452",
+        ["content_commit"] = "6bcd042a91a54d9a2f2f002869fbf1c75f3768f4",
+        ["engine_commit"] = "e5e266de195a2400a6a74180402fb1a3e8f75472",
+        ["commits_from"] = "version_file",
+    });
+
+    /// <inheritdoc/>
+    /// <remarks>Never fails, as the client's never does: a severed world still answers what it last knew.</remarks>
+    public ServerBuildIdentity DescribeServerBuild() => BuildIdentity;
 
     /// <summary>
     /// The packages the world's truth telemetry was asked to take its bare-earth grids from, in order,

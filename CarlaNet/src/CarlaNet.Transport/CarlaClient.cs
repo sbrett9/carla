@@ -10,6 +10,7 @@ using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
+using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Orbit;
 using CarlaNet.Types.Rpc.Supervision;
 using CarlaNet.Types.Streaming;
@@ -207,6 +208,9 @@ public sealed class CarlaClient : IAsyncDisposable
     // lock, and the observer must never wait for it. Created on first use.
     private TickDispatcher? _tickDispatcher;
     private readonly object _tickDispatcherLock = new();
+
+    // The server's build identity, asked once per connection (GetBuildIdentityAsync).
+    private volatile ServerBuildIdentity? _buildIdentity;
 
     // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
     // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
@@ -437,6 +441,67 @@ public sealed class CarlaClient : IAsyncDisposable
     /// </summary>
     public Task<string> GetWorldInterfaceVersionAsync()
         => _rpc.CallAsync<string>("get_world_interface_version");
+
+    /// <summary>
+    /// What the server was built from (<c>get_build_identity</c>): its release version, the world
+    /// interface version it declares, whether it runs from a package or the editor, its configuration,
+    /// and the CARLA, content and engine commits, each <c>unknown</c> where the server cannot know it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Never fails for a server built before the call: that one answers it has no such function,
+    /// and its identity comes back not available (<see cref="ServerBuildIdentity.Available"/> false) with
+    /// the reason, and with the release and world interface its older calls still give. A server that
+    /// cannot be reached at all comes back not available too, saying why; the caller records that and
+    /// carries on, since a file's record of what made it is no reason to stop writing the file.</para>
+    ///
+    /// <para>Asked once per connection and kept: a server's build does not change while it runs.</para>
+    /// </remarks>
+    public async Task<ServerBuildIdentity> GetBuildIdentityAsync()
+    {
+        if (_buildIdentity is { } known)
+        {
+            return known;
+        }
+
+        ServerBuildIdentity identity;
+        try
+        {
+            IReadOnlyDictionary<string, string> answer =
+                await _rpc.CallAsync<Dictionary<string, string>>("get_build_identity").ConfigureAwait(false);
+            identity = ServerBuildIdentity.FromAnswer(answer);
+        }
+        catch (CarlaRpcException older) when (older.NamesNoSuchFunction)
+        {
+            identity = ServerBuildIdentity.NotAnswered(
+                "the server answers no get_build_identity: it was built before the call",
+                await AnswerOrNullAsync("version").ConfigureAwait(false),
+                await AnswerOrNullAsync("get_world_interface_version").ConfigureAwait(false));
+        }
+        catch (Exception failed)
+        {
+            // Not kept: a server that could not be reached this time may answer next time.
+            return ServerBuildIdentity.NotAnswered($"get_build_identity failed: {failed.Message}");
+        }
+
+        _buildIdentity = identity;
+        return identity;
+    }
+
+    /// <summary>The server's build identity, waited for (<see cref="GetBuildIdentityAsync"/>).</summary>
+    public ServerBuildIdentity GetBuildIdentity() => GetBuildIdentityAsync().GetAwaiter().GetResult();
+
+    /// <summary>A string call's answer, or null where the server refuses or cannot be asked.</summary>
+    private async Task<string?> AnswerOrNullAsync(string method)
+    {
+        try
+        {
+            return await _rpc.CallAsync<string>(method).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     // ── Delivered worlds ──────────────────────────────────────────────────────
     // A world delivered on its own is a directory copied into the server's package. The engine
@@ -1533,8 +1598,14 @@ public sealed class CarlaClient : IAsyncDisposable
         IReadOnlyList<double> staging = await GetStagingBoundsAsync().ConfigureAwait(false);
         bool haveStaging = staging is { Count: >= 5 };
 
+        // What made the package: the tool, the carlanet release, the server this world was built on, and
+        // the SUMO release whose netconvert converted it.
+        ServerBuildIdentity server = await GetBuildIdentityAsync().ConfigureAwait(false);
+        System.Text.RegularExpressions.Match converted =
+            System.Text.RegularExpressions.Regex.Match(LastNetconvertVersion, @"\d+\.\d+\.\d+");
         var manifest = new WorldPackageManifest
         {
+            Producer = Producer.Now(server, converted.Success ? converted.Value : null),
             MapName = mapName,
             OriginLatitude = origin.Latitude,
             OriginLongitude = origin.Longitude,

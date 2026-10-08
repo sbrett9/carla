@@ -39,6 +39,10 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from carlacontrol.FormatVersion import FormatVersion, FormatVersionError
+
+# The newest manifest format this diff reads (`CarlaNet.CoSim.RunManifestWriter.FormatVersion`).
+MANIFEST_VERSION = 1
 OPENED_ROW = "manifest_opened"
 CLOSED_ROW = "manifest_closed"
 INSTANCE_ROW = "instance"
@@ -84,6 +88,8 @@ class ManifestSupervision:
     never_opened: list[Triple] = field(default_factory=list)
     defects_found: list[str] = field(default_factory=list)
     bound: dict[Triple, dict] = field(default_factory=dict)
+    # What made the manifest, from its opening row; None for one written before it was recorded.
+    producer: dict | None = None
 
     @property
     def named(self) -> set[Triple]:
@@ -162,10 +168,17 @@ def read_manifest(path: str | Path) -> ManifestSupervision:
     if not rows or rows[0]["row"] != OPENED_ROW:
         raise ManifestUnreadable(f"{path}: no {OPENED_ROW} row first; not a run manifest")
     opening = rows[0]
+    # A manifest of a newer format is refused for what it is, rather than diffed in part.
+    try:
+        FormatVersion.check(path, "manifest_version", opening.get("manifest_version"),
+                            MANIFEST_VERSION)
+    except FormatVersionError as newer:
+        raise ManifestUnreadable(str(newer)) from None
     scenario = opening.get("scenario") or {}
     plan = opening.get("plan") or {}
     read = ManifestSupervision(path=path, scenario_id=scenario.get("scenario_id"),
-                               plan_id=plan.get("plan_id"), plan_sha256=plan.get("sha256"))
+                               plan_id=plan.get("plan_id"), plan_sha256=plan.get("sha256"),
+                               producer=opening.get("producer"))
     for row in rows[1:]:
         kind = row["row"]
         if kind == INSTANCE_ROW:

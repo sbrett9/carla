@@ -23,10 +23,13 @@ namespace CarlaNet.CoSim;
 /// <para>A frame's set is the same object as the frame before's until a body is lent or given back,
 /// so the history costs a reference per frame between those moments.</para>
 /// </remarks>
-public sealed class RenderSetFrames : IRenderSetSource
+public sealed class RenderSetFrames : IRenderSetSource, ISumoDriven
 {
     /// <summary>Frames kept: seconds of history at a 0.05 s tick.</summary>
     public const int Capacity = 256;
+
+    /// <inheritdoc/>
+    public string? SumoRelease { get; internal set; }
 
     private readonly object _lock = new();
     private readonly Dictionary<ulong, RenderSet> _byFrame = [];

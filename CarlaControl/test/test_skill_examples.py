@@ -62,7 +62,16 @@ def beside_the_world(world: ScenarioWorldFixture, example: Path) -> Path:
 def without_machine(report: dict) -> dict:
     report = copy.deepcopy(report)
     report.get("world", {}).get("routing_sumo", {}).pop("home", None)
-    return report
+    return without_producer(report)
+
+
+def without_producer(document: object) -> object:
+    """The document less every record of what made it, which names the build and the time it ran."""
+    if isinstance(document, dict):
+        return {key: without_producer(value) for key, value in document.items() if key != "producer"}
+    if isinstance(document, list):
+        return [without_producer(value) for value in document]
+    return document
 
 
 def recorded(path: Path, actual: dict) -> dict:
@@ -110,6 +119,6 @@ def test_the_counterfactual_sweep_compiles_its_pairs_to_the_recorded_index(world
     index = ScenarioSweep(installation).compile(sweep, tmp_path / "out")
     assert index["outcome"] != "refused", index["findings"]
     assert {pair["mode"] for pair in index["pairs"]} == {"nominal", "absent", "displaced"}
-    actual = {key: value for key, value in index.items() if key != "path"}
+    actual = without_producer({key: value for key, value in index.items() if key != "path"})
     assert actual == recorded(EXAMPLES / "counterfactual" / "probe_standoff_pairs.sweep-index.json",
                               actual)

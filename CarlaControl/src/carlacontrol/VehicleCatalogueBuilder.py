@@ -45,6 +45,7 @@ from pathlib import Path
 
 import carlanet
 
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter
 from carlacontrol.VehicleCatalogue import LAMP_NAMES, VehicleCatalogue
 from carlacontrol.VehicleCatalogueValidator import VehicleCatalogueValidator
@@ -53,6 +54,8 @@ from carlacontrol.VehicleLampProbe import LampProbeResult, VehicleLampProbe
 
 CATALOGUE_VERSION = 1
 GENERATOR = "carlacontrol.VehicleCatalogueBuilder/1.0.0"
+# The component the catalogue's record of what made it names.
+TOOL = "carlacontrol.VehicleCatalogueBuilder"
 
 CATALOGUE_FILENAME = "vehicles.catalogue.json"
 VEHICLE_TYPES_FILENAME = "vehicles.vtypes.rou.xml"
@@ -141,6 +144,9 @@ class VehicleCatalogueBuilder:
         self.body_widths = body_widths
         self.world = world
         self.server_version = client.get_server_version()
+        # What the server was built from, beside its version: the commits its content was cooked from
+        # are what the measured bodies are, which the release alone does not say.
+        self.server_identity = ProducerRecord.server_identity(client)
         default_id = f"carla-{self.server_version}-{platform.system().lower()}"
         self.catalogue_id = catalogue_id or default_id
         self.content_build_id = content_build_id or default_id
@@ -185,6 +191,7 @@ class VehicleCatalogueBuilder:
             "generated_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
             "generator": GENERATOR,
             "server_version": self.server_version,
+            "producer": ProducerRecord.record(TOOL, server=self.server_identity),
             "lamp_probe": self._lamp_probe_header(lamp_result),
             "vehicles": vehicles,
             "classes": classes,
@@ -442,12 +449,27 @@ class VehicleCatalogueBuilder:
             vehicle["SpecialType"] = record.special_type
         return document
 
+    @staticmethod
+    def _producer_lines(producer: dict | None) -> list[str]:
+        """What made the catalogue, as the report's header states it; none for a catalogue built
+        before it was recorded."""
+        if not producer:
+            return []
+        server = producer.get("server") or {}
+        built = (f"{server.get('build')} at CARLA {server.get('carla_commit')}, content "
+                 f"{server.get('content_commit')}" if server.get("available")
+                 else f"not stated ({server.get('reason', 'no server')})")
+        return [f"  produced by {producer.get('tool')} {producer.get('tool_version')}, carlanet "
+                f"{producer.get('carlanet')}",
+                f"  server build {built}"]
+
     def report(self, document: dict) -> str:
         """The human-readable page: every measurement, and every place the content disagrees with it."""
         lines = [
             f"Vehicle catalogue {document['catalogue_id']}",
             f"  generated {document['generated_at_utc']} by {document['generator']}",
             f"  server {document['server_version']}, content build {document['content_build_id']}",
+            *self._producer_lines(document.get("producer")),
             f"  blueprint set digest {document['blueprint_set_digest']}",
             "",
             "Measured bodies. length, width and height are twice the spawned actor's bounding-box",

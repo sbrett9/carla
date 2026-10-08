@@ -19,6 +19,9 @@ namespace CarlaNet.Recording;
 /// </remarks>
 public static class SolarMetadata
 {
+    /// <summary>The format of the <c>carla:solar</c> chunk, written in it as <c>format_version</c>.</summary>
+    public const int FormatVersion = 1;
+
     private const int GeometricElevation = 7;
     private const int CorrectedElevation = 11;
 
@@ -54,6 +57,7 @@ public static class SolarMetadata
         if (!HasData(s)) return "{}";
         var band = Band(s);
         return "{"
+            + $"\"format_version\":{FormatVersion.ToString(CultureInfo.InvariantCulture)},"
             + $"\"solar_time\":{F(s[0])},"
             + $"\"date\":\"{(int)s[1]:D4}-{(int)s[2]:D2}-{(int)s[3]:D2}\","
             + $"\"time_zone\":{F(s[4])},"

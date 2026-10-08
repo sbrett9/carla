@@ -46,6 +46,7 @@ from carlacontrol.CameraName import CameraName
 from carlacontrol.ChannelDescription import ChannelDescription
 from carlacontrol.ChannelExposure import METHODS as EXPOSURE_METHODS
 from carlacontrol.ChannelExposure import ChannelExposure
+from carlacontrol.FormatVersion import FormatVersion, FormatVersionError
 from carlacontrol.RunConfigurationFindings import (
     RunConfigurationFindings,
     RunConfigurationRefusedError,
@@ -59,6 +60,10 @@ from carlacontrol.ViewReadiness import (
 )
 
 RUN_CONFIGURATION_VERSION = 1
+# What wrote a document a tool wrote -- a run's replayable run.effective.json -- as every file our
+# tools write records it (carlacontrol.ProducerRecord). Provenance and not configuration: accepted,
+# never read as a field, and outside the digest of the configuration it describes.
+PRODUCER_KEY = "producer"
 
 
 class _NoDefault:
@@ -586,6 +591,22 @@ class RunConfiguration:
         if not isinstance(document, dict):
             findings.refuse(1, source, "a run configuration is a JSON object")
             raise RunConfigurationRefusedError(findings, "usage_error")
+        # A version newer than this tool's is refused for what it is, before any key it may have
+        # renamed is refused as unknown.
+        declared = document.get("run_configuration_version")
+        if isinstance(declared, int) and not isinstance(declared, bool) \
+                and declared > RUN_CONFIGURATION_VERSION:
+            try:
+                FormatVersion.check(source, "run_configuration_version", declared,
+                                    RUN_CONFIGURATION_VERSION)
+            except FormatVersionError as newer:
+                findings.refuse(1, "run_configuration_version", str(newer))
+                raise RunConfigurationRefusedError(findings, "usage_error") from None
+        document = dict(document)
+        producer = document.pop(PRODUCER_KEY, None)
+        if producer is not None and not isinstance(producer, dict):
+            findings.refuse(1, PRODUCER_KEY, f"{source}: '{PRODUCER_KEY}' records what wrote the "
+                            "document, and is an object")
         cls._flatten(document, "", values, findings, source)
         for path, value in values.items():
             cls._check_value(path, value, findings, source)
@@ -802,6 +823,12 @@ class RunConfiguration:
                    "properties": {name: spec.published()
                                   for name, spec in cls.channel_fields().items()}}
         root["properties"]["capture"]["properties"]["channels"]["items"] = channel
+        root["properties"][PRODUCER_KEY] = {
+            "type": ["object", "null"],
+            "description": "What wrote the document, where a tool did: the tool and its release, the "
+                           "carlanet release, the server and the SUMO release where used, and when. "
+                           "Provenance, never read as configuration and outside its digest; a run's "
+                           "run.effective.json carries it."}
         return root
 
     @classmethod

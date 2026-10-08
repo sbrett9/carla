@@ -27,6 +27,11 @@ Its absence means only that the tool was stopped before it could write one.
 
 The file is written to a temporary name beside its final one and renamed into place, so a reader
 never sees a partial result under the real name.
+
+It says what made it (`producer`, `carlacontrol.ProducerRecord`): the tool and its release, the
+carlanet release, the server's build identity where the run reached a server, and the SUMO release
+where a session started one; `tool_version` beside it is the same release, kept for readers written
+before the record.
 """
 from __future__ import annotations
 
@@ -36,9 +41,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from carlacontrol.FormatVersion import FormatVersion
+from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.version import __version__
 
 RESULT_VERSION = 1
+# The component whose run the result records.
+TOOL = "carlacontrol.CaptureSession"
 OUTCOMES = {
     "run_finished": 0,
     "usage_error": 1,
@@ -71,6 +80,10 @@ class RunResult:
         self.schema_version: int | None = None
         self.artifacts: dict[str, str | None] = {"resolution_report": None, "lock": None,
                                                  "effective_configuration": None}
+        # What the run reached, for the record of what made the result: the server's build identity
+        # once it connected, and the SUMO release once a session started one.
+        self.server: dict | None = None
+        self.sumo: str | None = None
         self.launch_echo: dict | None = None
         self.produced: dict | None = None
         self.started_wall_utc = self.now()
@@ -119,6 +132,7 @@ class RunResult:
     def to_dict(self) -> dict:
         return {
             "result_version": RESULT_VERSION,
+            "producer": self.producer(),
             "outcome": self.outcome,
             "exit_status": self.exit_status,
             "closed_by": self.closed_by,
@@ -140,6 +154,10 @@ class RunResult:
             "ended_wall_utc": self.ended_wall_utc,
         }
 
+    def producer(self) -> dict:
+        """What made the result, as every file this run writes records it."""
+        return ProducerRecord.record(TOOL, server=self.server, sumo=self.sumo)
+
     def write(self, path: str | Path) -> Path:
         """Write the result atomically, beside nothing it could be mistaken for."""
         self.ended_wall_utc = self.now()
@@ -160,7 +178,14 @@ class RunResult:
 
     @staticmethod
     def read(path: str | Path) -> dict:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
+        """A written result, refused where it is of a `result_version` newer than this reader's.
+
+        Raises:
+            FormatVersionError: the result declares a version this reader does not know.
+        """
+        document = json.loads(Path(path).read_text(encoding="utf-8"))
+        FormatVersion.check(path, "result_version", document.get("result_version"), RESULT_VERSION)
+        return document
 
     @staticmethod
     def sibling(result_path: str | Path, kind: str) -> Path:
