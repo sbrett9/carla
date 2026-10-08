@@ -57,7 +57,7 @@ It is refused by 2.0 or 1.1.
 
 ## When the version changes
 
-**Major goes up** for a change that stops a world already delivered from loading:
+Major goes up for a change that stops a world already delivered from loading:
 
 - content a world refers to is renamed or deleted, the road materials especially
 - a class a world's assets store changes shape: `UGeoreferencedWorldSettings`, `URoadNetworkAsset` or `UBareEarthOffsetField`
@@ -65,11 +65,11 @@ It is refused by 2.0 or 1.1.
 
 When Major goes up, Minor goes back to 0.
 
-**Minor goes up** for added content that a world can refer to.\
+Minor goes up for added content that a world can refer to.\
 Worlds built before the addition keep working.\
 Worlds built after it need a package that has it.
 
-**Neither changes** for anything a delivered world cannot observe:
+Neither changes for anything a delivered world cannot observe:
 
 - gameplay code
 - server calls

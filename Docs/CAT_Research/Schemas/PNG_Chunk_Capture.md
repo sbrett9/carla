@@ -8,7 +8,8 @@
 
 Every still a recorder writes is a PNG with up to four text chunks.\
 They sit between its header and its pixels.\
-`carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the run it belongs to and what wrote it.\
+`carla:capture` says which capture the still is.\
+It holds the simulation frame and time the still was rendered at, the run it belongs to and what wrote it.\
 With it, you can trace a still to its frame, its run and the release that made it.\
 This works even for a still separated from its truth sidecar.
 

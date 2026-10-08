@@ -96,7 +96,7 @@ On a curving edge it says little about the heading at any one point.
 There is no other version.\
 A file without it is version 1.
 
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than read part of the file.\
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than reading part of the file.\
 The refusal names the version and the newest version they read.\
 `WorldPackageReader` then checks the file against the schema.\
 If the file does not match, it refuses the file and names each problem.

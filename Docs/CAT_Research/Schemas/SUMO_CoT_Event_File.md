@@ -17,7 +17,8 @@ It can send the live feed too.
 
 The schema includes `cot_event_body.xsd`, the event's own parts.\
 The datagram schema includes it too.\
-This schema cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth sidecar's root are both `<events>`, with no namespace.\
+This schema cannot include `truth_sidecar.xsd` as the datagram schema does.\
+This file's root and a truth sidecar's root are both `<events>`, with no namespace.\
 One schema can describe only one of them.\
 So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types.\
 A test makes sure that each copy matches the sidecar's.
@@ -61,7 +62,9 @@ It notes a file without its closing tag as a run that stopped early rather than 
 
 ### `<_producer>`
 
-What made the file, as every XML file these tools write records it: the truth sidecar's `Producer`, of which this schema holds a copy.\
+What made the file.\
+Every XML file these tools write records this, in the truth sidecar's `Producer` type.\
+This schema holds a copy of that type.\
 Absent from files written before it was recorded.
 
 | Attribute | Type | Required | Meaning |

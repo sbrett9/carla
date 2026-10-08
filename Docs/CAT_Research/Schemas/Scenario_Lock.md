@@ -21,7 +21,7 @@ It holds:
 The same specification, seed and world give the same traffic.\
 The lock is how a run proves that the files it is about to drive are the ones that were compiled.
 
-**This is not the run lock.**\
+This is not the run lock.\
 A capture run writes `run.lock.json` about one run of the scenario (see [Run lock](Run_Lock.md)).
 
 ## Who writes it and who reads it

@@ -16,7 +16,7 @@ The time in the name is the capture computer's local clock, to the millisecond.\
 The same instant in UTC is the `captured` attribute inside the file.
 
 The truth in a sidecar is always the truth of the still's own frame.\
-If the recorder is unable to read the truth of a still's frame, it does not write the still at all.\
+If the recorder cannot read the truth of a still's frame, it does not write the still at all.\
 So a still is never paired with a neighboring frame's truth.
 
 Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed sends.\

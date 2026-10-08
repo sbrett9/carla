@@ -23,7 +23,7 @@ Because the process exit status is read from `outcome`, the file and the exit st
   That includes a refusal before any server was contacted.\
   It goes to `--result` (the `result_path` field), or by default to `<paths.runs_root>/<session id>/run.result.json`.\
   It is always outside the capture folder.
-- It is written under a temporary name ending in `.partial` and then renamed.\
+- `carla-capture` writes it under a temporary name ending in `.partial` and then renames it.\
   A reader therefore never sees a half-written result.\
   If there is no result, the tool was stopped before it wrote one.
 - Three other records are written beside it, named after it.\

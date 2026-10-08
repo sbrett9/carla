@@ -192,7 +192,7 @@ Things to know:
 
 - A type map cannot key on `access`.\
   It sets what every road of a type admits, private or not.
-- The build refuses a file that is not XML, a root other than `<types>` and a `<type>` without an `id`.\
+- The build refuses a file that is not XML, a file with a root other than `<types>` and a `<type>` without an `id`.\
   When the conversion starts, netconvert refuses an unknown vehicle class.
 - Do not also pass `--type-files` through `--netconvert-arg`.\
   The build refuses the two together.

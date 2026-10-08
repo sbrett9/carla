@@ -65,7 +65,7 @@ These are nine of the catalog's ten `civ_car` bodies: the scenario draws the ten
 The scenario's class is the first part of the SUMO vehicle type: `vtype_id` in a sidecar and `type_id` in the world truth track.\
 A compiled scenario names each type `<class>.<blueprint>`, such as `suv.vehicle.nissan.patrol`.
 
-The truth still gives that vehicle the catalog's kind.\
+The truth record still gives that vehicle the base type of its catalog class.\
 In the sample capture, a record with `vtype_id="suv.vehicle.nissan.patrol"` has `base_type="car"`.
 
 **Names can state the author's intent.**\

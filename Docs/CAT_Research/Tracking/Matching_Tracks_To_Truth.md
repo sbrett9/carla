@@ -66,7 +66,7 @@ The author's labels for that frame sit beside it too, in `<_supervision>`.
 5. **Keep the evidence with each label you carry over.**\
    Keep the pixel distance and the distance divided by apparent size.\
    Also keep how much closer the chosen vehicle was than the next-best one.\
-   Then a wrong match can be found later instead of looking like a hard example.
+   Then you can find a wrong match later instead of mistaking it for a hard example.
 
 Appearance does not separate vehicles reliably.\
 Every vehicle drawn with one body has the same color.\

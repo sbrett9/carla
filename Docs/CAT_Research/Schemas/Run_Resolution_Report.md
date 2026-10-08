@@ -19,7 +19,7 @@ The run resolution report records what one `carla-capture` launch resolved and w
 It is written whether the launch was accepted or refused.\
 A refused launch can therefore always be read.
 
-**This is not the compiler's resolution report.**\
+This is not the compiler's resolution report.\
 The scenario compiler writes `<scenario_id>.resolution.json` about a compile (see [Scenario resolution report](Scenario_Resolution_Report.md)).\
 This one is about a run.\
 It is always named after the run result: `run.resolution.json` by default.

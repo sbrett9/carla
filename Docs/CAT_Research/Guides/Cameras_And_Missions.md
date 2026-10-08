@@ -93,7 +93,7 @@ They are CARLA's own names and units.\
 A run file's `exposure_shutter_s` is in seconds.
 
 The camera applies them over its post-process profile.\
-Give `post_process_profile` with its file's case, `Default`, `GoPro`, `Town10HD_Opt` or `Town_C`.\
+Give `post_process_profile` in the case its file name uses: `Default`, `GoPro`, `Town10HD_Opt` or `Town_C`.\
 [Exposure](Running_A_Capture.md#exposure) explains each value and why `histogram` is not for captures you mean to compare.
 
 `ChannelExposure` turns a run file's exposure fields into these attributes, as `carla-capture` does:
@@ -383,9 +383,10 @@ Unlike `carla-free-camera`, it can record what that camera sees.
   It looks straight down.
 - Press F to start a recording span.\
   Press F again to end it.\
-  A span starts once the camera's photoreal tiles are in.\
+  A span starts once the camera's photoreal tiles are loaded.\
   It waits up to 90 s of wall-clock time for them.\
-  It starts only from the capture window's opening, which is `--window-opens-at`, or by default the first frame drawn.\
+  It starts no earlier than the capture window's opening.\
+  That is `--window-opens-at`, or by default the first frame drawn.\
   Pressing F while it waits cancels the span.
 - Each span is written to a folder of its own under `--record-dir`, named by the camera and the span's start, `<camera name>-<UTC>`.\
   The stills inside are `<camera name>_<local capture time>.png` and `.xml`, with the same truth a fixed camera's stills carry, occlusion included.
@@ -468,7 +469,7 @@ if holder is not None:
 In a traffic tool, ask before you spawn anything, as `PythonAPI/examples/generate_traffic_carlanet.py` does.
 
 At its end, the drive gives the lease back.\
-A drive that dies without giving it back leaves it held until the world is reloaded, or until `world.break_drive_lease()` ends it.\
+A drive that exits without giving it back leaves it held until the world is reloaded, or until `world.break_drive_lease()` ends it.\
 That call returns the holder whose lease it ended.\
 The server logs the break as a warning.
 

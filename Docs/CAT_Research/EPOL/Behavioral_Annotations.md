@@ -349,7 +349,7 @@ Here is what the record shows, on SUMO's clock:
 | 144.15 s | `transit` enters part 1 of its route, northbound on Yosemite from Arapahoe. Its `past_the_kerb` interval opens. | `interval_opened` |
 | 155.0 s to 159.5 s | `transit` is in the picture, with two annotations, beside the parked `dweller`. | sidecars, frames 152198 to 152288 |
 | 160.4 s | `transit` enters part 2 of its route. `past_the_kerb` closes by `trigger`. | `interval_closed` |
-| 200.05 s | SUMO inserts `brief_stopper`. It is drawn but never in the picture. It is `unlabelled`: its stop is yet to begin. | `render_admitted` and sidecars |
+| 200.05 s | SUMO inserts `brief_stopper`. It is drawn but never in the picture. It is `unlabelled`: its stop begins later. | `render_admitted` and sidecars |
 | 229.4 s | `dweller` leaves the curb. `dwell` closes by `trigger`. | `interval_closed` |
 | 229.5 s | First still with `dweller` `unlabelled` again. | sidecar, frame 153688 |
 | 240 s | The window closes. The `transit` interval is still open and closes as `capture_window_end`. The `brief_stop` interval never opened. | `manifest_closed`: `open_intervals`, `never_opened` |

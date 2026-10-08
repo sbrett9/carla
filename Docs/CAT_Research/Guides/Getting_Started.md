@@ -91,7 +91,8 @@ On Linux:
 It installs `carlacontrol`'s own dependencies too (numpy, lxml and pygame-ce).\
 It puts the `carla-*` commands in the virtual environment.
 
-**`carla-env`** must be run with a dot in front, so that it changes the terminal you are in.\
+**`carla-env`** must be run with a dot in front.\
+The dot makes it change the terminal you are in.\
 It does two things:
 
 - It activates `venv/`, which puts the `carla-*` commands on the `PATH`.
@@ -115,7 +116,8 @@ Run it in a terminal of its own:
 ./run-server.sh &                                     # Linux
 ```
 
-It runs `CarlaServer` with `-RenderOffScreen -nosound`, so there is no window.\
+It runs `CarlaServer` with `-RenderOffScreen -nosound`.\
+So there is no window.\
 A first argument that does not start with `-` is the map to start in.\
 Anything else you add is passed to the server.\
 The server answers on port 2000.
@@ -143,7 +145,8 @@ export CESIUM_ION_TOKEN="<your token>"     # Linux, this shell only
 ### Your own SUMO, for `sumo-gui`
 
 `carla-drive --sumo-gui` shows the simulation it is stepping in SUMO's own window.\
-The distribution has no `sumo-gui`, so point the drive at your own SUMO 1.27.0 installation, the folder that holds `bin/sumo-gui`.\
+The distribution has no `sumo-gui`.\
+Point the drive at your own SUMO 1.27.0 installation, the folder that holds `bin/sumo-gui`.\
 Either pass it each time:
 
 ```sh
@@ -151,7 +154,8 @@ carla-drive --sumo-gui --sumo-home <your SUMO 1.27.0 folder> ...
 ```
 
 or set `CARLANET_SUMO_HOME` to that folder.\
-The drive looks at `CARLANET_SUMO_HOME` before `SUMO_HOME`, so `SUMO_HOME` can stay on the distribution's toolchain for building worlds and compiling scenarios.
+The drive looks at `CARLANET_SUMO_HOME` before `SUMO_HOME`.\
+So `SUMO_HOME` can stay on the distribution's toolchain for building worlds and compiling scenarios.
 
 When no site profile names a SUMO installation, `carla-capture` reads `CARLANET_SUMO_HOME` too (see below).\
 The capture then runs your SUMO, so it must be 1.27.0 as well.\
@@ -171,7 +175,8 @@ You need one for two reasons:
   Until the site profile names the SUMO installation, run check 36 refuses an installed `carla-capture` run with `--caller unattended`.\
   Without a profile, nothing names it.\
   The only way left to find it is a search of `SUMO_HOME` and then the `PATH`.\
-  An unattended run does not take machine state it was not given, so it refuses.\
+  An unattended run does not take machine state it was not given.\
+So it refuses.\
   The refusal reads: `'sumo.home' names no installation, so the session will search SUMO_HOME, then PATH for one, which the site profile does not declare.`
 - **Without one, the folders depend on where you run the command.**\
   An installed `carla-capture` looks for world packages in `world-packages/` under the folder it is run from.\
@@ -196,7 +201,8 @@ Set `sumo.home` to the SUMO installation, the folder that holds `bin/sumo`.\
 Do not leave it `null`.\
 With `null`, the capture searches `SUMO_HOME` and the `PATH` of whatever machine runs it.\
 If the server is not on this machine at port 2000, add a `server` block.\
-A relative path is relative to the profile's own folder, so a profile kept in the distribution's folder can be short:
+A relative path is relative to the profile's own folder.\
+So a profile kept in the distribution's folder can be short:
 
 ```json
 {
@@ -242,7 +248,8 @@ The capture refuses a profile that:
 - holds a block or field it does not know
 - does not fit its schema
 
-That refusal ends the launch with exit status 1, before a run begins, so no run result is written.\
+That refusal ends the launch with exit status 1, before a run begins.\
+So no run result is written.\
 Every value the capture uses is recorded, with where it came from, in the run's lock and resolution report.
 
 To check the file without starting a run, give `carla-validate` the folder that holds it.\

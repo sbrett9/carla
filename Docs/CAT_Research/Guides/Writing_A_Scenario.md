@@ -63,7 +63,8 @@ It is `shop_front`, on East Street's eastbound lane.\
 You publish it into the package from the areas file on [Building a world](Building_A_World.md#areas-of-interest).\
 The scenario file is in `Import/` and the package in `Build/world-packages/`.
 
-The test world has no ground grids (the package's bare-earth height grids), so you can compile against it but not drive it.\
+The test world has no ground grids (the package's bare-earth height grids).\
+So you can compile against it but not drive it.\
 To use the example on your own world, change `world`, the places and the times.
 
 ```json
@@ -277,7 +278,8 @@ A flow's or actor's `type` is a class, one of its vehicle types, the whole mix, 
 Things to know:
 
 - A class that draws one body warns (check 17).\
-  Every vehicle of the class looks the same, so its look can stand in for its label.\
+  Every vehicle of the class looks the same.\
+  So its look can stand in for its label.\
   The catalog has one van, so the example's `van` class warns.
 - Unless its driving is the behavior you are labeling, give a planted vehicle the class of the traffic around it.\
   A vehicle type that only planted vehicles use tells a model which vehicles are planted.\
@@ -573,7 +575,7 @@ The compiler writes into the `--out-dir` folder:
 | `<scenario_id>.add.xml` | the lane closures, only for a scenario that has some |
 | `<MapName>.net.xml` | the world's own network, copied from the package |
 | `<scenario_id>.supervision.json` | the labels |
-| `<scenario_id>.lock.json` | the digests of every file, the seed, the epoch and the versions, which a run checks |
+| `<scenario_id>.lock.json` | the digests of every file, the seed, the epoch and the versions. A run checks them. |
 | `<scenario_id>.resolution.md` and `.json` | the resolved values and every finding |
 
 The exit status is 0 for a compiled scenario and 1 for a refused one.\
@@ -584,7 +586,7 @@ You do not set them:
 
 | Option | Value | Why |
 |---|---|---|
-| `time-to-teleport` | -1 | SUMO never moves a stuck vehicle ahead, so a traffic jam stays where it is. |
+| `time-to-teleport` | -1 | SUMO never moves a stuck vehicle ahead. A traffic jam stays where it is. |
 | `max-depart-delay` | 900 | A vehicle that cannot enter within 900 s is dropped. |
 | `collision.action` | `warn` | Collisions are reported, not hidden. |
 | `lanechange.duration` | 3 | A lane change takes 3 seconds instead of one step. |
@@ -602,7 +604,8 @@ The compiler runs its checks in stages:
 - the files it writes
 - a run in SUMO alone
 
-Every check in a stage runs, so one compile reports all the problems that stage can see.\
+Every check in a stage runs.\
+So one compile reports all the problems that stage can see.\
 A stage that refuses stops the compile.
 
 `CarlaControl/skills/sumo-traffic-scenarios/checks.json` lists every check, by a number that never changes.\
@@ -625,7 +628,8 @@ See [Scenario compiler checks](../Schemas/Scenario_Checks.md).
 
 Read the report after every compile.\
 Check it against what you meant.\
-`sumo-gui` shows elapsed seconds and knows nothing of labels, dates or the sun, so the report is the one place to check them.
+`sumo-gui` shows elapsed seconds and knows nothing of labels, dates or the sun.\
+So the report is the one place to check them.
 
 `<scenario_id>.resolution.md` is laid out for reading.\
 `<scenario_id>.resolution.json` holds every field.\
@@ -822,7 +826,8 @@ When that full path passes 260 characters, SUMO cannot open it.\
 The member is then refused with check 11 or 59.\
 The refusal says that a file "is not accessible" or that SUMO "Could not access configuration".
 
-The example's twins have 52-character ids, such as `shop_deliveries.mcb1102d16d.cf.van_due_d0_h9.absent`, so the full path of its output folder must stay under about 80 characters.\
+The example's twins have 52-character ids, such as `shop_deliveries.mcb1102d16d.cf.van_due_d0_h9.absent`.\
+So the full path of its output folder must stay under about 80 characters.\
 A longer scenario id or actor id leaves less room.\
 Work in a folder with a short path, such as `C:\carla`.\
 Keep `--out-dir` short too.

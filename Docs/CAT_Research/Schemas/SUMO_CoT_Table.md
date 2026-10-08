@@ -17,7 +17,7 @@ Any CSV reader can therefore read it.
 
 `carlacontrol.SumoCotBridge` writes both.\
 The table schema is generated from the bridge's column list, `SumoCotBridge.CSV_COLUMNS`.\
-The two therefore cannot drift apart.
+The two therefore cannot differ.
 
 `carla-check-label-leaks --csv` reads the CSV, to check that no column tells the planted vehicles from the others.\
 Given a folder holding them, `carla-validate` checks the CSV against the table schema and the summary against its schema.\

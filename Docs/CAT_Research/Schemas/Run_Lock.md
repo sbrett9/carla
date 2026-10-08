@@ -18,7 +18,7 @@ The run lock records what one accepted capture run is bound to:
 
 When two runs differ, the run lock is the record to compare.
 
-**This is not the scenario lock.**\
+This is not the scenario lock.\
 The scenario compiler writes `<scenario_id>.lock.json`, the record of a compiled scenario (see [Scenario lock](Scenario_Lock.md)).\
 A run lock records one run of that scenario.\
 It is always named after the run result: `run.lock.json` by default.

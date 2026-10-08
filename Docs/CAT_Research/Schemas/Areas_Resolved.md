@@ -25,7 +25,7 @@ The build log names every problem.
 
 When the set is published and the areas are not refused, the file is always written.\
 A world built with no areas declared gets a file with an empty `areas` list.\
-So a world with no areas can be told apart from one that was never published.
+So you can tell a world with no areas from one that was never published.
 
 The scenario compiler reads it through `WorldPackageReader.areas_of_interest()` to locate places named by area.\
 If the file's `source_sha256` is not the digest of the `areas.aoi.geojson` beside it, the reader refuses the file.\

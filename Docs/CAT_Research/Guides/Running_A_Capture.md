@@ -441,7 +441,8 @@ check 16 REFUSE capture.channels[0].exposure_shutter_s: 320 is not a value the c
 
 **Why auto-exposure warns.**\
 `histogram` is allowed, but it raises warning `exposure_follows_the_scene` (run check 16).\
-Under `histogram` the engine meters each frame and sets its own exposure, so the exposure follows what is in the picture.\
+Under `histogram` the engine meters each frame and sets its own exposure.\
+The exposure then follows what is in the picture.\
 A bright vehicle entering the frame darkens the rest.\
 Two windows under different suns can come out alike.\
 That suits an operator's live picture, not captures you mean to compare.\

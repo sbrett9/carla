@@ -116,7 +116,7 @@ This track never writes them: a vehicle's last SUMO frame is drawn like any othe
 
 Each band includes its upper edge.
 
-**Two things differ from a sidecar.**\
+Two things differ from a sidecar.\
 The track's dimensions and color are the SUMO type's.\
 The sidecar's are the CARLA body's.\
 So the two can differ slightly for the same vehicle.\

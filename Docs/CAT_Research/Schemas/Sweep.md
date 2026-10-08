@@ -17,7 +17,7 @@ So a member that does not route fails at compile time, not partway through a set
 A member's id comes from the base scenario's id and the member's axis values.\
 It holds no counter and no time, so members can be joined across rebuilds.
 
-**Light is an axis of its own.**\
+Light is an axis of its own.\
 Any axis whose path touches `epoch`, `illumination` or a capture window's `begin` changes the light.\
 This is true whatever kind the axis is declared as.
 

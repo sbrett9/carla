@@ -15,7 +15,8 @@ This is a different file from the `world.json` inside a world package (`.cwp`).\
 
 ## Who writes it and who reads it
 
-An Unreal tech artist imports a `.cwp` into a level with the World Package Importer and exports it as a plugin under `Unreal/CarlaUnreal/Plugins/GeneratedWorlds/<World>/`.\
+An Unreal tech artist imports a `.cwp` into a level with the World Package Importer.\
+The artist exports the level as a plugin under `Unreal/CarlaUnreal/Plugins/GeneratedWorlds/<World>/`.\
 A `DeliverSeparately.txt` in that folder marks the world for separate delivery.\
 `PackageWorld` then cooks that world on its own against the base release.\
 Two scripts write the manifest:

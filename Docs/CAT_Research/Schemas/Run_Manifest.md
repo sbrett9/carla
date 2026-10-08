@@ -303,7 +303,8 @@ At the end of the run, a vehicle still drawn has an admission row and no release
 
 ## `collision_began` and `collision_ended`
 
-A collision SUMO reported, written as it begins and again, as a span, once the two vehicles are apart.
+When a collision that SUMO reported begins, the run writes `collision_began`.\
+It writes `collision_ended`, as a span, once the two vehicles are apart.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|

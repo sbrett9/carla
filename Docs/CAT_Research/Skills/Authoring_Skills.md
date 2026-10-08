@@ -51,7 +51,8 @@ Then move the pin, here and in `PROVENANCE.md`.
 
 ## Where an assistant finds skills
 
-An assistant working in this workspace loads skills from `.agents/skills/` at the workspace root, which is outside this repository and outside any repository:
+An assistant working in this workspace loads skills from `.agents/skills/` at the workspace root.\
+That directory is outside this repository and outside any repository:
 
 ```
 <workspace>/

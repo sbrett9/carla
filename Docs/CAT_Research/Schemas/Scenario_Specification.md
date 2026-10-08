@@ -34,7 +34,7 @@ Its resolution report (see [Scenario resolution report](Scenario_Resolution_Repo
 
 - **A scenario developer writes it**, by hand, from a script (the `make_*_scenario.py` examples), or with the authoring skill's help.
 - **`carla-compile-scenario` reads it** and checks it against this schema first (check 53).\
-  A field the schema does not name is refused.\
+  It refuses a field the schema does not name.\
   Every later check is listed in [Scenario compiler checks](Scenario_Checks.md).
 - A sweep (many runs of one scenario with parameters varied) names a specification as its `base` (see [Sweep](Sweep.md)).
 - `carla-drive --epoch` can read the `epoch` and `illumination` blocks out of a specification.

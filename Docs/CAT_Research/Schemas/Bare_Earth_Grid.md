@@ -77,7 +77,9 @@ CARLA's frame has x east and y south.\
 So column 0 is the west edge, row 0 is the north edge and rows run from north to south.\
 The last point is at minimum x + (columns − 1) × cell size and minimum y + (rows − 1) × cell size.
 
-The grid's points span the staging rectangle in `world.json`: in every package built so far the minimum corner equals `StagingMinXMeters`, `StagingMinYMeters` and the far corner equals `StagingMaxXMeters`, `StagingMaxYMeters`.\
+The grid's points span the staging rectangle in `world.json`.\
+In every package built so far, the minimum corner equals `StagingMinXMeters`, `StagingMinYMeters`.\
+The far corner equals `StagingMaxXMeters`, `StagingMaxYMeters`.\
 The cell size is `TerrainResolutionMeters`.
 
 A SUMO position is in the network's own meters, where y points north.\

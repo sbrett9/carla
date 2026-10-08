@@ -28,7 +28,7 @@ It lists:
 So this report is the one place to check a label, a date or a sun before a capture is run.\
 The `.md` file is the same report formatted for reading.
 
-**This is not the run resolution report.**\
+This is not the run resolution report.\
 A capture run writes `run.resolution.json` about one launch (see [Run resolution report](Run_Resolution_Report.md)).
 
 ## Who writes it and who reads it

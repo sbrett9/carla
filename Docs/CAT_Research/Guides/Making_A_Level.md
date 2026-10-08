@@ -240,7 +240,8 @@ Then import again.
 | The road network file | `Unreal\CarlaUnreal\Content\Carla\Maps\Generated\OpenDrive\<World>.xodr` |
 | The road meshes | `/Game/Carla/Static/Road/<World>/SM_RoadSurface_<n>` for driving lanes and junctions, with the material `MI_Road_Asphalt_A`. If the road network has sidewalks, the import also makes `/Game/Carla/Static/SideWalk/<World>/SM_Sidewalk_<n>` for them, with `MI_CurbDirty01`. |
 
-The level is a copy of `/Game/Carla/Maps/OpenDriveMap`, so it starts with that map's OpenDRIVE generator, player start and lighting.\
+The level is a copy of `/Game/Carla/Maps/OpenDriveMap`.\
+It starts with that map's OpenDRIVE generator, player start and lighting.\
 It has no large-map manager.\
 The importer adds:
 
@@ -250,7 +251,8 @@ The importer adds:
 - **The road pieces**, as Static Mesh Actors labeled with their mesh names and tagged `road`.\
   Only driving lanes, junctions and sidewalks are baked.\
   Other lane types in the road network, such as bike lanes, get no mesh.
-- **The Cesium georeference and imagery tilesets**, set up from the settings, so the globe streams in the editor.\
+- **The Cesium georeference and imagery tilesets**, set up from the settings.\
+  The globe streams in the editor.\
   The bare-earth ground layer is not drawn in the simulation.\
   When the level opens, the editor hides it.\
   Use the eye icon in the Outliner to show it while you work.
@@ -355,7 +357,7 @@ Every hand fix is lost.\
 The importer deletes the road meshes and builds new ones from the `.cwp`.\
 It also deletes the level and makes it again from the template.\
 Everything you placed in the level is lost too.\
-With "Make this world available to packaged builds" ticked, the export that follows replaces the plugin's copy as well.
+With "Make this world available to packaged builds" turned on, the export that follows replaces the plugin's copy as well.
 
 Re-importing the same world goes ahead without asking.\
 The replace box only guards against a package built from a different OpenStreetMap extract.\
@@ -391,7 +393,8 @@ Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\
     Carla\Static\SideWalk\<World>\SM_Sidewalk_<n>.uasset     only when the world has sidewalks
 ```
 
-- The plugin's content is mounted at `/<World>/`, so the level becomes `/<World>/Maps/<World>`.\
+- The plugin's content is mounted at `/<World>/`.\
+  So the level becomes `/<World>/Maps/<World>`.\
   That is the name a server loads it by.
 - The export points the copied settings at the copied road network and field.\
   It also points the copied level's road pieces at the copied meshes.
@@ -675,7 +678,7 @@ A packaged server looks up a short map name in a list made at cook time.\
 So it cannot find a world installed later by its short name.
 
 Set `CESIUM_ION_TOKEN` to a Cesium ion access token before you start the server.\
-With neither it nor a token saved in the level, the level loads with no imagery.
+With neither the variable nor a token saved in the level, the level loads with no imagery.
 
 ### In a distribution
 
