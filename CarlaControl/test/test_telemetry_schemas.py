@@ -8,8 +8,9 @@ the XML file and the CSV. Then:
     sidecar from `truth_sidecar.xsd`, and the XML file against `sumo_cot_events.xsd`, whose copies of
     those parts are held equal to the sidecar's; a SUMO vehicle's datagram leaves out the fields the
     files keep;
-  * the CSV meets `sumo_cot_telemetry.tableschema.json`, whose fields are the bridge's columns, and its
-    `.summary.json` meets its schema;
+  * the CSV meets `sumo_cot_telemetry.tableschema.json`, whose fields are the bridge's columns, checked
+    by `TableSchemaCheck`, the check `carla-validate` holds every table to; and its `.summary.json`
+    meets its schema;
   * a CARLA vehicle's datagram, as carla-sctmv sends it with the capture tick and the sun, is valid too;
   * the legacy labels file and the gap sidecar written from it meet their schemas.
 
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import csv
 import json
-import re
 import sys
 import types
 from datetime import UTC, datetime
@@ -40,6 +40,7 @@ from carlacontrol.SumoCotBridge import (  # noqa: E402
     SumoCotBridge,
 )
 from carlacontrol.SupervisionSidecar import SupervisionSidecar  # noqa: E402
+from carlacontrol.TableSchemaCheck import TableSchemaCheck  # noqa: E402
 from carlacontrol.TelemetrySchemas import CSV_TABLE_SCHEMA, TelemetrySchemas  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
@@ -229,68 +230,29 @@ def test_each_event_of_the_xml_file_is_also_a_valid_datagram(run, datagram_schem
         assert datagram_schema.validate(alone), datagram_schema.error_log
 
 
-def check_table(rows: list[dict], header: list[str], table: dict) -> list[str]:
-    """Every place a CSV departs from a Frictionless Table Schema, for the parts this one uses."""
-    problems = []
-    fields = table["fields"]
-    if header != [field["name"] for field in fields]:
-        problems.append(f"header {header} is not the fields in order")
-    for number, row in enumerate(rows, start=2):
-        for field in fields:
-            name, value = field["name"], row.get(field["name"])
-            constraints = field.get("constraints", {})
-            if value is None or (value in table.get("missingValues", [""]) and constraints.get("required")):
-                problems.append(f"line {number} {name}: missing")
-                continue
-            kind = field["type"]
-            try:
-                if kind == "number":
-                    parsed = float(value)
-                elif kind == "integer":
-                    parsed = int(value)
-                elif kind == "boolean":
-                    if value not in field["trueValues"] + field["falseValues"]:
-                        raise ValueError(value)
-                    parsed = value in field["trueValues"]
-                elif kind == "datetime":
-                    parsed = datetime.strptime(value, field["format"])
-                else:
-                    parsed = value
-            except ValueError:
-                problems.append(f"line {number} {name}: {value!r} is not a {kind}")
-                continue
-            if "enum" in constraints and parsed not in constraints["enum"]:
-                problems.append(f"line {number} {name}: {value!r} is not one of {constraints['enum']}")
-            if "pattern" in constraints and not re.fullmatch(constraints["pattern"], value):
-                problems.append(f"line {number} {name}: {value!r} does not match the pattern")
-            if "minimum" in constraints and parsed < constraints["minimum"]:
-                problems.append(f"line {number} {name}: {value} is below the minimum")
-            if "maximum" in constraints and parsed > constraints["maximum"]:
-                problems.append(f"line {number} {name}: {value} is above the maximum")
-    return problems
-
-
 def test_the_csv_meets_its_table_schema(run):
     with open(run.directory / "fixture.csv", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        rows = list(reader)
-        header = reader.fieldnames
+        rows = list(csv.DictReader(handle))
     assert len(rows) == len(ROSTER) * Playback.STEPS
-    assert check_table(rows, header, TelemetrySchemas.csv_table()) == []
+    assert [str(problem) for problem in TableSchemaCheck(TelemetrySchemas.csv_table()).problems(
+        run.directory / "fixture.csv")] == []
     kinds = {row["uid"]: (row["base_type"], row["special_type"]) for row in rows}
     assert kinds["SUMO-TRUTH-traffic.1"] == ("van", "emergency")
     assert kinds["SUMO-TRUTH-freight.0"] == ("truck", "")
 
 
-def test_a_table_checker_that_accepts_anything_would_fail_here():
+def test_a_table_checker_that_accepts_anything_would_fail_here(tmp_path):
     """The control: a row with a malformed time and a marked value of 2 is refused."""
-    table = TelemetrySchemas.csv_table()
     row = {name: "0" for name in CSV_COLUMNS}
     row.update(time_utc="2026-03-21 05:00:00", marked="2", cot_type="a-n-G-E-V", how="m-g",
                special_type="", color="1,2,3")
-    problems = check_table([row], CSV_COLUMNS, table)
-    assert any("time_utc" in problem for problem in problems)
-    assert any("marked" in problem for problem in problems)
+    path = tmp_path / "control.csv"
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerow(row)
+    problems = {problem.column for problem in TableSchemaCheck(TelemetrySchemas.csv_table()).problems(path)}
+    assert problems == {"time_utc", "marked"}
 
 
 def test_the_csv_summary_meets_its_schema(run):
