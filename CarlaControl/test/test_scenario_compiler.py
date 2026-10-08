@@ -42,7 +42,7 @@ from carlacontrol.RouteValidator import RouteRequest, RouteValidator  # noqa: E4
 from carlacontrol.ResolutionReport import ResolutionReport  # noqa: E402
 from carlacontrol.ScenarioCompiler import SKIPPED_DRY_RUN, ScenarioCompiler  # noqa: E402
 from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
-from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
+from carlacontrol.ScenarioSchema import OWN_CHECKS, SCHEMA, ScenarioSchema  # noqa: E402
 from carlacontrol.SumoDryRun import SumoDryRun  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.version import RELEASE  # noqa: E402
@@ -639,6 +639,21 @@ def test_no_epoch_is_refused_under_check_33(world, installation, tmp_path):
     result = ScenarioCompiler(installation).compile(world.write(spec, "c33.scenario.json"),
                                                     tmp_path / "out")
     assert checks(result) == {33}
+
+
+@pytest.mark.parametrize(("field", "check"), [("epoch", 33), ("illumination", 39)])
+def test_the_schema_requires_what_the_compiler_requires_and_leaves_its_absence_to_its_check(
+        world, field, check):
+    """The published schema says a specification needs an epoch and an illumination default, as
+    the compiler does; the compiler's shape check leaves a missing one to check 33 or 39, which
+    the two tests beside this one hold to the only finding."""
+    spec = world.specification()
+    assert ScenarioSchema.validate_against(spec, SCHEMA) == []
+    del spec[field]
+    assert ScenarioSchema.validate_against(spec, SCHEMA) == [f"$: '{field}' is required"]
+    assert ScenarioSchema.validate(spec) == [f"$: '{field}' is required"]
+    assert ScenarioSchema.validate(spec, leaving_to_own_checks=True) == []
+    assert OWN_CHECKS[field] == check
 
 
 def test_an_offset_that_is_not_a_quarter_hour_is_refused_under_check_34(world, installation,

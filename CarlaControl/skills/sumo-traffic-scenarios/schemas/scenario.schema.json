@@ -11,6 +11,8 @@
     "scenario_name",
     "description",
     "world",
+    "epoch",
+    "illumination",
     "seeds",
     "simulation",
     "catalogue",
@@ -54,11 +56,11 @@
     },
     "epoch": {
       "type": "object",
-      "description": "What simulated second zero is in civil time: the civil instant with its UTC offset, the same instant in UTC, whether the calendar advances and whether daylight saving is in effect; read by SolarEpoch"
+      "description": "What simulated second zero is in civil time: the civil instant with its UTC offset, the same instant in UTC, whether the calendar advances and whether daylight saving is in effect; read by SolarEpoch. Required: a specification without one is refused under check 33"
     },
     "illumination": {
       "type": "object",
-      "description": "The authored default for what the sun does across a capture window, which the operator may override; read by IlluminationPolicy"
+      "description": "The authored default for what the sun does across a capture window, which the operator may override; read by IlluminationPolicy. Required: a specification without one is refused under check 39"
     },
     "seeds": {
       "type": "object",
