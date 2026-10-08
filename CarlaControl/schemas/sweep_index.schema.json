@@ -142,7 +142,7 @@
           "specification": {
             "type": "string",
             "minLength": 1,
-            "description": "The member's specification, relative to the output directory."
+            "description": "The member's specification, relative to the output directory, in forward slashes. An index written before 2026-10-07 on Windows separates them with backslashes."
           },
           "findings": {
             "type": "array",

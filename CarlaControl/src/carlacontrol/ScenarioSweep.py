@@ -291,7 +291,7 @@ class ScenarioSweep:
         member = {"member_id": member_id, "assignments": [{"path": p, "value": v}
                                                           for p, v in assignment],
                   "outcome": "refused" if result.refused else "compiled",
-                  "specification": str(spec.relative_to(self.out_dir)),
+                  "specification": spec.relative_to(self.out_dir).as_posix(),
                   "findings": result.findings.to_list()}
         if not result.refused:
             lock = result.lock
