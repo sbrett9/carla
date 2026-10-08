@@ -387,7 +387,7 @@ Why it cannot be both, from `Unreal/Package/CookGeneratedWorlds.cmake.in`:
   it, except a world with a `DeliverSeparately.txt`.
 - A DLC cook leaves out everything the base already holds. For a world that is already in the base,
   that is everything, so the cook produces a plugin with no level and no assets. The cook still reports
-  success, and the empty level would fail at whoever installed it.
+  success, and the empty level would fail for whoever installs it.
 - So the base cook skips a marked world, and `PackageWorld` refuses an unmarked one.
 
 **The marker is not tracked in git.** The whole `Unreal/CarlaUnreal/Plugins/GeneratedWorlds/` folder is

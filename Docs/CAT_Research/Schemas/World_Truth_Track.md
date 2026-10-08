@@ -30,7 +30,7 @@ one too, and `--world-truth-track-interval <seconds>` samples every few SUMO ste
 The header is written as the track opens. Each sample's rows are written when the CARLA frame that
 renders that SUMO frame completes, and flushed together. Frames before the capture window opens write
 nothing. A file cut off by a killed run is the rows already written, plus at most one line without its
-line break, which a reader leaves off.
+line break, which a reader ignores.
 
 ## Columns
 

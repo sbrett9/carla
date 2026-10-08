@@ -281,7 +281,7 @@ The world truth track carries no labels. Join them to its rows by `sumo_id`.
 The scenario `Arapahoe_I25_SupervisionCheck` runs six minutes on South Yosemite Street, just north of
 East Arapahoe Road. Its files are in `Import/`: the specification
 `Arapahoe_I25_SupervisionCheck.scenario.json` and the plan `Arapahoe_I25_SupervisionCheck.supervision.json`.
-Among nine flows of background traffic, all `unlabelled` cohorts, it plants three vehicles:
+Among nine flows of background traffic, all `unlabelled` cohorts, it adds three vehicles:
 
 | Vehicle | What it does | Instance | State and label | Interval |
 |---|---|---|---|---|

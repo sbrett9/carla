@@ -17,7 +17,7 @@ capture computer's local clock, to the millisecond. The same instant in UTC is t
 attribute inside the file.
 
 The truth in a sidecar is always the truth of the still's own frame. A still whose frame's truth could
-not be read is not written at all, so you never get a still paired with a neighboring frame's truth.
+not be read is not written at all, so a still is never paired with a neighboring frame's truth.
 
 Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed
 sends, with extra detail elements whose names begin with `_`.
@@ -267,8 +267,8 @@ over a run, so always follow a vehicle by its `uid` or `sumo_id`, never by `acto
 | `source` | text, always `truth` | | Yes | Ground truth. |
 | `actor_id` | integer | | Yes | The CARLA actor that drew the vehicle on this frame. |
 | `type_id` | text | | Yes | The body's CARLA blueprint, such as `vehicle.audi.tt`. |
-| `base_type` | text | | Yes | The vehicle's base type, such as `car`, `van` or `truck`, from the vehicle catalogue for its blueprint. |
-| `special_type` | text | | Yes | The vehicle's kind from the catalogue or the blueprint; often empty. |
+| `base_type` | text | | Yes | The vehicle's base type, such as `car`, `van` or `truck`, from the vehicle catalog for its blueprint. |
+| `special_type` | text | | Yes | The vehicle's kind from the catalog or the blueprint; often empty. |
 | `length_m` | decimal | meters | Yes | The body's bounding box, front to back. |
 | `width_m` | decimal | meters | Yes | The body's bounding box, side to side. |
 | `height_m` | decimal | meters | Yes | The body's bounding box, bottom to top. |

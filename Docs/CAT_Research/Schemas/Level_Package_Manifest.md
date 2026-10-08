@@ -73,8 +73,8 @@ installs is the world interface version.
 `formatVersion` is 1, and there is no other version. `InstallWorld.ps1` and `InstallWorld.sh` read it
 before any other field: a manifest without it is format 1, and one that declares a newer format is
 refused, naming the format it declares and the newest the script reads. `-Force` and `--force` do not
-override that refusal, because the fields of a newer format may not mean what the script reads them
-as.
+override that refusal, because the fields of a newer format may not mean what the script takes them
+to mean.
 
 ## Example
 

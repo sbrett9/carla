@@ -63,7 +63,7 @@ and the release that wrote the file. [`carla:solar`](../Schemas/PNG_Chunk_Solar.
 [`carla:sensor`](../Schemas/PNG_Chunk_Sensor.md) repeat the sun and the camera from the sidecar. So a
 picture separated from its sidecar still says where it came from. The sidecar
 ([Truth sidecar](../Schemas/Truth_Sidecar.md)) holds the truth of the still's own frame: the camera's
-position, pointing, lens and exposure; the sun; and a record for every vehicle the frame drew, with its
+position, direction, lens and exposure; the sun; and a record for every vehicle the frame drew, with its
 labels. A still whose frame's truth could not be read is not written at all. So a picture never comes
 with another frame's truth.
 
@@ -176,7 +176,7 @@ for [`<_carla>`](../Schemas/Truth_Sidecar.md#_carla-the-vehicles-truth-record) a
   brake lights and turn signals follow SUMO's own signals for each vehicle (`sumo_signals`). The sun
   stood at 5.5°, and no headlight was on.
 - These are the lights commanded on. Whether the picture shows a lit lamp depends on the body. In the
-  current vehicle catalogue only the fire truck's high beams changed the picture when they were
+  current vehicle catalog only the fire truck's high beams changed the picture when they were
   measured. See [Lights](Vehicle_Catalogue.md#lights).
 - A container that says `lights="unknown"` means a vehicle in the picture has no `lights` because the
   frame's data did not carry them.

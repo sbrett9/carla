@@ -9,10 +9,10 @@
 
 ## What it is
 
-The launch echo is what a capture run says it is about to do, before it takes the world or starts
+The launch echo is what a capture run says it is about to do, before it acquires the world or starts
 SUMO: the simulated and civil span of the window, how many captures it will make, the sun it will
 set, the world, which vehicles get a body, the disk it will cost, where it writes, the wait for each
-camera's view, and the warnings raised. Its job is to let you notice that a run is not the run you
+camera's view, and the warnings raised. It lets you see that a run is not the run you
 meant before any time is spent.
 
 Every figure comes from the code that will act on it. It also says what it cannot predict, in
@@ -88,12 +88,12 @@ Every figure comes from the code that will act on it. It also says what it canno
 | `pacing.real_time_factor`, `pacing.min_achieved_factor` | number or null | sim s per wall s | Under `wall_clock`, the factor and its floor. |
 | `readiness.waits` | constant `true` | | Every run waits for each camera's view before the window. |
 | `readiness.rule` | string | | The rule the wait follows. |
-| `readiness.tiles` | string | | What a view's tiles being in means. |
+| `readiness.tiles` | string | | What it means for a view's tiles to be in. |
 | `readiness.picture_settled_wait` | boolean | | Whether the picture is also waited on. |
 | `readiness.picture` | string | | What the picture's wait compares, or that it is not run. |
 | `readiness.tiles_ceiling_s` | number | s | Wall-clock seconds a view has for its tiles. |
 | `readiness.tiles_hold_s` | number | s | When the picture is not waited on: the tiles' lead before the window, in simulated seconds. |
-| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | When the picture is waited on: how drawn vehicles are left out, and the picture's ceiling and tolerance. |
+| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only when the picture-settled wait is on: how the comparison skips the parts of the picture that drawn vehicles cover, and the wait's ceiling and tolerance. |
 | `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins, and the window's opening. |
 | `readiness.traffic_stare_holds_from_s` | number or null | s | Where a stare aimed at the traffic stops following it. Null with no such stare. |
 | `readiness.not_ready`, `readiness.per_capture` | string | | What happens to a view that is not ready, and what is not recorded per capture. |

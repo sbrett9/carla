@@ -2,7 +2,7 @@
 
 `vehicles.vtypes.rou.xml` is the [vehicle catalogue](Vehicle_Catalogue.md) as SUMO reads it. Each
 measured CARLA body is one SUMO vehicle type, `<vType>`, and each class is one type distribution,
-`<vTypeDistribution>`, over its members. A scenario asks for a class; SUMO draws a member from it; the
+`<vTypeDistribution>`, over its members. A scenario asks for a class, SUMO draws a member from it, and the
 member is the CARLA body. So the size SUMO reserves on the road and the body CARLA draws are the same.
 
 The file is a SUMO route file that holds only types, so SUMO's own `routes_file.xsd` accepts it. Our
@@ -13,13 +13,13 @@ schema is narrower: it describes exactly what the writer writes.
 
 ## Who writes it and who reads it
 
-`SumoVehicleTypeWriter` writes it from the catalogue, beside it, whenever the catalogue is built
+`SumoVehicleTypeWriter` writes it from the catalog, beside it, whenever the catalog is built
 (`make_vehicle_catalogue.py`) or its body widths are applied (`apply_vehicle_body_widths.py`). Do not edit
-it by hand: edit the catalogue and write it again.
+it by hand. Edit the catalog and write it again.
 
 The scenario compiler writes the types a scenario draws into the scenario's own route file, with the
 same parameters. SUMO reads them. The SUMO drive and `carla-cot-telemetry` read the parameters back
-from the running simulation to find each vehicle's body, class and catalogue.
+from the running simulation to find each vehicle's body, class and catalog.
 
 ## Structure
 
@@ -42,9 +42,9 @@ Every attribute is written on every type, in this order.
 |---|---|---|---|---|
 | `id` | string | | yes | The CARLA blueprint id, such as `vehicle.lincoln.mkz`. |
 | `vClass` | string | | yes | The class's `sumo_vclass`. |
-| `length` | number | meters | yes | The catalogue's `length_m`. |
-| `width` | number | meters | yes | The catalogue's `body_width_m`, the width without mirrors; its `width_m` where it holds no body width. |
-| `height` | number | meters | yes | The catalogue's `height_m`. |
+| `length` | number | meters | yes | The catalog's `length_m`. |
+| `width` | number | meters | yes | The catalog's `body_width_m`, the width without mirrors; its `width_m` where it holds no body width. |
+| `height` | number | meters | yes | The catalog's `height_m`. |
 | `minGap` | number | meters | yes | The class's `min_gap_m`. |
 | `maxSpeed` | number | m/s | yes | The class's `max_speed_mps`. |
 | `accel` | number | m/s² | yes | The class's `accel_mps2`. |
@@ -69,9 +69,9 @@ Each `<vType>` has two or three of them, each key once:
 
 | Key | Value | Written | Meaning |
 |---|---|---|---|
-| `carla:blueprint` | a CARLA blueprint id, such as `vehicle.lincoln.mkz` | always | The body the type is drawn with. Its length, width and height in the `<vType>` are that body's, measured by the vehicle catalogue (check 15). A type with no `carla:blueprint` is simulated by SUMO and never drawn. |
+| `carla:blueprint` | a CARLA blueprint id, such as `vehicle.lincoln.mkz` | always | The body the type is drawn with. Its length, width and height in the `<vType>` are that body's, measured by the vehicle catalog (check 15). A type with no `carla:blueprint` is simulated by SUMO and never drawn. |
 | `carla:class_id` | the class id, such as `civ_car` | always | The class the body was drawn for. A class draws several bodies, one type each; this tells a reader which population a vehicle belongs to. A run's display convention names a vehicle's population by it. |
-| `carla:catalogue_digest` | the catalogue's `catalogue_digest` | when the catalogue has one | The catalogue the type was written from, so a reader holding a catalogue can tell whether it is that one. `carla-cot-telemetry` warns once about a type written from another catalogue. |
+| `carla:catalogue_digest` | the catalog's `catalogue_digest` | when the catalog has one | The catalog the type was written from, so a reader holding a catalog can tell whether it is that one. `carla-cot-telemetry` warns once about a type written from another catalog. |
 
 In this file a type's id is its blueprint id. In a compiled route file it is `<class_id>.<blueprint>`,
 such as `car_quick.vehicle.ue4.audi.tt`:
@@ -97,8 +97,8 @@ Either way the id is for a person reading the file; what binds the type to a bod
 
 ## Format version
 
-The file carries no version. It is version 1. Its shape changes only with the catalogue's
-`catalogue_version`, and every type records which catalogue it came from.
+The file carries no version. It is version 1. Its shape changes only with the catalog's
+`catalogue_version`, and every type records which catalog it came from.
 
 ## Example
 

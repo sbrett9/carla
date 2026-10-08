@@ -18,12 +18,12 @@ deviates rather than describing a gap.
 `carla-cot-telemetry --labels <file>.labels.json` writes it (`carlacontrol.SupervisionSidecar`) when the
 labels describe at least one gap. It goes to `--supervision <file>` when given; otherwise beside the
 `--xml` or `--csv` output, named for its stem: `orbit_cot.xml` gets `orbit_cot.supervision.json`. A run
-with neither file prints the gaps to the log instead. The file is never written into the event file or
-the CSV: a note saying which post stood unmanned, and when, is the answer a behavior model is asked
-for.
+with neither file prints the gaps to the log instead. The gaps are never written into the event file
+or the CSV, because the answer a behavior model is asked for is a note saying which post stood
+unmanned, and when.
 
-Nothing in the tools reads it. It is for whoever scores a model against the run. `carla-validate`,
-given a folder holding it, checks it against this schema; a `.supervision.json` that declares
+Nothing in the tools reads it. It is for whoever scores a model against the run. Given a folder
+holding it, `carla-validate` checks it against this schema. A `.supervision.json` that declares
 `supervision_plan_version` is a compiled [supervision plan](Supervision_Plan.md) instead.
 
 The file is JSON with a one-space indent and no final newline.
@@ -52,8 +52,8 @@ the run's clock:
 
 ## Format version
 
-The file carries no version. It is version 1, as a file of a kind written before it carried a
-version is. It will change no further: it serves only scenarios made before compiled scenarios.
+The file carries no version. It is version 1, like any file written before its kind carried a
+version. It will not change again, because it serves only scenarios made before compiled scenarios.
 
 ## Example
 

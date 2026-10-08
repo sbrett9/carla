@@ -37,7 +37,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `producer` | object | What wrote the file. See [Run result](Run_Result.md#the-producer-record). |
 | `outcome` | `accepted`, `usage_error` or `refused_offline` | `accepted`: the offline checks passed and the lock was written. Otherwise the launch stopped here, with that outcome. |
 | `session_id` | string | The run's identity. |
-| `check_catalogue` | string | The catalogue the findings' check numbers belong to: `carla-capture run checks`. |
+| `check_catalogue` | string | The catalog the findings' check numbers belong to: `carla-capture run checks`. |
 | `findings` | array | Every refusal and warning, in the order made. Each has `check`, `outcome` (`refuse` or `warn`), `subject`, `message`, `catalogue`, and for a warning its `code`. See [Run result](Run_Result.md#a-finding). |
 | `launch_echo` | object or null | What the run was about to do. See [Launch echo](Launch_Echo.md). Null when the offline checks refused before it was computed. |
 | `effective_configuration` | object or null | Every field, its value, and where it came from. See [Run lock](Run_Lock.md#the-effective-configuration). Null when nothing could be resolved, as after an unknown key. |
@@ -52,7 +52,7 @@ the launch was refused (run check 37).
 
 This page describes version 1, the only version. No tool reads the report back, so no tool refuses
 one. A reader should read version 1 and refuse a newer version rather than read it in part. A file
-written before October 7, 2026 has no `producer` and may name the check catalogue differently; it is
+written before October 7, 2026 has no `producer` and may name the check catalog differently; it is
 still version 1.
 
 ## Example

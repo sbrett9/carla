@@ -1,6 +1,6 @@
 # Cameras and missions from your own code
 
-A mission, here, is a plan for cameras: where they are, where they look, and what they record.
+In this guide, a mission is a plan for cameras: where they are, where they look, and what they record.
 [Running a capture](Running_A_Capture.md) shows how to state a mission in a run file and record it
 with `carla-capture`. This page shows the other ways to work with cameras:
 
@@ -126,7 +126,7 @@ between frames.
 
 ### An orbit the server flies
 
-The server can fly a camera round a circle by itself. You send the circle once; the server moves the
+The server can fly a camera around a circle by itself. You send the circle once; the server moves the
 camera on every tick, before the frame is captured, so the picture, its header and the frame's
 record agree on the pose. Anything attached to the camera, such as a depth camera, moves with it.
 
@@ -264,9 +264,8 @@ server's own rate.
 **3. Start the drive** in another terminal. `--no-record` spawns no camera of the drive's own.
 `--real-time-factor 1.0` holds the ticks to the wall clock, so the traffic moves at its real pace
 and a lap takes 240 s on your clock too, as long as the machine keeps up. The drive prints the pace
-it held. `--steps 0` runs until the scenario ends. The epoch and the
-sun's policy are read from the scenario's specification, so `--illumination` is left out; giving
-both is refused.
+it held. `--steps 0` runs until the scenario ends. The drive reads the epoch and the sun's policy
+from the scenario's specification, so leave out `--illumination`; giving both is refused.
 
 ```sh
 carla-drive \
@@ -282,7 +281,7 @@ picture nearer its dwell, add `--warm-up 600`, which fast-forwards SUMO to t = 6
 drawing, before the first tick.
 
 **4. Stop.** Press Ctrl+C in the drive's terminal, and Esc in the follower's window. The order does
-not matter. When the drive ends, it gives the clock back, and the follower goes on showing frames at
+not matter. When the drive ends, it gives the clock back, and the follower keeps showing frames at
 the server's own rate until you close it.
 
 To stare at the spot instead of orbiting it, replace step 2 with:
@@ -386,7 +385,7 @@ take the lease. `carla-capture` then ends with exit status 4, `refused_authority
 holder in `authority_holder`. `carla-drive` prints `refused: <holder> holds this world's drive
 lease.`
 
-Cameras are not affected. Spawning, moving and orbiting cameras, and reading the world, all go on as
+Cameras are not affected. Spawning, moving and orbiting cameras, and reading the world, all work as
 before, which is why the follower and the free camera work beside a drive.
 
 From Python:
@@ -398,7 +397,7 @@ if holder is not None:
 ```
 
 A traffic tool should ask before it spawns anything, as
-`PythonAPI/examples/generate_traffic_carlanet.py` does. The lease is given back when the drive ends. A drive that dies without giving it back leaves it
-held until the world is reloaded, or until `world.break_drive_lease()` ends it. That call returns the
+`PythonAPI/examples/generate_traffic_carlanet.py` does. The drive gives the lease back when it ends. A drive that dies without giving it back leaves
+it held until the world is reloaded, or until `world.break_drive_lease()` ends it. That call returns the
 holder whose lease it ended, and the server logs it as a warning. A server built before the lease
 answers `None` to both calls, and nothing on it stops another traffic system.

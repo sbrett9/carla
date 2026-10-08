@@ -34,8 +34,8 @@ Every key may be absent. A reader ignores a key it does not name.
 
 ## Format version
 
-The file carries no version. It is version 1, as a file of a kind written before it carried a
-version is. No newer version will be made.
+The file carries no version. It is version 1, like any file written before its kind carried a
+version. No newer version will be made.
 
 ## Example
 

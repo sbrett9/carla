@@ -18,9 +18,13 @@ compiler reports the difference between the two. The file never claims a civil t
 carlacontrol's `SolarFrame` writes it from `world.json`'s origin when the authoring reference set is
 published. The scenario compiler reads it through `WorldPackageReader.solar_frame()`.
 
-What it cannot say: the time zone during a run, since a SUMO drive sets the scenario's own civil
-offset on the server's sun when it starts; and whether the world has a sun at all. Those are read from
-the server.
+The file cannot say two things:
+
+- the time zone during a run, since a SUMO drive sets the scenario's own civil offset on the server's
+  sun when it starts;
+- whether the world has a sun at all.
+
+Both are read from the server.
 
 The file is JSON, UTF-8, two-space indent, keys sorted.
 
@@ -39,10 +43,10 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 
 ## Format version
 
-`solar_frame_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
-that declares a newer version, naming the version and the newest they read, rather than reading
-part of it. `WorldPackageReader` then checks the
-file against the schema and refuses it, naming each problem, if it does not match.
+`solar_frame_version` is 1, and there is no other version. A file without it is version 1.
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, naming
+the version and the newest they read, rather than reading part of it. `WorldPackageReader` then checks
+the file against the schema. If the file does not match, it refuses the file and names each problem.
 
 ## Example
 

@@ -8,8 +8,8 @@
 
 Every still a recorder writes is a PNG with up to four text chunks between its header and its pixels.
 `carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the
-run it belongs to, and what wrote it. It lets a still that has been separated from its truth sidecar
-still be traced to its frame, its run and the release that made it.
+run it belongs to, and what wrote it. It lets you trace a still to its frame, its run and the release that
+made it, even when the still has been separated from its truth sidecar.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:capture`. Its text is one line of compact JSON.
 PNG text chunks are Latin-1; the writer replaces any character outside Latin-1 with `?`.
@@ -68,9 +68,9 @@ A server built before the call:
 | `world_interface` | string | | Yes | The world interface version it reported, or `unknown`. |
 | `reason` | string | | Yes | Why the identity is not available. |
 
-A value a server cannot know is `unknown`. The same record, with the same fields, is the truth
-sidecar's `<_producer>` element, the run manifest's opening `producer` and the world truth track
-summary's `producer`.
+A value a server cannot know is `unknown`. The truth sidecar's `<_producer>` element, the run
+manifest's opening `producer` and the world truth track summary's `producer` use the same record
+with the same fields.
 
 ## Format version
 

@@ -1,9 +1,10 @@
 # SUMO bridge table (`carla-cot-telemetry --csv`) and its summary
 
-Given `--csv <file>`, `carla-cot-telemetry` writes one row per vehicle per update of a SUMO run: the
-same vehicles and instants as its [event file](SUMO_CoT_Event_File.md), as a plain table. Beside it, as it
-opens the CSV, it writes `<file stem>.summary.json`, which records the CSV's format version, its columns
-and what made it. The CSV's own first line stays its header, so any CSV reader can read it.
+Given `--csv <file>`, `carla-cot-telemetry` writes one row per vehicle per update of a SUMO run. The
+rows hold the same vehicles and instants as its [event file](SUMO_CoT_Event_File.md), as a plain table.
+When it opens the CSV, it also writes `<file stem>.summary.json` beside it. The summary records the CSV's
+format version, its columns and what made it. The CSV's own first line stays its header, so any CSV
+reader can read it.
 
 - Table schema: `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json` (Frictionless Table Schema)
 - Table schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1`
@@ -16,8 +17,8 @@ and what made it. The CSV's own first line stays its header, so any CSV reader c
 `SumoCotBridge.CSV_COLUMNS`, so the two cannot drift apart.
 
 `carla-check-label-leaks --csv` reads the CSV, to check that no column tells the planted vehicles
-from the others. `carla-validate`, given a folder holding them, checks the CSV against the table schema
-and the summary against its schema; a CSV with no summary beside it is noted as format version 1.
+from the others. Given a folder holding them, `carla-validate` checks the CSV against the table schema
+and the summary against its schema. A CSV with no summary beside it is noted as format version 1.
 
 ## The CSV
 
@@ -43,11 +44,11 @@ vehicles. Every column is present in every row.
 | `vx` | number | m/s | Velocity east (CARLA's x). |
 | `vy` | number | m/s | Velocity south (CARLA's y). |
 | `vz` | number | m/s | Always `0.00`: a SUMO network is flat. |
-| `base_type` | string | | The vehicle catalogue's `cot_base_type` for the blueprint the vehicle's type names, or its SUMO vehicle class's when the type names none. |
+| `base_type` | string | | The vehicle catalog's `cot_base_type` for the blueprint the vehicle's type names, or its SUMO vehicle class's when the type names none. |
 | `type_id` | string | | The SUMO vehicle type id. |
-| `special_type` | string | | The catalogue's `cot_special_type` for the blueprint: `emergency`, `taxi`, `electric`, or empty. |
+| `special_type` | string | | The catalog's `cot_special_type` for the blueprint: `emergency`, `taxi`, `electric`, or empty. |
 | `length_m` | number | meters | Length SUMO gives the vehicle. |
-| `width_m` | number | meters | Width SUMO gives the vehicle: the body without mirrors, for a catalogue type. |
+| `width_m` | number | meters | Width SUMO gives the vehicle: the body without mirrors, for a catalog type. |
 | `height_m` | number | meters | Height SUMO gives the vehicle. |
 | `color` | string | | The type's sumo-gui color, `R,G,B`. Not the color CARLA renders. |
 | `role_name` | string | | The flow the vehicle came from: its SUMO id before the last dot. |
@@ -77,7 +78,7 @@ when the CSV is opened, so it exists even when the run stops early.
 ## Format version
 
 The CSV's format version is in its summary: `format_version` 1. A CSV with no summary beside it was
-written before summaries existed and is version 1. Nothing checks the version today; a reader that
+written before summaries existed and is version 1. Nothing checks the version today. A reader that
 meets a version it does not know should refuse the CSV.
 
 ## Example

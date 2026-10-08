@@ -17,7 +17,7 @@ The schema includes `cot_event_body.xsd`, the event's own parts, which the datag
 too. It cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth
 sidecar's root are both `<events>`, with no namespace, and one schema can describe only one of them.
 So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types, and a
-test holds each copy to the sidecar's.
+test checks that each copy matches the sidecar's.
 
 ## Who writes it and who reads it
 
@@ -89,7 +89,7 @@ differences:
 - `time` is the epoch plus the simulation time of the update.
 - `hae` is the ground height under the vehicle from the world package's `bareearth.bin` (given by
   `--bare-earth`), or `--hae`, 0 by default, when there is no grid or the vehicle is off it.
-- `<_carla>` carries `type_id` (the SUMO vehicle type), `special_type` (from the vehicle catalogue),
+- `<_carla>` carries `type_id` (the SUMO vehicle type), `special_type` (from the vehicle catalog),
   `role_name` (the flow: the SUMO id before its last dot) and `marked` (`1` for a planted vehicle,
   `0` otherwise), which the live feed leaves out. `actor_id` is the SUMO id. There is no `heading_deg`,
   `sumo_id`, `vtype_id`, `admitted_tick`, `_capture` or `_solar`.

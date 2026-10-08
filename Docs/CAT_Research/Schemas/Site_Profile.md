@@ -10,14 +10,14 @@
 ## What it is
 
 A site profile holds the facts about one machine that a capture run needs: the CARLA server's
-address, the SUMO installation, and where scenario packages, world packages, the vehicle catalogue,
+address, the SUMO installation, and where scenario packages, world packages, the vehicle catalog,
 captures and run records are kept. Keeping these out of the run configuration lets the same run
 configuration move between machines unchanged.
 
 Without a site profile, the values come from the layout the tool runs from. In a source checkout
 that is `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`,
 `Build/captures` and `Build/runs`. Installed, it is `scenarios`, `world-packages`, `captures` and
-`runs` under the current folder, and the catalogue installed with carlacontrol. A profile file
+`runs` under the current folder, and the catalog installed with carlacontrol. A profile file
 overrides only the fields it names.
 
 SUMO is found in this order when no profile names `sumo.home`: the `CARLANET_SUMO_HOME` environment
@@ -48,7 +48,7 @@ variable, the checkout's staged SUMO, and then `SUMO_HOME` and `PATH`, which the
 | `sumo.home` | string or null | | no | `null` | The SUMO installation the session launches: the folder holding `bin/sumo`. Null, the session searches `SUMO_HOME` and then `PATH`. |
 | `paths.scenario_root` | string or null | | no | from the layout | Where compiled scenario packages are found by id. |
 | `paths.world_package_root` | string or null | | no | from the layout | Where world packages are found by the name a scenario lock records. |
-| `paths.catalogue` | string or null | | no | from the layout | The measured vehicle catalogue. Its digest must match the scenario lock's (run check 48). |
+| `paths.catalogue` | string or null | | no | from the layout | The measured vehicle catalog. Its digest must match the scenario lock's (run check 48). |
 | `paths.capture_root` | string or null | | no | from the layout | Where captures are written: one folder per run. |
 | `paths.runs_root` | string or null | | no | from the layout | Where a run's result, resolution report and lock are written by default. |
 

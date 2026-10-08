@@ -103,7 +103,7 @@ normally supplies a field: the site profile, the world package or the scenario p
 | `server.timeout_s` | number | s | `30.0` | site | Seconds to wait for the server to answer a request. |
 | `paths.scenario_root` | string | | none | site | Where compiled scenario packages are found by id. |
 | `paths.world_package_root` | string | | none | site | Where world packages are found by the name a scenario lock records. |
-| `paths.catalogue` | string | | none | site | The measured vehicle catalogue. Its digest must match the scenario lock's. |
+| `paths.catalogue` | string | | none | site | The measured vehicle catalog. Its digest must match the scenario lock's. |
 | `paths.capture_root` | string | | none | site | Where captures are written: one folder per run, and one per channel inside it. |
 | `paths.runs_root` | string | | none | site | Where a run's result, resolution report and lock are written by default. |
 | `world.map_name` | string | | none | world | The world's map name. |
@@ -119,7 +119,7 @@ normally supplies a field: the site profile, the world package or the scenario p
 | `scenario.sumo_step_s` | number | s | none | scenario | SUMO's step. |
 | `scenario.sumo_seed` | integer | | none | scenario | SUMO's seed. |
 | `scenario.end_s` | number | s | none | scenario | The simulated second the scenario ends at. |
-| `scenario.catalogue_digest` | string | | none | scenario | The digest of the catalogue the scenario was compiled against. |
+| `scenario.catalogue_digest` | string | | none | scenario | The digest of the catalog the scenario was compiled against. |
 | `scenario.accept_skipped_dry_run` | boolean | | `false` | | Run a scenario whose compile skipped its SUMO-only run, instead of refusing it (run check 54). |
 
 Each object in `capture.channels` takes these fields:
@@ -158,7 +158,7 @@ Each object in `capture.channels` takes these fields:
 
 This page describes version 1, the only version. A document without `run_configuration_version` is
 read as version 1. A document that declares a newer version is refused, and the message says to use
-the release that wrote it. Any other value is refused as not a field value (run check 1).
+the release that wrote it. Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).
 
 ## Example
 

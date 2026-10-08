@@ -16,7 +16,7 @@ The chunk is a PNG `tEXt` chunk with the keyword `carla:solar`, holding one line
 
 The CarlaNet recorder writes it into a still whenever the world reported a sun for that frame. A still
 whose world reported no sun has no `carla:solar` chunk and no `<_solar>` in its sidecar; a capture run
-counts such stills and its closing checks hold the count at zero.
+counts such stills and its closing checks require the count to be zero.
 
 ## Fields
 
@@ -36,7 +36,7 @@ counts such stills and its closing checks hold the count at zero.
 | `illumination_band` | string | | No | The sun's illumination band (below); absent where the elevation is not a real sun's, such as the value the engine reports for a sun it could not compute. |
 | `illumination_band_elevation` | string | | No | Which elevation the band was cut from: `refraction_corrected` wherever the chunk carries it, `geometric` otherwise. Present exactly when `illumination_band` is. |
 
-**Illumination bands**, cut by the sun's refraction-corrected elevation in degrees, each including its
+**Illumination bands**, defined by the sun's refraction-corrected elevation in degrees, each including its
 upper edge: `day` above 6, `golden` above 0, `civil_twilight` above -6, `nautical_twilight` above -12,
 `astronomical_twilight` above -18, `night` at -18 and below. The two elevations differ by up to a few
 tenths of a degree near the horizon, which is a large share of a low sun.

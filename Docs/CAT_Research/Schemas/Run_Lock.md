@@ -10,7 +10,7 @@
 ## What it is
 
 The run lock records what one accepted capture run is bound to: the digests of its scenario, world,
-vehicle catalogue and epoch; every field of its effective configuration with the layer that set it
+vehicle catalog and epoch; every field of its effective configuration with the layer that set it
 and where that layer read it; how each warning was handled; and this machine's site profile. It is
 the record to compare when two runs differ.
 
@@ -44,7 +44,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `inputs.scenario_id` | string | | The scenario's id. |
 | `inputs.world_network_fingerprint` | string, 64 hex digits | | The canonical fingerprint of the world's SUMO network. |
 | `inputs.world_opendrive_sha256` | string | | SHA-256 of the world's OpenDRIVE. |
-| `inputs.catalogue_digest` | string | | The digest of the vehicle catalogue the scenario was compiled against. |
+| `inputs.catalogue_digest` | string | | The digest of the vehicle catalog the scenario was compiled against. |
 | `inputs.epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the scenario's epoch object. |
 | `inputs.sumo_seed` | integer | | SUMO's seed. |
 | `adjudications` | array | | How each warning was handled: `code`, `adjudication` (`proceed`) and `adjudicated_by` (the `on_warning` field's source, or "the operator at the terminal"). |

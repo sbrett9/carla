@@ -9,7 +9,7 @@
 A world built with `--height-align drape` has the file. A world built in any other mode does not; its
 one height shift is `HeightAlignOffsetMeters` in [`world.json`](World_Package_Manifest.md).
 
-Tools use the grids to turn the height a vehicle is drawn at into its true bare-earth height, to seat
+Tools use the grids to turn the height a vehicle is drawn at into its true bare-earth height, to place
 SUMO-driven vehicles on the ground, and to give the SUMO bridge's telemetry a ground height.
 
 ## Who writes it and who reads it
@@ -20,7 +20,7 @@ to the server when the world is built, and again when a level made from the worl
 These read it:
 
 - CarlaNet: `WorldPackage.TryReadGrids` and `WorldPackage.TryReadGridDigests`, used by a SUMO drive to
-  seat vehicles and to check the package against the world the server has loaded;
+  place vehicles and to check the package against the world the server has loaded;
 - the Unreal Editor's World Package Importer, which saves the grids in the level as a
   `UBareEarthOffsetField` asset;
 - carlacontrol's `BareEarthGrid`, which `carla-cot-telemetry` uses for ground heights. It reads the
@@ -107,7 +107,7 @@ the magic:
 - carlacontrol's `BareEarthGrid` refuses it, and refuses a file whose length is not exactly
   `60 + 8 × N` bytes.
 
-A new layout would get a new magic, so an older reader refuses it rather than reading it wrongly.
+A new layout would get a new magic number, so an older reader refuses it instead of reading it wrongly.
 
 ## Example
 

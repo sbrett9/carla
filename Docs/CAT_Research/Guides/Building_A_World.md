@@ -259,7 +259,7 @@ carla-publish-reference-set --package Build/world-packages/Gardnerville_Centervi
 | `--output` | Publish into a copy at this path and leave `--package` as it is. |
 | `--near-m` | How close, in meters, a lane must pass to count as near an area. |
 | `--sumo-home` | The SUMO installation to place the areas with. |
-| `--allow-version-mismatch` | Go on when that SUMO is not the release that built the world. |
+| `--allow-version-mismatch` | Continue when that SUMO is not the release that built the world. |
 
 Publishing replaces the whole reference set. The command exits 1 when the areas file has a problem
 or an area cannot be placed, and names every problem. A file with a problem publishes nothing. When

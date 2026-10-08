@@ -25,8 +25,8 @@ appended and flushed as the run goes:
 
 The schema describes one row. Every line of the file must be valid against it.
 
-**Reading a manifest.** Keep every line that ends in a line break: a manifest cut off at any instant is
-the rows already written, each still valid. The last row of a run that reached its end is
+**Reading a manifest.** Each row is written as one whole line, so a manifest stays readable even if the
+run was killed partway. Read only the lines that end in a line break, and ignore a last line that does not. The last row of a run that reached its end is
 `manifest_closed`. A manifest without it is a run that was interrupted: a vehicle admitted and never
 released was still being drawn then, and an interval opened and never closed was still open.
 
@@ -92,7 +92,7 @@ absent altogether.
 | `specification_sha256` | string or null | | Yes | The scenario specification's SHA-256, as the lock records it; null with no lock. |
 | `config_sha256`, `routes_sha256`, `network_sha256` | string or null | | Yes | The SUMO configuration's, routes file's and network's SHA-256, as the lock records them; null with no lock. |
 | `additional_sha256` | string or null | | Yes | The additional file's SHA-256; null where there is none. |
-| `catalogue_digest` | string | | Yes | The vehicle catalogue's digest. |
+| `catalogue_digest` | string | | Yes | The vehicle catalog's digest. |
 | `epoch_digest` | string or null | | Yes | The scenario epoch's digest; null with no lock. |
 | `world_opendrive_sha256` | string or null | | Yes | The world's OpenDRIVE SHA-256 the lock records; null where it records none. |
 | `world_network_fingerprint` | string or null | | Yes | The world network's fingerprint the lock records; null where it records none. |
@@ -283,7 +283,7 @@ was already simulated and entered the render set later, as under an optional lim
 Release reasons: `left_the_simulation`, SUMO reported it arriving or removed it during the step;
 `session_ended`, the session ended while it was drawn; `vanished`, it stopped reporting a state without
 SUMO listing it among the arrivals; `left_the_region`, under an optional limit it left the region or
-every camera's footprint; `capacity`, under an optional capacity it ranked out. A vehicle still drawn
+every camera's footprint; `capacity`, the optional limit on how many vehicles are drawn left it out. A vehicle still drawn
 when the run ends has an admission row and no release row.
 
 ## `collision_began` and `collision_ended`
@@ -328,8 +328,8 @@ named `..._begin...` on the opening row are `..._end...` on the end row.
 | `sun_elevation_begin_deg` / `_end_deg` | number or null | degrees | Yes | The sun's geometric elevation. |
 | `sun_corrected_elevation_begin_deg` / `_end_deg` | number or null | degrees | Yes | Its refraction-corrected elevation; null where the world did not report it. |
 | `sun_azimuth_begin_deg` / `_end_deg` | number or null | degrees | Yes | Its azimuth, clockwise from true north. |
-| `illumination_band_begin` / `_end` | string or null | | Yes | Its illumination band, cut as a still's is. |
-| `illumination_band_begin_elevation` / `_end_elevation` | string or null | | Yes | Which elevation the band was cut from. |
+| `illumination_band_begin` / `_end` | string or null | | Yes | Its illumination band, worked out the way a still's is. |
+| `illumination_band_begin_elevation` / `_end_elevation` | string or null | | Yes | Which elevation the band was worked out from. |
 | `advancing` | boolean or null | | Yes | Whether the engine itself advanced the sun's clock. |
 | `rate` | number or null | seconds per second | Yes | Sun-clock seconds per simulated second while it does. |
 | `sun_time_zone_hours` | number or null | hours | Opening only | The time zone the world's sun was configured with before the run set it. |

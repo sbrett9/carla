@@ -1,13 +1,13 @@
-# Vehicle catalogue (`vehicles.catalogue.json`)
+# Vehicle catalog (`vehicles.catalogue.json`)
 
-The vehicle catalogue lists every vehicle body CARLA can draw, measured, and groups the bodies into
-the classes a scenario asks for. It is the one source of three things:
+The vehicle catalog lists every vehicle body CARLA can draw, with its measurements, and groups the
+bodies into the classes a scenario asks for. It is the one source of three things:
 
-- **what kind of vehicle each body is.** The truth records' `base_type` and `special_type` come from the
-  catalogue's classes, not from what the content declares and not from SUMO's vehicle class;
-- **how big each body is.** SUMO reserves road space for the measured body, so the vehicle SUMO drives
-  and the body CARLA draws are the same size;
-- **how SUMO drives each class.** Every class states its acceleration, braking, speed and gap
+- **What kind of vehicle each body is.** The truth records' `base_type` and `special_type` come from the
+  catalog's classes, not from what the content declares and not from SUMO's vehicle class.
+- **How big each body is.** SUMO reserves road space for the measured body, so the vehicle SUMO drives
+  and the body CARLA draws are the same size.
+- **How SUMO drives each class.** Every class states its acceleration, braking, speed and gap
   explicitly.
 
 It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout, and an installed
@@ -20,18 +20,23 @@ The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_B
 ## Who writes it and who reads it
 
 `CarlaControl/scripts/make_vehicle_catalogue.py` (`VehicleCatalogueBuilder`) writes it against a
-running CARLA server. It spawns each vehicle blueprint alone, high above the map, reads its bounding
-box, and destroys it. It spawns each again with a color set and reads the server log to see whether
-the color reached the body. It renders each with every lamp commanded on and off and counts the pixels
-that change. It merges the body widths, checks the whole document, computes its digest, and writes the
-catalogue and the SUMO vehicle types. `CarlaControl/scripts/apply_vehicle_body_widths.py` merges a new
-body-width table into the existing catalogue without a server.
+running CARLA server. The script does these steps:
+
+1. It spawns each vehicle blueprint alone, high above the map, reads its bounding box, and destroys it.
+2. It spawns each again with a color set and reads the server log to see whether the color reached the
+   body.
+3. It renders each with every lamp commanded on and off and counts the pixels that change.
+4. It merges the body widths, checks the whole document, and computes its digest.
+5. It writes the catalog and the SUMO vehicle types.
+
+`CarlaControl/scripts/apply_vehicle_body_widths.py` merges a new body-width table into the existing
+catalog without a server.
 
 These read it:
 
-- the scenario compiler, which draws each vehicle's type from a class and records the catalogue's
+- the scenario compiler, which draws each vehicle's type from a class and records the catalog's
   digest in the compiled scenario;
-- a capture run, which refuses a scenario compiled against another catalogue;
+- a capture run, which refuses a scenario compiled against another catalog;
 - the SUMO drive (CarlaNet's `VehicleCatalogue`), which places each SUMO vehicle's body from its
   measured box;
 - the truth recorder, which takes each vehicle's `base_type` and `special_type` from it;
@@ -60,7 +65,7 @@ with the class's parameters. Each body belongs to exactly one class.
 | `fire_appliance` | Fire trucks. The largest emergency body. | emergency | truck | emergency | 1 |
 
 The descriptions for `civ_truck`, `heavy_truck`, `bus`, `taxi` and `fire_appliance` are paraphrased
-here; the catalogue holds the original wording.
+here. The catalog holds the original wording.
 
 How SUMO drives each class:
 
@@ -127,7 +132,7 @@ For a model developer reading a capture's truth:
   An empty `special_type` is the normal case and means "no special type". A planted vehicle has the
   same kind as any other vehicle of its body; which vehicles were planted is recorded separately.
 - A vehicle's `length_m`, `width_m` and `height_m` in the truth are the bounding box CARLA measures
-  on the drawn body. They match the catalogue's `length_m`, `width_m` and `height_m`, so the width
+  on the drawn body. They match the catalog's `length_m`, `width_m` and `height_m`, so the width
   includes the mirrors. SUMO was given `body_width_m`, the width without them.
 - A vehicle's `type_id` in the truth is its CARLA blueprint id. In a SUMO-driven capture, `vtype_id`
   is the SUMO type, which for a compiled scenario names the blueprint, and the type's
@@ -136,8 +141,8 @@ For a model developer reading a capture's truth:
   behind it by `length_m / 2 + bbox_centre_m[0]` along the heading. The truth's latitude, longitude and
   height are the body origin's.
 - The lights the truth records are the lights commanded on. `lamp_capability` says whether commanding
-  a lamp changed the image when the catalogue was built. In this catalogue the optical pass found
-  only one lamp that changes the image, the fire truck's high beams; every other lamp is `unlit`.
+  a lamp changed the image when the catalog was built. In this catalog the optical pass found
+  only one lamp that changes the image, the fire truck's high beams. Every other lamp is `unlit`.
 
 ## Fields
 
@@ -146,14 +151,14 @@ For a model developer reading a capture's truth:
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `catalogue_version` | integer, always 1 | | yes | The format of this file. |
-| `catalogue_id` | string | | yes | The catalogue's name: `carla-<server version>-<os>` unless the builder was given one. |
+| `catalogue_id` | string | | yes | The catalog's name: `carla-<server version>-<os>` unless the builder was given one. |
 | `catalogue_digest` | string | | yes | SHA-256, lowercase hexadecimal, of the canonical file with this field empty. Compiled scenarios record it. |
 | `content_build_id` | string | | yes | Which content build was measured. Defaults to `catalogue_id`. |
 | `blueprint_set_digest` | string | | yes | SHA-256 over every blueprint and attribute the server declared. A server can recompute it to show its content has not changed. |
 | `generated_at_utc` | string | | yes | When the sweep ran, ISO 8601 UTC to the millisecond. |
 | `generator` | string | | yes | The tool and its version: `carlacontrol.VehicleCatalogueBuilder/1.0.0`. |
 | `server_version` | string | | yes | The CARLA server's version. |
-| `producer` | object | | no | What made the catalogue, as in [World_Package_Manifest.md](World_Package_Manifest.md#the-producer-record). Absent from catalogues built before it was recorded. |
+| `producer` | object | | no | What made the catalog, as in [World_Package_Manifest.md](World_Package_Manifest.md#the-producer-record). Absent from catalogs built before it was recorded. |
 | `lamp_probe` | object | | yes | The conditions of the lamp pass, below. |
 | `body_width` | object | | no | How the body widths were measured: `method`, `measured` (when and from what) and `source` (the table's file name). Present whenever body widths are. |
 | `vehicles` | array of objects | | yes | One entry per vehicle blueprint the server offered, in blueprint id order. |
@@ -188,7 +193,7 @@ A measured entry also has:
 | `width_m` | number | meters | yes | Width of the bounding box, mirrors included. |
 | `height_m` | number | meters | yes | Height of the bounding box. |
 | `bbox_centre_m` | array of 3 numbers | meters | yes | The box's center in the vehicle's own frame: forward, right, up from the actor's origin. |
-| `body_width_m` | number | meters | no | Width of the body without mirrors, measured from the mesh. SUMO is given this width. Every measured entry has it in the current catalogue; without it, no SUMO type can be written for the body. |
+| `body_width_m` | number | meters | no | Width of the body without mirrors, measured from the mesh. SUMO is given this width. Every measured entry has it in the current catalog; without it, no SUMO type can be written for the body. |
 
 A failed entry has `measurement_note`, the reason, instead, and no dimensions. A reader refuses to
 place a body whose measurement failed.
@@ -233,19 +238,19 @@ place a body whose measurement failed.
 
 ## Format version
 
-`catalogue_version` is 1, and there is no other version. Every catalogue the builder wrote carries it,
-so a file without it is not a catalogue.
+`catalogue_version` is 1, and there is no other version. Every catalog the builder wrote carries it,
+so a file without it is not a catalog.
 
-- carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalogue that
+- carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that
   declares 1. They refuse any other value, or none. For a newer version the message says the file was
   written by a newer release.
 - `VehicleCatalogue.load` then checks the file against the schema and refuses it, naming each problem.
   Every vehicle and class entry must be whole. A header field that is present must have the right
   shape; one that is absent reads as empty.
 
-`carlacontrol.WorldFileValidator`, given the catalogue's folder, checks the whole catalogue against
+`carlacontrol.WorldFileValidator`, given the catalog's folder, checks the whole catalog against
 its schema and the builder's rules, checks that its digest is its content's, checks
-`vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalogue gives, and
+`vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives, and
 checks `vehicle_body_widths.json` where it is there. `carla-validate CarlaControl/catalogue` runs it.
 
 ## Example

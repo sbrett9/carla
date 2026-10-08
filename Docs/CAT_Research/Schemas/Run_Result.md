@@ -18,7 +18,7 @@ The process exit status is read from `outcome`, so the file and the exit status 
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** in every outcome the tool survives, including a refusal before any
+- **`carla-capture` writes it** in every outcome where the tool is not stopped first, including a refusal before any
   server was contacted. It goes to `--result` (the `result_path` field), or by default to
   `<paths.runs_root>/<session id>/run.result.json`. It is always outside the capture folder.
 - It is written under a temporary name ending in `.partial` and then renamed, so a reader never sees
@@ -90,7 +90,7 @@ Each entry of `refusals` and `warnings`:
 | `outcome` | `refuse` or `warn` | yes | A refusal stops the launch. A warning lets it go on once it is handled. |
 | `subject` | string | yes | What the finding is about: a field path, a channel, a package. |
 | `message` | string | yes | The finding in full. |
-| `catalogue` | string | yes | The catalogue the check number belongs to: `carla-capture run checks`. |
+| `catalogue` | string | yes | The catalog the check number belongs to: `carla-capture run checks`. |
 | `code` | string | warnings only | The warning's code, which `on_warning.<code>` handles. |
 | `adjudication` | `proceed` or null | warnings only | How the warning was handled. Null when nothing handled it. |
 | `adjudicated_by` | string or null | warnings only | Where that decision came from: the `on_warning` field's source, or "the operator at the terminal". |

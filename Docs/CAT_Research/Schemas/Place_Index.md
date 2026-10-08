@@ -1,8 +1,8 @@
 # Place index (`places.json` in a `.cwp`)
 
 `places.json` lists which edges of a world's SUMO network carry which street name, and which way each
-edge heads. A scenario that names a place as "eastbound on Centerville Lane" is resolved to edges with
-it. The index also says how much of the network its names cover, because on some maps few roads are
+edge heads. With it, a scenario that names a place as "eastbound on Centerville Lane" can be resolved to
+edges. The index also says how much of the network its names cover, because on some maps few roads are
 named.
 
 - Schema: `CarlaControl/schemas/place_index.schema.json`
@@ -87,9 +87,9 @@ of a whole edge. On a curving edge it says little about the heading at any one p
 ## Format version
 
 `place_index_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
-that declares a newer version, naming the version and the newest they read, rather than reading
-part of it. `WorldPackageReader` then checks the
-file against the schema and refuses it, naming each problem, if it does not match.
+that declares a newer version. They name the version and the newest they read, rather than reading
+part of the file. `WorldPackageReader` then checks the file against the schema. If the file does not
+match, it refuses the file and names each problem.
 
 ## Example
 

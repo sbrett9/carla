@@ -28,13 +28,13 @@ Every actor no row names is listed as `unlabelled` in `entities`, and every flow
 `unlabelled` cohort, because a missing row must never stand for an asserted negative.
 
 The plan is bound to the compiled files by their digests, and carries no time of writing, so two
-compiles of one specification write it byte for byte.
+compiles of one specification write byte-for-byte identical plans.
 
 ## Who writes it and who reads it
 
 - **`carla-compile-scenario` writes it** with the scenario's other files. The scenario lock digests it.
 - **The co-simulation session reads it** when a compiled scenario starts, under `carla-capture` and
-  `carla-drive`. It refuses a plan whose digests do not match the files it runs. As the run goes, it
+  `carla-drive`. It refuses a plan whose digests do not match the files it runs. During the run, it
   reports each interval opening and closing in the run manifest, and each still's sidecar carries the
   supervision of its own frame.
 - The scenario resolution report repeats the plan's rows (see

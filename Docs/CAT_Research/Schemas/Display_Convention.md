@@ -28,12 +28,15 @@ the convention does not name takes the run's default, `carla-cot-telemetry --aff
   `.sumocfg`: `Shahid_Bahonar_Port_PatternOfLife.display.json` for
   `Shahid_Bahonar_Port_PatternOfLife.sumocfg`.
 - **`carla-cot-telemetry` reads it**: the file `--display-convention` names, or the one beside
-  `--config` when there is one. A file that does not read is refused. The run records which
+  `--config` when there is one. A file that cannot be read is refused. The run records which
   convention it drew with.
-- The reader refuses a file that is not a JSON object, one that names planted vehicles
-  (`marked_ids`), one with a key other than the three below, one whose `convention_version` is not 1,
-  one with an affiliation letter that is not a CoT affiliation, and one that does not conform to the
-  schema.
+- The reader refuses a file in any of these cases:
+  - it is not a JSON object;
+  - it names planted vehicles (`marked_ids`);
+  - it has a key other than the three below;
+  - its `convention_version` is not 1;
+  - it has an affiliation letter that is not a CoT affiliation;
+  - it does not conform to the schema.
 
 ## Fields
 

@@ -36,11 +36,11 @@ no chunk. Fields that need an epoch, or an audit of the frame, are left out wher
 | `epoch_civil` | string | | No | The civil time simulated second zero stands for, with its UTC offset. |
 | `utc_offset_hours` | number | hours | No | The epoch's declared UTC offset. |
 | `declared_civil` | string | | No | This frame's simulated instant as a civil time, with its UTC offset. |
-| `declared_utc` | string | | No | The same instant in UTC, ending in `Z`: the key to join this frame to anything outside the simulation. |
+| `declared_utc` | string | | No | The same instant in UTC, ending in `Z`: use it to join this frame to anything outside the simulation. |
 | `sun_declared` | string | | No | The date and clock the sun was declared to hold for this frame: the frame's own civil time under a policy that honors the epoch, the window's opening time under a freeze. |
 | `sun_elevation_declared_deg` | number | degrees | No | The declared sun's geometric elevation. |
 | `sun_corrected_elevation_declared_deg` | number | degrees | No | The declared sun's refraction-corrected elevation. |
-| `declared_elevation` | string | | No | Which of the two elevations a declared window elevation means: `refraction_corrected` or `geometric`. |
+| `declared_elevation` | string | | No | Whether the sun elevation declared for the window is the refraction-corrected or the geometric one: `refraction_corrected` or `geometric`. |
 | `residual_clock_s` | number | seconds | No | The world's sun clock minus the declared one. |
 | `residual_deg` | number | degrees | No | The angle between the world's sun and the declared sun. |
 | `residual_corrected_deg` | number | degrees | No | The world's refraction-corrected elevation minus the declared one, where the world reports it. |

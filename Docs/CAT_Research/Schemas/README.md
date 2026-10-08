@@ -7,7 +7,7 @@ a name, not an address, so nothing has to serve it.
 
 The schemas are generated from the code that writes or reads each file, so they say what the writers
 write. A few are written by hand and say so below. `carla-validate <path>` checks a capture folder, a
-world package, a vehicle catalogue folder, or any folder holding the other files below, against them.
+world package, a vehicle catalog folder, or any folder holding the other files below, against them.
 `carla-validate --write-schemas CarlaControl/schemas` writes every generated schema again after a writer
 or a reader changes.
 
@@ -38,7 +38,7 @@ What `carla-capture` writes about a run beside the run's capture.
 |---|---|---|---|
 | [Run result](Run_Result.md) | `run_result.schema.json` | `urn:carla-sumo-capture:schema:run-result:1` | `run.result.json`: how a run ended, where everything it wrote is, and what it observed. |
 | [Run resolution report](Run_Resolution_Report.md) | `run_resolution.schema.json` | `urn:carla-sumo-capture:schema:run-resolution:1` | `run.resolution.json`: what a launch resolved and what its checks found, written whether it was accepted or refused. |
-| [Run lock](Run_Lock.md) | `run_lock.schema.json` | `urn:carla-sumo-capture:schema:run-lock:1` | `run.lock.json`: what an accepted run is bound to: its scenario, world, catalogue and epoch, and its effective configuration. |
+| [Run lock](Run_Lock.md) | `run_lock.schema.json` | `urn:carla-sumo-capture:schema:run-lock:1` | `run.lock.json`: what an accepted run is bound to: its scenario, world, catalog and epoch, and its effective configuration. |
 | [Launch echo](Launch_Echo.md) | `launch_echo.schema.json` | `urn:carla-sumo-capture:schema:launch-echo:1` | The `launch_echo` object in the result and the resolution report: what a run says it will do before it starts. |
 
 ## Inputs a user writes
@@ -79,13 +79,13 @@ What `carla-compile-scenario` writes for a scenario or a sweep.
 | [Level package manifest](Level_Package_Manifest.md) | `level_package_manifest.schema.json` | `urn:carla-sumo-capture:schema:level-package-manifest:1` | `world.json` in a `PackageWorld` zip: what a delivered world is and what it needs. |
 | [World interface version](World_Interface_Version.md) | none: a version in `DefaultWorldInterface.ini` | none | Which pairings of a delivered world and a CARLA package work, and how an installer decides. |
 
-## The vehicle catalogue
+## The vehicle catalog
 
 | Page | Schema | URN | What it describes |
 |---|---|---|---|
 | [Vehicle catalogue](Vehicle_Catalogue.md) | `vehicle_catalogue.schema.json` | `urn:carla-sumo-capture:schema:vehicle-catalogue:1` | `vehicles.catalogue.json`: every vehicle body CARLA can draw, measured, and the classes a scenario asks for. |
 | [Vehicle body widths](Vehicle_Body_Widths.md) | `vehicle_body_widths.schema.json` | `urn:carla-sumo-capture:schema:vehicle-body-widths:1` | `vehicle_body_widths.json`: each body's width without its mirrors, measured from the mesh. |
-| [Vehicle types](Vehicle_Types.md) | `vehicle_types.xsd`, written by hand | `urn:carla-sumo-capture:schema:vehicle-types:1` | `vehicles.vtypes.rou.xml`: the catalogue as SUMO reads it, and our parameters on a vehicle type. |
+| [Vehicle types](Vehicle_Types.md) | `vehicle_types.xsd`, written by hand | `urn:carla-sumo-capture:schema:vehicle-types:1` | `vehicles.vtypes.rou.xml`: the catalog as SUMO reads it, and our parameters on a vehicle type. |
 
 ## Telemetry
 

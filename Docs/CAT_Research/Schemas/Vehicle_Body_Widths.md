@@ -15,9 +15,9 @@ Unreal Editor and kept in this table. The [vehicle catalogue](Vehicle_Catalogue.
 editor as ASCII FBX, one `<blueprint id>.fbx` per vehicle. It is kept at
 `CarlaControl/catalogue/vehicle_body_widths.json`. It is not installed with `carlacontrol`.
 
-`VehicleCatalogueBuilder.load_body_widths` reads it, when a catalogue is built and when
-`apply_vehicle_body_widths.py` applies it to the existing catalogue. The merge refuses the table when a
-row's `full_width_m` differs from the catalogue's `width_m` by more than 1 mm, because the two then
+`VehicleCatalogueBuilder.load_body_widths` reads it, when a catalog is built and when
+`apply_vehicle_body_widths.py` applies it to the existing catalog. The merge refuses the table when a
+row's `full_width_m` differs from the catalog's `width_m` by more than 1 mm, because the two then
 measured different meshes.
 
 ## How a width is measured
@@ -32,7 +32,7 @@ added. The full width is the plain vertex extent. The table's `method` says the 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `body_widths_version` | integer, always 1 | | yes | The format of this file. |
-| `method` | string | | yes | How the widths were measured. The catalogue copies it into `body_width.method`. |
+| `method` | string | | yes | How the widths were measured. The catalog copies it into `body_width.method`. |
 | `measured` | string | | yes | When, and from what, the meshes were exported. |
 | `vehicles` | object | | yes | One row per CARLA blueprint id. |
 | `vehicles.<id>.length_m` | number | meters | yes | The mesh's length. |

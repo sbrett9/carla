@@ -187,7 +187,7 @@ from it.
 - `civil_datetime` is second zero in local time, with its offset.
 - `utc_offset_hours` is that offset in hours, daylight saving included: -6 for -06:00, 3.5 for +03:30.
 - `utc_datetime` is the same instant in UTC. It must equal the local time minus the offset. The common
-  mistake, the offset applied the wrong way, is refused by name (check 33).
+  mistake, applying the offset the wrong way, is refused by name (check 33).
 - `dst_in_effect` says whether the offset includes daylight saving. Colorado in May is -06:00 with
   daylight saving. One offset holds for the whole run.
 - `calendar_advances` says whether the date moves on when the run passes midnight.

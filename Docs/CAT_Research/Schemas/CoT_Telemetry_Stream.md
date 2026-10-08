@@ -11,7 +11,7 @@ the truth files carry.
 A vehicle event has the same shape as a vehicle event in a capture's truth sidecar, and the attributes
 they share mean the same thing. Their meanings are given in full in [Truth_Sidecar.md](Truth_Sidecar.md).
 The schema does not repeat them: it includes `truth_sidecar.xsd` and takes `<point>`, `<track>`,
-`<contact>` and the simple types under them from it, so the two cannot drift apart. The event's own
+`<contact>` and the simple types under them from it, so the two always match. The event's own
 parts are in `cot_event_body.xsd`, which the schema also includes. All three files must sit in one
 folder. This page lists the fields, and says where the stream differs from the sidecar.
 
@@ -88,7 +88,7 @@ as one XML document. Datagrams are UTF-8 and carry no XML declaration.
 | `source` | string | | yes | `truth`. |
 | `actor_id` | string | | yes | The CARLA actor id of the body. The SUMO bridge has no CARLA actor and writes the SUMO id. |
 | `type_id` | string | | no | The CARLA blueprint id. Left out of a SUMO bridge datagram. |
-| `base_type` | string | | yes | `car`, `van`, `truck`, `bus`, `motorcycle` or `bicycle`, from the vehicle catalogue. |
+| `base_type` | string | | yes | `car`, `van`, `truck`, `bus`, `motorcycle` or `bicycle`, from the vehicle catalog. |
 | `special_type` | string | | no | `emergency`, `taxi`, `electric`, or empty. Left out of a SUMO bridge datagram. |
 | `length_m`, `width_m`, `height_m` | decimal | meters | yes | The vehicle's size, two decimals. CARLA's is the drawn body's bounding box; the bridge's is SUMO's. |
 | `color` | string | | yes | `R,G,B`. CARLA's body color, empty for a blueprint with none; or the SUMO type's sumo-gui color from the bridge. |

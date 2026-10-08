@@ -23,7 +23,7 @@ from where you unpack it.
 | `CarlaServer/` | The CARLA server, cooked and ready to run. `run-server` starts it. |
 | `wheels/` | Two Python wheels: `carlanet`, the client library, and `carlacontrol`, which installs the `carla-*` commands. |
 | `setup-venv.ps1` or `setup-venv.sh` | Makes a Python virtual environment, `venv/`, and installs both wheels into it. Run it once. |
-| `carla-env.ps1` or `carla-env.sh` | The environment step. Run it in each new terminal before you use a `carla-*` command. |
+| `carla-env.ps1` or `carla-env.sh` | Sets up the environment. Run it in each new terminal before you use a `carla-*` command. |
 | `run-server.ps1` or `run-server.sh` | Starts the server without a window. |
 | `tools/sumo/` | The SUMO toolchain, laid out as a SUMO installation: `netconvert`, `sumo` and `duarouter` in `bin/`, SUMO's `typemap` and `xsd` data, its `traci` and `sumolib` Python modules, and the PROJ data. On Linux, `lib/` holds the shared libraries the programs load. There is no `sumo-gui`. |
 | `catalogue/` | The measured vehicle catalog, `vehicles.catalogue.json`, and the SUMO vehicle types made from it, `vehicles.vtypes.rou.xml`. |

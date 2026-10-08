@@ -9,10 +9,15 @@
 
 ## What it is
 
-The sweep index lists what a sweep compiled: every member with the axis values it took, the epoch and
-illumination it has, the SHA-256 of each file its lock digests, its capture windows with their civil
-dates and the sun each opens under, every counterfactual pair, and every finding. It is how you find
-the member that holds a given combination of values, and how you tell two members apart.
+The sweep index lists what a sweep compiled. For every member it gives:
+
+- the axis values the member took;
+- its epoch and illumination;
+- the SHA-256 of each file its lock digests;
+- its capture windows, with their civil dates and the sun each opens under.
+
+It also lists every counterfactual pair and every finding. The index is how you find the member that
+holds a given combination of values, and how you tell two members apart.
 
 ## Who writes it and who reads it
 
@@ -74,7 +79,7 @@ the member that holds a given combination of values, and how you tell two member
 
 This page describes version 1, the only version. No tool reads an index as input. A reader should
 read version 1 and refuse a newer version rather than read it in part. The skill's recorded example
-leaves out `producer`; it is still version 1.
+leaves out `producer`. It is still version 1.
 
 ## Example
 

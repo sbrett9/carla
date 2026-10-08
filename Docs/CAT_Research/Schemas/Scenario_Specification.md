@@ -9,11 +9,12 @@
 
 ## What it is
 
-A scenario specification is a SUMO scenario as its author writes it: the world it runs in, what civil
-time simulated second zero is, the vehicles, the places they drive between, the actors and flows,
-schedules of repeated trips, lane closures, the windows worth capturing, and the labels the scenario
-asserts. You never write SUMO's XML. The compiler turns the specification into the SUMO files, routes
-every vehicle, and checks everything it can before a capture is spent.
+A scenario specification is a SUMO scenario as its author writes it. It describes the world the
+scenario runs in, what civil time simulated second zero is, the vehicles, the places they drive
+between, the actors and flows, schedules of repeated trips, lane closures, the windows worth
+capturing, and the labels the scenario asserts. You never write SUMO's XML. The compiler turns the
+specification into the SUMO files, routes every vehicle, and checks everything it can before a capture
+is run.
 
 Times are written as civil times and places by name, and the compiler resolves both. Its resolution
 report (see [Scenario resolution report](Scenario_Resolution_Report.md)) states what each became.
@@ -32,11 +33,16 @@ The schema ships with the authoring skill. `carla-compile-scenario --write-schem
 
 ## Fields
 
-A time can be written in any of these forms: a number of seconds; `"dN HH:MM[:SS]"` (day N after the
-epoch's date); `"HH:MM[:SS]"`, only in a run of one day or less; an ISO 8601 instant at the epoch's
-offset; or `{"instant": <name>}` or `{"at": <time>}`, either with `"plus": <duration>`. A duration is
-seconds or `"[Nd][Nh][Nm][Ns]"`, such as `"1h30m"`. Never write a SUMO `H:M:S` value: SUMO reads it
-as an offset from second zero.
+A time can be written in any of these forms:
+
+- a number of seconds;
+- `"dN HH:MM[:SS]"` (day N after the epoch's date);
+- `"HH:MM[:SS]"`, only in a run of one day or less;
+- an ISO 8601 instant at the epoch's offset;
+- `{"instant": <name>}` or `{"at": <time>}`, either with `"plus": <duration>`.
+
+A duration is seconds or `"[Nd][Nh][Nm][Ns]"`, such as `"1h30m"`. Never write a SUMO `H:M:S` value:
+SUMO reads it as an offset from second zero.
 
 ### Top level
 
@@ -53,7 +59,7 @@ as an offset from second zero.
 | `seeds.sumo` | integer, 0 or more | yes | SUMO's seed. |
 | `simulation.end` | time | yes | When the scenario ends. |
 | `simulation.step_length_s` | number above 0, seconds | yes | SUMO's step. |
-| `catalogue` | string | yes | The measured vehicle catalogue, relative to this file. |
+| `catalogue` | string | yes | The measured vehicle catalog, relative to this file. |
 | `vehicle_classes` | array, at least one | yes | The kinds of vehicle the scenario asks for. |
 | `vehicle_mix` | string | no | The id given to the whole traffic mix, drawn by each class's `share`. |
 | `vehicle_mixes` | array | no | More named mixes, each drawing on declared classes by its own shares. |
@@ -73,9 +79,9 @@ as an offset from second zero.
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `class_id` | string | yes | The class's id. Each body it draws becomes a vehicle type `<class_id>.<blueprint>`. |
-| `blueprints` | array of strings, at least one | yes | CARLA blueprints the catalogue measured. A class drawing one body warns (check 17). |
+| `blueprints` | array of strings, at least one | yes | CARLA blueprints the catalog measured. A class drawing one body warns (check 17). |
 | `sumo_vclass` | string | yes | The SUMO vehicle class, such as `passenger` or `army`. It decides which lanes the vehicle may use. |
-| `behaviour` | object of attribute to string | no | SUMO `vType` attributes copied through as written, such as `maxSpeed` or `speedFactor`. The dimensions always come from the catalogue. |
+| `behaviour` | object of attribute to string | no | SUMO `vType` attributes copied through as written, such as `maxSpeed` or `speedFactor`. The dimensions always come from the catalog. |
 | `share` | number, 0 or more | no | The class's weight in the whole mix. 0 keeps it out of the mix, for a class only a named vehicle uses. |
 | `weights` | array of numbers above 0 | no | Each body's weight inside the class. Equal when left out. |
 | `gui_shape`, `gui_colour` | string | no | How `sumo-gui` draws the class. Nothing else reads them. |

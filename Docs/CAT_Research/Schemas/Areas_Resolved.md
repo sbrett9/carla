@@ -1,14 +1,14 @@
 # Resolved areas of interest (`areas.resolved.json` in a `.cwp`)
 
-An area of interest is a named place a scenario can put behavior in and a label can refer to: a guard
-post, a gate, a parking lot. An author declares areas in a GeoJSON file beside the OpenStreetMap
-extract, `<extract>.aoi.geojson`, in latitude and longitude. `areas.resolved.json` is those areas placed
-on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross, or pass near each
-one. The lane positions can be written straight into a SUMO `<stop>`.
+An area of interest is a named place where a scenario can put behavior and that a label can refer to:
+a guard post, a gate, a parking lot. An author declares areas in a GeoJSON file beside the
+OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude. `areas.resolved.json` holds
+those areas placed on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross,
+or pass near each one. The lane positions can be written straight into a SUMO `<stop>`.
 
 The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md), and its schema is
-`area_of_interest.schema.json`. The package carries a copy
-of it, byte for byte, as `areas.aoi.geojson`.
+`area_of_interest.schema.json`. The package holds a byte-for-byte copy of the areas file as
+`areas.aoi.geojson`.
 
 - Schema: `CarlaControl/schemas/areas_resolved.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:areas-resolved:1`
@@ -22,10 +22,10 @@ and converts it again with the world's own geographic frame. If the two disagree
 `areas.resolved.json`; the build log names every problem.
 
 The file is always written when the set is published and the areas are not refused. A world built with
-no areas declared gets a table with an empty `areas` list, so "no areas" reads differently from "never
-published".
+no areas declared gets a table with an empty `areas` list, so a world with no areas can be told apart from
+one that was never published.
 
-The scenario compiler reads it through `WorldPackageReader.areas_of_interest()`, to site places named
+The scenario compiler reads it through `WorldPackageReader.areas_of_interest()`, to locate places named
 by area. The reader refuses the table when its `source_sha256` is not the digest of the
 `areas.aoi.geojson` beside it, because the table would then describe other areas.
 
@@ -121,10 +121,11 @@ network.
 
 ## Format version
 
-`resolved_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
-that declares a newer version, naming the version and the newest they read, rather than reading
-part of it. `WorldPackageReader` then checks the
-file against the schema and refuses it, naming each problem, if it does not match.
+`resolved_version` is 1, and there is no other version. A file without it is version 1.
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version. They
+name the version and the newest they read, rather than reading part of the file.
+`WorldPackageReader` then checks the file against the schema. If the file does not match, it refuses
+the file and names each problem.
 
 ## Examples
 

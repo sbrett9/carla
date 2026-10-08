@@ -10,14 +10,23 @@
 ## What it is
 
 The resolution report states what a scenario compile resolved, so its author can check it against
-what they meant: every place and the edge or lane it became, every named time with its second and
-its civil time, every schedule and skip, every route as `duarouter` produced it, every lane closure,
-every vehicle type and the body it binds, every capture window with its civil date and the sun it
-opens under, the supervision, what a SUMO-only run showed, every finding in full, and the lock.
+what they meant. It lists:
 
-`sumo-gui` shows elapsed seconds and knows nothing about labels, dates or the sun, so this report is
-the one place a label, a date or a sun can be checked before a capture is spent. The `.md` file is the
-same report laid out for reading.
+- every place and the edge or lane it became;
+- every named time with its second and its civil time;
+- every schedule and skip;
+- every route as `duarouter` produced it;
+- every lane closure;
+- every vehicle type and the body it binds;
+- every capture window with its civil date and the sun it opens under;
+- the supervision;
+- what a SUMO-only run showed;
+- every finding in full;
+- the lock.
+
+`sumo-gui` shows elapsed seconds and knows nothing about labels, dates or the sun. So this report is
+the one place to check a label, a date or a sun before a capture is run. The `.md` file is the
+same report formatted for reading.
 
 **This is not the run resolution report.** A capture run writes `run.resolution.json` about one
 launch (see [Run resolution report](Run_Resolution_Report.md)).
@@ -132,7 +141,7 @@ The lock's record (see [Scenario lock](Scenario_Lock.md)) and, beside it, `telep
 
 This page describes version 1, the only version. No tool reads the report as input. A reader should
 read version 1 and refuse a newer version rather than read it in part. The skill's recorded examples
-leave out `producer`, which names the build and the time; they are still version 1.
+leave out `producer`, which names the build and the time. They are still version 1.
 
 ## Example
 

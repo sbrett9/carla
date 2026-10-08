@@ -19,14 +19,18 @@ time in it, so members can be joined across rebuilds.
 
 **Light is an axis of its own.** Any axis whose path touches `epoch`, `illumination` or a capture
 window's `begin` changes the light, whatever it is declared as. `illumination` says how the sweep
-treats such axes: `hold` refuses them, `vary` refuses any other kind, and `factorial` allows both and
+treats such axes. `hold` refuses them, `vary` refuses any other kind, and `factorial` allows both and
 warns that the result is not a controlled comparison of either (check 43).
 
-A counterfactual pair holds the inputs fixed except one actor: `absent` removes it, `nominal` keeps its
-type, route and timing but removes what you name (`stops` or `via`) and labels it nominal, and
-`displaced` moves it by a time `shift` and/or by place substitutions (`places`). Car-following models
-react to what is in front of them, so a pair is identical inputs except one vehicle, never identical
-trajectories.
+A counterfactual pair holds the inputs fixed except one actor. The mode says how the twin differs:
+
+- `absent` removes the actor;
+- `nominal` keeps its type, route and timing, removes what you name (`stops` or `via`) and labels it
+  nominal;
+- `displaced` moves it by a time `shift` and/or by place substitutions (`places`).
+
+Car-following models react to what is in front of them, so a pair is identical inputs except one
+vehicle, never identical trajectories.
 
 ## Who writes it and who reads it
 
