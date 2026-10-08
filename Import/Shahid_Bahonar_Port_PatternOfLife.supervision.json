@@ -3,12 +3,12 @@
   "plan_id": "Shahid_Bahonar_Port_PatternOfLife",
   "spec_version": 1,
   "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
-  "routes_digest": "7cd4d3fdea5ba87d988750038922264ecc9cff4b8aa42dd84312bb11bbf538cf",
+  "routes_digest": "5ea60913369e038ebb0940acc415e4d8e50d7c72963d090b96e06ed71b52214f",
   "network_digest": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
   "config_digest": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f",
   "additional_digest": null,
   "vocabulary_version": 3,
-  "vocabulary_digest": "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355",
+  "vocabulary_digest": "1dde0ea3664cc7ebd7f8c8b4cde009a3042cce03af229fffec814134711186f6",
   "vocabulary": {
     "core": {
       "vocabulary_version": 3,
@@ -209,7 +209,7 @@
             "applies_to": [
               "entity"
             ],
-            "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
+            "definition": "A scheduled air-freight run by one truck from the apron to the port.",
             "hard_negative_for": [
               "bahonar:coordinated_group_transit",
               "bahonar:destination_off_pattern"

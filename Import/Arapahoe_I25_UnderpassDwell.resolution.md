@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8c9c0f287.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:13:23.260Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:59:22.944Z
 
 One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.
 
@@ -25,15 +25,15 @@ t = 0 is 2026-09-29T07:00:00-06:00 (2026-09-29T13:00:00Z), UTC-06:00 including d
 
 ## The sun's zone
 
-Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_epoch writes the declared offset as the sun's zone (04 D4.19).
+Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_epoch writes the declared offset as the sun's zone.
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override (07 §3.9).
+Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2, bands from 11_Time_And_Illumination.md §4.4, elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -51,8 +51,8 @@ Bands where one state alone occurs: none. Bands where both occur: none.
 
 Remedies:
 
-- pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)
-- add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)
+- pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band
+- add a nominal twin inside the annotated band: a hard negative lit identically
 - add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one
 
 ## Places
@@ -242,7 +242,7 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
 {
   "routes": {
     "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-    "sha256": "2e24449e8dc8cccab1c72f1d7d3f2e17acc70b0f1ec774344cb8de93997bd8d7"
+    "sha256": "6d55aab12aa8b00895a5b116dded80cc310e15833da1edf1f897599d2c5a14d5"
   },
   "config": {
     "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
@@ -258,7 +258,7 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
   },
   "supervision": {
     "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-    "sha256": "8c12ed24be1e351d96d29617f8429b0dde16e6267fd3fbbfb843a782e77b26ca"
+    "sha256": "b7c04ee94220c0ca022954f471377190bc9283b143d94312d5836ec14ca3d97b"
   }
 }
 ```

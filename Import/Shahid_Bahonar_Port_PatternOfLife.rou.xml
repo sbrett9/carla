@@ -66,7 +66,7 @@
         <param key="carla:class_id" value="civ_taxi"/>
         <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
     </vType>
-    <!-- Civilian lorries: the European heavy goods vehicle. -->
+    <!-- Civilian trucks: the European heavy goods vehicle. -->
     <vType id="civ_truck.vehicle.carlamotors.european_hgv" vClass="truck" length="7.9241" width="2.787" height="3.7833" maxSpeed="25" guiShape="truck" color="#998059">
         <param key="carla:blueprint" value="vehicle.carlamotors.european_hgv"/>
         <param key="carla:class_id" value="civ_truck"/>
@@ -96,7 +96,7 @@
         <param key="carla:class_id" value="mil_jeep"/>
         <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
     </vType>
-    <!-- Naval and base lorries, and the routine air-freight hauls: the European heavy goods vehicle. -->
+    <!-- Naval and base trucks, and the routine air-freight hauls: the European heavy goods vehicle. -->
     <vType id="mil_truck.vehicle.carlamotors.european_hgv" vClass="army" length="7.9241" width="2.787" height="3.7833" maxSpeed="24" guiShape="truck" color="#475738">
         <param key="carla:blueprint" value="vehicle.carlamotors.european_hgv"/>
         <param key="carla:class_id" value="mil_truck"/>
@@ -109,7 +109,7 @@
         <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
     </vType>
     <!-- A civilian car admitted inside the wire and driven at 0.45 of each limit, exactly: the perimeter
-         shadow's crawl, which is the behaviour itself. -->
+         shadow's crawl, which is the behavior itself. -->
     <vType id="army_car_crawl.vehicle.dodge.charger" vClass="army" length="5.006" width="1.854" height="1.5403" maxSpeed="33" speedDev="0" speedFactor="0.45" guiShape="passenger" color="#FF3399">
         <param key="carla:blueprint" value="vehicle.dodge.charger"/>
         <param key="carla:class_id" value="army_car_crawl"/>

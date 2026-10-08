@@ -2,7 +2,7 @@
   "spec_version": 1,
   "scenario_id": "Arapahoe_I25_SupervisionCheck",
   "scenario_name": "Arapahoe supervision check",
-  "description": "Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the kerb, a second car drives through, and a van stops at the same kerb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.",
+  "description": "Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.",
   "world": {
     "package": "../Build/world-packages/Arapahoe_I25.cwp",
     "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc"
@@ -140,7 +140,7 @@
       "share": 0.0,
       "gui_shape": "truck",
       "gui_colour": "#99734D",
-      "note": "The two-axle box truck, 8.00 m, the catalogue's civilian lorry: 4.0 m shorter than the 12.0 m rigid lorry this type was designed around."
+      "note": "The two-axle box truck, 8.00 m, the catalogue's civilian truck: 4.0 m shorter than the 12.0 m rigid truck this type was designed around."
     },
     {
       "class_id": "semi",
@@ -159,7 +159,7 @@
       "share": 0.0,
       "gui_shape": "truck",
       "gui_colour": "#735940",
-      "note": "The content build has no articulated lorry, so the 16.5 m semitrailer this type was designed around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping driving model on the freeway."
+      "note": "The content build has no articulated truck, so the 16.5 m semitrailer this type was designed around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping driving model on the freeway."
     }
   ],
   "vehicle_mixes": [
@@ -613,12 +613,12 @@
             "applies_to": [
               "entity"
             ],
-            "definition": "A car pulls to the kerb and waits there for minutes, with nothing to deliver or collect, then drives on.",
+            "definition": "A car pulls to the curb and waits there for minutes, with nothing to deliver or collect, then drives on.",
             "parameters": {
               "dwell_s": {
                 "type": "number",
                 "unit": "s",
-                "definition": "the authored length of the wait at the kerb"
+                "definition": "the authored length of the wait at the curb"
               }
             },
             "contrast_with": [
@@ -648,7 +648,7 @@
             "applies_to": [
               "entity"
             ],
-            "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
+            "definition": "A van pulls to the same curb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
             "hard_negative_for": [
               "check:kerbside_dwell"
             ]

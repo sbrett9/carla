@@ -112,14 +112,14 @@
         <param key="carla:class_id" value="van"/>
         <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
     </vType>
-    <!-- The two-axle box truck, 8.00 m, the catalogue's civilian lorry: 4.0 m shorter than the 12.0 m
-         rigid lorry this type was designed around. -->
+    <!-- The two-axle box truck, 8.00 m, the catalogue's civilian truck: 4.0 m shorter than the 12.0 m
+         rigid truck this type was designed around. -->
     <vType id="truck.vehicle.carlacola.actors" vClass="truck" length="8.0037" width="2.787" height="4.0546" lcKeepRight="4.0" lcSpeedGain="0.4" maxSpeed="35" sigma="0.5" speedFactor="normc(0.86,0.04,0.78,0.95)" tau="1.4" guiShape="truck" color="#99734D">
         <param key="carla:blueprint" value="vehicle.carlacola.actors"/>
         <param key="carla:class_id" value="truck"/>
         <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
     </vType>
-    <!-- The content build has no articulated lorry, so the 16.5 m semitrailer this type was designed
+    <!-- The content build has no articulated truck, so the 16.5 m semitrailer this type was designed
          around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each
          semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping
          driving model on the freeway. -->

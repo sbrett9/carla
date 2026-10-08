@@ -2,19 +2,19 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8c9c0f287.dirty",
+    "tool_version": "0.10.0+g4e7614850.dirty",
     "carlanet": "unknown",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:11:30.067Z"
+    "written_utc": "2026-10-08T01:57:41.898Z"
   },
   "outcome": "compiled",
   "scenario": {
     "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
-    "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
-    "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighbourhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
+    "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
+    "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
     "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-    "specification_sha256": "84864407e01a2f65af863a66229e31184824bc29119e7505eaa8d2009189ba06",
+    "specification_sha256": "0fa15a284dcc2eefe9b0ae78705333af2b0345b95ec228ca03ee9b4b138df437",
     "spec_version": 1
   },
   "findings": [
@@ -66,7 +66,7 @@
     "declared_offset_hours": -7.0,
     "engine_time_zone_hours": -7.984306433333333,
     "difference_hours": 0.9843064333333329,
-    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone (04 D4.19)"
+    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone"
   },
   "illumination_default": {
     "declared": {
@@ -74,7 +74,7 @@
       "policy": "freeze_at_window_start"
     },
     "policy": "freeze_at_window_start",
-    "status": "an authored default the operator may override (07 §3.9)",
+    "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
   "capture_windows": [],
@@ -147,8 +147,8 @@
     "entries": 31,
     "measured_over": "span",
     "remedies": [
-      "pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)",
-      "add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)",
+      "pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band",
+      "add a nominal twin inside the annotated band: a hard negative lit identically",
       "add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one"
     ]
   },
@@ -163,7 +163,6 @@
     ],
     "georeference": "+proj=tmerc +lat_0=38.91108 +lon_0=-119.7645965 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
-      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-install",
       "version": "1.27.0",
       "matched_by": "explicit",
       "release_agreement": "SameRelease",
@@ -2761,26 +2760,26 @@
   "lock": {
     "lock_version": 1,
     "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
-    "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
+    "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
     "spec_version": 1,
     "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-    "specification_sha256": "84864407e01a2f65af863a66229e31184824bc29119e7505eaa8d2009189ba06",
+    "specification_sha256": "0fa15a284dcc2eefe9b0ae78705333af2b0345b95ec228ca03ee9b4b138df437",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+g8c9c0f287.dirty",
+      "tool_version": "0.10.0+g4e7614850.dirty",
       "carlanet": "unknown",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-08T01:11:30.066Z"
+      "written_utc": "2026-10-08T01:57:41.897Z"
     },
     "files": {
       "routes": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-        "sha256": "46cf46341b25746059b5ee6e4724ebb5cd22d272113a6ac376d07b7c4d8c0826"
+        "sha256": "3fdbc905b467184c0b2507efd1fe2fa2bc2fa403e633ecfc6363d57ebd5bf1a1"
       },
       "config": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -2792,7 +2791,7 @@
       },
       "supervision": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-        "sha256": "d66b3efcd402ed8ef227abb4aa0f553560fa714a1bc87e87d43c2d38d5a18010"
+        "sha256": "2b705fbb748949979630d074543394c21c4996fe33eba55ac5cc4b0e65c9a83d"
       }
     },
     "world": {
@@ -2801,7 +2800,7 @@
       "network_fingerprint": "a50ac5452330ef83485625a8ec89ff3dbec0d0d7b4fc7a9bfb50392ffb829bc6",
       "netconvert_argv": [
         "--osm-files",
-        "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Gardnerville_Centerville_Lane_clipped.osm",
+        "Gardnerville_Centerville_Lane_clipped.osm",
         "--opendrive-output",
         "<opendrive-output>",
         "--proj",

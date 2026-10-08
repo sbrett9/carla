@@ -4,23 +4,23 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "841afe55e6bf262ec6b3b3ec7827b28e279cd29e6f38cace8a1d302cb87cc61e",
+  "specification_sha256": "867ead63fe0fde32499384645c5440998680f92a6aa71288777ad6bb6ca40e58",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8c9c0f287.dirty",
+    "tool_version": "0.10.0+g4e7614850.dirty",
     "carlanet": "unknown",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:15:25.360Z"
+    "written_utc": "2026-10-08T02:01:13.334Z"
   },
   "files": {
     "routes": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
-      "sha256": "7cd4d3fdea5ba87d988750038922264ecc9cff4b8aa42dd84312bb11bbf538cf"
+      "sha256": "5ea60913369e038ebb0940acc415e4d8e50d7c72963d090b96e06ed71b52214f"
     },
     "config": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
@@ -32,7 +32,7 @@
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-      "sha256": "dc378852784602f6668cba94de28ef66cd01853baa736055003895ac47b4eb65"
+      "sha256": "977025dc0ed759f2695f896948e85d7dc36f93262242fed4764a3b112e768146"
     }
   },
   "world": {
@@ -41,7 +41,7 @@
     "network_fingerprint": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
     "netconvert_argv": [
       "--osm-files",
-      "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Shahid_Bahonar_Port_clipped.osm",
+      "Shahid_Bahonar_Port_clipped.osm",
       "--opendrive-output",
       "<opendrive-output>",
       "--proj",
@@ -70,7 +70,7 @@
       "--remove-edges.by-type",
       "highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway",
       "--type-files",
-      "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-install\\data\\typemap\\osmNetconvert.typ.xml,G:\\Projects\\CarlaUE_5_7_4\\carla\\Import\\Shahid_Bahonar_Port.typ.xml"
+      "${SUMO_HOME}/data/typemap/osmNetconvert.typ.xml,Shahid_Bahonar_Port.typ.xml"
     ],
     "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
     "opendrive_sha256": "8b942852c622448c5f35d959da74bf87eda21d29a2b56a499ab67675b374db85",
@@ -93,7 +93,7 @@
         "version": 2
       }
     ],
-    "vocabulary_digest": "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355"
+    "vocabulary_digest": "1dde0ea3664cc7ebd7f8c8b4cde009a3042cce03af229fffec814134711186f6"
   },
   "traffic": {
     "sumo_seed": 42,

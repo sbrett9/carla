@@ -93,7 +93,7 @@
       "share": 0.0,
       "gui_shape": "truck",
       "gui_colour": "#998059",
-      "note": "Civilian lorries: the European heavy goods vehicle."
+      "note": "Civilian trucks: the European heavy goods vehicle."
     },
     {
       "class_id": "civ_bus",
@@ -163,7 +163,7 @@
       "share": 0.0,
       "gui_shape": "truck",
       "gui_colour": "#475738",
-      "note": "Naval and base lorries, and the routine air-freight hauls: the European heavy goods vehicle."
+      "note": "Naval and base trucks, and the routine air-freight hauls: the European heavy goods vehicle."
     },
     {
       "class_id": "guard",
@@ -202,7 +202,7 @@
       "share": 0.0,
       "gui_shape": "passenger",
       "gui_colour": "#FF3399",
-      "note": "A civilian car admitted inside the wire and driven at 0.45 of each limit, exactly: the perimeter shadow's crawl, which is the behaviour itself."
+      "note": "A civilian car admitted inside the wire and driven at 0.45 of each limit, exactly: the perimeter shadow's crawl, which is the behavior itself."
     },
     {
       "class_id": "port_car",
@@ -3694,7 +3694,7 @@
             "applies_to": [
               "entity"
             ],
-            "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
+            "definition": "A scheduled air-freight run by one truck from the apron to the port.",
             "hard_negative_for": [
               "bahonar:coordinated_group_transit",
               "bahonar:destination_off_pattern"

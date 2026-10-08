@@ -3,12 +3,12 @@
   "plan_id": "Arapahoe_I25_SupervisionCheck",
   "spec_version": 1,
   "scenario_id": "Arapahoe_I25_SupervisionCheck",
-  "routes_digest": "f5026c3ab65203c71dc176835c575cd349514fb15d153b0f1a2b24e7c98e41b5",
+  "routes_digest": "016b810a19d4429fec8c65462b1937852e7b94379491d82ea603f1e839b21675",
   "network_digest": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
   "config_digest": "79a64f258e881cdb5d81638b6c4a95b467d036551ccdefc74f823bd9b1a856ff",
   "additional_digest": null,
   "vocabulary_version": 3,
-  "vocabulary_digest": "19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197",
+  "vocabulary_digest": "55bb7d40e1f03e72428012dbf76a888d67da45e4e35ee8ba7802ca4153ce7a88",
   "vocabulary": {
     "core": {
       "vocabulary_version": 3,
@@ -88,12 +88,12 @@
             "applies_to": [
               "entity"
             ],
-            "definition": "A car pulls to the kerb and waits there for minutes, with nothing to deliver or collect, then drives on.",
+            "definition": "A car pulls to the curb and waits there for minutes, with nothing to deliver or collect, then drives on.",
             "parameters": {
               "dwell_s": {
                 "type": "number",
                 "unit": "s",
-                "definition": "the authored length of the wait at the kerb"
+                "definition": "the authored length of the wait at the curb"
               }
             },
             "contrast_with": [
@@ -123,7 +123,7 @@
             "applies_to": [
               "entity"
             ],
-            "definition": "A van pulls to the same kerb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
+            "definition": "A van pulls to the same curb for twenty seconds, as a delivery or a pick-up does, and drives on: an ordinary stop where the dwell happens.",
             "hard_negative_for": [
               "check:kerbside_dwell"
             ]

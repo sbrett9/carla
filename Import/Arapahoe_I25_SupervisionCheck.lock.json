@@ -4,23 +4,23 @@
   "scenario_name": "Arapahoe supervision check",
   "spec_version": 1,
   "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-  "specification_sha256": "53477560f61a8668649984059c4850140eb379836ea9c1d4d62bce183d94fd9f",
+  "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8c9c0f287",
+    "tool_version": "0.10.0+g4e7614850",
     "carlanet": "unknown",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:11:23.903Z"
+    "written_utc": "2026-10-08T01:57:36.139Z"
   },
   "files": {
     "routes": {
       "path": "Arapahoe_I25_SupervisionCheck.rou.xml",
-      "sha256": "f5026c3ab65203c71dc176835c575cd349514fb15d153b0f1a2b24e7c98e41b5"
+      "sha256": "016b810a19d4429fec8c65462b1937852e7b94379491d82ea603f1e839b21675"
     },
     "config": {
       "path": "Arapahoe_I25_SupervisionCheck.sumocfg",
@@ -32,7 +32,7 @@
     },
     "supervision": {
       "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-      "sha256": "8b68f5e2b661319f1e31643c38e29e6539e20b6ac53ad10141630e8c7c4552a8"
+      "sha256": "c866ffeb735103f2720f98a4f838af8a4415434406b009d49fb3599fe728cc99"
     }
   },
   "world": {
@@ -41,7 +41,7 @@
     "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
     "netconvert_argv": [
       "--osm-files",
-      "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Arapahoe_I25_clipped.osm",
+      "Arapahoe_I25_clipped.osm",
       "--opendrive-output",
       "<opendrive-output>",
       "--proj",
@@ -99,7 +99,7 @@
         "version": 1
       }
     ],
-    "vocabulary_digest": "19beb3e43bec2220772e14f501b0657e24c0902246ac6fd0e9ce28a579e0f197"
+    "vocabulary_digest": "55bb7d40e1f03e72428012dbf76a888d67da45e4e35ee8ba7802ca4153ce7a88"
   },
   "traffic": {
     "sumo_seed": 42,

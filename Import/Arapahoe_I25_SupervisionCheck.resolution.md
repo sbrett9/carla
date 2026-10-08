@@ -2,9 +2,9 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8c9c0f287, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:11:23.904Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:57:36.141Z
 
-Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the kerb, a second car drives through, and a van stops at the same kerb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.
+Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.
 
 ## Findings
 
@@ -24,11 +24,11 @@ t = 0 is 2026-09-29T07:26:00-06:00 (2026-09-29T13:26:00Z), UTC-06:00 including d
 
 ## The sun's zone
 
-Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_epoch writes the declared offset as the sun's zone (04 D4.19).
+Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_epoch writes the declared offset as the sun's zone.
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override (07 §3.9).
+Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Capture windows (authored candidates)
 
@@ -39,7 +39,7 @@ Policy `freeze_at_window_start`: an authored default the operator may override (
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2, bands from 11_Time_And_Illumination.md §4.4, elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -65,8 +65,8 @@ Bands where one state alone occurs: day. Bands where both occur: golden.
 
 Remedies:
 
-- pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)
-- add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)
+- pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band
+- add a nominal twin inside the annotated band: a hard negative lit identically
 - add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one
 
 ## Places
@@ -234,7 +234,7 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
 {
   "routes": {
     "path": "Arapahoe_I25_SupervisionCheck.rou.xml",
-    "sha256": "f5026c3ab65203c71dc176835c575cd349514fb15d153b0f1a2b24e7c98e41b5"
+    "sha256": "016b810a19d4429fec8c65462b1937852e7b94379491d82ea603f1e839b21675"
   },
   "config": {
     "path": "Arapahoe_I25_SupervisionCheck.sumocfg",
@@ -246,7 +246,7 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-    "sha256": "8b68f5e2b661319f1e31643c38e29e6539e20b6ac53ad10141630e8c7c4552a8"
+    "sha256": "c866ffeb735103f2720f98a4f838af8a4415434406b009d49fb3599fe728cc99"
   }
 }
 ```

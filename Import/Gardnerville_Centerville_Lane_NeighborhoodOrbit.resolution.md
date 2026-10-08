@@ -2,9 +2,9 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8c9c0f287.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:11:30.067Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:57:41.898Z
 
-One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighbourhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.
+One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.
 
 ## Findings
 
@@ -23,15 +23,15 @@ t = 0 is 2026-06-21T10:00:00-07:00 (2026-06-21T17:00:00Z), UTC-07:00 including d
 
 ## The sun's zone
 
-Declared offset -7 h; the world's georeference configures -7.98431 h. set_solar_epoch writes the declared offset as the sun's zone (04 D4.19).
+Declared offset -7 h; the world's georeference configures -7.98431 h. set_solar_epoch writes the declared offset as the sun's zone.
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override (07 §3.9).
+Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2, bands from 11_Time_And_Illumination.md §4.4, elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -49,8 +49,8 @@ Bands where one state alone occurs: none. Bands where both occur: none.
 
 Remedies:
 
-- pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)
-- add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)
+- pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band
+- add a nominal twin inside the annotated band: a hard negative lit identically
 - add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one
 
 ## Places
@@ -190,7 +190,7 @@ SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into
 {
   "routes": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-    "sha256": "46cf46341b25746059b5ee6e4724ebb5cd22d272113a6ac376d07b7c4d8c0826"
+    "sha256": "3fdbc905b467184c0b2507efd1fe2fa2bc2fa403e633ecfc6363d57ebd5bf1a1"
   },
   "config": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -202,7 +202,7 @@ SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-    "sha256": "d66b3efcd402ed8ef227abb4aa0f553560fa714a1bc87e87d43c2d38d5a18010"
+    "sha256": "2b705fbb748949979630d074543394c21c4996fe33eba55ac5cc4b0e65c9a83d"
   }
 }
 ```

@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8c9c0f287.dirty",
+    "tool_version": "0.10.0+g4e7614850.dirty",
     "carlanet": "unknown",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:13:23.260Z"
+    "written_utc": "2026-10-08T01:59:22.944Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -14,7 +14,7 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "description": "One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.",
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "9b3508430dca72c7621754b543d02deedbbd37ffba54ac18dceb355cabf1b622",
+    "specification_sha256": "a1a421af59f55e854f5ccf512c0a6a56a4ee43b3d6ed65f8d57f8ec19d0dc6db",
     "spec_version": 1
   },
   "findings": [
@@ -78,7 +78,7 @@
     "declared_offset_hours": -6.0,
     "engine_time_zone_hours": -6.992299333333333,
     "difference_hours": 0.9922993333333334,
-    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone (04 D4.19)"
+    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone"
   },
   "illumination_default": {
     "declared": {
@@ -86,7 +86,7 @@
       "policy": "freeze_at_window_start"
     },
     "policy": "freeze_at_window_start",
-    "status": "an authored default the operator may override (07 §3.9)",
+    "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
   "capture_windows": [],
@@ -159,8 +159,8 @@
     "entries": 52,
     "measured_over": "span",
     "remedies": [
-      "pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)",
-      "add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)",
+      "pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band",
+      "add a nominal twin inside the annotated band: a hard negative lit identically",
       "add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one"
     ]
   },
@@ -175,7 +175,6 @@
     ],
     "georeference": "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
-      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-install",
       "version": "1.27.0",
       "matched_by": "explicit",
       "release_agreement": "SameRelease",
@@ -4657,23 +4656,23 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "spec_version": 1,
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "9b3508430dca72c7621754b543d02deedbbd37ffba54ac18dceb355cabf1b622",
+    "specification_sha256": "a1a421af59f55e854f5ccf512c0a6a56a4ee43b3d6ed65f8d57f8ec19d0dc6db",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+g8c9c0f287.dirty",
+      "tool_version": "0.10.0+g4e7614850.dirty",
       "carlanet": "unknown",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-08T01:13:23.258Z"
+      "written_utc": "2026-10-08T01:59:22.942Z"
     },
     "files": {
       "routes": {
         "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-        "sha256": "2e24449e8dc8cccab1c72f1d7d3f2e17acc70b0f1ec774344cb8de93997bd8d7"
+        "sha256": "6d55aab12aa8b00895a5b116dded80cc310e15833da1edf1f897599d2c5a14d5"
       },
       "config": {
         "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
@@ -4689,7 +4688,7 @@
       },
       "supervision": {
         "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-        "sha256": "8c12ed24be1e351d96d29617f8429b0dde16e6267fd3fbbfb843a782e77b26ca"
+        "sha256": "b7c04ee94220c0ca022954f471377190bc9283b143d94312d5836ec14ca3d97b"
       }
     },
     "world": {
@@ -4698,7 +4697,7 @@
       "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
       "netconvert_argv": [
         "--osm-files",
-        "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Arapahoe_I25_clipped.osm",
+        "Arapahoe_I25_clipped.osm",
         "--opendrive-output",
         "<opendrive-output>",
         "--proj",

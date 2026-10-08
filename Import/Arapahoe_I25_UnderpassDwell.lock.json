@@ -4,23 +4,23 @@
   "scenario_name": "Arapahoe I-25 underpass dwell",
   "spec_version": 1,
   "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-  "specification_sha256": "9b3508430dca72c7621754b543d02deedbbd37ffba54ac18dceb355cabf1b622",
+  "specification_sha256": "a1a421af59f55e854f5ccf512c0a6a56a4ee43b3d6ed65f8d57f8ec19d0dc6db",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8c9c0f287.dirty",
+    "tool_version": "0.10.0+g4e7614850.dirty",
     "carlanet": "unknown",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T01:13:23.258Z"
+    "written_utc": "2026-10-08T01:59:22.942Z"
   },
   "files": {
     "routes": {
       "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-      "sha256": "2e24449e8dc8cccab1c72f1d7d3f2e17acc70b0f1ec774344cb8de93997bd8d7"
+      "sha256": "6d55aab12aa8b00895a5b116dded80cc310e15833da1edf1f897599d2c5a14d5"
     },
     "config": {
       "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
@@ -36,7 +36,7 @@
     },
     "supervision": {
       "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-      "sha256": "8c12ed24be1e351d96d29617f8429b0dde16e6267fd3fbbfb843a782e77b26ca"
+      "sha256": "b7c04ee94220c0ca022954f471377190bc9283b143d94312d5836ec14ca3d97b"
     }
   },
   "world": {
@@ -45,7 +45,7 @@
     "network_fingerprint": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
     "netconvert_argv": [
       "--osm-files",
-      "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-smoketest\\Arapahoe_I25_clipped.osm",
+      "Arapahoe_I25_clipped.osm",
       "--opendrive-output",
       "<opendrive-output>",
       "--proj",

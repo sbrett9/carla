@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Gardnerville Centerville Lane neighbourhood orbit: compiled by carlacontrol.ScenarioCompiler 0.10.0 from the specification of Gardnerville_Centerville_Lane_NeighborhoodOrbit; edit that, not this. The epoch that gives these seconds their civil meaning is stated in Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg. Every time in this file is simulated seconds from t = 0. Supervision is not in this file: it is in Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json. -->
+<!-- Gardnerville Centerville Lane neighborhood orbit: compiled by carlacontrol.ScenarioCompiler 0.10.0 from the specification of Gardnerville_Centerville_Lane_NeighborhoodOrbit; edit that, not this. The epoch that gives these seconds their civil meaning is stated in Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg. Every time in this file is simulated seconds from t = 0. Supervision is not in this file: it is in Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json. -->
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
 
     <!-- Saloons, hatchbacks and coupes. Designed around a 4.6 m car; the nine measured bodies run 4.18 m
@@ -66,9 +66,9 @@
         <param key="carla:class_id" value="van"/>
         <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
     </vType>
-    <!-- The two rigid lorries in the content build, a two-axle box truck measuring 8.00 m and a three-
+    <!-- The two rigid trucks in the content build, a two-axle box truck measuring 8.00 m and a three-
          axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m shorter than the
-         9.5 m this class was designed around. The Fuso Rosa is a light bus, not a lorry, and is not
+         9.5 m this class was designed around. The Fuso Rosa is a light bus, not a truck, and is not
          drawn as one. -->
     <vType id="truck.vehicle.carlacola.actors" vClass="truck" length="8.0037" width="2.787" height="4.0546" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
         <param key="carla:blueprint" value="vehicle.carlacola.actors"/>

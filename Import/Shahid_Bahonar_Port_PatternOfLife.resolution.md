@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8c9c0f287.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:15:25.368Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4e7614850.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T02:01:13.342Z
 
 7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.
 
@@ -29,15 +29,15 @@ t = 0 is 2026-09-29T07:00:00+03:30 (2026-09-29T03:30:00Z), UTC+03:30, calendar a
 
 ## The sun's zone
 
-Declared offset +3.5 h; the world's georeference configures +3.74538 h. set_solar_epoch writes the declared offset as the sun's zone (04 D4.19).
+Declared offset +3.5 h; the world's georeference configures +3.74538 h. set_solar_epoch writes the declared offset as the sun's zone.
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override (07 §3.9).
+Policy `freeze_at_window_start`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
-I(band; supervision) / H(supervision), base 2, bands from 11_Time_And_Illumination.md §4.4, elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+I(band; supervision) / H(supervision), base 2; bands by 11_Time_And_Illumination.md §4.4; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
@@ -59,8 +59,8 @@ Bands where one state alone occurs: nautical_twilight, astronomical_twilight. Ba
 
 Remedies:
 
-- pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation appears in a second band (07 §7.3)
-- add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 §2.7)
+- pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band
+- add a nominal twin inside the annotated band: a hard negative lit identically
 - add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one
 
 ## Instants
@@ -111,7 +111,7 @@ Remedies:
 | fence_r26413426 | `{"edge": "-26413426"}` | -26413426 |  |
 | fence_r26413411 | `{"edge": "-26413411"}` | -26413411 |  |
 
-## Rotas
+## Schedules (rotas)
 
 - **guard_posting**: 335 entries
   - skipped `guard_d4_h7_t3` at 2026-10-03T07:00:00+03:30: the guard due here this shift, offpost_d4_h7_t3, parks elsewhere: this post is not manned
@@ -1323,7 +1323,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
 {
   "routes": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
-    "sha256": "7cd4d3fdea5ba87d988750038922264ecc9cff4b8aa42dd84312bb11bbf538cf"
+    "sha256": "5ea60913369e038ebb0940acc415e4d8e50d7c72963d090b96e06ed71b52214f"
   },
   "config": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
@@ -1335,7 +1335,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "dc378852784602f6668cba94de28ef66cd01853baa736055003895ac47b4eb65"
+    "sha256": "977025dc0ed759f2695f896948e85d7dc36f93262242fed4764a3b112e768146"
   }
 }
 ```

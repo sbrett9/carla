@@ -1,8 +1,8 @@
 {
   "spec_version": 1,
   "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
-  "scenario_name": "Gardnerville Centerville Lane neighbourhood orbit",
-  "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighbourhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
+  "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
+  "description": "One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.",
   "world": {
     "package": "../Build/world-packages/Gardnerville_Centerville_Lane.cwp",
     "network_fingerprint": "a50ac5452330ef83485625a8ec89ff3dbec0d0d7b4fc7a9bfb50392ffb829bc6"
@@ -93,7 +93,7 @@
       },
       "share": 0.05,
       "gui_shape": "truck",
-      "note": "The two rigid lorries in the content build, a two-axle box truck measuring 8.00 m and a three-axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m shorter than the 9.5 m this class was designed around. The Fuso Rosa is a light bus, not a lorry, and is not drawn as one."
+      "note": "The two rigid trucks in the content build, a two-axle box truck measuring 8.00 m and a three-axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m shorter than the 9.5 m this class was designed around. The Fuso Rosa is a light bus, not a truck, and is not drawn as one."
     },
     {
       "class_id": "orbiter",

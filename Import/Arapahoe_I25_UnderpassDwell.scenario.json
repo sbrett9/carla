@@ -140,7 +140,7 @@
       "share": 0.0,
       "gui_shape": "truck",
       "gui_colour": "#99734D",
-      "note": "The two-axle box truck, 8.00 m, the catalogue's civilian lorry: 4.0 m shorter than the 12.0 m rigid lorry this type was designed around."
+      "note": "The two-axle box truck, 8.00 m, the catalogue's civilian truck: 4.0 m shorter than the 12.0 m rigid truck this type was designed around."
     },
     {
       "class_id": "semi",
@@ -159,7 +159,7 @@
       "share": 0.0,
       "gui_shape": "truck",
       "gui_colour": "#735940",
-      "note": "The content build has no articulated lorry, so the 16.5 m semitrailer this type was designed around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping driving model on the freeway."
+      "note": "The content build has no articulated truck, so the 16.5 m semitrailer this type was designed around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping driving model on the freeway."
     },
     {
       "class_id": "marked",
