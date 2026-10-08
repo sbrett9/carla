@@ -97,7 +97,7 @@ from carlacontrol.SupervisionPlanCompiler import (
     SupervisionPlanCompiler,
 )
 from carlacontrol.VehicleCatalogue import BLUEPRINT_PARAM, VehicleCatalogue
-from carlacontrol.version import RELEASE, __version__
+from carlacontrol.version import RELEASE
 from carlacontrol.WindowSun import WindowSun
 from carlacontrol.WorldPackageReader import WorldPackageReader
 
@@ -1258,7 +1258,10 @@ class ScenarioCompiler:
             "spec_version": SPEC_VERSION,
             "specification": self.spec_path.name,
             "specification_sha256": self.spec_sha256,
-            "compiler": {"name": COMPILER, "version": __version__},
+            # The compiler's release, without the commit: a scenario recompiled at another commit of one
+            # release names the same compiler, so the recorded reports stay comparable. The producer
+            # record below carries the exact build.
+            "compiler": {"name": COMPILER, "version": RELEASE},
             # What made the compile: the compiler and its release, the carlanet release, and the SUMO
             # release that routed it. The supervision plan this lock binds by digest carries none: two
             # compiles of one specification write it byte for byte, at any commit of one release.

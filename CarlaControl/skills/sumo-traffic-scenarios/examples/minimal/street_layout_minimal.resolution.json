@@ -468,12 +468,12 @@
     "specification_sha256": "e11e0440b2765e98e5ed14c6fff9682ffa49de2515635192d9d152c755a9d15c",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
-      "version": "1.0.0"
+      "version": "0.10.0"
     },
     "files": {
       "routes": {
         "path": "street_layout_minimal.rou.xml",
-        "sha256": "d3db99088cd1f6d166a519d6481d6c4531d5c4dad0e4e28d32ec5786d29428b7"
+        "sha256": "8799044e70b8d053c2e7eb1dbf45e38ba7cda74267c9b09c7228a9ed9b14b68b"
       },
       "config": {
         "path": "street_layout_minimal.sumocfg",
@@ -485,7 +485,7 @@
       },
       "supervision": {
         "path": "street_layout_minimal.supervision.json",
-        "sha256": "f346b35dc41482f80f7ab703bb9340d85ca2d216c9ecad52de034e0381113226"
+        "sha256": "2d93c1830cfa15a62ca8bb0bdd0aa7eabd6706fb921dba0c544ebd0b857fbcaa"
       }
     },
     "world": {

@@ -46,6 +46,7 @@ from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
 from carlacontrol.SumoDryRun import SumoDryRun  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.version import RELEASE  # noqa: E402
+from carlacontrol.version import RELEASE as CARLACONTROL_RELEASE  # noqa: E402
 from carlacontrol.version import __version__ as carlacontrol_version  # noqa: E402
 
 
@@ -185,7 +186,7 @@ def test_the_lock_and_the_report_say_what_made_them_and_the_files_two_compiles_s
         assert producer["tool_version"] == carlacontrol_version
         assert producer["sumo"] == installation.version
         assert producer["server"] is None and producer["written_utc"]
-    assert lock["compiler"] == {"name": "carlacontrol.ScenarioCompiler", "version": carlacontrol_version}
+    assert lock["compiler"] == {"name": "carlacontrol.ScenarioCompiler", "version": CARLACONTROL_RELEASE}
     assert "**Produced by:** carlacontrol.ScenarioCompiler" in result.files["resolution_md"].read_text(
         encoding="utf-8")
     # The supervision plan, digested by the lock and compared across runs, carries no record of the
