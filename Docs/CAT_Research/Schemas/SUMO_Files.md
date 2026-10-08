@@ -23,24 +23,8 @@ vehicle classes `army` and `authority` and leaves everything else as SUMO has it
 
 ## Our parameters on a vehicle type
 
-A compiled route file binds each SUMO vehicle type (`<vType>`) to the CARLA body it is drawn with,
-through SUMO's generic `<param key="..." value="..."/>` element. SUMO stores these and never acts on
-them. These are the only parameters a compiled route file carries (check 52): labels never travel
-here, only in the supervision plan.
-
-| Key | Value | Written | Meaning |
-|---|---|---|---|
-| `carla:blueprint` | a CARLA blueprint id, such as `vehicle.lincoln.mkz` | always | The body the type is drawn with. Its length, width and height in the `<vType>` are that body's, measured by the vehicle catalogue (check 15). A type with no `carla:blueprint` is simulated by SUMO and never drawn. |
-| `carla:class_id` | the specification's vehicle class id, such as `car` | always | The class the body was drawn for. A class draws several bodies, one type each; this tells a reader which population a vehicle belongs to. A display convention names populations by it. |
-| `carla:catalogue_digest` | the vehicle catalogue's digest | when the catalogue has one | The catalogue the type was written from, so a reader holding a catalogue can tell whether it is that one. carla-cot-telemetry warns once about a type written from another catalogue. |
-
-A type's id is `<class_id>.<blueprint>`, such as `car_quick.vehicle.ue4.audi.tt`. The id is for a
-person reading the file; what binds the type to a body is its `carla:blueprint`.
-
-```xml
-<vType id="car_quick.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9667" height="1.3853" maxSpeed="60" speedFactor="normc(1.18,0.06,1.05,1.35)" guiShape="passenger" color="#D9D9E6">
-    <param key="carla:blueprint" value="vehicle.ue4.audi.tt"/>
-    <param key="carla:class_id" value="car_quick"/>
-    <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
-</vType>
-```
+A compiled route file binds each SUMO vehicle type (`<vType>`) to the CARLA body it is drawn with
+through three `<param>` keys, `carla:blueprint`, `carla:class_id` and `carla:catalogue_digest`: the
+same ones the vehicle catalogue's `vehicles.vtypes.rou.xml` carries. [Vehicle types](Vehicle_Types.md)
+describes them, the only parameters a compiled route file carries (check 52), and how a compiled
+type's id differs from the catalogue's.
