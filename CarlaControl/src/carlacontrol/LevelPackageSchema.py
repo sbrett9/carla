@@ -3,7 +3,8 @@
 A level package is the add-on content one generated world ships as: a zip holding the world's cooked
 plugin folder and, beside it, `world.json`. `Scripts/Windows/PackageWorld.ps1` and
 `Scripts/Linux/PackageWorld.sh` write the manifest; `InstallWorld.ps1` and `InstallWorld.sh` read it
-and refuse to install a world whose world interface version the target package does not provide.
+and refuse to install a world whose world interface version the target package does not provide. They
+read a manifest without `formatVersion` as format 1 and refuse a newer one.
 
 This is a different file from the `world.json` inside a world package (`.cwp`), which
 `WorldPackageSchemas` describes. Its keys are camelCase, and both scripts write every one of them.
@@ -41,13 +42,14 @@ class LevelPackageSchema:
                            "version; the commit hashes identify the build and are never compared.",
             "type": "object",
             "additionalProperties": False,
-            "required": ["formatVersion", "world", "mapPackage", "worldInterfaceMajor",
-                         "worldInterfaceMinor", "basedOnRelease", "releaseVersion", "config",
-                         "platform", "carlaGitHash", "contentGitHash", "unrealGitHash",
-                         "packagedAtUtc"],
+            "required": ["world", "mapPackage", "worldInterfaceMajor", "worldInterfaceMinor",
+                         "basedOnRelease", "releaseVersion", "config", "platform", "carlaGitHash",
+                         "contentGitHash", "unrealGitHash", "packagedAtUtc"],
             "properties": {
                 "formatVersion": {"const": LEVEL_MANIFEST_FORMAT_VERSION,
-                                  "description": "The format of this file."},
+                                  "description": "The format of this file. Both scripts write it; "
+                                                 "a manifest without it is format 1, and an "
+                                                 "installer refuses a newer one."},
                 "world": {"type": "string", "minLength": 1,
                           "description": "The world's name: its plugin folder, which the zip "
                                          "holds beside this file."},
@@ -83,8 +85,10 @@ class LevelPackageSchema:
                                   "description": "The Unreal Engine commit. Empty when the engine "
                                                  "folder is not a git checkout."},
                 "packagedAtUtc": {"type": "string", "pattern": UTC_INSTANT,
-                                  "description": "When the zip was made, ISO 8601 UTC: seven "
-                                                 "decimals of a second from PackageWorld.ps1, "
+                                  "description": "When the zip was made, ISO 8601 UTC to the "
+                                                 "millisecond, as both scripts write it. A "
+                                                 "manifest written before 2026-10-07 has seven "
+                                                 "decimals of a second from PackageWorld.ps1, or "
                                                  "whole seconds from PackageWorld.sh."},
             },
         }

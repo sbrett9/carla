@@ -84,18 +84,19 @@ how a material looks, or new maps in the base package.
 
 `InstallWorld.ps1` (Windows) and `InstallWorld.sh` (Linux) apply the rule:
 
-1. They unpack the zip and read `world.json`. A zip without one is refused.
-2. They read `Major` and `Minor` from the target package's
-   `CarlaUnreal/Config/DefaultWorldInterface.ini`. The target is a cooked package's root, or a
-   distribution's root, whose package is in `CarlaServer/`.
+1. They unpack the zip and read `world.json`. A zip without one is refused, and so is a `world.json`
+   that declares a `formatVersion` newer than they read.
+2. They read `Major` and `Minor` from the `[WorldInterface]` section of the target package's
+   `CarlaUnreal/Config/DefaultWorldInterface.ini`, and from no other section. The target is a cooked
+   package's root, or a distribution's root, whose package is in `CarlaServer/`.
 3. They refuse the install when the package declares no version, when the Majors differ, or when the
    package's Minor is lower than the world's. The message names both versions, the world's CARLA commit
    and the package's `VERSION` line.
 4. Otherwise they copy the world's folder to `CarlaUnreal/Plugins/GeneratedWorlds/<world>/`, replacing
    a copy already installed, and print the map to load.
 
-`-Force` (Windows) or `--force` (Linux) installs despite a refusal. If the world then fails to load,
-that is why.
+`-Force` (Windows) or `--force` (Linux) installs despite a refusal in step 3. If the world then fails
+to load, that is why. Neither overrides a `world.json` of a newer format.
 
 ## Example
 

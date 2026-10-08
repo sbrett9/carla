@@ -6,10 +6,17 @@
     Unpacks a world into the package's Plugins\GeneratedWorlds. The server discovers it on the next
     launch and it can be loaded by name.
 
-    Before unpacking, the world's recorded build is checked against the package's own VERSION file. A
-    world cooked against one build will not load against another -- cooked files carry package
-    versions and name base content by id -- and the failure that would otherwise reach the user is an
-    unexplained crash at load. Checking here turns that into a sentence.
+    Before unpacking, the world interface version the world was packaged against (world.json in the
+    zip) is checked against the one the package declares (CarlaUnreal\Config\DefaultWorldInterface.ini):
+    the world installs where the package's Major equals the world's and the package's Minor is at
+    least the world's. A world that needs content the package does not have will not load -- cooked
+    files name base content by id -- and the failure that would otherwise reach the user is an
+    unexplained crash at load. Checking here turns that into a sentence. The commits the world and the
+    package record are shown to identify them, and never compared.
+
+    A world.json without formatVersion is format 1. One that declares a newer format was written by a
+    newer PackageWorld, and is refused whatever -Force says: its fields may not mean what this
+    installer reads them as.
 
 .PARAMETER Package
     The .zip written by PackageWorld.ps1.
@@ -20,9 +27,9 @@
     a distribution's world-tools folder, it defaults to that distribution.
 
 .PARAMETER Force
-    Install even when the build check fails. For the case where you know two builds are compatible
-    despite differing hashes -- a documentation-only commit, say. If the world then fails to load,
-    this is why.
+    Install even when the world interface check fails: the package declares another Major, an older
+    Minor, or no version at all. For the case where you know the package has everything the world
+    needs despite its declaration. If the world then fails to load, this is why.
 
 .EXAMPLE
     .\InstallWorld.ps1 -Package Build\WorldPackages\Arapahoe_I25.zip -Into D:\Carla-0.10.0-Win64
@@ -61,7 +68,8 @@ USAGE:
 The package directory is a cooked package's root (holding CarlaUnreal\ and VERSION) or a CARLA
 distribution's root (holding CarlaServer\ and VERSION). Run from a distribution's world-tools
 folder, -Into defaults to that distribution.
--Force installs despite a build mismatch; the world may then fail to load.
+-Force installs despite a world interface version that does not allow it; the world may then fail
+to load. A world.json of a newer format than this script reads is refused regardless.
 '@ | Write-Host
     exit 0
 }
@@ -107,7 +115,23 @@ try {
         Write-Fail "$Package carries no world.json; it was not written by PackageWorld.ps1."
         exit 1
     }
-    $m = Get-Content $ManifestPath -Raw | ConvertFrom-Json
+    $m = Get-Content $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    # The manifest's own format, read before anything else in it. One without formatVersion is
+    # format 1; a newer one was written by a newer PackageWorld, whose fields this script may read
+    # wrongly, so it is refused rather than read in part. -Force does not override this.
+    $SupportedFormatVersion = 1
+    $declared = $m.PSObject.Properties['formatVersion']
+    $formatVersion = if ($null -eq $declared -or $null -eq $declared.Value) { 1 } else { $declared.Value }
+    if (-not ($formatVersion -is [int] -or $formatVersion -is [long]) -or $formatVersion -lt 1) {
+        Write-Fail "$Package declares formatVersion '$formatVersion' in world.json, which is not a format version."
+        exit 1
+    }
+    if ($formatVersion -gt $SupportedFormatVersion) {
+        Write-Fail "$Package declares formatVersion $formatVersion in world.json, and this InstallWorld reads formatVersion $SupportedFormatVersion and earlier."
+        Write-Fail "It was packaged by a newer release; install it with that release's InstallWorld."
+        exit 1
+    }
     $WorldDir = Join-Path $Unpacked $m.world
     if (-not (Test-Path $WorldDir)) {
         Write-Fail "$Package says it holds '$($m.world)' but does not contain it."
