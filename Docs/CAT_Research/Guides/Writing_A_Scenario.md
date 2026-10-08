@@ -259,7 +259,8 @@ Things to know:
   the eastbound traffic.
 - The catalog has no motorcycles, bicycles or pedestrians, and no pickup truck. Do not ask for them,
   and do not swap in a body of another kind. The drive never draws a body the catalog did not measure.
-- In the current catalog, no body's headlights, brake lights or turn signals show when switched on.
+- In the current catalog, only the fire truck's high beams show when switched on. No other body's
+  headlights, brake lights or turn signals show.
   The vehicles reference lists this for each body.
 
 ### Places
@@ -644,6 +645,10 @@ a short code for its values, such as `shop_deliveries.mcb1102d16d`; a twin adds 
 The console does not print a member's warnings. Read them in the index. See [Sweep](../Schemas/Sweep.md)
 and [Sweep index](../Schemas/Sweep_Index.md).
 
+On Windows, compile a sweep into a folder with a short path, such as `C:\sweeps\shop_deliveries`. A
+member's files are named after the member, so their paths get long. SUMO cannot open a file whose full
+path is longer than 260 characters, and a member that hits that limit is refused.
+
 ### Sweeping the light
 
 An axis that touches the `epoch`, the `illumination` or a window's `begin` changes the light. The
@@ -761,7 +766,7 @@ Positions are CARLA meters: x east, y south, so north is negative y. The package
 [Resolved areas of interest](../Schemas/Areas_Resolved.md)). Esc or Q closes the window.
 
 Capturing imagery and truth from a compiled scenario uses `carla-capture` and a run file (see
-[Run configuration](../Schemas/Run_Configuration.md)), and has its own guide.
+[Run configuration](../Schemas/Run_Configuration.md)). See [Running a capture](Running_A_Capture.md).
 
 ## Writing scenarios with an AI assistant
 

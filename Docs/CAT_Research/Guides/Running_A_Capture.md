@@ -797,7 +797,7 @@ The exposure line names the camera by its track's id, `CARLA-SENSOR-<actor id>`,
 ## What a capture folder holds
 
 The estimated pattern of life (EPoL) pages describe a capture folder file by file, and how to read
-the truth for training and testing: see [the EPoL pages](EPoL_Capture_Folder.md). The schema pages
+the truth for training and testing: see [What a capture folder holds](../EPOL/Capture_Folder.md). The schema pages
 describe each file's fields: [Truth sidecar](../Schemas/Truth_Sidecar.md), the four PNG text chunks
 ([`carla:capture`](../Schemas/PNG_Chunk_Capture.md), [`carla:solar`](../Schemas/PNG_Chunk_Solar.md),
 [`carla:illumination`](../Schemas/PNG_Chunk_Illumination.md),
