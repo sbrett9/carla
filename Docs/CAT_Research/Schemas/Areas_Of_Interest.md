@@ -23,12 +23,12 @@ If an area falls inside the extract with the two swapped, the reader names the l
 
 ## Who writes it and who reads it
 
-- **A scenario developer writes it**, by hand or in a GIS tool.
-- **The world build reads it** (`carla-build-world`, `carla-sctmv`): the file `--aoi` names, or the one found beside `--osm`.\
+- A scenario developer writes it, by hand or in a GIS tool.
+- The world build reads it (`carla-build-world`, `carla-sctmv`): the file `--aoi` names, or the one found beside `--osm`.\
   It checks the file before any time is spent building the world.\
   It resolves each area into the world's frame.\
   It puts the file in the world package as `areas.aoi.geojson`, beside the resolved table `areas.resolved.json`.
-- **`carla-publish-reference-set` reads it** the same way.
+- `carla-publish-reference-set` reads it the same way.
 - The scenario compiler does not read this file.\
   It reads the resolved table in the world package.\
   It refuses an `aoi_ref` that names no area there (check 20).

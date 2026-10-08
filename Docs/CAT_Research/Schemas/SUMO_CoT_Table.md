@@ -85,7 +85,8 @@ If the run stops early, the summary still exists.
 The CSV's format version is in its summary: `format_version` 1.\
 A CSV with no summary beside it was written before summaries existed and is version 1.
 
-Nothing checks the version today.\
+`carla-validate` reads the version.\
+It refuses a CSV whose summary declares a version newer than it knows.\
 If you write a reader, make it refuse a CSV whose version it does not know.
 
 ## Example

@@ -28,11 +28,11 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 
 ## Who writes it and who reads it
 
-- **`carla-capture` computes it** once, after the offline checks accept and before anything is acquired.\
+- `carla-capture` computes it once, after the offline checks accept and before anything is acquired.\
   An attended run prints it at the terminal.
 - It is written into the run's resolution report and its result, as `launch_echo`.\
   If the offline checks refused before the echo was computed, both are null.
-- **An `expect` entry in the run configuration reads it.**\
+- An `expect` entry in the run configuration reads it.\
   `expect` can name any value here as `launch_echo.<path>`, such as `launch_echo.captures.total`.\
   If the value is not what the caller expected, the launch is refused (run check 35).
 

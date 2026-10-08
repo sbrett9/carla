@@ -25,7 +25,7 @@ It is always named after the run result: `run.lock.json` by default.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** beside the run result, as `<stem>.lock.json`.\
+- `carla-capture` writes it beside the run result, as `<stem>.lock.json`.\
   It is written only for a launch that the offline checks accept.\
   Because it is written before any server is contacted, its `producer` names no server.
 - `run.effective.json` is written with it.\

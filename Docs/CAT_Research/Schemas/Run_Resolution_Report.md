@@ -26,7 +26,7 @@ It is always named after the run result: `run.resolution.json` by default.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** beside the run result, as `<stem>.resolution.json`.\
+- `carla-capture` writes it beside the run result, as `<stem>.resolution.json`.\
   It is written on every path that gets as far as reading the configuration: after a usage error, after the offline checks refuse and after they accept.\
   It is written before any server is contacted.
 - The run result names it in `resolution_report`.

@@ -33,10 +33,10 @@ A capture run writes `run.resolution.json` about one launch (see [Run resolution
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario` writes it** into the output folder on every compile.\
+- `carla-compile-scenario` writes it into the output folder on every compile.\
   A refused compile writes only the report, marked `refused`, with every refusal.\
   When the specification gives no `scenario_id`, the report is named after the specification file instead.
-- **A scenario developer and the authoring skill read it.**\
+- A scenario developer and the authoring skill read it.\
   The skill's examples keep a recorded report beside each example.\
   A test compiles each example and compares.
 - No tool reads it as input.

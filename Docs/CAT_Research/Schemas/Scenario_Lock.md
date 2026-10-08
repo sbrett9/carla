@@ -26,16 +26,16 @@ A capture run writes `run.lock.json` about one run of the scenario (see [Run loc
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario` writes it** with the scenario's other files.\
+- `carla-compile-scenario` writes it with the scenario's other files.\
   It writes it only for a compile that succeeds.
-- **`carla-capture` reads it** to bind the scenario: by id under `paths.scenario_root`, by folder, or by path.\
+- `carla-capture` reads it to bind the scenario: by id under `paths.scenario_root`, by folder, or by path.\
   It takes the epoch, the SUMO step, seed and end, the catalog digest and the illumination default from it.\
   It refuses:
   - a lock of another version (run check 6)
   - a world that does not match (run check 5)
   - a catalog that does not match (run check 48)
   - a skipped SUMO-only run that the capture run does not accept (run check 54)
-- **The co-simulation session reads it** as it starts, under `carla-capture` and `carla-drive` alike: the lock beside the `.sumocfg` it is given.\
+- The co-simulation session reads it as it starts, under `carla-capture` and `carla-drive` alike: the lock beside the `.sumocfg` it is given.\
   It refuses a scenario whose configuration, route file, network, lane closures or supervision plan is not the one the lock digests.\
   It also refuses a scenario whose catalog or epoch is not the one the lock records.\
   A scenario with no lock beside it still runs.\

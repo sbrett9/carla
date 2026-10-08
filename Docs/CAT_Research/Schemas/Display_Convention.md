@@ -26,8 +26,8 @@ A population the convention does not name takes the run's default, `carla-cot-te
 
 ## Who writes it and who reads it
 
-- **A scenario developer writes it**, beside the scenario, named for the stem of the scenario's `.sumocfg`: `Shahid_Bahonar_Port_PatternOfLife.display.json` for `Shahid_Bahonar_Port_PatternOfLife.sumocfg`.
-- **`carla-cot-telemetry` reads it**: the file `--display-convention` names, or any convention file beside `--config`.\
+- A scenario developer writes it, beside the scenario, named for the stem of the scenario's `.sumocfg`: `Shahid_Bahonar_Port_PatternOfLife.display.json` for `Shahid_Bahonar_Port_PatternOfLife.sumocfg`.
+- `carla-cot-telemetry` reads it: the file `--display-convention` names, or any convention file beside `--config`.\
   A file that cannot be read is refused.\
   The run records which convention it drew with.
 - The reader refuses a file in any of these cases:

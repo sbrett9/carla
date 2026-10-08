@@ -19,7 +19,7 @@ Because the process exit status is read from `outcome`, the file and the exit st
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** in every outcome where the tool is not stopped first.\
+- `carla-capture` writes it in every outcome where the tool is not stopped first.\
   That includes a refusal before any server was contacted.\
   It goes to `--result` (the `result_path` field), or by default to `<paths.runs_root>/<session id>/run.result.json`.\
   It is always outside the capture folder.
@@ -30,7 +30,7 @@ Because the process exit status is read from `outcome`, the file and the exit st
   The first is `<stem>.resolution.json` (see [Run resolution report](Run_Resolution_Report.md)).\
   When the offline checks accept, the other two are `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see [Run configuration](Run_Configuration.md)).\
   For the default name `run.result.json` the stem is `run`.
-- **Readers**: a camera or mission developer's own scripts, which read the outcome, the capture folder and the gate records.\
+- Readers: a camera or mission developer's own scripts, which read the outcome, the capture folder and the gate records.\
   `carlacontrol.RunResult.read` reads it with the version rule below.
 
 ## Fields
@@ -57,7 +57,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `lock` | string or null | | yes | Path of the run lock. If the offline checks did not accept, it is null. |
 | `effective_configuration` | string or null | | yes | Path of `run.effective.json`. If the offline checks did not accept, it is null. |
 | `launch_echo` | object or null | | yes | What the run was about to do, as it said before it started. See [Launch echo](Launch_Echo.md). If the offline checks refused first, it is null. |
-| `authority_holder` | string or null | | yes | When the outcome is `refused_authority`, who holds the world's population lease (the exclusive claim to generate its vehicles). |
+| `authority_holder` | string or null | | yes | When the outcome is `refused_authority`, the holder that refused the run. It is a client with the world's drive lease on the server. Or it is a traffic system in this process with its population lease (the exclusive claim to generate the world's vehicles). |
 | `refusals` | array of findings | | yes | Every refusal the launch made. |
 | `warnings` | array of findings | | yes | Every warning raised, with how it was handled. |
 | `expectations_declared` | integer | | yes | How many `expect` entries the configuration declared. |
@@ -73,7 +73,7 @@ The outcomes and their exit statuses:
 | 1 | `usage_error` | Resolving the invocation failed: an unknown key, an unreadable package, an override of a bound field. |
 | 2 | `refused_offline` | The offline checks refused. No server was contacted. |
 | 3 | `refused_server` | The server checks refused, or the session refused while starting. |
-| 4 | `refused_authority` | Another client holds the world's population lease. `authority_holder` names it. |
+| 4 | `refused_authority` | Another traffic system holds the world. It is another client with the world's drive lease on the server, or another traffic system in this process with its population lease. `authority_holder` names the holder. |
 | 5 | `refused_preroll` | Refused after the lease was taken and before the window opened: the fast-forward, the sun, a prewarm tick, the cameras, the pace, or the traffic a stare aims at. |
 | 6 | `run_stopped` | The run ended before its end. `closed_by` says why. |
 | 7 | `internal_error` | An unexpected fault. |

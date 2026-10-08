@@ -35,22 +35,22 @@ For every entry, see [World package](../Schemas/World_Package.md) and [World pac
 
 ## What the build needs
 
-- **A running CARLA server.**\
+- A running CARLA server.\
   Start it headless: `run-server.ps1` or `run-server.sh` in a CARLA distribution, or `Scripts/Windows/RunCarlaServer.ps1` or `Scripts/Linux/RunCarlaServer.sh` in a source checkout.\
   Unless you give `--host` and `--port`, the build connects to `127.0.0.1:2000`.\
   It builds the world on the server and leaves it loaded there.
-- **A Cesium ion access token.**\
+- A Cesium ion access token.\
   Set it in the `CESIUM_ION_TOKEN` environment variable, or give it with `--ion-token`.\
   The build streams the photoreal imagery and the terrain heights from Cesium ion.\
   Without a token, the build warns and the height sampling fails.
-- **The extract.**\
+- The extract.\
   It is an OpenStreetMap `.osm` file with a `<bounds>` element.\
   An extract taken with the OpenStreetMap website's Export button has one.\
   The build cuts the roads at those bounds.\
   The draped ground needs those bounds too.\
   In a source checkout, keep extracts in `Import/`.\
   A distribution ships examples in `osm/`.
-- **netconvert.**\
+- netconvert.\
   The build runs it to convert the extract.\
   From a source checkout it is the one under `Build/sumo-install`, which `CarlaSetup` builds.\
   In a distribution, dot-source `carla-env.ps1` (or source `carla-env.sh`) first.\
@@ -234,9 +234,7 @@ Two more settings decide heights:
 ## How long a build takes
 
 A build takes minutes.\
-The time varies from one build to the next.\
-On the development machine, seven drape builds of the Arapahoe I-25 world (about 1.9 km by 0.95 km) took from 25 seconds to 8 minutes; five of them took between 1 and 3.5 minutes.\
-Three drape builds of the Gardnerville world (1.7 km by 0.9 km) took from 1 to 2.2 minutes.
+The time varies from one build to the next.
 
 A larger area takes longer.\
 The Shahid Bahonar port world's ground grid has about 16 times as many points as Arapahoe's.\
@@ -244,12 +242,12 @@ The drape cache skips the terrain sampling on a rebuild of the same area.
 
 ## What comes out
 
-- **The world package**, `<MapName>.cwp`, in the `--emit-world-package` folder.
-- **The intermediate files.**\
+- The world package, `<MapName>.cwp`, in the `--emit-world-package` folder.
+- The intermediate files.\
   From a source checkout, they are in `Build/sumo-smoketest/`.\
   With the installed commands, they are in `sumo-smoketest/` under the current folder.\
   They are `<name>_clipped.osm` (the extract cut at its bounds) and `<name>_elevated.xodr` (the OpenDRIVE file with heights).
-- **The world, loaded on the server.**\
+- The world, loaded on the server.\
   You can drive SUMO traffic in it right away (see [Writing a scenario](Writing_A_Scenario.md#running-and-looking-at-it)).
 
 To check a package, run `carla-validate Build/world-packages/<MapName>.cwp`.\

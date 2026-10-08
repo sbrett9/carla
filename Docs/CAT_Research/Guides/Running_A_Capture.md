@@ -18,15 +18,15 @@ Getting started lists the script behind each one in a checkout.
 It never compiles a scenario or builds a world.\
 You need:
 
-- **The server running, with the world loaded.**\
+- The server running, with the world loaded.\
   The session checks that the loaded world is the world package's (run check 22).
-- **A compiled scenario.**\
+- A compiled scenario.\
   `carla-compile-scenario` writes it: a folder holding `<id>.lock.json` and the SUMO files the lock lists.\
   The scenario declares the epoch (what simulated second zero is in civil time) and the sun's policy.\
   It usually declares some named windows too.
-- **The world package** (`.cwp`) the scenario was compiled against, in the site profile's `paths.world_package_root`.\
+- The world package (`.cwp`) the scenario was compiled against, in the site profile's `paths.world_package_root`.\
   A world package is one generated world in one file.
-- **A site profile.**\
+- A site profile.\
   See [Getting started](Getting_Started.md#the-site-profile).
 
 ## A first capture
@@ -489,9 +489,9 @@ The launch echo shows the window's civil times.
 
 Before the window, the run does two things that record nothing:
 
-1. **It fast-forwards SUMO** to the start of the prewarm.\
+1. It fast-forwards SUMO to the start of the prewarm.\
    Nothing is drawn.
-2. **It renders the prewarm**, `capture.prewarm_s` simulated seconds (300 by default), with the cameras in place.\
+2. It renders the prewarm, `capture.prewarm_s` simulated seconds (300 by default), with the cameras in place.\
    This is where every camera's view gets ready.
 
 Under the sun policy `freeze_at_window_start`, which the example scenarios use, the sun is pinned at the window's opening and lights the prewarm too.
@@ -524,7 +524,8 @@ It is rounded up to whole SUMO steps.
   It then holds its pose.\
   Its prewarm must be one SUMO step longer.
 
-Measured cold tile loads took 1.5 to 6.2 s of simulated time; one took 35.6 s.\
+Tiles usually load in a few seconds of simulated time.\
+Sometimes they take more than 30 seconds.\
 If your views load slowly, lengthen the prewarm.\
 The prewarm is the time the tiles have.\
 For a stare at the traffic, lengthen `capture.tiles_hold_s` as well.\

@@ -57,18 +57,18 @@ That is how the two kinds of event are told apart.
 
 ## Conventions
 
-- **Positions** are WGS84 latitude and longitude in degrees.
-- **Heights** (`hae`) are meters above the WGS84 ellipsoid, in the bare-earth convention.\
+- Positions are WGS84 latitude and longitude in degrees.
+- Heights (`hae`) are meters above the WGS84 ellipsoid, in the bare-earth convention.\
   That is the height of the bare ground model the world was built on.\
   It leaves out the offset that lines the road up with the photographic terrain.\
   A camera's physical height is its `hae` plus `align_offset_m`.
-- **Directions** (`course`, `heading_deg`, `azimuth`) are degrees clockwise from true north.
-- **Velocities** (`vx`, `vy`, `vz`) are in CARLA's world frame: x east, y south, z up.
-- **Pixels** are counted from the picture's top-left corner: x to the right, y down.\
+- Directions (`course`, `heading_deg`, `azimuth`) are degrees clockwise from true north.
+- Velocities (`vx`, `vy`, `vz`) are in CARLA's world frame: x east, y south, z up.
+- Pixels are counted from the picture's top-left corner: x to the right, y down.\
   Boxes are not clipped to the picture.\
   So a coordinate can be negative or larger than the picture.
-- **Times** are UTC to the millisecond, such as `2026-10-07T17:34:49.411Z`.
-- **True or false** is written `true` or `false`.
+- Times are UTC to the millisecond, such as `2026-10-07T17:34:49.411Z`.
+- True or false is written `true` or `false`.
 
 A vehicle in the picture is one whose box fell wholly or partly in the picture (`in_frame` is `wholly` or `partly`).
 
@@ -430,7 +430,8 @@ Whether a blueprint draws a lamp for each is up to the 3D model.
 This page describes format version 1.\
 A sidecar names its version in `format_version` on `<events>`.\
 A sidecar without one was written before sidecars carried it and is version 1.\
-The sample capture of 2026-10-07, written before the version and the producer record, is valid against this schema.
+A sidecar written before the format version and the producer record existed is still valid against this schema.\
+Neither one is required.
 
 A reader reads a version it knows.\
 It refuses a newer version by name and says that a newer release wrote the file.\

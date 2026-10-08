@@ -24,7 +24,7 @@ A run with neither file prints the gaps to the log instead.
 The gaps are never written into the event file or the CSV.\
 This is because the answer a behavior model is asked for is a note that names the unmanned post and the time.
 
-Nothing in the tools reads it.\
+No tool uses the data in this file.\
 It is for whoever scores a model against the run.
 
 Given a folder holding it, `carla-validate` checks it against this schema.\

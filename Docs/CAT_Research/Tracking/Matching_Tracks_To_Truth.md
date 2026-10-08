@@ -44,26 +44,26 @@ The author's labels for that frame sit beside it too, in `<_supervision>`.
 
 ## The rule, per camera and per still
 
-1. **Match by position and time, never by id.**\
+1. Match by position and time, never by id.\
    The ids in the truth files (`uid`, which is `CARLA-TRUTH-SUMO-<sumo_id>`, `sumo_id` and `actor_id`) are for joining truth to truth.\
    Your tracks carry none of them.\
    If one of these ids ever turns up in your detector's output, it leaked from the capture folders you received.\
    Please tell whoever sent them.\
    `actor_id` does not even name one vehicle: a CARLA body draws a series of vehicles over a run.
-2. **Compare in the image, not on the ground.**\
+2. Compare in the image, not on the ground.\
    Take the distance in pixels between your box's center and the truth record's `box_px` center.\
    Divide it by the truth vehicle's apparent size.\
    A distance on the ground mixes up two different mistakes: matching the wrong vehicle and locating the right vehicle poorly.\
    Only the first gives a wrong label.
-3. **Use a match radius that grows with apparent size:** `max(g_min, k × max(apparent_width_px, apparent_height_px))`.\
+3. Use a match radius that grows with apparent size: `max(g_min, k × max(apparent_width_px, apparent_height_px))`.\
    A fixed radius in pixels is wrong across the frame.\
    In a steep oblique view, the same vehicle looks several times larger at one edge than at the other.\
    You choose `g_min` and `k`.\
    The rule sets no values for them.
-4. **Assign all the pairs at once, not nearest first.**\
+4. Assign all the pairs at once, not nearest first.\
    Use a minimum-cost assignment over every pair inside the radius.\
    Nearest-first matching in dense traffic gives one vehicle's label to another vehicle's track.
-5. **Keep the evidence with each label you carry over.**\
+5. Keep the evidence with each label you carry over.\
    Keep the pixel distance and the distance divided by apparent size.\
    Also keep how much closer the chosen vehicle was than the next-best one.\
    Then you can find a wrong match later instead of mistaking it for a hard example.
@@ -79,11 +79,11 @@ Only their positions tell them apart.
 
 ## Carrying labels across time
 
-- **A label goes on a stretch of one track, seen by one camera, inside one label interval.**\
+- A label goes on a stretch of one track, seen by one camera, inside one label interval.\
   A label interval is the span of time a label is in force.\
   One vehicle can become several tracks (a lost and re-found track, an id switch).\
   So labels never go on "the vehicle" as a whole.
-- **Clip at the interval's edges.**\
+- Clip at the interval's edges.\
   A track that runs past the start or end of a label interval gets the label only for the stills inside it.\
   Each sidecar's `<_supervision>` already says which labels were in force for each vehicle on that still.\
   So the stills a label covers are the stills whose matched record carries it.
@@ -91,7 +91,7 @@ Only their positions tell them apart.
   The exact edges, which fall between stills, are in the manifest.\
   Its `instance` rows declare each labeled behavior and the vehicles taking part.\
   Its `interval_opened` and `interval_closed` rows give each interval's start and end as `sim_time_s`.
-- **Compare times on SUMO's clock, through the frame number.**\
+- Compare times on SUMO's clock, through the frame number.\
   The manifest's `sim_time_s` is SUMO's clock.\
   A still's own `sim_time_s` is CARLA's, with another zero.\
   In the sample capture, it reads 235.299 s more for every still.
@@ -101,12 +101,12 @@ Only their positions tell them apart.
   Then read that row's `sim_time_s`.\
   A label holds from the frame at its interval's start up to, but not including, the frame at its end.\
   See [How the stills line up with the manifest's intervals](../EPOL/Capture_Folder.md#how-the-stills-line-up-with-the-manifests-intervals).
-- **Each camera is a separate observation.**\
+- Each camera is a separate observation.\
   With several cameras, one label interval can give a labeled stretch on each camera's tracks.\
   Those stretches overlap in time.\
   That is correct.\
   Reconciling them is up to you.
-- **Do not give one vehicle's label to a track that follows more than one vehicle over its life.**\
+- Do not give one vehicle's label to a track that follows more than one vehicle over its life.\
   Decide for yourself how large a share of a track one vehicle must account for.
 
 ## What a capture folder does not contain

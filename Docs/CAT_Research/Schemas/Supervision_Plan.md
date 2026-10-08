@@ -38,9 +38,9 @@ Two compiles of one specification therefore write byte-for-byte identical plans.
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario` writes it** with the scenario's other files.\
+- `carla-compile-scenario` writes it with the scenario's other files.\
   The scenario lock digests it.
-- **The co-simulation session reads it** at the start of a compiled scenario, under `carla-capture` and `carla-drive`.\
+- The co-simulation session reads it at the start of a compiled scenario, under `carla-capture` and `carla-drive`.\
   It refuses a plan whose digests do not match the files it runs.\
   During the run, it reports each interval opening and closing in the run manifest.\
   Each still's sidecar carries the supervision of its own frame.

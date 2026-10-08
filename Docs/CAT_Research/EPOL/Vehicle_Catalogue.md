@@ -83,23 +83,23 @@ In the Arapahoe check, every `suv` is the same Nissan Patrol.
 
 ## Body size
 
-- **In a sidecar**, `length_m`, `width_m` and `height_m` are the body's measured bounding box, mirrors included: the catalog's `length_m`, `width_m` and `height_m`, rounded to the centimeter.\
+- In a sidecar, `length_m`, `width_m` and `height_m` are the body's measured bounding box, mirrors included: the catalog's `length_m`, `width_m` and `height_m`, rounded to the centimeter.\
   For the Ford Mustang the catalog holds 4.7175 × 1.8948 × 1.3009 m.\
   The sidecar says 4.72 × 1.89 × 1.30.\
   The record's boxes, `box_px`, `box_oriented_px` and `<_box3d>`, are this box placed at the body's pose.
-- **In the world truth track**, they are the SUMO vehicle type's.\
+- In the world truth track, they are the SUMO vehicle type's.\
   Length and height are the same.\
   The width is `body_width_m`, the body without its mirrors.\
   It is the width SUMO keeps clear on the road.\
   For the Mustang the track says 4.72 × 1.84 × 1.30.
-- **Where the position is.**\
+- Where the position is.\
   SUMO places a vehicle by the middle of its front bumper.\
   CARLA places a body by its origin.\
   `bbox_centre_m` gives the box's center from that origin: forward, right, up.\
   So SUMO's point lies `length_m / 2 + bbox_centre_m[0]` ahead of the body's origin, along the way the body points.\
   For the Mustang that is 4.7175 / 2 + 0.0321 = 2.39 m.\
   In the sample capture, the track's point and the sidecar's `<point>` for the parked `dweller`, a Mustang, are 2.39 m apart.
-- **A class can be drawn smaller or larger than its name suggests.**\
+- A class can be drawn smaller or larger than its name suggests.\
   The content has no articulated truck.\
   So the Arapahoe check's `semi` class is drawn as `vehicle.carlamotors.european_hgv`, 7.92 m long.\
   The scenario specification's notes on each class say so.
@@ -131,14 +131,14 @@ The catalog writes `special_1` and `special_2`.
 
 ## Color
 
-- **In a sidecar**, `color` is the body's color attribute, as red,green,blue from 0 to 255.\
+- In a sidecar, `color` is the body's color attribute, as red,green,blue from 0 to 255.\
   It is empty for a body with no color attribute: in this catalog, `vehicle.carlamotors.european_hgv` and `vehicle.jeep.wrangler_rubicon` (`colour_settable` is `false`).
-- **Every body of one blueprint has the same color.**\
+- Every body of one blueprint has the same color.\
   Each body is created with its blueprint's own color attribute, unchanged.\
   In the sample capture every Ford Mustang is `0,0,0`, every Nissan Patrol `2,35,54` and every Mercedes Sprinter `233,234,236`: for each body, the first entry of its `colour_palette`.\
   So color does not tell two vehicles of one body apart.\
   The class's `render_colour_policy`, `palette`, is declared, but nothing reads it yet.
-- **The color attribute is not always the paint.**\
+- The color attribute is not always the paint.\
   Where the catalog says `colour_applied` is `false`, setting a color did not reach the body during the catalog's build.\
   For those bodies, it is possible that the recorded `color` is not what the picture shows.\
   In this catalog they are:
@@ -147,7 +147,7 @@ The catalog writes `special_1` and `special_2`.
   - `vehicle.lincoln.mkz`
   - `vehicle.mini.cooper`
   - `vehicle.sprinter.mercedes`
-- **In the world truth track**, `color` is the color sumo-gui draws the SUMO vehicle type in: the scenario class's `gui_colour`.\
+- In the world truth track, `color` is the color sumo-gui draws the SUMO vehicle type in: the scenario class's `gui_colour`.\
   It never reaches the picture.\
   The Arapahoe check's `car` class is `#B3B8C7`.\
   So every one of its cars is `179,184,199` in the track.

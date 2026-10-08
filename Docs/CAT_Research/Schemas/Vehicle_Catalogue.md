@@ -4,11 +4,11 @@ The vehicle catalog lists every vehicle body CARLA can draw, with its measuremen
 It groups the bodies into the classes a scenario asks for.\
 It is the one source of three things:
 
-- **What kind of vehicle each body is.**\
+- What kind of vehicle each body is.\
   The truth records' `base_type` and `special_type` come from the catalog's classes, not from what the content declares and not from SUMO's vehicle class.
-- **How big each body is.**\
+- How big each body is.\
   SUMO reserves road space for the measured body, so the vehicle SUMO drives and the body CARLA draws are the same size.
-- **How SUMO drives each class.**\
+- How SUMO drives each class.\
   Every class states its acceleration, braking, speed and gap explicitly.
 
 It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout.\

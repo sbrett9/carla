@@ -54,14 +54,14 @@ Every command takes `--help`.
 
 ## What the machine needs
 
-- **A GPU.**\
+- A GPU.\
   The server renders even with no window.\
   On Windows, 64-bit Windows 10 or 11 with current graphics drivers.\
   On Linux, a 64-bit system compatible with RHEL 8 (glibc 2.28 or newer) and a GPU with Vulkan drivers.
-- **Python 3.11 or newer**, on the `PATH`, for the virtual environment.
-- **The .NET 10 runtime.**\
+- Python 3.11 or newer, on the `PATH`, for the virtual environment.
+- The .NET 10 runtime.\
   `carlanet` runs .NET assemblies.
-- **SUMO 1.27.0, needed only for `sumo-gui`.**\
+- SUMO 1.27.0, needed only for `sumo-gui`.\
   The distribution's own SUMO has no `sumo-gui`.\
   If you want to watch a drive in SUMO's window, install SUMO 1.27.0 yourself.\
   It must be the release that converted the world.\
@@ -171,14 +171,14 @@ The [Site profile](../Schemas/Site_Profile.md) page describes every field.
 
 You need one for two reasons:
 
-- **An unattended capture refuses without one.**\
+- An unattended capture refuses without one.\
   Until the site profile names the SUMO installation, run check 36 refuses an installed `carla-capture` run with `--caller unattended`.\
   Without a profile, nothing names it.\
   The only way left to find it is a search of `SUMO_HOME` and then the `PATH`.\
   An unattended run does not take machine state it was not given.\
 So it refuses.\
   The refusal reads: `'sumo.home' names no installation, so the session will search SUMO_HOME, then PATH for one, which the site profile does not declare.`
-- **Without one, the folders depend on where you run the command.**\
+- Without one, the folders depend on where you run the command.\
   An installed `carla-capture` looks for world packages in `world-packages/` under the folder it is run from.\
   It looks for compiled scenarios in `scenarios/` under the same folder.\
   A profile fixes those folders whatever folder you are in.

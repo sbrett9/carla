@@ -29,15 +29,15 @@ Two machines with different time zone databases therefore always agree.
 
 ## Who writes it and who reads it
 
-- **A scenario developer writes it**, in the specification's `epoch` block.\
+- A scenario developer writes it, in the specification's `epoch` block.\
   The scenario compiler checks it (checks 33 and 34) and copies it into the scenario lock.
-- **`carla-drive --epoch FILE`** reads an epoch from a file: either the epoch object on its own, or a whole `scenario.json`.\
+- `carla-drive --epoch FILE` reads an epoch from a file: either the epoch object on its own, or a whole `scenario.json`.\
   From a whole specification, it reads the `epoch`.\
   It also reads the specification's `illumination` as the sun's policy.\
   It checks the epoch against this schema before the session sees it.\
   It refuses a file that does not conform.\
   The refusal quotes the schema.
-- **The co-simulation session** (`CarlaNet.CoSim.SolarEpoch`) makes the final decision on whether an epoch is valid.\
+- The co-simulation session (`CarlaNet.CoSim.SolarEpoch`) makes the final decision on whether an epoch is valid.\
   It also checks what a schema cannot:
   - the civil and UTC instants are one instant
   - the offset in `civil_datetime` equals `utc_offset_hours`

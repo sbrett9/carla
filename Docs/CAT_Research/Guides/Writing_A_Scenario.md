@@ -21,9 +21,9 @@ Every command takes `--help`.
 
 You need:
 
-- **A world package** (`.cwp`) for the place.\
+- A world package (`.cwp`) for the place.\
   [Building a world](Building_A_World.md) shows how to make one.
-- **The package's network fingerprint.**\
+- The package's network fingerprint.\
   A scenario names the network it was written for.\
   The fingerprint is a hash of the package's road network.\
   It is `NetworkFingerprint` in the package's `world.json`:
@@ -32,11 +32,11 @@ You need:
   python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('Build/world-packages/Arapahoe_I25.cwp').read('world.json'))['NetworkFingerprint'])"
   ```
 
-- **The vehicle catalog**, `vehicles.catalogue.json`.\
+- The vehicle catalog, `vehicles.catalogue.json`.\
   It lists every vehicle body CARLA can draw, each one measured.\
   It is `CarlaControl/catalogue/vehicles.catalogue.json` in a source checkout and `catalogue/vehicles.catalogue.json` in a distribution.\
   [The vehicles reference](../../../CarlaControl/skills/sumo-traffic-scenarios/references/vehicles.md) lists every class and body in it.
-- **SUMO 1.27.0**, the release that built the shipped worlds.\
+- SUMO 1.27.0, the release that built the shipped worlds.\
   The compiler routes with its `duarouter`.\
   It refuses a release other than the one that built the world (check 6).\
   From a source checkout it uses `Build/sumo-install`.\
@@ -527,11 +527,11 @@ A missing event is, for example, a delivery not made or a post left unmanned.\
 To plant one, label the vehicle that was due to fill it but did something else.\
 The example does it this way:
 
-1. **Keep the schedule's skip.**\
+1. Keep the schedule's skip.\
    It removes the routine 09:00 delivery, so no ordinary van fills it.\
    The skip's `because` says which vehicle deviates.\
    It is your note, not a label.
-2. **Add the deviating vehicle as an actor.**\
+2. Add the deviating vehicle as an actor.\
    Make it match the routine trips in everything but the behavior.\
    Only where it parks differs.\
    Any other difference is a second signal that the label does not name.\
@@ -540,14 +540,14 @@ The example does it this way:
    - the same start (`west_in`)
    - the occasion's departure time (09:00)
    - the same stay (4 minutes, parked)
-3. **Label it.**\
+3. Label it.\
    Use a term that says what it does instead: `shop:delivery_not_made`.
-4. **Give the place and time it was expected.**\
+4. Give the place and time it was expected.\
    Put them in the instance's `parameters`: `expected_area` and `expected_time`.\
    The empty place reaches the record as a value on the vehicle's label, never as a label of its own.
-5. **Anchor its interval to its stop.**\
+5. Anchor its interval to its stop.\
    The interval runs from `stop:0` to `stop_end:0`.
-6. **List the deviation in the routine term's `hard_negative_for`.**\
+6. List the deviation in the routine term's `hard_negative_for`.\
    `shop:scheduled_delivery` lists `shop:delivery_not_made`, so each routine delivery is a matched negative for it.
 
 ### Parameters
@@ -637,36 +637,36 @@ See [Scenario resolution report](../Schemas/Scenario_Resolution_Report.md).
 
 Check, in order:
 
-- **Findings.**\
+- Findings.\
   Every refusal and warning, with its check number.
-- **Epoch.**\
+- Epoch.\
   The civil time of second zero and of the end.
-- **Capture windows.**\
+- Capture windows.\
   Each window's civil times and the sun's elevation at its start and end.\
   The JSON's `capture_windows[].sun_lowest` gives the lowest elevation and its band, such as `day` or `night`.\
   Below -6 degrees, the scene has no light source.
-- **Places.**\
+- Places.\
   What each place became.\
   For the example, `shop_front` became lane `901#0_0` at 51.5 m and `east_at_cross` became edge `901#0`.\
   For a point, the JSON's `places.<name>.detail` gives how far it was moved to reach a lane: `snapped 0.01 m to -902#0_0`.\
   The `.md` file does not show it.
-- **Schedules.**\
+- Schedules.\
   How many trips each sent.\
   Each skip, with its civil time and reason.
-- **Routes.**\
+- Routes.\
   Each vehicle's and flow's route as `duarouter` found it, its length and its time at the speed limit.
-- **Vehicle types.**\
+- Vehicle types.\
   Each type and the body it binds, with its size.
-- **Supervision.**\
+- Supervision.\
   Each instance with its participants and intervals.\
   Each series with its slots.
-- **Dry run.**\
+- Dry run.\
   What the SUMO-only run showed (see below).
 
 The example compiles with two warnings:
 
-- **Check 17**, because the `van` class draws one body.
-- **Check 41**, the illumination-label association.\
+- Check 17, because the `van` class draws one body.
+- Check 41, the illumination-label association.\
   It measures how much the light band tells about the label over the capture windows, or over the whole run in a scenario with none.\
   It is always a warning and never a refusal.\
   In a pattern of life, routine behavior often follows the clock, as the light does.\
@@ -717,8 +717,7 @@ If a vehicle that the supervision plan names never gets in, the compiler refuses
 Such a vehicle is dropped after waiting 900 s at its entrance, or is still waiting at the end of the run.\
 The report's dry run section gives every labeled vehicle's wait, the other vehicles dropped and every collision.
 
-The run takes seconds to minutes.\
-Measured: the example's 3 hours took 2.4 s; the Arapahoe underpass dwell (45 minutes, 7,433 vehicles at a 0.05 s step) took 153 s; the Shahid Bahonar pattern of life (7 days, 69,246 vehicles at a 1 s step) took 146 s.
+The run takes seconds to minutes.
 
 `--skip-dry-run` skips it while you draft.\
 The lock records that it was skipped.\
@@ -826,7 +825,8 @@ When that full path passes 260 characters, SUMO cannot open it.\
 The member is then refused with check 11 or 59.\
 The refusal says that a file "is not accessible" or that SUMO "Could not access configuration".
 
-The example's twins have 52-character ids, such as `shop_deliveries.mcb1102d16d.cf.van_due_d0_h9.absent`.\
+The example's twin ids are about 50 characters long.\
+For example, `shop_deliveries.mcb1102d16d.cf.van_due_d0_h9.absent` has 51.\
 So the full path of its output folder must stay under about 80 characters.\
 A longer scenario id or actor id leaves less room.\
 Work in a folder with a short path, such as `C:\carla`.\

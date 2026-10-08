@@ -39,17 +39,17 @@ A level cooked on Linux goes into a Linux one.
 
 ## Words used here
 
-- **Distribution**: the CARLA bundle made by `Scripts/Windows/MakeDistribution.ps1`.\
+- Distribution: the CARLA bundle made by `Scripts/Windows/MakeDistribution.ps1`.\
   It is a folder named `Carla-<version>-Win64-<configuration>`, such as `Carla-0.10.0-Win64-Development`.\
   It holds:
   - the cooked server, in `CarlaServer\`
   - the world tools, in `world-tools\`
   - `run-server.ps1`
   - a `VERSION` file
-- **World package**: one generated world in one `.cwp` file, written by the world build.
-- **Exported world**: the level and its assets, copied into a content-only plugin under `Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
+- World package: one generated world in one `.cwp` file, written by the world build.
+- Exported world: the level and its assets, copied into a content-only plugin under `Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
   This is the copy that ships.
-- **Level package**: the `.zip` that `PackageWorld` makes.\
+- Level package: the `.zip` that `PackageWorld` makes.\
   It holds the cooked plugin and a `world.json` that says what the level needs.
 
 `<World>` stands for the world's name.\
@@ -178,14 +178,14 @@ The importer reads three of its entries:
 
 Before you import it:
 
-- **The file name is the world's name.**\
+- The file name is the world's name.\
   The importer names the level, the plugin and the map path `/<World>/Maps/<World>` after the file name, without `.cwp`.\
   Do not rename the file.
-- **Keep the `.cwp`.**\
+- Keep the `.cwp`.\
   Scenarios are compiled against it.\
   A SUMO drive or a capture checks the loaded level against it before it starts.\
   Whoever runs scenarios on your level needs this same file.
-- **Put it where the importer looks first.**\
+- Put it where the importer looks first.\
   That folder is `Build\world-packages\` in the checkout.\
   The importer fills in the first package it finds there.
 - If you have the `carla-*` commands installed, `carla-validate <World>.cwp` checks the package before you import it.
@@ -245,18 +245,18 @@ It starts with that map's OpenDRIVE generator, player start and lighting.\
 It has no large-map manager.\
 The importer adds:
 
-- **GeneratedWorldInitializer**, an actor that points at the world settings.\
+- GeneratedWorldInitializer, an actor that points at the world settings.\
   Each time the level plays, it applies them: the georeference (where the world sits on the Earth), the imagery layers, the collision surface and the bare-earth data.\
   A level loaded by name needs no client to set it up.
-- **The road pieces**, as Static Mesh Actors labeled with their mesh names and tagged `road`.\
+- The road pieces, as Static Mesh Actors labeled with their mesh names and tagged `road`.\
   Only driving lanes, junctions and sidewalks are baked.\
   Other lane types in the road network, such as bike lanes, get no mesh.
-- **The Cesium georeference and imagery tilesets**, set up from the settings.\
+- The Cesium georeference and imagery tilesets, set up from the settings.\
   The globe streams in the editor.\
   The bare-earth ground layer is not drawn in the simulation.\
   When the level opens, the editor hides it.\
   Use the eye icon in the Outliner to show it while you work.
-- **GeneratedWorldExposure**, an unbound post process volume with a fixed daylight exposure (ISO 100, 1/125 s, f/16).\
+- GeneratedWorldExposure, an unbound post process volume with a fixed daylight exposure (ISO 100, 1/125 s, f/16).\
   Without it the level looks white in the editor.\
   Camera sensors set their own exposure, so this volume does not change captured images.
 
@@ -271,18 +271,18 @@ So do not edit the plugin's copy of the level.
 
 ### Safe to edit
 
-- **The road meshes.**\
+- The road meshes.\
   Fix seams, gaps, holes, normals, UVs, LODs and materials on the `SM_RoadSurface_<n>` and `SM_Sidewalk_<n>` meshes, in `/Game/Carla/Static/Road/<World>/` and `/Game/Carla/Static/SideWalk/<World>/`.\
   Keep the surface where it is.\
   Vehicles are placed from the road network and the bare-earth data, not from these meshes.\
   A surface that is raised, lowered or moved sideways leaves vehicles floating above it or sunk into it.
-- **The road materials.**\
+- The road materials.\
   Another stock CARLA material is fine.\
   A new material must be saved inside the world's plugin (see below).
-- **Detail around the roads**: props, vegetation, buildings, barriers, decals.\
+- Detail around the roads: props, vegetation, buildings, barriers, decals.\
   Keep it off the driving lanes.\
   Vehicles follow the road network, so anything on a lane ends up inside the vehicles that drive through it.
-- **GeneratedWorldExposure**, to change how the level looks in the editor.\
+- GeneratedWorldExposure, to change how the level looks in the editor.\
   It does not change camera images.
 
 ### Where to save new assets
@@ -317,17 +317,17 @@ A SUMO drive or a capture compares the loaded level with the world's `.cwp` befo
 If any of the following differ, it refuses to start.\
 It names what differs.
 
-- **The georeference.**\
+- The georeference.\
   Leave the Datum fields of `<World>_WorldSettings` alone: `OriginLatitude`, `OriginLongitude`, `OriginHeightMeters` and `GeoReferenceString`.\
   Leave the Cesium georeference actor alone too, because the initializer sets it from the settings each time the level plays.\
   The run allows the origin to differ from the `.cwp`'s by no more than about a millimeter.\
   Do not move or rotate the level's content as a whole either.\
   Everything in it is placed in the coordinates the road network uses.
-- **The road network the scenarios bind to.**\
+- The road network the scenarios bind to.\
   Leave `<World>_RoadNetwork` and `OpenDrive\<World>.xodr` alone.\
   Scenarios are compiled against the SUMO network that was built with this road network.\
   The run compares the OpenDRIVE the server serves with the `.cwp`'s `map.xodr`.
-- **The bare-earth data.**\
+- The bare-earth data.\
   Leave `<World>_BareEarthField` alone.\
   Leave the Surface fields of `<World>_WorldSettings` alone too: `HeightAlignMode`, `DrapeActive`, `HeightAlignOffsetMeters` and `OffsetField`.\
   The run compares the grids' size, position and contents with the `.cwp`'s `bareearth.bin`.
@@ -431,9 +431,9 @@ It leaves other files in the plugin folder alone, such as `DeliverSeparately.txt
 
 A generated world ships in one of two ways, never both:
 
-- **Inside the base distribution.**\
+- Inside the base distribution.\
   Whoever makes the distribution cooks it with the rest of CARLA.
-- **On its own, as DLC.**\
+- On its own, as DLC.\
   You cook it by itself against an existing distribution.\
   It is then installed into that distribution.
 
@@ -509,18 +509,18 @@ Then it writes `world.json` and makes the zip.
 
 ### Options
 
-From the script's help text:
+Adapted from the script's help text:
 
 | Option | Meaning |
 |---|---|
-| `-World <name>` | Exported world to package (required). |
-| `-BasedOnRelease <name>` | Release to cook against (default: current short Carla commit). |
-| `-Distribution <folder>` | Record the release from this CARLA distribution, then cook against it. The checkout must be at the distribution's CARLA commit. |
-| `-CarlaRoot <path>` | The CARLA checkout (default: the one this script is in; required when run from a distribution's world-tools folder). |
-| `-OutputDirectory <path>` | Where to write the .zip (default: `Build\WorldPackages`). |
-| `-Config <cfg>` | Development (default) \| Shipping \| Debug. |
-| `-SkipCook` | Package an existing cook without re-cooking. |
-| `-UnrealEngineRoot <path>` | Engine root (default: `CARLA_UNREAL_ENGINE_PATH` or `<repo-parent>\UE_5_7_4`). |
+| `-World <name>` | The exported world to package. Required. |
+| `-BasedOnRelease <name>` | The release to cook against. The default is the current short Carla commit. |
+| `-Distribution <folder>` | Records the release from this CARLA distribution, then cooks against it. The checkout must be at the distribution's CARLA commit. |
+| `-CarlaRoot <path>` | The CARLA checkout. The default is the checkout this script is in. If you run the script from a distribution's world-tools folder, this option is required. |
+| `-OutputDirectory <path>` | Where to write the .zip. The default is `Build\WorldPackages`. |
+| `-Config <cfg>` | Development (the default), Shipping or Debug. |
+| `-SkipCook` | Packages an existing cook without cooking it again. |
+| `-UnrealEngineRoot <path>` | The engine root. The default is `CARLA_UNREAL_ENGINE_PATH`. If that variable is not set, the default is `<repo-parent>\UE_5_7_4`. |
 
 With `-Distribution`, you do not need `-BasedOnRelease` or `-Config`.
 
@@ -607,13 +607,13 @@ From anywhere else, name the distribution with `-Into`:
 .\Scripts\Windows\InstallWorld.ps1 -Package Build\WorldPackages\Arapahoe_I25.zip -Into D:\Carla-0.10.0-Win64-Development
 ```
 
-From the script's help text:
+Adapted from the script's help text:
 
 | Option | Meaning |
 |---|---|
-| `-Package <world.zip>` | The `.zip` written by `PackageWorld.ps1` (required). |
-| `-Into <package directory>` | The CARLA package to install into: a cooked package's root (the directory holding `CarlaUnreal\` and `VERSION`), or a CARLA distribution's root (the one holding `CarlaServer\` and `VERSION`). Run from a distribution's world-tools folder, it defaults to that distribution. |
-| `-Force` | Installs despite a world interface version that does not allow it; the world may then fail to load. A `world.json` of a newer format than this script reads is refused regardless. |
+| `-Package <world.zip>` | The `.zip` that `PackageWorld.ps1` wrote. Required. |
+| `-Into <package directory>` | The CARLA package to install into. It is a cooked package's root (the directory holding `CarlaUnreal\` and `VERSION`) or a CARLA distribution's root (the one holding `CarlaServer\` and `VERSION`). If you run the script from a distribution's world-tools folder, the default is that distribution. |
+| `-Force` | If the world interface version does not allow the install, this option installs anyway. It is then possible that the world fails to load. The script still refuses a `world.json` of a newer format than it reads. |
 
 `InstallWorld` unpacks the zip, checks the world interface version and copies the world's folder to `CarlaServer\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
 A copy of the world that is already installed is deleted first.\

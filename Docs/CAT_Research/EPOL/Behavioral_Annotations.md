@@ -24,10 +24,10 @@ It also records the times each one started and ended.
 A label is a term, spelled `namespace:name`, such as `check:kerbside_dwell`.\
 The vocabulary has two parts:
 
-- **The core**: a closed set of words that the tools themselves act on, such as the supervision states and the reasons an interval closes.\
+- The core: a closed set of words that the tools themselves act on, such as the supervision states and the reasons an interval closes.\
   Its version is the `vocabulary` number on every sidecar and in the manifest: 3 in current captures.\
   The plan lists every core word by family, in `vocabulary.core`.
-- **Author namespaces**: the terms a scenario's author declares.\
+- Author namespaces: the terms a scenario's author declares.\
   The Arapahoe supervision check declares `check` (version 1).\
   The Shahid Bahonar Port scenario declares `bahonar` (version 2).\
   Each namespace has its own version.
@@ -69,11 +69,11 @@ It also names the namespaces and versions the plan uses ([`manifest_opened`](../
 
 Every label row asserts one of three states, which are core words:
 
-- **`annotated`**: the vehicle carries out the named behavior.
-- **`nominal`**: an authored negative.\
+- `annotated`: the vehicle carries out the named behavior.
+- `nominal`: an authored negative.\
   The vehicle carries out none of the target behaviors.\
   An author can choose it because it looks like one of them (see [Hard negatives](#hard-negatives)).
-- **`unlabelled`**: no assertion.\
+- `unlabelled`: no assertion.\
   It is not a negative: the author says nothing about the vehicle.\
   The word is an identifier and keeps this spelling.
 
@@ -86,16 +86,16 @@ So a missing row never stands for a negative.
 
 A plan holds three kinds of label rows ([Supervision plan](../Schemas/Supervision_Plan.md)):
 
-- **An instance** is one assertion about one or more authored vehicles.\
+- An instance is one assertion about one or more authored vehicles.\
   Its id is `<scenario_id>/<name>`, such as `Arapahoe_I25_SupervisionCheck/kerbside_dwell`.\
   It has a state (`annotated` or `nominal`), its labels, its parameters and its participants: each a vehicle, by its `sumo_id`, with a role.\
   A one-vehicle instance names its vehicle `subject`.\
   An instance with several vehicles uses roles its namespace declares: the Bahonar escort instance `pi_escort_drydock_d3` names one `bahonar:lead` and four `bahonar:follower`s.
-- **A series** reads a schedule as a recurring behavior.\
+- A series reads a schedule as a recurring behavior.\
   It has one slot for each vehicle the schedule sends.\
   Every slot's vehicle plays the series' `member_role`.\
   In a sidecar, its annotation's `instance` is `series:<series_id>`.
-- **A cohort** labels every vehicle a flow sends, for each vehicle's whole life.\
+- A cohort labels every vehicle a flow sends, for each vehicle's whole life.\
   It is `annotated` or `unlabelled`, never `nominal`.\
   It has no intervals.\
   In a sidecar, its annotation's `instance` is `cohort:<flow_id>`.\
@@ -111,7 +111,7 @@ Two runs of one scenario share these names.
 
 An interval starts and ends in one of two ways:
 
-- **On the vehicle's own events**, which the scenario calls anchors:
+- On the vehicle's own events, which the scenario calls anchors:
   - `depart`: its insertion.
   - `stop:<i>`: arriving at its stop number `i`.
   - `stop_end:<i>`: leaving that stop.
@@ -120,31 +120,31 @@ An interval starts and ends in one of two ways:
   Numbers count from 0.\
   An interval with no end anchor stays open until the vehicle leaves the simulation or the run ends.
 
-- **At declared times**: a civil start and end, or a duration.
+- At declared times: a civil start and end, or a duration.
 
 When a vehicle carries an instance's labels:
 
-- **An instance with intervals** labels each participant only while one of that participant's intervals is open.\
+- An instance with intervals labels each participant only while one of that participant's intervals is open.\
   The annotation's `phase` names the interval.\
   If two are open, the vehicle carries two annotations.\
   Unless another row labels it, the vehicle is `unlabelled` outside its intervals.
-- **A participant with no intervals of its own** carries the instance's labels for as long as SUMO has it.\
+- A participant with no intervals of its own carries the instance's labels for as long as SUMO has it.\
   So does every vehicle of an instance that declares no intervals.
-- **A series** labels each slot's vehicle for as long as SUMO has it.\
+- A series labels each slot's vehicle for as long as SUMO has it.\
   The slot's declared start and end are in the plan and in the manifest's `series` row.
-- **An annotated cohort** labels each vehicle of its flow for as long as SUMO has it.
+- An annotated cohort labels each vehicle of its flow for as long as SUMO has it.
 
 ### The three onsets
 
 An interval's start is recorded three ways, each from a different source:
 
-- **Declared**: what the author wrote, from the plan.\
+- Declared: what the author wrote, from the plan.\
   `declared_start_s` and `declared_start_civil` are a declared start.\
   `declared_duration_s` is a declared length.\
   An interval anchored to a stop of set length declares that length but no start time.
-- **Committed**: when SUMO's model did it, on SUMO's clock at the step that reported it (`committed_start_s`, `committed_end_s`).\
+- Committed: when SUMO's model did it, on SUMO's clock at the step that reported it (`committed_start_s`, `committed_end_s`).\
   An interval declared by time alone has no committed onset.
-- **Observed**: when the drawn body showed it (`observed_start_s`, `observed_start_frame`).\
+- Observed: when the drawn body showed it (`observed_start_s`, `observed_start_frame`).\
   For a departure it is the first frame that drew the vehicle.\
   For a stop it is the first frame on which the drawn body's speed was at or below 0.15 m/s.\
   The body can come to a standstill up to one SUMO step before the committed onset, because frames between SUMO steps fill in its position.\
@@ -194,14 +194,14 @@ Then look up that row.
 
 Two examples:
 
-- **Arapahoe supervision check.**\
+- Arapahoe supervision check.\
   A van, `brief_stopper`, stops at the same curb as the `dweller` for twenty seconds.\
   Its instance is `nominal`, labeled `check:brief_kerb_stop`.\
   Its manifest row says `"hard_negative_for":["check:kerbside_dwell"]`.\
   The term's definition says why: this is "an ordinary stop where the dwell happens."\
   It pulls to the same curb for twenty seconds, as a delivery or a pick-up does.\
   Then it drives on.
-- **Shahid Bahonar Port.**\
+- Shahid Bahonar Port.\
   Guards relieve sixteen towers every eight hours.\
   The series `tower_relief` is `nominal`, labeled `bahonar:tower_posting`, a "long parked dwell, in a legitimate place, for a legitimate reason".\
   Its `hard_negative_for` is `bahonar:standoff_dwell_at_access_point`, `bahonar:arrival_without_departure` and `bahonar:posting_not_taken_up`.\
@@ -302,14 +302,14 @@ In the sample capture, the car `transit` carries two annotations while it passes
 
 The [run manifest](../Schemas/Run_Manifest.md) records the plan as declared and the run as it bound it:
 
-- **`instance`, `series` and `cohort` rows**, right after the first row.\
+- `instance`, `series` and `cohort` rows, right after the first row.\
   They hold every row of the plan, as declared, with its state, labels, parameters, `hard_negative_for`, participants and roles.\
   An instance's row also holds its intervals with their anchors and declared times.
-- **`interval_opened` and `interval_closed` rows**, as each interval opens and closes.\
+- `interval_opened` and `interval_closed` rows, as each interval opens and closes.\
   They hold the three onsets and whether the interval began before the capture window opened.\
   The closing row adds `closed_by`, the committed end and `not_drawn`.
-- **`supervision_defect` rows**: a fault in how the run carried out the plan, in words, such as a stop the drawn body never stood still for.
-- **The last row, `manifest_closed`.**\
+- `supervision_defect` rows: a fault in how the run carried out the plan, in words, such as a stop the drawn body never stood still for.
+- The last row, `manifest_closed`.\
   Its `open_intervals` lists the intervals still open as the run ended.\
   Its `open_intervals_close_as` gives the reason they close with.\
   Its `never_opened` lists the intervals nothing in the run opened or closed.\
@@ -363,13 +363,13 @@ Its `never_opened` entry is the record of that.
 
 Three things this shows:
 
-- **A participant is `unlabelled` outside its intervals.**\
+- A participant is `unlabelled` outside its intervals.\
   The `dweller` is `unlabelled` while it drives to the curb and after it leaves.\
   The `brief_stopper` is `unlabelled` in all 79 stills that list it, although its instance is `nominal`.
-- **Labels hold whether or not the vehicle is in the picture.**\
+- Labels hold whether or not the vehicle is in the picture.\
   `transit` is `annotated` from 90.5 s but is in the picture only from 155.0 s to 159.5 s.\
   Use `in_frame` to tell the two apart.
-- **Some onsets are left empty.**\
+- Some onsets are left empty.\
   The `transit` row was written as the interval opened, before any frame drew the car.\
   The interval never closed in the window.\
   So the manifest holds no observed onset for it.\

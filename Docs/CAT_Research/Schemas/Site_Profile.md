@@ -33,9 +33,9 @@ If no profile names `sumo.home`, the session looks for SUMO in this order:
 
 ## Who writes it and who reads it
 
-- **You write it**, usually once per machine.\
+- You write it, usually once per machine.\
   `carla-capture --write-site-profile PATH` writes this machine's current values as a file to edit.
-- **`carla-capture --site-profile` reads it** before resolving the run.\
+- `carla-capture --site-profile` reads it before resolving the run.\
   It refuses a file that is not JSON or does not conform to the schema.\
   It also refuses a file with no `site_profile_version` of 1, or with a block or a field it does not know.\
   The refusal ends the launch with exit status 1, before a run begins.\

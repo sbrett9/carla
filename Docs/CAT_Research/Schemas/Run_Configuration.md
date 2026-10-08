@@ -39,13 +39,13 @@ North is -y.
 
 ## Who writes it and who reads it
 
-- **You write it**, by hand or from a script.\
+- You write it, by hand or from a script.\
   A scenario developer usually writes one per scenario window.\
   A camera or mission developer adds or changes the channels.
-- **`carla-capture` writes `run.effective.json`** beside the run result.\
+- `carla-capture` writes `run.effective.json` beside the run result.\
   The offline checks must accept the launch first.\
   It adds a `producer` record that says what wrote it.
-- **`carla-capture --run` reads it** before anything else.\
+- `carla-capture --run` reads it before anything else.\
   An unknown key is refused with the nearest field names (run check 1).\
   A camera blueprint attribute such as `iso` or `shutter_speed` is refused with the name of the channel field that sets it.\
   A `world_build` block is refused, because a capture run never builds a world (run check 38).

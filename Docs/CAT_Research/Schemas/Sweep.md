@@ -37,8 +37,8 @@ Car-following models react to what is in front of them, so a pair is identical i
 
 ## Who writes it and who reads it
 
-- **A scenario developer writes it**, beside the base specification.
-- **`carla-compile-scenario --sweep FILE --out-dir DIR`** reads it, checks it against this schema (check 53), compiles each member into `DIR/<member id>/` and writes the [Sweep index](Sweep_Index.md) into `DIR`.
+- A scenario developer writes it, beside the base specification.
+- `carla-compile-scenario --sweep FILE --out-dir DIR` reads it, checks it against this schema (check 53), compiles each member into `DIR/<member id>/` and writes the [Sweep index](Sweep_Index.md) into `DIR`.
 
 The schema ships with the authoring skill.\
 `carla-compile-scenario --write-sweep-schema PATH` writes it.

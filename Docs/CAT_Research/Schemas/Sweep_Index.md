@@ -23,7 +23,7 @@ The index is how you find the member that holds a given combination of values an
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario --sweep FILE --out-dir DIR`** writes it into `DIR`, beside the members' folders.\
+- `carla-compile-scenario --sweep FILE --out-dir DIR` writes it into `DIR`, beside the members' folders.\
   Each member is compiled in full into `DIR/<member id>/`, with its own specification, lock, resolution report and supervision plan.
 - It is written whether the sweep compiled or was refused.\
   A sweep refused before its members were made, for example by its own schema, has only:

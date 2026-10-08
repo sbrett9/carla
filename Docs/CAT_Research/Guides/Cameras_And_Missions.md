@@ -176,7 +176,7 @@ So a lap takes `period` simulated seconds whatever the pace.\
 While the orbit is enabled, paused or not, the server owns the camera's pose.\
 Call `set_orbit_enabled(False)` before you move the camera yourself.
 
-A server too old to fly orbits raises `carlanet.OrbitNotOnServerError`.\
+If the server is too old to fly orbits, the client raises `carlanet.OrbitNotOnServerError`.\
 Nothing in the client moves the camera in its place.
 
 **`OrbitSensorController`** is the `carlacontrol` class that `carla-camera-follower` and `carla-capture` use to give a camera its orbit.\
@@ -285,11 +285,11 @@ The drive runs headless: with `--no-record` it opens no window and spawns no cam
 The paths are from the repository's root, where the compiled scenario is in `Import/` and the world package in `Build/world-packages/`.\
 With an installed distribution, give the paths to your own copies.
 
-1. **Start the server with the Arapahoe world loaded.**\
+1. Start the server with the Arapahoe world loaded.\
    See [Getting started](Getting_Started.md#set-up).\
    The server runs without a window.
 
-2. **Start the follower** in a terminal of its own.\
+2. Start the follower in a terminal of its own.\
    It orbits the dwell spot at the follower's defaults, a 200 m radius, 518.2 m up and 240 s per lap:
 
 ```sh
@@ -299,7 +299,7 @@ carla-camera-follower --sensor-id Underpass_Orbit_1 --pattern orbit --orbit-cent
 A window opens and shows the camera's picture.\
 Until a drive ticks the world, frames come at the server's own rate.
 
-3. **Start the drive** in another terminal.\
+3. Start the drive in another terminal.\
    The drive reads the epoch and the sun's policy from the scenario's specification.\
    So leave out `--illumination`.\
    Giving both is refused.
@@ -325,7 +325,7 @@ The marked vehicle leaves at t = 120 s.\
 To start the picture nearer its dwell, add `--warm-up 600`.\
 It fast-forwards SUMO to t = 600 s before the first tick and draws nothing on the way.
 
-4. **Stop.**\
+4. Stop.\
    Press Ctrl+C in the drive's terminal.\
    Press Esc in the follower's window.\
    The order does not matter.\

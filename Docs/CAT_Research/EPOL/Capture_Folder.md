@@ -33,21 +33,21 @@ cap-20261008-041347-270d6d/
     world_truth_track.summary.json                   the track's summary
 ```
 
-- **A folder per camera**, named after the camera.\
+- A folder per camera, named after the camera.\
   Each still is a PNG.\
   Its truth sidecar is an XML file with the same name.\
   The time in the name is the recording computer's local clock, to the millisecond.\
   It is not the simulated time.\
   It is not UTC either: the first still's sidecar says it was captured at `2026-10-08T04:14:04.926Z`.\
   Order stills by their frame number, `tick`, not by their names.
-- **`truth/`** holds the [run manifest](../Schemas/Run_Manifest.md), the [world truth track](../Schemas/World_Truth_Track.md) and the [track's summary](../Schemas/World_Truth_Track_Summary.md).
+- `truth/` holds the [run manifest](../Schemas/Run_Manifest.md), the [world truth track](../Schemas/World_Truth_Track.md) and the [track's summary](../Schemas/World_Truth_Track_Summary.md).
 
 Two things a capture depends on are kept outside the folder:
 
-- **The run's own records.**\
+- The run's own records.\
   `carla-capture` writes how the run ended, what it resolved and what it was bound to in files beside the capture, never inside it.\
   See [Run result](../Schemas/Run_Result.md).
-- **The scenario's supervision plan**, `<scenario_id>.supervision.json`, written as the scenario was compiled.\
+- The scenario's supervision plan, `<scenario_id>.supervision.json`, written as the scenario was compiled.\
   It holds the definition of every label.\
   The manifest's first row names its path and its SHA-256.\
   You need it to read what a label means.\
@@ -309,16 +309,16 @@ The exact edges fall between stills.
 The [world truth track](../Schemas/World_Truth_Track.md) lists every vehicle SUMO had at each sampled SUMO step of the capture window, whether a body drew it or not: one row per vehicle per sample.\
 The sample capture sampled every SUMO step (`every_sumo_steps` 1 in the summary): 3,600 samples and 180,125 rows.
 
-- **Counts over the whole scene come from here.**\
+- Counts over the whole scene come from here.\
   A sidecar lists only the bodies its frame drew.\
   A picture shows only the few in view.\
   The still at frame 151288 lists 44 vehicles and shows two.
-- **Whether a body drew the vehicle** is `render_state`: `rendered`, or `simulated_only` with a `render_reason`.\
+- Whether a body drew the vehicle is `render_state`: `rendered`, or `simulated_only` with a `render_reason`.\
   In the sample, 6 rows are `simulated_only` with `not_drawn`: three vehicles of the flow `clinton_to_arapahoe_west`, each on its first two SUMO steps.
-- **Join a row to a sidecar's record** by `sumo_id` and the frame: the track's `frame` is the sidecar's `tick`.
-- **The track carries no labels.**\
+- Join a row to a sidecar's record by `sumo_id` and the frame: the track's `frame` is the sidecar's `tick`.
+- The track carries no labels.\
   Join labels to it by `sumo_id`, from the manifest's `instance`, `series` and `cohort` rows and its interval rows.
-- **Its values are SUMO's.**\
+- Its values are SUMO's.\
   The drawn body's pose, size and boxes are in the sidecar.
 
 The `dweller`'s row for frame 151288:

@@ -115,7 +115,7 @@ Datagrams are UTF-8 and carry no XML declaration.
 | `_solar` | `time_zone` | decimal | hours | yes | The engine's time zone, east of UTC. |
 | `_solar` | `sun_elevation_deg` | decimal | degrees | yes | The sun's elevation. |
 | `_solar` | `sun_azimuth_deg` | decimal | degrees | yes | The sun's azimuth. |
-| `_solar` | `advancing` | `true` or `false` | | yes | Whether the sun's clock is running. |
+| `_solar` | `advancing` | `true` or `false` | | yes | Whether the engine itself moved the sun's clock with the world's tick. `false` in a SUMO drive: the drive sets the sun itself on every tick. |
 | `_solar` | `rate` | number | | yes | Solar seconds per simulation second. |
 
 If reading the server's solar state fails, `_solar` is left out.
