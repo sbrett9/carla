@@ -15,6 +15,11 @@
                      carla-compile-scenario, carla-capture, carla-drive and the rest
       catalogue\     the measured vehicle catalogue, which a scenario specification names
       osm\           the example OpenStreetMap maps worlds can be built from
+      Scenarios\     the example scenarios, whole, with the OpenStreetMap extracts they are built on
+      docs\          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
+                     Docs\CAT_Research\, with their folder structure kept so their links resolve.
+                     Links that leave it are pointed at the bundle by
+                     Scripts\Distribution\rewrite_doc_links.py, which needs python on PATH
       tools\sumo\    the SUMO toolchain laid out as a SUMO installation: bin\ with netconvert, sumo,
                      duarouter and the DLLs they import, SUMO's typemap/xsd data, its traci/sumolib
                      modules, and PROJ data
@@ -25,6 +30,9 @@
       licenses\      the license text of every third-party component in the bundle
       MANIFEST.md    what is in here, where it came from and under what terms (generated)
       setup-venv.ps1 / carla-env.ps1 / run-server.ps1 / README.md
+
+    README.md is filled in from Scripts\Distribution\README.md, the one template this script and
+    Scripts\Linux\MakeDistribution.sh share.
 
     carla-env.ps1 is the environment step: dot-sourced, it activates the venv and names the bundled
     SUMO toolchain for every command (CARLA_NETCONVERT, SUMO_HOME, PROJ_LIB/PROJ_DATA).
@@ -412,6 +420,39 @@ if (Test-Path $skillsSrc) {
                     -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'skills\'
 } else { Write-Warning "no authoring skills under $skillsSrc" }
 
+# 3c. The user documentation: the guides and the reference pages, from Docs\CAT_Research\ into docs\
+#     with their folder structure kept, so the relative links between them still resolve. Only these
+#     folders are written for users. Plans\, Findings\ and the rest of Docs\CAT_Research\ are internal
+#     and stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
+#     and stops the assembly.
+$userDocFolders = @('Guides', 'EPOL', 'Tracking', 'Schemas', 'Skills')
+function Copy-UserDocs {
+    $docsSrc  = Join-Path $CarlaRoot 'Docs\CAT_Research'
+    $docsDest = Join-Path $dist 'docs'
+    New-Item -ItemType Directory -Force -Path $docsDest | Out-Null
+    foreach ($folder in $userDocFolders) {
+        $src = Join-Path $docsSrc $folder
+        if (-not (Test-Path $src)) { throw "user documentation folder not found at $src" }
+        Copy-Item -Recurse -Force -Path $src -Destination (Join-Path $docsDest $folder)
+    }
+    # A link that leaves the documentation names a file by its place in the repository. The helper
+    # the Linux script runs too points it at the bundle's own copy, or keeps only its text when the
+    # target does not ship. It reads what shipped from the bundle, so it runs after step 3b.
+    $rewriter = Join-Path $CarlaRoot 'Scripts\Distribution\rewrite_doc_links.py'
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        throw "python is not on PATH; it is needed to point the documentation's links at the bundle."
+    }
+    $rewritten = @(& python $rewriter $docsDest)
+    $exitCode = $LASTEXITCODE
+    $rewritten | ForEach-Object { Write-Info "$_" }
+    if ($exitCode -ne 0) { throw "rewriting the documentation's links failed (exit $exitCode)." }
+    Write-Info "[dist] docs: $($userDocFolders -join ', ') ($(@(Get-ChildItem -Recurse -File $docsDest).Count) files)"
+    Add-ManifestRow -Component "user documentation ($($userDocFolders -join ', '))" `
+                    -Provenance 'built from this repository, Docs\CAT_Research\' `
+                    -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'docs\'
+}
+Copy-UserDocs
+
 # 4. Example OSM maps. These are OpenStreetMap extracts, so they and every .xodr derived from them
 #    carry the Open Database License; MANIFEST.md names the files that actually shipped.
 $osm = @(Get-ChildItem (Join-Path $CarlaRoot 'Import\*.osm') -ErrorAction SilentlyContinue)
@@ -421,6 +462,30 @@ if ($osm.Count -gt 0) {
                     -Provenance "openstreetmap.org contributors: $(($osm | ForEach-Object { $_.Name }) -join ', ')" `
                     -License 'ODbL 1.0 (licenses\OpenStreetMap-ODbL-NOTICE.txt)' -Location 'osm\'
 } else { Write-Warning "no .osm files under Import\" }
+
+# 4b. The example scenarios, copied whole to Scenarios\ at the top of the bundle. They include
+#     OpenStreetMap extracts, so their row carries the ODbL notice osm\ does and names the extracts
+#     that shipped. A checkout without the folder still assembles: the bundle goes without it, and
+#     the warning says so.
+function Copy-ExampleScenarios {
+    $src  = Join-Path $CarlaRoot 'CarlaControl\Examples\Scenarios'
+    $dest = Join-Path $dist 'Scenarios'
+    if (-not (Test-Path $src)) {
+        Write-Warning "no example scenarios at $src; the bundle will have no Scenarios\ folder."
+        return
+    }
+    Copy-Item -Recurse -Force -Path $src -Destination $dest
+    $destFull = (Get-Item $dest).FullName
+    $extracts = @(Get-ChildItem -Recurse -File $destFull | Where-Object { $_.Extension -eq '.osm' } |
+                  ForEach-Object { $_.FullName.Substring($destFull.Length + 1) } | Sort-Object)
+    $osmNamed = if ($extracts.Count -gt 0) { ": $($extracts -join ', ')" } else { '' }
+    Write-Info "[dist] example scenarios: $(@(Get-ChildItem -Recurse -File $dest).Count) files, $($extracts.Count) OpenStreetMap extracts"
+    Add-ManifestRow -Component 'example scenarios, with the OpenStreetMap extracts they are built on' `
+                    -Provenance "built from this repository, CarlaControl\Examples\Scenarios\; OpenStreetMap data by openstreetmap.org contributors$osmNamed" `
+                    -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt); the OpenStreetMap extracts and data derived from them ODbL 1.0 (licenses\OpenStreetMap-ODbL-NOTICE.txt)' `
+                    -Location 'Scenarios\'
+}
+Copy-ExampleScenarios
 
 # 5. The SUMO toolchain: the binaries, the runtime DLLs they actually import, the named data/ and
 #    tools/ subsets, and PROJ's data. CarlaNet talks to `sumo` over the TraCI wire protocol from
@@ -537,8 +602,8 @@ Add-ManifestRow -Component 'CARLA server (cooked)' -Provenance 'built from this 
 OpenStreetMap data and works derived from it
 ============================================
 
-The .osm extracts under osm\, and every OpenDRIVE (.xodr) road network this distribution generates
-from one, are derived from OpenStreetMap.
+The .osm extracts under osm\ and Scenarios\, and every OpenDRIVE (.xodr) road network this
+distribution generates from one, are derived from OpenStreetMap.
 
   (c) OpenStreetMap contributors, available under the Open Database License (ODbL) v1.0.
   License text: https://opendatacommons.org/licenses/odbl/1-0/
@@ -694,68 +759,38 @@ if ($rest.Count -gt 0 -and "$($rest[0])" -notmatch '^-') {
 '@
 Set-Content -Path (Join-Path $dist 'run-server.ps1') -Value $runServer -Encoding UTF8
 
-$readmeVersion = $pkgName -replace '^Carla-', ''
-$readme = @"
-# CARLA $readmeVersion distribution (Windows)
-
-Self-contained CARLA digital-twin bundle: the cooked server, the carlanet and carlacontrol Python
-packages with the ``carla-*`` commands, the SUMO toolchain, example OSM maps, the measured vehicle
-catalogue, the scenario-authoring skills and the world tools.
-
-## What ships
-- ``CarlaServer\`` - the cooked server; ``run-server.ps1`` starts it headless.
-- ``wheels\`` - carlanet and carlacontrol; ``setup-venv.ps1`` installs both, and the commands, into ``venv\``.
-- ``carla-env.ps1`` - the environment step (below).
-- ``tools\sumo\`` - SUMO $sumoVersion (netconvert, sumo, duarouter; no sumo-gui) and PROJ data.
-- ``osm\`` example OpenStreetMap extracts; ``catalogue\`` the measured vehicle catalogue a scenario names.
-- ``skills\`` - how to author scenarios; ``world-tools\`` - PackageWorld.ps1 and InstallWorld.ps1.
-- ``VERSION``, ``MANIFEST.md`` and ``licenses\`` - what this is, and under what terms.
-
-## Prerequisites
-- 64-bit Windows 10/11 with a GPU and current graphics drivers (the server renders even headless).
-- **Python 3.11 or newer** on PATH, for the venv.
-- The **.NET 10 runtime** (carlanet loads .NET assemblies), e.g. ``winget install Microsoft.DotNet.Runtime.10``.
-- To build a world: ``CESIUM_ION_TOKEN`` set to a Cesium ion access token.
-
-## Run it (PowerShell)
-``````powershell
-.\setup-venv.ps1                                  # once: venv\ with both wheels and the commands
-.\run-server.ps1                                  # start the server
-. .\carla-env.ps1                                 # in each new session: the environment step
-carla-build-world --osm osm\Lakeview_Carson.osm   # build a world; its package goes to world-packages\
-carla-sctmv --osm osm\Lakeview_Carson.osm         # or build one and fly, drive and record in it
-``````
-
-**The environment step.** ``carla-env.ps1`` activates ``venv\`` and points every command at the bundled
-toolchain: ``CARLA_NETCONVERT``, ``SUMO_HOME``, and ``PROJ_LIB``/``PROJ_DATA``. To watch a drive in
-sumo-gui, which is not bundled, give ``carla-drive --sumo-gui`` a SUMO $sumoVersion installation of your
-own: ``--sumo-home <folder>``, or set ``CARLANET_SUMO_HOME`` to it.
-
-## The commands
-Each takes ``--help``. A command reads and writes under the current folder (``world-packages\``,
-``captures\``, ``runs\``, ``scenarios\``) unless told otherwise.
-- ``carla-sctmv`` - build a world, then fly, drive and record in it.
-- ``carla-build-world`` - build a world and write its world package.
-- ``carla-compile-scenario`` - compile a scenario against its world package.
-- ``carla-drive`` - drive a world's vehicles from SUMO, and record.
-- ``carla-capture`` - capture a window of a compiled scenario.
-- ``carla-free-camera``, ``carla-camera-follower`` - watch a running world through a camera of your own.
-- ``carla-cot-telemetry`` - Cursor-on-Target from a SUMO scenario.
-- ``carla-audit-sidecars``, ``carla-diff-manifests``, ``carla-check-label-leaks`` - check what a run wrote.
-- ``carla-publish-reference-set`` - refresh a world package's areas of interest and place index.
-- ``carla-check-sumo`` - say which SUMO the commands resolve, and check it is complete.
-
-## Worlds made elsewhere
-``world-tools\InstallWorld.ps1 -Package <world.zip>`` installs a packaged world into this
-distribution. ``world-tools\PackageWorld.ps1`` makes such a package; it needs the editor and a CARLA
-checkout at this distribution's commit: ``-CarlaRoot <checkout> -Distribution .``
-
-## What is in here, and under what terms
-``MANIFEST.md`` lists every component this bundle carries, where it came from and its license, with
-the license texts themselves under ``licenses\``. Both are generated from what the packaging script
-actually copied, so they describe this bundle rather than an intended one.
-"@
-Set-Content -Path (Join-Path $dist 'README.md') -Value $readme -Encoding UTF8
+# 7b. README.md, filled in from Scripts\Distribution\README.md. That template is shared with
+#     Scripts\Linux\MakeDistribution.sh, so the text exists once, as a page checked like any other.
+#     Each placeholder in it is a DIST_ word for a value that differs between bundles: the release and
+#     configuration, the platform, the shell, the script extension and the SUMO release. A placeholder
+#     left unfilled stops the assembly, rather than shipping a README that shows it. The result is
+#     written with LF line endings and no byte-order mark, so both scripts write the same bytes for the
+#     same values.
+function Expand-ReadmeTemplate {
+    param([Parameter(Mandatory)][string]$Template,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Values)
+    if (-not (Test-Path $Template)) { throw "README template not found at $Template" }
+    $text = [System.IO.File]::ReadAllText($Template).Replace("`r", '')
+    # Every placeholder the template names needs a value. This is checked before anything is filled
+    # in, and the longest names are filled first, so a placeholder whose name begins with another's
+    # (DIST_SUMO_RELEASE beside DIST_SUMO) is reported or filled whole, never half-filled.
+    $named = @([regex]::Matches($text, '\bDIST_[A-Z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    $unfilled = @($named | Where-Object { -not $Values.Contains($_) })
+    if ($unfilled.Count -gt 0) { throw "the README template names placeholders with no value: $($unfilled -join ', ')" }
+    foreach ($token in @($Values.Keys | Sort-Object { "$_".Length } -Descending)) {
+        $text = $text.Replace([string]$token, [string]$Values[$token])
+    }
+    return $text.TrimEnd("`n") + "`n"
+}
+$readme = Expand-ReadmeTemplate -Template (Join-Path $CarlaRoot 'Scripts\Distribution\README.md') -Values ([ordered]@{
+    DIST_VERSION  = $pkgName -replace '^Carla-', ''
+    DIST_PLATFORM = 'Windows'
+    DIST_SYSTEM   = 'Windows 10 or 11'
+    DIST_SHELL    = 'PowerShell'
+    DIST_EXT      = 'ps1'
+    DIST_SUMO     = $sumoVersion
+})
+[System.IO.File]::WriteAllText((Join-Path $dist 'README.md'), $readme, [System.Text.UTF8Encoding]::new($false))
 
 # ============================================================================
 #  8. MANIFEST.md -- the inventory the steps above built up, rendered last so it
