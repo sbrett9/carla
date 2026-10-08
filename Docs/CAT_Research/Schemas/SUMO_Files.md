@@ -12,7 +12,7 @@ These tools publish no schema of their own for them.
 | `<MapName>.net.xml`, the world's network copied byte for byte | `carla-compile-scenario`, from the world package | `net_file.xsd` |
 | `<extract>.typ.xml`, the world's own road types | a scenario developer, beside the OpenStreetMap extract | `types_file.xsd` |
 
-The compiler checks the route file against `routes_file.xsd`, and the additional file against `additional_file.xsd`, before it writes them (check 51).\
+Before it writes them, the compiler checks the route file against `routes_file.xsd` and the additional file against `additional_file.xsd` (check 51).\
 The `.rou.xml`, `.add.xml` and `.sumocfg` name their SUMO schema in `xsi:noNamespaceSchemaLocation`.
 
 A type map is read when a world is built: netconvert reads SUMO's own OpenStreetMap type map first and the `<extract>.typ.xml` second, so the world's types take precedence over SUMO's.\
@@ -21,4 +21,5 @@ A type map is read when a world is built: netconvert reads SUMO's own OpenStreet
 ## The parameters these tools set on a vehicle type
 
 A compiled route file binds each SUMO vehicle type (`<vType>`) to the CARLA body it is drawn with through three `<param>` keys, `carla:blueprint`, `carla:class_id` and `carla:catalogue_digest`: the same ones the vehicle catalog's `vehicles.vtypes.rou.xml` carries.\
-[Vehicle types](Vehicle_Types.md) describes them, the only parameters a compiled route file carries (check 52), and how a compiled type's id differs from the catalog's.
+These are the only parameters a compiled route file carries (check 52).\
+[Vehicle types](Vehicle_Types.md) describes them and how a compiled type's id differs from the catalog's.

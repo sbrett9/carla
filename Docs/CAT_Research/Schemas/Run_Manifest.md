@@ -7,7 +7,8 @@
 ## What the file is
 
 The run manifest, `truth/manifest.jsonl` in a capture folder, is the record of one SUMO-driven run as it happened.\
-Each line is one JSON object, a **row**, and its `row` field says what kind it is.\
+Each line is one JSON object, a **row**.\
+Its `row` field says what kind it is.\
 Rows are appended and flushed as the run goes:
 
 - what the run is, first, before anything is rendered;
@@ -16,7 +17,8 @@ Rows are appended and flushed as the run goes:
 - every vehicle taking a place in the set of vehicles the world draws (the **render set**) and giving it up;
 - every event that changes the vehicles SUMO simulates: collisions, vehicles SUMO gave up inserting, emergency stops, teleports;
 - the sun at the capture window's first and last capture tick;
-- each of the plan's intervals as the run opens and closes it, and any defect found in carrying the plan out;
+- each of the plan's intervals as the run opens and closes it;
+- any defect found in carrying the plan out;
 - why the run ended, last.
 
 The schema describes one row.\
@@ -24,10 +26,12 @@ Every line of the file must be valid against it.
 
 **Reading a manifest.**\
 Each row is written as one whole line, so a manifest stays readable even if the run was killed partway.\
-Read only the lines that end in a line break, and ignore a last line that does not.
+Read only the lines that end in a line break.\
+Ignore a last line that does not.
 
 The last row of a run that reached its end is `manifest_closed`.\
-A manifest without it is a run that was interrupted: a vehicle admitted and never released was still being drawn then, and an interval opened and never closed was still open.
+A manifest without it is a run that was interrupted: a vehicle admitted and never released was still being drawn then.\
+An interval opened and never closed was still open then.
 
 **Times.**\
 `sim_time_s` and every other `_s` field is simulated time in seconds.\
@@ -38,7 +42,8 @@ A sun row is stamped with the frame whose sun it reads, to the microsecond.
 ## Who writes it and when
 
 The SUMO drive session in CarlaNet writes it when its caller names a path.\
-`carla-capture` always does, at `truth/manifest.jsonl` under the capture folder, and hands over a header (`run`) naming the run, its window and its channels.\
+`carla-capture` always does, at `truth/manifest.jsonl` under the capture folder.\
+It hands over a header (`run`) naming the run, its window and its channels.\
 `carla-drive --run-manifest <path>` writes one too.\
 A run writes a manifest of its own and refuses a path that already holds one.
 
@@ -50,9 +55,9 @@ A run writes a manifest of its own and refuses a path that already holds one.
 | `instance`, `series`, `cohort` | Next, one per pattern instance, recurring series and cohort of the supervision plan, where the scenario has one. |
 | `sensor_placed` | As each camera is placed. |
 | `render_admitted`, `render_released` | As each vehicle takes and gives up a place in the render set. |
-| `collision_began`, `collision_ended` | As a collision SUMO reported begins, and when it is over. |
+| `collision_began`, `collision_ended` | As a collision SUMO reported begins and when it is over. |
 | `vehicle_not_inserted`, `emergency_stop`, `teleport` | As SUMO gives up inserting a vehicle, a vehicle brakes in an emergency, or a vehicle starts a teleport. |
-| `solar_window_open`, `solar_window_end` | At the capture window's first capture tick, and at the close. |
+| `solar_window_open`, `solar_window_end` | At the capture window's first capture tick and at its close. |
 | `interval_opened`, `interval_closed` | As the run opens and closes each of the plan's intervals. |
 | `supervision_defect` | As a defect in carrying the plan out is found. |
 | `manifest_closed` | Last, in a run that reached its end. At most one. |
@@ -319,7 +324,7 @@ A collision SUMO reported, written as it begins and again, as a span, once the t
 
 ## `solar_window_open` and `solar_window_end`
 
-The sun the world reported at the capture window's first capture tick, and at its last.\
+The sun the world reported at the capture window's first capture tick and at its last.\
 The fields named `..._begin...` on the opening row are `..._end...` on the end row.
 
 | Name | Type | Unit | Required | Meaning |
@@ -343,7 +348,7 @@ The fields named `..._begin...` on the opening row are `..._end...` on the end r
 | `capture_ticks` | integer | | End only | How many capture ticks the window held. |
 | `solar_residual` | object | | End only | The audit of the world's sun against the declaration over the window (below). |
 | `no_sun` | boolean | | Yes | Whether the world held no sun. |
-| `sun_matched_declaration` | boolean | | End only | A fact, not a verdict: an epoch was declared, the policy set the sun, the world held one, and the audit stayed within its tolerance over the window. |
+| `sun_matched_declaration` | boolean | | End only | A fact, not a verdict: an epoch was declared, the policy set the sun, the world held one and the audit stayed within its tolerance over the window. |
 
 `solar_residual`:
 
@@ -388,7 +393,7 @@ An interval whose participant SUMO never inserted closes without having opened.
 - `trigger`: the authored condition ended it;
 - `entity_arrived`: the vehicle reached its destination and SUMO removed it;
 - `sumo_removed`: SUMO removed it for another reason;
-- `never_inserted`: declared, and discarded before it existed;
+- `never_inserted`: declared but discarded before it existed;
 - `physical_predicate_never_held`: SUMO committed it and the drawn body never did;
 - `render_released`: CARLA lost the body while SUMO still had the vehicle;
 - `capture_window_end`: the window closed while it was open;
@@ -463,6 +468,7 @@ The opening row is long and is left out here; it holds every field in its tables
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks every row against this schema, and checks the file as a whole: that it opens with `manifest_opened` and that nothing follows `manifest_closed`.\
+`carla-validate <capture folder>` checks every row against this schema.\
+It also checks the file as a whole: that it opens with `manifest_opened` and that nothing follows `manifest_closed`.\
 It notes a manifest with no closing row as an interrupted run.\
 `carla-diff-manifests` compares the supervision rows of two runs of one scenario.

@@ -2,7 +2,9 @@
 
 This guide is for the Unreal tech artist who makes the level a scenario takes place in.\
 You start from a world package (`.cwp`) that the world build wrote.\
-You import it into a level in the editor, clean up its road meshes and the detail around them, and ship the level as add-on content (DLC).\
+You import it into a level in the editor.\
+You clean up its road meshes and the detail around them.\
+Then you ship the level as add-on content (DLC).\
 Anyone who has the matching CARLA distribution can then install the level and load it, without being sent a new distribution.
 
 The steps, in order:
@@ -14,7 +16,7 @@ The steps, in order:
 5. Export it as a plugin, so packaged builds can load it.
 6. Mark it for separate delivery.
 7. Cook it as DLC with `PackageWorld`.
-8. Deliver it, and install it with `InstallWorld`.
+8. Deliver and install it with `InstallWorld`.
 9. Load it and check that it loaded.
 
 The commands are for PowerShell on Windows.\
@@ -25,11 +27,13 @@ For `PackageWorld.ps1` and `InstallWorld.ps1`, run `Get-Help <script> -Detailed`
 
 **On Linux.**\
 Every script in this guide except `OpenCarlaEditor.ps1` has a Linux twin with the same name ending in `.sh`.\
-`CarlaSetup.sh` is at the top of the checkout, and the others are in `Scripts/Linux/`.\
+`CarlaSetup.sh` is at the top of the checkout.\
+The others are in `Scripts/Linux/`.\
 A Linux distribution has `run-server.sh` and the `.sh` world tools.
 
 The Linux scripts spell their options in lower case with two dashes, such as `--world` and `--distribution`.\
-A level cooked on Windows goes into a Windows distribution, and a level cooked on Linux goes into a Linux one.
+A level cooked on Windows goes into a Windows distribution.\
+A level cooked on Linux goes into a Linux one.
 
 ## Words used here
 
@@ -81,11 +85,12 @@ You do not build the engine from source.
 1. Get the archive.\
    It is named `UnrealEngine-<engine version>-<branch>-<commit>-Win64.zip` and comes with a `.sha256` file and a `.metadata.txt` file.
 2. Check that it is the right engine.\
-   The `<commit>` in the name, and `source_commit` in the `.metadata.txt` file, are the short form of the engine commit.\
+   The `<commit>` in the name and `source_commit` in the `.metadata.txt` file are the short form of the engine commit.\
    They should match the start of the distribution's `UnrealEngine git hash`.
 3. Check that the download is whole.\
    The output of `Get-FileHash -Algorithm SHA256 <archive>` should match the hash in the `.sha256` file.
-4. Extract it, and set `CARLA_UNREAL_ENGINE_PATH` to the extracted folder, the one that holds `Engine\`:
+4. Extract it.\
+   Set `CARLA_UNREAL_ENGINE_PATH` to the extracted folder, the one that holds `Engine\`:
 
    ```powershell
    [Environment]::SetEnvironmentVariable('CARLA_UNREAL_ENGINE_PATH', 'D:\UnrealEngine-5.7.4-<branch>-<commit>-Win64', 'User')
@@ -105,13 +110,15 @@ Install Visual Studio 2022 with:
   `CarlaSetup.ps1` and `BuildCarla.ps1` stop when this version is missing;
 - a Windows SDK.
 
-You also need Git, and CMake 3.21 or later, on `PATH`.\
+You also need Git and CMake 3.21 or later, both on `PATH`.\
 The first step of `CarlaSetup.ps1` installs Ninja and Python when they are missing.
 
 ### A checkout at the distribution's commits
 
 `PackageWorld` cooks your checkout's content and leaves out everything the distribution already holds.\
-Both must come from one build, so check out **the exact commit the distribution was built from**, and the content repository at its matching commit.\
+Both must come from one build.\
+So check out **the exact commit the distribution was built from**.\
+Check out the content repository at its matching commit too.\
 Both commits are in the distribution's `VERSION` file.
 
 ```powershell
@@ -162,7 +169,8 @@ The importer reads three of its entries: `world.json` (where the world sits on t
   The importer names the level, the plugin and the map path `/<World>/Maps/<World>` after the file name, without `.cwp`.\
   Do not rename the file.
 - **Keep the `.cwp`.**\
-  Scenarios are compiled against it, and a SUMO drive or a capture checks the loaded level against it before it starts.\
+  Scenarios are compiled against it.\
+  A SUMO drive or a capture checks the loaded level against it before it starts.\
   Whoever runs scenarios on your level needs this same file.
 - **Put it where the importer looks first.**\
   That folder is `Build\world-packages\` in the checkout.\
@@ -188,7 +196,7 @@ The panel's code is in `Unreal/CarlaUnreal/Plugins/CarlaTools/Source/CarlaTools/
 | World package | The `.cwp` to import. **Choose...** opens a file dialog. Choose a `.cwp` file. |
 | Replace a level built from a different source (discards edits made to it) | Off by default. With it off, the importer refuses to overwrite a level of the same name that was built from a different OpenStreetMap extract. Re-importing a package built from the same extract always goes ahead, with or without it. |
 | Make this world available to packaged builds (writes it to Plugins/GeneratedWorlds) | On by default. After the import, it exports the level as a plugin (section 5). Leave it on. |
-| Cesium ion token | Optional. **Leave it empty for a level you will ship.** A token typed here is saved in the level's imagery layers, so it is in the exported plugin and in the DLC, where anyone who installs the level can read it. With the field empty, the editor streams imagery with the project's own token, and a server uses the `CESIUM_ION_TOKEN` environment variable. |
+| Cesium ion token | Optional. **Leave it empty for a level you will ship.** A token typed here is saved in the level's imagery layers, so it is in the exported plugin and in the DLC, where anyone who installs the level can read it. With the field empty, the editor streams imagery with the project's own token. In that case a server uses the `CESIUM_ION_TOKEN` environment variable. |
 
 Click **Import**.\
 The line at the bottom of the panel reports the result, such as `Imported to /Game/Carla/Maps/Generated/Arapahoe_I25. ... Packaged builds will include it (...)`.
@@ -209,7 +217,7 @@ The importer refuses to run:
 | What | Where |
 |---|---|
 | The level | `/Game/Carla/Maps/Generated/<World>` |
-| The world settings | `/Game/Carla/Maps/Generated/<World>_WorldSettings`: where the world is on the Earth (origin latitude, longitude and height, and the projection), how the road surface was matched to the bare earth, the imagery layers, the extent of the area traffic uses, and where the world came from |
+| The world settings | `/Game/Carla/Maps/Generated/<World>_WorldSettings`: where the world is on the Earth (the projection and the origin's latitude, longitude and height), how the road surface was matched to the bare earth, the imagery layers, the extent of the area traffic uses and where the world came from |
 | The bare-earth field | `/Game/Carla/Maps/Generated/<World>_BareEarthField`: the bare-earth grids. Only for a world whose road surface was fitted to the imagery point by point |
 | The road network | `/Game/Carla/Maps/Generated/<World>_RoadNetwork`: the OpenDRIVE document, as an asset |
 | The road network file | `Unreal\CarlaUnreal\Content\Carla\Maps\Generated\OpenDrive\<World>.xodr` |
@@ -271,7 +279,8 @@ The cook fails on anything else (section 7).
 
 **The folder decides a mesh's segmentation label.**\
 CARLA labels a mesh by the fourth folder of its path.\
-`/Game/Carla/Static/Road/<World>/SM_RoadSurface_0` is labeled `Road`, and so is its exported copy `/<World>/Carla/Static/Road/<World>/SM_RoadSurface_0`.\
+`/Game/Carla/Static/Road/<World>/SM_RoadSurface_0` is labeled `Road`.\
+Its exported copy `/<World>/Carla/Static/Road/<World>/SM_RoadSurface_0` has the same label.\
 Keep the road pieces in their `Road` and `SideWalk` folders.
 
 To give a new mesh a label, put the label in the fourth folder of its path, for example `/<World>/Detail/Static/Vegetation/SM_Hedge_01` for `Vegetation`.\
@@ -281,7 +290,8 @@ A mesh whose fourth folder is not one of those names has no label.
 ### Must not change
 
 A SUMO drive or a capture compares the loaded level with the world's `.cwp` before it starts.\
-It refuses to start when any of the following differ, and names what differs.
+It refuses to start when any of the following differ.\
+It names what differs.
 
 - **The georeference.**\
   Leave the Datum fields of `<World>_WorldSettings` alone: `OriginLatitude`, `OriginLongitude`, `OriginHeightMeters` and `GeoReferenceString`.\
@@ -294,7 +304,8 @@ It refuses to start when any of the following differ, and names what differs.
   Scenarios are compiled against the SUMO network that was built with this road network.\
   The run compares the OpenDRIVE the server serves with the `.cwp`'s `map.xodr`.
 - **The bare-earth data.**\
-  Leave `<World>_BareEarthField` alone, and the Surface fields of `<World>_WorldSettings`: `HeightAlignMode`, `DrapeActive`, `HeightAlignOffsetMeters` and `OffsetField`.\
+  Leave `<World>_BareEarthField` alone.\
+  Leave the Surface fields of `<World>_WorldSettings` alone too: `HeightAlignMode`, `DrapeActive`, `HeightAlignOffsetMeters` and `OffsetField`.\
   The run compares the grids' size, position and contents with the `.cwp`'s `bareearth.bin`.
 
 Leave these alone as well, because the level does not work without them:
@@ -304,7 +315,7 @@ Leave these alone as well, because the level does not work without them:
   It reads the road network when the level plays and places the traffic lights;
 - the `road` tag on the road pieces.\
   The server finds the road surface by this tag;
-- the names: the level, the `<World>_WorldSettings`, `<World>_RoadNetwork` and `<World>_BareEarthField` assets, and the `<World>` folders.\
+- the names of the level, the `<World>` folders and three assets: `<World>_WorldSettings`, `<World>_RoadNetwork` and `<World>_BareEarthField`.\
   The export and the server find them by name.
 
 Do not add a large-map manager.\
@@ -325,7 +336,8 @@ The replace box only guards against a package built from a different OpenStreetM
 A `.cwp` rebuilt from the same extract is not stopped.
 
 Neither the imported level nor the exported plugin is tracked in git.\
-Keep your own backup of these, and copy them before any re-import:
+Keep your own backup of these.\
+Copy them before any re-import:
 
 - in `Unreal\CarlaUnreal\Content\Carla\Maps\Generated\`, the `<World>` files and `OpenDrive\<World>.xodr`;
 - `Unreal\CarlaUnreal\Content\Carla\Static\Road\<World>\` and `Unreal\CarlaUnreal\Content\Carla\Static\SideWalk\<World>\`;
@@ -355,7 +367,8 @@ Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\
 
 - The plugin's content is mounted at `/<World>/`, so the level becomes `/<World>/Maps/<World>`.\
   That is the name a server loads it by.
-- The export points the copied settings at the copied road network and field, and points the copied level's road pieces at the copied meshes.
+- The export points the copied settings at the copied road network and field.\
+  It also points the copied level's road pieces at the copied meshes.
 - The plugin is marked as explicitly loaded.\
   CARLA mounts every exported world when the editor or a server starts.
 - The world's name is fixed once it is exported.\
@@ -363,7 +376,8 @@ Unreal\CarlaUnreal\Plugins\GeneratedWorlds\<World>\
 
 ### Exporting again after you edit
 
-The panel exports only as part of an import, and an import replaces your work (section 4).\
+The panel exports only as part of an import.\
+An import replaces your work (section 4).\
 To export the edited level without importing, use the editor's Python console:
 
 1. Save all your work.
@@ -377,7 +391,8 @@ To export the edited level without importing, use the editor's Python console:
 
    On success the log shows a line starting `[GeneratedLevelExporter] exported`.
 
-Each export replaces the plugin's level, settings, road network and field, and deletes and rewrites `/<World>/Carla/`.\
+Each export replaces the plugin's level, settings, road network and field.\
+It also deletes and rewrites `/<World>/Carla/`.\
 It leaves other files in the plugin folder alone, such as `DeliverSeparately.txt` and your own folders.
 
 ## 6. Deciding how it ships
@@ -387,7 +402,8 @@ A generated world ships in one of two ways, never both:
 - **inside the base distribution.**\
   Whoever makes the distribution cooks it with the rest of CARLA;
 - **on its own, as DLC.**\
-  You cook it by itself against an existing distribution, and it is installed into that distribution.
+  You cook it by itself against an existing distribution.\
+  It is then installed into that distribution.
 
 A level for others to install ships on its own.\
 Mark it by creating an empty file named `DeliverSeparately.txt` in the world's plugin folder:
@@ -403,8 +419,10 @@ Why it cannot be both, from `Unreal/Package/CookGeneratedWorlds.cmake.in`:
 - When a base distribution is cooked, every exported world in `Plugins/GeneratedWorlds/` is cooked into it, except a world with a `DeliverSeparately.txt`.
 - A DLC cook leaves out everything the base already holds.\
   For a world that is already in the base, that is everything, so the cook produces a plugin with no level and no assets.\
-  The cook still reports success, and the empty level would fail for whoever installs it.
-- So the base cook skips a marked world, and `PackageWorld` refuses an unmarked one.
+  The cook still reports success.\
+  The empty level would fail for whoever installs it.
+- So the base cook skips a marked world.\
+  `PackageWorld` refuses an unmarked one.
 
 **The marker is not tracked in git.**\
 The whole `Unreal/CarlaUnreal/Plugins/GeneratedWorlds/` folder is in `.gitignore`, so the marker, like the exported world, stays on the machine where it was made.\
@@ -447,7 +465,7 @@ That list is the base release record.\
 5. It takes the build configuration from the distribution's folder name, `Carla-<version>-Win64-<configuration>`.\
    If you renamed the folder, pass `-Config` yourself: without it the configuration is `Development`.
 
-It then cooks the world as DLC against that release, checks that the cook produced a level and assets, writes `world.json`, and makes the zip.
+It then cooks the world as DLC against that release, checks that the cook produced a level and assets, writes `world.json` and makes the zip.
 
 ### Options
 
@@ -483,11 +501,11 @@ The ones you are likely to see:
 | `... is a Linux distribution` | | Use `PackageWorld.sh` on Linux. |
 | `... carries no CarlaServer\CarlaUnreal\AssetRegistry.bin` | The distribution has no list of what it holds. | No world can be cooked against it. Ask for a complete distribution. |
 | `-Config <x>, but ... is a <y> distribution` | `-Config` contradicts the folder name. | Leave out `-Config`. |
-| `This checkout is not at the commit the distribution was built from` | | Check out the commit it names, and the content commit too (section 1). |
-| `Release '<release>' is already recorded here, from another build` | `Releases\<release>\Windows\` already holds a record from another build: another distribution, or a base cooked on this machine. | Delete the folder it names, and run again. |
-| `Release '<release>' holds a registry from a cook on this machine` | `Releases\<release>\Windows\` holds part of a record from a base cooked on this machine. | Delete the folder it names, and run again. |
+| `This checkout is not at the commit the distribution was built from` | | Check out the commit it names. Check out the content commit too (section 1). |
+| `Release '<release>' is already recorded here, from another build` | `Releases\<release>\Windows\` already holds a record from another build: another distribution, or a base cooked on this machine. | Delete the folder it names. Then run again. |
+| `Release '<release>' holds a registry from a cook on this machine` | `Releases\<release>\Windows\` holds part of a record from a base cooked on this machine. | Delete the folder it names. Then run again. |
 | `Unreal Engine root not found` | | Set `CARLA_UNREAL_ENGINE_PATH`, or pass `-UnrealEngineRoot`. |
-| `Cook failed (exit <n>)` | The cook itself failed. | Read the cook's output above it. If it says content is `being referenced by DLC`, the level uses an asset that is neither in the plugin nor in the distribution. Move that asset into the plugin (section 4), export again, and cook again. |
+| `Cook failed (exit <n>)` | The cook itself failed. | Read the cook's output above it. If it says content is `being referenced by DLC`, the level uses an asset that is neither in the plugin nor in the distribution. Move that asset into the plugin (section 4), export again and cook again. |
 | `The cook produced no content for '<World>'` | Every part of the world is already in the distribution. | The distribution already contains this world. It cannot also take it as DLC (section 6). |
 
 ### What comes out
@@ -513,7 +531,7 @@ The ones you are likely to see:
 
 Its fields are described in [Level package manifest](../Schemas/Level_Package_Manifest.md).
 
-At the end, `PackageWorld` prints the file, its size, what it needs, and the command to install it:
+At the end, `PackageWorld` prints the file, its size, what it needs and the command to install it:
 
 ```
 Packaged Arapahoe_I25
@@ -531,7 +549,8 @@ Send two files:
 - the level package, `<World>.zip`;
 - the world package, `<World>.cwp`.\
   The level package holds only the level.\
-  Scenarios are compiled against the `.cwp`, and a drive or a capture checks the level against it.
+  Scenarios are compiled against the `.cwp`.\
+  A drive or a capture checks the level against it.
 
 Any way of copying files works.\
 To check that the zip arrived whole, compare `Get-FileHash -Algorithm SHA256 <World>.zip` on both machines.
@@ -559,7 +578,7 @@ From the script's help text:
 | `-Into <package directory>` | The CARLA package to install into: a cooked package's root (the directory holding `CarlaUnreal\` and `VERSION`), or a CARLA distribution's root (the one holding `CarlaServer\` and `VERSION`). Run from a distribution's world-tools folder, it defaults to that distribution. |
 | `-Force` | Installs despite a world interface version that does not allow it; the world may then fail to load. A `world.json` of a newer format than this script reads is refused regardless. |
 
-`InstallWorld` unpacks the zip, checks the world interface version, and copies the world's folder to `CarlaServer\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
+`InstallWorld` unpacks the zip, checks the world interface version and copies the world's folder to `CarlaServer\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
 A copy of the world that is already installed is deleted first.\
 If a server from that distribution is running with the world loaded, stop it before you install.\
 At the end, `InstallWorld` prints the command that loads the world.
@@ -568,18 +587,21 @@ At the end, `InstallWorld` prints the command that loads the world.
 
 The world interface version is a promise a CARLA build makes about what a delivered world can rely on: the content, the asset classes and the cooked format that a world's files refer to.
 
-It is written by hand in `Unreal/CarlaUnreal/Config/DefaultWorldInterface.ini` as `Major` and `Minor`, and it is `1.0` today.\
+It is written by hand in `Unreal/CarlaUnreal/Config/DefaultWorldInterface.ini` as `Major` and `Minor`.\
+It is `1.0` today.\
 A distribution shows it in its `VERSION` file and in `CarlaServer\CarlaUnreal\Config\DefaultWorldInterface.ini`.\
 Your level records the version of the checkout it was cooked in.
 
 **The rule.**\
 A world installs into a distribution when both are true:
 
-- the distribution's Major **equals** the world's Major, and
+- the distribution's Major **equals** the world's Major;
 - the distribution's Minor is **at least** the world's Minor.
 
-So a world cooked at 1.2 installs into 1.2 or 1.7, and is refused by 1.1 or 2.0.\
-The whole rule, and when the version changes, are in [World interface version](../Schemas/World_Interface_Version.md).
+So a world cooked at 1.2 installs into 1.2 or 1.7.\
+It is refused by 1.1 or 2.0.\
+The whole rule is in [World interface version](../Schemas/World_Interface_Version.md).\
+That page also says when the version changes.
 
 `PackageWorld -Distribution` cooks only in a checkout at the distribution's own commit, so a level cooked that way has the distribution's own version and installs into it.
 
@@ -589,11 +611,13 @@ Install a level only into a distribution of the configuration and platform its `
 ### When it refuses
 
 A refusal means the level was not cooked for this distribution.\
-Installing it anyway would most likely make the level fail to load: a cooked level names the base content it uses, and a distribution that lacks that content cannot load it.
+Installing it anyway would most likely make the level fail to load.\
+A cooked level names the base content it uses.\
+A distribution that lacks that content cannot load it.
 
 | The message says | What it means | What to do |
 |---|---|---|
-| `this package is world interface <x>.x, the world needs <y>.x` | The Majors differ. The level was cooked for a distribution whose content differs in ways that break loading. | Cook the level again against this distribution: a checkout at its commits, and `PackageWorld -Distribution` pointing at it. |
+| `this package is world interface <x>.x, the world needs <y>.x` | The Majors differ. The level was cooked for a distribution whose content differs in ways that break loading. | Cook the level again against this distribution. Use a checkout at its commits. Point `PackageWorld -Distribution` at it. |
 | `this package is minor <x>, the world needs <y> or later` | The level was cooked against content this distribution does not have yet. | Cook it again against this distribution, or install it into a newer distribution. |
 | `this package does not declare a world interface version` | The distribution states no version, so what it supports is unknown. | Use a distribution that declares one. |
 | `declares formatVersion <n> in world.json, and this InstallWorld reads formatVersion 1 and earlier` | A newer `PackageWorld` made the zip. | Install it with the `InstallWorld` of that newer release. `-Force` does not override this. |
@@ -612,7 +636,7 @@ Load it by this full path.\
 A packaged server looks up a short map name in a list made when the server was cooked, so it cannot find a world installed later by its short name.
 
 Set `CESIUM_ION_TOKEN` to a Cesium ion access token before you start the server.\
-Without it, and without a token saved in the level, the level loads with no imagery.
+With neither it nor a token saved in the level, the level loads with no imagery.
 
 ### In a distribution
 
@@ -640,7 +664,8 @@ Use it to check the exported level before you cook it.
 - Close the editor first.\
   `RunCarlaServer` refuses to start while any `UnrealEditor` process is running.
 - `-RpcPort <n>` sets the port (default 2000).\
-  `-Version` prints the CARLA version and the world interface version this checkout declares, and exits.
+  `-Version` prints the CARLA version and the world interface version this checkout declares.\
+  Then it exits.
 - It prints `SERVER READY` when the server accepts connections.\
   `Ctrl+C` stops it.
 

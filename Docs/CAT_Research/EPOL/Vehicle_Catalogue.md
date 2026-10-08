@@ -1,11 +1,13 @@
 # The vehicles behind the truth
 
 This page is for people who build pattern-of-life models from the captures these tools make.\
-Every vehicle in a capture is drawn with one of a small set of measured CARLA bodies, and the vehicle catalog lists them.\
+Every vehicle in a capture is drawn with one of a small set of measured CARLA bodies.\
+The vehicle catalog lists them.\
 This page explains what the vehicle fields of a truth record mean in terms of those bodies.
 
 Every field of the catalog is described on the schema page [Vehicle catalogue](../Schemas/Vehicle_Catalogue.md).\
-The files are described on [What a capture folder holds](Capture_Folder.md), and the labels on [Behavioral annotations](Behavioral_Annotations.md).
+The files are described on [What a capture folder holds](Capture_Folder.md).\
+The labels are described on [Behavioral annotations](Behavioral_Annotations.md).
 
 **The files hold labels and truth, never scores or verdicts.**\
 The catalog records measurements of each body.\
@@ -22,7 +24,8 @@ The sample capture `cap-20261008-041347-270d6d` used this one.
 
 ## The classes and their bodies
 
-The catalog holds 19 bodies, each named by its CARLA blueprint, and groups them into 10 classes.\
+The catalog holds 19 bodies, each named by its CARLA blueprint.\
+It groups them into 10 classes.\
 Each body belongs to exactly one class.
 
 | Class | `base_type` | `special_type` | Bodies |
@@ -63,8 +66,10 @@ The truth still gives that vehicle the catalog's kind.\
 In the sample capture, a record with `vtype_id="suv.vehicle.nissan.patrol"` has `base_type="car"`.
 
 **Names can state the author's intent.**\
-A scenario's class names, its vehicle ids and its flow ids are written by its author, and they can say what a vehicle is for.\
-In the Shahid Bahonar Port scenario the guard vehicles are of type `guard.vehicle.jeep.wrangler_rubicon`, and the guard that misses its post is `offpost_d4_h7_t3`.\
+A scenario's class names, its vehicle ids and its flow ids are written by its author.\
+They can say what a vehicle is for.\
+In the Shahid Bahonar Port scenario the guard vehicles are of type `guard.vehicle.jeep.wrangler_rubicon`.\
+The guard that misses its post is `offpost_d4_h7_t3`.\
 These names are for joining truth to truth.\
 Keep them out of anything your model sees.
 
@@ -75,7 +80,8 @@ In the Arapahoe check, every `suv` is the same Nissan Patrol.
 ## Body size
 
 - **In a sidecar**, `length_m`, `width_m` and `height_m` are the body's measured bounding box, mirrors included: the catalog's `length_m`, `width_m` and `height_m`, rounded to the centimeter.\
-  For the Ford Mustang the catalog holds 4.7175 × 1.8948 × 1.3009 m, and the sidecar says 4.72 × 1.89 × 1.30.\
+  For the Ford Mustang the catalog holds 4.7175 × 1.8948 × 1.3009 m.\
+  The sidecar says 4.72 × 1.89 × 1.30.\
   The record's boxes, `box_px`, `box_oriented_px` and `<_box3d>`, are this box placed at the body's pose.
 - **In the world truth track**, they are the SUMO vehicle type's.\
   Length and height are the same.\
@@ -83,7 +89,8 @@ In the Arapahoe check, every `suv` is the same Nissan Patrol.
   For the Mustang the track says 4.72 × 1.84 × 1.30.
 - **Where the position is.**\
   SUMO places a vehicle by the middle of its front bumper.\
-  CARLA places a body by its origin, and `bbox_centre_m` gives the box's center from that origin: forward, right, up.\
+  CARLA places a body by its origin.\
+  `bbox_centre_m` gives the box's center from that origin: forward, right, up.\
   So SUMO's point lies `length_m / 2 + bbox_centre_m[0]` ahead of the body's origin, along the way the body points.\
   For the Mustang that is 4.7175 / 2 + 0.0321 = 2.39 m.\
   In the sample capture, the track's point and the sidecar's `<point>` for the parked `dweller`, a Mustang, are 2.39 m apart.
@@ -134,7 +141,8 @@ The sidecar writes `special1` and `special2`; the catalog writes `special_1` and
 
 - A sidecar's `type_id` is the catalog's `blueprint_id`.
 - The track's `type_id` is the SUMO vehicle type.\
-  In a compiled scenario the part after the class name is the blueprint, and the type's `carla:blueprint` parameter names it too.\
+  In a compiled scenario the part after the class name is the blueprint.\
+  In a compiled scenario the type's `carla:blueprint` parameter names it too.\
   You can also join the row to a sidecar record by `sumo_id` and frame.
 - From there, the body's entry in `vehicles[]` gives its size, `bbox_centre_m`, `body_width_m`, `colour_palette`, `colour_applied` and `lamp_capability`.\
   Its class in `classes[]` gives the `base_type` and `special_type`.\

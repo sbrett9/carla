@@ -4,7 +4,7 @@
 SUMO moves the vehicles and CARLA draws them.
 
 For every capture of every camera, the command writes a PNG still and a truth sidecar, which holds each vehicle's position, size and box in pixels.\
-It also writes a truth track of every vehicle SUMO had, and a manifest of the run.
+It also writes a manifest of the run and a truth track of every vehicle SUMO had.
 
 [Getting started](Getting_Started.md) covers the install and the site profile.\
 These pages use the installed command names; Getting started lists the script each one is in a checkout.
@@ -19,7 +19,8 @@ You need:
   The session checks that the loaded world is the world package's (run check 22).
 - **A compiled scenario.**\
   `carla-compile-scenario` writes it: a folder holding `<id>.lock.json` and the SUMO files the lock lists.\
-  The scenario declares the epoch (what simulated second zero is in civil time), the sun's policy, and usually some named windows.
+  The scenario declares the epoch (what simulated second zero is in civil time) and the sun's policy.\
+  It usually declares some named windows too.
 - **The world package** (`.cwp`) the scenario was compiled against, in the site profile's `paths.world_package_root`.
 - **A site profile.**\
   See [Getting started](Getting_Started.md#the-site-profile).
@@ -60,7 +61,8 @@ Check it without touching the server:
 carla-capture --site-profile site.json --run overhead.run.json --validate-only
 ```
 
-`--validate-only` resolves the run, runs the offline checks, prints the launch echo, and writes the resolution report, the lock and the effective configuration.\
+`--validate-only` resolves the run, runs the offline checks and prints the launch echo.\
+It also writes the resolution report, the lock and the effective configuration.\
 The launch echo says what the run will do before it starts:
 
 ```text
@@ -94,7 +96,8 @@ carla-capture --site-profile site.json --run overhead.run.json
 ```
 
 Every launch gets a session id of its own, so the real run's folder is not the one the check printed.\
-The command's last line names the result, and the result names the capture folder.\
+The command's last line names the result.\
+The result names the capture folder.\
 When it ends, check what it wrote (see [Checking a capture](#checking-a-capture)).\
 For example:
 
@@ -129,7 +132,8 @@ A run is resolved from six layers, lowest first:
 - the command line
 
 A higher layer wins.\
-Fields the world and scenario packages bind, such as the epoch, the SUMO step and seed, and the world's fingerprint, can be restated only with the value the package gives.\
+The world and scenario packages bind some fields, such as the epoch, the SUMO step, the SUMO seed and the world's fingerprint.\
+A bound field can be restated only with the value the package gives.\
 Any other value is refused (run check 3).
 
 **How `scenario_package` is found.**\
@@ -154,7 +158,8 @@ carla-capture --site-profile site.json --run overhead.run.json \
 ```
 
 A few fields have short options of their own.\
-They are applied before `--set`, and `--set` is applied in the order given:
+They are applied before `--set`.\
+The `--set` options are applied in the order given:
 
 | Option | Sets | Values |
 |---|---|---|
@@ -173,9 +178,9 @@ The other options:
 | `--run FILE` | The run file. |
 | `--site-profile FILE` | This machine's site profile. Unset, the values come from the folder layout the command runs from. |
 | `--validate-only` | Stop after the offline checks: resolve, check, print the echo, write the resolution report and the lock. |
-| `--write-schema PATH` | Write the run file's JSON schema, and exit. |
-| `--write-schemas DIR` | Write the schemas of the run file, the run's records and the site profile into `DIR`, and exit. |
-| `--write-site-profile PATH` | Write this machine's site profile as a file to edit, and exit. |
+| `--write-schema PATH` | Write the run file's JSON schema. The command then exits. |
+| `--write-schemas DIR` | Write the schemas of the run file, the run's records and the site profile into `DIR`. The command then exits. |
+| `--write-site-profile PATH` | Write this machine's site profile as a file to edit. The command then exits. |
 | `--log-level {DEBUG,INFO,WARNING,ERROR}` | How much the command prints. |
 
 ## Camera channels
@@ -184,34 +189,42 @@ Each object in `capture.channels` is one camera, a channel.\
 Every channel records at the same rate, `capture.capture_hz` (2 per simulated second by default).
 
 Each camera also carries a depth camera, attached at the same pose with the same picture size and field of view.\
-The depth camera measures how much of each vehicle something hides, and nothing turns it off.
+The depth camera measures how much of each vehicle something hides.\
+Nothing turns it off.
 
 ### Where things are
 
 Positions are in CARLA's frame: meters, x east, y **south**, z up.\
 North is -y.
 
-Angles follow CARLA: yaw 0 faces east and -90 faces north, and a negative pitch looks down.\
+Angles follow CARLA: yaw 0 faces east and -90 faces north.\
+A negative pitch looks down.\
 A bearing is a compass direction, in degrees clockwise from north.
 
 To find a view, fly there with `carla-free-camera` (see [Cameras and missions](Cameras_And_Missions.md#flying-a-camera-to-find-a-view-carla-free-camera)).\
-Its heads-up display, like `carla-sctmv`'s, shows `x`, `N`, `yaw` and `pitch`, and the height as `elev` and `AGL` in feet.\
+Its heads-up display, like `carla-sctmv`'s, shows `x`, `N`, `yaw` and `pitch`.\
+It gives the height as `elev` and `AGL`, in feet.\
 Convert before you copy a pose into a run file:
 
 - `x`, `yaw` and `pitch` copy across as they are.
 - y is `-N`.
 - z in meters is `elev` divided by 3.28084, less the height of the world's origin.\
-  `elev` is the height above the ellipsoid, and `world.get_cesium_origin()` gives the origin's height as its third value.
+  `elev` is the height above the ellipsoid.\
+  `world.get_cesium_origin()` gives the origin's height as its third value.
 
 ### The camera's name: `sensor_id`
 
 `sensor_id` names the camera.\
-It names the channel's folder, begins every still's file name (`<sensor_id>_<local capture time>.png` and `.xml`), and is the callsign of the camera's track in the truth.\
+It names the channel's folder and begins every still's file name (`<sensor_id>_<local capture time>.png` and `.xml`).\
+It is also the callsign of the camera's track in the truth.\
 The rules:
 
 - 1 to 63 characters, each an ASCII letter, digit, underscore or hyphen, such as `Overwatch_1` or `Southeast_1700m_orbit`.
-- Not a Windows device name (`CON`, `NUL`, `COM1` and so on), not a role name the server gives sensors (`front`, `back`, `left`, `right` and so on), and not the server's own forms, `Camera_<n>` and `CARLA-SENSOR-<n>`.
-- Required when there is more than one channel, and unique among them, ignoring case (run check 11).
+- Not a Windows device name (`CON`, `NUL`, `COM1` and so on).
+- Not a role name the server gives sensors (`front`, `back`, `left`, `right` and so on).
+- Not one of the server's own forms, `Camera_<n>` and `CARLA-SENSOR-<n>`.
+- Required when there is more than one channel (run check 11).\
+  The same check requires the names to be unique among the channels, ignoring case.
 - A single channel may leave it out.\
   The server then names the camera `Camera_<n>`.
 
@@ -222,7 +235,8 @@ The run is then refused before the window (exit status 5).
 
 A stare holds one pose for the whole run.\
 `pattern` is `stare` by default.\
-The simplest stare names the point to look at, and stands the camera off from it:
+The simplest stare names the point to look at.\
+It stands the camera off from that point:
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -276,16 +290,20 @@ How it moves:
 - The camera starts over the center of the world's staging bounds.
 - Through the prewarm it follows the traffic: after each SUMO step it moves to the center of the vehicles that step drew.
 - At `capture.tiles_hold_s` before the window (10 s by default, rounded up to whole SUMO steps) it stops following and holds that pose, through the rest of the prewarm and the whole window.
-- If the step before the hold drew no vehicle, there is nothing to aim at, and the run is refused before the window (exit status 5).
+- If the step before the hold drew no vehicle, there is nothing to aim at.\
+  The run is then refused before the window (exit status 5).
 
-It needs a prewarm of at least one SUMO step to measure the traffic on (run check 47), and one SUMO step more than a fixed camera needs for its tiles (run check 51).\
-The run result records the point it aimed at under `produced.cameras[].look_at`, and the same point as stare fields under `as_look_at_point`.\
+It needs a prewarm of at least one SUMO step to measure the traffic on (run check 47).\
+It also needs one SUMO step of prewarm more than a fixed camera needs for its tiles (run check 51).\
+The run result records the point it aimed at under `produced.cameras[].look_at`.\
+The result also gives the same point as stare fields under `as_look_at_point`.\
 Paste those into a later run file to repeat the view.
 
 ### An orbit flown by the server
 
 An orbit circles a center at a fixed height, with the camera looking at the center the whole way.\
-The server flies it: the run gives the circle to the server once, and the server moves the camera on every tick.\
+The server flies it: the run gives the circle to the server once.\
+The server then moves the camera on every tick.\
 Nothing in the client sends a pose per frame.
 
 | Field | Default | Meaning |
@@ -301,7 +319,8 @@ How it moves:
 
 - The camera starts due east of the center.\
   It goes from east through south, west and north, which is clockwise seen from above.
-- It is held at that opening pose through the prewarm, and starts moving as the window opens.
+- It is held at that opening pose through the prewarm.\
+  It starts moving as the window opens.
 - It advances by each tick's simulated time, so `orbit_period_s` counts simulated seconds.\
   At the default 2 captures per second, a 240 s lap is 480 captures, 0.75 degrees apart.
 - The tile wait sees only the opening view.\
@@ -310,7 +329,9 @@ How it moves:
 
 The run result records each orbit's center, `radius_m`, `altitude_m` and `period_s` under `produced.cameras`.
 
-This run file has two channels on the Arapahoe underpass scenario: an orbit around the dwell spot under the Yosemite Street bridge, and a stare at the same spot from 150 m south and 150 m up, with its own exposure.\
+This run file has two channels on the Arapahoe underpass scenario.\
+One is an orbit around the dwell spot under the Yosemite Street bridge.\
+The other is a stare at the same spot from 150 m south and 150 m up, with its own exposure.\
 The scenario declares no windows, so the window is given as seconds:
 
 ```json
@@ -360,14 +381,16 @@ The scenario declares no windows, so the window is given as seconds:
 | `fov` | `90.0` | Horizontal field of view, degrees, above 0 and below 180. The vertical field follows from the picture's shape. |
 
 Bigger pictures cost disk.\
-The launch echo estimates the run's size from a measured 2.25 MiB per 1280 x 720 PNG, scaled by pixel count, and says how many hours of capture the free space holds.
+The launch echo estimates the run's size from a measured 2.25 MiB per 1280 x 720 PNG, scaled by pixel count.\
+It also says how many hours of capture the free space holds.
 
 When the free space under the capture root cannot hold the window, run check 19 warns (`capture_may_outrun_disk`).\
 While the run goes on, it stops itself cleanly when the free space falls below `write_headroom_floor_s` of capture, 600 s by default (run check 46).
 
 ### Exposure
 
-Each channel states its camera's exposure in numbers, and every one of them is sent to the camera.\
+Each channel states its camera's exposure in numbers.\
+Every one of them is sent to the camera.\
 The exposure is set over the channel's post-process profile, which sets the rest of the picture.
 
 | Field | Default | Meaning |
@@ -394,7 +417,9 @@ check 16 REFUSE capture.channels[0].exposure_shutter_s: 320 is not a value the c
 
 **Why auto-exposure warns.**\
 `histogram` is allowed, but it raises warning `exposure_follows_the_scene` (run check 16).\
-Under `histogram` the engine meters each frame and sets its own exposure, so the exposure follows what is in the picture: a bright vehicle entering the frame darkens the rest, and two windows under different suns can come out alike.\
+Under `histogram` the engine meters each frame and sets its own exposure, so the exposure follows what is in the picture.\
+A bright vehicle entering the frame darkens the rest.\
+Two windows under different suns can come out alike.\
 That suits an operator's live picture, not captures you mean to compare.\
 Each capture then records the method and no EV100.
 
@@ -409,14 +434,16 @@ Every still's sidecar carries the exposure its camera was given, in a `<_carla_e
 - compensation
 - under `manual`, the EV100
 
-The run result records the exposure per camera under `produced.cameras[].exposure`, and `carla-audit-sidecars` checks that every still of a camera carries the same one.
+The run result records the exposure per camera under `produced.cameras[].exposure`.\
+`carla-audit-sidecars` checks that every still of a camera carries the same one.
 
 ## Timing
 
 ### The clock
 
 The world ticks `capture.world_delta_s` of simulated time at a time, 0.05 s by default.\
-SUMO's step, which the scenario fixes, must be a whole number of ticks, and so must the time between captures (run check 9).\
+The scenario fixes SUMO's step.\
+That step and the time between captures must each be a whole number of ticks (run check 9).\
 At the defaults, a capture is taken every 10 ticks, twice per simulated second.
 
 ### The window
@@ -451,7 +478,8 @@ For example, the default 300 s against a window that opens at t=60 gives: `prewa
 
 The world's imagery is photoreal tiles streamed from Cesium.\
 A camera pointed at new ground draws it while the tiles still arrive, so the run waits for them.\
-After every SUMO step of the prewarm, it asks the server whether each camera's tiles are in: every visible tileset fully loaded, and no failed tile in view.
+After every SUMO step of the prewarm, it asks the server whether each camera's tiles are in.\
+They are in when every visible tileset is fully loaded with no failed tile in view.
 
 - The wait starts once every camera holds the pose the window opens on.
 - It has a ceiling of 90 s of wall-clock time.
@@ -466,7 +494,8 @@ The run result records, per channel, when its tiles came in, under `produced.rea
 It is rounded up to whole SUMO steps.
 
 - Every camera's prewarm must be at least this long (run check 51).
-- A stare at the traffic stops following the traffic this long before the window, and holds.\
+- A stare at the traffic stops following the traffic this long before the window.\
+  It then holds its pose.\
   Its prewarm must be one SUMO step longer.
 
 Measured cold tile loads took 1.5 to 6.2 s of simulated time; one took 35.6 s.\
@@ -476,21 +505,30 @@ For a stare at the traffic, lengthen `capture.tiles_hold_s` as well, because its
 ### The picture-settled wait, off by default
 
 `capture.picture_settled_wait` adds a second wait: after a camera's tiles are in, the run compares its frames until the picture stops changing.\
-It is `false` by default, and it is best left that way.\
-It has proved too strict, and with many ticks to a SUMO step, such as 20 ticks at a 1 s step, every comparison comes back unknown and the run is refused.
+It is `false` by default.\
+It is best left that way.\
+It has proved too strict.\
+With many ticks to a SUMO step, such as 20 ticks at a 1 s step, every comparison comes back unknown and the run is refused.
 
 When it is `true`, two more fields are read:
 
 - `capture.picture_ceiling_frames` (60 by default, 30 s at 2 per second) is how many of its own frames a camera has to settle.
-- `capture.picture_tolerance_levels` (0.5 gray levels by default) is how far a frame may differ from the frame ten ticks earlier, in its worst 80-pixel block that no vehicle covers, and count as settled.
+- `capture.picture_tolerance_levels` (0.5 gray levels by default) is the largest difference from the frame ten ticks earlier that still counts as settled.\
+  The difference is measured in the frame's worst 80-pixel block that no vehicle covers.
 
-The prewarm must then hold the ceiling's frames (run check 51), and `capture.tiles_hold_s` is not read.
+The prewarm must then hold the ceiling's frames (run check 51).\
+In that case `capture.tiles_hold_s` is not read.
 
 ### Pacing
 
 By default (`pacing.mode` `as_available`) the world ticks as fast as the machine allows.
 
-To hold the ticks to the wall clock, set `pacing.mode` to `wall_clock`, `pacing.real_time_factor` to the simulated seconds per wall-clock second, and `pacing.min_achieved_factor` to the pace below which the run has failed.\
+To hold the ticks to the wall clock, set these fields:
+
+- `pacing.mode` to `wall_clock`
+- `pacing.real_time_factor` to the simulated seconds per wall-clock second
+- `pacing.min_achieved_factor` to the pace below which the run has failed
+
 `pacing.min_achieved_factor` is required under `wall_clock` (run check 2).\
 A prewarm that does not hold it refuses the window (run check 44).
 
@@ -503,7 +541,8 @@ A prewarm that does not hold it refuses the window (run check 44).
 - The run prints the launch echo.
 - It stops for the person only when a warning was raised that no `on_warning` entry covers.\
   It then asks: `Proceed past 1 warning(s) (prewarm_clipped)? Type 'proceed' to continue:`.\
-  Any other answer refuses the run (run check 34), and so does having no terminal to ask.
+  Any other answer refuses the run (run check 34).\
+  Having no terminal to ask also refuses it.
 
 ### Unattended
 
@@ -512,7 +551,8 @@ A prewarm that does not hold it refuses the window (run check 44).
 - `result_path` is required (run check 2).
 - The run never stops to ask.\
   Every warning raised must already have an `on_warning` entry, either `proceed` or `refuse` (run check 34).
-- No value may come from an environment variable the site profile does not list, and SUMO may not be searched for on the machine (run check 36).\
+- No value may come from an environment variable the site profile does not list (run check 36).\
+  The same check bars searching the machine for SUMO.\
   Name `sumo.home` in the site profile.
 - A loud condition stops the run: a channel whose recorder dropped stills (`loud:recorder_dropped`), or, under `wall_clock` pacing, a pace below the floor (`loud:pace_below_floor`).\
   An attended run shows the condition and goes on.
@@ -572,7 +612,8 @@ The run's lock records who allowed each warning: the run file, or "the operator 
 
 The monitor shows how the run is going:
 
-- the simulated time, and how far through the window it is
+- the simulated time
+- how far through the window the run is
 - the civil time
 - the sun's elevation
 - the pace
@@ -599,7 +640,8 @@ The run then:
 3. writes the run result,
 4. gives the world back: it destroys its cameras and returns the bodies, the drive lease, the layers, the sun and the clock.
 
-It exits with status 6, `run_stopped`, and `closed_by` names the signal, such as `signal:SIGINT`.\
+It exits with status 6, `run_stopped`.\
+The result's `closed_by` names the signal, such as `signal:SIGINT`.\
 A second signal abandons the rest of the shutdown and exits at once, leaving the files as they are.
 
 ## Results
@@ -638,11 +680,11 @@ The parts you read most:
 
 | Part | What it says |
 |---|---|
-| `outcome`, `exit_status`, `closed_by`, `detail` | How the run ended, and the first refusal or fault in one line. |
+| `outcome`, `exit_status`, `closed_by`, `detail` | How the run ended. The last field gives the first refusal or fault in one line. |
 | `refusals`, `warnings` | Every finding, with its run check number, subject and message. |
 | `produced.capture_directory` | The capture folder. |
-| `produced.channels` | Per channel: stills `written`, `recorder_dropped`, and counts of stills that lacked part of their truth. |
-| `produced.cameras` | Where each camera looked, and the exposure it was given. |
+| `produced.channels` | Per channel: stills `written`, `recorder_dropped` and counts of stills that lacked part of their truth. |
+| `produced.cameras` | Each camera's view and the exposure it was given. |
 | `produced.readiness` | How each view became ready before the window. |
 | `produced.gates` | The closing checks, each with what was observed, its threshold and whether it was `met`. |
 | `producer` | What wrote the result: the tool's release, `carlanet`'s, the server's build and SUMO's release. |
@@ -694,7 +736,8 @@ The run's records go beside the result, outside the capture folder, named after 
 | `<stem>.effective.json` | Every field the run resolved, as a run file. |
 
 With `--result out/check.result.json` the stem is `check`.\
-Without `--result`, the result is `<paths.runs_root>/<session id>/run.result.json`, and the stem is `run`.
+Without `--result`, the result is `<paths.runs_root>/<session id>/run.result.json`.\
+The stem is then `run`.
 
 ### Repeating a run
 
@@ -729,7 +772,8 @@ world truth track summaries       1 checked, 0 failed
 every file keeps its schema
 ```
 
-Give it the folder that holds the run's records as well, and it checks the result, the resolution report, the lock and the effective configuration too.\
+To check the run's records too, give it the folder that holds them.\
+It then checks the result, the resolution report, the lock and the effective configuration.\
 It checks the files, not the pixels.\
 A manifest with no closing row is noted as a run that was interrupted, which is not a failure.
 
@@ -744,11 +788,12 @@ A manifest with no closing row is noted as a run that was interrupted, which is 
 | `path` | A capture folder, one camera's folder in it, a folder of run records or inputs, a world package (`.cwp`), a vehicle catalog folder or its `vehicles.catalogue.json`, or any folder holding them. |
 | `--show SHOW` | How many failures to list, 50 by default. Every one is counted. |
 | `--schemas SCHEMAS` | The folder of schemas to check against. By default, the ones installed with `carlacontrol`, or a checkout's `CarlaControl/schemas`. |
-| `--write-schemas DIR` | Write every schema this release makes into `DIR`, and check nothing. |
+| `--write-schemas DIR` | Write every schema this release makes into `DIR`. Nothing is checked. |
 
 ### `carla-audit-sidecars`
 
-`carla-audit-sidecars` reads every truth sidecar in a capture, or in one channel's folder, and holds the vehicle records to the rules a SUMO-driven capture must keep.\
+`carla-audit-sidecars` reads every truth sidecar in a capture, or in one channel's folder.\
+It holds the vehicle records to the rules a SUMO-driven capture must keep.\
 It fails, with exit status 1, when:
 
 - a vehicle record stands below the ground band the moving vehicles draw, which means a parked pool body was listed as a vehicle;
@@ -795,7 +840,8 @@ The exposure line names the camera by its track's id, `CARLA-SENSOR-<actor id>`,
 
 ## What a capture folder holds
 
-The estimated pattern of life (EPoL) pages describe a capture folder file by file, and how to read the truth for training and testing: see [What a capture folder holds](../EPOL/Capture_Folder.md).\
+The estimated pattern of life (EPoL) pages describe a capture folder file by file: see [What a capture folder holds](../EPOL/Capture_Folder.md).\
+That page also shows how to read the truth for training and testing.\
 The schema pages describe each file's fields:
 
 - [Truth sidecar](../Schemas/Truth_Sidecar.md)

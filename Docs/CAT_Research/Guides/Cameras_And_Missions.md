@@ -1,6 +1,6 @@
 # Cameras and missions from your own code
 
-In this guide, a mission is a plan for cameras: where they are, where they look, and what they record.\
+In this guide, a mission is a plan for cameras: where they are, where they look and what they record.\
 [Running a capture](Running_A_Capture.md) shows how to state a mission in a run file and record it with `carla-capture`.\
 This page shows the other ways to work with cameras:
 
@@ -18,16 +18,19 @@ These pages use the installed command names.\
 Positions are in CARLA's frame: meters, x east, y **south**, z up.\
 North is -y.
 
-Angles follow CARLA: yaw 0 faces east and -90 faces north, and a negative pitch looks down.\
+Angles follow CARLA: yaw 0 faces east and -90 faces north.\
+A negative pitch looks down.\
 A bearing is a compass direction, in degrees clockwise from north, so a bearing maps to a yaw as `yaw = bearing - 90`.
 
-`carla-sctmv`'s heads-up display, which `carla-free-camera` shares, shows north as `N`, which is -y, and the height as `elev`, in feet above the ellipsoid.\
+`carla-sctmv`'s heads-up display, which `carla-free-camera` shares, shows north as `N`, which is -y.\
+The display gives the height as `elev`, in feet above the ellipsoid.\
 Convert before you copy a position from it; [Where things are](Running_A_Capture.md#where-things-are) shows how.
 
 ## The Python API: `carlanet`
 
 `carlanet` is a Python client for the CARLA server that matches CARLA's own `carla` module.\
-It runs on .NET 10 rather than on CARLA's native library, and adds the calls this fork's server has, such as named cameras, camera exposure and server-flown orbits.\
+It runs on .NET 10 rather than on CARLA's native library.\
+It adds the calls this fork's server has, such as named cameras, camera exposure and server-flown orbits.\
 Import it in place of `carla`:
 
 ```python
@@ -39,7 +42,7 @@ world = client.get_world()
 ```
 
 `setup-venv` installs it into the distribution's `venv/`.\
-`carlacontrol`, installed beside it, holds the helpers the commands use, and you can use them too.
+`carlacontrol`, installed beside it, holds the helpers the commands use.
 
 ### Spawning a camera and setting its exposure
 
@@ -100,10 +103,13 @@ print(exposure.ev100)   # 12.94
 
 **The camera's name.**\
 `world.spawn_camera(blueprint, transform, name=...)` spawns a camera under a name.\
-Every still recorded from it begins with that name, and it is the callsign of the camera's track.\
-`name` follows the rules in [The camera's name](Running_A_Capture.md#the-cameras-name-sensor_id), and `carla.camera_name_problem(name)` says why a name breaks them, or returns `None`.
+Every still recorded from it begins with that name.\
+The name is also the callsign of the camera's track.\
+`name` follows the rules in [The camera's name](Running_A_Capture.md#the-cameras-name-sensor_id).\
+`carla.camera_name_problem(name)` says why a name breaks them, or returns `None`.
 
-The server refuses a name a live camera already holds, and `spawn_camera` then raises `ValueError` with the server's reason.\
+The server refuses a name a live camera already holds.\
+`spawn_camera` then raises `ValueError` with the server's reason.\
 With no name, the server names the camera `Camera_<n>`.\
 Either way, `world.camera_name(camera)` reads back the name the camera holds, so every client agrees on it.
 
@@ -161,7 +167,8 @@ Call `set_orbit_enabled(False)` before you move the camera yourself.
 A server built before it could fly orbits raises `carlanet.OrbitNotOnServerError`; nothing in the client moves the camera in its place.
 
 **`OrbitSensorController`** is the `carlacontrol` class that `carla-camera-follower` and `carla-capture` use to give a camera its orbit.\
-It keeps the circle, turns it on and off, and works out the current angle from the simulated clock without asking the server:
+It keeps the circle and turns it on and off.\
+It also works out the current angle from the simulated clock without asking the server:
 
 ```python
 from carlacontrol.OrbitSensorController import OrbitSensorController
@@ -183,7 +190,8 @@ orbit.set_enabled(False)
 - `angle`, in radians;
 - `clockwise`.
 
-It also takes `radius_feet` and `altitude_feet`, and `center_lat` and `center_lon`, which it converts with the world's georeference when it was given `world`.
+It also takes `radius_feet`, `altitude_feet`, `center_lat` and `center_lon`.\
+It converts the latitude and longitude with the world's georeference when it was given `world`.
 
 New parameters take effect the next time the orbit is enabled.\
 If the server refuses the orbit, `set_enabled(True)` logs the reason and leaves `orbit.orbit_enabled` false.\
@@ -194,8 +202,13 @@ If the server refuses the orbit, `set_enabled(True)` logs the reason and leaves 
 `carla-camera-follower` places one camera of your own in a running world and shows its picture in a window.\
 Over each frame it prints the camera's name, its pattern, the frame number and the simulated time the frame carries.
 
-It changes nothing else.\
-It never advances the world's clock, never changes the world's settings, sun, weather, layers or map, never starts a traffic manager, and removes its camera when it closes.\
+It changes nothing else:
+
+- It never advances the world's clock.
+- It never changes the world's settings, sun, weather, layers or map.
+- It never starts a traffic manager.
+- It removes its camera when it closes.
+
 So you can start it before, during or after a drive.
 
 While a drive owns the clock, frames arrive at the drive's tick rate; when nothing does, at the server's own rate.\
@@ -207,7 +220,8 @@ To record, use `carla-capture` or `carla-drive`.
 Some things to know:
 
 - Its camera is a plain RGB camera with the camera's default exposure, the `Default` profile's.\
-  It renders on every tick, and has no depth camera.
+  It renders on every tick.\
+  It has no depth camera.
 - `--sensor-id` is shown over the picture only.\
   The follower does not give it to the server, which names the follower's camera `Camera_<n>`.\
   The name must still follow the camera-name rules: ASCII letters, digits, underscores and hyphens, up to 63.
@@ -282,14 +296,17 @@ carla-drive \
     --no-record --real-time-factor 1.0 --steps 0
 ```
 
-While the drive owns the clock, the follower's frames arrive at the drive's tick rate, and its overlay shows the scenario's simulated time.\
+While the drive owns the clock, the follower's frames arrive at the drive's tick rate.\
+The follower's overlay then shows the scenario's simulated time.\
 The marked vehicle leaves at t = 120 s.\
 To start the picture nearer its dwell, add `--warm-up 600`, which fast-forwards SUMO to t = 600 s, without drawing, before the first tick.
 
 4. **Stop.**\
-   Press Ctrl+C in the drive's terminal, and Esc in the follower's window.\
+   Press Ctrl+C in the drive's terminal.\
+   Press Esc in the follower's window.\
    The order does not matter.\
-   When the drive ends, it gives the clock back, and the follower keeps showing frames at the server's own rate until you close it.
+   When the drive ends, it gives the clock back.\
+   The follower then keeps showing frames at the server's own rate until you close it.
 
 To stare at the spot instead of orbiting it, replace step 2 with:
 
@@ -305,7 +322,8 @@ That camera stands 150 m south of the spot and 150 m up, looking north at it.
 `carla-free-camera` flies a camera of your own around a running world, with flight controls and a heads-up display.\
 Like the follower, it changes nothing in the world and records nothing.\
 Use it to find a view, then put the pose in a run file.\
-It spawns two cameras, the picture and a depth camera for measuring, and removes both when it closes.
+It spawns two cameras, the picture and a depth camera for measuring.\
+It removes both when it closes.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -330,7 +348,8 @@ B and M draw the perimeter and margin; Space returns to the start; Esc quits.
 Unlike `carla-free-camera`, it can record what that camera sees.
 
 - The camera starts over the center of the world's staging bounds, `--camera-z` meters up (300 by default), looking straight down.
-- Press **F** to start a recording span, and F again to end it.\
+- Press **F** to start a recording span.\
+  Press F again to end it.\
   A span starts once the camera's photoreal tiles are in, waiting up to 90 s of wall-clock time for them.\
   It starts only from the capture window's opening, which is `--window-opens-at`, or by default the first frame drawn.\
   Pressing F while it waits cancels the span.
@@ -352,7 +371,7 @@ The options that shape the flown camera and its recording:
 | Option | Default | Meaning |
 |---|---|---|
 | `--view {fixed,free}` | `fixed` | `fixed` spawns one camera, aims it once and records the whole window. `free` gives you a camera to fly. |
-| `--no-record` | off | Write no frames: no fixed camera is spawned, and a free view's F key records nothing. |
+| `--no-record` | off | Write no frames: no fixed camera is spawned. A free view's F key records nothing. |
 | `--record-dir RECORD_DIR` | `captures` under the current folder when installed, `Build/captures` from a checkout | Where captures go. |
 | `--record-hz RECORD_HZ` | `2.0` | Captures per simulated second. |
 | `--camera-name NAME` | none | The camera's name, given to the server. It begins every still's name and each span folder's name. Without one the server names the camera `Camera_<n>`. |
@@ -374,7 +393,7 @@ On Linux, the window needs a display.
 `world.start_recording(camera, record_dir, ...)` in `carlanet` is the recorder the commands use.\
 A recorder in a process of your own writes the supervision the server holds for each frame, the same as any other.
 
-But the list of which bodies each frame drew, and the declared sun, belong to the process that drives SUMO.\
+But the declared sun and the list of which bodies each frame drew belong to the process that drives SUMO.\
 Without them, a recorder lists every vehicle actor in the world, including the bodies parked out of sight between uses, which `carla-audit-sidecars` then reports as standing below the ground.\
 Record SUMO-driven traffic from `carla-capture` or `carla-drive`.
 
@@ -389,12 +408,16 @@ While it is held, the server refuses these calls for every actor and every clien
 - turning autopilot on (`set_autopilot(True)`);
 - vehicle control, Ackermann control and physics control, direct or in a batch.
 
-So a traffic manager in any process moves nothing, and a second drive is refused when it tries to take the lease.\
-`carla-capture` then ends with exit status 4, `refused_authority`, and names the holder in `authority_holder`.\
+So a traffic manager in any process moves nothing.\
+A second drive is refused when it tries to take the lease.\
+`carla-capture` then ends with exit status 4, `refused_authority`.\
+It names the holder in `authority_holder`.\
 `carla-drive` prints `refused: <holder> holds this world's drive lease.`
 
 Cameras are not affected.\
-Spawning, moving and orbiting cameras, and reading the world, all work as before, which is why the follower and the free camera work beside a drive.
+Spawning, moving and orbiting cameras all work as before.\
+Reading the world works as before too.\
+That is why the follower and the free camera work beside a drive.
 
 From Python:
 
@@ -408,6 +431,8 @@ A traffic tool should ask before it spawns anything, as `PythonAPI/examples/gene
 
 The drive gives the lease back when it ends.\
 A drive that dies without giving it back leaves it held until the world is reloaded, or until `world.break_drive_lease()` ends it.\
-That call returns the holder whose lease it ended, and the server logs it as a warning.
+That call returns the holder whose lease it ended.\
+The server logs the break as a warning.
 
-A server built before the lease answers `None` to both calls, and nothing on it stops another traffic system.
+A server built before the lease answers `None` to both calls.\
+Nothing on such a server stops another traffic system.

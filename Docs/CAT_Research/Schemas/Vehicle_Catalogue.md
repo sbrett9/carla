@@ -1,6 +1,7 @@
 # Vehicle catalog (`vehicles.catalogue.json`)
 
-The vehicle catalog lists every vehicle body CARLA can draw, with its measurements, and groups the bodies into the classes a scenario asks for.\
+The vehicle catalog lists every vehicle body CARLA can draw, with its measurements.\
+It groups the bodies into the classes a scenario asks for.\
 It is the one source of three things:
 
 - **What kind of vehicle each body is.**\
@@ -10,7 +11,8 @@ It is the one source of three things:
 - **How SUMO drives each class.**\
   Every class states its acceleration, braking, speed and gap explicitly.
 
-It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout, and an installed `carlacontrol` carries a copy.\
+It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout.\
+An installed `carlacontrol` carries a copy.\
 SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](Vehicle_Types.md).\
 The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_Body_Widths.md).
 
@@ -22,10 +24,10 @@ The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_B
 `CarlaControl/scripts/make_vehicle_catalogue.py` (`VehicleCatalogueBuilder`) writes it against a running CARLA server.\
 The script does these steps:
 
-1. It spawns each vehicle blueprint alone, high above the map, reads its bounding box, and destroys it.
+1. It spawns each vehicle blueprint alone, high above the map, reads its bounding box and destroys it.
 2. It spawns each again with a color set and reads the server log to see whether the color reached the body.
 3. It renders each with every lamp commanded on and off and counts the pixels that change.
-4. It merges the body widths, checks the whole document, and computes its digest.
+4. It merges the body widths, checks the whole document and computes its digest.
 5. It writes the catalog and the SUMO vehicle types.
 
 `CarlaControl/scripts/apply_vehicle_body_widths.py` merges a new body-width table into the existing catalog without a server.
@@ -46,7 +48,8 @@ The digest is defined over that form.
 A scenario asks for a class.\
 SUMO draws a member body from it, with the member's weight as its chance.
 
-Every member of a class has the class's `base_type` and `special_type` in the truth, and SUMO drives it with the class's parameters.\
+Every member of a class has the class's `base_type` and `special_type` in the truth.\
+SUMO drives it with the class's parameters.\
 Each body belongs to exactly one class.
 
 | Class | Description | SUMO vClass | `base_type` | `special_type` | Bodies |
@@ -81,7 +84,8 @@ How SUMO drives each class:
 | `fire_appliance` | 25 | 1.3 | 4.0 | 0.4 | 1 | 0.05 | 3.0 |
 
 The builder takes these from SUMO's own defaults for each vehicle class and writes them out, so none is left implicit.\
-The top speeds are set for a mixed city and freeway network instead, and the bus takes a speed spread of 0.05 where SUMO's default is zero.
+The top speeds are set for a mixed city and freeway network instead.\
+The bus takes a speed spread of 0.05 where SUMO's default is zero.
 
 ### How a body's kind is decided
 
@@ -136,7 +140,8 @@ For a model developer reading a capture's truth:
   They match the catalog's `length_m`, `width_m` and `height_m`, so the width includes the mirrors.\
   SUMO was given `body_width_m`, the width without them.
 - A vehicle's `type_id` in the truth is its CARLA blueprint id.\
-  In a SUMO-driven capture, `vtype_id` is the SUMO type, which for a compiled scenario names the blueprint, and the type's `carla:class_id` parameter names the class.
+  In a SUMO-driven capture, `vtype_id` is the SUMO type, which for a compiled scenario names the blueprint.\
+  The type's `carla:class_id` parameter names the class.
 - SUMO reports a vehicle's position at the center of its front bumper.\
   CARLA places the body's origin behind it by `length_m / 2 + bbox_centre_m[0]` along the heading.\
   The truth's latitude, longitude and height are the body origin's.
@@ -196,7 +201,8 @@ A measured entry also has:
 | `bbox_centre_m` | array of 3 numbers | meters | yes | The box's center in the vehicle's own frame: forward, right, up from the actor's origin. |
 | `body_width_m` | number | meters | no | Width of the body without mirrors, measured from the mesh. SUMO is given this width. Every measured entry has it in the current catalog; without it, no SUMO type can be written for the body. |
 
-A failed entry has `measurement_note`, the reason, instead, and no dimensions.\
+A failed entry has no dimensions.\
+It has `measurement_note`, the reason, instead.\
 A reader refuses to place a body whose measurement failed.
 
 ### `classes[]`
@@ -208,7 +214,7 @@ A reader refuses to place a body whose measurement failed.
 | `sumo_vclass` | string | | yes | SUMO's vehicle class, which decides the lanes the vehicle may use. |
 | `cot_base_type` | string | | yes | The `base_type` truth records for every member: `car`, `van`, `truck`, `bus`, `motorcycle` or `bicycle`. |
 | `cot_special_type` | string | | no | The `special_type` truth records: `emergency`, `taxi`, `electric`, or empty. Absent means empty. |
-| `members` | array of objects | | yes | The bodies the class draws: `blueprint_id`, and `weight`, its relative chance, above 0. |
+| `members` | array of objects | | yes | The bodies the class draws. Each has `blueprint_id` and `weight`, its relative chance, above 0. |
 | `max_speed_mps` | number | m/s | yes | SUMO `maxSpeed`: the top speed. |
 | `accel_mps2` | number | m/s² | yes | SUMO `accel`: the most the vehicle accelerates. |
 | `decel_mps2` | number | m/s² | yes | SUMO `decel`: how hard it brakes when it wants to. |
@@ -239,7 +245,8 @@ A reader refuses to place a body whose measurement failed.
 
 ## Format version
 
-`catalogue_version` is 1, and there is no other version.\
+`catalogue_version` is 1.\
+There is no other version.\
 Every catalog the builder wrote carries it, so a file without it is not a catalog.
 
 - carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that declares 1.\

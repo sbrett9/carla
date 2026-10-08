@@ -3,10 +3,12 @@
 An area of interest is a named place where a scenario can put behavior and that a label can refer to: a guard post, a gate, a parking lot.\
 An author declares areas in a GeoJSON file beside the OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude.
 
-`areas.resolved.json` holds those areas placed on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross, or pass near each one.\
+`areas.resolved.json` holds those areas placed on the built world in CARLA meters.\
+It also places each one on the SUMO lanes that lie inside, cross, or pass near it.\
 The lane positions can be written straight into a SUMO `<stop>`.
 
-The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md), and its schema is `area_of_interest.schema.json`.\
+The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md).\
+Its schema is `area_of_interest.schema.json`.\
 The package holds a byte-for-byte copy of the areas file as `areas.aoi.geojson`.
 
 - Schema: `CarlaControl/schemas/areas_resolved.schema.json`
@@ -15,7 +17,8 @@ The package holds a byte-for-byte copy of the areas file as `areas.aoi.geojson`.
 ## Who writes it and who reads it
 
 carlacontrol's `AreaOfInterestResolver` writes it when the authoring reference set is published.\
-It converts each vertex with SUMO's own projection, run by a SUMO process holding the world's network, and converts it again with the world's own geographic frame.\
+It converts each vertex with SUMO's own projection, run by a SUMO process holding the world's network.\
+It converts each vertex again with the world's own geographic frame.\
 If the two disagree by more than `geodesy_agreement_limit_m` at any vertex, the areas are refused and the package gets no `areas.resolved.json`; the build log names every problem.
 
 The file is always written when the set is published and the areas are not refused.\
@@ -36,7 +39,9 @@ Every lane of a normal edge is tested against every area:
 - `near`: no part lies in the area, but the lane passes within `near_m` of it.
 
 Positions on a lane are SUMO lane positions in meters: the distance along the lane's shape, scaled by the lane's `length` over its shape length, as SUMO maps positions.\
-An edge is `inside` when all its lanes are, `crossing` when any listed lane is inside or crossing, and `near` otherwise.
+An edge is `inside` when all its lanes are.\
+An edge is `crossing` when any listed lane is inside or crossing.\
+Otherwise an edge is `near`.
 
 ## Fields
 
@@ -116,7 +121,8 @@ A scenario that changes lane permissions checks its own network.
 
 ## Format version
 
-`resolved_version` is 1, and there is no other version.\
+`resolved_version` is 1.\
+There is no other version.\
 A file without it is version 1.
 
 `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\

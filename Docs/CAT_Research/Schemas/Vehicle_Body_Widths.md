@@ -5,7 +5,8 @@ SUMO's width is the body without them.\
 On a bus the difference is large: the Fuso Rosa's box is 3.93 m wide and its body 3.23 m, on 3.35 m lanes.
 
 A server cannot see a mesh's vertices, so the width without mirrors is measured from the mesh in the Unreal Editor and kept in this table.\
-The [vehicle catalog](Vehicle_Catalogue.md) merges it as `body_width_m`, and the [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
+The [vehicle catalog](Vehicle_Catalogue.md) merges it as `body_width_m`.\
+The [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 
 - Schema: `CarlaControl/schemas/vehicle_body_widths.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-body-widths:1`
@@ -34,7 +35,7 @@ The table's `method` says the same.
 |---|---|---|---|---|
 | `body_widths_version` | integer, always 1 | | yes | The format of this file. |
 | `method` | string | | yes | How the widths were measured. The catalog copies it into `body_width.method`. |
-| `measured` | string | | yes | When, and from what, the meshes were exported. |
+| `measured` | string | | yes | When the meshes were exported and from what. |
 | `vehicles` | object | | yes | One row per CARLA blueprint id. |
 | `vehicles.<id>.length_m` | number | meters | yes | The mesh's length. |
 | `vehicles.<id>.full_width_m` | number | meters | yes | The mesh's whole width, mirrors included. |
@@ -45,8 +46,10 @@ All values are rounded to 0.1 mm.
 
 ## Format version
 
-`body_widths_version` is 1, and there is no other version.\
-`load_body_widths` refuses any other value, or none, and then refuses a table that does not match the schema, naming each problem.
+`body_widths_version` is 1.\
+There is no other version.\
+`load_body_widths` refuses any other value, or none.\
+Then it refuses a table that does not match the schema, naming each problem.
 
 ## Example
 

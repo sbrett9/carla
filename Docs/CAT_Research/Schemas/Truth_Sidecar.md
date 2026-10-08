@@ -7,7 +7,9 @@
 ## What the file is
 
 The truth sidecar is an XML file written beside every still.\
-It holds the ground truth of the simulation frame the still was rendered on: where the camera was and how it was set up, the sun, and every vehicle with its position, motion, size and, for a vehicle in the picture, its box in pixels and in latitude, longitude and height.
+It holds the ground truth of the simulation frame the still was rendered on: where the camera was and how it was set up, the sun and every vehicle.\
+Each vehicle has its position, motion and size.\
+A vehicle in the picture also has its box in pixels and in latitude, longitude and height.
 
 The still and its sidecar share a name: `<camera>/<camera>_<local capture time>.png` and `.xml`, for example `Check_Overhead_1/Check_Overhead_1_2026.10.07_10.34.51.318.xml`.\
 The time in the name is the capture computer's local clock, to the millisecond.\
@@ -82,7 +84,7 @@ The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives 
 | `run_id` | text | | No | The run the capture belongs to; every recorder writes one. |
 | `scenario_id` | text | | No | The scenario driving the run, where there is one. |
 | `seed` | integer | | No | The seed the run was started with, where one was given. |
-| `vehicles` | word | | No | `rendered`: the events are exactly the bodies this frame drew, each named by the SUMO vehicle it drew. `unknown`: the frame's set of drawn bodies was no longer held, so no vehicle is listed, and the empty list does not mean an empty scene. Absent: the events are every vehicle actor the world held. |
+| `vehicles` | word | | No | `rendered`: the events are exactly the bodies this frame drew, each named by the SUMO vehicle it drew. `unknown`: the frame's set of drawn bodies was no longer held, so no vehicle is listed. The empty list does not mean an empty scene. Absent: the events are every vehicle actor the world held. |
 | `draw_distance_m` | decimal | meters | No | The draw distance the image was rendered under; absent where vehicles were drawn at any range. |
 | `supervision` | text, always `unknown` | | No | A supervision plan was in force but this frame's supervision could not be read, so no vehicle carries any. |
 | `plan_id` | text | | No | The supervision plan in force on this frame, where one was. |
@@ -155,7 +157,9 @@ Each band includes its upper edge.
 ## `<_illumination>`: what the run declared the sun to be
 
 Written only in a run that declares its illumination.\
-`<_solar>` is what the world did; this is what the run said it should be, and how far apart the two were.\
+`<_solar>` is what the world did.\
+This element records what the run said it should be.\
+It also records how far apart the two were.\
 The same values are in the still's `carla:illumination` text chunk.
 
 | Name | Type | Unit | Required | Meaning |
@@ -254,7 +258,8 @@ Absent for a camera that does not publish its exposure.
 
 ## A vehicle's event
 
-A vehicle's `uid` is `CARLA-TRUTH-SUMO-<sumo_id>` where a SUMO drive lent the body, and `CARLA-TRUTH-<actor_id>` otherwise.\
+A vehicle's `uid` is `CARLA-TRUTH-SUMO-<sumo_id>` where a SUMO drive lent the body.\
+Otherwise it is `CARLA-TRUTH-<actor_id>`.\
 During a SUMO drive one CARLA body draws a succession of vehicles over a run, so always follow a vehicle by its `uid` or `sumo_id`, never by `actor_id`.
 
 | Element and name | Type | Unit | Required | Meaning |
@@ -336,7 +341,7 @@ A vehicle the author says nothing about still gets one, with state `unlabelled`.
 
 | Element and name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `_supervision/state` | word | | Yes | `annotated`: the vehicle carries out the named pattern. `nominal`: an authored negative. `unlabelled`: no assertion, and never a negative. |
+| `_supervision/state` | word | | Yes | `annotated`: the vehicle carries out the named pattern. `nominal`: an authored negative. `unlabelled`: no assertion. It is never a negative. |
 | `_supervision/vocabulary` | integer | | Yes | The annotation vocabulary's core version. |
 | `_supervision/vocabulary_digest` | text, 64 hex digits | | Yes | The digest of the plan's vocabulary. |
 | `annotation/instance` | text | | Yes | The pattern instance in force for the vehicle: `<scenario_id>/<name>`. |
@@ -462,6 +467,7 @@ A sidecar with the camera platform and one vehicle in the picture, shortened fro
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks every sidecar of a capture against this schema, with every other file of the capture, and lists each failure with its file and line.\
+`carla-validate <capture folder>` checks every sidecar of a capture against this schema, with every other file of the capture.\
+It lists each failure with its file and line.\
 Any XML Schema 1.0 validator can check a single sidecar, for example `xmllint --schema truth_sidecar.xsd <file>.xml`.\
 The schema cannot check which attributes go together, such as the box appearing exactly when `in_frame` is `wholly` or `partly`; `carla-audit-sidecars` checks those rules across a capture.

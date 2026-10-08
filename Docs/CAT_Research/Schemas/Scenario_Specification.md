@@ -23,9 +23,10 @@ It describes:
 - the labels the scenario asserts.
 
 You never write SUMO's XML.\
-The compiler turns the specification into the SUMO files, routes every vehicle, and checks everything it can before a capture is run.
+The compiler turns the specification into the SUMO files, routes every vehicle and checks everything it can before a capture is run.
 
-Times are written as civil times and places by name, and the compiler resolves both.\
+Times are written as civil times and places by name.\
+The compiler resolves both.\
 Its resolution report (see [Scenario resolution report](Scenario_Resolution_Report.md)) states what each became.
 
 ## Who writes it and who reads it
@@ -96,7 +97,7 @@ Never write a SUMO `H:M:S` value: SUMO reads it as an offset from second zero.
 | `gui_shape`, `gui_colour` | string | no | How `sumo-gui` draws the class. Nothing else reads them. |
 | `note` | string | no | A note written into the route file as a comment. |
 
-A named mix (`vehicle_mixes[]`) has an `id`, `shares` (class id to a weight above 0), and an optional `note`.\
+A named mix (`vehicle_mixes[]`) has an `id`, `shares` (class id to a weight above 0) and an optional `note`.\
 A flow's or actor's `type` is a class id, one of its vehicle types, the whole mix, or a named mix (check 16).
 
 ### A place (`places.<name>`)
@@ -105,7 +106,7 @@ A place takes exactly one of these forms:
 
 | Form | Fields | Meaning |
 |---|---|---|
-| Edge | `edge`, optional `offset_m` | A network edge by id, and a position along it in meters. |
+| Edge | `edge`, optional `offset_m` | A network edge by id and a position along it in meters. |
 | Lane | `lane`, `offset_m` | A lane by id and a position along it. |
 | Area | `area` | An area of interest by id (see [Areas of interest](Areas_Of_Interest.md)). |
 | Street | `street`, `direction` (`north`, `east`, `south`, `west`), optional `at` (a cross street) or `near` (`{lat, lon}`) | One run of a named street, narrowed by direction and a cross street or a point. |
@@ -129,7 +130,7 @@ A place takes exactly one of these forms:
 | `actors[].depart` | time | yes | When it departs. |
 | `actors[].from`, `actors[].to`, `actors[].via` | place names | no | Its route, which the compiler routes with `duarouter`. |
 | `actors[].route` | array of at least 2 place names | no | An explicit route instead, each place naming one edge. |
-| `actors[].phases` | array | no | An explicit route in phases instead: each phase a `route` of places, an optional `repeat` (default 1), and an optional `hold`, a speed in m/s or `"posted"` for each edge's own limit. |
+| `actors[].phases` | array | no | An explicit route in phases instead: each phase a `route` of places, an optional `repeat` (default 1) and an optional `hold`, a speed in m/s or `"posted"` for each edge's own limit. |
 | `actors[].stops` | array | no | Its stops, in order. |
 | `actors[].stops[].place` | place name | yes | Where it stops. The place must give a lane position. |
 | `actors[].stops[].duration` | duration | no | How long it stops. |
@@ -146,8 +147,8 @@ A place takes exactly one of these forms:
 | `at` | array of `"HH:MM[:SS]"` | yes | The clock times on each day. |
 | `subjects` | array of place names, or `{"place_set": <name>}` | yes | The places the trips serve. The template names the current one as `$subject`. |
 | `id_pattern` | string | yes | Each trip's vehicle id, from `{day}`, `{hour}`, `{minute}`, `{subject_index}` and `{subject}`. |
-| `template` | object | yes | The trip: `type`, and optionally `from`, `to`, `via`, `stops`, `depart_lane`, `depart_speed`, `arrival_speed`, as an actor has them. |
-| `skip` | array | no | Occasions left out: `day`, `at`, `subject_index` or `subject`, and `because`, the reason. A skip must match exactly one occasion (check 48). |
+| `template` | object | yes | The trip, in the same fields as an actor. `type` is required. `from`, `to`, `via`, `stops`, `depart_lane`, `depart_speed` and `arrival_speed` are optional. |
+| `skip` | array | no | Occasions left out: `day`, `at`, `subject_index` or `subject`. `because` gives the reason. A skip must match exactly one occasion (check 48). |
 
 ### A lane closure (`lane_closures[]`) and a capture window (`capture_windows[]`)
 
@@ -167,18 +168,19 @@ A place takes exactly one of these forms:
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `vocabulary.import` | array of paths | no | Namespace files to read, relative to this file. |
-| `vocabulary.namespaces[]` | object | no | A namespace: `namespace` (lower case), `version`, `authority`, `terms`, and optional `roles` and `area_kinds`. |
+| `vocabulary.namespaces[]` | object | no | A namespace: `namespace` (lower case), `version`, `authority` and `terms`. It may also have `roles` and `area_kinds`. |
 | `...terms[].term` | string `ns:name` | yes | The term. |
 | `...terms[].definition` | string | yes | What it means. |
 | `...terms[].applies_to` | array of `entity`, `cohort` | yes | What it may label: one authored vehicle, or every vehicle of a flow. |
-| `...terms[].since`, `status` | integer; `active` or `deprecated` | yes | The namespace version it appeared in, and its state. |
+| `...terms[].since`, `status` | integer; `active` or `deprecated` | yes | The namespace version it appeared in and its state. |
 | `...terms[]` other fields | | no | `superseded_by`, `broader`, `parameters` (key to `type`, `unit`, `definition`), `counterfactual`, `contrast_with`, `hard_negative_for`, `exemplar_instances`. |
-| `supervision.instances[]` | object | no | An assertion about one or more actors: `name`, `supervision` (`annotated` or `nominal`), `labels`, `participants` (`actor`, `role`), and optional `intervals`, `aoi_refs`, `parameters`, `hard_negative_for`, `counterfactual`. |
-| `supervision.instances[].intervals[]` | object | no | A phase: `participant`, `phase`, and either `begin` with `end` or `duration`, or an `anchor` naming the participant's events (`depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>`). Never both (check 58). |
+| `supervision.instances[]` | object | no | An assertion about one or more actors: `name`, `supervision` (`annotated` or `nominal`), `labels` and `participants` (`actor`, `role`). It may also have `intervals`, `aoi_refs`, `parameters`, `hard_negative_for` and `counterfactual`. |
+| `supervision.instances[].intervals[]` | object | no | A phase: `participant` and `phase`. It also has either `begin` with `end` or `duration`, or an `anchor` naming the participant's events (`depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>`). Never both (check 58). |
 | `supervision.cohorts[]` | object | no | A flow's whole-life label: `flow`, `supervision` (`annotated`, `unlabelled` or `nominal`, which is refused), `labels`, `parameters`. |
-| `supervision.series[]` | object | no | A schedule read as a recurring series: `series_id`, `rota`, `member_role`, `slot_length`, `slot_aoi_refs`, `supervision`, and optional `labels`, `parameters`, `hard_negative_for`. |
+| `supervision.series[]` | object | no | A schedule read as a recurring series: `series_id`, `rota`, `member_role`, `slot_length`, `slot_aoi_refs` and `supervision`. It may also have `labels`, `parameters` and `hard_negative_for`. |
 
-Every actor that no instance names, and every flow that no cohort names, is written into the supervision plan as `unlabelled`.\
+Every actor that no instance names is written into the supervision plan as `unlabelled`.\
+So is every flow that no cohort names.\
 See [Supervision plan](Supervision_Plan.md).
 
 ## Versions

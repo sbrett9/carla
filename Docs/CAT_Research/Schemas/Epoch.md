@@ -11,14 +11,17 @@
 
 SUMO counts simulated seconds from zero and knows nothing else about time.\
 The epoch says what simulated second zero is in civil time at the site.\
-Every civil time a tool reports, and the sun a capture is lit by, is computed from it.
+Every civil time a tool reports is computed from it.\
+The sun a capture is lit by is computed from it too.
 
-The instant is written twice: once in civil time with its offset, and again in UTC.\
+The instant is written twice: once in civil time with its offset and once in UTC.\
 The two must be the same instant, to the second.\
-This check catches the most likely mistake, an offset applied in the wrong direction, and names it.
+This check catches the most likely mistake, an offset applied in the wrong direction.\
+It names the mistake.
 
 The offset is the declared value.\
-It includes daylight saving when daylight saving is in force, and `dst_in_effect` says whether it is.\
+It includes daylight saving when daylight saving is in force.\
+`dst_in_effect` says whether daylight saving is in force.\
 Half-hour and quarter-hour offsets are ordinary: Iran is +03:30.
 
 The time zone name is carried for a reader and never looked up, so two machines with different time zone databases always agree.
@@ -28,9 +31,10 @@ The time zone name is carried for a reader and never looked up, so two machines 
 - **A scenario developer writes it**, in the specification's `epoch` block.\
   The scenario compiler checks it (checks 33 and 34) and copies it into the scenario lock.
 - **`carla-drive --epoch FILE`** reads an epoch from a file: either the epoch object on its own, or a whole `scenario.json`, whose `epoch` it reads (and whose `illumination` it reads as the sun's policy).\
-  It checks the epoch against this schema before the session sees it, and refuses a file that does not conform, quoting the schema.
+  It checks the epoch against this schema before the session sees it.\
+  It refuses a file that does not conform, quoting the schema.
 - **The co-simulation session** (`CarlaNet.CoSim.SolarEpoch`) makes the final decision on whether an epoch is valid.\
-  It also checks what a schema cannot: that the civil and UTC instants are one instant, that the offset in `civil_datetime` equals `utc_offset_hours`, and that every date and time exists.
+  It also checks what a schema cannot: that the civil and UTC instants are one instant, that the offset in `civil_datetime` equals `utc_offset_hours` and that every date and time exists.
 
 ## Fields
 

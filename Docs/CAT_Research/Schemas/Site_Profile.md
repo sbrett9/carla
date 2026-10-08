@@ -9,13 +9,14 @@
 
 ## What it is
 
-A site profile holds the facts about one machine that a capture run needs: the CARLA server's address, the SUMO installation, and where scenario packages, world packages, the vehicle catalog, captures and run records are kept.\
+A site profile holds the facts about one machine that a capture run needs: the CARLA server's address, the SUMO installation and where scenario packages, world packages, the vehicle catalog, captures and run records are kept.\
 Keeping these out of the run configuration lets the same run configuration move between machines unchanged.
 
 Without a site profile, the values come from the layout the tool runs from:
 
 - in a source checkout, `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/vehicles.catalogue.json`, `Build/captures` and `Build/runs`;
-- installed, `scenarios`, `world-packages`, `captures` and `runs` under the current folder, and the catalog installed with carlacontrol.
+- installed, `scenarios`, `world-packages`, `captures` and `runs` under the current folder.\
+  The catalog is the one installed with carlacontrol.
 
 A profile file overrides only the fields it names.
 

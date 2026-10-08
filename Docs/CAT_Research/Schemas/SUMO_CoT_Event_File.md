@@ -1,18 +1,24 @@
 # SUMO bridge event file (`carla-cot-telemetry --xml`)
 
-`carla-cot-telemetry` runs a SUMO scenario through TraCI, with no CARLA server, and turns each vehicle's state into a Cursor-on-Target event at a chosen rate.\
+`carla-cot-telemetry` runs a SUMO scenario through TraCI, with no CARLA server.\
+It turns each vehicle's state into a Cursor-on-Target event at a chosen rate.\
 Given `--xml <file>`, it writes every event of the run to one XML file.\
-The file is truth: each event carries the whole record, including the scenario author's names for its vehicle types and flows, and which vehicles it planted.
+The file is truth: each event carries the whole record.\
+The record includes the scenario author's names for its vehicle types and flows.\
+It also shows which vehicles the scenario planted.
 
 - Schema: `CarlaControl/schemas/sumo_cot_events.xsd` (XSD 1.0), root element `<events>`
 - Schema id: `urn:carla-sumo-capture:schema:sumo-cot-events:1`
 
 The events have the shape of the live feed's events, described in [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md); each one, taken alone, is also a valid datagram.\
-The same run can also write a CSV, described in [SUMO_CoT_Table.md](SUMO_CoT_Table.md), and send the live feed.
+The same run can also write a CSV, described in [SUMO_CoT_Table.md](SUMO_CoT_Table.md).\
+It can send the live feed too.
 
 The schema includes `cot_event_body.xsd`, the event's own parts, which the datagram schema includes too.\
-It cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth sidecar's root are both `<events>`, with no namespace, and one schema can describe only one of them.\
-So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types, and a test checks that each copy matches the sidecar's.
+It cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth sidecar's root are both `<events>`, with no namespace.\
+One schema can describe only one of them.\
+So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types.\
+A test checks that each copy matches the sidecar's.
 
 ## Who writes it and who reads it
 
@@ -27,7 +33,8 @@ So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_ser
 A run that stops early leaves a file without its closing tag.
 
 `carla-check-label-leaks --xml` reads it, to check that no field tells the planted vehicles from the others.\
-`carla-validate`, given a folder holding it, checks it against this schema, and notes a file without its closing tag as a run that stopped early rather than failing it.
+`carla-validate`, given a folder holding it, checks it against this schema.\
+It notes a file without its closing tag as a run that stopped early rather than failing it.
 
 ## Structure
 
@@ -100,7 +107,8 @@ Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stre
 ## Format version
 
 `format_version` is 1.\
-`carla-check-label-leaks` reads a file without it as version 1, and refuses a newer one, naming the file, the version and the newest it reads.
+`carla-check-label-leaks` reads a file without it as version 1.\
+It refuses a newer one, naming the file, the version and the newest it reads.
 
 ## Example
 

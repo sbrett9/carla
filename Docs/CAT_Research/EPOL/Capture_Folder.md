@@ -1,16 +1,18 @@
 # What a capture folder holds
 
 This page is for people who build pattern-of-life models from the captures these tools make.\
-It says what a capture folder holds, how its files relate, and how to read the truth about one vehicle.
+It says what a capture folder holds, how its files relate and how to read the truth about one vehicle.
 
-The labels are described on [Behavioral annotations](Behavioral_Annotations.md), and the vehicles on [The vehicles behind the truth](Vehicle_Catalogue.md).\
+The labels are described on [Behavioral annotations](Behavioral_Annotations.md).\
+The vehicles are described on [The vehicles behind the truth](Vehicle_Catalogue.md).\
 Every field is described in full on the schema pages listed in [`../Schemas/README.md`](../Schemas/README.md).\
 This page links them rather than repeating them.
 
 **The files hold labels and truth, never scores or verdicts.**\
-A truth file holds only what a scenario's author declared, what happened in the simulation, and what was measured.\
+A truth file holds only what a scenario's author declared, what happened in the simulation and what was measured.\
 No file holds a pass mark, a quality score or a judgment of whether a still or a label is good enough.\
-Those depend on your model, and they are yours to make.
+Those depend on your model.\
+They are yours to make.
 
 The examples on this page come from one real capture, `cap-20261008-041347-270d6d`, made on 2026-10-08 from the scenario `Arapahoe_I25_SupervisionCheck`.\
 One camera, `Check_Overhead_1`, looked down at South Yosemite Street in Arapahoe County, Colorado, for three simulated minutes and took two stills each simulated second: 360 stills.\
@@ -31,9 +33,11 @@ cap-20261008-041347-270d6d/
 ```
 
 - **A folder per camera**, named after the camera.\
-  Each still is a PNG, and its truth sidecar is an XML file with the same name.\
+  Each still is a PNG.\
+  Its truth sidecar is an XML file with the same name.\
   The time in the name is the recording computer's local clock, to the millisecond.\
-  It is not the simulated time, and it is not UTC: the first still's sidecar says it was captured at `2026-10-08T04:14:04.926Z`.\
+  It is not the simulated time.\
+  It is not UTC either: the first still's sidecar says it was captured at `2026-10-08T04:14:04.926Z`.\
   Order stills by their frame number, `tick`, not by their names.
 - **`truth/`** holds the [run manifest](../Schemas/Run_Manifest.md), the [world truth track](../Schemas/World_Truth_Track.md) and the [track's summary](../Schemas/World_Truth_Track_Summary.md).
 
@@ -55,7 +59,7 @@ Two things a capture depends on are kept outside the folder:
 | Files | the PNG and its sidecar, in the camera's folder | the manifest, the track and the track's summary, in `truth/` |
 | Time | one simulation frame | the whole run; the track covers the capture window |
 | Vehicles | every body that frame drew | every vehicle SUMO had |
-| Labels | what was in force for each drawn vehicle on that frame | every label the plan declares, and when each interval opened and closed |
+| Labels | what was in force for each drawn vehicle on that frame | every label the plan declares and the times each interval opened and closed |
 
 **Per still.**\
 The PNG holds the picture and up to four text chunks.\
@@ -96,7 +100,8 @@ The first event is the camera.\
 You can tell it apart because its `<detail>` starts with `<contact>`.\
 Every other event is a vehicle.
 
-Here is the container of the still at frame 151288, and the record of the car called `dweller`, which is parked at the curb:
+The car called `dweller` is parked at the curb.\
+Here is its record inside the container of the still at frame 151288:
 
 ```xml
 <events format_version="1" captured="2026-10-08T04:14:22.253Z" count="44" source="truth" tick="151288" sim_time_s="344.799094" run_id="cap-20261008-041347-270d6d" vehicles="rendered" plan_id="Arapahoe_I25_SupervisionCheck" vocabulary="3" vocabulary_digest="0fbcea06c4a28575486d05528b3bdf029d139a829c8ec7a3f0adc71527f9ece6">
@@ -128,7 +133,8 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
 
 ### Which vehicle it is
 
-- `uid` is `CARLA-TRUTH-SUMO-<sumo_id>`, and `sumo_id` names the SUMO vehicle.\
+- `uid` is `CARLA-TRUTH-SUMO-<sumo_id>`.\
+  `sumo_id` names the SUMO vehicle.\
   Follow a vehicle from still to still by its `uid` or its `sumo_id`.
 - `actor_id` names the CARLA body that drew the vehicle on this frame.\
   The world reuses its bodies, so one body draws a series of different vehicles over a run.\
@@ -146,9 +152,11 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
   Two of them are in the picture.
 - `in_frame` says where the vehicle's box fell: `wholly` in the picture, `partly`, `none`, or `behind_camera`.
 - Only a vehicle `wholly` or `partly` in the picture carries its boxes, its pitch and roll, its lights and its pose source.\
-  A vehicle outside the picture still has its position, motion, size and labels, and `apparent_width_px` and `apparent_height_px` say how large it would look.
+  A vehicle outside the picture still has its position, motion, size and labels.\
+  Its `apparent_width_px` and `apparent_height_px` say how large it would look.
 - A run can draw vehicles only out to a set distance from the camera.\
-  Then the container carries `draw_distance_m`, and a vehicle the distance kept out of the image carries `beyond_draw_distance`, `partly` or `wholly`.\
+  Then the container carries `draw_distance_m`.\
+  A vehicle the distance kept out of the image carries `beyond_draw_distance`, `partly` or `wholly`.\
   A vehicle `wholly` beyond it is in the truth but not in the picture.\
   The sample capture had no draw distance.
 - A container that says `vehicles="unknown"` lists no vehicle because the frame's set of drawn bodies was no longer held.\
@@ -164,23 +172,28 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
 - Boxes are not clipped to the picture, so a coordinate can be negative or larger than the picture.\
   `truncation` is the share of `box_px`'s area that lies outside the picture: 0 for a box wholly inside.
 - `occlusion` is the share of the vehicle's outline hidden from the camera by anything nearer: 0 fully visible, 1 fully hidden.\
-  `occlusion_level` gives it as a band from 0 to 4, and `occlusion_samples` says how many points it was measured over.\
+  `occlusion_level` gives it as a band from 0 to 4.\
+  `occlusion_samples` says how many points it was measured over.\
   The parked `dweller` above is 0.112 hidden, level 1, measured over 233 points.
 - Where occlusion was not measured, those three attributes are absent and `occlusion_unmeasured` says why, such as `outside_frame`.\
   An absent occlusion never means that nothing was in the way.\
   In the sample capture, one record in the picture says `no_sample`: the vehicle was narrower than the sampling step.
 - `camera_range_m` is the distance from the camera to the center of the box.
 - `heading_deg`, `pitch_deg` and `roll_deg` are the drawn body's yaw, pitch and roll, in degrees.\
-  Pitch is positive nose up, and roll is positive right side down.
+  Pitch is positive nose up.\
+  Roll is positive right side down.
 
 ### Its lights
 
 - `lights` lists the lights commanded on for the vehicle on this frame, in words, or says `none`.\
   The sample capture holds `none`, `brake`, `right_blinker` and `brake right_blinker`.\
-  The `dweller` comes into the picture at 104.0 s with `right_blinker`, as it pulls toward the curb, and shows `brake right_blinker` from 106.5 s.
+  The `dweller` comes into the picture at 104.0 s with `right_blinker` as it pulls toward the curb.\
+  It shows `brake right_blinker` from 106.5 s.
 - The rule the lights follow is written once per run, as `vehicle_lights` on the manifest's first row.\
-  In the sample, headlights come on below a geometric sun elevation of 3° and go off above 6°, and brake lights and turn signals follow SUMO's own signals for each vehicle (`sumo_signals`).\
-  The sun stood at 5.5°, and no headlight was on.
+  In the sample, headlights come on below a geometric sun elevation of 3° and go off above 6°.\
+  Brake lights and turn signals in the sample follow SUMO's own signals for each vehicle (`sumo_signals`).\
+  The sun stood at 5.5°.\
+  No headlight was on.
 - These are the lights commanded on.\
   Whether the picture shows a lit lamp depends on the body.\
   In the current vehicle catalog only the fire truck's high beams changed the picture when they were measured.\
@@ -193,7 +206,8 @@ SUMO moves each vehicle in steps of fixed length, 0.05 s in the sample capture.\
 CARLA can draw several frames between two SUMO steps.\
 `pose_source` says where the drawn position came from on this frame:
 
-- `sumo`: the frame falls on a SUMO step, and the position is SUMO's own.
+- `sumo`: the frame falls on a SUMO step.\
+  The position is SUMO's own.
 - `interpolated`: the frame falls between two SUMO steps.\
   Its position is filled in along the lane, between where SUMO had the vehicle at the step before and at the step after.
 - `jump`: SUMO moved the vehicle farther in one step than it could drive.\
@@ -208,7 +222,8 @@ A container that says `pose_source="unknown"` means a SUMO vehicle in the pictur
 
 `<_supervision>` is what the scenario's author asserts about this vehicle on this frame.\
 Every SUMO vehicle the frame drew has one, whether it is in the picture or not.\
-Its `state` is `annotated`, `nominal` or `unlabelled`, and each `<annotation>` names a labeled behavior in force for the vehicle.\
+Its `state` is `annotated`, `nominal` or `unlabelled`.\
+Each `<annotation>` names a labeled behavior in force for the vehicle.\
 [Behavioral annotations](Behavioral_Annotations.md) explains them.
 
 ## How the stills line up with the manifest's intervals
@@ -216,7 +231,8 @@ Its `state` is `annotated`, `nominal` or `unlabelled`, and each `<annotation>` n
 ### The clocks
 
 A capture uses five clocks.\
-Two of them count simulated seconds, and they do not agree.
+Two of them count simulated seconds.\
+Those two do not agree.
 
 | Clock | Where you find it | What it counts |
 |---|---|---|
@@ -229,14 +245,16 @@ Two of them count simulated seconds, and they do not agree.
 **A still's `sim_time_s` is not the manifest's.**\
 The still at frame 151288 says `sim_time_s="344.799094"`.\
 The same frame in the world truth track has `sim_time_s` 109.5, on SUMO's clock.\
-In this capture the difference was 235.299 s for every still, and it changes from run to run.\
+In this capture the difference was 235.299 s for every still.\
+The difference changes from run to run.\
 Never compare a still's `sim_time_s` with a time in the manifest or the track.
 
 ### Putting a still on SUMO's clock
 
 Use the still's frame number, `tick`:
 
-1. Find the row of the world truth track whose `frame` is the still's `tick`, and read its `sim_time_s`.\
+1. Find the row of the world truth track whose `frame` is the still's `tick`.\
+   Read its `sim_time_s`.\
    In the sample capture every still's `tick` is in the track.\
    A track that samples less often than every SUMO step may not hold every frame; then use the next way.
 2. Or work it out from the manifest.\
@@ -244,12 +262,16 @@ Use the still's frame number, `tick`:
    The first row's `clock.world_delta_s` gives the length of one frame: 0.05 s.\
    A still at frame `tick` is at 60 + (`tick` − 150298) × 0.05 seconds.\
    For the still at frame 151288, that is 109.5.
-3. Where the run declared an epoch and its illumination, the sidecar's `<_illumination>` `declared_utc` is the same instant as the track's `time_utc`: `2026-09-29T13:27:49.5Z` for this still, and `2026-09-29T13:27:49.500Z` in the track.
+3. Where the run declared an epoch and its illumination, the sidecar's `<_illumination>` `declared_utc` is the same instant as the track's `time_utc`.\
+   For this still it is `2026-09-29T13:27:49.5Z` in the sidecar and `2026-09-29T13:27:49.500Z` in the track.
 
 ### Which stills an interval covers
 
-The manifest names each label interval by its instance, participant and phase, and writes a row as it opens and another as it closes ([`interval_opened` and `interval_closed`](../Schemas/Run_Manifest.md#interval_opened-and-interval_closed)).\
-The opening row's `sim_time_s` is the start, and the closing row's is the end, both on SUMO's clock.\
+The manifest names each label interval by its instance, participant and phase.\
+It writes a row as the interval opens and another as it closes ([`interval_opened` and `interval_closed`](../Schemas/Run_Manifest.md#interval_opened-and-interval_closed)).\
+The opening row's `sim_time_s` is the start.\
+The closing row's time is the end.\
+Both are on SUMO's clock.\
 A label is in force from the frame at its start up to, but not including, the frame at its end.
 
 In the sample, the `dwell` phase of `Arapahoe_I25_SupervisionCheck/kerbside_dwell` opened at 109.4 and closed at 229.4:
@@ -267,7 +289,8 @@ The last row, [`manifest_closed`](../Schemas/Run_Manifest.md#manifest_closed), l
 In the sample, the `transit` phase of `Arapahoe_I25_SupervisionCheck/through_transit` opened at 90.05 s and was still open when the window closed at 240 s, so it closes as `capture_window_end`.
 
 For a drawn vehicle you rarely need this arithmetic: each sidecar already carries the labels in force on its own frame.\
-Use the manifest for the exact edges, which fall between stills, for the three onsets, and for vehicles no body drew.
+Use the manifest for the exact edges, for the three onsets and for vehicles no body drew.\
+The exact edges fall between stills.
 
 ## What the world truth track adds
 
@@ -275,7 +298,8 @@ The [world truth track](../Schemas/World_Truth_Track.md) lists every vehicle SUM
 The sample capture sampled every SUMO step (`every_sumo_steps` 1 in the summary): 3,600 samples and 180,125 rows.
 
 - **Counts over the whole scene come from here.**\
-  A sidecar lists only the bodies its frame drew, and a picture shows only the few in view.\
+  A sidecar lists only the bodies its frame drew.\
+  A picture shows only the few in view.\
   The still at frame 151288 lists 44 vehicles and shows two.
 - **Whether a body drew the vehicle** is `render_state`: `rendered`, or `simulated_only` with a `render_reason`.\
   In the sample, 6 rows are `simulated_only` with `not_drawn`: three vehicles of the flow `clinton_to_arapahoe_west`, each on its first two SUMO steps.
@@ -324,7 +348,8 @@ From the sample:
 - A file written before producer records existed has none.
 
 **The format version.**\
-Each file names its format: the sidecar's and the chunk's `format_version`, the manifest's `manifest_version`, and the summary's `world_truth_track_version`, which is also the track's.\
+Each file names its format: the sidecar's and the chunk's `format_version`, the manifest's `manifest_version` and the summary's `world_truth_track_version`.\
+The summary's version is also the track's.\
 A file that names no version is version 1.\
 The readers in these tools refuse a version newer than they know, by name, rather than reading it in part.
 
@@ -342,7 +367,9 @@ world truth track summaries       1 checked, 0 failed
 every file keeps its schema
 ```
 
-It exits with 0 when every file keeps its schema, 1 when any does not, and 2 when the folder holds no file a schema describes.\
+It exits with 0 when every file keeps its schema.\
+It exits with 1 when any file does not.\
+It exits with 2 when the folder holds no file a schema describes.\
 It reports a file of a newer format version as written by a newer release.
 
 It does not check the pixels.\
@@ -357,7 +384,7 @@ The sidecar calls the SUMO vehicle type `vtype_id`.
 
 **`time_utc` and `captured`.**\
 The track's `time_utc` is simulated civil time: the scenario's clock placed on the calendar by its epoch.\
-The sidecar's times (`captured`, and each event's `time`, `start` and `stale`) are the real clock of the computer that recorded the still.\
+The sidecar's times (`captured` and each event's `time`, `start` and `stale`) are the real clock of the computer that recorded the still.\
 For the still at frame 151288, the track says `2026-09-29T13:27:49.500Z` and the sidecar says `2026-10-08T04:14:22.253Z`.
 
 **`sim_time_s`.**\
@@ -371,13 +398,15 @@ The sidecar's `<point>` is the CARLA body's origin, which lies behind the bumper
 For the `dweller` at frame 151288 the two points are 2.39 m apart.\
 The track's point is the middle of the front face of the sidecar's `<_box3d>`.
 
-The heights differ too: the track's `hae_m` is the bare ground under the bumper point, and the sidecar's `hae` is the body origin's.
+The heights differ too: the track's `hae_m` is the bare ground under the bumper point.\
+The sidecar's `hae` is the body origin's.
 
 **Size and color.**\
-The sidecar's `length_m`, `width_m`, `height_m` and `color` are the drawn body's: its measured box, mirrors included, and its color attribute.\
-The track's are the SUMO vehicle type's: the same length and height, the width without mirrors, and the color sumo-gui draws the type in.\
+The sidecar's `length_m`, `width_m`, `height_m` and `color` are the drawn body's: its measured box with mirrors included and its color attribute.\
+The track's are the SUMO vehicle type's: the same length and height, the width without mirrors and the color sumo-gui draws the type in.\
 That color never reaches the picture.\
-The `dweller` is 4.72 × 1.89 × 1.30 m and `0,0,0` in the sidecar, and 4.72 × 1.84 × 1.30 m and `179,184,199` in the track.\
+In the sidecar the `dweller` is 4.72 × 1.89 × 1.30 m and `0,0,0`.\
+In the track it is 4.72 × 1.84 × 1.30 m and `179,184,199`.\
 See [The vehicles behind the truth](Vehicle_Catalogue.md).
 
 **`role_name`.**\
@@ -386,6 +415,8 @@ In the track it is the SUMO flow the vehicle came from, such as `arapahoe_east_t
 
 **Direction.**\
 The track's `course_deg` is SUMO's angle for the vehicle.\
-The sidecar's `heading_deg` is the way the drawn body points, and its `<track course>` is the way the body moves; these two differ while the body turns or changes lanes.\
+The sidecar's `heading_deg` is the way the drawn body points.\
+Its `<track course>` is the way the body moves.\
+These two differ while the body turns or changes lanes.\
 SUMO's angle can differ from both.\
 The sidecar repeats it as `sumo_angle_deg`, so you can compare them on one record.

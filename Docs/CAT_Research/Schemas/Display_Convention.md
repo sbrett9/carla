@@ -14,7 +14,7 @@ A TAK client colors each track by it.\
 A display convention gives each vehicle population the affiliation letter its tracks are drawn with, so a live picture is readable at a glance: a port's civilian traffic neutral and its naval traffic friendly, for example.
 
 It is a choice about how one run is displayed.\
-It is not part of the scenario, is not covered by the scenario's digests, and is not checked by the compiler.
+It is not part of the scenario, is not covered by the scenario's digests and is not checked by the compiler.
 
 A convention names **populations, never single vehicles**.\
 In a compiled scenario a population is a vehicle class: the `carla:class_id` parameter of its vehicle types (see [SUMO files](SUMO_Files.md)).\

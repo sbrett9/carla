@@ -33,7 +33,8 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 - It is written into the run's resolution report and its result, as `launch_echo`.\
   Both are null when the offline checks refused before the echo was computed.
 - **An `expect` entry in the run configuration reads it.**\
-  `expect` can name any value here as `launch_echo.<path>`, such as `launch_echo.captures.total`, and the launch is refused if the value is not what the caller expected (run check 35).
+  `expect` can name any value here as `launch_echo.<path>`, such as `launch_echo.captures.total`.\
+  The launch is refused if the value is not what the caller expected (run check 35).
 
 ## Fields
 
@@ -70,7 +71,7 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `sun.window_open_s` | number | s | The simulated second the window opens and the sun is set. |
 | `sun.at_begin`, `sun.at_end` | object | | The sun at the window's first and last instant: `seconds`, `sun_date`, `sun_clock`, `elevation_deg`, `geometric_elevation_deg`, `azimuth_deg` (degrees clockwise from north) and `band`. |
 | `sun.held_at` | string | | For a frozen sun, the date and clock it is held at. |
-| `sun.held_at_note` | string | | When the sun is pinned, and what the prewarm is lit by. |
+| `sun.held_at_note` | string | | A note on when the sun is pinned and what the prewarm is lit by. |
 | `world.map_name` | string | | The world's map name. |
 | `world.package` | string | | The world package's file name. |
 | `world.network_fingerprint` | string | | The canonical fingerprint of the world's SUMO network. |
@@ -100,10 +101,10 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `readiness.picture` | string | | What the picture's wait compares, or that it is not run. |
 | `readiness.tiles_ceiling_s` | number | s | Wall-clock seconds a view has for its tiles. |
 | `readiness.tiles_hold_s` | number | s | When the picture is not waited on: the tiles' lead before the window, in simulated seconds. |
-| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only when the picture-settled wait is on: how the comparison skips the parts of the picture that drawn vehicles cover, and the wait's ceiling and tolerance. |
-| `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins, and the window's opening. |
+| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only when the picture-settled wait is on. The first says how the comparison skips the parts of the picture that drawn vehicles cover. The other three give the wait's ceiling and tolerance. |
+| `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins and where the window opens. |
 | `readiness.traffic_stare_holds_from_s` | number or null | s | Where a stare aimed at the traffic stops following it. Null with no such stare. |
-| `readiness.not_ready`, `readiness.per_capture` | string | | What happens to a view that is not ready, and what is not recorded per capture. |
+| `readiness.not_ready`, `readiness.per_capture` | string | | The first says what happens to a view that is not ready. The second says what is not recorded per capture. |
 | `warnings` | array of strings | | The codes of the warnings the offline checks raised. |
 | `not_predicted` | array of strings | | What the echo cannot say before the run. |
 

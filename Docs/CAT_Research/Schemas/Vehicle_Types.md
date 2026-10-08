@@ -1,9 +1,12 @@
 # SUMO vehicle types (`vehicles.vtypes.rou.xml`)
 
 `vehicles.vtypes.rou.xml` is the [vehicle catalog](Vehicle_Catalogue.md) as SUMO reads it.\
-Each measured CARLA body is one SUMO vehicle type, `<vType>`, and each class is one type distribution, `<vTypeDistribution>`, over its members.
+Each measured CARLA body is one SUMO vehicle type, `<vType>`.\
+Each class is one type distribution, `<vTypeDistribution>`, over its members.
 
-A scenario asks for a class, SUMO draws a member from it, and the member is the CARLA body.\
+A scenario asks for a class.\
+SUMO draws a member from it.\
+The member is the CARLA body.\
 So the size SUMO reserves on the road and the body CARLA draws are the same.
 
 The file is a SUMO route file that holds only types, so SUMO's own `routes_file.xsd` accepts it.\
@@ -62,7 +65,7 @@ Numbers are written with up to six significant digits and no trailing `.0`.
 ## `<param>` children: the parameters these tools set on a vehicle type
 
 A vehicle type is bound to the CARLA body it is drawn with through SUMO's generic `<param key="..." value="..."/>` element, which SUMO stores and never acts on.\
-Two files carry these parameters, in the same keys: this one, and the route file the scenario compiler writes for each scenario (`<scenario_id>.rou.xml`, see [SUMO files](SUMO_Files.md)).\
+Two files carry these parameters, in the same keys: this one and the route file the scenario compiler writes for each scenario (`<scenario_id>.rou.xml`, see [SUMO files](SUMO_Files.md)).\
 They are the only parameters a compiled route file carries (check 52): labels never appear here, only in the supervision plan.
 
 Each `<vType>` has two or three of them, each key once:
@@ -98,7 +101,8 @@ Either way the id is for a person reading the file; what binds the type to a bod
 
 The file carries no version.\
 It is version 1.\
-Its shape changes only with the catalog's `catalogue_version`, and every type records which catalog it came from.
+Its shape changes only with the catalog's `catalogue_version`.\
+Every type records which catalog it came from.
 
 ## Example
 

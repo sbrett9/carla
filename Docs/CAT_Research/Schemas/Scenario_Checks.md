@@ -22,7 +22,8 @@ A capture run's checks are a separate list with their own numbers, the carla-cap
 ## Who writes it and who reads it
 
 - **`carla-compile-scenario --write-checks PATH`** writes it, generated from the compiler's own list.\
-  It ships with the authoring skill, and a test holds the shipped copy equal to the compiler's list.
+  It ships with the authoring skill.\
+  A test holds the shipped copy equal to the compiler's list.
 - **A scenario developer or the authoring skill reads it** to learn what a check id in a report means.\
   No tool reads it as input.
 

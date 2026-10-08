@@ -3,12 +3,14 @@
 The tools can send each vehicle's position as a live Cursor-on-Target (CoT) feed over UDP, for a TAK client or any other CoT receiver.\
 Each UDP datagram holds exactly one CoT `<event>`: one vehicle at one instant.
 
-The feed is for a moving-map display: it carries what a display needs, and leaves out what only the truth files carry.
+The feed is for a moving-map display: it carries what a display needs.\
+It leaves out what only the truth files carry.
 
 - Schema: `CarlaControl/schemas/cot_telemetry.xsd` (XSD 1.0), root element `<event>`
 - Schema id: `urn:carla-sumo-capture:schema:cot-telemetry:1`
 
-A vehicle event has the same shape as a vehicle event in a capture's truth sidecar, and the attributes they share mean the same thing.\
+A vehicle event has the same shape as a vehicle event in a capture's truth sidecar.\
+The attributes they share mean the same thing.\
 Their meanings are given in full in [Truth_Sidecar.md](Truth_Sidecar.md).
 
 The schema does not repeat the shared parts: it includes `truth_sidecar.xsd` and takes `<point>`, `<track>`, `<contact>` and the simple types under them from it, so the two always match.\
@@ -119,12 +121,14 @@ Datagrams are UTF-8 and carry no XML declaration.
 
 - It never carries what depends on a picture: `in_frame`, the box fields, occlusion, `lights`, `pose_source`, `<_box3d>` or `<_supervision>`.
 - A SUMO bridge datagram leaves out `type_id`, `special_type`, `role_name` and `marked`.\
-  Those are the scenario author's names for its vehicle types and flows, and the vehicles it planted.\
+  Those fields hold the scenario author's names for its vehicle types and flows.\
+  They also say which vehicles it planted.\
   The bridge's XML and CSV files keep them.
 - `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed, so an operator can see them.\
   The written files never do.
 - It carries `_capture` and `_solar` inside each event's `<detail>`.\
-  A sidecar holds the solar state once, on its container, and its `_solar` also has the latitude, longitude and the illumination band.
+  A sidecar holds the solar state once, on its container.\
+  The sidecar's `_solar` also has the latitude, longitude and the illumination band.
 - There is no container, so no format version and no record of what made it.
 - The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper.\
   CARLA's is the height of the body's origin with the drape offset removed, so it includes the origin's height above the ground.

@@ -21,7 +21,8 @@ The chunk is a PNG `tEXt` chunk with the keyword `carla:illumination`, holding o
 ## Who writes it and when
 
 The CarlaNet recorder writes it into a still when the run declares an illumination policy: a SUMO drive given one records a declaration for every frame it renders.\
-A run with no policy, such as traffic-manager traffic in `carla-sctmv`, writes none, and a still whose frame has no declaration has no chunk.\
+A run with no policy, such as traffic-manager traffic in `carla-sctmv`, writes none.\
+A still whose frame has no declaration has no chunk.\
 Fields that need an epoch, or an audit of the frame, are left out where there is none.
 
 ## Fields
@@ -60,7 +61,7 @@ A civil time looks like `2026-09-29T07:27:00-06:00`, with a fraction of a second
 
 This page describes format version 1.\
 A chunk without `format_version` was written before chunks carried one and is version 1.\
-Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
+Readers read a version they know, refuse a newer one by name rather than reading it in part and read a chunk with no version as version 1.
 
 ## Example
 

@@ -5,28 +5,30 @@ This page is for the person who installs the tool suite and for the developer wh
 Two more pages follow on from this one:
 
 - [Running a capture](Running_A_Capture.md): capture a window of a compiled scenario with `carla-capture`.
-- [Cameras and missions](Cameras_And_Missions.md): drive cameras from your own code, and watch a drive live.
+- [Cameras and missions](Cameras_And_Missions.md): drive cameras from your own code.\
+  It also shows how to watch a drive live.
 
 ## What the distribution holds
 
 The distribution is one archive: `Carla-<version>-Win64-<config>.zip` on Windows, or `Carla-<version>-Linux-<config>.tar.gz` on Linux.\
 `Scripts/Windows/MakeDistribution.ps1` and `Scripts/Linux/MakeDistribution.sh` make it.\
-Unpacked, it is one folder of the same name, and it runs from where you unpack it.
+Unpacked, it is one folder of the same name.\
+It runs from where you unpack it.
 
 | Item | What it is |
 |---|---|
 | `CarlaServer/` | The CARLA server, cooked and ready to run. `run-server` starts it. |
-| `wheels/` | Two Python wheels: `carlanet`, the client library, and `carlacontrol`, which installs the `carla-*` commands. |
-| `setup-venv.ps1` or `setup-venv.sh` | Makes a Python virtual environment, `venv/`, and installs both wheels into it. Run it once. |
+| `wheels/` | Two Python wheels. `carlanet` is the client library. `carlacontrol` installs the `carla-*` commands. |
+| `setup-venv.ps1` or `setup-venv.sh` | Makes a Python virtual environment, `venv/`. Installs both wheels into the environment. Run it once. |
 | `carla-env.ps1` or `carla-env.sh` | Sets up the environment. Run it in each new terminal before you use a `carla-*` command. |
 | `run-server.ps1` or `run-server.sh` | Starts the server without a window. |
-| `tools/sumo/` | The SUMO toolchain, laid out as a SUMO installation: `netconvert`, `sumo` and `duarouter` in `bin/`, SUMO's `typemap` and `xsd` data, its `traci` and `sumolib` Python modules, and the PROJ data. On Linux, `lib/` holds the shared libraries the programs load. There is no `sumo-gui`. |
-| `catalogue/` | The measured vehicle catalog, `vehicles.catalogue.json`, and the SUMO vehicle types made from it, `vehicles.vtypes.rou.xml`. |
+| `tools/sumo/` | The SUMO toolchain, laid out as a SUMO installation: `netconvert`, `sumo` and `duarouter` in `bin/`, SUMO's `typemap` and `xsd` data, its `traci` and `sumolib` Python modules and the PROJ data. On Linux, `lib/` holds the shared libraries the programs load. There is no `sumo-gui`. |
+| `catalogue/` | The measured vehicle catalog (`vehicles.catalogue.json`) and the SUMO vehicle types made from it (`vehicles.vtypes.rou.xml`). |
 | `osm/` | Example OpenStreetMap extracts to build worlds from. |
 | `skills/` | The scenario-authoring skills, which describe how to write scenarios for a generated world. |
 | `world-tools/` | `PackageWorld` and `InstallWorld`, which package a world for a distribution and install a packaged world into one. |
 | `VERSION` | Which build of CARLA this is. |
-| `MANIFEST.md` and `licenses/` | Every component in the archive, where it came from, its license, and the license texts. |
+| `MANIFEST.md` and `licenses/` | Every component in the archive, where it came from, its license and the license texts. |
 | `README.md` | A short version of this page. |
 
 The commands `carlacontrol` installs include these:
@@ -37,12 +39,12 @@ The commands `carlacontrol` installs include these:
 | `carla-sctmv` | Builds a world, then lets you fly, drive and record in it. |
 | `carla-compile-scenario` | Compiles a scenario against a world package. |
 | `carla-capture` | Captures a window of a compiled scenario. |
-| `carla-drive` | Drives a world's vehicles from SUMO, and records. |
+| `carla-drive` | Drives a world's vehicles from SUMO. Records while it drives. |
 | `carla-camera-follower` | Shows one camera of your own on a running world, live. |
 | `carla-free-camera` | Flies a camera of your own around a running world, live. |
 | `carla-validate` | Checks the files the tools write against their schemas. |
 | `carla-audit-sidecars` | Checks the truth sidecars of a capture. |
-| `carla-check-sumo` | Says which SUMO the commands use, and checks that it is complete. |
+| `carla-check-sumo` | Says which SUMO the commands use. Checks that it is complete. |
 | `carla-cot-telemetry` | Makes Cursor-on-Target telemetry for every vehicle in a SUMO scenario, to a UDP socket, an XML file or a CSV. |
 | `carla-diff-manifests` | Checks that two runs of one scenario name the same supervision rows in their run manifests. |
 | `carla-check-label-leaks` | Checks that a telemetry dataset does not give away which vehicles a scenario planted. |
@@ -67,7 +69,7 @@ Every command takes `--help`.
 
 ## Set up
 
-Unpack the archive, open a terminal in its folder, and run these steps.
+Unpack the archive, open a terminal in its folder and run these steps.
 
 On Windows, in PowerShell:
 
@@ -84,7 +86,8 @@ On Linux:
 ```
 
 **`setup-venv`** makes `venv/` beside the scripts and installs both wheels from `wheels/`.\
-It installs `carlacontrol`'s own dependencies too (numpy, lxml and pygame-ce), and puts the `carla-*` commands in the virtual environment.
+It installs `carlacontrol`'s own dependencies too (numpy, lxml and pygame-ce).\
+It puts the `carla-*` commands in the virtual environment.
 
 **`carla-env`** must be run with a dot in front, so that it changes the terminal you are in.\
 It does two things:
@@ -116,14 +119,15 @@ Anything else you add is passed to the server.\
 The server answers on port 2000.
 
 A capture needs the world loaded on the server.\
-`carla-build-world --osm osm/<extract>.osm` builds a world on the running server, loads it, and writes its world package to `world-packages/`.\
+`carla-build-world --osm osm/<extract>.osm` builds a world on the running server, loads it and writes its world package to `world-packages/`.\
 A world installed with `world-tools/InstallWorld` is loaded by starting the server in its map, as above.
 
 ## Settings to make after installing
 
 ### A Cesium ion token, for building worlds
 
-`carla-build-world` and `carla-sctmv` stream terrain and imagery from Cesium ion, and need an access token.\
+`carla-build-world` and `carla-sctmv` stream terrain and imagery from Cesium ion.\
+They need an access token.\
 Set `CESIUM_ION_TOKEN` to it, or pass `--ion-token <token>`:
 
 ```powershell
@@ -153,7 +157,7 @@ An unattended capture refuses a value read from `CARLANET_SUMO_HOME` unless the 
 
 ### The site profile
 
-A site profile is a small JSON file that holds the facts about this machine that a capture needs: the server's address, the SUMO installation, and the folders for scenarios, world packages, the vehicle catalog, captures and run records.\
+A site profile is a small JSON file that holds the facts about this machine that a capture needs: the server's address, the SUMO installation and the folders for scenarios, world packages, the vehicle catalog, captures and run records.\
 Keeping them in their own file lets the same run file move between machines unchanged.\
 The [Site profile](../Schemas/Site_Profile.md) page describes every field.
 
@@ -165,7 +169,8 @@ You need one for two reasons:
   An unattended run does not take machine state it was not given, so it refuses.\
   The refusal reads: `'sumo.home' names no installation, so the session will search SUMO_HOME, then PATH for one, which the site profile does not declare.`
 - **Without one, the folders depend on where you run the command.**\
-  An installed `carla-capture` looks for world packages in `world-packages/` under the folder it is run from, and for compiled scenarios in `scenarios/` there.\
+  An installed `carla-capture` looks for world packages in `world-packages/` under the folder it is run from.\
+  It looks for compiled scenarios in `scenarios/` under the same folder.\
   A profile fixes those folders whatever folder you are in.
 
 **Write a profile to edit.**\
@@ -176,7 +181,9 @@ carla-capture --write-site-profile site.json
 ```
 
 It writes the values this machine would use now, as absolute paths.\
-Installed, that is the current folder's `scenarios/`, `world-packages/`, `captures/` and `runs/`, the catalog installed with `carlacontrol`, and `"sumo": {"home": null}` unless `CARLANET_SUMO_HOME` names an installation.\
+Installed, the folders are the current folder's `scenarios/`, `world-packages/`, `captures/` and `runs/`.\
+The catalog is the one installed with `carlacontrol`.\
+Installed, the SUMO entry is `"sumo": {"home": null}` unless `CARLANET_SUMO_HOME` names an installation.\
 It writes no `server` block.
 
 **Edit it.**\
@@ -242,8 +249,10 @@ A world installed from a `PackageWorld` zip does not bring its `.cwp` with it, s
 
 ### Which SUMO the commands use
 
-`carla-check-sumo` says which SUMO installation the commands find, its release, and which rule found it.\
-Then it runs `netconvert`, `sumo` and `duarouter`, and imports `traci`, to check that the installation is complete.\
+`carla-check-sumo` says which SUMO installation the commands find, its release and which rule found it.\
+Then it checks that the installation is complete.\
+It runs `netconvert`, `sumo` and `duarouter`.\
+It also imports `traci`.\
 Give it the release you expect:
 
 ```sh
@@ -323,7 +332,9 @@ In a build that is not the tagged release it ends in the short CARLA commit, suc
 
 An installed command has no repository to write into, so it uses the folder you run it from instead.\
 `carlacontrol.ToolLayout` decides this.\
-It looks at where `carlacontrol` itself was imported from, not at the current folder: a copy imported from a checkout's `CarlaControl/src/` uses the checkout's folders, and an installed copy uses the current folder.
+It looks at where `carlacontrol` itself was imported from, not at the current folder.\
+A copy imported from a checkout's `CarlaControl/src/` uses the checkout's folders.\
+An installed copy uses the current folder.
 
 | What | Installed | From a checkout |
 |---|---|---|
@@ -338,7 +349,8 @@ It looks at where `carlacontrol` itself was imported from, not at the current fo
 | SUMO toolchain | whatever `SUMO_HOME`, `CARLA_NETCONVERT` and `PROJ_LIB` name, which `carla-env` sets | `Build/sumo-install/` |
 
 So run the commands from one folder, usually the distribution's folder, or give a site profile and explicit paths.\
-A command run from another folder looks for its inputs, and writes its outputs, there.
+A command run from another folder looks for its inputs there.\
+It writes its outputs there too.
 
 ## Running the commands from a checkout
 

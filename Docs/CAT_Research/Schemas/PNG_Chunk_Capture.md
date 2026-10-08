@@ -7,7 +7,7 @@
 ## What it is
 
 Every still a recorder writes is a PNG with up to four text chunks between its header and its pixels.\
-`carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the run it belongs to, and what wrote it.\
+`carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the run it belongs to and what wrote it.\
 It lets you trace a still to its frame, its run and the release that made it, even when the still has been separated from its truth sidecar.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:capture`.\
@@ -76,7 +76,7 @@ The truth sidecar's `<_producer>` element, the run manifest's opening `producer`
 
 This page describes format version 1.\
 A chunk without `format_version` was written before chunks carried one and is version 1; it has no `producer` either.\
-Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
+Readers read a version they know, refuse a newer one by name rather than reading it in part and read a chunk with no version as version 1.
 
 ## Example
 

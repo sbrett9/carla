@@ -18,7 +18,7 @@ For every member it gives:
 - its capture windows, with their civil dates and the sun each opens under.
 
 It also lists every counterfactual pair and every finding.\
-The index is how you find the member that holds a given combination of values, and how you tell two members apart.
+The index is how you find the member that holds a given combination of values and tell two members apart.
 
 ## Who writes it and who reads it
 
@@ -37,7 +37,7 @@ The index is how you find the member that holds a given combination of values, a
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `sweep_version` | constant `1` | yes | The format version of the sweep compiled, and of this index. |
+| `sweep_version` | constant `1` | yes | The format version of both the sweep compiled and this index. |
 | `producer` | object | no | What wrote the file, with the SUMO release that routed the members. See [Run result](Run_Result.md#the-producer-record). |
 | `sweep_id` | string or null | yes | The sweep's id. Null when the sweep file gave none. |
 | `members` | array | yes | Every member, the twins of counterfactual pairs included. See below. |
@@ -47,7 +47,7 @@ The index is how you find the member that holds a given combination of values, a
 | `base_sha256` | string, 64 hex digits | no | SHA-256 of the base specification. |
 | `pairing` | `cross` or `zip` | no | How the axes were combined. |
 | `illumination` | `hold`, `vary` or `factorial` | no | How the sweep treats axes that change the light. |
-| `axes` | array | no | Each axis: `path`, `values`, and `illumination_axis`, whether it changes the light. |
+| `axes` | array | no | Each axis: `path`, `values` and `illumination_axis`, whether it changes the light. |
 | `outcome` | `compiled` or `refused` | yes | Whether every member compiled. |
 
 ### A member (`members[]`)
@@ -62,7 +62,7 @@ The index is how you find the member that holds a given combination of values, a
 | `epoch_block_sha256` | string | compiled only | SHA-256 of the member's epoch. |
 | `illumination` | object | compiled only | The member's illumination default. |
 | `files` | object | compiled only | Each file the member's lock digests, by role, to its SHA-256. |
-| `windows` | array | compiled only | Each capture window: `id`, `civil_begin`, `civil_date`, and `sun_open`, the sun at its opening (or null). |
+| `windows` | array | compiled only | Each capture window: `id`, `civil_begin`, `civil_date` and `sun_open`, the sun at its opening (or null). |
 | `counterfactual` | object | twins only | The pair this member is the twin in. |
 
 ### A pair (`pairs[]`)

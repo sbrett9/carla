@@ -36,14 +36,17 @@ A capture run writes `run.resolution.json` about one launch (see [Run resolution
 - **`carla-compile-scenario` writes it** into the output folder on every compile.\
   A refused compile writes only the report, marked `refused`, with every refusal.\
   When the specification gives no `scenario_id`, the report is named after the specification file instead.
-- **A scenario developer reads it**, and so does the authoring skill.\
-  The skill's examples keep a recorded report beside each example, and a test compiles each example and compares.
+- **A scenario developer and the authoring skill read it.**\
+  The skill's examples keep a recorded report beside each example.\
+  A test compiles each example and compares.
 - No tool reads it as input.
 
 ## Fields
 
-The report's sections appear in the order below, and only the sections the compile reached.\
-A compile refused at its first stage has only `resolution_version`, `producer`, `outcome`, `scenario` and `findings`, and no `scenario` when the specification is not JSON.
+The report's sections appear in the order below.\
+Only the sections the compile reached appear.\
+A compile refused at its first stage has only `resolution_version`, `producer`, `outcome`, `scenario` and `findings`.\
+When the specification is not JSON, `scenario` is left out too.
 
 | Section | Type | Meaning |
 |---|---|---|
@@ -52,17 +55,17 @@ A compile refused at its first stage has only `resolution_version`, `producer`, 
 | `outcome` | `compiled` or `refused` | Whether the compile succeeded. |
 | `scenario` | object | The specification: `scenario_id`, `scenario_name`, `description`, `specification` (its file name), `specification_sha256`, `spec_version`. |
 | `findings` | array | Every refusal and warning, in full: `check` (its id in [Scenario compiler checks](Scenario_Checks.md)), `outcome` (`refuse` or `warn`), `subject` (in the specification's own names) and `message`. |
-| `epoch` | object | The epoch as `declared`, its `epoch_block_sha256`, a one-line `statement`, `t0_civil`, the run's `end_s` and `end_civil`, `time_zone_id`, and `time_zone_id_resolved`, always false. |
-| `zone` | object | The declared offset against the zone the world's georeference sets: `declared_offset_hours`, `engine_time_zone_hours` (or null), `difference_hours` (or null), and `written_by_the_session`. |
+| `epoch` | object | The epoch as `declared`, its `epoch_block_sha256`, a one-line `statement`, `t0_civil`, the run's `end_s` and `end_civil`, `time_zone_id` and `time_zone_id_resolved`, always false. |
+| `zone` | object | The declared offset against the zone the world's georeference sets: `declared_offset_hours`, `engine_time_zone_hours` (or null), `difference_hours` (or null) and `written_by_the_session`. |
 | `illumination_default` | object | The specification's illumination default: `declared`, its `policy`, its `status` and `declared_elevation_kind`. |
 | `capture_windows` | array | Each capture window, resolved. See below. |
 | `illumination_label_association` | object | How far the illumination band predicts the supervision state (check 41). See below. |
-| `world` | object | The world package: `package`, `map_name`, `network_fingerprint`, `netconvert_version`, `origin` (latitude and longitude), `georeference`, and `routing_sumo` (`version`, `matched_by`, `release_agreement`, `verdict`). |
+| `world` | object | The world package: `package`, `map_name`, `network_fingerprint`, `netconvert_version`, `origin` (latitude and longitude), `georeference` and `routing_sumo` (`version`, `matched_by`, `release_agreement`, `verdict`). |
 | `instants` | object | Each named time: `authored`, `form`, `seconds` and `civil`. |
 | `places` | object | Each place and what it became. See below. |
-| `rotas` | array | Each schedule: `id`, how many `entries` it made, and its `skips` (`entry`, `seconds`, `civil`, `because`). |
+| `rotas` | array | Each schedule: `id`, how many `entries` it made and its `skips` (`entry`, `seconds`, `civil`, `because`). |
 | `routes` | array | Each actor and flow as routed. See below. |
-| `lane_closures` | array | Each lane closure: `id`, `edge`, `street`, the closed `lanes`, how many `open_lanes`, `notify`, the class it still `allow`s, and `begin` and `end` as resolved times. |
+| `lane_closures` | array | Each lane closure: `id`, `edge`, `street`, the closed `lanes`, how many `open_lanes`, `notify` and the class it still `allow`s. Its `begin` and `end` are resolved times. |
 | `vehicle_types` | object | The `catalogue` read; one line per class in `classes`; the whole `mix` and each named mix in `mixes` with each vehicle type's probability; and `types`, each vehicle type id with the body it binds. |
 | `supervision` | object | The supervision plan's `instances`, `cohorts` and `series`, each series with its count of `slots`. See [Supervision plan](Supervision_Plan.md). |
 | `dry_run` | object | What the SUMO-only run showed. See below. |
@@ -95,8 +98,8 @@ A resolved time (`depart`, `begin`, `end` and the like) is `{authored, form, sec
 |---|---|---|
 | `statistic` | string | What is computed: the mutual information between band and supervision state, over the state's entropy. |
 | `band_source`, `band_edges` | string; array of `{band, above_deg}` | The band table used. |
-| `elevation_kind`, `presence_estimate` | string | What the elevations are, and how a vehicle's presence is estimated. |
-| `over_windows`, `over_span` | object | The association over the declared windows, and over the whole span at each departure. Each has `normalized_mutual_information`, `entries`, `table`, `degenerate_bands` and `mixed_bands`, or `not_computed` and why. |
+| `elevation_kind`, `presence_estimate` | string | What the elevations are. How a vehicle's presence is estimated. |
+| `over_windows`, `over_span` | object | The association over the declared windows and the one over the whole span at each departure. Each has `normalized_mutual_information`, `entries`, `table`, `degenerate_bands` and `mixed_bands`, or `not_computed` and why. |
 | `normalized_mutual_information` | number or null | The headline figure. Null when there is one supervision state only. |
 | `bands` | object or null | The headline table: for each band, the count of `annotated`, `nominal` and `unlabelled` route entries and the `total`. |
 | `entries` | integer or null | How many route entries the headline counts. |
@@ -120,14 +123,14 @@ A resolved time (`depart`, `begin`, `end` and the like) is `{authored, form, sec
 
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
-| `id`, `type` | string | | The actor's or flow's id, and its vehicle type. |
+| `id`, `type` | string | | The actor's or flow's id and vehicle type. |
 | `from`, `to`, `via` | edges | | What was asked for. |
 | `route` | array of edge ids, or null | | The route `duarouter` produced. |
 | `route_length_m` | number | m | The route's length. |
 | `free_flow_s` | number | s | Its time at each edge's speed limit. |
-| `stops` | array | | Each stop as emitted: `place`, `lane`, `start_pos`, `end_pos`, `parking`, and its `duration` or `until`. |
+| `stops` | array | | Each stop as emitted: `place`, `lane`, `start_pos`, `end_pos`, `parking` and its `duration` or `until`. |
 | `phases`, `waypoints` | array, integer | | For an actor routed in phases. |
-| `depart`, `origin` | resolved time, string | | For an actor: when it departs, and where it came from: `actor` or `rota:<id>`. |
+| `depart`, `origin` | resolved time, string | | For an actor: its departure time and its origin, `actor` or `rota:<id>`. |
 | `begin`, `end`, `vehs_per_hour` | resolved time, resolved time, number | | For a flow. |
 
 ### `dry_run`

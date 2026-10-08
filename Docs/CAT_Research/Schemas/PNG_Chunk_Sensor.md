@@ -52,13 +52,16 @@ A recorder started through carlanet (`start_recording`), which every `carla-*` t
 | `distortion` | string | | Yes | `none` at CARLA's defaults, otherwise CARLA's own lens parameters. |
 | `sensor_model` | string | | Yes | The camera blueprint, such as `sensor.camera.rgb`. |
 
-Some names differ from the sidecar's for the same value: `az_deg` and `el_deg` here are `azimuth` and `elevation` on the sidecar's `<sensor>`, and `intrinsics.sensor_model` is the `<sensor>`'s `model`.
+Some names differ from the sidecar's for the same value:
+
+- `az_deg` and `el_deg` here are `azimuth` and `elevation` on the sidecar's `<sensor>`;
+- `intrinsics.sensor_model` is the `<sensor>`'s `model`.
 
 ## Format version
 
 This page describes format version 1.\
 A chunk without `format_version` was written before chunks carried one and is version 1.\
-Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
+Readers read a version they know, refuse a newer one by name rather than reading it in part and read a chunk with no version as version 1.
 
 ## Example
 

@@ -1,11 +1,13 @@
 # Writing a scenario
 
-A scenario says what traffic SUMO drives through a world: which vehicles, where they go, when they go, and what the scenario asserts about them.\
-CARLA draws the vehicles SUMO moves, and a capture writes the imagery and the truth.
+A scenario says what traffic SUMO drives through a world: which vehicles, where they go, when they go and what the scenario asserts about them.\
+CARLA draws the vehicles SUMO moves.\
+A capture writes the imagery and the truth.
 
 You write a scenario as one JSON file, a scenario specification, named `<name>.scenario.json`.\
 You never write SUMO's XML.\
-`carla-compile-scenario` checks the file against its world package, routes every vehicle, and writes the SUMO files and a report of what everything resolved to.
+`carla-compile-scenario` checks the file against its world package and routes every vehicle.\
+It writes the SUMO files and a report of what everything resolved to.
 
 Every field is listed on [Scenario specification](../Schemas/Scenario_Specification.md).\
 This page explains how to use them.
@@ -33,7 +35,8 @@ You need:
   It is `CarlaControl/catalogue/vehicles.catalogue.json` in a source checkout and `catalogue/vehicles.catalogue.json` in a distribution.\
   [The vehicles reference](../../../CarlaControl/skills/sumo-traffic-scenarios/references/vehicles.md) lists every class and body in it.
 - **SUMO 1.27.0**, the release that built the shipped worlds.\
-  The compiler routes with its `duarouter`, and refuses a release other than the one that built the world (check 6).\
+  The compiler routes with its `duarouter`.\
+  It refuses a release other than the one that built the world (check 6).\
   From a source checkout it uses `Build/sumo-install`.\
   Installed, it uses `SUMO_HOME`, then `PATH`; a distribution's `carla-env` script sets `SUMO_HOME`.\
   `--sumo-home` names another installation.
@@ -183,7 +186,8 @@ It compiles with two warnings, which [Reading the resolution report](#reading-th
 
 SUMO counts seconds from zero and knows nothing else about time.\
 The epoch says what simulated second zero is in civil time at the site.\
-Every time you write is read against it, and the sun is computed from it.
+Every time you write is read against it.\
+The sun is computed from the epoch.
 
 - `civil_datetime` is second zero in local time, with its offset.
 - `utc_offset_hours` is that offset in hours, daylight saving included: -6 for -06:00, 3.5 for +03:30.
@@ -228,7 +232,7 @@ A run may override it.
 
 | `policy` | The sun during a window |
 |---|---|
-| `freeze_at_window_start` | set to the civil time the window opens, and held there. Recommended: one lighting condition per window. |
+| `freeze_at_window_start` | held at the civil time the window opens. Recommended: one lighting condition per window. |
 | `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. |
 | `freeze_at` | held at `freeze_at_civil_time`, written `HH:MM:SS`. |
 | `ignore` | left as the world has it. |
@@ -268,8 +272,9 @@ Things to know:
 - Give a planted vehicle the class of the traffic around it, unless its driving is the behavior you are labeling.\
   A vehicle type that only planted vehicles use tells a model which vehicles are planted.\
   The example's van that skips its delivery is a `van`, like the routine deliveries and the vans in the eastbound traffic.
-- The catalog has no motorcycles, bicycles or pedestrians, and no pickup truck.\
-  Do not ask for them, and do not swap in a body of another kind.\
+- The catalog has no motorcycles, bicycles, pedestrians or pickup trucks.\
+  Do not ask for them.\
+  Do not swap in a body of another kind.\
   The drive never draws a body the catalog did not measure.
 - In the current catalog, only the fire truck's high beams show when switched on.\
   No other body's headlights, brake lights or turn signals show.\
@@ -278,7 +283,8 @@ Things to know:
 ### Places
 
 Flows and actors never name edges directly.\
-They name places from `places`, and the compiler resolves each place to edges and lanes.\
+They name places from `places`.\
+The compiler resolves each place to edges and lanes.\
 It refuses a place rather than guess: a street that runs over several edges is refused, with every candidate listed.
 
 | Form | Example | Resolves to |
@@ -315,7 +321,8 @@ It has:
 
 `depart_lane` and `depart_speed` default to SUMO's `best` and `max`.
 
-The compiler routes each flow with SUMO's `duarouter`, and every vehicle of the flow takes that route.
+The compiler routes each flow with SUMO's `duarouter`.\
+Every vehicle of the flow takes that route.
 
 ### Actors, routes and stops
 
@@ -329,7 +336,7 @@ An actor is one vehicle:
   - `phases`, a route in parts, each with an optional `repeat` count and an optional `hold` speed.\
     This is how a vehicle circles a block.
 - `stops` lists its stops in order.\
-  Each has a `place`, a `duration` or an `until` time, and `parking`.
+  Each has a `place`, `parking` and either a `duration` or an `until` time.
 
 Set `"parking": true` for any long stop on a road where traffic must get past.\
 A vehicle stopped in a single running lane blocks it for the whole stop.
@@ -347,9 +354,11 @@ The field is named `rotas`.
   `"$subject"` stands for the trip's subject place.
 - `id_pattern` makes each trip's vehicle id from `{day}`, `{hour}`, `{minute}`, `{subject_index}` and `{subject}`.\
   The numbers are not padded with zeros.\
-  Make the pattern give every trip its own id: with trips at 09:00 and 09:30, `{hour}` alone gives both the same id, and the compile is refused (check 48).
+  Make the pattern give every trip its own id: with trips at 09:00 and 09:30, `{hour}` alone gives both the same id.\
+  When two trips share an id, the compile is refused (check 48).
 - `skip` leaves occasions out.\
-  Each skip gives the `day`, the `at` time and the `subject_index` or `subject`, and `because`, your reason.\
+  Each skip gives the `day`, the `at` time and the `subject_index` or `subject`.\
+  Its `because` field gives your reason.\
   A skip must match exactly one occasion (check 48).
 
 A skipped occasion writes no trip and no label.\
@@ -379,7 +388,8 @@ The Arapahoe underpass dwell closes five of the six northbound lanes of I-25 for
 ## The labels
 
 Labels are what the scenario asserts about its vehicles, for whoever trains a model on the result.\
-They go in the `supervision` block, and the terms they use go in the `vocabulary` block.
+They go in the `supervision` block.\
+The terms they use go in the `vocabulary` block.
 
 The compiler writes them only into `<scenario_id>.supervision.json`, the supervision plan.\
 The SUMO files carry none (check 52).\
@@ -413,12 +423,14 @@ A term has:
 - `term`, written `<namespace>:<name>`, such as `shop:delivery_not_made`;
 - `definition`, what it means, in words someone who has never met you can follow;
 - `applies_to`: `entity` for one authored vehicle, `cohort` for every vehicle of a flow;
-- `since`, the namespace version it first appeared in, and `status`, `active` or `deprecated`.
+- `since`, the namespace version it first appeared in;
+- `status`: `active` or `deprecated`.
 
 A term may also relate to others: `broader`, `contrast_with`, `hard_negative_for`, `counterfactual`, `superseded_by`.\
-It may list `exemplar_instances`, and it may declare `parameters` (below).
+It may list `exemplar_instances`.\
+It may declare `parameters` (below).
 
-The compiler refuses a label that is not a declared term (check 18), a term attached to a kind of subject its `applies_to` excludes (check 45), and a namespace nobody declared (check 46).\
+The compiler refuses a label that is not a declared term (check 18), a term attached to a kind of subject its `applies_to` excludes (check 45) and a namespace nobody declared (check 46).\
 `vocabulary.import` reads namespaces from files, so several scenarios can share one vocabulary.
 
 ### Instances, participants and roles
@@ -429,7 +441,7 @@ An instance is an assertion about one or more actors:
 - `supervision`: `annotated` or `nominal`;
 - `labels`: the terms it asserts;
 - `participants`: each an `actor` and its `role`;
-- optionally `intervals`, `aoi_refs` (the areas it is about), and `parameters`.
+- optionally `intervals`, `aoi_refs` (the areas it is about) and `parameters`.
 
 Every instance has at least one participant (check 19).\
 An instance with one participant gives it the role `subject` (check 50).\
@@ -437,7 +449,7 @@ With several participants, each role other than `subject` is declared in the nam
 
 ### Phases and intervals
 
-An interval marks a phase of a participant's part in the pattern: its `participant`, a `phase` name, and either a civil time (`begin` with `end` or `duration`) or an `anchor`, never both (check 58).
+An interval marks a phase of a participant's part in the pattern: its `participant`, a `phase` name and either a civil time (`begin` with `end` or `duration`) or an `anchor`, never both (check 58).
 
 An anchor ties the interval to the vehicle's own events:
 
@@ -472,14 +484,17 @@ A skipped occasion has no slot.
 ### Cohorts
 
 A cohort labels every vehicle of a flow, for its whole life: `flow`, `supervision` and `labels`.\
-A cohort is `annotated` or `unlabelled`, never `nominal` (check 49), and has no intervals (check 23).\
+A cohort is `annotated` or `unlabelled`, never `nominal` (check 49).\
+A cohort has no intervals (check 23).\
 A flow that no cohort names is `unlabelled`.
 
 ### A label follows its vehicle
 
 Every label is about a vehicle.\
-SUMO reports vehicles, and each row of the supervision plan names the vehicle it is about.\
-Nothing labels an empty place, and nothing is written for each frame.
+SUMO reports vehicles.\
+Each row of the supervision plan names the vehicle it is about.\
+Nothing labels an empty place.\
+Nothing is written for each frame.
 
 ### An omission: label the vehicle that deviates
 
@@ -491,7 +506,7 @@ The example does it this way:
    The skip's `because` says which vehicle deviates.\
    It is your note, not a label.
 2. **Add the deviating vehicle as an actor.**\
-   Make it match the routine trips in everything but the behavior: the same class (`van`), the same start (`west_in`), the occasion's departure time (09:00), and the same stay (4 minutes, parked).\
+   Make it match the routine trips in everything but the behavior: the same class (`van`), the same start (`west_in`), the occasion's departure time (09:00) and the same stay (4 minutes, parked).\
    Only where it parks differs.\
    Any other difference would be a second signal the label does not name.
 3. **Label it** with a term that says what it does instead: `shop:delivery_not_made`.
@@ -504,8 +519,8 @@ The example does it this way:
 ### Parameters
 
 Parameters hold a subject's values, on an instance, a series or a cohort.\
-Each key must be declared in the `parameters` of one of the subject's label terms, with a `type` (`number`, `integer`, `string` or `boolean`), a `unit` where it has one, and a `definition`.\
-The compiler refuses a key no label declares, and a value of the wrong type (check 56).
+Each key must be declared in the `parameters` of one of the subject's label terms, with a `type` (`number`, `integer`, `string` or `boolean`), a `definition` and a `unit` where it has one.\
+The compiler refuses a value of the wrong type and a key no label declares (check 56).
 
 `hard_negative_for` on a term is copied onto every nominal subject that carries the term.\
 Do not restate it on a subject, or restate it exactly (check 57).
@@ -526,7 +541,7 @@ The compiler writes into the `--out-dir` folder:
 | `<MapName>.net.xml` | the world's own network, copied from the package |
 | `<scenario_id>.supervision.json` | the labels |
 | `<scenario_id>.lock.json` | the digests of every file, the seed, the epoch and the versions, which a run checks |
-| `<scenario_id>.resolution.md` and `.json` | what everything resolved to, and every finding |
+| `<scenario_id>.resolution.md` and `.json` | the resolved values and every finding |
 
 The exit status is 0 when the scenario compiled and 1 when it was refused.\
 A refused compile writes only the resolution report, which names every refusal.
@@ -598,13 +613,15 @@ Check, in order:
   For a point, the JSON's `places.<name>.detail` gives how far it was moved to reach a lane: `snapped 0.01 m to -902#0_0`.\
   The `.md` file does not show it.
 - **Schedules.**\
-  How many trips each sent, and each skip with its civil time and reason.
+  How many trips each sent.\
+  Each skip, with its civil time and reason.
 - **Routes.**\
-  Each vehicle's and flow's route as `duarouter` found it, its length, and its time at the speed limit.
+  Each vehicle's and flow's route as `duarouter` found it, its length and its time at the speed limit.
 - **Vehicle types.**\
   Each type and the body it binds, with its size.
 - **Supervision.**\
-  Each instance, its participants and intervals, and each series with its slots.
+  Each instance with its participants and intervals.\
+  Each series with its slots.
 - **Dry run.**\
   What the SUMO-only run showed (see below).
 
@@ -613,8 +630,9 @@ The example compiles with two warnings:
 - **Check 17**, because the `van` class draws one body.
 - **Check 41**, the illumination-label association: how much the light band tells about the label, over the capture windows, or over the whole run when there are none.\
   It is always a warning and never a refusal.\
-  In a pattern of life, routine behavior often follows the clock, and so does the light.\
-  The report gives the figure, a table of labels by band, and ways to change the figure.\
+  In a pattern of life, routine behavior often follows the clock.\
+  The light follows the clock too.\
+  The report gives the figure, a table of labels by band and ways to change the figure.\
   In the example, everything in the window is in the `day` band, so the figure is 0.000.
 
 ### Fixing a refusal
@@ -633,7 +651,8 @@ REFUSED
 
 The compiler writes only `shop_deliveries.resolution.md` and `.json`, with the refusal in their findings.\
 The message lists both candidates and how to narrow the place.\
-Put `"at": "Cross Street"` back, or name the edge, and compile again.
+Put `"at": "Cross Street"` back or name the edge.\
+Then compile again.
 
 A refused compile does not remove the files of an earlier compile in the same folder.\
 Only the report is new.\
@@ -643,7 +662,7 @@ Common refusals:
 
 | Check | What it means | What to do |
 |---|---|---|
-| 1 | The scenario's network fingerprint is not the package's. | The message gives the package's fingerprint. Copy it in, compile, and check the places in the report. |
+| 1 | The scenario's network fingerprint is not the package's. | The message gives the package's fingerprint. Copy it in, compile and check the places in the report. |
 | 6 | The SUMO doing the routing is not the release that built the world. | Use SUMO 1.27.0 with `--sumo-home`. `--allow-sumo-version-mismatch` compiles anyway and records that in the lock. |
 | 7 | A place is not in the world, or names several things where one is needed. | Read the candidates in the message and narrow the place. |
 | 10 | A vehicle's class may not drive an edge of its route. | Choose another route or class. To open a road to a class, build the world with a type map. |
@@ -656,13 +675,14 @@ Common refusals:
 
 Before writing anything, the compiler runs the compiled scenario in SUMO alone over its whole length.\
 It refuses the scenario when a vehicle the supervision plan names never gets in: dropped after waiting 900 s at its entrance, or still waiting when the run ends (check 59).\
-The report's dry run section gives every labeled vehicle's wait, the other vehicles dropped, and every collision.
+The report's dry run section gives every labeled vehicle's wait, the other vehicles dropped and every collision.
 
 The run takes seconds to minutes.\
 Measured: the example's 3 hours took 2.4 s; the Arapahoe underpass dwell (45 minutes, 7,433 vehicles at a 0.05 s step) took 153 s; the Shahid Bahonar pattern of life (7 days, 69,246 vehicles at a 1 s step) took 146 s.
 
 `--skip-dry-run` skips it while you draft.\
-The lock records that it was skipped, and `carla-capture` and `carla-drive` refuse such a scenario unless told to accept it.\
+The lock records that it was skipped.\
+`carla-capture` and `carla-drive` refuse such a scenario unless told to accept it.\
 Compile without it before you capture.
 
 ## Sweeps
@@ -689,23 +709,25 @@ A sweep is a file, `<name>.sweep.json`, beside the base scenario:
 carla-compile-scenario --sweep Import/shop_deliveries_seeds.sweep.json --out-dir Build/scenarios/shop_deliveries_seeds
 ```
 
-This sweep has nine members: three seeds, and for each seed the base and two counterfactual twins.
+This sweep has nine members: the base and two counterfactual twins for each of three seeds.
 
 - `axes` lists what to vary.\
   `path` names a field, such as `seeds.sumo` or `actors.van_due_d0_h9.stops[0].duration`.\
   A list entry is named by its `id`, `name`, `class_id`, `series_id` or `flow`.\
   `values` lists the values.
-- `pairing`: `cross` (the default) makes every combination of the axes' values; `zip` takes the first value of each axis together, then the second, and so on.
+- `pairing`: `cross` (the default) makes every combination of the axes' values; `zip` takes the first value of each axis together, then the second, then each later value in turn.
 - `counterfactuals` makes, for every member, a twin that differs in one actor:
   - `absent` removes the actor;
-  - `nominal` keeps its type, route and time, takes away what `remove` names (`stops`, `via`), and labels it nominal;
+  - `nominal` keeps its type, route and time, takes away what `remove` names (`stops`, `via`) and labels it nominal;
   - `displaced` moves it in time (`shift`) or swaps places in its route and stops (`places`).
 
   A pair has the same inputs except one vehicle.\
   Its trajectories are not expected to match, because the vehicles behind react to what is in front of them.
 
-The compiler writes each member into `<out-dir>/<member id>/`, with the member's own scenario file, and writes `<sweep_id>.sweep-index.json` into the output folder.\
-The index lists every member, its axis values, its outcome and its findings, and every pair.
+The compiler writes each member into `<out-dir>/<member id>/`, with the member's own scenario file.\
+It writes `<sweep_id>.sweep-index.json` into the output folder.\
+The index lists every member with its axis values, its outcome and its findings.\
+It lists every pair too.
 
 A member's id is the base scenario's id and a short code for its values, such as `shop_deliveries.mcb1102d16d`; a twin adds `.cf.<actor>.<mode>`.
 
@@ -715,7 +737,8 @@ See [Sweep](../Schemas/Sweep.md) and [Sweep index](../Schemas/Sweep_Index.md).
 
 On Windows, compile a sweep into a folder with a short path, such as `C:\sweeps\shop_deliveries`.\
 A member's files are named after the member, so their paths get long.\
-SUMO cannot open a file whose full path is longer than 260 characters, and a member that reaches that limit is refused.
+SUMO cannot open a file whose full path is longer than 260 characters.\
+A member that reaches that limit is refused.
 
 ### Sweeping the light
 
@@ -725,7 +748,8 @@ The sweep's `illumination` setting decides what is allowed:
 - `hold`, the default, refuses such an axis.\
   A sweep that varies behavior keeps the light fixed.
 - `vary` allows only such axes.
-- `factorial` allows both, and warns that the result does not compare either one cleanly (check 43).
+- `factorial` allows both.\
+  It warns that the result does not compare either one cleanly (check 43).
 
 To vary the light, sweep `epoch.date`, not the window's hour.\
 The date moves the sun and leaves the traffic alone; the hour moves both.
@@ -753,11 +777,13 @@ A `vary` sweep also refuses an axis that would change it.
 
 A member's SUMO-only run writes a file at `<out-dir>\<member id>\.<member id>.dry-run\<member id>.sumocfg`, which repeats the member id three times.\
 When that full path passes 260 characters, SUMO cannot open it.\
-The member is then refused with check 11 or 59, and a message that a file "is not accessible" or that SUMO "Could not access configuration".
+The member is then refused with check 11 or 59.\
+The refusal says that a file "is not accessible" or that SUMO "Could not access configuration".
 
 The example's twins have 52-character ids, such as `shop_deliveries.mcb1102d16d.cf.van_due_d0_h9.absent`, so the full path of its output folder must stay under about 80 characters.\
 A longer scenario id or actor id leaves less room.\
-Work in a folder with a short path, such as `C:\carla`, and keep `--out-dir` short.
+Work in a folder with a short path, such as `C:\carla`.\
+Keep `--out-dir` short too.
 
 ## The shipped examples
 
@@ -767,11 +793,11 @@ The test suite compiles every one and compares the result with that report.
 
 | Example | What it shows |
 |---|---|
-| `minimal/street_layout_minimal.scenario.json` | the least a scenario declares: one flow, and one actor that stops at a point; no labels |
-| `counterfactual/street_layout_probe.scenario.json` and `probe_standoff_pairs.sweep.json` | every kind of label (an annotated instance, a nominal instance, an unlabeled cohort, a series with a skipped occasion), and a sweep pairing the annotated actor three ways |
+| `minimal/street_layout_minimal.scenario.json` | the least a scenario declares: one flow and one actor that stops at a point; no labels |
+| `counterfactual/street_layout_probe.scenario.json` and `probe_standoff_pairs.sweep.json` | every kind of label (an annotated instance, a nominal instance, an unlabeled cohort, a series with a skipped occasion) and a sweep pairing the annotated actor three ways |
 | `epoch/street_layout_epoch_whole_hour.scenario.json` | Mountain Standard Time, -07:00 |
 | `epoch/street_layout_epoch_daylight_saving.scenario.json` | Mountain Daylight Time, -06:00 with daylight saving |
-| `epoch/street_layout_epoch_half_hour.scenario.json` | Iran's +03:30 on a Colorado world: it compiles as declared, check 40 warns that the offset is far from the world's, and the window's sun is 25.7 degrees below the horizon |
+| `epoch/street_layout_epoch_half_hour.scenario.json` | Iran's +03:30 on a Colorado world. It compiles as declared. Check 40 warns that the offset is far from the world's. The window's sun is 25.7 degrees below the horizon. |
 
 `Import/` holds four scenarios on real worlds, each compiled, with its resolution report beside it.\
 A script in `CarlaControl/scripts/` writes each one and compiles it:
@@ -779,9 +805,9 @@ A script in `CarlaControl/scripts/` writes each one and compiles it:
 | Scenario | Script | What it shows |
 |---|---|---|
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit` | `make_sumo_scenario.py` | one vehicle circling a block 20 times, written as a route in phases |
-| `Arapahoe_I25_UnderpassDwell` | `make_arapahoe_scenario.py` | heavy freeway traffic, a lane closure, and a vehicle parked under a bridge for 30 minutes |
-| `Arapahoe_I25_SupervisionCheck` | `make_supervision_check_scenario.py` | six minutes with an anchored dwell, a transit in phases, and a nominal stop |
-| `Shahid_Bahonar_Port_PatternOfLife` | `make_bahonar_scenario.py` | a week of port life in civil clocks at +03:30, a guard schedule over 16 towers, and six planted anomalies, one of them an omission |
+| `Arapahoe_I25_UnderpassDwell` | `make_arapahoe_scenario.py` | heavy freeway traffic, a lane closure and a vehicle parked under a bridge for 30 minutes |
+| `Arapahoe_I25_SupervisionCheck` | `make_supervision_check_scenario.py` | six minutes with an anchored dwell, a transit in phases and a nominal stop |
+| `Shahid_Bahonar_Port_PatternOfLife` | `make_bahonar_scenario.py` | a week of port life in civil clocks at +03:30, a guard schedule over 16 towers and six planted anomalies, one of them an omission |
 
 These scenarios name their packages at `../Build/world-packages/<MapName>.cwp`.\
 Build each world first (see [Building a world](Building_A_World.md)).\
@@ -825,7 +851,8 @@ Pausing the `sumo-gui` window pauses the drive.\
 Closing it stops the run.
 
 To look at the vehicles in CARLA, place a camera of your own with `carla-camera-follower`, in another terminal.\
-It can start before, during or after the drive, and it records nothing.\
+It can start before, during or after the drive.\
+It records nothing.\
 To stare at the curb on South Yosemite Street that this scenario's capture looks at:
 
 ```
@@ -849,12 +876,13 @@ It holds:
 - `checks.json`;
 - the scenario and sweep schemas;
 - the examples above;
-- references on places and times, the epoch, illumination, vehicles, and known SUMO problems.
+- references on places and times, the epoch, illumination, vehicles and known SUMO problems.
 
 What to expect from an assistant that uses it:
 
 - It asks you what civil date and time second zero is, rather than guess.
-- It asks you for each label's term and definition, and does not make up terms for you.
+- It asks you for each label's term and definition.\
+  It does not make up terms for you.
 - It compiles the scenario and reads the report back to you, including the light each window is under and the illumination-label figure.
 
 [Authoring skills](../Skills/Authoring_Skills.md) says where the skills live and how an assistant finds them.

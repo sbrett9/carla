@@ -8,7 +8,8 @@ When `carla-cot-telemetry` runs that scenario, it writes the gaps to this file, 
 This lets whoever holds the run's output find the hours a gap covers.
 
 This file is for legacy scenarios only.\
-A compiled scenario states its supervision in its compiled supervision plan, a different file that also ends in `.supervision.json`, and labels the vehicle that deviates rather than describing a gap.
+A compiled scenario states its supervision in its compiled supervision plan, a different file that also ends in `.supervision.json`.\
+It labels the vehicle that deviates rather than describing a gap.
 
 - Schema: `CarlaControl/schemas/supervision_gaps.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:supervision-gaps:1`
@@ -19,7 +20,7 @@ A compiled scenario states its supervision in its compiled supervision plan, a d
 It goes to `--supervision <file>` when given; otherwise beside the `--xml` or `--csv` output, named for its stem: `orbit_cot.xml` gets `orbit_cot.supervision.json`.\
 A run with neither file prints the gaps to the log instead.
 
-The gaps are never written into the event file or the CSV, because the answer a behavior model is asked for is a note saying which post stood unmanned, and when.
+The gaps are never written into the event file or the CSV, because the answer a behavior model is asked for is a note naming the unmanned post and the time.
 
 Nothing in the tools reads it.\
 It is for whoever scores a model against the run.

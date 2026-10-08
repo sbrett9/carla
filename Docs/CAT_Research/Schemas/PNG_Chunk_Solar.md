@@ -6,7 +6,8 @@
 
 ## What it is
 
-`carla:solar` is the sun the world reported on the tick nearest the still's pixels, and the illumination band of that sun.\
+`carla:solar` is the sun the world reported on the tick nearest the still's pixels.\
+It also carries the illumination band of that sun.\
 The band is worked out from the sun the world actually had, never from the time the run asked for.\
 The truth sidecar's `<_solar>` element carries the same values.
 
@@ -50,7 +51,7 @@ The two elevations differ by up to a few tenths of a degree near the horizon, wh
 
 This page describes format version 1.\
 A chunk without `format_version` was written before chunks carried one and is version 1.\
-Readers read a version they know, refuse a newer one by name rather than reading it in part, and read a chunk with no version as version 1.
+Readers read a version they know, refuse a newer one by name rather than reading it in part and read a chunk with no version as version 1.
 
 ## Example
 

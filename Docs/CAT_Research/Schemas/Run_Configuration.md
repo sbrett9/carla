@@ -2,16 +2,17 @@
 
 | | |
 |---|---|
-| File | `<name>.run.json`, and a run's `run.effective.json` |
+| File | `<name>.run.json` and a run's `run.effective.json` |
 | Schema | `CarlaControl/schemas/run_configuration.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:run-configuration:1` |
 | Format version | 1, in `run_configuration_version` |
 
 ## What it is
 
-A run configuration describes one capture run: which compiled scenario to bind, which window of simulated time to render, the cameras, and how the run is paced, lit and recorded.\
+A run configuration describes one capture run: which compiled scenario to bind, which window of simulated time to render, the cameras and how the run is paced, lit and recorded.\
 You pass it to `carla-capture --run`.\
-Any field can also be set on the command line with `--set <path>=<value>`, and a few have short options such as `--window` and `--scenario`.
+Any field can also be set on the command line with `--set <path>=<value>`.\
+A few have short options such as `--window` and `--scenario`.
 
 A run is resolved from six layers, lowest first:
 
@@ -27,7 +28,9 @@ Fields marked "world" or "scenario" in the table below are bound by those packag
 You may restate a bound field only with the value the package gives it; any other value is refused (run check 3).
 
 Every run also writes `run.effective.json` beside its result.\
-It is a run configuration too: every field the run resolved, the scenario named by its id, and the machine facts (server, paths, SUMO) left out.\
+It is a run configuration too: every field the run resolved.\
+It names the scenario by its id.\
+The machine facts (server, paths, SUMO) are left out.\
 Passing it back to `carla-capture --run` on any machine reproduces the run.
 
 Positions are in CARLA's frame: meters, x east, y south.\
@@ -82,7 +85,7 @@ A field with no default must come from some layer, or the launch is refused (run
 | `capture.road_layer_visible` | boolean | | `false` | | Whether to draw the generated road surface. It is hidden by default because it lies over the real road in the photogrammetry. |
 | `capture.signal_layer_visible` | boolean | | `false` | | Whether to draw the generated traffic light and sign meshes. SUMO runs the signals either way. |
 | `capture.render_set` | one of `all`, `circle`, `cameras` | | `"all"` | | Which vehicles get a body: every vehicle SUMO has, those inside `capture.render_region`, or those in or near a camera's view. |
-| `capture.render_region` | object `{x_m, y_m, radius_m}` or null | m | `null` | | The circle vehicles get a body inside, for `circle`, and for `cameras` until the cameras are placed. |
+| `capture.render_region` | object `{x_m, y_m, radius_m}` or null | m | `null` | | The circle vehicles get a body inside, for `circle`. Under `cameras`, the same circle is used until the cameras are placed. |
 | `capture.render_hysteresis_m` | number | m | `60.0` | | How far past the limit a vehicle keeps its body before it loses it. |
 | `capture.render_cap` | integer or null | | `null` | | The most vehicles that may hold a body at once. Null means no limit. |
 | `capture.render_min_pixels` | number | pixels | `2.0` | | Under `cameras`: a camera's footprint ends where the longest body would cover fewer pixels than this. |
@@ -113,7 +116,7 @@ A field with no default must come from some layer, or the launch is refused (run
 | `paths.scenario_root` | string | | none | site | Where compiled scenario packages are found by id. |
 | `paths.world_package_root` | string | | none | site | Where world packages are found by the name a scenario lock records. |
 | `paths.catalogue` | string | | none | site | The measured vehicle catalog. Its digest must match the scenario lock's. |
-| `paths.capture_root` | string | | none | site | Where captures are written: one folder per run, and one per channel inside it. |
+| `paths.capture_root` | string | | none | site | Where captures are written: one folder per run and one per channel inside it. |
 | `paths.runs_root` | string | | none | site | Where a run's result, resolution report and lock are written by default. |
 | `world.map_name` | string | | none | world | The world's map name. |
 | `world.network_fingerprint` | string, 64 hex digits | | none | world | The canonical fingerprint of the SUMO network the world carries. |
@@ -157,7 +160,7 @@ Each object in `capture.channels` takes these fields:
 | `stare_pitch_deg` | number or null | degrees | `null` | Stare: pitch. Negative looks down. |
 | `stare_yaw_deg` | number or null | degrees | `null` | Stare: yaw. 0 faces east, -90 faces north. |
 | `post_process_profile` | one of `Default`, `GoPro`, `Town10HD_Opt`, `Town_C` | | `"Default"` | The post-process profile the camera spawns with. |
-| `exposure_method` | one of `manual`, `histogram` | | `"manual"` | `manual` fixes the exposure with the three fields below; `histogram` lets the engine meter each frame, and warns. |
+| `exposure_method` | one of `manual`, `histogram` | | `"manual"` | `manual` fixes the exposure with the three fields below; `histogram` lets the engine meter each frame. It also raises a warning. |
 | `exposure_iso` | number | ISO | `100.0` | Sensitivity, at least 1. |
 | `exposure_shutter_s` | number | s | `0.003125` | Shutter time, 1/8000 s to 100 s. 0.003125 is 1/320 s. |
 | `exposure_fstop` | number | f-number | `4.0` | Aperture, 1 to 32. |
@@ -168,7 +171,8 @@ Each object in `capture.channels` takes these fields:
 This page describes version 1, the only version.\
 A document without `run_configuration_version` is read as version 1.
 
-A document that declares a newer version is refused, and the message says to use the release that wrote it.\
+A document that declares a newer version is refused.\
+The message says to use the release that wrote it.\
 Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).
 
 ## Example

@@ -24,7 +24,9 @@ The process exit status is read from `outcome`, so the file and the exit status 
   It is always outside the capture folder.
 - It is written under a temporary name ending in `.partial` and then renamed, so a reader never sees a half-written result.\
   If there is no result, the tool was stopped before it could write one.
-- Three other records are written beside it, named after it: `<stem>.resolution.json` (see [Run resolution report](Run_Resolution_Report.md)), and, when the offline checks accept, `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see [Run configuration](Run_Configuration.md)).\
+- Three other records are written beside it, named after it.\
+  The first is `<stem>.resolution.json` (see [Run resolution report](Run_Resolution_Report.md)).\
+  When the offline checks accept, the other two are `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see [Run configuration](Run_Configuration.md)).\
   For the default name `run.result.json` the stem is `run`.
 - **Readers**: a camera or mission developer's own scripts, which read the outcome, the capture folder and the gate records.\
   `carlacontrol.RunResult.read` reads it with the version rule below.
@@ -120,10 +122,10 @@ Every field below is written; only `termination` is added at the very end.
 | `window.civil` | array of 2 strings | | The begin and the end reached, in civil time (ISO 8601 with offset). |
 | `channels` | array | | Each channel's recorder counts, below. |
 | `cameras` | array of objects | | Where each camera looked: `sensor_id`, `pattern`; for a stare its `form`, `look_at` and `pose`; for an orbit its `centre`, `radius_m`, `altitude_m` and `period_s`; and the `exposure` it was given. |
-| `readiness` | object or null | | How each view became ready before the window: the rule, the ceilings, and per channel its state and when its tiles were in. |
+| `readiness` | object or null | | How each view became ready before the window: the rule, the ceilings, each channel's state and when its tiles were in. |
 | `gates` | array | | The closing gate records, below. |
 | `admissions` | object or null | | The render set's admission passes: `at_window_open` and a summary over the `window`. |
-| `session` | object | | What the co-simulation session established: its clock, SUMO, pace, sun, layers, drive lease, render set and draw distance in words, its compile lock and teleport checks, and `last_snapshot`, the last figures it reported. |
+| `session` | object | | What the co-simulation session established: its clock, SUMO, pace, sun, layers, drive lease, render set and draw distance in words; its compile lock and teleport checks. It also holds `last_snapshot`, the last figures it reported. |
 | `preroll_achieved_factor` | number or null | sim s per wall s | The real-time factor the prewarm achieved. |
 | `recorder_run_id` | string | | The run id the recorders stamped on every still: the session id. |
 | `termination` | array | | The shutdown steps in order, each with `phase`, `step`, `ran`, `completed` and `failure`. |
@@ -139,7 +141,7 @@ Each entry of `produced.channels` (every count is an integer, or null where this
 | `recorder_dropped` | Captures the recorder's queue had no room for. Any is a loud condition. |
 | `frame_unpaired` | Stills not written because the truth of their own frame was not available when the image arrived. |
 | `illumination_paired`, `illumination_unpaired` | Captures written with and without their frame's illumination declaration. |
-| `solar_block_missing` | Captures written with no recorded sun, and so no illumination band. |
+| `solar_block_missing` | Captures written with no recorded sun. They have no illumination band. |
 | `render_set_paired`, `render_set_unpaired` | Captures written with and without their frame's list of drawn vehicles. |
 | `supervision_paired`, `supervision_unpaired` | Captures written with and without their frame's supervision. |
 | `lights_unknown` | Captures where a vehicle in the picture went without its lights. |

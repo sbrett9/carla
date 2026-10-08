@@ -1,21 +1,24 @@
 # Authoring skills
 
 Reference bundles that an AI coding assistant loads to work on this repository.\
-There are two kinds, and they are kept apart on purpose.
+There are two kinds.\
+They are kept apart on purpose.
 
 ## This fork's skills: `CarlaControl/skills/`
 
-Skills that describe this fork's own tooling live in the repository, tracked and versioned with the code they describe, and ship in the distribution under `skills/`.
+Skills that describe this fork's own tooling live in the repository, tracked and versioned with the code they describe.\
+They ship in the distribution under `skills/`.
 
 | Skill | Covers |
 |---|---|
-| [`sumo-traffic-scenarios`](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md) | Building SUMO traffic scenarios and Cursor-on-Target telemetry datasets for a CARLA world generated from OpenStreetMap: the OSM to world-package to SUMO-network to routes to CoT pipeline, the netconvert flags, coordinate alignment, and the `make_*_scenario.py` / `sumo_cot_telemetry.py` tools |
+| [`sumo-traffic-scenarios`](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md) | Building SUMO traffic scenarios and Cursor-on-Target telemetry datasets for a CARLA world generated from OpenStreetMap: the OSM to world-package to SUMO-network to routes to CoT pipeline, the netconvert flags, coordinate alignment and the `make_*_scenario.py` / `sumo_cot_telemetry.py` tools |
 
 They sit beside `CarlaControl/src/carlacontrol/`, the code that generates most of their contents, so a skill cannot describe a tool the same commit changed.\
-A copy outside the repository has no version, no history and no reproducible source, and cannot be bundled into a distribution.
+A copy outside the repository has no version, no history and no reproducible source.\
+It cannot be bundled into a distribution.
 
 That is why the `.agents/skills/sumo-traffic-scenarios/` copy at the workspace root is now a stub pointing here rather than a second, editable copy.\
-It is deliberately not a directory junction: a junction is invisible in `git status`, does not survive a fresh clone, and lets the two diverge unseen.
+It is deliberately not a directory junction: a junction is invisible in `git status`, does not survive a fresh clone and lets the two diverge unseen.
 
 ## Third-party skills: `CarlaControl/skills/third-party/`
 

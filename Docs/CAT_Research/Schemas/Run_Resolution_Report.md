@@ -20,12 +20,13 @@ It is written whether the launch was accepted or refused, so a refused launch ca
 
 **This is not the compiler's resolution report.**\
 The scenario compiler writes `<scenario_id>.resolution.json` about a compile (see [Scenario resolution report](Scenario_Resolution_Report.md)).\
-This one is about a run, and is always named after the run result: `run.resolution.json` by default.
+This one is about a run.\
+It is always named after the run result: `run.resolution.json` by default.
 
 ## Who writes it and who reads it
 
 - **`carla-capture` writes it** beside the run result, as `<stem>.resolution.json`.\
-  It is written on every path that gets as far as reading the configuration: after a usage error, after the offline checks refuse, and after they accept.\
+  It is written on every path that gets as far as reading the configuration: after a usage error, after the offline checks refuse and after they accept.\
   It is written before any server is contacted.
 - The run result names it in `resolution_report`.
 - No tool reads it back.\
@@ -42,9 +43,9 @@ Every field is always present, except `producer` in a file written before Octobe
 | `outcome` | `accepted`, `usage_error` or `refused_offline` | `accepted`: the offline checks passed and the lock was written. Otherwise the launch stopped here, with that outcome. |
 | `session_id` | string | The run's identity. |
 | `check_catalogue` | string | The catalog the findings' check numbers belong to: `carla-capture run checks`. |
-| `findings` | array | Every refusal and warning, in the order made. Each has `check`, `outcome` (`refuse` or `warn`), `subject`, `message`, `catalogue`, and for a warning its `code`. See [Run result](Run_Result.md#a-finding). |
+| `findings` | array | Every refusal and warning, in the order made. Each has `check`, `outcome` (`refuse` or `warn`), `subject`, `message` and `catalogue`. A warning also has its `code`. See [Run result](Run_Result.md#a-finding). |
 | `launch_echo` | object or null | What the run was about to do. See [Launch echo](Launch_Echo.md). Null when the offline checks refused before it was computed. |
-| `effective_configuration` | object or null | Every field, its value, and where it came from. See [Run lock](Run_Lock.md#the-effective-configuration). Null when nothing could be resolved, as after an unknown key. |
+| `effective_configuration` | object or null | Every field, its value and where it came from. See [Run lock](Run_Lock.md#the-effective-configuration). Null when nothing could be resolved, as after an unknown key. |
 | `site_profile` | object | This machine's facts as resolved. See [Run lock](Run_Lock.md#the-site-profile-record). |
 
 The effective configuration here is the same block the run lock carries, with one difference: the report records what was resolved even when a check then refused it, so a value here may not have its field's type.\

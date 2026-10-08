@@ -1,6 +1,7 @@
 # Place index (`places.json` in a `.cwp`)
 
-`places.json` lists which edges of a world's SUMO network carry which street name, and which way each edge heads.\
+`places.json` lists which edges of a world's SUMO network carry which street name.\
+It also says which way each edge heads.\
 With it, a scenario that names a place as "eastbound on Centerville Lane" can be resolved to edges.\
 The index also says how much of the network its names cover, because on some maps few roads are named.
 
@@ -86,7 +87,8 @@ On a curving edge it says little about the heading at any one point.
 
 ## Format version
 
-`place_index_version` is 1, and there is no other version.\
+`place_index_version` is 1.\
+There is no other version.\
 A file without it is version 1.
 
 `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\

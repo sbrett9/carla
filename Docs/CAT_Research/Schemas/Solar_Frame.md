@@ -44,7 +44,8 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 
 ## Format version
 
-`solar_frame_version` is 1, and there is no other version.\
+`solar_frame_version` is 1.\
+There is no other version.\
 A file without it is version 1.
 
 `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, naming the version and the newest they read, rather than reading part of it.\

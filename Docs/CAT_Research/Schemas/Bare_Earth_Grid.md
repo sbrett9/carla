@@ -8,23 +8,25 @@
 A world built with `--height-align drape` has the file.\
 A world built in any other mode does not; its one height shift is `HeightAlignOffsetMeters` in [`world.json`](World_Package_Manifest.md).
 
-Tools use the grids to turn the height a vehicle is drawn at into its true bare-earth height, to place SUMO-driven vehicles on the ground, and to give the SUMO bridge's telemetry a ground height.
+Tools use the grids to turn the height a vehicle is drawn at into its true bare-earth height, place SUMO-driven vehicles on the ground and give the SUMO bridge's telemetry a ground height.
 
 ## Who writes it and who reads it
 
 CarlaNet's `WorldPackage.Write` writes it with the rest of the package.\
-The same values are published to the server when the world is built, and again when a level made from the world loads.
+The same values are published to the server when the world is built.\
+They are published again when a level made from the world loads.
 
 These read it:
 
-- CarlaNet: `WorldPackage.TryReadGrids` and `WorldPackage.TryReadGridDigests`, used by a SUMO drive to place vehicles and to check the package against the world the server has loaded;
+- CarlaNet: `WorldPackage.TryReadGrids` and `WorldPackage.TryReadGridDigests`, used by a SUMO drive to place vehicles and check the package against the world the server has loaded;
 - the Unreal Editor's World Package Importer, which saves the grids in the level as a `UBareEarthOffsetField` asset;
 - carlacontrol's `BareEarthGrid`, which `carla-cot-telemetry` uses for ground heights.\
   It reads the entry from a `.cwp`, or the same bytes from a loose `.bin` file.
 
 ## Layout
 
-All values are little-endian, and there is no padding.\
+All values are little-endian.\
+There is no padding.\
 The header is 60 bytes.\
 Then come the two grids, each `N = columns × rows` 32-bit floats.\
 The file is exactly `60 + 8 × N` bytes long.
@@ -60,7 +62,7 @@ Point `(c, r)` is at:
 - CARLA y = minimum y + r × cell size
 
 CARLA's frame has x east and y south.\
-So column 0 is the west edge, row 0 is the north edge, and rows run from north to south.\
+So column 0 is the west edge, row 0 is the north edge and rows run from north to south.\
 The last point is at minimum x + (columns − 1) × cell size and minimum y + (rows − 1) × cell size.
 
 The grid's points span the staging rectangle in `world.json`: in every package built so far the minimum corner equals `StagingMinXMeters`, `StagingMinYMeters` and the far corner equals `StagingMaxXMeters`, `StagingMaxYMeters`.\
@@ -81,7 +83,8 @@ To look one up, negate its y: CARLA (x, y) = SUMO (x, −y).
 
 Readers sample the grids differently between points:
 
-- CARLA truth splits each cell into two triangles along the diagonal from point (c, r) to point (c + 1, r + 1), as Unreal's physics height field does, and interpolates on the triangle.\
+- CARLA truth splits each cell into two triangles along the diagonal from point (c, r) to point (c + 1, r + 1), as Unreal's physics height field does.\
+  It interpolates on the triangle.\
   Outside the grid it uses the nearest edge.
 - The SUMO bridge takes the point at the minimum-x, minimum-y corner of the cell the position falls in, without interpolating.\
   Outside the grid it has no answer and reports the configured constant height.
@@ -93,13 +96,18 @@ A server holding the world returns the same two digests from `get_bare_earth_dig
 
 ## Format version
 
-The magic carries the version: it reads `CWP1` as a big-endian word, and the trailing `1` is the format version.\
+The magic carries the version: it reads `CWP1` as a big-endian word.\
+The trailing `1` is the format version.\
 There is only version 1.\
 Every reader refuses a file whose first four bytes are not the magic:
 
-- CarlaNet refuses it as "not a world-package grid", refuses a grid with fewer than 2 columns or rows, and refuses a file whose length is not exactly `60 + 8 × N` bytes.
-- The Unreal importer refuses it, and refuses a file whose length is not exactly `60 + 8 × N` bytes.
-- carlacontrol's `BareEarthGrid` refuses it, and refuses a file whose length is not exactly `60 + 8 × N` bytes.
+- CarlaNet refuses it as "not a world-package grid".\
+  It also refuses a grid with fewer than 2 columns or rows.\
+  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
+- The Unreal importer refuses it.\
+  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
+- carlacontrol's `BareEarthGrid` refuses it.\
+  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
 
 A new layout would get a new magic number, so an older reader refuses it instead of reading it wrongly.
 

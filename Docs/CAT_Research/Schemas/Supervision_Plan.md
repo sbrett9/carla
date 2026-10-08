@@ -9,21 +9,27 @@
 
 ## What it is
 
-The supervision plan holds a scenario's labels, and no other file carries them.\
+The supervision plan holds a scenario's labels.\
+No other file carries them.\
 Every labeled assertion about authored vehicles and flows is fixed here at compile time.
 
 A run only binds these rows to the vehicles as they appear; it never adds one.\
-The route file carries no labels, and the compiler refuses one that does (check 52).
+The route file carries no labels.\
+The compiler refuses one that does (check 52).
 
 A plan has three kinds of rows:
 
 - an **instance** is an assertion about one or more authored vehicles (actors): `annotated`, executing the labeled pattern, or `nominal`, executing no target pattern (a matched negative), with its participants, their roles and the intervals of each phase;
 - a **series** is a schedule read as a recurring pattern, with one slot for each vehicle the schedule sends;
-- a **cohort** is a flow's whole-life label: `annotated` or `unlabelled`, never `nominal`, and never with intervals.
+- a **cohort** is a flow's whole-life label: `annotated` or `unlabelled`, never `nominal`.\
+  A cohort never has intervals.
 
-Every actor no row names is listed as `unlabelled` in `entities`, and every flow no cohort names as an `unlabelled` cohort, because a missing row must never stand for an asserted negative.
+Every actor no row names is listed as `unlabelled` in `entities`.\
+Every flow no cohort names is listed as an `unlabelled` cohort.\
+Both are listed because a missing row must never stand for an asserted negative.
 
-The plan is bound to the compiled files by their digests, and carries no time of writing, so two compiles of one specification write byte-for-byte identical plans.
+The plan is bound to the compiled files by their digests.\
+It carries no time of writing, so two compiles of one specification write byte-for-byte identical plans.
 
 ## Who writes it and who reads it
 
@@ -31,7 +37,8 @@ The plan is bound to the compiled files by their digests, and carries no time of
   The scenario lock digests it.
 - **The co-simulation session reads it** when a compiled scenario starts, under `carla-capture` and `carla-drive`.\
   It refuses a plan whose digests do not match the files it runs.\
-  During the run, it reports each interval opening and closing in the run manifest, and each still's sidecar carries the supervision of its own frame.
+  During the run, it reports each interval opening and closing in the run manifest.\
+  Each still's sidecar carries the supervision of its own frame.
 - The scenario resolution report repeats the plan's rows (see [Scenario resolution report](Scenario_Resolution_Report.md)).
 
 ## Fields
@@ -48,12 +55,12 @@ The plan is bound to the compiled files by their digests, and carries no time of
 | `additional_digest` | string or null | SHA-256 of the lane closures' `.add.xml`. Null where there is none. |
 | `vocabulary_version` | integer | The core vocabulary's version. |
 | `vocabulary_digest` | string, 64 hex digits | SHA-256 of `vocabulary`, keys sorted, two-space indent. |
-| `vocabulary.core` | object | The closed core: `vocabulary_version`, `source`, and `terms`, the terms the pipeline's own code branches on, by family (`supervision_state`, `subject_kind`, `interval_onset`, `closed_by`, `illumination_band`, `cadence`, `reserved_role`, `interval_anchor`, `render_state`, `render_reason`). |
+| `vocabulary.core` | object | The closed core: `vocabulary_version`, `source` and `terms`, the terms the pipeline's own code branches on, by family (`supervision_state`, `subject_kind`, `interval_onset`, `closed_by`, `illumination_band`, `cadence`, `reserved_role`, `interval_anchor`, `render_state`, `render_reason`). |
 | `vocabulary.namespaces` | array | Every author namespace, declared or imported, as the specification declares one (see [Scenario specification](Scenario_Specification.md#the-vocabulary-and-the-supervision)). |
 | `instances` | array | The instances. See below. |
 | `series` | array | The series. See below. |
 | `cohorts` | array | Every flow: `flow_id`, `supervision` (`annotated` or `unlabelled`), `labels` and `parameters`. |
-| `entities` | array | Every actor: `entity_id`, its `supervision` states (for example `["nominal"]`, or `["unlabelled"]`), and `refs`, the rows that name it. |
+| `entities` | array | Every actor: `entity_id`, its `supervision` states (for example `["nominal"]`, or `["unlabelled"]`) and `refs`, the rows that name it. |
 
 ### An instance (`instances[]`)
 
@@ -81,7 +88,8 @@ The plan is bound to the compiled files by their digests, and carries no time of
 | `declared_end_s`, `declared_end_civil` | number or null, string or null | s | The end as declared. |
 | `declared_duration_s` | number or null | s | The length as declared, such as a stop's duration. |
 
-The actual start and end of an anchored interval are what the run observes, and the run manifest records them.
+The actual start and end of an anchored interval are what the run observes.\
+The run manifest records them.
 
 ### A series (`series[]`)
 

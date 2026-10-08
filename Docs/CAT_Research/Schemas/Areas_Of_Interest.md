@@ -23,13 +23,14 @@ If swapping the two would put an area inside the extract, the reader names the l
 
 - **A scenario developer writes it**, by hand or in a GIS tool.
 - **The world build reads it** (`carla-build-world`, `carla-sctmv`): the file `--aoi` names, or the one found beside `--osm`.\
-  It checks the file before any time is spent building the world, resolves each area into the world's frame, and puts the file in the world package as `areas.aoi.geojson`, beside the resolved table `areas.resolved.json`.
+  It checks the file before any time is spent building the world, resolves each area into the world's frame and puts the file in the world package as `areas.aoi.geojson`, beside the resolved table `areas.resolved.json`.
 - **`carla-publish-reference-set` reads it** the same way.
 - The scenario compiler does not read this file.\
-  It reads the resolved table in the world package, and refuses an `aoi_ref` that names no area there (check 20).
+  It reads the resolved table in the world package.\
+  It refuses an `aoi_ref` that names no area there (check 20).
 - The reader refuses the whole file, naming every problem.\
   It also refuses a file that does not conform to the schema.\
-  It warns and keeps reading for an altitude on a position, a property it does not read, and a `crs` member.
+  It warns and keeps reading for an altitude on a position, a property it does not read and a `crs` member.
 
 ## Fields
 
@@ -54,9 +55,10 @@ A ring has at least four positions, the last repeating the first.
 
 The reader also checks what the schema cannot say:
 
-- a ring is closed, has at least three distinct corners, does not cross or touch itself, and encloses at least one square meter;
+- a ring is closed, has at least three distinct corners, does not cross or touch itself and encloses at least one square meter;
 - a hole does not cross another ring of its polygon and lies inside its exterior;
-- every area reaches into the extract's `<bounds>`, and positions are inside WGS84's ranges.
+- every area reaches into the extract's `<bounds>`;
+- every position is inside WGS84's ranges.
 
 ## Versions
 
