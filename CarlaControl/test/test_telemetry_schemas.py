@@ -53,7 +53,8 @@ NO_SIDECAR = "truth_sidecar.xsd, which cot_telemetry.xsd includes, is not in Car
 needs_sidecar = pytest.mark.skipif(not SIDECAR_SCHEMA.is_file(), reason=NO_SIDECAR)
 # The truth sidecar's parts the SUMO bridge's event file holds copies of.
 SHARED_PARTS = ("Instant", "CalendarDate", "TrueOrFalse", "Latitude", "Longitude", "Bearing",
-                "NonNegativeDecimal", "CotType", "Color", "Point", "Track", "Contact", "Server")
+                "NonNegativeDecimal", "CotType", "Color", "Point", "Track", "Contact", "Producer",
+                "Server")
 CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 LEGACY_LABELS = _REPO / "CarlaControl" / "test" / "fixtures" / \
     "Shahid_Bahonar_Port_PatternOfLife.shipped.labels.json"

@@ -102,7 +102,7 @@ added. A sidecar written before it has none.
 |---|---|---|---|---|
 | `tool` | text | | Yes | The component that wrote the file, such as `carlacontrol.CaptureSession`. |
 | `tool_version` | text | | No | The release of the package the tool comes from, where the tool said. |
-| `carlanet` | text | | Yes | The carlanet release that wrote the file: `0.10.0` for a tagged release, `0.10.0+g<commit>` for any other build. |
+| `carlanet` | text | | No | The carlanet release that wrote the file: `0.10.0` for a tagged release, `0.10.0+g<commit>` for any other build. A sidecar always has it, because CarlaNet writes the sidecar. The record's schema leaves it optional because the same record, written by a Python process that never loaded CarlaNet, leaves it out (the SUMO bridge's event file). |
 | `sumo` | text | | No | The SUMO release, such as `1.27.0`, where SUMO drove the vehicles. |
 | `written_utc` | UTC time | | No | When the file was written. |
 

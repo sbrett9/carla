@@ -19,7 +19,8 @@ object:
   for byte; the file that binds that one by digest carries the time.
 
 In an XML file it is a `<_producer>` element with those values as attributes, one not used left out,
-and the server a `<_server>` child (`xml_element`).
+and the server a `<_server>` child (`xml_element`): the `Producer` of `truth_sidecar.xsd`, whose
+`carlanet` is left out where the process loaded no CarlaNet, as the SUMO bridge's event file may be.
 
 The C# writers -- the truth sidecar, the PNG's `carla:capture` chunk, the run manifest, the world truth
 track's summary, the world package -- write the same object (`CarlaNet.Types.Provenance.ProducerRecord`).
@@ -67,7 +68,9 @@ class ProducerRecord:
     @staticmethod
     def xml_element(record: dict) -> ET.Element:
         """The record as a `<_producer>` element, in the shape the C# sidecar writer gives it: each
-        value an attribute, one not used left out, and the server a `<_server>` child."""
+        value an attribute, one not used left out, and the server a `<_server>` child. A `carlanet`
+        that is null -- a process that never loaded CarlaNet -- is left out, which the sidecar's
+        schema allows."""
         element = ET.Element(PRODUCER_ELEMENT)
         for name in ("tool", "tool_version", "carlanet", "sumo", "written_utc"):
             if record.get(name) is not None:

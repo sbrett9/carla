@@ -51,14 +51,14 @@ others.
 
 ### `<_producer>`
 
-What made the file, as every XML file our tools write records it. Absent from files written before it
-was recorded.
+What made the file, as every XML file our tools write records it: the truth sidecar's `Producer`, of
+which this schema holds a copy. Absent from files written before it was recorded.
 
 | Attribute | Type | Required | Meaning |
 |---|---|---|---|
 | `tool` | string | yes | `carlacontrol.SumoCotBridge`. |
 | `tool_version` | string | no | The carlacontrol release. |
-| `carlanet` | string | no | The CarlaNet release the process loaded, when it loaded one. The truth sidecar's `_producer` always has it; the bridge may run without CarlaNet. |
+| `carlanet` | string | no | The CarlaNet release the process loaded, when it loaded one. The bridge may run without CarlaNet and then leaves it out. A truth sidecar always has it, because CarlaNet writes the sidecar. |
 | `sumo` | string | no | The SUMO release that ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was opened, ISO 8601 UTC to the millisecond. |
 

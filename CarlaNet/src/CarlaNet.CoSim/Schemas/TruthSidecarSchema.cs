@@ -288,7 +288,9 @@ public static class TruthSidecarSchema
             Sequence(Element("_server", "Server", "The CARLA server's build identity.", optional: true)),
             Attribute("tool", "xs:string", true, "The component that wrote the file, such as carlacontrol.CaptureSession."),
             Attribute("tool_version", "xs:string", false, "The release version of the tool's package, where it said."),
-            Attribute("carlanet", "xs:string", true, "The carlanet release that wrote the file."),
+            Attribute("carlanet", "xs:string", false,
+                      "The carlanet release the writing process loaded. Absent where it loaded none, as "
+                      + "carlacontrol.ProducerRecord writes the record; CarlaNet's own writers always give it."),
             Attribute("sumo", "xs:string", false, "The SUMO release, where SUMO ran."),
             Attribute("written_utc", "Instant", false, "When the file was written, in UTC."));
 

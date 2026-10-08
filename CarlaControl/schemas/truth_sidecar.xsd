@@ -489,9 +489,9 @@
         <xs:documentation>The release version of the tool's package, where it said.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="carlanet" type="xs:string" use="required">
+    <xs:attribute name="carlanet" type="xs:string" use="optional">
       <xs:annotation>
-        <xs:documentation>The carlanet release that wrote the file.</xs:documentation>
+        <xs:documentation>The carlanet release the writing process loaded. Absent where it loaded none, as carlacontrol.ProducerRecord writes the record; CarlaNet's own writers always give it.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="sumo" type="xs:string" use="optional">
