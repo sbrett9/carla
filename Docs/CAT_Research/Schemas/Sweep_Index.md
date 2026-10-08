@@ -30,7 +30,7 @@ the member that holds a given combination of values, and how you tell two member
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `sweep_version` | constant `1` | yes | The format version of the sweep compiled, and of this index. |
-| `producer` | object | no | What wrote the file, with the SUMO release that routed the members. See [Run result](RunResult.md#the-producer-record). |
+| `producer` | object | no | What wrote the file, with the SUMO release that routed the members. See [Run result](Run_Result.md#the-producer-record). |
 | `sweep_id` | string or null | yes | The sweep's id. Null when the sweep file gave none. |
 | `members` | array | yes | Every member, the twins of counterfactual pairs included. See below. |
 | `pairs` | array | yes | Every counterfactual pair. See below. |
@@ -49,7 +49,7 @@ the member that holds a given combination of values, and how you tell two member
 | `member_id` | string | yes | `<base scenario id>.base` with no axes, or `<base scenario id>.m<10 hex digits>` from the member's axis values. A twin's id is its pair id. |
 | `assignments` | array | yes | The axis values the member took: `{path, value}`. |
 | `outcome` | `compiled` or `refused` | yes | Whether the member compiled. |
-| `specification` | string | yes | The member's specification, relative to the output folder, written with the path separator of the machine that compiled it (`\` on Windows). |
+| `specification` | string | yes | The member's specification, relative to the output folder, in forward slashes on every machine. An index written on Windows before 2026-10-07 separates them with `\`. |
 | `findings` | array | yes | The member's own findings. |
 | `epoch_block_sha256` | string | compiled only | SHA-256 of the member's epoch. |
 | `illumination` | object | compiled only | The member's illumination default. |
@@ -86,7 +86,7 @@ The authoring skill's `examples/counterfactual/probe_standoff_pairs.sweep-index.
   "sweep_id": "probe_standoff_pairs",
   "members": [
     {"member_id": "street_layout_probe.base", "assignments": [], "outcome": "compiled",
-     "specification": "street_layout_probe.base\\street_layout_probe.base.scenario.json",
+     "specification": "street_layout_probe.base/street_layout_probe.base.scenario.json",
      "findings": ["..."], "epoch_block_sha256": "...", "illumination": {"...": "..."},
      "files": {"routes": "...", "config": "...", "network": "...", "supervision": "..."},
      "windows": [{"id": "morning", "civil_begin": "2026-03-21T07:00:00-06:00",

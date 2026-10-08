@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check every file of a capture folder against its published schema.
+"""Check every file of a capture folder, a world package or a vehicle catalogue against its published
+schema.
 
 The tool is `carla-validate`, installed with the carlacontrol wheel (`carlacontrol.commands.validate`). This
 script runs the same tool from this checkout, with the checkout's sources ahead of any installed copy, so

@@ -6,7 +6,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "solar_frame_version",
     "origin_latitude",
     "origin_longitude",
     "engine_time_zone_hours",
@@ -18,7 +17,7 @@
   "properties": {
     "solar_frame_version": {
       "const": 1,
-      "description": "The format of this file."
+      "description": "The format of this file. A frame without it is version 1."
     },
     "origin_latitude": {
       "type": "number",
@@ -31,8 +30,8 @@
       "description": "WGS84 longitude, degrees, of the world's origin."
     },
     "engine_time_zone_hours": {
-      "description": "The zone the engine sets, hours east of UTC: origin_longitude / 15. Local mean solar time, not the site's civil zone.",
-      "type": "number"
+      "type": "number",
+      "description": "The zone the engine sets, hours east of UTC: origin_longitude / 15. Local mean solar time, not the site's civil zone."
     },
     "engine_time_zone": {
       "type": "string",
@@ -40,17 +39,17 @@
       "description": "The same zone as a signed offset, hours:minutes:seconds."
     },
     "engine_time_zone_rule": {
-      "description": "The rule in words.",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "The rule in words."
     },
     "engine_daylight_saving": {
-      "description": "Whether the engine applies daylight saving. It does not.",
-      "type": "boolean"
+      "type": "boolean",
+      "description": "Whether the engine applies daylight saving. It does not."
     },
     "engine_solar_time_at_configure_hours": {
-      "description": "The solar time, hours, the engine sets when the world's georeference is configured.",
-      "type": "number"
+      "type": "number",
+      "description": "The solar time, hours, the engine sets when the world's georeference is configured."
     }
   }
 }

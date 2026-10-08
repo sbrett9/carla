@@ -122,7 +122,7 @@ class VehicleExtent:
 
     `body_width_m` is the body's width without its mirrors, measured separately (`body_width` in the
     catalogue's header says how), where it was: SUMO's width is the body's, and the mirrors' extent
-    made the Fuso bus 3.93 m wide on 3.35 m lanes, where its body is 3.18 m.
+    made the Fuso bus 3.93 m wide on 3.35 m lanes, where its body is 3.23 m.
     """
 
     blueprint_id: str
@@ -238,14 +238,14 @@ class VehicleCatalogue:
         """
         # Imported here rather than at the top: the schema module reads this module's lamp
         # vocabulary, so importing it before this module is defined would be circular.
-        from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: PLC0415
+        from carlacontrol.SchemaPublication import SchemaPublication  # noqa: PLC0415
         from carlacontrol.VehicleCatalogueSchemas import VehicleCatalogueSchemas  # noqa: PLC0415
 
         document = json.loads(Path(path).read_text(encoding="utf-8"))
         if isinstance(document, Mapping):
             cls.check_version(document, path)
         schema = VehicleCatalogueSchemas.catalogue()
-        problems = JsonSchemaFile.problems(document, schema, top_level_required=False)
+        problems = SchemaPublication.problems(document, schema, top_level_required=False)
         if problems:
             raise ValueError(f"{path} does not match the vehicle catalogue's schema "
                              f"({schema['$id']}): " + "; ".join(problems))

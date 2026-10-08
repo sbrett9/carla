@@ -1,6 +1,6 @@
 # SUMO vehicle types (`vehicles.vtypes.rou.xml`)
 
-`vehicles.vtypes.rou.xml` is the [vehicle catalogue](VehicleCatalogue.md) as SUMO reads it. Each
+`vehicles.vtypes.rou.xml` is the [vehicle catalogue](Vehicle_Catalogue.md) as SUMO reads it. Each
 measured CARLA body is one SUMO vehicle type, `<vType>`, and each class is one type distribution,
 `<vTypeDistribution>`, over its members. A scenario asks for a class; SUMO draws a member from it; the
 member is the CARLA body. So the size SUMO reserves on the road and the body CARLA draws are the same.
@@ -57,15 +57,35 @@ Every attribute is written on every type, in this order.
 
 Numbers are written with up to six significant digits and no trailing `.0`.
 
-## `<param>` children
+## `<param>` children: our parameters on a vehicle type
 
-Each `<vType>` has two or three `<param key="..." value="..."/>` children, each key once:
+A vehicle type is bound to the CARLA body it is drawn with through SUMO's generic
+`<param key="..." value="..."/>` element, which SUMO stores and never acts on. Two files carry these
+parameters, in the same keys: this one, and the route file the scenario compiler writes for each
+scenario (`<scenario_id>.rou.xml`, see [SUMO files](SUMO_Files.md)). They are the only parameters a
+compiled route file carries (check 52): labels never travel here, only in the supervision plan.
 
-| Key | Required | Meaning |
-|---|---|---|
-| `carla:blueprint` | yes | The CARLA blueprint the type renders as. A vehicle whose type has none is refused a body. |
-| `carla:class_id` | yes | The class the type belongs to. A run's display convention names a vehicle's population by it. |
-| `carla:catalogue_digest` | when the catalogue has a digest | The `catalogue_digest` of the catalogue the type was written from. A reader holding another catalogue warns once. |
+Each `<vType>` has two or three of them, each key once:
+
+| Key | Value | Written | Meaning |
+|---|---|---|---|
+| `carla:blueprint` | a CARLA blueprint id, such as `vehicle.lincoln.mkz` | always | The body the type is drawn with. Its length, width and height in the `<vType>` are that body's, measured by the vehicle catalogue (check 15). A type with no `carla:blueprint` is simulated by SUMO and never drawn. |
+| `carla:class_id` | the class id, such as `civ_car` | always | The class the body was drawn for. A class draws several bodies, one type each; this tells a reader which population a vehicle belongs to. A run's display convention names a vehicle's population by it. |
+| `carla:catalogue_digest` | the catalogue's `catalogue_digest` | when the catalogue has one | The catalogue the type was written from, so a reader holding a catalogue can tell whether it is that one. `carla-cot-telemetry` warns once about a type written from another catalogue. |
+
+In this file a type's id is its blueprint id. In a compiled route file it is `<class_id>.<blueprint>`,
+such as `car_quick.vehicle.ue4.audi.tt`:
+
+```xml
+<vType id="car_quick.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9667" height="1.3853" maxSpeed="60" speedFactor="normc(1.18,0.06,1.05,1.35)" guiShape="passenger" color="#D9D9E6">
+    <param key="carla:blueprint" value="vehicle.ue4.audi.tt"/>
+    <param key="carla:class_id" value="car_quick"/>
+    <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+</vType>
+```
+
+Either way the id is for a person reading the file; what binds the type to a body is its
+`carla:blueprint`.
 
 ## `<vTypeDistribution>` attributes
 

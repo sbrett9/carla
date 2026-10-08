@@ -6,6 +6,9 @@ network from netconvert, a small draped grid with its digests -- and the referen
 into it by `AuthoringReferenceSet` with no areas declared, which needs no SUMO. It passes, and so does
 each copy of it damaged in one way fails, naming the entry. The world packages a world build wrote
 (the main checkout's `Build/world-packages`) and the shipped catalogue folder pass as they are.
+
+`carla-validate` checks the same, given a `.cwp`, a catalogue folder or its `vehicles.catalogue.json`,
+or a folder holding them beside other files our tools write.
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_world_package_schemas import BUILT_PACKAGES, built_package_folders  # noqa: E402
 
 from carlacontrol.AuthoringReferenceSet import AuthoringReferenceSet  # noqa: E402
+from carlacontrol.commands.validate import main as validate  # noqa: E402
 from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.WorldFileValidator import (  # noqa: E402
@@ -193,6 +197,24 @@ def test_a_manifest_missing_a_required_field_or_of_a_newer_format_is_named(valid
     assert any("declares FormatVersion 2" in line for line in newer)
 
 
+@pytest.mark.parametrize(("entry", "field"), [("places.json", "place_index_version"),
+                                              ("solar.json", "solar_frame_version"),
+                                              ("areas.resolved.json", "resolved_version")])
+def test_a_reference_entry_without_a_version_is_version_one_and_a_newer_one_is_named(
+        validator, package, tmp_path, entry, field):
+    with zipfile.ZipFile(package) as archive:
+        document = json.loads(archive.read(entry))
+    del document[field]
+    assert failures(validator, damaged(package, tmp_path, replace={
+        entry: json.dumps(document).encode()})) == []
+    newer = failures(validator, damaged(package, tmp_path, replace={
+        entry: json.dumps({**document, field: 2}).encode()}))
+    assert [line for line in newer if line.startswith(f"Damaged.cwp: {entry}:")] == [
+        f"Damaged.cwp: {entry}: {tmp_path / 'Damaged.cwp'} ({entry}) declares {field} 2, and this "
+        f"reader supports {field} 1 and earlier. It was written by a newer release; read it with "
+        "that release's tools."]
+
+
 @pytest.mark.skipif(not BUILT_PACKAGES, reason="no world package a world build wrote")
 def test_the_packages_a_world_build_wrote_are_sound(validator):
     for folder in built_package_folders():
@@ -232,3 +254,61 @@ def test_vehicle_types_that_break_their_schema_are_named(validator, tmp_path):
                     encoding="utf-8")
     found = failures(validator, folder)
     assert any("vehicles.vtypes.rou.xml: line" in line and "class" in line for line in found)
+
+
+# -- carla-validate -----------------------------------------------------------------------------------
+
+def run(path: Path, caplog) -> tuple[int, str]:
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        status = validate([str(path)])
+    return status, caplog.text
+
+
+def test_carla_validate_checks_a_world_package_given_itself(package, tmp_path, caplog):
+    status, text = run(package, caplog)
+    assert status == 0, text
+    assert f"{WORLD_PACKAGES:<28s} {1:6d} checked, 0 failed" in text
+    status, text = run(damaged(package, tmp_path, deflate="map.net.xml"), caplog)
+    assert status == 1
+    assert "FAILED: Damaged.cwp: map.net.xml: is compressed" in text
+
+
+@pytest.mark.parametrize("given", ["folder", "catalogue file"])
+def test_carla_validate_checks_the_catalogue_folder_and_not_its_route_file_as_a_sidecar(given, caplog):
+    path = CATALOGUE_FOLDER if given == "folder" else CATALOGUE_FOLDER / "vehicles.catalogue.json"
+    status, text = run(path, caplog)
+    assert status == 0, text
+    assert f"{CATALOGUES:<28s} {1:6d} checked, 0 failed" in text
+    assert "truth sidecars" not in text
+
+
+def test_carla_validate_names_a_catalogue_that_breaks_its_rules(tmp_path, caplog):
+    folder = copied_catalogue(tmp_path)
+    catalogue = folder / "vehicles.catalogue.json"
+    document = json.loads(catalogue.read_text(encoding="utf-8"))
+    document["catalogue_digest"] = "0" * 64
+    catalogue.write_text(json.dumps(document, indent=2), encoding="utf-8")
+    status, text = run(folder, caplog)
+    assert status == 1
+    assert "catalogue_digest: is not the digest of the catalogue's content" in text
+
+
+def test_carla_validate_checks_packages_beside_the_other_files_a_folder_holds(package, tmp_path,
+                                                                              caplog):
+    folder = tmp_path / "delivery"
+    folder.mkdir()
+    shutil.copy(package, folder)
+    shutil.copy(_REPO / "Import" / "Arapahoe_I25_SupervisionCheck.lock.json", folder)
+    status, text = run(folder, caplog)
+    assert status == 0, text
+    assert f"{WORLD_PACKAGES:<28s} {1:6d} checked, 0 failed" in text
+    assert "scenario locks" in text
+
+
+def test_carla_validate_refuses_a_file_it_does_not_check_whole(tmp_path, caplog):
+    stray = tmp_path / "notes.txt"
+    stray.write_text("x", encoding="utf-8")
+    status, text = run(stray, caplog)
+    assert status == 2
+    assert "is not a folder, a world package (.cwp) or a vehicles.catalogue.json" in text

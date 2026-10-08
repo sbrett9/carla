@@ -6,7 +6,7 @@
       "member_id": "street_layout_probe.base",
       "assignments": [],
       "outcome": "compiled",
-      "specification": "street_layout_probe.base\\street_layout_probe.base.scenario.json",
+      "specification": "street_layout_probe.base/street_layout_probe.base.scenario.json",
       "findings": [
         {
           "check": 17,
@@ -53,7 +53,7 @@
       "member_id": "street_layout_probe.base.cf.probe.nominal",
       "assignments": [],
       "outcome": "compiled",
-      "specification": "street_layout_probe.base.cf.probe.nominal\\street_layout_probe.base.cf.probe.nominal.scenario.json",
+      "specification": "street_layout_probe.base.cf.probe.nominal/street_layout_probe.base.cf.probe.nominal.scenario.json",
       "findings": [
         {
           "check": 17,
@@ -111,7 +111,7 @@
       "member_id": "street_layout_probe.base.cf.probe.absent",
       "assignments": [],
       "outcome": "compiled",
-      "specification": "street_layout_probe.base.cf.probe.absent\\street_layout_probe.base.cf.probe.absent.scenario.json",
+      "specification": "street_layout_probe.base.cf.probe.absent/street_layout_probe.base.cf.probe.absent.scenario.json",
       "findings": [
         {
           "check": 17,
@@ -169,7 +169,7 @@
       "member_id": "street_layout_probe.base.cf.probe.displaced",
       "assignments": [],
       "outcome": "compiled",
-      "specification": "street_layout_probe.base.cf.probe.displaced\\street_layout_probe.base.cf.probe.displaced.scenario.json",
+      "specification": "street_layout_probe.base.cf.probe.displaced/street_layout_probe.base.cf.probe.displaced.scenario.json",
       "findings": [
         {
           "check": 17,

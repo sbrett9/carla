@@ -2,7 +2,7 @@
 <!-- Generated from vehicles.catalogue.json by carlacontrol.VehicleCatalogueBuilder.
      Every length, width and height is a measurement of the rendered body; edit the
      catalogue and re-run the sweep, never this file.
-     A vType's colour is read by sumo-gui alone and never reaches the rendered vehicle. -->
+     A vType's color is read by sumo-gui alone and never reaches the rendered vehicle. -->
 <routes>
     <vType id="vehicle.dodge.charger" vClass="passenger" length="5.006" width="1.854" height="1.5403" minGap="2.5" maxSpeed="35" accel="2.6" decel="4.5" sigma="0.5" speedFactor="1" speedDev="0.1" guiShape="passenger" color="#CCCCD1">
         <param key="carla:blueprint" value="vehicle.dodge.charger"/>

@@ -41,7 +41,7 @@ import zipfile
 from pathlib import Path
 
 from carlacontrol.FormatVersion import FormatVersion
-from carlacontrol.JsonSchemaFile import JsonSchemaFile
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.WorldPackageSchemas import MANIFEST_FORMAT_VERSION, WorldPackageSchemas
 
 # `MANIFEST_FORMAT_VERSION` is the newest `world.json` format this reader reads: `FormatVersion` in the
@@ -51,7 +51,9 @@ from carlacontrol.WorldPackageSchemas import MANIFEST_FORMAT_VERSION, WorldPacka
 # How many of an entry's departures from its schema a refusal names before it says how many more.
 SHOWN_PROBLEMS = 12
 
-# The schema shape each reference-set entry must declare to be read. A reader never reads one in part.
+# The version field of each reference-set entry, and the newest version this reader reads. An entry
+# that declares none is version 1, and a newer one is refused before any of it is read, as `world.json`
+# is (`FormatVersion`): a reader never reads one in part.
 IMPLEMENTED_VERSIONS = {
     "areas.resolved.json": ("resolved_version", 1),
     "places.json": ("place_index_version", 1),
@@ -212,16 +214,15 @@ class WorldPackageReader:
             return None
         document = json.loads(raw.decode("utf-8"))
         field, implemented = IMPLEMENTED_VERSIONS[name]
-        if document.get(field) != implemented:
-            raise ValueError(f"{self.path}: {name} declares {field} {document.get(field)!r}; this "
-                             f"reader implements {implemented} and does not read one in part")
+        declared = document.get(field) if isinstance(document, dict) else None
+        FormatVersion.check(f"{self.path} ({name})", field, declared, implemented)
         self._refuse_malformed(name, document)
         return document
 
     def _refuse_malformed(self, name: str, document: object, *, top_level_required: bool = True) -> None:
         """Refuse an entry that departs from its published schema, naming every departure."""
-        problems = JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name),
-                                           top_level_required=top_level_required)
+        problems = SchemaPublication.problems(document, WorldPackageSchemas.entry_schema(name),
+                                              top_level_required=top_level_required)
         if not problems:
             return
         shown = "; ".join(problems[:SHOWN_PROBLEMS])

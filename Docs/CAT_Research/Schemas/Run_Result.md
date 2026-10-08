@@ -24,9 +24,9 @@ The process exit status is read from `outcome`, so the file and the exit status 
 - It is written under a temporary name ending in `.partial` and then renamed, so a reader never sees
   a half-written result. If there is no result, the tool was stopped before it could write one.
 - Three other records are written beside it, named after it: `<stem>.resolution.json` (see
-  [Run resolution report](RunResolutionReport.md)), and, when the offline checks accept,
-  `<stem>.lock.json` (see [Run lock](RunLock.md)) and `<stem>.effective.json` (see
-  [Run configuration](RunConfiguration.md)). For the default name `run.result.json` the stem is
+  [Run resolution report](Run_Resolution_Report.md)), and, when the offline checks accept,
+  `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see
+  [Run configuration](Run_Configuration.md)). For the default name `run.result.json` the stem is
   `run`.
 - **Readers**: a camera or mission developer's own scripts, which read the outcome, the capture
   folder and the gate records. `carlacontrol.RunResult.read` reads it with the version rule below.
@@ -54,7 +54,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `resolution_report` | string or null | | yes | Path of the resolution report. Null when none was written. |
 | `lock` | string or null | | yes | Path of the run lock. Null when the offline checks did not accept. |
 | `effective_configuration` | string or null | | yes | Path of `run.effective.json`. Null when the offline checks did not accept. |
-| `launch_echo` | object or null | | yes | What the run said it would do before it started. See [Launch echo](LaunchEcho.md). Null when the offline checks refused first. |
+| `launch_echo` | object or null | | yes | What the run said it would do before it started. See [Launch echo](Launch_Echo.md). Null when the offline checks refused first. |
 | `authority_holder` | string or null | | yes | Who holds the world's population lease, when the outcome is `refused_authority`. |
 | `refusals` | array of findings | | yes | Every refusal the launch made. |
 | `warnings` | array of findings | | yes | Every warning raised, with how it was handled. |

@@ -282,9 +282,19 @@ fi
 
 # What this build promises a delivered world. A declaration, not a fingerprint: see
 # Unreal/CarlaUnreal/Config/DefaultWorldInterface.ini.
+# Read from the [WorldInterface] section alone, a key of another section never taken for it, and
+# section and key matched without regard to case, as PackageWorld.ps1 reads them.
 interface_ini="$project_dir/Config/DefaultWorldInterface.ini"
-iface_major="$(sed -n 's/^[[:space:]]*Major[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$interface_ini" 2>/dev/null | head -1)"
-iface_minor="$(sed -n 's/^[[:space:]]*Minor[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$interface_ini" 2>/dev/null | head -1)"
+world_interface() {
+    awk -v key="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')" '
+        { line = tolower($0) }
+        line ~ /^[[:space:]]*\[/ { in_section = (line ~ /^[[:space:]]*\[worldinterface\]/); next }
+        in_section && match(line, "^[[:space:]]*" key "[[:space:]]*=[[:space:]]*[0-9]+") {
+            value = substr(line, RSTART, RLENGTH); sub(/^[^=]*=[[:space:]]*/, "", value); print value; exit
+        }' "$1" 2>/dev/null
+}
+iface_major="$(world_interface "$interface_ini" Major)"
+iface_minor="$(world_interface "$interface_ini" Minor)"
 if [ -z "$iface_major" ] || [ -z "$iface_minor" ]; then
     echo "ERROR: could not read the world interface version from $interface_ini." >&2
     echo "       Without it there is nothing to record for an installer to check against." >&2
@@ -364,26 +374,51 @@ fi
 
 git_hash() { [ -d "$1" ] && git -C "$1" log -1 --format=%H 2>/dev/null || echo ""; }
 
+# A JSON string: the text in quotes, with a quote, a backslash and every control character escaped
+# as JSON requires. Bytes beyond ASCII pass through, so UTF-8 text stays UTF-8.
+json_string() {
+    local text="$1" out="" char code i
+    local LC_ALL=C
+    for (( i = 0; i < ${#text}; i++ )); do
+        char="${text:i:1}"
+        case "$char" in
+            '"')  out+='\"' ;;
+            '\') out+='\\' ;;
+            *)
+                printf -v code '%d' "'$char"
+                if [ "$code" -ge 0 ] && [ "$code" -lt 32 ]; then
+                    printf -v char '\\u%04x' "$code"
+                fi
+                out+="$char" ;;
+        esac
+    done
+    printf '"%s"' "$out"
+}
+
+release_version="$(for part in MAJOR MINOR PATCH; do sed -nE "s/^[[:space:]]*set[[:space:]]*\([[:space:]]*CARLA_VERSION_${part}[[:space:]]+([0-9]+)[[:space:]]*\).*/\1/p" "$carla_root/CMakeLists.txt" | head -1; done | paste -sd. -)"
+
 mkdir -p "$output_dir"
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
 cp -a "$payload" "$staging/$world"
+# Every string escaped (json_string); packagedAtUtc UTC to the millisecond, as PackageWorld.ps1
+# writes it.
 cat > "$staging/world.json" <<EOF
 {
   "formatVersion": 1,
-  "world": "$world",
-  "mapPackage": "/$world/Maps/$world",
+  "world": $(json_string "$world"),
+  "mapPackage": $(json_string "/$world/Maps/$world"),
   "worldInterfaceMajor": $iface_major,
   "worldInterfaceMinor": $iface_minor,
-  "basedOnRelease": "$based_on_release",
-  "releaseVersion": "$(for part in MAJOR MINOR PATCH; do sed -nE "s/^[[:space:]]*set[[:space:]]*\([[:space:]]*CARLA_VERSION_${part}[[:space:]]+([0-9]+)[[:space:]]*\).*/\1/p" "$carla_root/CMakeLists.txt" | head -1; done | paste -sd. -)",
-  "config": "$config",
-  "platform": "$platform",
-  "carlaGitHash": "$(git_hash "$carla_root")",
-  "contentGitHash": "$(git_hash "$project_dir/Content/Carla")",
-  "unrealGitHash": "$(git_hash "$unreal_engine_root")",
-  "packagedAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  "basedOnRelease": $(json_string "$based_on_release"),
+  "releaseVersion": $(json_string "$release_version"),
+  "config": $(json_string "$config"),
+  "platform": $(json_string "$platform"),
+  "carlaGitHash": $(json_string "$(git_hash "$carla_root")"),
+  "contentGitHash": $(json_string "$(git_hash "$project_dir/Content/Carla")"),
+  "unrealGitHash": $(json_string "$(git_hash "$unreal_engine_root")"),
+  "packagedAtUtc": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)")
 }
 EOF
 

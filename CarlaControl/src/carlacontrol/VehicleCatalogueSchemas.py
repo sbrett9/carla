@@ -24,15 +24,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from carlacontrol.JsonSchemaFile import (
-    DRAFT,
-    LOCAL_REFERENCE,
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
+from carlacontrol.SchemaPublication import (
     NON_EMPTY_TEXT,
     NUMBER,
     SHA256_HEX,
-    TEXT,
+    STRING,
     UTC_MILLISECONDS,
-    JsonSchemaFile,
+    SchemaPublication,
 )
 from carlacontrol.VehicleCatalogue import LAMP_NAMES, LAMP_VERDICTS, SUPPORTED_CATALOGUE_VERSION
 from carlacontrol.VehicleCatalogueValidator import (
@@ -84,7 +83,7 @@ class VehicleCatalogueSchemas:
     @classmethod
     def write(cls, directory: str | Path) -> list[Path]:
         """Publish every schema into `directory`."""
-        return [JsonSchemaFile.write(schema, Path(directory) / name)
+        return [SchemaPublication.write(Path(directory) / name, schema)
                 for name, schema in cls.schemas().items()]
 
     # -- vehicles.catalogue.json ----------------------------------------------------------------
@@ -105,38 +104,38 @@ class VehicleCatalogueSchemas:
             "type": "object", "additionalProperties": False,
             "required": ["id", "type", "restrict_to_recommended", "recommended_values"],
             "properties": {
-                "id": JsonSchemaFile.described(NON_EMPTY_TEXT, "The attribute's name, such as "
-                                                               "color or role_name."),
-                "type": JsonSchemaFile.described(NON_EMPTY_TEXT, "CARLA's attribute type, such as "
-                                                                 "RGBColor, String or Bool."),
-                "restrict_to_recommended": JsonSchemaFile.described(
+                "id": SchemaPublication.described(NON_EMPTY_TEXT, "The attribute's name, such as "
+                                                                  "color or role_name."),
+                "type": SchemaPublication.described(NON_EMPTY_TEXT, "CARLA's attribute type, such as "
+                                                                    "RGBColor, String or Bool."),
+                "restrict_to_recommended": SchemaPublication.described(
                     {"type": "boolean"}, "True when only the recommended values are accepted."),
-                "recommended_values": {"type": "array", "items": TEXT,
+                "recommended_values": {"type": "array", "items": STRING,
                                        "description": "The values the blueprint recommends."},
             },
         }
         declared = {
             "blueprint_id": {"type": "string", "pattern": f"^{BLUEPRINT_ID_PATTERN.pattern}",
                              "description": "The CARLA blueprint id, such as vehicle.lincoln.mkz."},
-            "uid": JsonSchemaFile.described({"type": "integer"},
-                                            "The blueprint's numeric id on the server that was "
-                                            "measured."),
-            "tags": JsonSchemaFile.described(TEXT, "The blueprint's tags, comma separated."),
-            "declared_base_type": JsonSchemaFile.described(
-                TEXT, "The base_type the content declares for the blueprint. Truth does not use "
-                      "it; it uses the class's cot_base_type."),
-            "declared_special_type": JsonSchemaFile.described(
-                TEXT, "The special_type the content declares. Truth does not use it; it uses the "
-                      "class's cot_special_type."),
-            "number_of_wheels": JsonSchemaFile.described(
+            "uid": SchemaPublication.described({"type": "integer"},
+                                               "The blueprint's numeric id on the server that was "
+                                               "measured."),
+            "tags": SchemaPublication.described(STRING, "The blueprint's tags, comma separated."),
+            "declared_base_type": SchemaPublication.described(
+                STRING, "The base_type the content declares for the blueprint. Truth does not use "
+                        "it; it uses the class's cot_base_type."),
+            "declared_special_type": SchemaPublication.described(
+                STRING, "The special_type the content declares. Truth does not use it; it uses the "
+                        "class's cot_special_type."),
+            "number_of_wheels": SchemaPublication.described(
                 {"type": "integer"}, "Wheels the blueprint declares; -1 when it declares none."),
-            "generation": JsonSchemaFile.described(
+            "generation": SchemaPublication.described(
                 {"type": "integer"}, "The CARLA generation the blueprint declares; -1 when none."),
-            "declared_has_lights": JsonSchemaFile.described(
+            "declared_has_lights": SchemaPublication.described(
                 {"type": "boolean"}, "Whether the blueprint declares it has lights."),
             "settable_attributes": {"type": "array", "items": settable_attribute,
                                     "description": "Every attribute a spawn may set, by id."},
-            "colour_settable": JsonSchemaFile.described(
+            "colour_settable": SchemaPublication.described(
                 {"type": "boolean"}, "Whether the blueprint has a color attribute."),
             "colour_palette": {"type": "array",
                                "items": {"type": "string",
@@ -156,16 +155,16 @@ class VehicleCatalogueSchemas:
             "properties": {
                 **declared,
                 "measurement": {"const": "measured"},
-                "length_m": JsonSchemaFile.described(
+                "length_m": SchemaPublication.described(
                     dimension, "Length of the spawned body's bounding box, meters, front to back."),
-                "width_m": JsonSchemaFile.described(
+                "width_m": SchemaPublication.described(
                     dimension, "Width of the bounding box, meters, mirrors included."),
-                "height_m": JsonSchemaFile.described(
+                "height_m": SchemaPublication.described(
                     dimension, "Height of the bounding box, meters."),
-                "bbox_centre_m": JsonSchemaFile.numbers(
+                "bbox_centre_m": SchemaPublication.numbers(
                     3, "Center of the bounding box in the vehicle's own frame, three numbers in "
                        "meters: forward, right, up from the actor's origin."),
-                "body_width_m": JsonSchemaFile.described(
+                "body_width_m": SchemaPublication.described(
                     dimension, "Width of the body without its mirrors, meters, measured from the "
                                "mesh in the editor. SUMO is given this width."),
             },
@@ -176,7 +175,7 @@ class VehicleCatalogueSchemas:
             "properties": {
                 **declared,
                 "measurement": {"const": "failed"},
-                "measurement_note": JsonSchemaFile.described(
+                "measurement_note": SchemaPublication.described(
                     NON_EMPTY_TEXT, "Why the blueprint could not be measured."),
             },
         }
@@ -198,7 +197,7 @@ class VehicleCatalogueSchemas:
                              "description": "The class's id, which a scenario names and which "
                                             "every vehicle drawn from it carries as "
                                             "carla:class_id."},
-                "description": JsonSchemaFile.described(NON_EMPTY_TEXT, "The class in words."),
+                "description": SchemaPublication.described(NON_EMPTY_TEXT, "The class in words."),
                 "sumo_vclass": {"enum": sorted(SUMO_VEHICLE_CLASSES),
                                 "description": "SUMO's vehicle class: which lanes the vehicle may "
                                                "use and SUMO's defaults for it."},
@@ -209,14 +208,14 @@ class VehicleCatalogueSchemas:
                                                     "member. Absent means empty."},
                 "members": {"type": "array", "minItems": 1, "items": member,
                             "description": "The blueprints the class draws from."},
-                **{name: JsonSchemaFile.described(NUMBER, text)
+                **{name: SchemaPublication.described(NUMBER, text)
                    for name, text in CLASS_PARAMETERS.items()},
                 "gui_shape": {"enum": sorted(SUMO_GUI_SHAPES),
                               "description": "SUMO guiShape. Read by sumo-gui only."},
                 "gui_colour": {"type": "string", "pattern": f"^{SUMO_COLOUR_PATTERN.pattern}",
                                "description": "The #RRGGBB color sumo-gui draws the class in. It "
                                               "never reaches the rendered vehicle."},
-                "render_colour_policy": JsonSchemaFile.described(
+                "render_colour_policy": SchemaPublication.described(
                     NON_EMPTY_TEXT, "How a rendered body's color is chosen: palette, from the "
                                     "blueprint's colour_palette. Nothing reads it yet."),
             },
@@ -225,16 +224,16 @@ class VehicleCatalogueSchemas:
             "type": "object", "additionalProperties": False, "required": ["ran"],
             "description": "The conditions of the optical lamp pass, and whether it ran.",
             "properties": {
-                "ran": JsonSchemaFile.described({"type": "boolean"}, "Whether the pass ran."),
-                "reason": JsonSchemaFile.described(NON_EMPTY_TEXT, "Why it did not run, or "
-                                                                   "stopped."),
-                "solar_date": JsonSchemaFile.described(TEXT, "The date the sun was set to, "
-                                                             "YYYY-MM-DD."),
-                "solar_time_hours": JsonSchemaFile.described(NUMBER, "The solar time the sun was "
-                                                                     "set to, hours."),
-                "sun_elevation_deg": JsonSchemaFile.nullable(NUMBER, "The sun's elevation the "
-                                                                     "server reported, degrees."),
-                "positive_control_pixels": JsonSchemaFile.described(
+                "ran": SchemaPublication.described({"type": "boolean"}, "Whether the pass ran."),
+                "reason": SchemaPublication.described(NON_EMPTY_TEXT, "Why it did not run, or "
+                                                                      "stopped."),
+                "solar_date": SchemaPublication.described(STRING, "The date the sun was set to, "
+                                                                  "YYYY-MM-DD."),
+                "solar_time_hours": SchemaPublication.described(NUMBER, "The solar time the sun was "
+                                                                        "set to, hours."),
+                "sun_elevation_deg": SchemaPublication.nullable(NUMBER, "The sun's elevation the "
+                                                                        "server reported, degrees."),
+                "positive_control_pixels": SchemaPublication.described(
                     {"type": "integer"}, "Pixels that changed when the sun was moved to daylight, "
                                          "which proves the camera sees a change."),
                 "camera_poses": {"type": "array",
@@ -247,24 +246,24 @@ class VehicleCatalogueSchemas:
                                                           "fov_deg": NUMBER}},
                                  "description": "Where the probe camera stood relative to the "
                                                 "vehicle, meters and degrees."},
-                "image_size": JsonSchemaFile.numbers(2, "Probe image width and height, pixels."),
-                "luminance_threshold": JsonSchemaFile.described(
+                "image_size": SchemaPublication.numbers(2, "Probe image width and height, pixels."),
+                "luminance_threshold": SchemaPublication.described(
                     {"type": "integer"}, "A pixel counts as gained above this brightness, out of "
-                                         "255."),
-                "region": JsonSchemaFile.numbers(4, "The part of the image counted, as fractions "
-                                                    "of its width and height."),
-                "minimum_lit_pixels": JsonSchemaFile.described(
+                                            "255."),
+                "region": SchemaPublication.numbers(4, "The part of the image counted, as fractions "
+                                                       "of its width and height."),
+                "minimum_lit_pixels": SchemaPublication.described(
                     {"type": "integer"}, "A lamp needs more gained pixels than this to be lit."),
-                "drift_margin": JsonSchemaFile.described(
+                "drift_margin": SchemaPublication.described(
                     NUMBER, "A lamp also needs more than this many times the largest difference "
                             "between two images of the same state."),
-                "average_frames": JsonSchemaFile.described(
+                "average_frames": SchemaPublication.described(
                     {"type": "integer"}, "Frames averaged per image."),
             },
         }
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("vehicle_catalogue", SUPPORTED_CATALOGUE_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("vehicle-catalogue", SUPPORTED_CATALOGUE_VERSION),
             "title": "Vehicle catalogue (vehicles.catalogue.json)",
             "description": "Every CARLA vehicle blueprint, measured by spawning it on a running "
                            "server, and the classes a scenario draws vehicles from. Meters, "
@@ -277,35 +276,35 @@ class VehicleCatalogueSchemas:
             "properties": {
                 "catalogue_version": {"const": SUPPORTED_CATALOGUE_VERSION,
                                       "description": "The format of this file."},
-                "catalogue_id": JsonSchemaFile.described(
+                "catalogue_id": SchemaPublication.described(
                     NON_EMPTY_TEXT, "The catalogue's name: carla-<server version>-<os> unless "
-                                    "given."),
+                                       "given."),
                 "catalogue_digest": {"type": "string", "pattern": SHA256_HEX,
                                      "description": "SHA-256 of this file in its canonical form "
                                                     "(sorted keys, two-space indent) with this "
                                                     "field empty. Scenarios record it."},
-                "content_build_id": JsonSchemaFile.described(
+                "content_build_id": SchemaPublication.described(
                     NON_EMPTY_TEXT, "Which content build was measured."),
                 "blueprint_set_digest": {"type": "string", "pattern": SHA256_HEX,
                                          "description": "SHA-256 over every vehicle definition "
                                                         "and attribute the server declared."},
                 "generated_at_utc": {"type": "string", "pattern": UTC_MILLISECONDS,
                                      "description": "When the sweep ran, UTC."},
-                "generator": JsonSchemaFile.described(NON_EMPTY_TEXT, "The tool and its version."),
-                "server_version": JsonSchemaFile.described(NON_EMPTY_TEXT,
-                                                           "The CARLA server's version."),
-                "producer": {"$ref": f"{LOCAL_REFERENCE}producer",
-                             "description": "What made the catalogue. Absent from a catalogue "
-                                            "built before it was recorded."},
+                "generator": SchemaPublication.described(NON_EMPTY_TEXT, "The tool and its version."),
+                "server_version": SchemaPublication.described(NON_EMPTY_TEXT,
+                                                              "The CARLA server's version."),
+                "producer": SchemaPublication.described(
+                    SchemaPublication.producer(), "What made the catalogue. Absent from a catalogue "
+                                                  "built before it was recorded."),
                 "lamp_probe": lamp_probe,
                 "body_width": {"type": "object", "additionalProperties": False,
                                "required": ["method", "measured", "source"],
                                "description": "How the body widths were measured.",
                                "properties": {
-                                   "method": JsonSchemaFile.described(NON_EMPTY_TEXT, "The method."),
-                                   "measured": JsonSchemaFile.described(NON_EMPTY_TEXT,
-                                                                        "When, and from what."),
-                                   "source": JsonSchemaFile.described(
+                                   "method": SchemaPublication.described(NON_EMPTY_TEXT, "The method."),
+                                   "measured": SchemaPublication.described(NON_EMPTY_TEXT,
+                                                                           "When, and from what."),
+                                   "source": SchemaPublication.described(
                                        NON_EMPTY_TEXT, "The table they were merged from.")}},
                 "vehicles": {"type": "array",
                              "items": {"anyOf": [measured, failed]},
@@ -314,7 +313,6 @@ class VehicleCatalogueSchemas:
                 "classes": {"type": "array", "items": vehicle_class,
                             "description": "The authoring classes."},
             },
-            "$defs": JsonSchemaFile.producer_definitions(),
         }
 
     # -- vehicle_body_widths.json ---------------------------------------------------------------
@@ -327,18 +325,18 @@ class VehicleCatalogueSchemas:
             "type": "object", "additionalProperties": False,
             "required": ["length_m", "full_width_m", "body_width_m", "height_m"],
             "properties": {
-                "length_m": JsonSchemaFile.described(dimension, "The mesh's length, meters."),
-                "full_width_m": JsonSchemaFile.described(
+                "length_m": SchemaPublication.described(dimension, "The mesh's length, meters."),
+                "full_width_m": SchemaPublication.described(
                     dimension, "The mesh's whole width, meters, mirrors included. Must equal the "
                                "catalogue's width_m to within a millimeter."),
-                "body_width_m": JsonSchemaFile.described(
+                "body_width_m": SchemaPublication.described(
                     dimension, "The width without mirrors and other short protrusions, meters."),
-                "height_m": JsonSchemaFile.described(dimension, "The mesh's height, meters."),
+                "height_m": SchemaPublication.described(dimension, "The mesh's height, meters."),
             },
         }
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("vehicle_body_widths", BODY_WIDTHS_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("vehicle-body-widths", BODY_WIDTHS_VERSION),
             "title": "Vehicle body widths (vehicle_body_widths.json)",
             "description": "Each vehicle body's width without its mirrors, measured from the mesh "
                            "in the Unreal Editor, keyed by CARLA blueprint id.",
@@ -348,8 +346,8 @@ class VehicleCatalogueSchemas:
             "properties": {
                 "body_widths_version": {"const": BODY_WIDTHS_VERSION,
                                         "description": "The format of this file."},
-                "method": JsonSchemaFile.described(NON_EMPTY_TEXT, "How the widths were measured."),
-                "measured": JsonSchemaFile.described(NON_EMPTY_TEXT, "When, and from what."),
+                "method": SchemaPublication.described(NON_EMPTY_TEXT, "How the widths were measured."),
+                "measured": SchemaPublication.described(NON_EMPTY_TEXT, "When, and from what."),
                 "vehicles": {"type": "object", "additionalProperties": row,
                              "description": "One row per blueprint id."},
             },

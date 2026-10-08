@@ -117,7 +117,20 @@ def test_a_track_row_with_a_word_its_writer_never_writes_or_a_wrong_count_fails(
 def test_a_folder_with_no_file_of_a_capture_is_not_a_capture(tmp_path, caplog):
     status, text = run(tmp_path, caplog)
     assert status == 2
-    assert "no file of a capture" in text
+    assert "no file a published schema describes" in text
+
+
+def test_an_xml_file_beside_a_still_is_its_sidecar_and_any_other_is_not_a_capture_s(capture, caplog):
+    """A SUMO route file in a capture folder is nobody's sidecar; a sidecar broken into another root
+    is still the still's, and fails as one."""
+    (capture / "traffic.rou.xml").write_text("<routes/>\n", encoding="utf-8")
+    status, text = run(capture, caplog)
+    assert status == 0, text
+    assert "truth sidecars" in text and "2 checked, 0 failed" in text
+    (capture / CAMERA / f"{STILL}.xml").write_text("<routes/>\n", encoding="utf-8")
+    status, text = run(capture, caplog)
+    assert status == 1
+    assert "is not a truth sidecar: its root is <routes>, not <events>" in text
 
 
 def test_a_real_capture_named_by_the_environment_validates(caplog):

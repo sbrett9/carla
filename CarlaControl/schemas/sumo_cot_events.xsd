@@ -9,9 +9,9 @@
   The vehicle event shares its Point, Track and Contact with a truth sidecar's vehicle event. This
   schema cannot take them from truth_sidecar.xsd, because both files' roots are <events> with no
   namespace and one schema can hold only one of them. So it holds copies of truth_sidecar.xsd's Point,
-  Track, Contact, Server and the simple types under them, which a test holds equal to the sidecar's.
-  Its record of what made the file, BridgeProducer, differs from the sidecar's Producer in one way:
-  carlanet is optional, because the bridge may run in a process that never loaded CarlaNet.
+  Track, Contact, Producer, Server and the simple types under them, which a test holds equal to the
+  sidecar's. The record of what made the file is the sidecar's Producer: carlanet is left out where the
+  bridge ran in a process that never loaded CarlaNet, as carlacontrol.ProducerRecord writes it.
 
   No element is in a namespace.
 -->
@@ -38,7 +38,7 @@
 
   <xs:complexType name="SumoEventFile">
     <xs:sequence>
-      <xs:element name="_producer" type="BridgeProducer" minOccurs="0">
+      <xs:element name="_producer" type="Producer" minOccurs="0">
         <xs:annotation><xs:documentation>What made the file. Absent from a file written before it was
           recorded.</xs:documentation></xs:annotation>
       </xs:element>
@@ -57,9 +57,10 @@
     </xs:attribute>
   </xs:complexType>
 
-  <xs:complexType name="BridgeProducer">
+  <xs:complexType name="Producer">
     <xs:annotation><xs:documentation>The record of what made the file, as carlacontrol.ProducerRecord
-      writes it in XML: each value an attribute, one not used left out.</xs:documentation></xs:annotation>
+      writes it in XML: each value an attribute, one not used left out. A copy of truth_sidecar.xsd's
+      Producer.</xs:documentation></xs:annotation>
     <xs:sequence>
       <xs:element name="_server" type="Server" minOccurs="0"/>
     </xs:sequence>

@@ -1,7 +1,8 @@
 """The vehicle catalogue's three files are what their schemas say, and their loaders hold them to it.
 
   * `vehicles.catalogue.json` and `vehicle_body_widths.json` match the JSON Schemas
-    `VehicleCatalogueSchemas` generates, which are the published ones;
+    `VehicleCatalogueSchemas` generates, which `test_published_schemas` holds equal to the published
+    ones;
   * `vehicles.vtypes.rou.xml`, and the route file `SumoVehicleTypeWriter` writes from the catalogue now,
     match `vehicle_types.xsd`, whose attributes are the ones the writer writes;
   * `VehicleCatalogue.load` and `VehicleCatalogueBuilder.load_body_widths` refuse a file that departs
@@ -21,7 +22,7 @@ from lxml import etree
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.VehicleCatalogueBuilder import (  # noqa: E402
@@ -40,18 +41,10 @@ VEHICLE_TYPES = CATALOGUE_DIRECTORY / "vehicles.vtypes.rou.xml"
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
 VEHICLE_TYPES_SCHEMA = SCHEMAS / "vehicle_types.xsd"
 XSD = "{http://www.w3.org/2001/XMLSchema}"
-REGENERATE = ("regenerate with: python -c \"from carlacontrol.VehicleCatalogueSchemas import "
-              "VehicleCatalogueSchemas; VehicleCatalogueSchemas.write('CarlaControl/schemas')\"")
 
 
 def shipped() -> dict:
     return json.loads(CATALOGUE.read_text(encoding="utf-8"))
-
-
-@pytest.mark.parametrize("name", sorted(VehicleCatalogueSchemas.schemas()))
-def test_the_published_schema_is_the_generated_one(name):
-    assert (SCHEMAS / name).read_text(encoding="utf-8") == JsonSchemaFile.text(
-        VehicleCatalogueSchemas.schemas()[name]), REGENERATE
 
 
 def test_the_body_width_version_is_the_one_the_builder_reads():
@@ -64,12 +57,12 @@ def test_the_body_width_version_is_the_one_the_builder_reads():
 
 
 def test_the_shipped_catalogue_matches_its_schema():
-    assert JsonSchemaFile.problems(shipped(), VehicleCatalogueSchemas.catalogue()) == []
+    assert SchemaPublication.problems(shipped(), VehicleCatalogueSchemas.catalogue()) == []
 
 
 def test_the_shipped_body_widths_match_their_schema():
     table = json.loads(BODY_WIDTHS.read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(table, VehicleCatalogueSchemas.body_widths()) == []
+    assert SchemaPublication.problems(table, VehicleCatalogueSchemas.body_widths()) == []
 
 
 def test_every_class_parameter_the_validator_requires_is_described():
@@ -143,6 +136,12 @@ def test_the_shipped_vehicle_types_match_their_schema(vehicle_types_schema):
     assert vehicle_types_schema.validate(document), vehicle_types_schema.error_log
 
 
+def test_the_shipped_vehicle_types_are_what_the_writer_writes_from_the_shipped_catalogue():
+    """Byte for byte, its header comment included: the file is never edited by hand."""
+    assert VEHICLE_TYPES.read_text(encoding="utf-8") == SumoVehicleTypeWriter(shipped()).to_xml(), (
+        "write it again with SumoVehicleTypeWriter(catalogue).write(path)")
+
+
 def test_the_vehicle_types_written_now_match_their_schema(vehicle_types_schema):
     written = etree.fromstring(SumoVehicleTypeWriter(shipped()).to_xml().encode("utf-8"))
     assert vehicle_types_schema.validate(written), vehicle_types_schema.error_log
@@ -175,3 +174,14 @@ def test_every_distribution_draws_only_types_the_file_holds(source):
         drawn = distribution.get("vTypes").split()
         assert set(drawn) <= held, distribution.get("id")
         assert len(distribution.get("probabilities").split()) == len(drawn)
+
+
+def test_the_fuso_bus_widths_vehicle_extent_gives_are_the_catalogue_s():
+    """`VehicleExtent`'s docstring names the bus's whole and body widths; they are the measured ones."""
+    from carlacontrol.VehicleCatalogue import VehicleExtent  # noqa: PLC0415
+
+    (bus,) = [entry for entry in shipped()["vehicles"]
+              if entry["blueprint_id"] == "vehicle.fuso.mitsubishi"]
+    words = " ".join(VehicleExtent.__doc__.split())
+    assert f"made the Fuso bus {bus['width_m']:.2f} m wide" in words
+    assert f"where its body is {bus['body_width_m']:.2f} m" in words

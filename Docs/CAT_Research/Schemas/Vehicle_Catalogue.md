@@ -11,8 +11,8 @@ the classes a scenario asks for. It is the one source of three things:
   explicitly.
 
 It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout, and an installed
-`carlacontrol` carries a copy. SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](VehicleTypes.md).
-The body widths without mirrors come from [`vehicle_body_widths.json`](VehicleBodyWidths.md).
+`carlacontrol` carries a copy. SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](Vehicle_Types.md).
+The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_Body_Widths.md).
 
 - Schema: `CarlaControl/schemas/vehicle_catalogue.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-catalogue:1`
@@ -153,7 +153,7 @@ For a model developer reading a capture's truth:
 | `generated_at_utc` | string | | yes | When the sweep ran, ISO 8601 UTC to the millisecond. |
 | `generator` | string | | yes | The tool and its version: `carlacontrol.VehicleCatalogueBuilder/1.0.0`. |
 | `server_version` | string | | yes | The CARLA server's version. |
-| `producer` | object | | no | What made the catalogue, as in [WorldPackageManifest.md](WorldPackageManifest.md#the-producer-record). Absent from catalogues built before it was recorded. |
+| `producer` | object | | no | What made the catalogue, as in [World_Package_Manifest.md](World_Package_Manifest.md#the-producer-record). Absent from catalogues built before it was recorded. |
 | `lamp_probe` | object | | yes | The conditions of the lamp pass, below. |
 | `body_width` | object | | no | How the body widths were measured: `method`, `measured` (when and from what) and `source` (the table's file name). Present whenever body widths are. |
 | `vehicles` | array of objects | | yes | One entry per vehicle blueprint the server offered, in blueprint id order. |
@@ -246,7 +246,7 @@ so a file without it is not a catalogue.
 `carlacontrol.WorldFileValidator`, given the catalogue's folder, checks the whole catalogue against
 its schema and the builder's rules, checks that its digest is its content's, checks
 `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalogue gives, and
-checks `vehicle_body_widths.json` where it is there.
+checks `vehicle_body_widths.json` where it is there. `carla-validate CarlaControl/catalogue` runs it.
 
 ## Example
 

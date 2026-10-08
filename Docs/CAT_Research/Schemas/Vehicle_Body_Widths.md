@@ -3,8 +3,8 @@
 A vehicle body's bounding box includes its mirrors. SUMO's width is the body without them. On a bus
 the difference is large: the Fuso Rosa's box is 3.93 m wide and its body 3.23 m, on 3.35 m lanes. A
 server cannot see a mesh's vertices, so the width without mirrors is measured from the mesh in the
-Unreal Editor and kept in this table. The [vehicle catalogue](VehicleCatalogue.md) merges it as
-`body_width_m`, and the [SUMO vehicle types](VehicleTypes.md) use it as their `width`.
+Unreal Editor and kept in this table. The [vehicle catalogue](Vehicle_Catalogue.md) merges it as
+`body_width_m`, and the [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 
 - Schema: `CarlaControl/schemas/vehicle_body_widths.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-body-widths:1`

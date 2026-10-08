@@ -6,7 +6,7 @@ extract, `<extract>.aoi.geojson`, in latitude and longitude. `areas.resolved.jso
 on the built world: in CARLA meters, and on the SUMO lanes that lie inside, cross, or pass near each
 one. The lane positions can be written straight into a SUMO `<stop>`.
 
-The areas file itself is described in [AreasOfInterest.md](AreasOfInterest.md), and its schema is
+The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.md), and its schema is
 `area_of_interest.schema.json`. The package carries a copy
 of it, byte for byte, as `areas.aoi.geojson`.
 
@@ -50,7 +50,7 @@ lanes are, `crossing` when any listed lane is inside or crossing, and `near` oth
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `resolved_version` | integer, always 1 | | yes | The format of this file. |
+| `resolved_version` | integer, always 1 | | no | The format of this file. A table without it is version 1. |
 | `source_file_name` | string | | yes | The areas file's name. Empty when no areas were declared. |
 | `source_sha256` | string | | yes | SHA-256, lowercase hexadecimal, of `areas.aoi.geojson`'s bytes. Empty when no areas were declared. |
 | `world_map_name` | string | | yes | `MapName` from `world.json`. |
@@ -121,9 +121,10 @@ network.
 
 ## Format version
 
-`resolved_version` is 1, and there is no other version. `WorldPackageReader` reads only a file that
-declares exactly 1. It refuses any other value, or none. It then checks the file against the schema
-and refuses it, naming each problem, if it does not match.
+`resolved_version` is 1, and there is no other version. A file without it is version 1. `WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file
+that declares a newer version, naming the version and the newest they read, rather than reading
+part of it. `WorldPackageReader` then checks the
+file against the schema and refuses it, naming each problem, if it does not match.
 
 ## Examples
 

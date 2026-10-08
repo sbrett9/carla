@@ -15,7 +15,7 @@ and where that layer read it; how each warning was handled; and this machine's s
 the record to compare when two runs differ.
 
 **This is not the scenario lock.** The scenario compiler writes `<scenario_id>.lock.json`, which
-records a compiled scenario (see [Scenario lock](ScenarioLock.md)). A run lock records one run of
+records a compiled scenario (see [Scenario lock](Scenario_Lock.md)). A run lock records one run of
 that scenario, and is always named after the run result: `run.lock.json` by default.
 
 ## Who writes it and who reads it
@@ -33,7 +33,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
 | `lock_version` | constant `1` | | The format version of this file. |
-| `producer` | object | | What wrote the file. See [Run result](RunResult.md#the-producer-record). |
+| `producer` | object | | What wrote the file. See [Run result](Run_Result.md#the-producer-record). |
 | `session_id` | string | | The run's identity. |
 | `effective_configuration_sha256` | string, 64 hex digits | | SHA-256 of the replayable configuration, `run.effective.json` without its producer. Two machines resolving the same inputs get the same digest. |
 | `tool_version` | string | | The carlacontrol release that resolved the run. |
@@ -56,7 +56,7 @@ Every field is always present, except `producer` in a file written before Octobe
 
 ### The effective configuration
 
-The `effective_configuration` object, which the [Run resolution report](RunResolutionReport.md)
+The `effective_configuration` object, which the [Run resolution report](Run_Resolution_Report.md)
 carries too:
 
 | Field | Type | Meaning |
@@ -81,7 +81,7 @@ Each value in `fields` and in a channel object records one field:
 | `note` | string | no | A note, such as a bound field restated with the same value. |
 | `environment_variable` | string | no | The environment variable the value was read from. |
 
-The fields themselves are listed in [Run configuration](RunConfiguration.md).
+The fields themselves are listed in [Run configuration](Run_Configuration.md).
 
 ### The site profile record
 

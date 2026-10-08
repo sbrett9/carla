@@ -15,6 +15,11 @@ The epoch and illumination objects are typed only as objects here for that reaso
 are `CarlaNet.CoSim.SolarEpoch`'s and `IlluminationPolicy`'s, and restating them here would be a second
 copy that can drift.
 
+Both are required, because the compiler compiles no scenario without them. A missing one is still
+reported under the check that explains why there is no default to assume, 33 for the epoch and 39
+for the illumination default (`OWN_CHECKS`), not as a departure from the schema: the compiler's shape
+check leaves the two to those checks (`validate(..., leaving_to_own_checks=True)`).
+
 `validate` implements the subset of JSON Schema this document uses -- `type`, `properties`,
 `required`, `additionalProperties`, `items`, `enum`, `const`, `minItems`, `minLength`, `pattern`,
 `minimum`, `exclusiveMinimum`, `anyOf` and local `$ref` -- and refuses to run on a keyword outside
@@ -33,6 +38,9 @@ from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
 
 SPEC_VERSION = 1
 SCHEMA_CHECK = 53
+# The fields the schema requires whose absence the compiler reports under a check of its own, which
+# says why no default is assumed, rather than under the schema's check.
+OWN_CHECKS = {"epoch": 33, "illumination": 39}
 
 _IDENTIFIER = "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
 _TERM = "^[a-z0-9_]+:[a-z0-9_]+$"
@@ -66,7 +74,7 @@ SCHEMA: dict = {
     "type": "object",
     "additionalProperties": False,
     "required": ["spec_version", "scenario_id", "scenario_name", "description", "world",
-                 "seeds", "simulation", "catalogue", "vehicle_classes"],
+                 "epoch", "illumination", "seeds", "simulation", "catalogue", "vehicle_classes"],
     "properties": {
         "spec_version": {"const": SPEC_VERSION},
         "scenario_id": {"type": "string", "pattern": _IDENTIFIER,
@@ -86,11 +94,13 @@ SCHEMA: dict = {
                   "description": "What simulated second zero is in civil time: the civil instant "
                                  "with its UTC offset, the same instant in UTC, whether the calendar "
                                  "advances and whether daylight saving is in effect; read by "
-                                 "SolarEpoch"},
+                                 "SolarEpoch. Required: a specification without one is refused "
+                                 "under check 33"},
         "illumination": {"type": "object",
                          "description": "The authored default for what the sun does across a "
                                         "capture window, which the operator may override; read by "
-                                        "IlluminationPolicy"},
+                                        "IlluminationPolicy. Required: a specification without one "
+                                        "is refused under check 39"},
         "seeds": {"type": "object", "additionalProperties": False, "required": ["sumo"],
                   "properties": {"sumo": {"type": "integer", "minimum": 0}}},
         "simulation": {
@@ -449,11 +459,20 @@ class ScenarioSchema:
     """Validates a specification against `SCHEMA`, and publishes `SCHEMA`."""
 
     @classmethod
-    def validate(cls, document: object) -> list[str]:
-        """Every place the document departs from the schema, as `$.path: problem`. Empty when valid."""
+    def validate(cls, document: object, *, leaving_to_own_checks: bool = False) -> list[str]:
+        """Every place the document departs from the schema, as `$.path: problem`. Empty when valid.
+
+        `leaving_to_own_checks` leaves out a missing `epoch` or `illumination`, which the compiler
+        refuses under the check of its own `OWN_CHECKS` names; everything else is checked as the
+        schema says.
+        """
         cls._require_supported(SCHEMA)
+        schema = SCHEMA
+        if leaving_to_own_checks:
+            schema = {**SCHEMA, "required": [name for name in SCHEMA["required"]
+                                             if name not in OWN_CHECKS]}
         problems: list[str] = []
-        cls._check(document, SCHEMA, "$", problems, SCHEMA)
+        cls._check(document, schema, "$", problems, SCHEMA)
         return problems
 
     @classmethod

@@ -189,6 +189,32 @@ public class WorldPackageTests : IDisposable
         Assert.Equal(WorldPackage.HashGrid(ground), groundSha1);
     }
 
+    [Theory]
+    [InlineData(4)]
+    [InlineData(-4)]
+    public void AGridEntryThatIsNotItsHeaderAndTwoWholeGridsIsRefused(int change)
+    {
+        // A stray tail after the second grid, or the second grid cut short: either way the entry is
+        // not the grid its header describes, and neither reader reads it.
+        var (offset, ground) = MakeGrids(21, 13);
+        WorldPackage.Write(_dir, DrapedManifest(cols: 21, rows: 13), Xodr, Net, offset, ground);
+        byte[] grid;
+        using (ZipArchive archive = ZipFile.OpenRead(Pkg))
+        using (Stream stream = archive.GetEntry("bareearth.bin")!.Open())
+        using (var buffer = new MemoryStream())
+        {
+            stream.CopyTo(buffer);
+            grid = buffer.ToArray();
+        }
+
+        Publish(("bareearth.bin", change > 0 ? [.. grid, .. new byte[change]] : grid[..^-change]));
+
+        InvalidDataException refused = Assert.Throws<InvalidDataException>(
+            () => WorldPackage.TryReadGrids(Pkg, out _, out _));
+        Assert.Contains("not a whole 21x13 grid", refused.Message);
+        Assert.Throws<InvalidDataException>(() => WorldPackage.TryReadGridDigests(Pkg, out _, out _));
+    }
+
     [Fact]
     public void AConstantShiftRecordsNoDigestsAndCarriesNoneToRead()
     {
@@ -481,6 +507,43 @@ public class WorldPackageTests : IDisposable
         Assert.Equal(solar, readSolar);
         // The world itself still reads as it did.
         Assert.Equal(Net, WorldPackage.ReadNetwork(Pkg));
+    }
+
+    [Fact]
+    public void AReferenceSetEntryThatDeclaresNoVersionIsVersionOne()
+    {
+        WriteWorld();
+        const string places = "{\"streets\": []}";
+        const string solar = "{\"engine_time_zone\": \"+03:44:43\"}";
+        const string table = "{\"source_sha256\": \"\", \"areas\": []}";
+        Publish((WorldPackage.PlaceIndexEntry, Utf8(places)), (WorldPackage.SolarFrameEntry, Utf8(solar)),
+                (WorldPackage.AreasOfInterestEntry, Utf8(table)));
+
+        Assert.True(WorldPackage.TryReadPlaceIndex(Pkg, out string readPlaces));
+        Assert.Equal(places, readPlaces);
+        Assert.True(WorldPackage.TryReadSolarFrame(Pkg, out string readSolar));
+        Assert.Equal(solar, readSolar);
+        Assert.True(WorldPackage.TryReadAreasOfInterest(Pkg, out string readTable));
+        Assert.Equal(table, readTable);
+    }
+
+    [Theory]
+    [InlineData("places.json", "place_index_version")]
+    [InlineData("solar.json", "solar_frame_version")]
+    [InlineData("areas.resolved.json", "resolved_version")]
+    public void AReferenceSetEntryOfANewerFormatIsRefusedByName(string entry, string field)
+    {
+        WriteWorld();
+        Publish((entry, Utf8("{\"" + field + "\": 2, \"source_sha256\": \"\"}")));
+
+        InvalidDataException refused = Assert.Throws<InvalidDataException>(() => _ = entry switch
+        {
+            "places.json" => WorldPackage.TryReadPlaceIndex(Pkg, out _),
+            "solar.json" => WorldPackage.TryReadSolarFrame(Pkg, out _),
+            _ => WorldPackage.TryReadAreasOfInterest(Pkg, out _),
+        });
+        Assert.Contains($"({entry}) declares {field} 2, and this reader supports {field} 1 and earlier",
+                        refused.Message);
     }
 
     [Fact]

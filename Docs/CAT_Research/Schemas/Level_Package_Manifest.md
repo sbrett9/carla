@@ -6,7 +6,7 @@ package. It is a zip made by `PackageWorld`. It holds the world's cooked plugin 
 `InstallWorld` reads that file before it installs anything.
 
 This is a different file from the `world.json` inside a world package (`.cwp`), which is described in
-[WorldPackageManifest.md](WorldPackageManifest.md).
+[World_Package_Manifest.md](World_Package_Manifest.md).
 
 - Schema: `CarlaControl/schemas/level_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:level-package-manifest:1`
@@ -21,14 +21,16 @@ release by `PackageWorld`:
 - `Scripts/Windows/PackageWorld.ps1` writes it for Windows (platform `Win64`);
 - `Scripts/Linux/PackageWorld.sh` writes it for Linux (platform `Linux`).
 
-Both write the same keys in the same order. The file is indented JSON with camelCase keys. When
-`PackageWorld.ps1` runs under Windows PowerShell 5.1 rather than PowerShell 7, the file begins with a
-UTF-8 byte order mark, so a reader should accept one.
+Both write the same keys in the same order. The file is indented JSON with camelCase keys, in UTF-8
+without a byte order mark, whether `PackageWorld.ps1` runs under PowerShell 7 or Windows PowerShell 5.1.
+A manifest written by `PackageWorld.ps1` under Windows PowerShell 5.1 before 2026-10-07 begins with a
+byte order mark, so a reader should accept one.
 
-`Scripts/Windows/InstallWorld.ps1` and `Scripts/Linux/InstallWorld.sh` read it. They check the world
-interface version against the target package's (see [WorldInterfaceVersion.md](WorldInterfaceVersion.md)),
-then copy the world's folder into the package's `CarlaUnreal/Plugins/GeneratedWorlds/`. They print the
-`mapPackage` to load. They read `world`, `mapPackage`, `worldInterfaceMajor`, `worldInterfaceMinor` and
+`Scripts/Windows/InstallWorld.ps1` and `Scripts/Linux/InstallWorld.sh` read it. They check its
+`formatVersion` first, then the world interface version against the target package's (see
+[World_Interface_Version.md](World_Interface_Version.md)), then copy the world's folder into the package's
+`CarlaUnreal/Plugins/GeneratedWorlds/`. They print the `mapPackage` to load. They read
+`formatVersion`, `world`, `mapPackage`, `worldInterfaceMajor`, `worldInterfaceMinor` and
 `carlaGitHash`. The other fields identify the build for a person.
 
 ## The zip
@@ -45,11 +47,11 @@ happens when the world is already part of the base release.
 
 ## Fields
 
-Every field is required: both scripts write all of them.
+Both scripts write every field. Every field but `formatVersion` is required.
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `formatVersion` | integer, always 1 | | yes | The format of this file. |
+| `formatVersion` | integer, always 1 | | no | The format of this file. A manifest without it is format 1. |
 | `world` | string | | yes | The world's name. It is the plugin folder's name, which the zip holds beside this file. |
 | `mapPackage` | string | | yes | The level's Unreal package path, `/<world>/Maps/<world>`. Load the world by this name. |
 | `worldInterfaceMajor` | integer | | yes | The Major of the world interface version of the checkout that cooked the world. The package it is installed into must declare the same Major. |
@@ -61,16 +63,18 @@ Every field is required: both scripts write all of them.
 | `carlaGitHash` | string | | yes | The full CARLA commit of the checkout that cooked the world. Empty when git could not say. |
 | `contentGitHash` | string | | yes | The full commit of `Unreal/CarlaUnreal/Content/Carla`. Empty when git could not say. |
 | `unrealGitHash` | string | | yes | The full Unreal Engine commit. Empty when the engine folder is not a git checkout. |
-| `packagedAtUtc` | string | | yes | When the zip was made, ISO 8601 UTC. `PackageWorld.ps1` writes seven decimal places of a second; `PackageWorld.sh` writes whole seconds. |
+| `packagedAtUtc` | string | | yes | When the zip was made, ISO 8601 UTC to the millisecond, as both scripts write it. A manifest written before 2026-10-07 has seven decimal places of a second (`PackageWorld.ps1`) or whole seconds (`PackageWorld.sh`). |
 
 The three commit hashes identify the build. No tool compares them; what decides whether a world
 installs is the world interface version.
 
 ## Format version
 
-`formatVersion` is 1, and there is no other version. `InstallWorld.ps1` and `InstallWorld.sh` do not
-read `formatVersion` today: they read the fields above from any `world.json` in the zip. A reader that
-meets a `formatVersion` it does not know should refuse the file.
+`formatVersion` is 1, and there is no other version. `InstallWorld.ps1` and `InstallWorld.sh` read it
+before any other field: a manifest without it is format 1, and one that declares a newer format is
+refused, naming the format it declares and the newest the script reads. `-Force` and `--force` do not
+override that refusal, because the fields of a newer format may not mean what the script reads them
+as.
 
 ## Example
 
@@ -88,6 +92,6 @@ meets a `formatVersion` it does not know should refuse the file.
   "carlaGitHash": "025443a834b1f3c9d1e2a4b5c6d7e8f901234567",
   "contentGitHash": "6bcd042a91a54d9a2f2f002869fbf1c75f3768f4",
   "unrealGitHash": "e5e266de195a2400a6a74180402fb1a3e8f75472",
-  "packagedAtUtc": "2026-10-07T17:40:12.3456789Z"
+  "packagedAtUtc": "2026-10-07T17:40:12.345Z"
 }
 ```

@@ -7,7 +7,7 @@
 - the **ground** grid: the bare-earth ground height at each grid point.
 
 A world built with `--height-align drape` has the file. A world built in any other mode does not; its
-one height shift is `HeightAlignOffsetMeters` in [`world.json`](WorldPackageManifest.md).
+one height shift is `HeightAlignOffsetMeters` in [`world.json`](World_Package_Manifest.md).
 
 Tools use the grids to turn the height a vehicle is drawn at into its true bare-earth height, to seat
 SUMO-driven vehicles on the ground, and to give the SUMO bridge's telemetry a ground height.
@@ -101,8 +101,8 @@ The magic carries the version: it reads `CWP1` as a big-endian word, and the tra
 format version. There is only version 1. Every reader refuses a file whose first four bytes are not
 the magic:
 
-- CarlaNet refuses it as "not a world-package grid", and refuses a grid with fewer than 2 columns or
-  rows.
+- CarlaNet refuses it as "not a world-package grid", refuses a grid with fewer than 2 columns or
+  rows, and refuses a file whose length is not exactly `60 + 8 × N` bytes.
 - The Unreal importer refuses it, and refuses a file whose length is not exactly `60 + 8 × N` bytes.
 - carlacontrol's `BareEarthGrid` refuses it, and refuses a file whose length is not exactly
   `60 + 8 × N` bytes.

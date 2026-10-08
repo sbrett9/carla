@@ -436,7 +436,12 @@ if (-not $Interface) {
 
 function Get-GitHash([string]$Path) {
     if (-not (Test-Path $Path)) { return '' }
-    $h = (& git -C $Path log -1 --format=%H 2>$null)
+    # A folder that is not a git checkout -- an engine installed from a launcher -- has no commit.
+    # Windows PowerShell 5.1 turns git's complaint on stderr into a terminating error under 'Stop',
+    # so it is let pass here and the exit code decides.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $h = (& git -C $Path log -1 --format=%H 2>$null) } finally { $ErrorActionPreference = $previous }
     if ($LASTEXITCODE -ne 0) { return '' }
     return $h
 }
@@ -456,7 +461,8 @@ $manifest = [ordered]@{
     carlaGitHash          = Get-GitHash $CarlaRoot
     contentGitHash        = Get-GitHash (Join-Path $ProjectDir 'Content\Carla')
     unrealGitHash         = Get-GitHash $UnrealEngineRoot
-    packagedAtUtc         = (Get-Date).ToUniversalTime().ToString('o')
+    # UTC to the millisecond, as PackageWorld.sh writes it.
+    packagedAtUtc         = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -465,7 +471,10 @@ if (Test-Path $StagingCopy) { Remove-Item -Recurse -Force $StagingCopy }
 New-Item -ItemType Directory -Force -Path $StagingCopy | Out-Null
 try {
     Copy-Item -Recurse -Force $Payload.FullName (Join-Path $StagingCopy $World)
-    $manifest | ConvertTo-Json | Set-Content -Path (Join-Path $StagingCopy 'world.json') -Encoding UTF8
+    # UTF-8 without a byte-order mark, which Set-Content -Encoding UTF8 writes under Windows
+    # PowerShell 5.1: a JSON reader need not accept one.
+    [System.IO.File]::WriteAllText((Join-Path $StagingCopy 'world.json'), ($manifest | ConvertTo-Json),
+                                   (New-Object System.Text.UTF8Encoding $false))
 
     $ZipPath = Join-Path $OutputDirectory "$World.zip"
     if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }

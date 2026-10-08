@@ -6,7 +6,7 @@
 // names, each of the JSON type the schema gives it; the fields the schema requires are the record's
 // required members; and the record of what made the package has the schema's fields.
 //
-// The layout of bareearth.bin is described in words (Docs/CAT_Research/Schemas/BareEarthGrid.md) and
+// The layout of bareearth.bin is described in words (Docs/CAT_Research/Schemas/Bare_Earth_Grid.md) and
 // by carlacontrol.WorldPackageSchemas.BARE_EARTH_HEADER. The last test reads a written grid entry at
 // the byte offsets that page gives.
 using System;
@@ -190,7 +190,9 @@ public class WorldPackageSchemaTests : IDisposable
     public void TheRecordOfWhatMadeThePackageHasTheSchemasFields()
     {
         JsonElement written = JsonDocument.Parse(Entry(WritePackage(), "world.json")).RootElement;
-        JsonElement producer = Schema().GetProperty("$defs").GetProperty("producer");
+        // The manifest's Producer is the record, or null; the record's server is null, a server that
+        // answered, or one that did not.
+        JsonElement producer = Schema().GetProperty("properties").GetProperty("Producer").GetProperty("anyOf")[0];
         var allowed = producer.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToHashSet();
         var required = producer.GetProperty("required").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
 
@@ -198,7 +200,10 @@ public class WorldPackageSchemaTests : IDisposable
         Assert.Subset(allowed, names);
         Assert.Superset(required, names);
 
-        JsonElement unavailable = Schema().GetProperty("$defs").GetProperty("server_identity_unavailable");
+        JsonElement unavailable = producer.GetProperty("properties").GetProperty("server").GetProperty("anyOf")
+            .EnumerateArray()
+            .Single(form => form.TryGetProperty("properties", out JsonElement members)
+                            && members.TryGetProperty("reason", out _));
         var serverNames = written.GetProperty("Producer").GetProperty("server").EnumerateObject().Select(p => p.Name);
         Assert.Equal(unavailable.GetProperty("required").EnumerateArray().Select(e => e.GetString()!).OrderBy(n => n, StringComparer.Ordinal),
                      serverNames.OrderBy(n => n, StringComparer.Ordinal));
@@ -210,7 +215,7 @@ public class WorldPackageSchemaTests : IDisposable
         byte[] grid = Entry(WritePackage(), "bareearth.bin");
         var (offset, ground) = Grids();
 
-        // Byte offsets as BareEarthGrid.md tabulates them; every value little-endian.
+        // Byte offsets as Bare_Earth_Grid.md tabulates them; every value little-endian.
         Assert.Equal(60 + 2 * 4 * Columns * Rows, grid.Length);
         Assert.Equal("1PWC", Encoding.ASCII.GetString(grid, 0, 4));
         Assert.Equal(0x43575031, BinaryPrimitives.ReadInt32LittleEndian(grid.AsSpan(0)));

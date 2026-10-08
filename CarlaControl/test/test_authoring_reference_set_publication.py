@@ -33,6 +33,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.AreaOfInterestSource import AreaOfInterestSource  # noqa: E402
 from carlacontrol.AuthoringReferenceSet import AuthoringReferenceSet  # noqa: E402
+from carlacontrol.FormatVersion import FormatVersionError  # noqa: E402
 from carlacontrol.GeodeticFrame import GeodeticFrame  # noqa: E402
 from carlacontrol.OsmClipper import OsmClipper  # noqa: E402
 from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
@@ -209,15 +210,36 @@ def test_a_table_whose_source_went_missing_is_refused(tmp_path, installation):
         WorldPackageReader(package).areas_of_interest()
 
 
-def test_an_entry_of_an_unimplemented_version_is_refused(tmp_path):
+@pytest.mark.parametrize(("entry", "field", "read"), [
+    ("places.json", "place_index_version", WorldPackageReader.place_index),
+    ("solar.json", "solar_frame_version", WorldPackageReader.solar_frame),
+    ("areas.resolved.json", "resolved_version", WorldPackageReader.areas_of_interest),
+])
+def test_an_entry_of_a_newer_version_is_refused_by_name(tmp_path, entry, field, read):
     package = write_package(tmp_path)
     AuthoringReferenceSet(package, None, None).publish()
-    future = json.loads(WorldPackageReader(package).entry_bytes("places.json"))
-    future["place_index_version"] = 2
-    rewrite(package, {"places.json": json.dumps(future).encode()})
-    with pytest.raises(ValueError) as raised:
-        WorldPackageReader(package).place_index()
-    assert "does not read one in part" in str(raised.value)
+    future = json.loads(WorldPackageReader(package).entry_bytes(entry))
+    future[field] = 2
+    rewrite(package, {entry: json.dumps(future).encode()})
+    with pytest.raises(FormatVersionError) as raised:
+        read(WorldPackageReader(package))
+    assert f"({entry}) declares {field} 2, and this reader supports {field} 1 and earlier" in \
+        str(raised.value)
+
+
+@pytest.mark.parametrize(("entry", "field", "read"), [
+    ("places.json", "place_index_version", WorldPackageReader.place_index),
+    ("solar.json", "solar_frame_version", WorldPackageReader.solar_frame),
+    ("areas.resolved.json", "resolved_version", WorldPackageReader.areas_of_interest),
+])
+def test_an_entry_that_declares_no_version_is_version_one(tmp_path, entry, field, read):
+    """The rule `world.json` keeps, and every reader in both languages: no version is version 1."""
+    package = write_package(tmp_path)
+    AuthoringReferenceSet(package, None, None).publish()
+    unversioned = json.loads(WorldPackageReader(package).entry_bytes(entry))
+    del unversioned[field]
+    rewrite(package, {entry: json.dumps(unversioned).encode()})
+    assert read(WorldPackageReader(package)) == unversioned
 
 
 def test_a_package_from_before_the_set_reads_as_unpublished(tmp_path):

@@ -20,7 +20,7 @@ the one place a label, a date or a sun can be checked before a capture is spent.
 same report laid out for reading.
 
 **This is not the run resolution report.** A capture run writes `run.resolution.json` about one
-launch (see [Run resolution report](RunResolutionReport.md)).
+launch (see [Run resolution report](Run_Resolution_Report.md)).
 
 ## Who writes it and who reads it
 
@@ -40,10 +40,10 @@ and `findings`, and no `scenario` when the specification is not JSON.
 | Section | Type | Meaning |
 |---|---|---|
 | `resolution_version` | constant `1` | The format version of this file. |
-| `producer` | object | What wrote the file. See [Run result](RunResult.md#the-producer-record). |
+| `producer` | object | What wrote the file. See [Run result](Run_Result.md#the-producer-record). |
 | `outcome` | `compiled` or `refused` | Whether the compile succeeded. |
 | `scenario` | object | The specification: `scenario_id`, `scenario_name`, `description`, `specification` (its file name), `specification_sha256`, `spec_version`. |
-| `findings` | array | Every refusal and warning, in full: `check` (its id in [Scenario compiler checks](ScenarioChecks.md)), `outcome` (`refuse` or `warn`), `subject` (in the specification's own names) and `message`. |
+| `findings` | array | Every refusal and warning, in full: `check` (its id in [Scenario compiler checks](Scenario_Checks.md)), `outcome` (`refuse` or `warn`), `subject` (in the specification's own names) and `message`. |
 | `epoch` | object | The epoch as `declared`, its `epoch_block_sha256`, a one-line `statement`, `t0_civil`, the run's `end_s` and `end_civil`, `time_zone_id`, and `time_zone_id_resolved`, always false. |
 | `zone` | object | The declared offset against the zone the world's georeference sets: `declared_offset_hours`, `engine_time_zone_hours` (or null), `difference_hours` (or null), and `written_by_the_session`. |
 | `illumination_default` | object | The specification's illumination default: `declared`, its `policy`, its `status` and `declared_elevation_kind`. |
@@ -56,9 +56,9 @@ and `findings`, and no `scenario` when the specification is not JSON.
 | `routes` | array | Each actor and flow as routed. See below. |
 | `lane_closures` | array | Each lane closure: `id`, `edge`, `street`, the closed `lanes`, how many `open_lanes`, `notify`, the class it still `allow`s, and `begin` and `end` as resolved times. |
 | `vehicle_types` | object | The `catalogue` read; one line per class in `classes`; the whole `mix` and each named mix in `mixes` with each vehicle type's probability; and `types`, each vehicle type id with the body it binds. |
-| `supervision` | object | The supervision plan's `instances`, `cohorts` and `series`, each series with its count of `slots`. See [Supervision plan](SupervisionPlan.md). |
+| `supervision` | object | The supervision plan's `instances`, `cohorts` and `series`, each series with its count of `slots`. See [Supervision plan](Supervision_Plan.md). |
 | `dry_run` | object | What the SUMO-only run showed. See below. |
-| `lock` | object | The scenario lock, as written. See [Scenario lock](ScenarioLock.md). |
+| `lock` | object | The scenario lock, as written. See [Scenario lock](Scenario_Lock.md). |
 
 A resolved time (`depart`, `begin`, `end` and the like) is `{authored, form, seconds, civil}`: what
 the specification wrote, which form it was written in, simulated seconds from zero, and the civil
@@ -121,7 +121,7 @@ instant, ISO 8601 with the epoch's offset.
 
 ### `dry_run`
 
-The lock's record (see [Scenario lock](ScenarioLock.md)) and, beside it, `teleports`,
+The lock's record (see [Scenario lock](Scenario_Lock.md)) and, beside it, `teleports`,
 `emergency_stops`, `emergency_braking`, `other_vehicles_discarded`, `other_vehicles_waiting_at_end`,
 `planned` (each planned vehicle: `vehicle_id`, `refs`, `declared_depart_s`, `declared_depart_civil`,
 `entrance`, `inserted`, `outcome`, `depart_s`, `waited_s`) and `collision_list` (each collision:

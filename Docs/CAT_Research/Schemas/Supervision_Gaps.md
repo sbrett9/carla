@@ -22,7 +22,9 @@ with neither file prints the gaps to the log instead. The file is never written 
 the CSV: a note saying which post stood unmanned, and when, is the answer a behavior model is asked
 for.
 
-Nothing in the tools reads it. It is for whoever scores a model against the run.
+Nothing in the tools reads it. It is for whoever scores a model against the run. `carla-validate`,
+given a folder holding it, checks it against this schema; a `.supervision.json` that declares
+`supervision_plan_version` is a compiled [supervision plan](Supervision_Plan.md) instead.
 
 The file is JSON with a one-space indent and no final newline.
 

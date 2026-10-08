@@ -187,7 +187,9 @@ class ScenarioCompiler:
         except (UnicodeDecodeError, ValueError) as problem:
             self.findings.refuse(53, self.spec_path.name, f"is not JSON: {problem}")
             return
-        for problem in ScenarioSchema.validate(self.spec):
+        # A missing epoch or illumination default is refused by its own check, 33 or 39, which says
+        # why none is assumed.
+        for problem in ScenarioSchema.validate(self.spec, leaving_to_own_checks=True):
             self.findings.refuse(53, "specification", problem)
         self.scenario_id = str(self.spec.get("scenario_id", ""))
         self.report.set("scenario", {"scenario_id": self.scenario_id,

@@ -68,6 +68,9 @@ def test_a_behaviour_sweep_compiles_every_member_with_deterministic_ids(world, i
     assert all(m["outcome"] == "compiled" for m in first["members"])
     assert {tuple(a["value"] for a in m["assignments"]) for m in first["members"]} == {
         (42, "5m"), (42, "10m"), (43, "5m"), (43, "10m")}
+    # A shipped index reads the same on every machine: its paths are in forward slashes.
+    for member in first["members"]:
+        assert member["specification"] == f"{member['member_id']}/{member['member_id']}.scenario.json"
 
 
 def test_holding_illumination_refuses_an_axis_that_moves_the_sun(world, installation, tmp_path):

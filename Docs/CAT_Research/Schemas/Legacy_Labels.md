@@ -16,10 +16,11 @@ can be repeated.
   - `affiliation_by_type`: the display affiliations, used only when the run has no display convention.
     The `u` the generator gave every anomaly type is withheld: it marked the answer, not a display
     choice. Those types take `--affiliation`;
-  - `anomaly_notes`: the described gaps, written to a [gap file](SupervisionGaps.md) beside the run's
+  - `anomaly_notes`: the described gaps, written to a [gap file](Supervision_Gaps.md) beside the run's
     output.
 - `carla-check-label-leaks --labels <file>` reads `marked_ids`, to group the run's records into
   planted and not planted.
+- `carla-validate`, given a folder holding it, checks it against this schema.
 
 ## Fields
 

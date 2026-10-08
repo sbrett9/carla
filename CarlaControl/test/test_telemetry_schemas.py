@@ -8,18 +8,22 @@ the XML file and the CSV. Then:
     sidecar from `truth_sidecar.xsd`, and the XML file against `sumo_cot_events.xsd`, whose copies of
     those parts are held equal to the sidecar's; a SUMO vehicle's datagram leaves out the fields the
     files keep;
-  * the CSV meets `sumo_cot_telemetry.tableschema.json`, whose fields are the bridge's columns, and its
-    `.summary.json` meets its schema;
+  * the CSV meets `sumo_cot_telemetry.tableschema.json`, whose fields are the bridge's columns, checked
+    by `TableSchemaCheck`, the check `carla-validate` holds every table to; and its `.summary.json`
+    meets its schema;
   * a CARLA vehicle's datagram, as carla-sctmv sends it with the capture tick and the sun, is valid too;
-  * the legacy labels file and the gap sidecar written from it meet their schemas.
+  * the legacy labels file and the gap sidecar written from it meet their schemas;
+  * `carla-validate`, given the folders that hold them, checks each against its schema
+    (`TelemetryValidator`), names a file that breaks it, and tells the bridge's event file from a
+    truth sidecar and a gap file from a compiled supervision plan.
 
-Every published schema here is held equal to `TelemetrySchemas`.
+`test_published_schemas` holds every published schema here equal to `TelemetrySchemas`.
 """
 from __future__ import annotations
 
 import csv
 import json
-import re
+import shutil
 import sys
 import types
 from datetime import UTC, datetime
@@ -31,8 +35,9 @@ from lxml import etree
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
+from carlacontrol.commands.validate import main as validate  # noqa: E402
 from carlacontrol.CotUdpEmitter import CotUdpEmitter  # noqa: E402
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoCotBridge import (  # noqa: E402
     AUTHORED_TRUTH_FIELDS,
     CSV_COLUMNS,
@@ -40,7 +45,15 @@ from carlacontrol.SumoCotBridge import (  # noqa: E402
     SumoCotBridge,
 )
 from carlacontrol.SupervisionSidecar import SupervisionSidecar  # noqa: E402
+from carlacontrol.TableSchemaCheck import TableSchemaCheck  # noqa: E402
 from carlacontrol.TelemetrySchemas import CSV_TABLE_SCHEMA, TelemetrySchemas  # noqa: E402
+from carlacontrol.TelemetryValidator import (  # noqa: E402
+    EVENT_FILES,
+    GAP_FILES,
+    LABELS_FILES,
+    TABLE_SUMMARIES,
+    TABLES,
+)
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
@@ -53,12 +66,11 @@ NO_SIDECAR = "truth_sidecar.xsd, which cot_telemetry.xsd includes, is not in Car
 needs_sidecar = pytest.mark.skipif(not SIDECAR_SCHEMA.is_file(), reason=NO_SIDECAR)
 # The truth sidecar's parts the SUMO bridge's event file holds copies of.
 SHARED_PARTS = ("Instant", "CalendarDate", "TrueOrFalse", "Latitude", "Longitude", "Bearing",
-                "NonNegativeDecimal", "CotType", "Color", "Point", "Track", "Contact", "Server")
+                "NonNegativeDecimal", "CotType", "Color", "Point", "Track", "Contact", "Producer",
+                "Server")
 CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 LEGACY_LABELS = _REPO / "CarlaControl" / "test" / "fixtures" / \
     "Shahid_Bahonar_Port_PatternOfLife.shipped.labels.json"
-REGENERATE = ("regenerate with: python -c \"from carlacontrol.TelemetrySchemas import "
-              "TelemetrySchemas; TelemetrySchemas.write('CarlaControl/schemas')\"")
 EPOCH = datetime(2026, 3, 21, 5, 0, tzinfo=UTC)
 
 # The vehicles the stand-in presents: SUMO id, type id, and that type's class, blueprint and vClass.
@@ -69,12 +81,6 @@ TYPES = {
 }
 ROSTER = [("traffic.0", "vehicle.lincoln.mkz"), ("traffic.1", "vehicle.ambulance.ford"),
           ("orbiter", "vehicle.lincoln.mkz"), ("freight.0", "hand_written_truck")]
-
-
-@pytest.mark.parametrize("name", sorted(TelemetrySchemas.schemas()))
-def test_the_published_schema_is_the_generated_one(name):
-    assert (SCHEMAS / name).read_text(encoding="utf-8") == JsonSchemaFile.text(
-        TelemetrySchemas.schemas()[name]), REGENERATE
 
 
 def test_the_table_schema_s_fields_are_the_bridge_s_columns_in_order():
@@ -228,73 +234,34 @@ def test_each_event_of_the_xml_file_is_also_a_valid_datagram(run, datagram_schem
         assert datagram_schema.validate(alone), datagram_schema.error_log
 
 
-def check_table(rows: list[dict], header: list[str], table: dict) -> list[str]:
-    """Every place a CSV departs from a Frictionless Table Schema, for the parts this one uses."""
-    problems = []
-    fields = table["fields"]
-    if header != [field["name"] for field in fields]:
-        problems.append(f"header {header} is not the fields in order")
-    for number, row in enumerate(rows, start=2):
-        for field in fields:
-            name, value = field["name"], row.get(field["name"])
-            constraints = field.get("constraints", {})
-            if value is None or (value in table.get("missingValues", [""]) and constraints.get("required")):
-                problems.append(f"line {number} {name}: missing")
-                continue
-            kind = field["type"]
-            try:
-                if kind == "number":
-                    parsed = float(value)
-                elif kind == "integer":
-                    parsed = int(value)
-                elif kind == "boolean":
-                    if value not in field["trueValues"] + field["falseValues"]:
-                        raise ValueError(value)
-                    parsed = value in field["trueValues"]
-                elif kind == "datetime":
-                    parsed = datetime.strptime(value, field["format"])
-                else:
-                    parsed = value
-            except ValueError:
-                problems.append(f"line {number} {name}: {value!r} is not a {kind}")
-                continue
-            if "enum" in constraints and parsed not in constraints["enum"]:
-                problems.append(f"line {number} {name}: {value!r} is not one of {constraints['enum']}")
-            if "pattern" in constraints and not re.fullmatch(constraints["pattern"], value):
-                problems.append(f"line {number} {name}: {value!r} does not match the pattern")
-            if "minimum" in constraints and parsed < constraints["minimum"]:
-                problems.append(f"line {number} {name}: {value} is below the minimum")
-            if "maximum" in constraints and parsed > constraints["maximum"]:
-                problems.append(f"line {number} {name}: {value} is above the maximum")
-    return problems
-
-
 def test_the_csv_meets_its_table_schema(run):
     with open(run.directory / "fixture.csv", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        rows = list(reader)
-        header = reader.fieldnames
+        rows = list(csv.DictReader(handle))
     assert len(rows) == len(ROSTER) * Playback.STEPS
-    assert check_table(rows, header, TelemetrySchemas.csv_table()) == []
+    assert [str(problem) for problem in TableSchemaCheck(TelemetrySchemas.csv_table()).problems(
+        run.directory / "fixture.csv")] == []
     kinds = {row["uid"]: (row["base_type"], row["special_type"]) for row in rows}
     assert kinds["SUMO-TRUTH-traffic.1"] == ("van", "emergency")
     assert kinds["SUMO-TRUTH-freight.0"] == ("truck", "")
 
 
-def test_a_table_checker_that_accepts_anything_would_fail_here():
+def test_a_table_checker_that_accepts_anything_would_fail_here(tmp_path):
     """The control: a row with a malformed time and a marked value of 2 is refused."""
-    table = TelemetrySchemas.csv_table()
     row = {name: "0" for name in CSV_COLUMNS}
     row.update(time_utc="2026-03-21 05:00:00", marked="2", cot_type="a-n-G-E-V", how="m-g",
                special_type="", color="1,2,3")
-    problems = check_table([row], CSV_COLUMNS, table)
-    assert any("time_utc" in problem for problem in problems)
-    assert any("marked" in problem for problem in problems)
+    path = tmp_path / "control.csv"
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerow(row)
+    problems = {problem.column for problem in TableSchemaCheck(TelemetrySchemas.csv_table()).problems(path)}
+    assert problems == {"time_utc", "marked"}
 
 
 def test_the_csv_summary_meets_its_schema(run):
     summary = json.loads((run.directory / "fixture.summary.json").read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(summary, TelemetrySchemas.csv_summary()) == []
+    assert SchemaPublication.problems(summary, TelemetrySchemas.csv_summary()) == []
     assert summary["csv"] == "fixture.csv"
 
 
@@ -341,7 +308,7 @@ def test_an_event_the_schema_does_not_describe_is_refused(events_schema):
 
 def test_the_shipped_legacy_labels_meet_their_schema():
     labels = json.loads(LEGACY_LABELS.read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(labels, TelemetrySchemas.legacy_labels()) == []
+    assert SchemaPublication.problems(labels, TelemetrySchemas.legacy_labels()) == []
 
 
 def test_the_gap_sidecar_written_from_them_meets_its_schema(tmp_path):
@@ -349,7 +316,7 @@ def test_the_gap_sidecar_written_from_them_meets_its_schema(tmp_path):
     sidecar = SupervisionSidecar.from_labels(labels, scenario="Shahid_Bahonar_Port_PatternOfLife",
                                              epoch=EPOCH, labels_path=LEGACY_LABELS)
     written = json.loads(sidecar.write(tmp_path / "run.supervision.json").read_text(encoding="utf-8"))
-    assert JsonSchemaFile.problems(written, TelemetrySchemas.supervision_gaps()) == []
+    assert SchemaPublication.problems(written, TelemetrySchemas.supervision_gaps()) == []
     (gap,) = written["supervision_gaps"]
     assert gap["begin_utc"] == "2026-03-25T12:00:00.000Z"
 
@@ -357,5 +324,103 @@ def test_the_gap_sidecar_written_from_them_meets_its_schema(tmp_path):
 def test_a_gap_sidecar_with_a_malformed_window_is_refused():
     document = {"scenario": "s", "epoch": "2026-03-21T05:00:00.000Z", "source_labels": None,
                 "supervision_gaps": [{"kind": "guard_no_show", "begin_utc": "d4 00:00"}]}
-    problems = JsonSchemaFile.problems(document, TelemetrySchemas.supervision_gaps())
+    problems = SchemaPublication.problems(document, TelemetrySchemas.supervision_gaps())
     assert problems and "begin_utc" in problems[0]
+
+
+# -- carla-validate -----------------------------------------------------------------------------------
+
+def checked(kind: str, count: int, failed: int = 0) -> str:
+    """How carla-validate reports a kind it checked."""
+    return f"{kind:<28s} {count:6d} checked, {failed} failed"
+
+
+def validated(folder: Path, caplog) -> tuple[int, str]:
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        status = validate([str(folder)])
+    return status, caplog.text
+
+
+@pytest.fixture
+def bridge_output(run, tmp_path) -> Path:
+    """A copy of the bridge run's files, to break one at a time."""
+    folder = tmp_path / "bridge"
+    shutil.copytree(run.directory, folder)
+    return folder
+
+
+def test_carla_validate_checks_every_file_the_bridge_wrote(bridge_output, caplog):
+    status, text = validated(bridge_output, caplog)
+    assert status == 0, text
+    for kind in (EVENT_FILES, TABLES, TABLE_SUMMARIES):
+        assert checked(kind, 1) in text, text
+    # The bridge's event file has an <events> root, and is not a truth sidecar.
+    assert "truth sidecars" not in text
+
+
+def test_carla_validate_names_an_event_a_table_row_and_a_summary_that_break_their_schemas(
+        bridge_output, caplog):
+    events = bridge_output / "fixture.xml"
+    events.write_text(events.read_text(encoding="utf-8").replace('how="m-g"', 'how="h-e"', 1),
+                      encoding="utf-8")
+    table = bridge_output / "fixture.csv"
+    lines = table.read_text(encoding="utf-8").split("\n")
+    lines[1] = lines[1].replace(",m-g,", ",h-e,", 1)
+    table.write_text("\n".join(lines), encoding="utf-8", newline="")
+    summary = bridge_output / "fixture.summary.json"
+    document = json.loads(summary.read_text(encoding="utf-8"))
+    document["csv"] = ""
+    summary.write_text(json.dumps(document), encoding="utf-8")
+    status, text = validated(bridge_output, caplog)
+    assert status == 1
+    assert checked(EVENT_FILES, 1, 1) in text and checked(TABLES, 1, 1) in text
+    assert "FAILED: fixture.xml: line " in text and "'h-e'" in text
+    assert "FAILED: fixture.csv: line 2, how: 'h-e' is not one of ['m-g']" in text
+    assert "FAILED: fixture.summary.json: $.csv: must not be empty" in text
+
+
+def test_a_table_whose_summary_declares_a_newer_format_is_named_and_its_rows_left_unchecked(
+        bridge_output, caplog):
+    summary = bridge_output / "fixture.summary.json"
+    document = json.loads(summary.read_text(encoding="utf-8"))
+    summary.write_text(json.dumps({**document, "format_version": 2}), encoding="utf-8")
+    status, text = validated(bridge_output, caplog)
+    assert status == 1
+    assert "FAILED: fixture.csv: fixture.csv declares format_version 2, and this reader supports " \
+           "format_version 1 and earlier" in text
+    assert "line 2" not in text
+
+
+def test_an_event_file_cut_off_by_an_interrupted_run_is_noted_and_does_not_fail(bridge_output, caplog):
+    events = bridge_output / "fixture.xml"
+    events.write_text(events.read_text(encoding="utf-8").replace("</events>\n", ""), encoding="utf-8")
+    status, text = validated(bridge_output, caplog)
+    assert status == 0, text
+    assert checked(EVENT_FILES, 1) in text
+    assert "is cut off before its closing </events>, so its run was interrupted" in text
+
+
+def test_carla_validate_checks_the_legacy_labels_and_gaps_and_leaves_a_plan_to_the_records(
+        tmp_path, caplog):
+    folder = tmp_path / "legacy"
+    folder.mkdir()
+    shutil.copy(LEGACY_LABELS, folder / "Shahid_Bahonar_Port_PatternOfLife.labels.json")
+    labels = json.loads(LEGACY_LABELS.read_text(encoding="utf-8"))
+    SupervisionSidecar.from_labels(labels, scenario="Shahid_Bahonar_Port_PatternOfLife", epoch=EPOCH,
+                                   labels_path=LEGACY_LABELS).write(folder / "run.supervision.json")
+    plan = "Arapahoe_I25_SupervisionCheck.supervision.json"
+    shutil.copy(_REPO / "Import" / plan, folder / plan)
+    status, text = validated(folder, caplog)
+    assert status == 0, text
+    assert checked(LABELS_FILES, 1) in text and checked(GAP_FILES, 1) in text
+    assert checked("supervision plans", 1) in text
+    gaps = folder / "run.supervision.json"
+    document = json.loads(gaps.read_text(encoding="utf-8"))
+    document["supervision_gaps"][0]["begin_utc"] = "d4 00:00"
+    gaps.write_text(json.dumps(document), encoding="utf-8")
+    status, text = validated(folder, caplog)
+    assert status == 1
+    assert "FAILED: run.supervision.json: $.supervision_gaps[0].begin_utc: 'd4 00:00' does not match" \
+        in text
+

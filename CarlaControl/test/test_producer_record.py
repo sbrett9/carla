@@ -26,9 +26,16 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
+from lxml import etree  # noqa: E402
+
 from carlacontrol.FormatVersion import FormatVersion, FormatVersionError  # noqa: E402
 from carlacontrol.ProducerRecord import ProducerRecord  # noqa: E402
 from carlacontrol.version import __version__  # noqa: E402
+
+SIDECAR_SCHEMA = _REPO / "CarlaControl" / "schemas" / "truth_sidecar.xsd"
+# A still's sidecar written before sidecars carried the record of what made them.
+LEGACY_SIDECAR = (Path(__file__).resolve().parent / "fixtures" / "capture_schemas" / "legacy" /
+                  "Check_Overhead_1" / "Check_Overhead_1_2026.10.07_10.34.51.318.xml")
 
 PACKAGE = {"available": True, "release": "0.10.0", "world_interface": "1.0", "build": "package",
            "configuration": "Shipping", "carla_commit": "025443a83eaf1bb82f18795d608fca50eb77a452",
@@ -148,3 +155,17 @@ def test_a_newer_version_is_refused_naming_the_file_its_version_and_what_the_rea
 def test_a_version_that_is_not_one_is_refused(declared):
     with pytest.raises(FormatVersionError, match="a.json declares format_version"):
         FormatVersion.check("a.json", "format_version", declared, 1)
+
+
+@pytest.mark.parametrize("carlanet", [None, "0.10.0+g1a2b3c4d5"])
+def test_the_xml_record_is_one_the_truth_sidecar_s_schema_accepts_with_or_without_carlanet(
+        monkeypatch, carlanet):
+    """The writer and the schema agree: a process that never loaded CarlaNet leaves carlanet out."""
+    monkeypatch.setattr(ProducerRecord, "carlanet_version", staticmethod(lambda: carlanet))
+    record = ProducerRecord.record("carlacontrol.SumoCotBridge", server=PACKAGE, sumo="1.27.0")
+    element = etree.fromstring(ET.tostring(ProducerRecord.xml_element(record)))
+    assert ("carlanet" in element.attrib) == (carlanet is not None)
+    sidecar = etree.parse(str(LEGACY_SIDECAR))
+    sidecar.getroot().insert(0, element)
+    schema = etree.XMLSchema(etree.parse(str(SIDECAR_SCHEMA)))
+    assert schema.validate(sidecar), schema.error_log

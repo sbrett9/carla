@@ -2,13 +2,13 @@
 
 Checked here:
 
-  * every published schema of a world package's JSON entries is the one `WorldPackageSchemas` generates,
-    and each uses only what the reader's validator enforces;
+  * every schema of a world package's JSON entries uses only what the reader's validator enforces
+    (`test_published_schemas` holds each published one equal to what `WorldPackageSchemas` generates);
   * a package the authoring reference set was published into by the real writers -- the place index,
     the solar frame and a resolved area -- matches the schemas;
   * the world packages a world build wrote, under the main checkout's `Build/world-packages`, match
     the schemas, hold the entries `ENTRIES` says they hold and no other, all stored, and their
-    `bareearth.bin` is laid out as `BareEarthGrid.md` says: the header, its size, and the digests the
+    `bareearth.bin` is laid out as `Bare_Earth_Grid.md` says: the header, its size, and the digests the
     manifest records;
   * `WorldPackageReader` refuses an entry that departs from its schema, naming the departure, and still
     reads a manifest that carries only some fields; the SUMO bridge's grid reader refuses a grid that
@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ScenarioWorldFixture import ScenarioWorldFixture  # noqa: E402
 
-from carlacontrol.JsonSchemaFile import JsonSchemaFile  # noqa: E402
+from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 from carlacontrol.SumoCotBridge import BareEarthGrid  # noqa: E402
 from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
 from carlacontrol.WorldPackageSchemas import (  # noqa: E402
@@ -44,8 +44,6 @@ from carlacontrol.WorldPackageSchemas import (  # noqa: E402
 )
 
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
-REGENERATE = ("regenerate with: python -c \"from carlacontrol.WorldPackageSchemas import "
-              "WorldPackageSchemas; WorldPackageSchemas.write('CarlaControl/schemas')\"")
 
 
 
@@ -67,19 +65,11 @@ JSON_ENTRIES = [entry.name for entry in ENTRIES if entry.schema]
 
 
 @pytest.mark.parametrize("name", sorted(WorldPackageSchemas.schemas()))
-def test_the_published_schema_is_the_generated_one(name):
-    published = SCHEMAS / name
-    assert published.is_file(), REGENERATE
-    assert published.read_text(encoding="utf-8") == JsonSchemaFile.text(
-        WorldPackageSchemas.schemas()[name]), REGENERATE
-
-
-@pytest.mark.parametrize("name", sorted(WorldPackageSchemas.schemas()))
 def test_every_schema_says_only_what_the_reader_enforces(name):
     schema = WorldPackageSchemas.schemas()[name]
     assert schema["$id"].startswith("urn:carla-sumo-capture:schema:")
     # The validator refuses to run on a keyword it does not enforce.
-    JsonSchemaFile.problems({}, schema)
+    SchemaPublication.problems({}, schema)
 
 
 def test_every_entry_the_reader_names_is_a_listed_entry():
@@ -107,7 +97,7 @@ def test_a_published_reference_set_matches_its_schemas(published):
         assert {"places.json", "solar.json", "areas.resolved.json", "areas.aoi.geojson"} <= names
         for name in ("places.json", "solar.json", "areas.resolved.json"):
             document = json.loads(package.read(name))
-            assert JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name)) == [], name
+            assert SchemaPublication.problems(document, WorldPackageSchemas.entry_schema(name)) == [], name
         areas = json.loads(package.read("areas.resolved.json"))
     (kerb,) = areas["areas"]
     assert kerb["carla_local"]["type"] == "Circle"
@@ -133,7 +123,7 @@ def test_a_built_package_s_json_entries_match_their_schemas(package):
         for name in JSON_ENTRIES:
             if name in archive.namelist():
                 document = json.loads(archive.read(name))
-                assert JsonSchemaFile.problems(document, WorldPackageSchemas.entry_schema(name)) == [], \
+                assert SchemaPublication.problems(document, WorldPackageSchemas.entry_schema(name)) == [], \
                     name
 
 

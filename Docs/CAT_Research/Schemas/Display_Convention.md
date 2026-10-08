@@ -18,7 +18,7 @@ It is a choice about how one run is displayed. It is not part of the scenario, i
 scenario's digests, and is not checked by the compiler.
 
 A convention names **populations, never single vehicles**. In a compiled scenario a population is a
-vehicle class: the `carla:class_id` parameter of its vehicle types (see [SUMO files](SumoFiles.md)).
+vehicle class: the `carla:class_id` parameter of its vehicle types (see [SUMO files](SUMO_Files.md)).
 In a hand-written route file, whose types name no class, it is the vehicle type's id. A population
 the convention does not name takes the run's default, `carla-cot-telemetry --affiliation`.
 

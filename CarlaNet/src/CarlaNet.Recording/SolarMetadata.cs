@@ -51,26 +51,33 @@ public static class SolarMetadata
             yield return ("carla:solar", ToJson(s));
     }
 
-    /// Compact JSON of the solar state (ASCII, safe for a PNG tEXt value). "{}" when no data.
+    /// <summary>
+    /// Compact JSON of the solar state, every string escaped as JSON requires (<see cref="PngChunkJson"/>).
+    /// "{}" when there is no data.
+    /// </summary>
     public static string ToJson(IReadOnlyList<double> s)
     {
         if (!HasData(s)) return "{}";
         var band = Band(s);
-        return "{"
-            + $"\"format_version\":{FormatVersion.ToString(CultureInfo.InvariantCulture)},"
-            + $"\"solar_time\":{F(s[0])},"
-            + $"\"date\":\"{(int)s[1]:D4}-{(int)s[2]:D2}-{(int)s[3]:D2}\","
-            + $"\"time_zone\":{F(s[4])},"
-            + $"\"lat\":{F(s[5])},\"lon\":{F(s[6])},"
-            + $"\"sun_elevation_deg\":{F(s[7])},\"sun_azimuth_deg\":{F(s[8])},"
-            + $"\"advancing\":{(s[9] != 0.0 ? "true" : "false")},"
-            + $"\"rate\":{F(s[10])}"
-            + (s.Count > 11 ? $",\"sun_corrected_elevation_deg\":{F(s[11])}" : string.Empty)
-            + (band is { } b
-                ? $",\"illumination_band\":\"{IlluminationBands.Name(b.Band)}\""
-                  + $",\"illumination_band_elevation\":\"{SolarElevationKinds.Name(b.AssignedFrom)}\""
-                : string.Empty)
-            + "}";
+        return PngChunkJson.Object(json =>
+        {
+            PngChunkJson.Number(json, "format_version", FormatVersion.ToString(CultureInfo.InvariantCulture));
+            PngChunkJson.Number(json, "solar_time", F(s[0]));
+            json.WriteString("date", $"{(int)s[1]:D4}-{(int)s[2]:D2}-{(int)s[3]:D2}");
+            PngChunkJson.Number(json, "time_zone", F(s[4]));
+            PngChunkJson.Number(json, "lat", F(s[5]));
+            PngChunkJson.Number(json, "lon", F(s[6]));
+            PngChunkJson.Number(json, "sun_elevation_deg", F(s[7]));
+            PngChunkJson.Number(json, "sun_azimuth_deg", F(s[8]));
+            json.WriteBoolean("advancing", s[9] != 0.0);
+            PngChunkJson.Number(json, "rate", F(s[10]));
+            if (s.Count > 11) PngChunkJson.Number(json, "sun_corrected_elevation_deg", F(s[11]));
+            if (band is { } b)
+            {
+                json.WriteString("illumination_band", IlluminationBands.Name(b.Band));
+                json.WriteString("illumination_band_elevation", SolarElevationKinds.Name(b.AssignedFrom));
+            }
+        });
     }
 
     private static string F(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);

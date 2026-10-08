@@ -31,8 +31,8 @@ from pathlib import Path
 from lxml import etree
 
 from carlacontrol.FormatVersion import FormatVersion, FormatVersionError
-from carlacontrol.JsonSchemaFile import JsonSchemaFile
 from carlacontrol.NetworkFingerprint import NetworkFingerprint
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.SumoVehicleTypeWriter import SumoVehicleTypeWriter
 from carlacontrol.VehicleCatalogue import VehicleCatalogue
 from carlacontrol.VehicleCatalogueSchemas import VehicleCatalogueSchemas
@@ -56,7 +56,8 @@ VEHICLE_TYPES_FILE = "vehicles.vtypes.rou.xml"
 BODY_WIDTHS_FILE = "vehicle_body_widths.json"
 VEHICLE_TYPES_SCHEMA = "vehicle_types.xsd"
 
-# The version field each reference-set entry declares; the reader reads exactly the schema's version.
+# The version field each reference-set entry declares. One that declares none is version 1, and one
+# newer than its schema describes is refused, as the reader refuses it.
 REFERENCE_VERSIONS = {"places.json": "place_index_version", "solar.json": "solar_frame_version",
                       "areas.resolved.json": "resolved_version"}
 # How many of one file's schema departures are reported; the rest are counted in the last.
@@ -83,12 +84,14 @@ class WorldFileFailure:
 
 @dataclass
 class WorldFileValidation:
-    """How many files of each kind were checked and failed, and every failure."""
+    """How many files of each kind were checked and failed, every failure, and notes that are not
+    failures: the shape of `CaptureValidation`, so `carla-validate` reports both alike."""
 
     root: Path
     checked: Counter = field(default_factory=Counter)
     failed_files: Counter = field(default_factory=Counter)
     failures: list[WorldFileFailure] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -174,7 +177,7 @@ class WorldFileValidator:
             if manifest is not None and not self._versions(path, documents, result):
                 return
             for name, document in documents.items():
-                self._schema_failures(result, kind, path, name, JsonSchemaFile.problems(
+                self._schema_failures(result, kind, path, name, SchemaPublication.problems(
                     document, WorldPackageSchemas.entry_schema(name)))
             if not isinstance(manifest, dict):
                 return
@@ -200,11 +203,14 @@ class WorldFileValidator:
             document = documents.get(name)
             if not isinstance(document, dict):
                 continue
-            expected = WorldPackageSchemas.entry_schema(name)["properties"][version_field]["const"]
-            if document.get(version_field) != expected:
-                result.fail(WORLD_PACKAGES, path, name,
-                            f"declares {version_field} {document.get(version_field)!r}; this release "
-                            f"reads {expected} only")
+            described = WorldPackageSchemas.entry_schema(name)["properties"][version_field]["const"]
+            try:
+                FormatVersion.check(f"{path} ({name})", version_field, document.get(version_field),
+                                    described)
+            except FormatVersionError as refused:
+                # A newer entry is reported for what it is, and not held to a schema of an older one.
+                result.fail(WORLD_PACKAGES, path, name, str(refused))
+                del documents[name]
         return True
 
     @staticmethod
@@ -287,7 +293,7 @@ class WorldFileValidator:
         except (ValueError, AttributeError) as refused:
             result.fail(kind, path, "", str(refused))
             return
-        problems = JsonSchemaFile.problems(document, VehicleCatalogueSchemas.catalogue())
+        problems = SchemaPublication.problems(document, VehicleCatalogueSchemas.catalogue())
         self._schema_failures(result, kind, path, "", problems)
         if problems:
             return
@@ -303,7 +309,7 @@ class WorldFileValidator:
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as broken:
                 result.fail(kind, widths, "", f"is not readable JSON: {broken}")
             else:
-                self._schema_failures(result, kind, widths, "", JsonSchemaFile.problems(
+                self._schema_failures(result, kind, widths, "", SchemaPublication.problems(
                     table, VehicleCatalogueSchemas.body_widths()))
 
     def _vehicle_type_file(self, path: Path, document: dict, result: WorldFileValidation) -> None:

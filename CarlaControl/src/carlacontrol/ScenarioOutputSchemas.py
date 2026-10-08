@@ -192,7 +192,8 @@ class ScenarioOutputSchemas:
             "assignments": {"type": "array", "items": assignment},
             "outcome": {"enum": ["compiled", "refused"]},
             "specification": _d(_TEXT, "The member's specification, relative to the output "
-                                       "directory."),
+                                       "directory, in forward slashes. An index written before "
+                                       "2026-10-07 on Windows separates them with backslashes."),
             "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
             "epoch_block_sha256": _P.SHA256,
             "illumination": _d({"type": "object"}, "The member's illumination default, from its "

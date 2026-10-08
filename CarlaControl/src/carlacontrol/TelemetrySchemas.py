@@ -23,13 +23,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from carlacontrol.CotDisplayConvention import COT_AFFILIATIONS
-from carlacontrol.JsonSchemaFile import (
-    DRAFT,
-    LOCAL_REFERENCE,
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
+from carlacontrol.SchemaPublication import (
     NON_EMPTY_TEXT,
     NUMBER,
     UTC_MILLISECONDS,
-    JsonSchemaFile,
+    SchemaPublication,
 )
 from carlacontrol.SumoCotBridge import CSV_COLUMNS, CSV_FORMAT_VERSION
 from carlacontrol.SupervisionSidecar import BEGIN_SECONDS, END_SECONDS, LABELS_KEY
@@ -133,7 +132,7 @@ class TelemetrySchemas:
     @classmethod
     def write(cls, directory: str | Path) -> list[Path]:
         """Publish every schema into `directory`."""
-        return [JsonSchemaFile.write(schema, Path(directory) / name)
+        return [SchemaPublication.write(Path(directory) / name, schema)
                 for name, schema in cls.schemas().items()]
 
     # -- the CSV --------------------------------------------------------------------------------
@@ -151,7 +150,7 @@ class TelemetrySchemas:
             fields.append(field)
         return {
             "$schema": TABLE_SCHEMA_PROFILE,
-            "$id": JsonSchemaFile.identifier("sumo_cot_telemetry", CSV_FORMAT_VERSION),
+            "$id": SchemaIdentifier.urn("sumo-cot-telemetry", CSV_FORMAT_VERSION),
             "name": "sumo_cot_telemetry",
             "title": "SUMO bridge CoT telemetry table (carla-cot-telemetry --csv)",
             "description": "One row per vehicle per update of a SUMO run. The first line is the "
@@ -166,8 +165,8 @@ class TelemetrySchemas:
     def csv_summary() -> dict:
         """`<name>.summary.json`, as `SumoCotBridge.write_csv_summary` writes it."""
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("sumo_cot_telemetry_summary", CSV_FORMAT_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("sumo-cot-telemetry-summary", CSV_FORMAT_VERSION),
             "title": "SUMO bridge CSV summary (<name>.summary.json)",
             "description": "Written beside a carla-cot-telemetry --csv file when the CSV is "
                            "opened: the CSV's format version, its file name, its columns, and "
@@ -178,13 +177,13 @@ class TelemetrySchemas:
             "properties": {
                 "format_version": {"const": CSV_FORMAT_VERSION,
                                    "description": "The CSV's format."},
-                "producer": {"$ref": f"{LOCAL_REFERENCE}producer"},
-                "csv": JsonSchemaFile.described(NON_EMPTY_TEXT, "The CSV's file name, without a "
-                                                                "folder."),
+                "producer": SchemaPublication.described(SchemaPublication.producer(),
+                                                        "What made the CSV."),
+                "csv": SchemaPublication.described(NON_EMPTY_TEXT, "The CSV's file name, without a "
+                                                                   "folder."),
                 "columns": {"const": list(CSV_COLUMNS),
                             "description": "The CSV's columns, in order: its header."},
             },
-            "$defs": JsonSchemaFile.producer_definitions(),
         }
 
     # -- the legacy gap sidecar -----------------------------------------------------------------
@@ -198,25 +197,25 @@ class TelemetrySchemas:
             "description": "One described gap: the labels file's note with every key the author "
                            "gave it, and where its window falls on the run's clock.",
             "properties": {
-                "kind": JsonSchemaFile.described(NON_EMPTY_TEXT, "What kind of gap it is, such "
-                                                                 "as guard_no_show."),
-                "note": JsonSchemaFile.described(NON_EMPTY_TEXT, "The author's description."),
-                BEGIN_SECONDS: JsonSchemaFile.described(
+                "kind": SchemaPublication.described(NON_EMPTY_TEXT, "What kind of gap it is, such "
+                                                                    "as guard_no_show."),
+                "note": SchemaPublication.described(NON_EMPTY_TEXT, "The author's description."),
+                BEGIN_SECONDS: SchemaPublication.described(
                     NUMBER, "Where the window begins, seconds of simulation time."),
-                END_SECONDS: JsonSchemaFile.described(
+                END_SECONDS: SchemaPublication.described(
                     NUMBER, "Where the window ends, seconds of simulation time."),
-                "begin_utc": JsonSchemaFile.described(
+                "begin_utc": SchemaPublication.described(
                     instant, f"{BEGIN_SECONDS} placed on the run's clock: epoch + {BEGIN_SECONDS}, "
                              "UTC to the millisecond. Present when the note gives "
                              f"{BEGIN_SECONDS}."),
-                "end_utc": JsonSchemaFile.described(
+                "end_utc": SchemaPublication.described(
                     instant, f"{END_SECONDS} placed on the run's clock. Present when the note "
-                             f"gives {END_SECONDS}."),
+                                f"gives {END_SECONDS}."),
             },
         }
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("supervision_gaps", SUPERVISION_GAPS_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("supervision-gaps", SUPERVISION_GAPS_VERSION),
             "title": "Legacy supervision gaps (<name>.supervision.json beside a SUMO bridge run)",
             "description": "The supervision gaps a legacy scenario's labels file describes -- an "
                            "absence, such as a guard who never arrives, which no vehicle record "
@@ -228,12 +227,12 @@ class TelemetrySchemas:
             "additionalProperties": False,
             "required": ["scenario", "epoch", "source_labels", "supervision_gaps"],
             "properties": {
-                "scenario": JsonSchemaFile.described(NON_EMPTY_TEXT, "The scenario: the .sumocfg "
-                                                                     "file's name without "
-                                                                     "extension."),
-                "epoch": JsonSchemaFile.described(instant, "The UTC instant simulation time 0 was "
-                                                           "stamped with."),
-                "source_labels": JsonSchemaFile.nullable(
+                "scenario": SchemaPublication.described(NON_EMPTY_TEXT, "The scenario: the .sumocfg "
+                                                                        "file's name without "
+                                                                        "extension."),
+                "epoch": SchemaPublication.described(instant, "The UTC instant simulation time 0 was "
+                                                              "stamped with."),
+                "source_labels": SchemaPublication.nullable(
                     NON_EMPTY_TEXT, "The labels file's name, or null when none was named."),
                 "supervision_gaps": {"type": "array", "items": gap,
                                      "description": "Every described gap, in the labels file's "
@@ -248,8 +247,8 @@ class TelemetrySchemas:
         """A legacy scenario's `*.labels.json`, as `carla-cot-telemetry` and
         `carla-check-label-leaks` read it."""
         return {
-            "$schema": DRAFT,
-            "$id": JsonSchemaFile.identifier("legacy_labels", LEGACY_LABELS_VERSION),
+            "$schema": DIALECT,
+            "$id": SchemaIdentifier.urn("legacy-labels", LEGACY_LABELS_VERSION),
             "title": "Legacy scenario labels (*.labels.json)",
             "description": "What a scenario made before compiled scenarios planted: the planted "
                            "vehicles, an affiliation per vehicle type, and the described gaps. "

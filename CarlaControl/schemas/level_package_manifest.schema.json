@@ -6,7 +6,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "formatVersion",
     "world",
     "mapPackage",
     "worldInterfaceMajor",
@@ -23,7 +22,7 @@
   "properties": {
     "formatVersion": {
       "const": 1,
-      "description": "The format of this file."
+      "description": "The format of this file. Both scripts write it; a manifest without it is format 1, and an installer refuses a newer one."
     },
     "world": {
       "type": "string",
@@ -36,14 +35,14 @@
       "description": "The level's Unreal package path, /<world>/Maps/<world>, which loads it."
     },
     "worldInterfaceMajor": {
-      "description": "The Major of the world interface version the world was cooked against. The package installed into must declare the same Major.",
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "description": "The Major of the world interface version the world was cooked against. The package installed into must declare the same Major."
     },
     "worldInterfaceMinor": {
-      "description": "The Minor of that version. The package installed into must declare this Minor or a later one.",
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "description": "The Minor of that version. The package installed into must declare this Minor or a later one."
     },
     "basedOnRelease": {
       "type": "string",
@@ -88,7 +87,7 @@
     "packagedAtUtc": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$",
-      "description": "When the zip was made, ISO 8601 UTC: seven decimals of a second from PackageWorld.ps1, whole seconds from PackageWorld.sh."
+      "description": "When the zip was made, ISO 8601 UTC to the millisecond, as both scripts write it. A manifest written before 2026-10-07 has seven decimals of a second from PackageWorld.ps1, or whole seconds from PackageWorld.sh."
     }
   }
 }

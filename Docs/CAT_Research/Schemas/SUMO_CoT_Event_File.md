@@ -9,8 +9,8 @@ scenario author's names for its vehicle types and flows, and which vehicles it p
 - Schema id: `urn:carla-sumo-capture:schema:sumo-cot-events:1`
 
 The events have the shape of the live feed's events, described in
-[CotTelemetryStream.md](CotTelemetryStream.md); each one, taken alone, is also a valid datagram. The
-same run can also write a CSV, described in [SumoCotTable.md](SumoCotTable.md), and send the live
+[CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md); each one, taken alone, is also a valid datagram. The
+same run can also write a CSV, described in [SUMO_CoT_Table.md](SUMO_CoT_Table.md), and send the live
 feed.
 
 The schema includes `cot_event_body.xsd`, the event's own parts, which the datagram schema includes
@@ -26,7 +26,8 @@ made it, the display convention, then one line per event, and the closing tag wh
 that stops early leaves a file without its closing tag.
 
 `carla-check-label-leaks --xml` reads it, to check that no field tells the planted vehicles from the
-others.
+others. `carla-validate`, given a folder holding it, checks it against this schema, and notes a file
+without its closing tag as a run that stopped early rather than failing it.
 
 ## Structure
 
@@ -51,14 +52,14 @@ others.
 
 ### `<_producer>`
 
-What made the file, as every XML file our tools write records it. Absent from files written before it
-was recorded.
+What made the file, as every XML file our tools write records it: the truth sidecar's `Producer`, of
+which this schema holds a copy. Absent from files written before it was recorded.
 
 | Attribute | Type | Required | Meaning |
 |---|---|---|---|
 | `tool` | string | yes | `carlacontrol.SumoCotBridge`. |
 | `tool_version` | string | no | The carlacontrol release. |
-| `carlanet` | string | no | The CarlaNet release the process loaded, when it loaded one. The truth sidecar's `_producer` always has it; the bridge may run without CarlaNet. |
+| `carlanet` | string | no | The CarlaNet release the process loaded, when it loaded one. The bridge may run without CarlaNet and then leaves it out. A truth sidecar always has it, because CarlaNet writes the sidecar. |
 | `sumo` | string | no | The SUMO release that ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was opened, ISO 8601 UTC to the millisecond. |
 
@@ -79,7 +80,7 @@ vehicle class, from its types' `carla:class_id`, or a hand-written route file's 
 
 ### `<event>`
 
-Each event is a vehicle event as on [CotTelemetryStream.md](CotTelemetryStream.md), with these
+Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md), with these
 differences:
 
 - `uid` is `<uid prefix>-<SUMO id>`; the prefix is `SUMO-TRUTH` unless `--uid-prefix` sets it.
