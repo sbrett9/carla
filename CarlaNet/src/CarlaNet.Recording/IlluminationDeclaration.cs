@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Xml;
 
 namespace CarlaNet.Recording;
@@ -82,22 +81,27 @@ public sealed record IlluminationDeclaration(string Policy, bool EpochHonoured, 
         yield return ("carla:illumination", ToJson());
     }
 
-    /// <summary>Compact JSON of the declaration (ASCII, safe as a PNG tEXt value).</summary>
-    public string ToJson()
+    /// <summary>
+    /// Compact JSON of the declaration, every string escaped as JSON requires (<see cref="PngChunkJson"/>).
+    /// </summary>
+    public string ToJson() => PngChunkJson.Object(json =>
     {
-        var json = new StringBuilder("{");
-        json.Append("\"format_version\":").Append(FormatVersion.ToString(CultureInfo.InvariantCulture));
-        json.Append(",\"policy\":\"").Append(Escape(Policy)).Append('"');
-        json.Append(",\"epoch_honoured\":").Append(EpochHonoured ? "true" : "false");
-        json.Append(",\"audited\":").Append(Audited ? "true" : "false");
+        PngChunkJson.Number(json, "format_version", FormatVersion.ToString(CultureInfo.InvariantCulture));
+        json.WriteString("policy", Policy);
+        json.WriteBoolean("epoch_honoured", EpochHonoured);
+        json.WriteBoolean("audited", Audited);
         foreach ((string name, string value, bool quoted) in Fields())
         {
-            json.Append(",\"").Append(name).Append("\":");
-            json.Append(quoted ? "\"" + Escape(value) + "\"" : value);
+            if (quoted)
+            {
+                json.WriteString(name, value);
+            }
+            else
+            {
+                PngChunkJson.Number(json, name, value);
+            }
         }
-
-        return json.Append('}').ToString();
-    }
+    });
 
     /// <summary>Write the <c>_illumination</c> element of a sidecar.</summary>
     public void WriteElement(XmlWriter writer)
@@ -138,6 +142,4 @@ public sealed record IlluminationDeclaration(string Policy, bool EpochHonoured, 
 
     private static string F(double value, string format) =>
         value.ToString(format, CultureInfo.InvariantCulture);
-
-    private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

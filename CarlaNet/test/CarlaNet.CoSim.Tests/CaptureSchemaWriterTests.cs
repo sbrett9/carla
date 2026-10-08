@@ -118,6 +118,47 @@ public sealed class CaptureSchemaWriterTests : IDisposable
         Assert.NotEmpty(new SchemaCheck(PngChunkSchemas.Schema(keyword)).Problems(json));
     }
 
+    [Fact]
+    public void AStringWithAControlCharacterAQuoteOrABackslashIsWrittenAsValidJsonAndReadsBackAsWritten()
+    {
+        const string awkward = "run \"7\"\tC:\\captures\nline two\u0001\u001f, +05:30, café";
+
+        string capture = new CaptureIdentity(1, 0.05, awkward, awkward, 3).ToJson();
+        string illumination = new IlluminationDeclaration(awkward, true, false)
+        {
+            FreezeAtCivilTime = awkward, EpochCivil = awkward, DeclaredCivil = awkward,
+        }.ToJson();
+        string sensor = SensorMetadata.ToJson(new SensorPose(
+            awkward, awkward, awkward, 39.5971345, -104.8891363, 1818.06, -0.63, 90, -70.346, 0, 90, 0, 1920, 1080,
+            2058.73, 2058.73, 960, 540, 50, 29.395, awkward, awkward, awkward));
+
+        foreach ((string chunk, string[] fields) in new[]
+                 {
+                     (capture, new[] { "run_id", "scenario_id" }),
+                     (illumination, new[] { "policy", "freeze_at_civil_time", "epoch_civil", "declared_civil" }),
+                     (sensor, new[] { "uid", "type", "callsign" }),
+                 })
+        {
+            Assert.DoesNotContain('\n', chunk);
+            Assert.DoesNotContain('\t', chunk);
+            Assert.DoesNotContain('\u0001', chunk);
+            using JsonDocument read = JsonDocument.Parse(chunk);
+            foreach (string field in fields)
+            {
+                Assert.Equal(awkward, read.RootElement.GetProperty(field).GetString());
+            }
+        }
+
+        using JsonDocument intrinsics = JsonDocument.Parse(sensor);
+        Assert.Equal(awkward, intrinsics.RootElement.GetProperty("intrinsics").GetProperty("model").GetString());
+        // The minimum JSON requires is escaped, and nothing more: an offset reads as written.
+        Assert.Contains("+05:30", capture);
+        // Every number keeps the form the chunk gives it.
+        Assert.Contains("\"sim_time_s\":0.05,", capture);
+        Assert.Contains("\"lat\":39.5971345,", sensor);
+        Assert.Contains("\"speed_mps\":0.00,", sensor);
+    }
+
     // ---- the run manifest and the world truth track ------------------------------------------------------------
 
     [RequiresSumoFact]

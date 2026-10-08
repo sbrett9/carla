@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.Recording;
@@ -50,29 +49,21 @@ public sealed record CaptureIdentity(
         yield return ("carla:capture", ToJson());
     }
 
-    /// Compact JSON of the capture identity (ASCII, safe as a PNG tEXt value).
-    public string ToJson()
+    /// <summary>Compact JSON of the capture identity, every string escaped as JSON requires (<see cref="PngChunkJson"/>).</summary>
+    public string ToJson() => PngChunkJson.Object(json =>
     {
-        var sb = new StringBuilder("{");
-        sb.Append("\"format_version\":").Append(FormatVersion.ToString(CultureInfo.InvariantCulture));
-        sb.Append(",\"tick\":").Append(Tick.ToString(CultureInfo.InvariantCulture));
-        sb.Append(",\"sim_time_s\":").Append(F(SimTimeSeconds));
-        Append(sb, "run_id", RunId);
-        Append(sb, "scenario_id", ScenarioId);
-        if (Seed.HasValue)
-            sb.Append(",\"seed\":").Append(Seed.Value.ToString(CultureInfo.InvariantCulture));
+        PngChunkJson.Number(json, "format_version", FormatVersion.ToString(CultureInfo.InvariantCulture));
+        PngChunkJson.Number(json, "tick", Tick.ToString(CultureInfo.InvariantCulture));
+        PngChunkJson.Number(json, "sim_time_s", F(SimTimeSeconds));
+        if (!string.IsNullOrEmpty(RunId)) json.WriteString("run_id", RunId);
+        if (!string.IsNullOrEmpty(ScenarioId)) json.WriteString("scenario_id", ScenarioId);
+        if (Seed.HasValue) json.WriteNumber("seed", Seed.Value);
         if (Producer is not null)
-            sb.Append(",\"producer\":").Append(Producer.ToJson());
-        return sb.Append('}').ToString();
-    }
-
-    private static void Append(StringBuilder sb, string key, string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return;
-        sb.Append(",\"").Append(key).Append("\":\"").Append(Escape(value)).Append('"');
-    }
-
-    private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        {
+            json.WritePropertyName("producer");
+            Producer.WriteJson(json);
+        }
+    });
 
     private static string F(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
 }
