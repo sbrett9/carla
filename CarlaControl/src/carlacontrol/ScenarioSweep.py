@@ -49,6 +49,7 @@ from pathlib import Path
 
 from carlacontrol.CivilTimeResolver import CivilTimeResolver
 from carlacontrol.CompileFindings import CompileFindings
+from carlacontrol.PortablePath import PortablePath
 from carlacontrol.ScenarioCompiler import ScenarioCompiler
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioSchema import ScenarioSchema
@@ -268,12 +269,13 @@ class ScenarioSweep:
         document["scenario_id"] = member_id
         world = document.get("world", {})
         if "package" in world:
-            world["package"] = str((base_path.parent / world["package"]).resolve())
+            world["package"] = PortablePath.relative(base_path.parent / world["package"], directory)
         if "catalogue" in document:
-            document["catalogue"] = str((base_path.parent / document["catalogue"]).resolve())
+            document["catalogue"] = PortablePath.relative(base_path.parent / document["catalogue"],
+                                                          directory)
         vocabulary = document.get("vocabulary", {})
         if "import" in vocabulary:
-            vocabulary["import"] = [str((base_path.parent / p).resolve())
+            vocabulary["import"] = [PortablePath.relative(base_path.parent / p, directory)
                                     for p in vocabulary["import"]]
         spec = directory / f"{member_id}.scenario.json"
         spec.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8", newline="\n")

@@ -77,6 +77,7 @@ from carlacontrol.IlluminationLabelAssociation import (
 )
 from carlacontrol.NetworkFingerprint import NetworkFingerprint
 from carlacontrol.PlaceResolver import PlaceResolver
+from carlacontrol.PortablePath import PortablePath
 from carlacontrol.ResolutionReport import ResolutionReport
 from carlacontrol.RotaExpander import RotaEntry, RotaExpander, RotaSkip
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator
@@ -258,8 +259,7 @@ class ScenarioCompiler:
             "package": package_path.name, "map_name": self.package.map_name,
             "network_fingerprint": carried, "netconvert_version": built_with,
             "origin": list(self.package.origin), "georeference": georeference,
-            "routing_sumo": {"home": str(self.installation.home),
-                             "version": self.installation.version or "",
+            "routing_sumo": {"version": self.installation.version or "",
                              "matched_by": self.installation.source,
                              "release_agreement": self.release_agreement,
                              "verdict": str(self.release_check.Verdict)}})
@@ -270,8 +270,8 @@ class ScenarioCompiler:
                                                              self.allow_sumo_version_mismatch)
         agreement = self.release_check.Agreement
         self.release_agreement = str(agreement)
-        installation = (f"SUMO {self.installation.version or 'of an unreadable release'} at "
-                        f"{self.installation.home} (matched by {self.installation.source})")
+        installation = (f"SUMO {self.installation.version or 'of an unreadable release'} "
+                        f"(matched by {self.installation.source})")
         if agreement == SumoReleaseAgreement.Mismatch:
             self.findings.refuse(6, "world", f"the world was converted by '{built_with}' and the "
                                  f"routes would be routed by {installation}. A different duarouter "
@@ -1263,7 +1263,10 @@ class ScenarioCompiler:
                       for role, digest in digests.items()},
             "world": {"package": self.package.path.name, "map_name": self.package.map_name,
                       "network_fingerprint": self.network_fingerprint,
-                      "netconvert_argv": self.package.netconvert_argv,
+                      "netconvert_argv": PortablePath.argv(
+                          self.package.netconvert_argv, self.out_dir,
+                          [self.installation.home,
+                           *PortablePath.sumo_home_of(manifest.get("NetconvertPath", ""))]),
                       "netconvert_version": self.package.netconvert_version,
                       "opendrive_sha256": manifest.get("OpenDriveSha256", ""),
                       "source_osm_sha256": manifest.get("SourceOsmSha256", ""),
