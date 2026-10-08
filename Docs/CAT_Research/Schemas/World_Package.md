@@ -86,7 +86,8 @@ entry's page says what a reader does with an older or newer version.
 `carlacontrol.WorldFileValidator` checks a whole package: the entries it holds and how they are
 stored, every JSON entry against its schema and version, `bareearth.bin` against its format page and
 the digests in `world.json`, and the network fingerprints and area digest the entries record. Given
-a folder, it checks every package in it.
+a folder, it checks every package in it. `carla-validate <name>.cwp`, or `carla-validate` given a folder
+holding packages, runs it.
 
 ## Example
 

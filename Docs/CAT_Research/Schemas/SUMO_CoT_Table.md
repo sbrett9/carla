@@ -16,7 +16,8 @@ and what made it. The CSV's own first line stays its header, so any CSV reader c
 `SumoCotBridge.CSV_COLUMNS`, so the two cannot drift apart.
 
 `carla-check-label-leaks --csv` reads the CSV, to check that no column tells the planted vehicles
-from the others. Nothing reads the summary yet.
+from the others. `carla-validate`, given a folder holding them, checks the CSV against the table schema
+and the summary against its schema; a CSV with no summary beside it is noted as format version 1.
 
 ## The CSV
 

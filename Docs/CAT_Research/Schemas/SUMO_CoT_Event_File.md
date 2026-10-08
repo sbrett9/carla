@@ -26,7 +26,8 @@ made it, the display convention, then one line per event, and the closing tag wh
 that stops early leaves a file without its closing tag.
 
 `carla-check-label-leaks --xml` reads it, to check that no field tells the planted vehicles from the
-others.
+others. `carla-validate`, given a folder holding it, checks it against this schema, and notes a file
+without its closing tag as a run that stopped early rather than failing it.
 
 ## Structure
 

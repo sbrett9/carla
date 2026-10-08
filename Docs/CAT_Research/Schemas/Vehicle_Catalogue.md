@@ -246,7 +246,7 @@ so a file without it is not a catalogue.
 `carlacontrol.WorldFileValidator`, given the catalogue's folder, checks the whole catalogue against
 its schema and the builder's rules, checks that its digest is its content's, checks
 `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalogue gives, and
-checks `vehicle_body_widths.json` where it is there.
+checks `vehicle_body_widths.json` where it is there. `carla-validate CarlaControl/catalogue` runs it.
 
 ## Example
 

@@ -20,6 +20,7 @@ can be repeated.
     output.
 - `carla-check-label-leaks --labels <file>` reads `marked_ids`, to group the run's records into
   planted and not planted.
+- `carla-validate`, given a folder holding it, checks it against this schema.
 
 ## Fields
 
