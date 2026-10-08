@@ -27,10 +27,9 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
-sys.path.insert(0, str(_REPO / "CarlaControl" / "scripts"))
 
-import sumo_cot_telemetry  # noqa: E402  (a CLI, imported for the routing it performs)
-
+# carla-cot-telemetry, imported for the routing it performs.
+from carlacontrol.commands import cot_telemetry as sumo_cot_telemetry  # noqa: E402
 from carlacontrol.SumoCotBridge import (  # noqa: E402
     AUTHORED_TRUTH_FIELDS,
     CSV_COLUMNS,

@@ -2,19 +2,27 @@
 #
 # MakeDistribution.sh - assemble a self-contained CARLA Linux distribution tarball.
 #
-# Produces  Build/Dist/Carla-<version>-Linux-<config>.tar.gz  containing everything needed to run the
-# digital-twin single-client traffic-manager demo on another Linux machine:
+# Produces  Build/Dist/Carla-<version>-Linux-<config>.tar.gz  containing everything needed to build
+# worlds, author and compile scenarios, drive them from SUMO and capture them on another Linux machine:
 #   CarlaServer/   the cooked CARLA server (the packaged game binary; run with CarlaUnreal.sh)
-#   wheels/        the carlanet + carlacontrol Python wheels (install into a venv)
-#   scripts/       run_SCTMV.py (the demo client; imports carlanet + carlacontrol)
-#   osm/           the example OpenStreetMap maps the demo can build worlds from
-#   tools/sumo/    the SUMO toolchain: netconvert, sumo, duarouter, the shared libraries they load,
-#                  SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
+#   wheels/        the carlanet + carlacontrol Python wheels (install into a venv). carlacontrol
+#                  installs the user tools as carla-* commands: carla-sctmv, carla-build-world,
+#                  carla-compile-scenario, carla-capture, carla-drive and the rest
+#   catalogue/     the measured vehicle catalogue, which a scenario specification names
+#   osm/           the example OpenStreetMap maps worlds can be built from
+#   tools/sumo/    the SUMO toolchain laid out as a SUMO installation: bin/ with netconvert, sumo and
+#                  duarouter, lib/ with the shared libraries they load, SUMO's typemap/xsd data, its
+#                  traci/sumolib modules, and PROJ data
 #   skills/        this repository's own authoring skills, describing how to build scenarios for a
 #                  generated world. The vendored third-party skills are developer aids and stay out
-#   licenses/      the licence text of every third-party component in the bundle
+#   world-tools/   PackageWorld.sh (package a world for this distribution, from a CARLA checkout with
+#                  the editor) and InstallWorld.sh (install a packaged world into it)
+#   licenses/      the license text of every third-party component in the bundle
 #   MANIFEST.md    what is in here, where it came from and under what terms (generated)
-#   setup-venv.sh / run-server.sh / run-sctmv.sh / README.md
+#   setup-venv.sh / carla-env.sh / run-server.sh / README.md
+#
+# carla-env.sh is the environment step: sourced, it activates the venv and names the bundled SUMO
+# toolchain for every command (CARLA_NETCONVERT, SUMO_HOME, PROJ_LIB/PROJ_DATA).
 #
 # Run this AFTER the build + cook have produced the artifacts:
 #   ./Scripts/Linux/BuildCarla.sh                                   # editor + carlanet & carlacontrol wheels
@@ -90,7 +98,7 @@ echo "[dist] using cooked package: $pkg_parent"
 dist="$root/Build/Dist/$pkgname"
 echo "[dist] staging into $dist"
 rm -rf "$dist"
-mkdir -p "$dist"/{CarlaServer,wheels,scripts,osm,tools/sumo/lib,licenses}
+mkdir -p "$dist"/{CarlaServer,wheels,catalogue,osm,tools/sumo/bin,tools/sumo/lib,world-tools,licenses}
 
 # ── Component and licence inventory ──────────────────────────────────────────────────────────
 # The distribution used to ship no LICENSE, no NOTICE and no third-party listing of any kind while
@@ -127,8 +135,11 @@ else
     echo "[dist] WARNING: no VERSION at $version_src; the distribution will not state its build." >&2
 fi
 
-# 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the
-#    run_SCTMV client package). carlacontrol depends on carlanet, so both must be bundled.
+# 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the client
+#    package, which installs the carla-* commands). carlacontrol depends on carlanet, so both must be
+#    bundled. The commands ship inside the carlacontrol wheel, so there are no scripts to copy beside
+#    it: an installed command takes its defaults from the current folder and from the data installed
+#    with the package (carlacontrol.ToolLayout), and its SUMO toolchain from carla-env.sh.
 # A missing wheel is fatal rather than a warning: the distribution cannot install itself without it,
 # and a warning buried in a long cook log is how a broken bundle shipped before.
 copy_newest_wheel() {   # <dist-dir>
@@ -146,15 +157,41 @@ copy_newest_wheel "$root/CarlaNet/python/dist"
 add_manifest_row "carlanet (CARLA .NET client)" "built from this repository, $bundled_wheel" \
                  "MIT (licenses/CARLA-LICENSE.txt)" "wheels/"
 copy_newest_wheel "$root/CarlaControl/dist"
-add_manifest_row "carlacontrol (world building, scenarios, telemetry)" \
+add_manifest_row "carlacontrol (world building, scenarios, capture, telemetry; the carla-* commands)" \
                  "built from this repository, $bundled_wheel" \
                  "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt)" "wheels/"
 
-# 3. Demo client. run_SCTMV.py imports carlanet + carlacontrol (both installed from wheels/ above);
-#    it has no sibling-file imports -- it clips OSM through carlacontrol.OsmClipper from the wheel,
-#    which is why no clipper script is copied beside it -- and reads its netconvert, PROJ and SUMO
-#    paths from the environment run-sctmv.sh sets.
-cp "$root/CarlaControl/scripts/run_SCTMV.py" "$dist/scripts/"
+# 3. The measured vehicle catalogue, as a file a scenario specification can name in its "catalogue"
+#    field. The commands read the copy installed with the carlacontrol wheel; an author needs one on
+#    disk, and the authoring skill's examples name ../../../../catalogue/vehicles.catalogue.json,
+#    which from skills/<skill>/examples/<example>/ is this folder.
+catalogue_files="vehicles.catalogue.json vehicles.vtypes.rou.xml"
+for name in $catalogue_files; do
+    if [ ! -f "$root/CarlaControl/catalogue/$name" ]; then
+        echo "[dist] ERROR: the vehicle catalogue file $root/CarlaControl/catalogue/$name is missing; a distribution without it cannot compile a scenario." >&2
+        exit 1
+    fi
+    cp "$root/CarlaControl/catalogue/$name" "$dist/catalogue/"
+done
+add_manifest_row "measured vehicle catalogue" \
+                 "built from this repository, CarlaControl/catalogue/ ($catalogue_files)" \
+                 "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt)" "catalogue/"
+
+# 3a. The world tools. InstallWorld.sh installs a world packaged for this distribution, and finds the
+#     distribution from world-tools/ by itself. PackageWorld.sh cooks such a world; it needs the
+#     editor and a CARLA checkout at this distribution's commit (--carla-root), and records this
+#     distribution's release in that checkout (--distribution) so the world cooks against it.
+for tool in PackageWorld.sh InstallWorld.sh; do
+    if [ ! -f "$root/Scripts/Linux/$tool" ]; then
+        echo "[dist] ERROR: world tool not found at $root/Scripts/Linux/$tool" >&2
+        exit 1
+    fi
+    cp "$root/Scripts/Linux/$tool" "$dist/world-tools/"
+    chmod +x "$dist/world-tools/$tool"
+done
+add_manifest_row "world tools (PackageWorld.sh, InstallWorld.sh)" \
+                 "built from this repository, Scripts/Linux/" \
+                 "MIT (licenses/CARLA-LICENSE.txt)" "world-tools/"
 
 # 3b. The authoring skills: the reference bundles that describe how to build scenarios against a
 #     world this distribution generates. They travel with the tools so the description and the tool
@@ -197,9 +234,13 @@ fi
 # 5. The SUMO toolchain: the binaries, the shared libraries they actually load, the named data/ and
 #    tools/ subsets, and PROJ data. CarlaNet talks to `sumo` over the TraCI wire protocol from managed
 #    code that ships in the carlanet wheel, so there is nothing native to bundle for it.
+#    tools/sumo is laid out as a SUMO installation -- each binary's launcher in bin/ -- because that is
+#    what SUMO_HOME names: carlacontrol.SumoInstallation and the drive's CarlaNet.Sumo.SumoInstallation
+#    both look for <SUMO_HOME>/bin/sumo, and refuse a folder with the binaries at its top.
 sumo_install="$root/Build/sumo-install"
 sumo_bin="$sumo_install/bin"
 sumo_dest="$dist/tools/sumo"
+sumo_bin_dest="$sumo_dest/bin"
 sumo_executables="netconvert sumo duarouter"
 # sumo-gui is staged beside these by CarlaSetup and deliberately not bundled: whether a distribution
 # carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md section 5.4).
@@ -222,17 +263,19 @@ bundle_libraries_of() {   # <binary>
 if [ -x "$sumo_bin/netconvert" ]; then
     for b in $sumo_executables; do
         if [ -x "$sumo_bin/$b" ]; then
-            cp "$sumo_bin/$b" "$sumo_dest/$b.bin"
+            cp "$sumo_bin/$b" "$sumo_bin_dest/$b.bin"
             bundle_libraries_of "$sumo_bin/$b"
-            # Self-contained launcher (points PROJ + the bundled libraries at the bundle).
-            cat > "$sumo_dest/$b" <<NETC
+            # Self-contained launcher in bin/ (points PROJ + the bundled libraries, one folder up, at
+            # the bundle).
+            cat > "$sumo_bin_dest/$b" <<NETC
 #!/usr/bin/env bash
 here="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-export LD_LIBRARY_PATH="\$here/lib:\${LD_LIBRARY_PATH:-}"
-[ -f "\$here/proj/proj.db" ] && export PROJ_LIB="\$here/proj" PROJ_DATA="\$here/proj"
+sumo_home="\$(dirname "\$here")"
+export LD_LIBRARY_PATH="\$sumo_home/lib:\${LD_LIBRARY_PATH:-}"
+[ -f "\$sumo_home/proj/proj.db" ] && export PROJ_LIB="\$sumo_home/proj" PROJ_DATA="\$sumo_home/proj"
 exec "\$here/$b.bin" "\$@"
 NETC
-            chmod +x "$sumo_dest/$b"
+            chmod +x "$sumo_bin_dest/$b"
         else
             echo "[dist] WARNING: $b is missing from $sumo_bin (run CarlaSetup.sh to build the whole toolchain)"
         fi
@@ -267,8 +310,8 @@ NETC
     # Run each staged binary through its own launcher. The one way the bundled library set can be
     # wrong is by being short, and this is what would say so.
     for b in $sumo_executables; do
-        [ -x "$sumo_dest/$b" ] || continue
-        if ! reported="$("$sumo_dest/$b" --version 2>&1 | head -1)"; then
+        [ -x "$sumo_bin_dest/$b" ] || continue
+        if ! reported="$("$sumo_bin_dest/$b" --version 2>&1 | head -1)"; then
             echo "[dist] ERROR: $b does not run from the staged bundle: $reported" >&2
             echo "       The bundled shared-library set is incomplete." >&2
             exit 1
@@ -308,7 +351,7 @@ A generated road network is a Derivative Database under that licence. Anything p
 must carry the attribution above.
 ODBL
 
-if [ -x "$sumo_dest/netconvert" ]; then
+if [ -x "$sumo_bin_dest/netconvert" ]; then
     # SUMO itself: Eclipse Public License 2.0, which carries a source offer. The offer cites the
     # commit CarlaSetup.sh pins rather than repeating it, so the two cannot drift apart.
     sumo_pin="$(sed -n 's/.*checkout \([0-9a-f]\{40\}\).*/\1/p' "$root/CarlaSetup.sh" | head -1)"
@@ -372,7 +415,8 @@ fi
 # 7. Helper scripts + README for the target machine.
 cat > "$dist/setup-venv.sh" <<'VENV'
 #!/usr/bin/env bash
-# Create a Python venv and install the carlanet + carlacontrol wheels + the demo's Python deps.
+# Create a Python venv and install the carlanet + carlacontrol wheels into it. carlacontrol brings
+# its own dependencies (numpy, lxml, pygame-ce) and installs the carla-* commands into venv/bin/.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -m venv "$here/venv"
@@ -380,54 +424,109 @@ python3 -m venv "$here/venv"
 pip install --upgrade pip
 # Both wheels are passed together (and --find-links points at wheels/) so carlacontrol's dependency
 # on the local-only carlanet wheel resolves from the bundle rather than a package index.
-pip install --find-links "$here/wheels" "$here"/wheels/*.whl numpy pygame
-echo "venv ready: source $here/venv/bin/activate"
+pip install --find-links "$here/wheels" "$here"/wheels/*.whl
+echo "venv ready: $here/venv. In each new shell, run  . $here/carla-env.sh"
 VENV
 chmod +x "$dist/setup-venv.sh"
 
+cat > "$dist/carla-env.sh" <<'CARLAENV'
+# The environment step for the carla-* commands. Source it in each new bash shell:
+#     . ./carla-env.sh
+# It activates the venv setup-venv.sh made, which puts the commands on PATH, and names this
+# distribution's SUMO toolchain for every command: CARLA_NETCONVERT, the converter a world is built
+# with; SUMO_HOME, the installation scenarios are compiled and driven with; PROJ_LIB and PROJ_DATA, the
+# coordinate database netconvert geo-references with. Each is set outright, so the bundled toolchain
+# is the one in use whatever the shell had set before.
+#
+# No sumo-gui is bundled. To watch a drive in one (carla-drive --sumo-gui), name a SUMO installation of
+# your own that has it, of the release that converted the world: pass --sumo-home <folder> to
+# carla-drive, or set CARLANET_SUMO_HOME, which the drive prefers to SUMO_HOME.
+carla_env_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$carla_env_here/venv/bin/activate" ]; then
+    echo "venv missing - run $carla_env_here/setup-venv.sh first." >&2
+    return 1 2>/dev/null || exit 1
+fi
+. "$carla_env_here/venv/bin/activate"
+export SUMO_HOME="$carla_env_here/tools/sumo"
+export CARLA_NETCONVERT="$SUMO_HOME/bin/netconvert"
+if [ -f "$SUMO_HOME/proj/proj.db" ]; then
+    export PROJ_LIB="$SUMO_HOME/proj" PROJ_DATA="$SUMO_HOME/proj"
+fi
+echo "carla-* commands ready; SUMO from $SUMO_HOME"
+unset carla_env_here
+CARLAENV
+
 cat > "$dist/run-server.sh" <<'SRV'
 #!/usr/bin/env bash
-# Launch the CARLA server (headless rendering still needs a GPU + Vulkan on this machine).
+# Launch the CARLA server (headless rendering still needs a GPU + Vulkan on this machine). A first
+# argument that is not an option is the map to start in -- a world installed with
+# world-tools/InstallWorld.sh, for example: ./run-server.sh /Arapahoe_I25/Maps/Arapahoe_I25
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$here/CarlaServer/CarlaUnreal.sh" -RenderOffScreen -nosound "$@"
+map=()
+if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+    map=("$1")
+    shift
+fi
+exec "$here/CarlaServer/CarlaUnreal.sh" "${map[@]+"${map[@]}"}" -RenderOffScreen -nosound "$@"
 SRV
 chmod +x "$dist/run-server.sh"
-
-cat > "$dist/run-sctmv.sh" <<'RUN'
-#!/usr/bin/env bash
-# Run the single-client traffic-manager / EO demo against a running server.
-set -euo pipefail
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$here/venv/bin/activate"
-export CARLA_NETCONVERT="$here/tools/sumo/netconvert"
-export SUMO_HOME="$here/tools/sumo"
-[ -f "$here/tools/sumo/proj/proj.db" ] && export PROJ_LIB="$here/tools/sumo/proj" PROJ_DATA="$here/tools/sumo/proj"
-exec python "$here/scripts/run_SCTMV.py" "$@"
-RUN
-chmod +x "$dist/run-sctmv.sh"
 
 cat > "$dist/README.md" <<README
 # CARLA ${pkgname#Carla-} distribution
 
-Self-contained CARLA digital-twin bundle: the cooked server, the carlanet + carlacontrol Python
-client packages, the run_SCTMV demo, example OSM maps, and SUMO netconvert.
+Self-contained CARLA digital-twin bundle: the cooked server, the carlanet and carlacontrol Python
+packages with the \`carla-*\` commands, the SUMO toolchain, example OSM maps, the measured vehicle
+catalogue, the scenario-authoring skills and the world tools.
 
-## Target prerequisites
+## What ships
+- \`CarlaServer/\` - the cooked server; \`run-server.sh\` starts it headless.
+- \`wheels/\` - carlanet and carlacontrol; \`setup-venv.sh\` installs both, and the commands, into \`venv/\`.
+- \`carla-env.sh\` - the environment step (below).
+- \`tools/sumo/\` - SUMO ${sumo_version} (netconvert, sumo, duarouter; no sumo-gui), its libraries and PROJ data.
+- \`osm/\` example OpenStreetMap extracts; \`catalogue/\` the measured vehicle catalogue a scenario names.
+- \`skills/\` - how to author scenarios; \`world-tools/\` - PackageWorld.sh and InstallWorld.sh.
+- \`VERSION\`, \`MANIFEST.md\` and \`licenses/\` - what this is, and under what terms.
+
+## Prerequisites
 - 64-bit Linux compatible with the build host (RHEL 8 / glibc 2.28 or newer).
 - A GPU with **Vulkan** drivers (the server renders even when headless).
-- **Python 3.11** (for the venv).
-- The **.NET 10 runtime** (carlanet runs .NET assemblies). Install e.g. \`dnf install dotnet-runtime-10.0\`.
-- netconvert's xerces/PROJ libraries are bundled; only core system libraries are expected on the host.
+- **Python 3.11 or newer**, for the venv.
+- The **.NET 10 runtime** (carlanet runs .NET assemblies), e.g. \`dnf install dotnet-runtime-10.0\`.
+- To build a world: \`CESIUM_ION_TOKEN\` set to a Cesium ion access token.
 
 ## Run it
 \`\`\`sh
-./setup-venv.sh                      # one-time: venv + carlanet & carlacontrol wheels + numpy + pygame
-./run-server.sh &                    # start the CARLA server (needs GPU/Vulkan)
-./run-sctmv.sh --osm osm/Lakeview_Carson.osm   # build a world from an OSM map and run the demo
+./setup-venv.sh                                  # once: venv/ with both wheels and the commands
+./run-server.sh &                                # start the server (needs GPU/Vulkan)
+. ./carla-env.sh                                 # in each new shell: the environment step
+carla-build-world --osm osm/Lakeview_Carson.osm  # build a world; its package goes to world-packages/
+carla-sctmv --osm osm/Lakeview_Carson.osm        # or build one and fly, drive and record in it
 \`\`\`
-\`run-sctmv.sh\` points carlanet at the bundled \`tools/sumo/netconvert\` and sets \`SUMO_HOME\` to
-\`tools/sumo\`; pass \`--help\` to run-sctmv for options.
+
+**The environment step.** \`carla-env.sh\` activates \`venv/\` and points every command at the bundled
+toolchain: \`CARLA_NETCONVERT\`, \`SUMO_HOME\`, and \`PROJ_LIB\`/\`PROJ_DATA\`. To watch a drive in
+sumo-gui, which is not bundled, give \`carla-drive --sumo-gui\` a SUMO ${sumo_version} installation of your
+own: \`--sumo-home <folder>\`, or set \`CARLANET_SUMO_HOME\` to it.
+
+## The commands
+Each takes \`--help\`. A command reads and writes under the current folder (\`world-packages/\`,
+\`captures/\`, \`runs/\`, \`scenarios/\`) unless told otherwise.
+- \`carla-sctmv\` - build a world, then fly, drive and record in it.
+- \`carla-build-world\` - build a world and write its world package.
+- \`carla-compile-scenario\` - compile a scenario against its world package.
+- \`carla-drive\` - drive a world's vehicles from SUMO, and record.
+- \`carla-capture\` - capture a window of a compiled scenario.
+- \`carla-free-camera\`, \`carla-camera-follower\` - watch a running world through a camera of your own.
+- \`carla-cot-telemetry\` - Cursor-on-Target from a SUMO scenario.
+- \`carla-audit-sidecars\`, \`carla-diff-manifests\`, \`carla-check-label-leaks\` - check what a run wrote.
+- \`carla-publish-reference-set\` - refresh a world package's areas of interest and place index.
+- \`carla-check-sumo\` - say which SUMO the commands resolve, and check it is complete.
+
+## Worlds made elsewhere
+\`world-tools/InstallWorld.sh --package <world.zip>\` installs a packaged world into this
+distribution. \`world-tools/PackageWorld.sh\` makes such a package; it needs the editor and a CARLA
+checkout at this distribution's commit: \`--carla-root <checkout> --distribution .\`
 
 ## What is in here, and under what terms
 \`MANIFEST.md\` lists every component this bundle carries, where it came from and its licence, with

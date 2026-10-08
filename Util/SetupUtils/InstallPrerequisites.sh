@@ -83,6 +83,27 @@ if [ "$python_path" == "python3" ]; then
         python3 \
         python3-dev \
         python3-pip
+    # The Python the build runs has to satisfy every Python requirement of the build: carlacontrol
+    # needs 3.11 or newer, and requirements.txt pins numpy below 2.0 (the legacy Boost.Python module
+    # needs it), whose last release publishes wheels up to Python 3.12. Ubuntu 24.04's python3 is
+    # 3.12; Ubuntu 22.04's is 3.10, so where the system python3 is older than 3.11, Ubuntu's
+    # python3.11 is installed beside it and used instead.
+    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+        if apt-cache show python3.11 >/dev/null 2>&1; then
+            echo "python3 is $(python3 --version 2>&1 | cut -d' ' -f2); installing python3.11 for the build..."
+            sudo apt-get -y install python3.11 python3.11-dev python3.11-venv
+            if python3.11 -m pip --version >/dev/null 2>&1; then
+                python_path=python3.11
+            else
+                echo "WARNING: python3.11 is installed but has no pip, so the packages below go to python3." >&2
+                echo "         Give python3.11 a pip and name it (--python-path here, --python-root to CarlaSetup.sh)." >&2
+            fi
+        else
+            echo "WARNING: python3 is $(python3 --version 2>&1 | cut -d' ' -f2) and this system offers no python3.11 package." >&2
+            echo "         carlacontrol needs Python 3.11 or 3.12: install one and name it (--python-path here," >&2
+            echo "         --python-root to CarlaSetup.sh)." >&2
+        fi
+    fi
 fi
 
 # -- CONFIGURE GIT LFS --

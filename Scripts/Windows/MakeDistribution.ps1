@@ -6,19 +6,28 @@
 .DESCRIPTION
     Windows peer of Scripts\Linux\MakeDistribution.sh. Produces
     Build\Dist\Carla-<version>-Win64-<config>\  (and a matching .zip) containing everything
-    needed to run the digital-twin single-client traffic-manager demo on another Windows machine:
+    needed to build worlds, author and compile scenarios, drive them from SUMO and capture them on
+    another Windows machine:
 
       CarlaServer\   the cooked CARLA server (the packaged game; run with CarlaUnreal.exe)
-      wheels\        the carlanet + carlacontrol Python wheels (install into a venv)
-      scripts\       run_SCTMV.py (the demo client; imports carlanet + carlacontrol)
-      osm\           the example OpenStreetMap maps the demo can build worlds from
-      tools\sumo\    the SUMO toolchain: netconvert, sumo, duarouter, the DLLs they import,
-                     SUMO's typemap/xsd data, its traci/sumolib modules, and PROJ data
+      wheels\        the carlanet + carlacontrol Python wheels (install into a venv). carlacontrol
+                     installs the user tools as carla-* commands: carla-sctmv, carla-build-world,
+                     carla-compile-scenario, carla-capture, carla-drive and the rest
+      catalogue\     the measured vehicle catalogue, which a scenario specification names
+      osm\           the example OpenStreetMap maps worlds can be built from
+      tools\sumo\    the SUMO toolchain laid out as a SUMO installation: bin\ with netconvert, sumo,
+                     duarouter and the DLLs they import, SUMO's typemap/xsd data, its traci/sumolib
+                     modules, and PROJ data
       skills\        this repository's own authoring skills, describing how to build scenarios for a
                      generated world. The vendored third-party skills are developer aids and stay out
-      licenses\      the licence text of every third-party component in the bundle
+      world-tools\   PackageWorld.ps1 (package a world for this distribution, from a CARLA checkout
+                     with the editor) and InstallWorld.ps1 (install a packaged world into it)
+      licenses\      the license text of every third-party component in the bundle
       MANIFEST.md    what is in here, where it came from and under what terms (generated)
-      setup-venv.ps1 / run-server.ps1 / run-sctmv.ps1 / README.md
+      setup-venv.ps1 / carla-env.ps1 / run-server.ps1 / README.md
+
+    carla-env.ps1 is the environment step: dot-sourced, it activates the venv and names the bundled
+    SUMO toolchain for every command (CARLA_NETCONVERT, SUMO_HOME, PROJ_LIB/PROJ_DATA).
 
     Run AFTER the build + cook have produced the artifacts:
       .\Scripts\Windows\BuildCarla.ps1                              # editor + carlanet wheel
@@ -279,7 +288,7 @@ Write-Info "[dist] using cooked package: $pkgServer"
 $dist = Join-Path $BuildDir "Dist\$pkgName"
 Write-Info "[dist] staging into $dist"
 if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
-foreach ($d in 'CarlaServer', 'wheels', 'scripts', 'osm', 'tools\sumo', 'licenses') {
+foreach ($d in 'CarlaServer', 'wheels', 'catalogue', 'osm', 'tools\sumo\bin', 'world-tools', 'licenses') {
     New-Item -ItemType Directory -Force -Path (Join-Path $dist $d) | Out-Null
 }
 
@@ -325,8 +334,11 @@ if (Test-Path $versionSrc) {
     Write-Fail "[dist] WARNING: no VERSION at $versionSrc; the distribution will not state its build."
 }
 
-# 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the
-#    run_SCTMV client package). carlacontrol depends on carlanet, so both must be bundled.
+# 2. Python client wheels (newest of each): carlanet (the .NET bridge) and carlacontrol (the client
+#    package, which installs the carla-* commands). carlacontrol depends on carlanet, so both must be
+#    bundled. The commands ship inside the carlacontrol wheel, so there are no scripts to copy beside
+#    it: an installed command takes its defaults from the current folder and from the data installed
+#    with the package (carlacontrol.ToolLayout), and its SUMO toolchain from carla-env.ps1.
 #    A missing wheel is fatal rather than a warning: the distribution cannot install itself without
 #    it, and a warning buried in a long cook log is how a broken bundle shipped before.
 function Copy-NewestWheel {
@@ -344,17 +356,36 @@ $carlanetWheel     = Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaNet\python\dis
 $carlacontrolWheel = Copy-NewestWheel (Join-Path $CarlaRoot 'CarlaControl\dist')
 Add-ManifestRow -Component 'carlanet (CARLA .NET client)' -Provenance "built from this repository, $carlanetWheel" `
                 -License 'MIT (licenses\CARLA-LICENSE.txt)' -Location 'wheels\'
-Add-ManifestRow -Component 'carlacontrol (world building, scenarios, telemetry)' `
+Add-ManifestRow -Component 'carlacontrol (world building, scenarios, capture, telemetry; the carla-* commands)' `
                 -Provenance "built from this repository, $carlacontrolWheel" `
                 -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'wheels\'
 
-# 3. Demo client. run_SCTMV.py imports carlanet + carlacontrol (both installed from wheels\ above);
-#    it has no sibling-file imports -- it clips OSM through carlacontrol.OsmClipper from the wheel,
-#    which is why no clipper script is copied beside it -- and reads its netconvert, PROJ and SUMO
-#    paths from the environment run-sctmv.ps1 sets.
-$demoClient = Join-Path $CarlaRoot 'CarlaControl\scripts\run_SCTMV.py'
-if (-not (Test-Path $demoClient)) { throw "demo client not found at $demoClient" }
-Copy-Item -Force $demoClient (Join-Path $dist 'scripts')
+# 3. The measured vehicle catalogue, as a file a scenario specification can name in its "catalogue"
+#    field. The commands read the copy installed with the carlacontrol wheel; an author needs one on
+#    disk, and the authoring skill's examples name ..\..\..\..\catalogue\vehicles.catalogue.json,
+#    which from skills\<skill>\examples\<example>\ is this folder.
+$catalogueFiles = @('vehicles.catalogue.json', 'vehicles.vtypes.rou.xml')
+foreach ($name in $catalogueFiles) {
+    $src = Join-Path $CarlaRoot "CarlaControl\catalogue\$name"
+    if (-not (Test-Path $src)) { throw "the vehicle catalogue file $src is missing; a distribution without it cannot compile a scenario." }
+    Copy-Item -Force $src (Join-Path $dist 'catalogue')
+}
+Add-ManifestRow -Component 'measured vehicle catalogue' `
+                -Provenance "built from this repository, CarlaControl\catalogue\ ($($catalogueFiles -join ', '))" `
+                -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'catalogue\'
+
+# 3a. The world tools. InstallWorld.ps1 installs a world packaged for this distribution, and finds the
+#     distribution from world-tools\ by itself. PackageWorld.ps1 cooks such a world; it needs the
+#     editor and a CARLA checkout at this distribution's commit (-CarlaRoot), and records this
+#     distribution's release in that checkout (-Distribution) so the world cooks against it.
+foreach ($tool in 'PackageWorld.ps1', 'InstallWorld.ps1') {
+    $src = Join-Path $PSScriptRoot $tool
+    if (-not (Test-Path $src)) { throw "world tool not found at $src" }
+    Copy-Item -Force $src (Join-Path $dist 'world-tools')
+}
+Add-ManifestRow -Component 'world tools (PackageWorld.ps1, InstallWorld.ps1)' `
+                -Provenance 'built from this repository, Scripts\Windows\' `
+                -License 'MIT (licenses\CARLA-LICENSE.txt)' -Location 'world-tools\'
 
 # 3b. The authoring skills: the reference bundles that describe how to build scenarios against a
 #     world this distribution generates. They travel with the tools so the description and the tool
@@ -394,9 +425,14 @@ if ($osm.Count -gt 0) {
 # 5. The SUMO toolchain: the binaries, the runtime DLLs they actually import, the named data/ and
 #    tools/ subsets, and PROJ's data. CarlaNet talks to `sumo` over the TraCI wire protocol from
 #    managed code that ships in the carlanet wheel, so there is nothing native to bundle for it.
+#    tools\sumo is laid out as a SUMO installation -- the binaries and their DLLs in bin\ -- because
+#    that is what SUMO_HOME names: carlacontrol.SumoInstallation and the drive's
+#    CarlaNet.Sumo.SumoInstallation both look for <SUMO_HOME>\bin\sumo.exe, and refuse a folder with
+#    the binaries at its top.
 $sumoInstall = Join-Path $BuildDir 'sumo-install'
 $sumoBin     = Join-Path $sumoInstall 'bin'
 $sumoDest    = Join-Path $dist 'tools\sumo'
+$sumoBinDest = Join-Path $sumoDest 'bin'
 $sumoExecutables = @('netconvert.exe', 'sumo.exe', 'duarouter.exe')
 # sumo-gui.exe is staged beside these by CarlaSetup and deliberately not bundled: whether a
 # distribution carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md
@@ -407,7 +443,7 @@ $nc = Join-Path $sumoBin 'netconvert.exe'
 if (Test-Path $nc) {
     foreach ($binary in $sumoExecutables) {
         $src = Join-Path $sumoBin $binary
-        if (Test-Path $src) { Copy-Item -Force $src $sumoDest }
+        if (Test-Path $src) { Copy-Item -Force $src $sumoBinDest }
         else { Write-Warning "$binary is missing from $sumoBin (run CarlaSetup.ps1 to build the whole toolchain)" }
     }
 
@@ -433,7 +469,7 @@ if (Test-Path $nc) {
         }
     }
     foreach ($library in ($needed | Sort-Object)) {
-        Copy-Item -Force (Join-Path $sumoBin $library) $sumoDest
+        Copy-Item -Force (Join-Path $sumoBin $library) $sumoBinDest
         $sumoNativeStaged += $library
     }
     Write-Info "[dist] bundled $($sumoNativeStaged.Count) runtime DLLs the SUMO binaries import (of $(@(Get-ChildItem "$sumoBin\*.dll").Count) present)"
@@ -465,7 +501,7 @@ if (Test-Path $nc) {
     # folder first, so this is a direct check that the explicit DLL list above is sufficient -- the
     # one way the list can be wrong is by being short, and this is what would say so.
     foreach ($binary in $sumoExecutables) {
-        $staged = Join-Path $sumoDest $binary
+        $staged = Join-Path $sumoBinDest $binary
         if (-not (Test-Path $staged)) { continue }
         # Collect the whole output before reading the exit code: stopping the pipeline early (with
         # Select-Object -First) can end it before the native command's status is recorded, which
@@ -512,7 +548,7 @@ A generated road network is a Derivative Database under that licence. Anything p
 must carry the attribution above.
 '@ | Set-Content -Path (Join-Path $licenseDir 'OpenStreetMap-ODbL-NOTICE.txt') -Encoding UTF8
 
-if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoDest 'netconvert.exe'))) {
+if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoBinDest 'netconvert.exe'))) {
     # SUMO itself: Eclipse Public License 2.0, which carries a source offer. The offer cites the
     # commit CarlaSetup.ps1 pins rather than repeating it, so the two cannot drift apart.
     $sumoPin = 'unrecorded'
@@ -569,7 +605,7 @@ if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoDest 'netconver
         if (-not $entry) {
             Write-Fail "[dist] WARNING: $library has no licence row; MANIFEST.md will list it as unattributed."
             Add-ManifestRow -Component "$library (UNATTRIBUTED - add it to the licence table)" `
-                            -Provenance 'DLR-TS/SUMOLibraries bundle' -License 'unknown' -Location 'tools\sumo\'
+                            -Provenance 'DLR-TS/SUMOLibraries bundle' -License 'unknown' -Location 'tools\sumo\bin\'
             continue
         }
         $filed = 'text not carried'
@@ -587,7 +623,7 @@ if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoDest 'netconver
     foreach ($component in ($attributed.Keys | Sort-Object)) {
         $row = $attributed[$component]
         Add-ManifestRow -Component $component -Provenance "DLR-TS/SUMOLibraries $($row.Files -join ', ')" `
-                        -License "$($row.License) ($($row.Filed))" -Location 'tools\sumo\'
+                        -License "$($row.License) ($($row.Filed))" -Location 'tools\sumo\bin\'
     }
 
     if (Test-Path (Join-Path $sumoDest 'proj')) {
@@ -599,7 +635,8 @@ if ($sumoNativeStaged.Count -gt 0 -or (Test-Path (Join-Path $sumoDest 'netconver
 # 7. Helper scripts + README for the target machine.
 $setupVenv = @'
 #Requires -Version 5.1
-# Create a Python venv and install the carlanet + carlacontrol wheels + the demo's Python deps.
+# Create a Python venv and install the carlanet + carlacontrol wheels into it. carlacontrol brings
+# its own dependencies (numpy, lxml, pygame-ce) and installs the carla-* commands into venv\Scripts\.
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 python -m venv "$here\venv"
@@ -609,56 +646,109 @@ $py = Join-Path $here 'venv\Scripts\python.exe'
 # on the local-only carlanet wheel resolves from the bundle rather than from a package index.
 $wheels = @(Get-ChildItem "$here\wheels\*.whl" | ForEach-Object { $_.FullName })
 if ($wheels.Count -eq 0) { throw "no wheels under $here\wheels; this distribution is incomplete." }
-& $py -m pip install --find-links "$here\wheels" @wheels numpy pygame
-Write-Host "venv ready: $here\venv  (activate: $here\venv\Scripts\Activate.ps1)" -ForegroundColor Green
+& $py -m pip install --find-links "$here\wheels" @wheels
+if ($LASTEXITCODE -ne 0) { throw "installing the wheels failed (exit $LASTEXITCODE)." }
+Write-Host "venv ready: $here\venv. In each new PowerShell session, run  . $here\carla-env.ps1" -ForegroundColor Green
 '@
 Set-Content -Path (Join-Path $dist 'setup-venv.ps1') -Value $setupVenv -Encoding UTF8
 
+$carlaEnv = @'
+#Requires -Version 5.1
+# The environment step for the carla-* commands. Dot-source it in each new PowerShell session:
+#     . .\carla-env.ps1
+# It activates the venv setup-venv.ps1 made, which puts the commands on PATH, and names this
+# distribution's SUMO toolchain for every command: CARLA_NETCONVERT, the converter a world is built
+# with; SUMO_HOME, the installation scenarios are compiled and driven with; PROJ_LIB and PROJ_DATA,
+# the coordinate database netconvert geo-references with. Each is set outright, so the bundled
+# toolchain is the one in use whatever the machine had set before.
+#
+# No sumo-gui is bundled. To watch a drive in one (carla-drive --sumo-gui), name a SUMO
+# installation of your own that has it, of the release that converted the world: pass
+# --sumo-home <folder> to carla-drive, or set CARLANET_SUMO_HOME, which the drive prefers to
+# SUMO_HOME.
+$activate = Join-Path $PSScriptRoot 'venv\Scripts\Activate.ps1'
+if (-not (Test-Path $activate)) { throw "venv missing - run $PSScriptRoot\setup-venv.ps1 first." }
+. $activate
+$env:SUMO_HOME = Join-Path $PSScriptRoot 'tools\sumo'
+$env:CARLA_NETCONVERT = Join-Path $env:SUMO_HOME 'bin\netconvert.exe'
+$carlaProj = Join-Path $env:SUMO_HOME 'proj'
+if (Test-Path (Join-Path $carlaProj 'proj.db')) { $env:PROJ_LIB = $carlaProj; $env:PROJ_DATA = $carlaProj }
+Write-Host "carla-* commands ready; SUMO from $env:SUMO_HOME" -ForegroundColor Green
+'@
+Set-Content -Path (Join-Path $dist 'carla-env.ps1') -Value $carlaEnv -Encoding UTF8
+
 $runServer = @'
 #Requires -Version 5.1
-# Launch the CARLA server. -RenderOffScreen runs headless; remove it to get a render window.
+# Launch the CARLA server. -RenderOffScreen runs headless; remove it to get a render window. A first
+# argument that is not an option is the map to start in -- a world installed with
+# world-tools\InstallWorld.ps1, for example: .\run-server.ps1 /Arapahoe_I25/Maps/Arapahoe_I25
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
-& "$here\CarlaServer\CarlaUnreal.exe" -RenderOffScreen -nosound @args
+$map = @()
+$rest = @($args)
+if ($rest.Count -gt 0 -and "$($rest[0])" -notmatch '^-') {
+    $map = @($rest[0])
+    $rest = @($rest | Select-Object -Skip 1)
+}
+& "$here\CarlaServer\CarlaUnreal.exe" @map -RenderOffScreen -nosound @rest
 '@
 Set-Content -Path (Join-Path $dist 'run-server.ps1') -Value $runServer -Encoding UTF8
-
-$runSctmv = @'
-#Requires -Version 5.1
-# Run the single-client traffic-manager / EO demo against a running server.
-$ErrorActionPreference = 'Stop'
-$here = $PSScriptRoot
-$py = Join-Path $here 'venv\Scripts\python.exe'
-if (-not (Test-Path $py)) { throw "venv missing - run .\setup-venv.ps1 first." }
-$env:CARLA_NETCONVERT = Join-Path $here 'tools\sumo\netconvert.exe'
-$env:SUMO_HOME = Join-Path $here 'tools\sumo'
-$proj = Join-Path $here 'tools\sumo\proj'
-if (Test-Path (Join-Path $proj 'proj.db')) { $env:PROJ_LIB = $proj; $env:PROJ_DATA = $proj }
-& $py "$here\scripts\run_SCTMV.py" @args
-'@
-Set-Content -Path (Join-Path $dist 'run-sctmv.ps1') -Value $runSctmv -Encoding UTF8
 
 $readmeVersion = $pkgName -replace '^Carla-', ''
 $readme = @"
 # CARLA $readmeVersion distribution (Windows)
 
-Self-contained CARLA digital-twin bundle: the cooked server, the carlanet + carlacontrol Python
-client packages, the run_SCTMV demo, example OSM maps, and SUMO netconvert.
+Self-contained CARLA digital-twin bundle: the cooked server, the carlanet and carlacontrol Python
+packages with the ``carla-*`` commands, the SUMO toolchain, example OSM maps, the measured vehicle
+catalogue, the scenario-authoring skills and the world tools.
 
-## Target prerequisites
-- 64-bit Windows 10/11 with a GPU + up-to-date graphics drivers (the server renders even headless).
-- **Python 3.11** (on PATH, for the venv).
-- The **.NET 10 runtime** (carlanet loads .NET assemblies). Install e.g. ``winget install Microsoft.DotNet.Runtime.10``.
-- netconvert's DLLs + PROJ data are bundled under ``tools\sumo``.
+## What ships
+- ``CarlaServer\`` - the cooked server; ``run-server.ps1`` starts it headless.
+- ``wheels\`` - carlanet and carlacontrol; ``setup-venv.ps1`` installs both, and the commands, into ``venv\``.
+- ``carla-env.ps1`` - the environment step (below).
+- ``tools\sumo\`` - SUMO $sumoVersion (netconvert, sumo, duarouter; no sumo-gui) and PROJ data.
+- ``osm\`` example OpenStreetMap extracts; ``catalogue\`` the measured vehicle catalogue a scenario names.
+- ``skills\`` - how to author scenarios; ``world-tools\`` - PackageWorld.ps1 and InstallWorld.ps1.
+- ``VERSION``, ``MANIFEST.md`` and ``licenses\`` - what this is, and under what terms.
+
+## Prerequisites
+- 64-bit Windows 10/11 with a GPU and current graphics drivers (the server renders even headless).
+- **Python 3.11 or newer** on PATH, for the venv.
+- The **.NET 10 runtime** (carlanet loads .NET assemblies), e.g. ``winget install Microsoft.DotNet.Runtime.10``.
+- To build a world: ``CESIUM_ION_TOKEN`` set to a Cesium ion access token.
 
 ## Run it (PowerShell)
 ``````powershell
-.\setup-venv.ps1                       # one-time: venv + carlanet & carlacontrol wheels + numpy + pygame
-.\run-server.ps1                       # start the CARLA server (new window or background job)
-.\run-sctmv.ps1 --osm osm\Lakeview_Carson.osm   # build a world from an OSM map and run the demo
+.\setup-venv.ps1                                  # once: venv\ with both wheels and the commands
+.\run-server.ps1                                  # start the server
+. .\carla-env.ps1                                 # in each new session: the environment step
+carla-build-world --osm osm\Lakeview_Carson.osm   # build a world; its package goes to world-packages\
+carla-sctmv --osm osm\Lakeview_Carson.osm         # or build one and fly, drive and record in it
 ``````
-``run-sctmv.ps1`` points carlanet at the bundled ``tools\sumo\netconvert.exe`` and sets ``SUMO_HOME``
-to ``tools\sumo``; pass ``--help`` to run-sctmv for options.
+
+**The environment step.** ``carla-env.ps1`` activates ``venv\`` and points every command at the bundled
+toolchain: ``CARLA_NETCONVERT``, ``SUMO_HOME``, and ``PROJ_LIB``/``PROJ_DATA``. To watch a drive in
+sumo-gui, which is not bundled, give ``carla-drive --sumo-gui`` a SUMO $sumoVersion installation of your
+own: ``--sumo-home <folder>``, or set ``CARLANET_SUMO_HOME`` to it.
+
+## The commands
+Each takes ``--help``. A command reads and writes under the current folder (``world-packages\``,
+``captures\``, ``runs\``, ``scenarios\``) unless told otherwise.
+- ``carla-sctmv`` - build a world, then fly, drive and record in it.
+- ``carla-build-world`` - build a world and write its world package.
+- ``carla-compile-scenario`` - compile a scenario against its world package.
+- ``carla-drive`` - drive a world's vehicles from SUMO, and record.
+- ``carla-capture`` - capture a window of a compiled scenario.
+- ``carla-free-camera``, ``carla-camera-follower`` - watch a running world through a camera of your own.
+- ``carla-cot-telemetry`` - Cursor-on-Target from a SUMO scenario.
+- ``carla-audit-sidecars``, ``carla-diff-manifests``, ``carla-check-label-leaks`` - check what a run wrote.
+- ``carla-publish-reference-set`` - refresh a world package's areas of interest and place index.
+- ``carla-check-sumo`` - say which SUMO the commands resolve, and check it is complete.
+
+## Worlds made elsewhere
+``world-tools\InstallWorld.ps1 -Package <world.zip>`` installs a packaged world into this
+distribution. ``world-tools\PackageWorld.ps1`` makes such a package; it needs the editor and a CARLA
+checkout at this distribution's commit: ``-CarlaRoot <checkout> -Distribution .``
 
 ## What is in here, and under what terms
 ``MANIFEST.md`` lists every component this bundle carries, where it came from and its licence, with

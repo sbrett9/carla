@@ -1,6 +1,7 @@
 """The drive's free view records as the fixed camera does, and adds nothing to the drive's tick loop.
 
-`CarlaNet/python/run_sumo_drive.py --view free` flies a camera inside the process that drives the
+`carla-drive --view free` (`carlacontrol.commands.drive`, run from a checkout as
+`CarlaNet/python/run_sumo_drive.py`) flies a camera inside the process that drives the
 world (`12_Operator_Control_Surface.md` section 9.6). What is checked here, with the server and the
 session stood in for:
 
@@ -28,7 +29,7 @@ session stood in for:
 """
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import json
 import sys
 import zipfile
@@ -40,7 +41,6 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
-SCRIPT = _REPO / "CarlaNet" / "python" / "run_sumo_drive.py"
 
 GARDNERVILLE = {
     "MapName": "Gardnerville_Centerville_Lane",
@@ -51,15 +51,12 @@ GARDNERVILLE = {
 
 @pytest.fixture(scope="module")
 def drive():
-    """The script as a module. It imports the co-simulation assemblies, so it needs carlanet."""
+    """The command's module. It imports the co-simulation assemblies, so it needs carlanet."""
     pytest.importorskip("carlanet", reason="the drive needs carlanet and its assemblies")
-    spec = importlib.util.spec_from_file_location("run_sumo_drive", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
     try:
-        spec.loader.exec_module(module)
+        return importlib.import_module("carlacontrol.commands.drive")
     except ImportError as missing:
         pytest.skip(f"the co-simulation assemblies are not loaded here: {missing}")
-    return module
 
 
 def _arguments(drive, monkeypatch, *extra: str, package: Path | None = None):

@@ -11,14 +11,16 @@ Where the values come from, in order:
 1. a site-profile file, when one is named (`--site-profile`): JSON, `site_profile_version` 1, with
    `server`, `sumo` and `paths` blocks and an `environment` list naming the variables the profile
    allows a value to be read from. A relative path in it is relative to the file;
-2. otherwise, derived from the layout the tool runs from (12 §13 question 2's recommendation): in the
-   source tree, `Build/scenarios`, `Build/world-packages`, `CarlaControl/catalogue/
-   vehicles.catalogue.json`, `Build/captures` and `Build/runs` under the repository root;
+2. otherwise, derived from the layout the tool runs from (12 §13 question 2's recommendation,
+   `carlacontrol.ToolLayout`): in the source tree, `Build/scenarios`, `Build/world-packages`,
+   `CarlaControl/catalogue/vehicles.catalogue.json`, `Build/captures` and `Build/runs` under the
+   repository root; installed, `scenarios`, `world-packages`, `captures` and `runs` under the current
+   folder, and the catalogue installed with the package;
 3. `sumo.home` alone may come from `CARLANET_SUMO_HOME` when neither of the above sets it, and then
-   from the layout's staged build (`Build/sumo-install`, then `Build/sumo-src`) -- the order the
-   session itself searches (`CarlaNet.Sumo.SumoInstallation`). Where nothing holds a `sumo`, it is
-   unset and the session searches `SUMO_HOME` and then `PATH`, which the profile records as a
-   resolution the host decides.
+   from the layout's staged build (`Build/sumo-install`, then `Build/sumo-src`; an installed layout
+   has none) -- the order the session itself searches (`CarlaNet.Sumo.SumoInstallation`). Where
+   nothing holds a `sumo`, it is unset and the session searches `SUMO_HOME` and then `PATH`, which
+   the profile records as a resolution the host decides.
 """
 from __future__ import annotations
 
@@ -28,20 +30,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from carlacontrol.ToolLayout import ToolLayout
+
 SITE_PROFILE_VERSION = 1
 SUMO_OVERRIDE_VARIABLE = "CARLANET_SUMO_HOME"
 SUMO_SEARCHED_VARIABLES = ("SUMO_HOME", "PATH")
 SUMO_EXECUTABLE = "sumo.exe" if os.name == "nt" else "sumo"
 
-# Where the layout keeps each path, relative to its root.
-LAYOUT_PATHS = {
-    "paths.scenario_root": ("Build", "scenarios"),
-    "paths.world_package_root": ("Build", "world-packages"),
-    "paths.catalogue": ("CarlaControl", "catalogue", "vehicles.catalogue.json"),
-    "paths.capture_root": ("Build", "captures"),
-    "paths.runs_root": ("Build", "runs"),
-}
-LAYOUT_SUMO_BUILDS = (("Build", "sumo-install"), ("Build", "sumo-src"))
+# The paths a layout supplies, in the order a profile file lists them (`ToolLayout.site_paths`).
+LAYOUT_PATHS = ("paths.scenario_root", "paths.world_package_root", "paths.catalogue",
+                "paths.capture_root", "paths.runs_root")
 FILE_FIELDS = ("server.host", "server.port", "server.timeout_s", "sumo.home",
                *LAYOUT_PATHS)
 
@@ -68,15 +66,18 @@ class SiteProfile:
         self.host_searched: tuple[str, ...] = ()
 
     @classmethod
-    def discover(cls, layout_root: str | Path, profile_path: str | Path | None = None,
+    def discover(cls, layout_root: str | Path | ToolLayout, profile_path: str | Path | None = None,
                  environ: Mapping[str, str] | None = None) -> SiteProfile:
         """The profile for this machine: the named file, or the layout, then the SUMO search.
+
+        Args:
+            layout_root: the layout the tool runs from, or a source checkout's root.
 
         Raises:
             ValueError: when a named profile file cannot be read or is not a site profile.
         """
         environ = os.environ if environ is None else environ
-        layout_root = Path(layout_root).resolve()
+        layout = layout_root if isinstance(layout_root, ToolLayout) else ToolLayout(layout_root)
         values: dict[str, SiteValue] = {}
         declared: tuple[str, ...] = ()
         if profile_path is not None:
@@ -86,28 +87,27 @@ class SiteProfile:
             values.update(cls._from_file(document, profile_path))
             source = f"site profile {profile_path}"
         else:
-            source = f"the layout at {layout_root}"
-        for path, parts in LAYOUT_PATHS.items():
+            source = (f"the layout at {layout.checkout}" if layout.checkout is not None
+                      else f"the installed layout at {layout.work}")
+        for path, (value, provenance) in layout.site_paths().items():
             if path not in values:
-                values[path] = SiteValue(str(layout_root.joinpath(*parts)),
-                                         f"derived from the layout at {layout_root}")
+                values[path] = SiteValue(str(value), provenance)
         profile = cls(values, source, declared)
         if "sumo.home" not in values:
-            profile._discover_sumo(layout_root, environ)
+            profile._discover_sumo(layout, environ)
         return profile
 
-    def _discover_sumo(self, layout_root: Path, environ: Mapping[str, str]) -> None:
+    def _discover_sumo(self, layout: ToolLayout, environ: Mapping[str, str]) -> None:
         override = environ.get(SUMO_OVERRIDE_VARIABLE)
         if override and self.holds_sumo(Path(override)):
             self.values["sumo.home"] = SiteValue(
                 str(Path(override).resolve()), f"environment {SUMO_OVERRIDE_VARIABLE}",
                 SUMO_OVERRIDE_VARIABLE)
             return
-        for parts in LAYOUT_SUMO_BUILDS:
-            home = layout_root.joinpath(*parts)
+        for _, home in layout.repository_sumo_builds():
             if self.holds_sumo(home):
                 self.values["sumo.home"] = SiteValue(
-                    str(home), f"derived from the layout at {layout_root}: its staged SUMO")
+                    str(home), f"derived from the layout at {layout.checkout}: its staged SUMO")
                 return
         self.values["sumo.home"] = SiteValue(
             None, "nothing named one: the session searches SUMO_HOME, then PATH")

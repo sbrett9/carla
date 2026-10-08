@@ -26,9 +26,9 @@
     Print run_capture's help and exit.
 
 .EXAMPLE
-    .\RunCapture.ps1 --scenario gardnerville_morning --window morning
+    .\RunCapture.ps1 --run Import\Arapahoe_I25_SupervisionCheck.run.json --validate-only
 .EXAMPLE
-    .\RunCapture.ps1 --run configs\gardnerville.run.json --caller unattended --result out\g.result.json
+    .\RunCapture.ps1 --run Import\Arapahoe_I25_SupervisionCheck.run.json --caller unattended --result out\arapahoe.result.json
 .EXAMPLE
     .\RunCapture.ps1 -Help
 #>

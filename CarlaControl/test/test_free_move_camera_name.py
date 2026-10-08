@@ -1,6 +1,7 @@
 """The free-move camera is named as it is created, and takes the server's name when it is not.
 
-`CarlaControl/scripts/run_free_move_camera.py` records nothing, but its picture camera is a camera in
+`carla-free-camera` (`carlacontrol.commands.free_camera`, run from a checkout as
+`CarlaControl/scripts/run_free_move_camera.py`) records nothing, but its picture camera is a camera in
 the world like any other, and `--camera-name` names it as it is spawned: the name is set as its
 role_name, which every client reads, and the server refuses one a live camera in the world holds,
 before the window opens. Without one the server names it `Camera_<n>`. Its depth camera is given no
@@ -8,7 +9,7 @@ name. The world and the window are stood in for.
 """
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,17 +18,13 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
-SCRIPT = _REPO / "CarlaControl" / "scripts" / "run_free_move_camera.py"
 
 
 @pytest.fixture(scope="module")
 def viewer():
-    """The script as a module. It imports carlanet and the rig, so it needs the assemblies."""
+    """The command's module. It imports carlanet and the rig, so it needs the assemblies."""
     pytest.importorskip("carlanet", reason="the viewer needs carlanet and its assemblies")
-    spec = importlib.util.spec_from_file_location("run_free_move_camera", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return importlib.import_module("carlacontrol.commands.free_camera")
 
 
 def _arguments(viewer, monkeypatch, *extra: str):

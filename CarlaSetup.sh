@@ -346,9 +346,10 @@ fi
 #     typically /usr/share/proj) so PROJ can resolve the +proj=tmerc projection.
 #   SUMO_HOME -> this whole installation; carlacontrol.SumoInstallation reads it, and so does
 #     traci itself.
-# These are printed, not persisted: a fresh shell has none of them. CarlaControl/scripts/run_SCTMV.py
-# defaults all three to this staged install when they are unset, and a packaged distribution's
-# run-sctmv.sh points them at its own bundled tools/sumo.
+# These are printed, not persisted: a fresh shell has none of them. The carla-* commands, and the
+# scripts under CarlaControl/scripts/ that run them from this checkout, default all three to this
+# staged install when they are unset (carlacontrol.ToolLayout), and a packaged distribution's
+# carla-env.sh points them at its own bundled tools/sumo.
 # SUMO_HOME is worth setting deliberately rather than leaving to whatever a SUMO installer wrote,
 # because it takes precedence over this repository's own build: an unrelated SUMO left in it is how a
 # world and the scenarios authored against it end up built by two different converter versions.

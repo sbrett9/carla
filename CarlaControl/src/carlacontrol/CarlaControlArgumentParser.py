@@ -7,8 +7,15 @@ connection, world building, EO observer, traffic, telemetry, and recording.
 import argparse
 import os
 import random
+import sys
+from pathlib import Path
 
 from carlacontrol.CameraName import CameraName
+from carlacontrol.ToolLayout import ToolLayout
+
+# The extract a world is built from when none is named, in a source checkout's Import/ folder. An
+# installed command has no such folder to take one from, so there it must be named.
+CHECKOUT_DEFAULT_OSM = "Lakeview_Carson.osm"
 
 
 class CarlaControlArgumentParser:
@@ -18,21 +25,21 @@ class CarlaControlArgumentParser:
     viewing, traffic management, telemetry, and recording subsystems.
     """
 
-    def __init__(self, repo_root: str, description: str | None = None):
+    def __init__(self, layout: ToolLayout | str | Path, description: str | None = None):
         """Initialize the argument parser.
 
         Args:
-            repo_root: Path to repository root for default paths
+            layout: Where the default paths come from (`ToolLayout`), or a source checkout's root
             description: Program description (uses default if None)
         """
-        self.repo_root = repo_root
+        self.layout = layout if isinstance(layout, ToolLayout) else ToolLayout(layout)
         self.description = description or "SCTMV — Single Client Traffic Manager & Viewer"
         self._parser = self._build_parser()
 
     def _build_parser(self) -> argparse.ArgumentParser:
         """Build the argument parser with all argument groups."""
         ap = argparse.ArgumentParser(
-            description=self.description,
+            prog=os.path.basename(sys.argv[0]), description=self.description,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
 
@@ -47,6 +54,11 @@ class CarlaControlArgumentParser:
         self._add_orbit_args(ap)
 
         return ap
+
+    def _build_relative(self, *parts: str) -> str:
+        """A default under the layout's output folder, as a help text names it."""
+        prefix = ("Build",) if not self.layout.installed else (".",)
+        return "/".join((*prefix, *parts))
 
     def _add_connection_args(self, ap: argparse.ArgumentParser) -> None:
         """Add connection and mode arguments."""
@@ -86,9 +98,15 @@ class CarlaControlArgumentParser:
             help="don't build a world; attach to the one already on the server "
             "(skip straight to viewing / traffic)",
         )
-        build.add_argument(
-            "--osm", default=os.path.join(self.repo_root, "Import", "Lakeview_Carson.osm")
-        )
+        if self.layout.installed:
+            build.add_argument(
+                "--osm", default=None,
+                help="the OpenStreetMap extract to build the world from (required to build)")
+        else:
+            build.add_argument(
+                "--osm", default=str(self.layout.import_directory / CHECKOUT_DEFAULT_OSM),
+                help=f"the OpenStreetMap extract to build the world from (default "
+                f"Import/{CHECKOUT_DEFAULT_OSM})")
         build.add_argument(
             "--lat", type=float, default=None, help="origin lat (default: OSM bounds center)"
         )
@@ -216,7 +234,8 @@ class CarlaControlArgumentParser:
         build.add_argument(
             "--save",
             default=None,
-            help="output elevated .xodr (default: Build/sumo-smoketest/<osm>_elevated.xodr)",
+            help="output elevated .xodr (default: "
+            f"{self._build_relative('sumo-smoketest', '<osm>_elevated.xodr')})",
         )
         build.add_argument(
             "--emit-world-package",
@@ -549,8 +568,9 @@ class CarlaControlArgumentParser:
         rec = ap.add_argument_group("recording (F hotkey)")
         rec.add_argument(
             "--record-dir",
-            default=os.path.join(self.repo_root, "Build", "SCTMV_recordings"),
-            help="folder for recordings (default Build/SCTMV_recordings). F toggles recording: "
+            default=str(self.layout.build_directory / "SCTMV_recordings"),
+            help=f"folder for recordings (default {self._build_relative('SCTMV_recordings')}). "
+            "F toggles recording: "
             "each capture writes a lossless PNG of the clean streamed imagery (no HUD) plus "
             "a matching .xml Cursor-on-Target sidecar at that instant — the vehicle tracks "
             "and the collection platform (the camera itself) as an air track — named "

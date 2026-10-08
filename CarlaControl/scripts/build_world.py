@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""SCTMV -- Single Client Traffic Manager & Viewer: build a world, then fly, drive and record in it.
+"""Build a generated world on a running CARLA server and write its world package, then exit.
 
-The tool is `carla-sctmv`, installed with the carlacontrol wheel (`carlacontrol.commands.sctmv`). This
+The tool is `carla-build-world`, installed with the carlacontrol wheel (`carlacontrol.commands.build_world`). This
 script runs the same tool from this checkout, with the checkout's sources ahead of any installed
 copy, so its defaults are the repository's. `--help` describes it.
 """
@@ -22,7 +22,7 @@ _layout.ToolLayout(_SOURCES.parents[1]).apply_sumo_environment()
 
 sys.path.insert(0, str(_SOURCES))
 
-from carlacontrol.commands.sctmv import main  # noqa: E402  (needs the path above)
+from carlacontrol.commands.build_world import main  # noqa: E402  (needs the path above)
 
 if __name__ == "__main__":
     sys.exit(main())

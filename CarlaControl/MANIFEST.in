@@ -1,5 +1,7 @@
 include README.md
 include LICENSE
 recursive-include src/carlacontrol *.py
+include catalogue/vehicles.catalogue.json catalogue/vehicles.vtypes.rou.xml
+include schemas/*.schema.json
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
