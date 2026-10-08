@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://carla.local/schemas/run_configuration.schema.json",
+  "$id": "urn:carla-sumo-capture:schema:run-configuration:1",
   "title": "SUMO-driven capture run configuration",
   "description": "One capture run's configuration: every field, its default, its mutability class and the layer that may supply it. Positions are in CARLA's frame: meters, x east, y south.",
   "type": "object",

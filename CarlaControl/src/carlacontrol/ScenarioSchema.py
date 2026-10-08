@@ -18,13 +18,18 @@ copy that can drift.
 `validate` implements the subset of JSON Schema this document uses -- `type`, `properties`,
 `required`, `additionalProperties`, `items`, `enum`, `const`, `minItems`, `minLength`, `pattern`,
 `minimum`, `exclusiveMinimum`, `anyOf` and local `$ref` -- and refuses to run on a keyword outside
-it, so the published schema cannot say more than the compiler enforces.
+it, so the published schema cannot say more than the compiler enforces. `validate_against` checks a
+document against any other schema written in the same subset, which also takes a list of types,
+`maximum`, `multipleOf` and `maxItems`, resolves a `$ref` inside the schema it is given, and reads the
+annotations `default`, `examples`, `$comment` and any `x-` keyword as notes that constrain nothing.
 """
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
+
+from carlacontrol.SchemaIdentifier import DIALECT, SchemaIdentifier
 
 SPEC_VERSION = 1
 SCHEMA_CHECK = 53
@@ -50,9 +55,14 @@ _HARD_NEGATIVE_FOR = ("Optional, and only on a nominal subject: the set its labe
                       "restated exactly (check 57). The plan copies it from the terms either way")
 
 SCHEMA: dict = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://carla.local/schemas/scenario.schema.json",
-    "title": "SUMO behavioural-capture scenario specification",
+    "$schema": DIALECT,
+    "$id": SchemaIdentifier.urn("scenario", SPEC_VERSION),
+    "title": "SUMO behavioral capture scenario specification",
+    "description": "One scenario as its author writes it: the world it runs in, the epoch, the "
+                   "illumination default, the vehicle classes, places, instants, flows, actors, "
+                   "schedules, lane closures, capture windows, the vocabulary and the supervision. "
+                   "carla-compile-scenario checks a <scenario>.scenario.json against this schema "
+                   "(check 53) and compiles it into a scenario package.",
     "type": "object",
     "additionalProperties": False,
     "required": ["spec_version", "scenario_id", "scenario_name", "description", "world",
@@ -421,8 +431,14 @@ SCHEMA: dict = {
 _SUPPORTED_KEYWORDS = frozenset({
     "$schema", "$id", "title", "description", "type", "properties", "required",
     "additionalProperties", "items", "enum", "const", "minItems", "minLength", "pattern", "minimum",
-    "exclusiveMinimum", "anyOf", "$ref", "$defs",
+    "exclusiveMinimum", "anyOf", "$ref", "$defs", "maximum", "multipleOf", "maxItems",
+    # Annotations: notes for a reader that constrain nothing.
+    "default", "examples", "$comment",
 })
+# Keywords whose value is a JSON value rather than a schema, so nothing inside it is a keyword.
+_VALUE_KEYWORDS = frozenset({"enum", "const", "required", "default", "examples"})
+# A keyword of this prefix is an annotation of our own, such as a field's mutability class.
+_ANNOTATION_PREFIX = "x-"
 
 _JSON_TYPES = {
     "object": dict, "array": list, "string": str, "boolean": bool,
@@ -437,16 +453,17 @@ class ScenarioSchema:
         """Every place the document departs from the schema, as `$.path: problem`. Empty when valid."""
         cls._require_supported(SCHEMA)
         problems: list[str] = []
-        cls._check(document, SCHEMA, "$", problems)
+        cls._check(document, SCHEMA, "$", problems, SCHEMA)
         return problems
 
     @classmethod
     def validate_against(cls, document: object, schema: dict) -> list[str]:
         """Every departure of a document from another schema written in the same subset -- the
-        sweep's -- checked by the same validator."""
+        sweep's, a run record's -- checked by the same validator. A `$ref` names one of that
+        schema's own `$defs`."""
         cls._require_supported(schema)
         problems: list[str] = []
-        cls._check(document, schema, "$", problems)
+        cls._check(document, schema, "$", problems, schema)
         return problems
 
     @classmethod
@@ -454,7 +471,7 @@ class ScenarioSchema:
         """Every departure of a document from one of the schema's `$defs` -- a namespace document
         imported from the bundle is checked against the same definition an inline one is."""
         problems: list[str] = []
-        cls._check(document, SCHEMA["$defs"][definition], path, problems)
+        cls._check(document, SCHEMA["$defs"][definition], path, problems, SCHEMA)
         return problems
 
     @classmethod
@@ -469,13 +486,15 @@ class ScenarioSchema:
     @classmethod
     def _require_supported(cls, schema: object) -> None:
         if isinstance(schema, dict):
-            unknown = set(schema) - _SUPPORTED_KEYWORDS
+            unknown = {key for key in schema if key not in _SUPPORTED_KEYWORDS
+                       and not key.startswith(_ANNOTATION_PREFIX)}
             # A properties / $defs map is keyed by names, not keywords.
             for key, value in schema.items():
                 if key in ("properties", "$defs"):
                     for sub in value.values():
                         cls._require_supported(sub)
-                elif key not in ("enum", "const", "required") and isinstance(value, (dict, list)):
+                elif key not in _VALUE_KEYWORDS and not key.startswith(_ANNOTATION_PREFIX) \
+                        and isinstance(value, (dict, list)):
                     cls._require_supported(value)
             if unknown:
                 raise ValueError(f"the scenario schema uses {sorted(unknown)}, which the validator "
@@ -486,16 +505,19 @@ class ScenarioSchema:
                 cls._require_supported(item)
 
     @classmethod
-    def _check(cls, value: object, schema: dict, path: str, problems: list[str]) -> None:
+    def _check(cls, value: object, schema: dict, path: str, problems: list[str],
+               root: dict) -> None:
         if "$ref" in schema:
             name = schema["$ref"].rsplit("/", 1)[-1]
-            cls._check(value, SCHEMA["$defs"][name], path, problems)
+            definitions = root.get("$defs", {})
+            target = definitions[name] if name in definitions else SCHEMA["$defs"][name]
+            cls._check(value, target, path, problems, root)
             return
         if "anyOf" in schema:
             branches = []
             for branch in schema["anyOf"]:
                 attempt: list[str] = []
-                cls._check(value, branch, path, attempt)
+                cls._check(value, branch, path, attempt, root)
                 if not attempt:
                     break
                 branches.append(attempt)
@@ -511,7 +533,8 @@ class ScenarioSchema:
             return
         kind = schema.get("type")
         if kind is not None and not cls._is_type(value, kind):
-            problems.append(f"{path}: must be {kind}, is {cls._type_name(value)}")
+            shown = " or ".join(kind) if isinstance(kind, list) else kind
+            problems.append(f"{path}: must be {shown}, is {cls._type_name(value)}")
             return
         if isinstance(value, str):
             if len(value) < schema.get("minLength", 0):
@@ -523,12 +546,20 @@ class ScenarioSchema:
                 problems.append(f"{path}: {value} is below {schema['minimum']}")
             if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
                 problems.append(f"{path}: {value} must be above {schema['exclusiveMinimum']}")
+            if "maximum" in schema and value > schema["maximum"]:
+                problems.append(f"{path}: {value} is above {schema['maximum']}")
+            if "multipleOf" in schema:
+                steps = value / schema["multipleOf"]
+                if abs(steps - round(steps)) > 1e-9:
+                    problems.append(f"{path}: {value} is not a multiple of {schema['multipleOf']}")
         if isinstance(value, list):
             if len(value) < schema.get("minItems", 0):
                 problems.append(f"{path}: needs at least {schema['minItems']} item(s)")
+            if "maxItems" in schema and len(value) > schema["maxItems"]:
+                problems.append(f"{path}: takes at most {schema['maxItems']} item(s)")
             if "items" in schema:
                 for index, item in enumerate(value):
-                    cls._check(item, schema["items"], f"{path}[{index}]", problems)
+                    cls._check(item, schema["items"], f"{path}[{index}]", problems, root)
         if isinstance(value, dict):
             properties = schema.get("properties", {})
             for name in schema.get("required", []):
@@ -537,14 +568,16 @@ class ScenarioSchema:
             extra = schema.get("additionalProperties", True)
             for name, item in value.items():
                 if name in properties:
-                    cls._check(item, properties[name], f"{path}.{name}", problems)
+                    cls._check(item, properties[name], f"{path}.{name}", problems, root)
                 elif extra is False:
                     problems.append(f"{path}: '{name}' is not a field here")
                 elif isinstance(extra, dict):
-                    cls._check(item, extra, f"{path}.{name}", problems)
+                    cls._check(item, extra, f"{path}.{name}", problems, root)
 
-    @staticmethod
-    def _is_type(value: object, kind: str) -> bool:
+    @classmethod
+    def _is_type(cls, value: object, kind: str | list[str]) -> bool:
+        if isinstance(kind, list):
+            return any(cls._is_type(value, one) for one in kind)
         if kind == "integer":
             return isinstance(value, int) and not isinstance(value, bool)
         if kind == "number":

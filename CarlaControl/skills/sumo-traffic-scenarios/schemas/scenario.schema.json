@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://carla.local/schemas/scenario.schema.json",
-  "title": "SUMO behavioural-capture scenario specification",
+  "$id": "urn:carla-sumo-capture:schema:scenario:1",
+  "title": "SUMO behavioral capture scenario specification",
+  "description": "One scenario as its author writes it: the world it runs in, the epoch, the illumination default, the vehicle classes, places, instants, flows, actors, schedules, lane closures, capture windows, the vocabulary and the supervision. carla-compile-scenario checks a <scenario>.scenario.json against this schema (check 53) and compiles it into a scenario package.",
   "type": "object",
   "additionalProperties": false,
   "required": [

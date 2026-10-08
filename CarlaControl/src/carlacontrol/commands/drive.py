@@ -230,6 +230,8 @@ from carlacontrol.FreeView import FreeView
 from carlacontrol.PyGameSensorController import PyGameSensorController
 from carlacontrol.RenderRegionCoverage import RenderRegionCoverage
 from carlacontrol.RunConfiguration import RunConfiguration
+from carlacontrol.ScenarioEpoch import ScenarioEpoch
+from carlacontrol.SchemaPublication import SchemaPublication
 from carlacontrol.SensorRig import SensorRig
 from carlacontrol.SpanRecorder import SpanRecorder
 from carlacontrol.ToolLayout import ToolLayout
@@ -546,11 +548,12 @@ class SessionSumo:
 class SunDeclaration:
     """The scenario's epoch and the run's sun policy, as the session is handed them.
 
-    The session reads both and is the one validator of either; this only gathers them. An epoch file
-    may be the `epoch` object on its own or a whole scenario.json, whose `illumination` object is
-    then the policy. A policy given in the file and on the command line is refused rather than
-    resolved: which of two declarations wins is the operator surface's decision to make, not this
-    script's.
+    The session reads both and is the one judge of either; this gathers them, and refuses an epoch
+    that does not conform to the published epoch schema (`epoch.schema.json`) before the session
+    sees it, in the schema's words. An epoch file may be the `epoch` object on its own or a whole
+    scenario.json, whose `illumination` object is then the policy. A policy given in the file and on
+    the command line is refused rather than resolved: which of two declarations wins is the operator
+    surface's decision to make, not this script's.
     """
 
     def __init__(self, args: argparse.Namespace) -> None:
@@ -560,11 +563,17 @@ class SunDeclaration:
         if args.epoch:
             with open(args.epoch, encoding="utf-8") as handle:
                 document = json.load(handle)
+            source = args.epoch
             if isinstance(document, dict) and isinstance(document.get("epoch"), dict):
                 self.epoch = document["epoch"]
                 from_file = document.get("illumination")
+                source = f"the epoch object of {args.epoch}"
             else:
                 self.epoch = document
+            problems = ScenarioEpoch.schema_problems(self.epoch)
+            if problems:
+                raise SystemExit(SchemaPublication.refusal(source, ScenarioEpoch.schema(),
+                                                           problems))
 
         from_command_line = self.from_command_line(args)
         if from_file is not None and from_command_line is not None:

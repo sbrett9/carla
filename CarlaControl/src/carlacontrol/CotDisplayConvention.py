@@ -25,12 +25,18 @@ The same map once travelled in a scenario's legacy `*.labels.json`, beside a sec
 every anomaly type `u`. That half was the label written into the CoT type, which D6.18 names a
 defect wherever this code produces ground truth, and it is not a display convention:
 `from_legacy_labels` keeps the display half and withholds the other.
+
+A convention file is also checked against its published schema (`schema()`,
+`display_convention.schema.json`), after the reader's own checks, so a value of the wrong type is
+refused in the schema's words.
 """
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping
 from pathlib import Path
+
+from carlacontrol.SchemaPublication import SchemaPublication
 
 CONVENTION_VERSION = 1
 
@@ -112,7 +118,40 @@ class CotDisplayConvention:
         mapping = document.get(AFFILIATIONS_KEY)
         if not isinstance(mapping, dict):
             raise ValueError(f"{path.name} has no {AFFILIATIONS_KEY} object")
-        return cls(mapping, source=path.name)
+        convention = cls(mapping, source=path.name)
+        schema = cls.schema()
+        problems = SchemaPublication.problems(document, schema)
+        if problems:
+            raise ValueError(SchemaPublication.refusal(path.name, schema, problems))
+        return convention
+
+    @staticmethod
+    def schema() -> dict:
+        """The convention file's schema, as published, from the keys and affiliations this reader
+        accepts."""
+        return SchemaPublication.document(
+            "display-convention", CONVENTION_VERSION, "CoT display convention",
+            "How one run draws each vehicle population in Cursor-on-Target: the affiliation letter "
+            "a TAK client colors its tracks by. A choice about display, not part of the scenario: "
+            f"kept beside the scenario as <scenario>{SUFFIX}, and read by carla-cot-telemetry. It "
+            "names populations and never single vehicles.",
+            {"type": "object", "additionalProperties": False,
+             "required": [VERSION_KEY, AFFILIATIONS_KEY],
+             "properties": {
+                 VERSION_KEY: {"const": CONVENTION_VERSION,
+                               "description": "The format version of this file. A reader refuses "
+                                              "any other."},
+                 DESCRIPTION_KEY: {"type": "string",
+                                   "description": "What the convention is for, in a sentence or "
+                                                  "two. Not read."},
+                 AFFILIATIONS_KEY: {
+                     "type": "object",
+                     "additionalProperties": {"enum": sorted(COT_AFFILIATIONS)},
+                     "description": "Each population's affiliation: the second letter of a CoT "
+                                    "type. A population is a vehicle class id (a vType's "
+                                    "carla:class_id) in a compiled scenario, or a vType id in a "
+                                    "hand-written route file. A population left out takes the "
+                                    "run's default."}}})
 
     @classmethod
     def from_legacy_labels(cls, labels: Mapping, source: str = "") -> CotDisplayConvention:

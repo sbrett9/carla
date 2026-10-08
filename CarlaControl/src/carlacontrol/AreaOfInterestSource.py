@@ -39,6 +39,14 @@ It cannot check `kind` against a vocabulary, because the vocabulary's term list 
 `kind` is carried through unchanged. Planar tests run in degrees, which preserves every topological
 property checked here at the scale of one world; the square-metre floor converts degrees to metres
 with a spherical approximation that is only ever used to reject the degenerate.
+
+The published schema (`schema()`, `area_of_interest.schema.json`) states the structural half of these
+rules -- the shapes, the id pattern, a circle's radius -- for a reader. A file that passes every rule
+above is also checked against it, so the schema can never accept less than this reader does without a
+test noticing, and a file the schema refuses is refused in its words. The geometric rules (a closed,
+simple ring of positive area; a hole inside its exterior; the extract's bounds) are this reader's
+alone. The file carries no format version: it is GeoJSON, and every file is read as version 1 of our
+properties.
 """
 from __future__ import annotations
 
@@ -51,6 +59,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from carlacontrol.OsmClipper import BoundingBox
+from carlacontrol.SchemaPublication import SchemaPublication
 
 # The file an extract's areas are declared in: `Import/Arapahoe_I25.osm` ->
 # `Import/Arapahoe_I25.aoi.geojson`.
@@ -59,6 +68,10 @@ SOURCE_SUFFIX = ".aoi.geojson"
 AREA_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,63}")
 GEOMETRY_TYPES = ("Polygon", "MultiPolygon", "Point")
 READ_PROPERTIES = frozenset({"id", "name", "kind", "radius_m"})
+# The format of our properties on the GeoJSON, which the file does not declare.
+SOURCE_VERSION = 1
+# A ring's fewest positions: three distinct vertices and the first repeated to close it.
+MINIMUM_RING_POSITIONS = 4
 
 # A ring enclosing less than this cannot hold a vehicle; one that small is almost always a ring whose
 # vertices are collinear or repeated.
@@ -203,9 +216,81 @@ class AreaOfInterestSource:
             problems.extend(source.envelope_problems(bounds))
         if problems:
             raise AreaOfInterestError(source_name, problems)
+        schema = cls.schema()
+        departures = SchemaPublication.problems(document, schema)
+        if departures:
+            raise AreaOfInterestError(source_name, [SchemaPublication.refusal(
+                source_name, schema, departures)])
         for warning in warnings:
             logger.warning("%s: %s", source_name, warning)
         return source
+
+    @staticmethod
+    def schema() -> dict:
+        """The areas file's schema, as published: GeoJSON's FeatureCollection with the geometries
+        and the properties this reader takes."""
+        position = {"type": "array", "minItems": 2, "maxItems": 3, "items": {"type": "number"},
+                    "description": "[longitude, latitude] in WGS84 degrees, in that order. A third "
+                                   "number, an altitude, is ignored with a warning."}
+        ring = {"type": "array", "minItems": MINIMUM_RING_POSITIONS,
+                "items": {"$ref": "#/$defs/position"},
+                "description": "A closed ring: at least four positions, the last repeating the first, "
+                               "not crossing itself and enclosing at least "
+                               f"{MINIMUM_RING_AREA_M2:g} square meter."}
+        polygon = {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ring"},
+                   "description": "The exterior ring, then any holes, each inside the exterior."}
+        text = {"type": "string", "pattern": r"\S"}
+
+        def properties(circle: bool) -> dict:
+            radius = ({"type": "number", "exclusiveMinimum": 0,
+                       "description": "The circle's radius, meters. Required on a Point."}
+                      if circle else
+                      {"type": "null", "description": "Applies to a Point only; refused here."})
+            return {"type": "object", "required": ["id", "name", "radius_m"] if circle
+                    else ["id", "name"],
+                    "description": "Our properties. Any other is not read and not carried into "
+                                   "the world, with a warning.",
+                    "properties": {
+                        "id": {"type": "string", "pattern": f"^{AREA_ID_PATTERN.pattern}$",
+                               "description": "The area's id: a lower-case letter, then up to 63 "
+                                              "lower-case letters, digits and underscores; unique "
+                                              "in the file. Annotations name the area by it."},
+                        "name": SchemaPublication.described(
+                            text, "The area's name for a person; not empty."),
+                        "kind": SchemaPublication.nullable(
+                            text, "What kind of place it is, such as bahonar:guard_post; carried "
+                                  "into the world unchanged. Optional."),
+                        "radius_m": radius}}
+
+        def feature(geometry: str, coordinates: dict, circle: bool = False) -> dict:
+            return {"type": "object", "required": ["type", "geometry", "properties"],
+                    "properties": {
+                        "type": {"const": "Feature"},
+                        "geometry": {"type": "object", "required": ["type", "coordinates"],
+                                     "properties": {"type": {"const": geometry},
+                                                    "coordinates": coordinates}},
+                        "properties": properties(circle)}}
+
+        return SchemaPublication.document(
+            "area-of-interest", SOURCE_VERSION, "Areas of interest",
+            "Named places a scenario can site behavior on and an annotation can refer to, declared "
+            f"in GeoJSON (RFC 7946) beside the OpenStreetMap extract as <extract>{SOURCE_SUFFIX}. "
+            "Read when a world is built (carla-build-world, carla-sctmv) and by "
+            "carla-publish-reference-set. An area is a Polygon, a MultiPolygon, or a Point with a "
+            "radius, which is a circle.",
+            {"type": "object", "required": ["type", "features"],
+             "properties": {
+                 "type": {"const": "FeatureCollection"},
+                 "features": {"type": "array", "items": {"$ref": "#/$defs/feature"}},
+                 "crs": {"description": "Removed from GeoJSON by RFC 7946. Positions are read as "
+                                        "WGS84 degrees whatever it says, with a warning."}},
+             "$defs": {
+                 "position": position, "ring": ring, "polygon": polygon,
+                 "feature": {"anyOf": [
+                     feature("Polygon", {"$ref": "#/$defs/polygon"}),
+                     feature("MultiPolygon", {"type": "array", "minItems": 1,
+                                              "items": {"$ref": "#/$defs/polygon"}}),
+                     feature("Point", {"$ref": "#/$defs/position"}, circle=True)]}}})
 
     def envelope_problems(self, bounds: BoundingBox) -> list[str]:
         """V5.3 and V5.4: every area must reach into the world's extent, stated in degrees."""
