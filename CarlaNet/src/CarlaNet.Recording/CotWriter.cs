@@ -115,8 +115,7 @@ public static class CotWriter
         // as they always were. "rendered" is exactly the bodies this frame drew, each named by the
         // vehicle it drew; "unknown" is a frame whose render set was no longer held, listed empty
         // rather than guessed, and not to be read as an empty scene.
-        if (vehicles == SidecarVehicles.Rendered) w.WriteAttributeString("vehicles", "rendered");
-        else if (vehicles == SidecarVehicles.Unknown) w.WriteAttributeString("vehicles", "unknown");
+        if (VehiclesValue(vehicles) is { } listed) w.WriteAttributeString("vehicles", listed);
 
         // The draw distance the image was rendered under, where one was in force: every vehicle below
         // farther than this from the camera is in the world and not in the image, and says so. Absent,
@@ -446,6 +445,17 @@ public static class CotWriter
         w.WriteEndElement(); // events
         w.WriteEndDocument();
     }
+
+    /// <summary>
+    /// The container's <c>vehicles</c> word for which vehicles a sidecar lists: <c>rendered</c> or
+    /// <c>unknown</c>, and null for every vehicle actor the world held, which writes none.
+    /// </summary>
+    public static string? VehiclesValue(SidecarVehicles vehicles) => vehicles switch
+    {
+        SidecarVehicles.Rendered => "rendered",
+        SidecarVehicles.Unknown => "unknown",
+        _ => null,
+    };
 
     /// <summary>
     /// Whether a vehicle of the capture in the picture goes without its lights, because the snapshot of the

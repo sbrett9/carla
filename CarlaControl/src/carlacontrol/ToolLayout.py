@@ -34,7 +34,8 @@ PACKAGE = "carlacontrol"
 PACKAGE_DATA = "data"
 CATALOGUE = ("catalogue", "vehicles.catalogue.json")
 VEHICLE_TYPES = ("catalogue", "vehicles.vtypes.rou.xml")
-RUN_CONFIGURATION_SCHEMA = ("schemas", "run_configuration.schema.json")
+SCHEMAS = "schemas"
+RUN_CONFIGURATION_SCHEMA = (SCHEMAS, "run_configuration.schema.json")
 EXECUTABLE_SUFFIX = ".exe" if os.name == "nt" else ""
 
 
@@ -215,6 +216,12 @@ class ToolLayout:
     def run_configuration_schema(self) -> Path:
         """The JSON schema of a capture run's configuration."""
         return self._data_file(RUN_CONFIGURATION_SCHEMA)
+
+    @property
+    def schema_directory(self) -> Path:
+        """The published schemas: the checkout's `CarlaControl/schemas/`, or the copies installed with
+        the package."""
+        return self._data_file((SCHEMAS,))
 
     def _data_file(self, parts: tuple[str, ...]) -> Path:
         if self.checkout is not None:

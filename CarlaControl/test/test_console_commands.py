@@ -38,6 +38,7 @@ COMMANDS = {
     "carla-check-label-leaks": "CarlaControl/scripts/check_corpus_leaks.py",
     "carla-publish-reference-set": "CarlaControl/scripts/publish_reference_set.py",
     "carla-check-sumo": "CarlaControl/scripts/test_sumo_toolchain.py",
+    "carla-validate": "CarlaControl/scripts/validate_capture.py",
 }
 
 

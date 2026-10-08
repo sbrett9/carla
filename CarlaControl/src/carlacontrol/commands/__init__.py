@@ -20,6 +20,8 @@ checkout:
     carla-publish-reference-set  publish_reference_set  publish a world package's reference set
     carla-check-sumo             check_sumo             check which SUMO resolves, and that it is
                                                         complete
+    carla-validate               validate               check every file of a capture against its
+                                                        schema
 
 Where a command takes its defaults from -- a source checkout, or the current folder when installed --
 is `carlacontrol.ToolLayout`.

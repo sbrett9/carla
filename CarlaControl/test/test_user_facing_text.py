@@ -32,6 +32,7 @@ import json
 import re
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -53,7 +54,11 @@ PYPROJECT = _REPO / "CarlaControl" / "pyproject.toml"
 SKILL = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios"
 PUBLISHED = [_REPO / "CarlaControl" / "schemas" / "run_configuration.schema.json",
              SKILL / "schemas" / "scenario.schema.json", SKILL / "schemas" / "sweep.schema.json",
-             SKILL / "checks.json"]
+             SKILL / "checks.json",
+             *sorted((_REPO / "CarlaControl" / "schemas").glob("*.tableschema.json")),
+             *sorted(path for path in (_REPO / "CarlaControl" / "schemas").glob("*.schema.json")
+                     if path.name != "run_configuration.schema.json")]
+XML_SCHEMAS = sorted((_REPO / "CarlaControl" / "schemas").glob("*.xsd"))
 # The vehicle classes' descriptions and curation reasons are the measured catalogue's own data: the
 # catalogue digest covers them and every compiled scenario's lock records that digest, so their words
 # change only with a rebuilt catalogue and recompiled scenarios.
@@ -184,6 +189,14 @@ def test_every_command_s_help_is_plain(name, monkeypatch, capsys):
 @pytest.mark.parametrize("path", PUBLISHED, ids=lambda p: p.name)
 def test_every_published_schema_and_check_list_is_plain(path):
     assert_plain(prose(json.loads(path.read_text(encoding="utf-8"))), str(path.relative_to(_REPO)))
+
+
+@pytest.mark.parametrize("path", XML_SCHEMAS, ids=lambda p: p.name)
+def test_every_published_xml_schema_s_documentation_is_plain(path):
+    namespace = "{http://www.w3.org/2001/XMLSchema}"
+    texts = [element.text or "" for element in ET.parse(path).iter(namespace + "documentation")]
+    assert texts
+    assert_plain(texts, str(path.relative_to(_REPO)))
 
 
 def test_what_the_generators_produce_now_is_plain():

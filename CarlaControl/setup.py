@@ -65,6 +65,8 @@ RELEASE = VERSION.split("+", 1)[0]
 DEPENDENCIES = [
     # The carlanet of this release, whichever commit built it.
     f"carlanet=={RELEASE}",
+    # carla-validate checks a capture's JSON files against their published JSON Schemas (2020-12).
+    "jsonschema>=4.18",
     # The scenario compiler and the SUMO vehicle-type writer parse and write XML with it.
     "lxml>=5.0",
     "numpy>=1.24.0",

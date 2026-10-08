@@ -119,25 +119,62 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     /// <summary>The terminal row: present in a manifest whose run reached its end, and only there.</summary>
     public const string ClosedRow = "manifest_closed";
 
-    private const string SensorPlacedRow = "sensor_placed";
-    private const string AdmittedRow = "render_admitted";
-    private const string ReleasedRow = "render_released";
-    private const string CollisionBeganRow = "collision_began";
-    private const string CollisionEndedRow = "collision_ended";
-    private const string NotInsertedRow = "vehicle_not_inserted";
-    private const string EmergencyStopRow = "emergency_stop";
-    private const string TeleportRow = "teleport";
-    private const string WindowOpenRow = "solar_window_open";
-    private const string WindowEndRow = "solar_window_end";
-    private const string InstanceRow = "instance";
-    private const string SeriesRow = "series";
-    private const string CohortRow = "cohort";
-    private const string IntervalOpenedRow = "interval_opened";
-    private const string IntervalClosedRow = "interval_closed";
-    private const string DefectRow = "supervision_defect";
+    internal const string SensorPlacedRow = "sensor_placed";
+    internal const string AdmittedRow = "render_admitted";
+    internal const string ReleasedRow = "render_released";
+    internal const string CollisionBeganRow = "collision_began";
+    internal const string CollisionEndedRow = "collision_ended";
+    internal const string NotInsertedRow = "vehicle_not_inserted";
+    internal const string EmergencyStopRow = "emergency_stop";
+    internal const string TeleportRow = "teleport";
+    internal const string WindowOpenRow = "solar_window_open";
+    internal const string WindowEndRow = "solar_window_end";
+    internal const string InstanceRow = "instance";
+    internal const string SeriesRow = "series";
+    internal const string CohortRow = "cohort";
+    internal const string IntervalOpenedRow = "interval_opened";
+    internal const string IntervalClosedRow = "interval_closed";
+    internal const string DefectRow = "supervision_defect";
+
+    /// <summary>Every kind of row a manifest holds, in the order a run first writes them.</summary>
+    internal static IReadOnlyList<string> RowKinds { get; } =
+    [
+        OpenedRow, InstanceRow, SeriesRow, CohortRow, SensorPlacedRow, AdmittedRow, ReleasedRow,
+        CollisionBeganRow, CollisionEndedRow, NotInsertedRow, EmergencyStopRow, TeleportRow, WindowOpenRow,
+        WindowEndRow, IntervalOpenedRow, IntervalClosedRow, DefectRow, ClosedRow,
+    ];
+
+    /// <summary>Why a vehicle was admitted: the first frame after the session fast-forwarded SUMO.</summary>
+    internal const string RenderingBeganReason = "rendering_began";
+
+    /// <summary>Why a vehicle was admitted: SUMO inserted it at this frame.</summary>
+    internal const string InsertedReason = "inserted";
+
+    /// <summary>Why a vehicle was admitted: it entered the render set's limit, having been simulated already.</summary>
+    internal const string EnteredLimitReason = "entered_limit";
+
+    /// <summary>Every reason an admission row gives.</summary>
+    internal static IReadOnlyList<string> AdmissionReasons { get; } =
+        [RenderingBeganReason, InsertedReason, EnteredLimitReason];
+
+    /// <summary>A run that ended because SUMO had nothing left to simulate.</summary>
+    internal const string ScenarioFinishedEnding = "scenario_finished";
+
+    /// <summary>A run its caller stopped before SUMO had finished.</summary>
+    internal const string CallerStoppedEnding = "caller_stopped";
+
+    /// <summary>A run the session stopped, at a stage and for a cause.</summary>
+    internal const string RunStoppedEnding = "run_stopped";
+
+    /// <summary>Every way a run ends, as the terminal row and the world truth track's summary write it.</summary>
+    internal static IReadOnlyList<string> Endings { get; } =
+        [ScenarioFinishedEnding, CallerStoppedEnding, RunStoppedEnding];
+
+    /// <summary>How an advancing sun is advanced: the session writes it on every tick.</summary>
+    internal const string AdvanceMechanism = "per_tick_write";
 
     /// <summary>What the opening row names as the source of a vehicle's brake lights and turn signals.</summary>
-    private const string SumoSignalsSource = "sumo_signals";
+    internal const string SumoSignalsSource = "sumo_signals";
 
     private static readonly JsonWriterOptions JsonOptions = new()
     {
@@ -392,9 +429,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             {
                 string typeId = step.Frames.TryGetValue(vehicleId, out CoSimVehicleFrame frame) ? frame.TypeId : string.Empty;
                 _held[vehicleId] = typeId;
-                string reason = step.AfterFastForward ? "rendering_began"
-                    : step.Events.Departed.Contains(vehicleId) ? "inserted"
-                    : "entered_limit";
+                string reason = step.AfterFastForward ? RenderingBeganReason
+                    : step.Events.Departed.Contains(vehicleId) ? InsertedReason
+                    : EnteredLimitReason;
                 _pending.Add(new Admission(vehicleId, typeId, step.FrameSeconds, reason));
             }
 
@@ -587,9 +624,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             return;
         }
 
-        string ended = end.Stopped is not null ? "run_stopped"
-            : end.ScenarioFinished ? "scenario_finished"
-            : "caller_stopped";
+        string ended = end.Stopped is not null ? RunStoppedEnding
+            : end.ScenarioFinished ? ScenarioFinishedEnding
+            : CallerStoppedEnding;
         WriteClosing(ended, end.Stopped, null, end.LastFrameSeconds,
                      end.LastRenderedSeconds is { } rendered ? Rendered(rendered) : null, end.LastRenderedFrame,
                      end.Released);
@@ -617,9 +654,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             return;
         }
 
-        string ended = _report.Stopped is not null ? "run_stopped"
-            : _scenarioFinished() ? "scenario_finished"
-            : "caller_stopped";
+        string ended = _report.Stopped is not null ? RunStoppedEnding
+            : _scenarioFinished() ? ScenarioFinishedEnding
+            : CallerStoppedEnding;
         WriteClosing(ended, _report.Stopped, reason, _lastSumoFrameSeconds,
                      _lastFrame is null ? null : Rendered(_lastFrame.SimulatedTimeSeconds),
                      _lastFrame?.Frame, _leftAtAClose());
@@ -836,7 +873,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             json.WritePropertyName("illumination_in_force");
             WriteIllumination(json, policy);
             json.WriteBoolean("epoch_honoured", epoch is not null && policy is { HonoursTheEpoch: true });
-            json.WriteString("advance_mechanism", "per_tick_write");
+            json.WriteString("advance_mechanism", AdvanceMechanism);
             json.WriteEndObject();
 
             json.WriteString("world_truth_track", _options.WorldTruthTrackPath);
@@ -939,7 +976,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     }
 
     /// <summary>A release reason as the manifest writes it.</summary>
-    private static string ReasonName(RenderSetReleaseReason reason) => reason switch
+    internal static string ReasonName(RenderSetReleaseReason reason) => reason switch
     {
         RenderSetReleaseReason.LeftTheSimulation => "left_the_simulation",
         RenderSetReleaseReason.SessionEnded => "session_ended",
@@ -1136,7 +1173,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
         json.WriteEndArray();
         json.WriteString("open_intervals_close_as", CoreVocabulary.Name(
-            ended == "scenario_finished" ? ClosedBy.ScenarioEnd : ClosedBy.CaptureWindowEnd));
+            ended == ScenarioFinishedEnding ? ClosedBy.ScenarioEnd : ClosedBy.CaptureWindowEnd));
         json.WriteStartArray("never_opened");
         if (_report.CompileLock.Plan is { } plan)
         {
