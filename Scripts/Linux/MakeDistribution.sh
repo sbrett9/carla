@@ -10,6 +10,9 @@
 #                  carla-compile-scenario, carla-capture, carla-drive and the rest
 #   catalogue/     the measured vehicle catalogue, which a scenario specification names
 #   osm/           the example OpenStreetMap maps worlds can be built from
+#   Scenarios/     the example scenarios, whole, with the OpenStreetMap extracts they are built on
+#   docs/          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
+#                  Docs/CAT_Research/, with their folder structure kept so their links resolve
 #   tools/sumo/    the SUMO toolchain laid out as a SUMO installation: bin/ with netconvert, sumo and
 #                  duarouter, lib/ with the shared libraries they load, SUMO's typemap/xsd data, its
 #                  traci/sumolib modules, and PROJ data
@@ -20,6 +23,9 @@
 #   licenses/      the license text of every third-party component in the bundle
 #   MANIFEST.md    what is in here, where it came from and under what terms (generated)
 #   setup-venv.sh / carla-env.sh / run-server.sh / README.md
+#
+# README.md is filled in from Scripts/Distribution/README.md, the one template this script and
+# Scripts/Windows/MakeDistribution.ps1 share.
 #
 # carla-env.sh is the environment step: sourced, it activates the venv and names the bundled SUMO
 # toolchain for every command (CARLA_NETCONVERT, SUMO_HOME, PROJ_LIB/PROJ_DATA).
@@ -221,6 +227,29 @@ else
     echo "[dist] WARNING: no authoring skills under $root/CarlaControl/skills"
 fi
 
+# 3c. The user documentation: the guides and the reference pages, from Docs/CAT_Research/ into docs/
+#     with their folder structure kept, so the relative links between them still resolve. Only these
+#     folders are written for users. Plans/, Findings/ and the rest of Docs/CAT_Research/ are internal
+#     and stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
+#     and stops the assembly.
+user_doc_folders="Guides EPOL Tracking Schemas Skills"
+copy_user_docs() {
+    local folder
+    mkdir -p "$dist/docs"
+    for folder in $user_doc_folders; do
+        if [ ! -d "$root/Docs/CAT_Research/$folder" ]; then
+            echo "[dist] ERROR: user documentation folder not found at $root/Docs/CAT_Research/$folder" >&2
+            exit 1
+        fi
+        cp -a "$root/Docs/CAT_Research/$folder" "$dist/docs/"
+    done
+    echo "[dist] docs: ${user_doc_folders// /, } ($(find "$dist/docs" -type f | wc -l) files)"
+    add_manifest_row "user documentation (${user_doc_folders// /, })" \
+                     "built from this repository, Docs/CAT_Research/" \
+                     "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt)" "docs/"
+}
+copy_user_docs
+
 # 4. Example OSM maps. These are OpenStreetMap extracts, so they and every .xodr derived from them
 #    carry the Open Database License; MANIFEST.md names the files that actually shipped.
 if cp "$root"/Import/*.osm "$dist/osm/" 2>/dev/null; then
@@ -230,6 +259,27 @@ if cp "$root"/Import/*.osm "$dist/osm/" 2>/dev/null; then
 else
     echo "[dist] WARNING: no .osm files under Import/"
 fi
+
+# 4b. The example scenarios, copied whole to Scenarios/ at the top of the bundle. They include
+#     OpenStreetMap extracts, so their row carries the ODbL notice osm/ does and names the extracts
+#     that shipped. A checkout without the folder still assembles: the bundle goes without it, and
+#     the warning says so.
+copy_example_scenarios() {
+    local src="$root/CarlaControl/Examples/Scenarios" extracts osm_named=""
+    if [ ! -d "$src" ]; then
+        echo "[dist] WARNING: no example scenarios at $src; the bundle will have no Scenarios/ folder."
+        return 0
+    fi
+    cp -a "$src" "$dist/Scenarios"
+    extracts="$(find "$dist/Scenarios" -type f -name '*.osm' -printf '%P\n' | sort | paste -sd ',' - | sed 's/,/, /g')"
+    [ -z "$extracts" ] || osm_named=": $extracts"
+    echo "[dist] example scenarios: $(find "$dist/Scenarios" -type f | wc -l) files, $(find "$dist/Scenarios" -type f -name '*.osm' | wc -l) OpenStreetMap extracts"
+    add_manifest_row "example scenarios, with the OpenStreetMap extracts they are built on" \
+                     "built from this repository, CarlaControl/Examples/Scenarios/; OpenStreetMap data by openstreetmap.org contributors$osm_named" \
+                     "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt); the OpenStreetMap extracts and data derived from them ODbL 1.0 (licenses/OpenStreetMap-ODbL-NOTICE.txt)" \
+                     "Scenarios/"
+}
+copy_example_scenarios
 
 # 5. The SUMO toolchain: the binaries, the shared libraries they actually load, the named data/ and
 #    tools/ subsets, and PROJ data. CarlaNet talks to `sumo` over the TraCI wire protocol from managed
@@ -340,8 +390,8 @@ cat > "$dist/licenses/OpenStreetMap-ODbL-NOTICE.txt" <<'ODBL'
 OpenStreetMap data and works derived from it
 ============================================
 
-The .osm extracts under osm/, and every OpenDRIVE (.xodr) road network this distribution generates
-from one, are derived from OpenStreetMap.
+The .osm extracts under osm/ and Scenarios/, and every OpenDRIVE (.xodr) road network this
+distribution generates from one, are derived from OpenStreetMap.
 
   (c) OpenStreetMap contributors, available under the Open Database License (ODbL) v1.0.
   License text: https://opendatacommons.org/licenses/odbl/1-0/
@@ -472,67 +522,49 @@ exec "$here/CarlaServer/CarlaUnreal.sh" "${map[@]+"${map[@]}"}" -RenderOffScreen
 SRV
 chmod +x "$dist/run-server.sh"
 
-cat > "$dist/README.md" <<README
-# CARLA ${pkgname#Carla-} distribution
-
-Self-contained CARLA digital-twin bundle: the cooked server, the carlanet and carlacontrol Python
-packages with the \`carla-*\` commands, the SUMO toolchain, example OSM maps, the measured vehicle
-catalogue, the scenario-authoring skills and the world tools.
-
-## What ships
-- \`CarlaServer/\` - the cooked server; \`run-server.sh\` starts it headless.
-- \`wheels/\` - carlanet and carlacontrol; \`setup-venv.sh\` installs both, and the commands, into \`venv/\`.
-- \`carla-env.sh\` - the environment step (below).
-- \`tools/sumo/\` - SUMO ${sumo_version} (netconvert, sumo, duarouter; no sumo-gui), its libraries and PROJ data.
-- \`osm/\` example OpenStreetMap extracts; \`catalogue/\` the measured vehicle catalogue a scenario names.
-- \`skills/\` - how to author scenarios; \`world-tools/\` - PackageWorld.sh and InstallWorld.sh.
-- \`VERSION\`, \`MANIFEST.md\` and \`licenses/\` - what this is, and under what terms.
-
-## Prerequisites
-- 64-bit Linux compatible with the build host (RHEL 8 / glibc 2.28 or newer).
-- A GPU with **Vulkan** drivers (the server renders even when headless).
-- **Python 3.11 or newer**, for the venv.
-- The **.NET 10 runtime** (carlanet runs .NET assemblies), e.g. \`dnf install dotnet-runtime-10.0\`.
-- To build a world: \`CESIUM_ION_TOKEN\` set to a Cesium ion access token.
-
-## Run it
-\`\`\`sh
-./setup-venv.sh                                  # once: venv/ with both wheels and the commands
-./run-server.sh &                                # start the server (needs GPU/Vulkan)
-. ./carla-env.sh                                 # in each new shell: the environment step
-carla-build-world --osm osm/Lakeview_Carson.osm  # build a world; its package goes to world-packages/
-carla-sctmv --osm osm/Lakeview_Carson.osm        # or build one and fly, drive and record in it
-\`\`\`
-
-**The environment step.** \`carla-env.sh\` activates \`venv/\` and points every command at the bundled
-toolchain: \`CARLA_NETCONVERT\`, \`SUMO_HOME\`, and \`PROJ_LIB\`/\`PROJ_DATA\`. To watch a drive in
-sumo-gui, which is not bundled, give \`carla-drive --sumo-gui\` a SUMO ${sumo_version} installation of your
-own: \`--sumo-home <folder>\`, or set \`CARLANET_SUMO_HOME\` to it.
-
-## The commands
-Each takes \`--help\`. A command reads and writes under the current folder (\`world-packages/\`,
-\`captures/\`, \`runs/\`, \`scenarios/\`) unless told otherwise.
-- \`carla-sctmv\` - build a world, then fly, drive and record in it.
-- \`carla-build-world\` - build a world and write its world package.
-- \`carla-compile-scenario\` - compile a scenario against its world package.
-- \`carla-drive\` - drive a world's vehicles from SUMO, and record.
-- \`carla-capture\` - capture a window of a compiled scenario.
-- \`carla-free-camera\`, \`carla-camera-follower\` - watch a running world through a camera of your own.
-- \`carla-cot-telemetry\` - Cursor-on-Target from a SUMO scenario.
-- \`carla-audit-sidecars\`, \`carla-diff-manifests\`, \`carla-check-label-leaks\` - check what a run wrote.
-- \`carla-publish-reference-set\` - refresh a world package's areas of interest and place index.
-- \`carla-check-sumo\` - say which SUMO the commands resolve, and check it is complete.
-
-## Worlds made elsewhere
-\`world-tools/InstallWorld.sh --package <world.zip>\` installs a packaged world into this
-distribution. \`world-tools/PackageWorld.sh\` makes such a package; it needs the editor and a CARLA
-checkout at this distribution's commit: \`--carla-root <checkout> --distribution .\`
-
-## What is in here, and under what terms
-\`MANIFEST.md\` lists every component this bundle carries, where it came from and its license, with
-the license texts themselves under \`licenses/\`. Both are generated from what the packaging script
-actually copied, so they describe this bundle rather than an intended one.
-README
+# 7b. README.md, filled in from Scripts/Distribution/README.md. That template is shared with
+#     Scripts/Windows/MakeDistribution.ps1, so the text exists once, as a page checked like any other.
+#     Each placeholder in it is a DIST_ word for a value that differs between bundles: the release and
+#     configuration, the platform, the shell, the script extension and the SUMO release. A placeholder
+#     left unfilled stops the assembly, rather than shipping a README that shows it. The result has LF
+#     line endings, so both scripts write the same bytes for the same values.
+expand_readme_template() {   # <template> <PLACEHOLDER=value>...
+    local text pair name token known unfilled=""
+    if [ ! -f "$1" ]; then
+        echo "[dist] ERROR: README template not found at $1" >&2
+        exit 1
+    fi
+    text="$(tr -d '\r' < "$1")"
+    shift
+    # Every placeholder the template names needs a value. This is checked before anything is filled
+    # in, and the longest names are filled first, so a placeholder whose name begins with another's
+    # (DIST_SUMO_RELEASE beside DIST_SUMO) is reported or filled whole, never half-filled.
+    for token in $(printf '%s\n' "$text" | grep -oE '\bDIST_[A-Z0-9_]+' | sort -u || true); do
+        known=0
+        for pair in "$@"; do
+            if [ "${pair%%=*}" = "$token" ]; then known=1; fi
+        done
+        [ "$known" -eq 1 ] || unfilled="$unfilled $token"
+    done
+    if [ -n "$unfilled" ]; then
+        echo "[dist] ERROR: the README template names placeholders with no value:$unfilled" >&2
+        exit 1
+    fi
+    # Both sides quoted: the placeholder matches literally, and the value goes in as written (an & in
+    # it is not the matched text, whatever bash's patsub_replacement says).
+    while IFS= read -r pair; do
+        text=${text//"${pair%%=*}"/"${pair#*=}"}
+    done < <(for pair in "$@"; do name="${pair%%=*}"; printf '%s\t%s\n' "${#name}" "$pair"; done |
+             sort -rn | cut -f2-)
+    printf '%s\n' "$text"
+}
+expand_readme_template "$root/Scripts/Distribution/README.md" \
+    "DIST_VERSION=${pkgname#Carla-}" \
+    "DIST_PLATFORM=Linux" \
+    "DIST_SYSTEM=Linux compatible with RHEL 8 (glibc 2.28 or newer), with Vulkan drivers" \
+    "DIST_SHELL=bash" \
+    "DIST_EXT=sh" \
+    "DIST_SUMO=$sumo_version" > "$dist/README.md"
 
 # 8. MANIFEST.md -- the inventory the steps above built up, rendered last so it covers everything
 # that was actually staged.
