@@ -16,11 +16,13 @@ It labels the vehicle that deviates rather than describing a gap.
 
 ## Who writes it and who reads it
 
-`carla-cot-telemetry --labels <file>.labels.json` writes it (`carlacontrol.SupervisionSidecar`) when the labels describe at least one gap.\
-It goes to `--supervision <file>` when given; otherwise beside the `--xml` or `--csv` output, named for its stem: `orbit_cot.xml` gets `orbit_cot.supervision.json`.\
+If the labels describe at least one gap, `carla-cot-telemetry --labels <file>.labels.json` writes it (`carlacontrol.SupervisionSidecar`).\
+If `--supervision <file>` is given, the file goes there.\
+Otherwise it goes beside the `--xml` or `--csv` output, named for its stem: `orbit_cot.xml` gets `orbit_cot.supervision.json`.\
 A run with neither file prints the gaps to the log instead.
 
-The gaps are never written into the event file or the CSV, because the answer a behavior model is asked for is a note naming the unmanned post and the time.
+The gaps are never written into the event file or the CSV.\
+This is because the answer a behavior model is asked for is a note that names the unmanned post and the time.
 
 Nothing in the tools reads it.\
 It is for whoever scores a model against the run.
@@ -39,7 +41,8 @@ The file is JSON with a one-space indent and no final newline.
 | `source_labels` | string or null | | yes | The labels file's name. |
 | `supervision_gaps` | array of objects | | yes | Every gap the labels describe, in their order. |
 
-Each gap is the labels file's note with every key the author gave it, unchanged, plus the window on the run's clock:
+Each gap is the labels file's note with every key the author gave it, unchanged.\
+It also holds the window on the run's clock:
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -47,8 +50,8 @@ Each gap is the labels file's note with every key the author gave it, unchanged,
 | `note` | string | | no | The author's description. |
 | `begin_s` | number | seconds | no | Where the window begins, in simulation time. |
 | `end_s` | number | seconds | no | Where the window ends, in simulation time. |
-| `begin_utc` | string | | no | `epoch + begin_s`, ISO 8601 UTC to the millisecond. Present when the note gives `begin_s`. |
-| `end_utc` | string | | no | `epoch + end_s`. Present when the note gives `end_s`. |
+| `begin_utc` | string | | no | `epoch + begin_s`, ISO 8601 UTC to the millisecond. Present for a note that gives `begin_s`. |
+| `end_utc` | string | | no | `epoch + end_s`. Present for a note that gives `end_s`. |
 | any other key | any | | no | The author's own, such as `tower_index`, `edge` or `edge_pos_m`. |
 
 ## Format version

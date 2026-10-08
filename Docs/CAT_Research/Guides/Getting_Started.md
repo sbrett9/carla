@@ -35,7 +35,7 @@ The commands `carlacontrol` installs include these:
 
 | Command | What it does |
 |---|---|
-| `carla-build-world` | Builds a world on the running server from an OpenStreetMap extract and writes its world package (`.cwp`). |
+| `carla-build-world` | Builds a world on the running server from an OpenStreetMap extract. Writes its world package (`.cwp`), one generated world in one file. |
 | `carla-sctmv` | Builds a world, then lets you fly, drive and record in it. |
 | `carla-compile-scenario` | Compiles a scenario against a world package. |
 | `carla-capture` | Captures a window of a compiled scenario. |
@@ -43,25 +43,25 @@ The commands `carlacontrol` installs include these:
 | `carla-camera-follower` | Shows one camera of your own on a running world, live. |
 | `carla-free-camera` | Flies a camera of your own around a running world, live. |
 | `carla-validate` | Checks the files the tools write against their schemas. |
-| `carla-audit-sidecars` | Checks the truth sidecars of a capture. |
+| `carla-audit-sidecars` | Checks the truth sidecars of a capture: the XML truth files written beside each still. |
 | `carla-check-sumo` | Says which SUMO the commands use. Checks that it is complete. |
 | `carla-cot-telemetry` | Makes Cursor-on-Target telemetry for every vehicle in a SUMO scenario, to a UDP socket, an XML file or a CSV. |
 | `carla-diff-manifests` | Checks that two runs of one scenario name the same supervision rows in their run manifests. |
 | `carla-check-label-leaks` | Checks that a telemetry dataset does not give away which vehicles a scenario planted. |
-| `carla-publish-reference-set` | Refreshes a world package's areas of interest and place index. |
+| `carla-publish-reference-set` | Refreshes a world package's areas of interest (named places a label can point to) and place index. |
 
 Every command takes `--help`.
 
 ## What the machine needs
 
 - **A GPU.**\
-  The server renders even when it runs without a window.\
+  The server renders even with no window.\
   On Windows, 64-bit Windows 10 or 11 with current graphics drivers.\
   On Linux, a 64-bit system compatible with RHEL 8 (glibc 2.28 or newer) and a GPU with Vulkan drivers.
 - **Python 3.11 or newer**, on the `PATH`, for the virtual environment.
 - **The .NET 10 runtime.**\
   `carlanet` runs .NET assemblies.
-- **SUMO 1.27.0, only if you want `sumo-gui`.**\
+- **SUMO 1.27.0, needed only for `sumo-gui`.**\
   The distribution's own SUMO has no `sumo-gui`.\
   If you want to watch a drive in SUMO's window, install SUMO 1.27.0 yourself.\
   It must be the release that converted the world.\
@@ -69,7 +69,9 @@ Every command takes `--help`.
 
 ## Set up
 
-Unpack the archive, open a terminal in its folder and run these steps.
+Unpack the archive.\
+Open a terminal in its folder.\
+Run these steps.
 
 On Windows, in PowerShell:
 
@@ -151,21 +153,24 @@ carla-drive --sumo-gui --sumo-home <your SUMO 1.27.0 folder> ...
 or set `CARLANET_SUMO_HOME` to that folder.\
 The drive looks at `CARLANET_SUMO_HOME` before `SUMO_HOME`, so `SUMO_HOME` can stay on the distribution's toolchain for building worlds and compiling scenarios.
 
-`carla-capture` reads `CARLANET_SUMO_HOME` too, when no site profile names a SUMO installation (see below).\
+When no site profile names a SUMO installation, `carla-capture` reads `CARLANET_SUMO_HOME` too (see below).\
 The capture then runs your SUMO, so it must be 1.27.0 as well.\
-An unattended capture refuses a value read from `CARLANET_SUMO_HOME` unless the site profile lists the variable in its `environment`.
+An unattended capture runs with no person at the terminal.\
+Unless the site profile lists the variable in its `environment`, an unattended capture refuses a value read from `CARLANET_SUMO_HOME`.
 
 ### The site profile
 
-A site profile is a small JSON file that holds the facts about this machine that a capture needs: the server's address, the SUMO installation and the folders for scenarios, world packages, the vehicle catalog, captures and run records.\
+A site profile is a small JSON file that holds the facts about this machine that a capture needs.\
+These are the server's address, the SUMO installation and the folders for scenarios, world packages, the vehicle catalog, captures and run records.\
 Keeping them in their own file lets the same run file move between machines unchanged.\
 The [Site profile](../Schemas/Site_Profile.md) page describes every field.
 
 You need one for two reasons:
 
 - **An unattended capture refuses without one.**\
-  An installed `carla-capture` run with `--caller unattended` is refused by run check 36 until the site profile names the SUMO installation.\
-  Without a profile nothing names it, so the capture would search `SUMO_HOME` and then the `PATH`.\
+  Until the site profile names the SUMO installation, run check 36 refuses an installed `carla-capture` run with `--caller unattended`.\
+  Without a profile, nothing names it.\
+  The only way left to find it is a search of `SUMO_HOME` and then the `PATH`.\
   An unattended run does not take machine state it was not given, so it refuses.\
   The refusal reads: `'sumo.home' names no installation, so the session will search SUMO_HOME, then PATH for one, which the site profile does not declare.`
 - **Without one, the folders depend on where you run the command.**\
@@ -180,16 +185,17 @@ Run this from the folder you will run captures from, usually the distribution's 
 carla-capture --write-site-profile site.json
 ```
 
-It writes the values this machine would use now, as absolute paths.\
+It writes the current values for this machine, as absolute paths.\
 Installed, the folders are the current folder's `scenarios/`, `world-packages/`, `captures/` and `runs/`.\
 The catalog is the one installed with `carlacontrol`.\
-Installed, the SUMO entry is `"sumo": {"home": null}` unless `CARLANET_SUMO_HOME` names an installation.\
+Unless `CARLANET_SUMO_HOME` names an installation, an installed copy writes the SUMO entry `"sumo": {"home": null}`.\
 It writes no `server` block.
 
 **Edit it.**\
 Set `sumo.home` to the SUMO installation, the folder that holds `bin/sumo`.\
-Don't leave it `null`: with `null`, the capture searches `SUMO_HOME` and the `PATH` of whatever machine runs it.\
-Add a `server` block if the server is not on this machine at port 2000.\
+Do not leave it `null`.\
+With `null`, the capture searches `SUMO_HOME` and the `PATH` of whatever machine runs it.\
+If the server is not on this machine at port 2000, add a `server` block.\
 A relative path is relative to the profile's own folder, so a profile kept in the distribution's folder can be short:
 
 ```json
@@ -217,8 +223,8 @@ A relative path is relative to the profile's own folder, so a profile kept in th
 | `paths.world_package_root` | Where the world packages (`.cwp` files) are. |
 | `paths.catalogue` | The vehicle catalog. It must be the one the scenario was compiled against (run check 48). |
 | `paths.capture_root` | Where captures are written, one folder per run. Put it on a disk with room: the launch estimates about 2.25 MiB per 1280 x 720 still. |
-| `paths.runs_root` | Where run results and their records go when `--result` is not given. |
-| `environment` | The environment variables the profile allows a value to come from. Leave it empty when every value is in the file. |
+| `paths.runs_root` | Without `--result`, where run results and their records go. |
+| `environment` | The environment variables the profile allows a value to come from. If every value is in the file, leave it empty. |
 
 The `catalogue/vehicles.catalogue.json` in the distribution is the same file as the one installed with `carlacontrol`.
 
@@ -229,7 +235,13 @@ Pass it on every capture:
 carla-capture --site-profile site.json --run my_capture.run.json
 ```
 
-The capture refuses a profile that is not JSON, has another `site_profile_version`, holds a block or field it does not know, or does not fit its schema.\
+The capture refuses a profile that:
+
+- is not JSON
+- has another `site_profile_version`
+- holds a block or field it does not know
+- does not fit its schema
+
 That refusal ends the launch with exit status 1, before a run begins, so no run result is written.\
 Every value the capture uses is recorded, with where it came from, in the run's lock and resolution report.
 
@@ -243,7 +255,8 @@ It does not take a single `.json` file.
 It finds it by the name the scenario's lock records, under `paths.world_package_root`.
 
 `carla-build-world` writes the package to `world-packages/` under the folder it is run from.\
-A world installed from a `PackageWorld` zip does not bring its `.cwp` with it, so copy the `.cwp` the world was built as into that folder.
+A world installed from a `PackageWorld` zip does not bring its `.cwp` with it.\
+Copy the `.cwp` the world was built as into that folder.
 
 ## Checking the install
 
@@ -271,21 +284,22 @@ Staged tools:
 SUMO toolchain at <distribution>\tools\sumo is complete.
 ```
 
-It exits 1 when the installation is incomplete or is another release.\
+If the installation is incomplete or is another release, it exits 1.\
 Its options:
 
 | Option | What it does |
 |---|---|
-| `--sumo-home SUMO_HOME` | The installation to check. Otherwise `SUMO_HOME`, then the repository's own build when run from a checkout, then the `PATH`. |
+| `--sumo-home SUMO_HOME` | The installation to check. Otherwise `SUMO_HOME`, then (from a checkout) the repository's own build, then the `PATH`. |
 | `--expect-version EXPECT_VERSION` | The release the installation must be, such as `1.27.0`. |
-| `--allow-version-mismatch` | Warn instead of refusing when `--expect-version` does not match. |
+| `--allow-version-mismatch` | If `--expect-version` does not match, warn instead of refusing. |
 
 Check your own SUMO the same way before you use it for `sumo-gui`: `carla-check-sumo --sumo-home <your SUMO> --expect-version 1.27.0`.
 
 ### Which server build you are talking to
 
 With the server running, ask it what it was built from.\
-`get_build_identity` never raises for an old server or one it cannot reach; it says so in `available` and `reason` instead.
+`get_build_identity` never raises for an old server or one it cannot reach.\
+It says so in `available` and `reason` instead.
 
 ```python
 import carlanet as carla
@@ -317,7 +331,7 @@ This one came from a run on a development editor build:
 
 | Key | Meaning |
 |---|---|
-| `available` | False for a server built before the call, or one that could not be reached. A `reason` then says why. |
+| `available` | False for a server built before the call, or one the call cannot reach. A `reason` then says why. |
 | `release` | The release compiled into the server. |
 | `world_interface` | What a separately delivered world can rely on this server providing, as `Major.Minor`. |
 | `build` | `package` for a cooked server, `editor` for the editor. |
@@ -371,4 +385,5 @@ Most are under `CarlaControl/scripts/`, but the names differ from the command na
 | `carla-sctmv` | `python CarlaControl/scripts/run_SCTMV.py` |
 
 These pages use the command names.\
-From a checkout, `carlanet` also needs its .NET assemblies: build them with `CarlaNet/python/build_wheel.ps1` or `build_wheel.sh`, or set `CARLANET_PUBLISH_DIR` to a folder `CarlaNet.Python` was published to.
+From a checkout, `carlanet` also needs its .NET assemblies.\
+Build them with `CarlaNet/python/build_wheel.ps1` or `build_wheel.sh`, or set `CARLANET_PUBLISH_DIR` to a folder `CarlaNet.Python` was published to.

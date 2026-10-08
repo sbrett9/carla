@@ -2,12 +2,13 @@
 
 `solar.json` holds the facts about a world's sun that a scenario's start time is checked against without a running server:
 
-- the origin the engine computes the sun's position from;
-- the time zone the engine sets from the origin's longitude.
+- the origin the engine computes the sun's position from
+- the time zone the engine sets from the origin's longitude
 
 The engine's time zone is local mean solar time, `longitude / 15` hours.\
 It is not the site's civil time zone.\
-At a site near 56.2° E it is +03:44:43, while the local civil time is +03:30.
+At a site near 56.2° E it is +03:44:43.\
+The local civil time there is +03:30.
 
 The scenario compiler reports the difference between the two.\
 The file never claims a civil time zone.
@@ -17,12 +18,12 @@ The file never claims a civil time zone.
 
 ## Who writes it and who reads it
 
-carlacontrol's `SolarFrame` writes it from `world.json`'s origin when the authoring reference set is published.\
+When the authoring reference set is published, carlacontrol's `SolarFrame` writes it from `world.json`'s origin.\
 The scenario compiler reads it through `WorldPackageReader.solar_frame()`.
 
 The file cannot say two things:
 
-- the time zone during a run, since a SUMO drive sets the scenario's own civil offset on the server's sun when it starts;
+- the time zone during a run, because a SUMO drive sets the scenario's own civil offset on the server's sun at its start
 - whether the world has a sun at all.
 
 Both are read from the server.
@@ -39,8 +40,8 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 | `engine_time_zone_hours` | number | hours east of UTC | yes | The zone the engine sets: `origin_longitude / 15`. |
 | `engine_time_zone` | string | | yes | The same zone as a signed offset `±HH:MM:SS`, rounded to the second. |
 | `engine_time_zone_rule` | string | | yes | The rule in words. |
-| `engine_daylight_saving` | boolean | | yes | Whether the engine applies daylight saving when it configures the world. Always `false`. |
-| `engine_solar_time_at_configure_hours` | number | hours | yes | The solar time the engine sets when it configures the world's georeference. Always 12.0. |
+| `engine_daylight_saving` | boolean | | yes | Whether the engine applies daylight saving as it configures the world. Always `false`. |
+| `engine_solar_time_at_configure_hours` | number | hours | yes | The solar time the engine sets as it configures the world's georeference. Always 12.0. |
 
 ## Format version
 
@@ -48,7 +49,8 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 There is no other version.\
 A file without it is version 1.
 
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, naming the version and the newest they read, rather than reading part of it.\
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than read part of it.\
+The refusal names the version and the newest version they read.\
 `WorldPackageReader` then checks the file against the schema.\
 If the file does not match, it refuses the file and names each problem.
 

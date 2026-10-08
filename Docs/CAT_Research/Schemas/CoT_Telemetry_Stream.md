@@ -13,8 +13,11 @@ A vehicle event has the same shape as a vehicle event in a capture's truth sidec
 The attributes they share mean the same thing.\
 Their meanings are given in full in [Truth_Sidecar.md](Truth_Sidecar.md).
 
-The schema does not repeat the shared parts: it includes `truth_sidecar.xsd` and takes `<point>`, `<track>`, `<contact>` and the simple types under them from it, so the two always match.\
-The event's own parts are in `cot_event_body.xsd`, which the schema also includes.\
+The schema does not repeat the shared parts.\
+It includes `truth_sidecar.xsd` and takes `<point>`, `<track>`, `<contact>` and the simple types under them from it.\
+The shared parts therefore always match.\
+The event's own parts are in `cot_event_body.xsd`.\
+The schema also includes that file.\
 All three files must sit in one folder.
 
 ## Who sends it and who receives it
@@ -25,12 +28,12 @@ Both format events with `carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot`.
 | | `carla-sctmv` | `carla-cot-telemetry --udp HOST:PORT` |
 |---|---|---|
 | Vehicles | CARLA's, from `get_vehicle_telemetry` | SUMO's, from TraCI, with no CARLA server |
-| Turned on | with the **Y** key while it runs | by `--udp` |
-| Destination | `--tak-host` (default `239.2.3.1`, TAK's multicast group) and `--tak-port` (default 6969) | the address given; port 6969 when none is given |
+| Turned on | with the Y key while it runs | by `--udp` |
+| Destination | `--tak-host` (default `239.2.3.1`, TAK's multicast group) and `--tak-port` (default 6969) | the address given. If no port is given, port 6969. |
 | Rate | `--rate`, default 5 Hz | `--rate`, default 1 Hz of simulation time |
-| `time` of each event | the wall clock when the event was formatted | the run's epoch plus the simulation time |
+| `time` of each event | the wall clock at the moment the event was formatted | the run's epoch plus the simulation time |
 | uid prefix | `CARLA-TRUTH` | `SUMO-TRUTH`, or `--uid-prefix` |
-| Affiliation | `--affiliation`, default `n` | the run's display convention, by population; `--marked-affiliation` for planted vehicles, in the live feed only |
+| Affiliation | `--affiliation`, default `n` | the run's display convention, by population. `--marked-affiliation` sets it for planted vehicles, in the live feed only. |
 | Extra detail | `_capture` (the frame) and `_solar` (the sun) | none |
 
 Multicast datagrams are sent with time-to-live `--ttl` (`carla-sctmv`) or `--udp-ttl` (`carla-cot-telemetry`), default 1.
@@ -59,7 +62,7 @@ Datagrams are UTF-8 and carry no XML declaration.
 | Attribute | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `version` | string | | yes | `2.0`, the CoT event version. |
-| `uid` | string | | yes | The track id. A CARLA vehicle is `CARLA-TRUTH-<actor id>`. A vehicle a SUMO drive lent a CARLA body is `CARLA-TRUTH-SUMO-<SUMO id>`, so its track does not change when its body does. A SUMO bridge vehicle is `SUMO-TRUTH-<SUMO id>`. |
+| `uid` | string | | yes | The track id. A CARLA vehicle is `CARLA-TRUTH-<actor id>`. A vehicle a SUMO drive lent a CARLA body is `CARLA-TRUTH-SUMO-<SUMO id>`. This id keeps its track the same through a change of body. A SUMO bridge vehicle is `SUMO-TRUTH-<SUMO id>`. |
 | `type` | string | | yes | `a-<affiliation>-G-E-V`: a ground vehicle. The affiliation is one of `p u a f n s h j k o x`. |
 | `how` | string | | yes | `m-g`: machine-generated truth. |
 | `time` | string | | yes | When the vehicle was at the point. ISO 8601 UTC to the millisecond. |
@@ -93,8 +96,8 @@ Datagrams are UTF-8 and carry no XML declaration.
 | `type_id` | string | | no | The CARLA blueprint id. Left out of a SUMO bridge datagram. |
 | `base_type` | string | | yes | `car`, `van`, `truck`, `bus`, `motorcycle` or `bicycle`, from the vehicle catalog. |
 | `special_type` | string | | no | `emergency`, `taxi`, `electric`, or empty. Left out of a SUMO bridge datagram. |
-| `length_m`, `width_m`, `height_m` | decimal | meters | yes | The vehicle's size, two decimals. CARLA's is the drawn body's bounding box; the bridge's is SUMO's. |
-| `color` | string | | yes | `R,G,B`. CARLA's body color, empty for a blueprint with none; or the SUMO type's sumo-gui color from the bridge. |
+| `length_m`, `width_m`, `height_m` | decimal | meters | yes | The vehicle's size, two decimals. CARLA's is the drawn body's bounding box. The bridge's is SUMO's. |
+| `color` | string | | yes | `R,G,B`. From CARLA, the body color, empty for a blueprint with none. From the bridge, the SUMO type's sumo-gui color. |
 | `role_name` | string | | no | The CARLA role name. Left out of a SUMO bridge datagram. |
 | `vx`, `vy`, `vz` | decimal | m/s | yes | Velocity in CARLA's frame: east, south, up. |
 | `heading_deg` | decimal | degrees | no | The direction the body points, clockwise from north. CARLA vehicles only. |
@@ -115,7 +118,7 @@ Datagrams are UTF-8 and carry no XML declaration.
 | `_solar` | `advancing` | `true` or `false` | | yes | Whether the sun's clock is running. |
 | `_solar` | `rate` | number | | yes | Solar seconds per simulation second. |
 
-`_solar` is left out when the server's solar state could not be read.
+If reading the server's solar state fails, `_solar` is left out.
 
 ## How the stream differs from the truth sidecar
 
@@ -124,20 +127,23 @@ Datagrams are UTF-8 and carry no XML declaration.
   Those fields hold the scenario author's names for its vehicle types and flows.\
   They also say which vehicles it planted.\
   The bridge's XML and CSV files keep them.
-- `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed, so an operator can see them.\
+- `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed.\
+  This lets an operator see them.\
   The written files never do.
 - It carries `_capture` and `_solar` inside each event's `<detail>`.\
   A sidecar holds the solar state once, on its container.\
   The sidecar's `_solar` also has the latitude, longitude and the illumination band.
-- There is no container, so no format version and no record of what made it.
+- There is no container.\
+  The stream therefore has no format version and no record of what made it.
 - The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper.\
-  CARLA's is the height of the body's origin with the drape offset removed, so it includes the origin's height above the ground.
+  CARLA's is the height of the body's origin with the drape offset removed.\
+  It therefore includes the origin's height above the ground.
 
 ## Format version
 
 A datagram carries no format version defined by these tools.\
 `version="2.0"` is the CoT event version.\
-A receiver should ignore attributes and elements it does not know, as CoT receivers do.
+If you write a receiver, make it ignore attributes and elements it does not know, as CoT receivers do.
 
 ## Example
 

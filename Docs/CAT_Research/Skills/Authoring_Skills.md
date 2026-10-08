@@ -23,8 +23,10 @@ It is deliberately not a directory junction: a junction is invisible in `git sta
 ## Third-party skills: `CarlaControl/skills/third-party/`
 
 General Unreal Engine 5 reference skills (gameplay framework, Mass Entity, Niagara, materials, replication and about twenty more) are a third-party MIT-licensed collection.\
-They are **vendored here** at `CarlaControl/skills/third-party/unreal-engine-skills/`, under the `third-party` path segment that says whose they are.\
-Assistants working in this workspace read them, so the version they read needs a commit behind it rather than whatever a developer happened to clone.
+They are vendored (copied into this repository) at `CarlaControl/skills/third-party/unreal-engine-skills/`.\
+The `third-party` path segment says whose they are.\
+Assistants working in this workspace read them.\
+So the version they read needs a commit behind it rather than whatever a developer happened to clone.
 
 | | |
 |---|---|
@@ -35,14 +37,17 @@ Assistants working in this workspace read them, so the version they read needs a
 
 **They do not ship.**\
 `MakeDistribution` copies `CarlaControl/skills/` into the distribution and skips `third-party/` on both platforms.\
-A distribution recipient authors scenarios against a generated world; they do not write engine C++, so this is 1.3 MB of somebody else's content they have no use for.
+A distribution recipient authors scenarios against a generated world.\
+They do not write engine C++.\
+So this is 1.3 MB of somebody else's content they have no use for.
 
 The `skills/` row in the distribution's generated `MANIFEST.md` also states one provenance and one license for everything under it.\
 That is true only while everything under it is this fork's own.
 
 **Do not edit the vendored files.**\
 A local fix is invisible to upstream and is lost at the next update.\
-Replace the whole directory from a fresh clone and move the pin, here and in `PROVENANCE.md`.
+Replace the whole directory from a fresh clone.\
+Then move the pin, here and in `PROVENANCE.md`.
 
 ## Where an assistant finds skills
 
@@ -61,5 +66,5 @@ An assistant working in this workspace loads skills from `.agents/skills/` at th
     ue-*/                       the Unreal Engine skills, byte-identical to the vendored copy
 ```
 
-The `.agents/skills/ue-*` directories are what the harness actually reads, so they stay where they are.\
+The `.agents/skills/ue-*` directories are what an assistant actually reads, so they stay where they are.\
 The vendored copy is what gives them a version, a license and a diff.

@@ -11,22 +11,26 @@
 
 A sweep is many runs of one scenario with parameters varied.\
 It names a base specification, the axes to vary over it and counterfactual pairs.\
-The compiler compiles every member in full, each in its own folder, so a member that would not route fails at compile time and not partway through a set of captures.
+The compiler compiles every member in full, each in its own folder.\
+So a member that does not route fails at compile time, not partway through a set of captures.
 
-A member's id comes from the base scenario's id and the member's axis values, with no counter and no time in it, so members can be joined across rebuilds.
+A member's id comes from the base scenario's id and the member's axis values.\
+It holds no counter and no time, so members can be joined across rebuilds.
 
 **Light is an axis of its own.**\
-Any axis whose path touches `epoch`, `illumination` or a capture window's `begin` changes the light, whatever it is declared as.\
+Any axis whose path touches `epoch`, `illumination` or a capture window's `begin` changes the light.\
+This is true whatever kind the axis is declared as.
+
 `illumination` says how the sweep treats such axes (check 43).\
 `hold` refuses them.\
 `vary` refuses any other kind.\
 `factorial` allows both and warns that the result is not a controlled comparison of either.
 
 A counterfactual pair holds the inputs fixed except one actor.\
-The mode says how the twin differs:
+The mode says how the twin (the member that changes the actor) differs:
 
-- `absent` removes the actor;
-- `nominal` keeps its type, route and timing, removes what you name (`stops` or `via`) and labels it nominal;
+- `absent` removes the actor.
+- `nominal` keeps its type, route and timing, removes what you name (`stops` or `via`) and labels it nominal.
 - `displaced` moves it by a time `shift` and/or by place substitutions (`places`).
 
 Car-following models react to what is in front of them, so a pair is identical inputs except one vehicle, never identical trajectories.
@@ -50,7 +54,7 @@ The schema ships with the authoring skill.\
 | `axes[].path` | string | yes | | The specification field to vary, such as `seeds.sumo` or `actors.probe.stops[0].duration`. A list entry is named by its `id`, `name`, `class_id`, `series_id` or `flow`. `epoch.date` moves the epoch's date and keeps it valid. |
 | `axes[].values` | array, at least one | yes | | The values the field takes. |
 | `axes[].kind` | `illumination` or `behaviour` | no | | What the author says the axis varies. An axis declared `behaviour` that changes the light is refused. |
-| `pairing` | `cross` or `zip` | no | `cross` | `cross` makes every combination of the axes' values; `zip` takes the n-th value of each axis together. It needs axes of equal length. |
+| `pairing` | `cross` or `zip` | no | `cross` | `cross` makes every combination of the axes' values. `zip` takes the n-th value of each axis together. It needs axes of equal length. |
 | `illumination` | `hold`, `vary` or `factorial` | no | `hold` | How the sweep treats axes that change the light. |
 | `counterfactuals` | array | no | none | Pairs made for every member. |
 | `counterfactuals[].actor` | string | yes | | The actor the twin changes. |

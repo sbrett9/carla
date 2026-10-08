@@ -16,20 +16,23 @@ The time in the name is the capture computer's local clock, to the millisecond.\
 The same instant in UTC is the `captured` attribute inside the file.
 
 The truth in a sidecar is always the truth of the still's own frame.\
-A still whose frame's truth could not be read is not written at all, so a still is never paired with a neighboring frame's truth.
+If the recorder is unable to read the truth of a still's frame, it does not write the still at all.\
+So a still is never paired with a neighboring frame's truth.
 
-Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed sends, with extra detail elements whose names begin with `_`.
+Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed sends.\
+These events carry extra detail elements whose names begin with `_`.
 
 ## Who writes it and when
 
 The CarlaNet recorder writes one sidecar for every still it saves, in the same moment as the PNG.\
-`carla-capture` runs a recorder for each camera of a capture run and puts each camera's stills in a folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a checkout).\
+`carla-capture` runs a recorder for each camera of a capture run.\
+It puts each camera's stills in a folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a checkout).\
 `carla-drive` and `carla-sctmv` write stills and sidecars the same way.
 
 ## Structure
 
 Elements appear in this order.\
-Elements marked "optional" may be absent.
+Elements marked "optional" can be absent.
 
 ```
 <events>                             the capture, one camera, one frame
@@ -48,26 +51,32 @@ Elements marked "optional" may be absent.
 </events>
 ```
 
-The camera platform's `<detail>` begins with `<contact>`; a vehicle's begins with `<track>`.\
+The camera platform's `<detail>` begins with `<contact>`.\
+A vehicle's begins with `<track>`.\
 That is how the two kinds of event are told apart.
 
 ## Conventions
 
 - **Positions** are WGS84 latitude and longitude in degrees.
-- **Heights** (`hae`) are meters above the WGS84 ellipsoid, in the bare-earth convention: the height of the bare ground model the world was built on, without the offset that lines the road up with the photographic terrain.\
+- **Heights** (`hae`) are meters above the WGS84 ellipsoid, in the bare-earth convention.\
+  That is the height of the bare ground model the world was built on.\
+  It leaves out the offset that lines the road up with the photographic terrain.\
   A camera's physical height is its `hae` plus `align_offset_m`.
 - **Directions** (`course`, `heading_deg`, `azimuth`) are degrees clockwise from true north.
 - **Velocities** (`vx`, `vy`, `vz`) are in CARLA's world frame: x east, y south, z up.
 - **Pixels** are counted from the picture's top-left corner: x to the right, y down.\
-  Boxes are not clipped to the picture, so a coordinate can be negative or larger than the picture.
+  Boxes are not clipped to the picture.\
+  So a coordinate can be negative or larger than the picture.
 - **Times** are UTC to the millisecond, such as `2026-10-07T17:34:49.411Z`.
 - **True or false** is written `true` or `false`.
 
-In the tables, **Required** is:
+A vehicle in the picture is one whose box fell wholly or partly in the picture (`in_frame` is `wholly` or `partly`).
 
-- "Yes" for an attribute every element of that kind carries;
-- "No" for one that may be absent;
-- "In picture" for one that a vehicle carries exactly when its box fell in the picture (`in_frame` is `wholly` or `partly`) and never otherwise.
+In the tables, the Required column holds one of three values:
+
+- "Yes" for an attribute every element of that kind carries
+- "No" for one that can be absent
+- "In picture" for one that every vehicle in the picture carries and no other vehicle carries
 
 The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives every unit in `cap:unit`.
 
@@ -75,21 +84,21 @@ The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives 
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `format_version` | integer, always 1 | | No | The file's format version; absent from a file written before files carried one, which is version 1. |
+| `format_version` | integer, always 1 | | No | The file's format version. A file written before files carried one has none and is version 1. |
 | `captured` | UTC time | | Yes | When the still was captured, by the recording computer's clock. |
-| `count` | integer | | Yes | How many vehicle events follow; the camera platform's event is not counted. |
+| `count` | integer | | Yes | How many vehicle events follow. The camera platform's event is not counted. |
 | `source` | text, always `truth` | | Yes | The events are the simulator's ground truth. |
-| `tick` | integer | | No | The simulation frame the image was rendered on; every recorder writes it. |
-| `sim_time_s` | decimal | seconds | No | Simulated time at that frame; written with `tick`. |
-| `run_id` | text | | No | The run the capture belongs to; every recorder writes one. |
+| `tick` | integer | | No | The simulation frame the image was rendered on. Every recorder writes it. |
+| `sim_time_s` | decimal | seconds | No | Simulated time at that frame. Written with `tick`. |
+| `run_id` | text | | No | The run the capture belongs to. Every recorder writes one. |
 | `scenario_id` | text | | No | The scenario driving the run, where there is one. |
 | `seed` | integer | | No | The seed the run was started with, where one was given. |
-| `vehicles` | word | | No | `rendered`: the events are exactly the bodies this frame drew, each named by the SUMO vehicle it drew. `unknown`: the frame's set of drawn bodies was no longer held, so no vehicle is listed. The empty list does not mean an empty scene. Absent: the events are every vehicle actor the world held. |
-| `draw_distance_m` | decimal | meters | No | The draw distance the image was rendered under; absent where vehicles were drawn at any range. |
-| `supervision` | text, always `unknown` | | No | A supervision plan was in force but this frame's supervision could not be read, so no vehicle carries any. |
+| `vehicles` | word | | No | `rendered`: the events are exactly the bodies this frame drew, each named by the SUMO vehicle it drew. `unknown`: the frame's set of drawn bodies was no longer held. No vehicle is listed. The empty list does not mean an empty scene. Absent: the events are every vehicle actor the world held. |
+| `draw_distance_m` | decimal | meters | No | The draw distance (the range limit for drawing vehicles) the image was rendered under. Absent where vehicles were drawn at any range. |
+| `supervision` | text, always `unknown` | | No | A supervision plan (the file that holds a scenario's labels) was in force. But the recorder was unable to read this frame's supervision. No vehicle carries any. |
 | `plan_id` | text | | No | The supervision plan in force on this frame, where one was. |
-| `vocabulary` | integer | | No | The annotation vocabulary's core version, written with `plan_id`. |
-| `vocabulary_digest` | text, 64 hex digits | | No | The digest of the plan's vocabulary, which pins what every label means, written with `plan_id`. |
+| `vocabulary` | integer | | No | The annotation vocabulary's core version, written with `plan_id`. The vocabulary says what each label means. |
+| `vocabulary_digest` | text, 64 hex digits | | No | The digest of the plan's vocabulary. It pins what every label means. Written with `plan_id`. |
 | `lights` | text, always `unknown` | | No | A vehicle in the picture has no `lights` because the frame's snapshot did not carry them. |
 | `pose_source` | text, always `unknown` | | No | A SUMO vehicle in the picture has no `pose_source` because the frame's snapshot did not carry one. |
 
@@ -102,7 +111,7 @@ A sidecar written before it has none.
 |---|---|---|---|---|
 | `tool` | text | | Yes | The component that wrote the file, such as `carlacontrol.CaptureSession`. |
 | `tool_version` | text | | No | The release of the package the tool comes from, where the tool said. |
-| `carlanet` | text | | No | The carlanet release that wrote the file: `0.10.0` for a tagged release, `0.10.0+g<commit>` for any other build. A sidecar always has it, because CarlaNet writes the sidecar. The record's schema leaves it optional because the same record, written by a Python process that never loaded CarlaNet, leaves it out (the SUMO bridge's event file). |
+| `carlanet` | text | | No | The carlanet release that wrote the file: `0.10.0` for a tagged release, `0.10.0+g<commit>` for any other build. A sidecar always has it, because CarlaNet writes the sidecar. The record's schema leaves it optional because a Python process that never loaded CarlaNet writes the same record without it. The SUMO bridge's event file is one such record. |
 | `sumo` | text | | No | The SUMO release, such as `1.27.0`, where SUMO drove the vehicles. |
 | `written_utc` | UTC time | | No | When the file was written. |
 
@@ -110,16 +119,16 @@ A sidecar written before it has none.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `available` | true or false | | Yes | Whether the server answered the build identity call; a server built before the call did not. |
+| `available` | true or false | | Yes | Whether the server answered the build identity call. A server built before the call did not. |
 | `release` | text | | Yes | The CARLA release the server was compiled with, or `unknown`. |
 | `world_interface` | text | | Yes | The world interface version the server declares, major.minor, or `unknown`. |
-| `build` | text | | No | `package` or `editor`; only where `available` is `true`. |
-| `configuration` | text | | No | The build configuration, such as `Shipping`; only where `available` is `true`. |
-| `carla_commit` | text | | No | The CARLA commit the server was built from; only where `available` is `true`. |
-| `content_commit` | text | | No | The content commit its package was cooked from; only where `available` is `true`. |
-| `engine_commit` | text | | No | The Unreal Engine commit; only where `available` is `true`. |
-| `commits_from` | text | | No | Where the three commits came from: `version_file`, `compiled` or `none`; only where `available` is `true`. |
-| `reason` | text | | No | Why the identity is not available; only where `available` is `false`. |
+| `build` | text | | No | `package` or `editor`. Only where `available` is `true`. |
+| `configuration` | text | | No | The build configuration, such as `Shipping`. Only where `available` is `true`. |
+| `carla_commit` | text | | No | The CARLA commit the server was built from. Only where `available` is `true`. |
+| `content_commit` | text | | No | The content commit its package was cooked from. Only where `available` is `true`. |
+| `engine_commit` | text | | No | The Unreal Engine commit. Only where `available` is `true`. |
+| `commits_from` | text | | No | Where the three commits came from: `version_file`, `compiled` or `none`. Only where `available` is `true`. |
+| `reason` | text | | No | Why the identity is not available. Only where `available` is `false`. |
 
 A value the server cannot know is `unknown`.
 
@@ -136,21 +145,21 @@ The same values are in the still's `carla:solar` text chunk.
 | `lat` | decimal | degrees | Yes | The latitude the sun is computed for: the world's georeference origin. |
 | `lon` | decimal | degrees | Yes | The longitude the sun is computed for. |
 | `sun_elevation_deg` | decimal | degrees | Yes | The sun's geometric elevation above the horizon, with no atmosphere. |
-| `sun_corrected_elevation_deg` | decimal | degrees | No | The elevation with atmospheric refraction applied, which is the elevation the frame was lit at; absent where the server does not report it. |
+| `sun_corrected_elevation_deg` | decimal | degrees | No | The elevation with atmospheric refraction applied. The frame was lit at this elevation. Absent where the server does not report it. |
 | `sun_azimuth_deg` | decimal | degrees | Yes | The sun's azimuth, clockwise from true north. |
-| `advancing` | true or false | | Yes | Whether the engine itself moved the sun's clock; `false` in a SUMO drive, which sets the sun on every tick itself. |
+| `advancing` | true or false | | Yes | Whether the engine itself moved the sun's clock. `false` in a SUMO drive: the drive sets the sun itself on every tick. |
 | `rate` | decimal | seconds per second | Yes | Sun-clock seconds per simulated second while the engine advances it. |
-| `illumination_band` | word | | No | The sun's illumination band (see below); absent where the elevation is not a real sun's. |
+| `illumination_band` | word | | No | The sun's illumination band (see below). Absent where the elevation is not a real sun's. |
 | `illumination_band_elevation` | word | | No | Which elevation the band was cut from: `refraction_corrected` wherever the block carries it, `geometric` otherwise. Written with `illumination_band`. |
 
 **Illumination bands**, cut by the sun's refraction-corrected elevation in degrees:
 
-- `day` above 6;
-- `golden` above 0;
-- `civil_twilight` above -6;
-- `nautical_twilight` above -12;
-- `astronomical_twilight` above -18;
-- `night` at -18 and below.
+- `day` above 6
+- `golden` above 0
+- `civil_twilight` above -6
+- `nautical_twilight` above -12
+- `astronomical_twilight` above -18
+- `night` at -18 and below
 
 Each band includes its upper edge.
 
@@ -158,7 +167,7 @@ Each band includes its upper edge.
 
 Written only in a run that declares its illumination.\
 `<_solar>` is what the world did.\
-This element records what the run said it should be.\
+This element records what the run declared the sun to be.\
 It also records how far apart the two were.\
 The same values are in the still's `carla:illumination` text chunk.
 
@@ -167,8 +176,8 @@ The same values are in the still's `carla:illumination` text chunk.
 | `policy` | word | | Yes | The illumination policy: `freeze_at_window_start`, `advance`, `freeze_at` or `ignore`. |
 | `epoch_honoured` | true or false | | Yes | Whether the frame was lit by the sun of its own declared civil time. |
 | `audited` | true or false | | Yes | Whether the world's sun was compared with the declaration on this frame's tick. |
-| `rate` | decimal | seconds per second | No | Sun-clock seconds per simulated second; under `advance` only. |
-| `freeze_at_civil_time` | time of day | | No | The time of day the sun is held at, hh:mm:ss; under `freeze_at` only. |
+| `rate` | decimal | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. |
+| `freeze_at_civil_time` | time of day | | No | The time of day the sun is held at, hh:mm:ss. Under `freeze_at` only. |
 | `epoch_digest` | text, 64 hex digits | | No | SHA-256 of the scenario's epoch. |
 | `epoch_civil` | civil time | | No | The civil time that simulated second zero stands for, with its UTC offset. |
 | `utc_offset_hours` | decimal | hours | No | The epoch's declared UTC offset. |
@@ -215,8 +224,8 @@ The camera's `<contact>`, `<track>` and `<sensor>`:
 
 | Element and name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `contact/callsign` | text | | Yes | The camera's name, which its stills are named after. |
-| `track/course` | decimal | degrees | Yes | The camera's direction of movement since the previous capture; its boresight azimuth when it moved slower than 0.5 m/s. |
+| `contact/callsign` | text | | Yes | The camera's name. Its stills are named after it. |
+| `track/course` | decimal | degrees | Yes | The camera's direction of movement since the previous capture. If the camera moved slower than 0.5 m/s, the azimuth of its boresight (its line of sight) instead. |
 | `track/speed` | decimal | meters per second | Yes | The camera's ground speed since the previous capture. |
 | `sensor/azimuth` | decimal | degrees | Yes | Boresight azimuth, clockwise from true north. |
 | `sensor/elevation` | decimal | degrees | Yes | Boresight elevation: 0 level, -90 straight down. |
@@ -253,18 +262,19 @@ Absent for a camera that does not publish its exposure.
 | `iso` | decimal | | Yes | The sensor's sensitivity, ISO. |
 | `shutter_s` | decimal | seconds | Yes | The shutter time. |
 | `fstop` | decimal | | Yes | The aperture, as an f-number. |
-| `compensation_ev` | decimal | EV | Yes | Exposure compensation; above 0 brightens. |
-| `ev100` | decimal | EV | No | The exposure value at ISO 100 that the ISO, shutter and aperture make, log2(fstop² / shutter_s) - log2(iso / 100); under `manual` only. |
+| `compensation_ev` | decimal | EV | Yes | Exposure compensation. A value above 0 brightens. |
+| `ev100` | decimal | EV | No | The exposure value at ISO 100 that the ISO, shutter and aperture make: log2(fstop² / shutter_s) minus log2(iso / 100). Under `manual` only. |
 
 ## A vehicle's event
 
 A vehicle's `uid` is `CARLA-TRUTH-SUMO-<sumo_id>` where a SUMO drive lent the body.\
 Otherwise it is `CARLA-TRUTH-<actor_id>`.\
-During a SUMO drive one CARLA body draws a succession of vehicles over a run, so always follow a vehicle by its `uid` or `sumo_id`, never by `actor_id`.
+During a SUMO drive, one CARLA body draws a succession of vehicles over a run.\
+So always follow a vehicle by its `uid` or `sumo_id`, never by `actor_id`.
 
 | Element and name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `track/course` | decimal | degrees | Yes | The direction the vehicle moves; the direction its body points when it moves slower than 0.5 m/s. |
+| `track/course` | decimal | degrees | Yes | The direction the vehicle moves. If the vehicle moves slower than 0.5 m/s, the direction its body points instead. |
 | `track/speed` | decimal | meters per second | Yes | Its horizontal speed. |
 | `contact/callsign` | text | | Yes | `<base_type>-<sumo_id>`, or `<base_type>-<actor_id>` where no SUMO vehicle is named. |
 
@@ -276,36 +286,36 @@ During a SUMO drive one CARLA body draws a succession of vehicles over a run, so
 | `actor_id` | integer | | Yes | The CARLA actor that drew the vehicle on this frame. |
 | `type_id` | text | | Yes | The body's CARLA blueprint, such as `vehicle.audi.tt`. |
 | `base_type` | text | | Yes | The vehicle's base type, such as `car`, `van` or `truck`, from the vehicle catalog for its blueprint. |
-| `special_type` | text | | Yes | The vehicle's kind from the catalog or the blueprint; often empty. |
+| `special_type` | text | | Yes | The vehicle's kind from the catalog or the blueprint. Often empty. |
 | `length_m` | decimal | meters | Yes | The body's bounding box, front to back. |
 | `width_m` | decimal | meters | Yes | The body's bounding box, side to side. |
 | `height_m` | decimal | meters | Yes | The body's bounding box, bottom to top. |
-| `color` | text | | Yes | The body's color as red,green,blue, each 0 to 255; empty where the blueprint has none. |
+| `color` | text | | Yes | The body's color as red,green,blue, each 0 to 255. Empty where the blueprint has none. |
 | `role_name` | text | | Yes | The actor's role name: `sumo` for a body a SUMO drive lent. |
 | `vx` | decimal | meters per second | Yes | Velocity east. |
 | `vy` | decimal | meters per second | Yes | Velocity south. |
 | `vz` | decimal | meters per second | Yes | Velocity up. |
-| `heading_deg` | decimal | degrees | No | The direction the body points: its yaw. It differs from `track/course` while the vehicle turns or changes lane. Written wherever the body's pose was read, which is every record a recorder writes. |
+| `heading_deg` | decimal | degrees | No | The direction the body points: its yaw. It differs from `track/course` while the vehicle turns or changes lane. Written wherever the body's pose was read. Every record a recorder writes has it. |
 | `pitch_deg` | decimal | degrees | In picture | The body's pitch, positive nose up. |
 | `roll_deg` | decimal | degrees | In picture | The body's roll, positive right side down. |
 | `in_frame` | word | | No | Where the vehicle's box fell against the picture (see below). Written on every record a recorder writes. |
 | `occlusion` | decimal, 0 to 1 | | No | The share of the vehicle's outline hidden from the camera by anything nearer: 0 fully visible, 1 fully hidden. Only where occlusion was measured. |
-| `occlusion_level` | integer, 0 to 4 | | No | The occlusion as a band: 0 nothing hidden, 1 less than 30 %, 2 from 30 % to less than 60 %, 3 from 60 % to less than 90 %, 4 90 % or more. Only where measured. |
-| `occlusion_samples` | integer | | No | How many points across the outline the occlusion was measured over; few samples mean few possible values. Only where measured. |
+| `occlusion_level` | integer, 0 to 4 | | No | The occlusion as a band. 0: nothing hidden. 1: less than 30 %. 2: from 30 % to less than 60 %. 3: from 60 % to less than 90 %. 4: 90 % or more. Only where measured. |
+| `occlusion_samples` | integer | | No | How many points across the outline the occlusion was measured over. Few samples mean few possible values. Only where measured. |
 | `apparent_width_px` | integer | pixels | No | How wide the box appears, its whole projected footprint, any part outside the picture included. Written wherever the box was projected and is not behind the camera. |
-| `apparent_height_px` | integer | pixels | No | How tall the box appears; written with `apparent_width_px`. |
+| `apparent_height_px` | integer | pixels | No | How tall the box appears. Written with `apparent_width_px`. |
 | `box_px` | four decimals | pixels | In picture | The upright rectangle the box's eight projected corners span: x min, y min, x max, y max. |
 | `box_oriented_px` | eight decimals | pixels | In picture | The smallest rectangle around the eight projected corners, turned with the vehicle: four x y corners, clockwise from the top-most. |
 | `truncation` | decimal, 0 to 1 | | In picture | The share of `box_px`'s area outside the picture. |
 | `lights` | words | | In picture | The lights commanded on for the vehicle on this frame, or `none` (see below). Absent only where the container says `lights="unknown"`. |
-| `pose_source` | word | | In picture | Where the drawn pose came from on this frame (see below). Only for a SUMO vehicle; absent where the container says `pose_source="unknown"`. |
-| `occlusion_unmeasured` | word | | No | Why there is no occlusion (see below). Only where occlusion was not measured, so a missing fraction never reads as "nothing in the way". |
+| `pose_source` | word | | In picture | Where the drawn pose came from on this frame (see below). Only for a SUMO vehicle. Absent where the container says `pose_source="unknown"`. |
+| `occlusion_unmeasured` | word | | No | Why there is no occlusion (see below). Only where occlusion was not measured. With it, a missing fraction never reads as "nothing in the way". |
 | `beyond_draw_distance` | word | | No | `partly` or `wholly`: the capture's draw distance kept the vehicle out of the image in part or entirely. Only where the draw distance reached it. |
 | `camera_range_m` | decimal | meters | No | Distance from the camera to the center of the vehicle's box. Written for a vehicle in the picture and beside `beyond_draw_distance`. |
-| `sumo_id` | text | | No | The SUMO vehicle this body drew on this frame; only where a SUMO drive lent the body. It joins the record to the world truth track and the supervision plan. |
-| `vtype_id` | text | | No | The SUMO vehicle type; written with `sumo_id`. |
-| `admitted_tick` | integer | | No | The frame on which this body began drawing this vehicle; written with `sumo_id`. |
-| `sumo_angle_deg` | decimal | degrees | No | The angle SUMO reported for the vehicle on this frame, clockwise from north, for comparison with `heading_deg`; written with `sumo_id` where the recorder knows it. |
+| `sumo_id` | text | | No | The SUMO vehicle this body drew on this frame. Only where a SUMO drive lent the body. It joins the record to the world truth track and the supervision plan. |
+| `vtype_id` | text | | No | The SUMO vehicle type. Written with `sumo_id`. |
+| `admitted_tick` | integer | | No | The frame on which this body began drawing this vehicle. Written with `sumo_id`. |
+| `sumo_angle_deg` | decimal | degrees | No | The angle SUMO reported for the vehicle on this frame, clockwise from north. For comparison with `heading_deg`. Written with `sumo_id` where the recorder knows it. |
 
 A vehicle whose box fell wholly beyond the draw distance is in the world and in the truth, but it is not in the image.\
 Check `beyond_draw_distance` before treating a record as something the picture shows.
@@ -325,7 +335,8 @@ It holds exactly eight `<corner>` elements, converted to latitude, longitude and
 - `back_left_top`
 
 Corner n + 4 is above corner n.\
-Front is the way `heading_deg` points; left and right are as seen from the driver's seat.
+Front is the way `heading_deg` points.\
+Left and right are as seen from the driver's seat.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -345,9 +356,9 @@ A vehicle the author says nothing about still gets one, with state `unlabelled`.
 | `_supervision/vocabulary` | integer | | Yes | The annotation vocabulary's core version. |
 | `_supervision/vocabulary_digest` | text, 64 hex digits | | Yes | The digest of the plan's vocabulary. |
 | `annotation/instance` | text | | Yes | The pattern instance in force for the vehicle: `<scenario_id>/<name>`. |
-| `annotation/labels` | terms | | No | The instance's labels, `namespace:name`, separated by spaces; absent where it has none. |
-| `annotation/phase` | text | | No | The phase of the instance's interval in force; absent where none is declared. |
-| `annotation/role` | text | | No | The vehicle's role in the instance, `subject` for a single-vehicle instance; absent where none is declared. |
+| `annotation/labels` | terms | | No | The instance's labels, `namespace:name`, separated by spaces. Absent where it has none. |
+| `annotation/phase` | text | | No | The phase of the instance's interval in force. Absent where none is declared. |
+| `annotation/role` | text | | No | The vehicle's role in the instance, `subject` for a single-vehicle instance. Absent where none is declared. |
 
 An `annotated` or `nominal` vehicle can carry several annotations, one per instance in force.\
 The run manifest's `instance` and `interval_*` rows give the full plan and each interval's start and end.
@@ -363,7 +374,7 @@ The schema takes each of these lists from the code that writes the words.
 | `wholly` | Every corner is inside the picture. |
 | `partly` | The box crosses an edge of the picture. |
 | `none` | The box is wholly outside the picture. |
-| `behind_camera` | A corner is at or behind the lens, so the box has no projection. |
+| `behind_camera` | A corner is at or behind the lens. The box has no projection. |
 
 **`occlusion_unmeasured`**: the reason nearest the vehicle where several hold.
 
@@ -371,8 +382,8 @@ The schema takes each of these lists from the code that writes the words.
 |---|---|
 | `behind_camera` | A corner of the box is at or behind the lens. |
 | `outside_frame` | The box is wholly outside the picture. |
-| `beyond_draw_distance` | The vehicle is wholly beyond the draw distance, so neither the image nor the depth image shows it. |
-| `no_depth_camera` | The recorder had no depth camera, so nothing was measured for any vehicle. |
+| `beyond_draw_distance` | The vehicle is wholly beyond the draw distance. Neither the image nor the depth image shows it. |
+| `no_depth_camera` | The recorder had no depth camera. Nothing was measured for any vehicle. |
 | `no_depth_capture` | The depth camera delivered no image to pair the frame with. |
 | `depth_out_of_step` | Every depth image held was of another instant. |
 | `depth_pose_mismatch` | The depth image of the instant was taken from another pose than the picture. |
@@ -394,32 +405,36 @@ The schema takes each of these lists from the code that writes the words.
 - `special2`
 
 A light CARLA declares and no word names is written `bit<n>`, with its bit number.\
-These are the lights commanded on; whether a blueprint draws a lamp for each is up to the 3D model.
+These are the lights commanded on.\
+Whether a blueprint draws a lamp for each is up to the 3D model.
 
 **`pose_source`**:
 
 | Word | Meaning |
 |---|---|
 | `sumo` | The frame falls on a SUMO step and the position is SUMO's own. |
-| `interpolated` | The frame falls between SUMO steps; the position is filled in along the lane. |
-| `jump` | SUMO reported a step too far to drive in one step; the body is shown at SUMO's later position. |
-| `stale` | The body could not be placed on this frame and stands where it was last drawn. |
+| `interpolated` | The frame falls between SUMO steps. The position is filled in along the lane. |
+| `jump` | SUMO reported a step too far to drive in one step. The body is shown at SUMO's later position. |
+| `stale` | The SUMO drive was unable to place the body on this frame. The body stands where it was last drawn. |
 
 ## Joining a sidecar to the other files
 
 - To the still: same folder, same name, `.png` instead of `.xml`.\
   The still's `carla:capture` chunk carries the same `tick`.
 - To the world truth track: by `sumo_id` and the frame (`tick` here, `frame` there).
-- To the run manifest: by `run_id`; the manifest's `instance` and `interval_*` rows explain the `<annotation>`s.
+- To the run manifest: by `run_id`.\
+  The manifest's `instance` and `interval_*` rows explain the `<annotation>`s.
 
 ## Format version
 
 This page describes format version 1.\
-A sidecar names its version in `format_version` on `<events>`; a sidecar without one was written before sidecars carried it and is version 1.\
+A sidecar names its version in `format_version` on `<events>`.\
+A sidecar without one was written before sidecars carried it and is version 1.\
 The sample capture of 2026-10-07, written before the version and the producer record, is valid against this schema.
 
 A reader reads a version it knows.\
-It refuses a newer version by name, saying the file was written by a newer release, rather than reading it in part, because a field that silently moved is worse than one that is missing.\
+It refuses a newer version by name and says that a newer release wrote the file.\
+It does not read such a file in part, because a field that silently moved is worse than one that is missing.\
 The CarlaControl readers and `carla-validate` follow this rule.
 
 ## Example
@@ -470,4 +485,6 @@ A sidecar with the camera platform and one vehicle in the picture, shortened fro
 `carla-validate <capture folder>` checks every sidecar of a capture against this schema, with every other file of the capture.\
 It lists each failure with its file and line.\
 Any XML Schema 1.0 validator can check a single sidecar, for example `xmllint --schema truth_sidecar.xsd <file>.xml`.\
-The schema cannot check which attributes go together, such as the box appearing exactly when `in_frame` is `wholly` or `partly`; `carla-audit-sidecars` checks those rules across a capture.
+The schema cannot check which attributes go together.\
+One such rule: the box is present for an `in_frame` of `wholly` or `partly` and absent for any other value.\
+`carla-audit-sidecars` checks those rules across a capture.

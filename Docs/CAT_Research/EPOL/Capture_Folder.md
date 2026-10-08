@@ -9,13 +9,14 @@ Every field is described in full on the schema pages listed in [`../Schemas/READ
 This page links them rather than repeating them.
 
 **The files hold labels and truth, never scores or verdicts.**\
-A truth file holds only what a scenario's author declared, what happened in the simulation and what was measured.\
+A truth file holds only three things: what a scenario's author declared, what happened in the simulation and what was measured.\
 No file holds a pass mark, a quality score or a judgment of whether a still or a label is good enough.\
 Those depend on your model.\
 They are yours to make.
 
 The examples on this page come from one real capture, `cap-20261008-041347-270d6d`, made on 2026-10-08 from the scenario `Arapahoe_I25_SupervisionCheck`.\
-One camera, `Check_Overhead_1`, looked down at South Yosemite Street in Arapahoe County, Colorado, for three simulated minutes and took two stills each simulated second: 360 stills.\
+One camera, `Check_Overhead_1`, looked down at South Yosemite Street in Arapahoe County, Colorado.\
+It took two stills each simulated second for three simulated minutes: 360 stills.\
 Every file in it is valid against its schema.
 
 ## The layout
@@ -46,7 +47,7 @@ Two things a capture depends on are kept outside the folder:
 - **The run's own records.**\
   `carla-capture` writes how the run ended, what it resolved and what it was bound to in files beside the capture, never inside it.\
   See [Run result](../Schemas/Run_Result.md).
-- **The scenario's supervision plan**, `<scenario_id>.supervision.json`, written when the scenario was compiled.\
+- **The scenario's supervision plan**, `<scenario_id>.supervision.json`, written as the scenario was compiled.\
   It holds the definition of every label.\
   The manifest's first row names its path and its SHA-256.\
   You need it to read what a label means.\
@@ -57,7 +58,7 @@ Two things a capture depends on are kept outside the folder:
 | | Per still | Per run |
 |---|---|---|
 | Files | the PNG and its sidecar, in the camera's folder | the manifest, the track and the track's summary, in `truth/` |
-| Time | one simulation frame | the whole run; the track covers the capture window |
+| Time | one simulation frame | the whole run. The track covers the capture window, the simulated time the run records. |
 | Vehicles | every body that frame drew | every vehicle SUMO had |
 | Labels | what was in force for each drawn vehicle on that frame | every label the plan declares and the times each interval opened and closed |
 
@@ -67,8 +68,13 @@ The PNG holds the picture and up to four text chunks.\
 [`carla:solar`](../Schemas/PNG_Chunk_Solar.md), [`carla:illumination`](../Schemas/PNG_Chunk_Illumination.md) and [`carla:sensor`](../Schemas/PNG_Chunk_Sensor.md) repeat the sun and the camera from the sidecar.\
 So a picture separated from its sidecar still says where it came from.
 
-The sidecar ([Truth sidecar](../Schemas/Truth_Sidecar.md)) holds the truth of the still's own frame: the camera's position, direction, lens and exposure; the sun; and a record for every vehicle the frame drew, with its labels.\
-A still whose frame's truth could not be read is not written at all.\
+The sidecar ([Truth sidecar](../Schemas/Truth_Sidecar.md)) holds the truth of the still's own frame:
+
+- the camera's position, direction, lens and exposure
+- the sun
+- a record for every vehicle the frame drew, with its labels
+
+If a frame's truth cannot be read, its still is not written at all.\
 So a picture never comes with another frame's truth.
 
 **Per run.**\
@@ -76,7 +82,7 @@ The manifest records the run as it happened, one JSON object per line.\
 It says what the run was:
 
 - the scenario and the digests of its files
-- the SUMO settings
+- the SUMO configuration
 - the clocks
 - the rule the vehicle lights follow
 - the sun
@@ -137,7 +143,8 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
   `sumo_id` names the SUMO vehicle.\
   Follow a vehicle from still to still by its `uid` or its `sumo_id`.
 - `actor_id` names the CARLA body that drew the vehicle on this frame.\
-  The world reuses its bodies, so one body draws a series of different vehicles over a run.\
+  The world reuses its bodies.\
+  So one body draws a series of different vehicles over a run.\
   In the sample capture, 19 bodies drew more than one vehicle.\
   Never follow a vehicle by `actor_id`.
 - `admitted_tick` is the frame on which this body began drawing this vehicle.
@@ -153,7 +160,7 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
 - `in_frame` says where the vehicle's box fell: `wholly` in the picture, `partly`, `none`, or `behind_camera`.
 - Only a vehicle `wholly` or `partly` in the picture carries its boxes, its pitch and roll, its lights and its pose source.\
   A vehicle outside the picture still has its position, motion, size and labels.\
-  Its `apparent_width_px` and `apparent_height_px` say how large it would look.
+  Its `apparent_width_px` and `apparent_height_px` say how large its projected box is, in pixels.
 - A run can draw vehicles only out to a set distance from the camera.\
   Then the container carries `draw_distance_m`.\
   A vehicle the distance kept out of the image carries `beyond_draw_distance`, `partly` or `wholly`.\
@@ -169,7 +176,8 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
 - `box_oriented_px` is the smallest rectangle around the vehicle turned with it: four x y corners, clockwise from the top-most.
 - Both are the eight corners of the body's 3D box, projected through this still's own camera.\
   The same eight corners, in latitude, longitude and height, are in `<_box3d frame="geodetic">`, in the order the sidecar page gives.
-- Boxes are not clipped to the picture, so a coordinate can be negative or larger than the picture.\
+- Boxes are not clipped to the picture.\
+  So a coordinate can be negative or larger than the picture.\
   `truncation` is the share of `box_px`'s area that lies outside the picture: 0 for a box wholly inside.
 - `occlusion` is the share of the vehicle's outline hidden from the camera by anything nearer: 0 fully visible, 1 fully hidden.\
   `occlusion_level` gives it as a band from 0 to 4.\
@@ -196,7 +204,7 @@ Every attribute is described on the [Truth sidecar](../Schemas/Truth_Sidecar.md)
   No headlight was on.
 - These are the lights commanded on.\
   Whether the picture shows a lit lamp depends on the body.\
-  In the current vehicle catalog only the fire truck's high beams changed the picture when they were measured.\
+  When the lamps were measured for the current vehicle catalog, only the fire truck's high beams changed the picture.\
   See [Lights](Vehicle_Catalogue.md#lights).
 - A container that says `lights="unknown"` means a vehicle in the picture has no `lights` because the frame's data did not carry them.
 
@@ -210,12 +218,13 @@ CARLA can draw several frames between two SUMO steps.\
   The position is SUMO's own.
 - `interpolated`: the frame falls between two SUMO steps.\
   Its position is filled in along the lane, between where SUMO had the vehicle at the step before and at the step after.
-- `jump`: SUMO moved the vehicle farther in one step than it could drive.\
+- `jump`: SUMO moved the vehicle farther in one step than it was able to drive.\
   The body is shown at SUMO's later position.
-- `stale`: the body could not be placed on this frame.\
+- `stale`: placing the body failed on this frame.\
   It stands where it was last drawn.
 
-In the sample capture SUMO took one step for every frame (`world_ticks_per_sumo_step` is 1 in the manifest's `clock`), so every record says `sumo`.\
+In the sample capture SUMO took one step for every frame (`world_ticks_per_sumo_step` is 1 in the manifest's `clock`).\
+So every record says `sumo`.\
 A container that says `pose_source="unknown"` means a SUMO vehicle in the picture has no `pose_source` because the frame's data did not carry one.
 
 ### Its labels
@@ -236,11 +245,11 @@ Those two do not agree.
 
 | Clock | Where you find it | What it counts |
 |---|---|---|
-| CARLA frame number | sidecar and `carla:capture` `tick`; track `frame`; manifest `frame`, `observed_start_frame`, `after_frame`; sidecar `admitted_tick` | One per world step. |
-| SUMO's simulated time | manifest `sim_time_s`, `committed_start_s` and its other instants in seconds; track `sim_time_s`; the plan's `declared_start_s` and `declared_end_s` | Seconds from the scenario's second zero, on SUMO's clock as TraCI reports it. |
-| CARLA's own elapsed time | sidecar and `carla:capture` `sim_time_s` | Seconds the CARLA server's world has run. Its zero is the server's, not the scenario's. |
-| Simulated civil time | track `time_utc`; sidecar `<_illumination>` `declared_civil` and `declared_utc`; manifest `declared_start_civil`, `civil_begin` | SUMO's simulated time placed on the calendar by the scenario's [epoch](../Schemas/Epoch.md). |
-| Wall clock | sidecar `captured` and each event's `time`, `start` and `stale`; file names; `written_utc`; manifest `opened_wall_utc` and `closed_wall_utc` | The recording computer's clock while the run was made. |
+| CARLA frame number | Sidecar and `carla:capture`: `tick`. Track: `frame`. Manifest: `frame`, `observed_start_frame`, `after_frame`. Sidecar: `admitted_tick`. | One per world step. |
+| SUMO's simulated time | Manifest: `sim_time_s`, `committed_start_s` and its other instants in seconds. Track: `sim_time_s`. The plan: `declared_start_s` and `declared_end_s`. | Seconds from the scenario's second zero, on SUMO's clock as TraCI reports it. |
+| CARLA's own elapsed time | Sidecar and `carla:capture`: `sim_time_s`. | Seconds since the CARLA server's world started. Its zero is the server's, not the scenario's. |
+| Simulated civil time | Track: `time_utc`. Sidecar `<_illumination>`: `declared_civil` and `declared_utc`. Manifest: `declared_start_civil`, `civil_begin`. | SUMO's simulated time placed on the calendar by the scenario's [epoch](../Schemas/Epoch.md). |
+| Wall clock | Sidecar: `captured` and each event's `time`, `start` and `stale`. File names. `written_utc`. Manifest: `opened_wall_utc` and `closed_wall_utc`. | The recording computer's clock while the run was made. |
 
 **A still's `sim_time_s` is not the manifest's.**\
 The still at frame 151288 says `sim_time_s="344.799094"`.\
@@ -256,7 +265,8 @@ Use the still's frame number, `tick`:
 1. Find the row of the world truth track whose `frame` is the still's `tick`.\
    Read its `sim_time_s`.\
    In the sample capture every still's `tick` is in the track.\
-   A track that samples less often than every SUMO step may not hold every frame; then use the next way.
+   It is possible that a track that samples less often than every SUMO step does not hold every frame.\
+   In that case, use the next way.
 2. Or work it out from the manifest.\
    The `solar_window_open` row gives the window's first capture frame and its time: `frame` 150298 at `sim_time_s` 60.\
    The first row's `clock.world_delta_s` gives the length of one frame: 0.05 s.\
@@ -284,9 +294,11 @@ In the sample, the `dwell` phase of `Arapahoe_I25_SupervisionCheck/kerbside_dwel
 The stills from 109.5 s (frame 151288) to 229.0 s (frame 153678) carry the `dwell` annotation: 240 stills.\
 The still at 229.5 s (frame 153688) does not.
 
-An interval still open when the run ended has no `interval_closed` row.\
+An interval still open at the end of the run has no `interval_closed` row.\
 The last row, [`manifest_closed`](../Schemas/Run_Manifest.md#manifest_closed), lists it in `open_intervals` and gives the reason it closes with in `open_intervals_close_as`.\
-In the sample, the `transit` phase of `Arapahoe_I25_SupervisionCheck/through_transit` opened at 90.05 s and was still open when the window closed at 240 s, so it closes as `capture_window_end`.
+In the sample, the `transit` phase of `Arapahoe_I25_SupervisionCheck/through_transit` opened at 90.05 s.\
+It was still open as the window closed at 240 s.\
+So it closes as `capture_window_end`.
 
 For a drawn vehicle you rarely need this arithmetic: each sidecar already carries the labels in force on its own frame.\
 Use the manifest for the exact edges, for the three onsets and for vehicles no body drew.\
@@ -367,13 +379,13 @@ world truth track summaries       1 checked, 0 failed
 every file keeps its schema
 ```
 
-It exits with 0 when every file keeps its schema.\
-It exits with 1 when any file does not.\
-It exits with 2 when the folder holds no file a schema describes.\
+When every file keeps its schema, it exits with 0.\
+When any file does not, it exits with 1.\
+When the folder holds no file a schema describes, it exits with 2.\
 It reports a file of a newer format version as written by a newer release.
 
 It does not check the pixels.\
-`carla-audit-sidecars <folder>` checks the rules a schema cannot, such as a box appearing exactly when the vehicle is in the picture.
+`carla-audit-sidecars <folder>` checks the rules a schema cannot, such as a box appearing exactly while the vehicle is in the picture.
 
 ## Fields that are easy to misread
 
@@ -389,12 +401,14 @@ For the still at frame 151288, the track says `2026-09-29T13:27:49.500Z` and the
 
 **`sim_time_s`.**\
 In the manifest and the track it is SUMO's simulated time.\
-In a sidecar and its `carla:capture` chunk it is CARLA's own elapsed time, which has another zero.\
+In a sidecar and its `carla:capture` chunk it is CARLA's own elapsed time.\
+That clock has another zero.\
 See [The clocks](#the-clocks).
 
 **Position.**\
 The track's `lat` and `lon` are SUMO's position for the vehicle: the middle of its front bumper.\
-The sidecar's `<point>` is the CARLA body's origin, which lies behind the bumper by about half the body's length.\
+The sidecar's `<point>` is the CARLA body's origin.\
+It lies behind the bumper by about half the body's length.\
 For the `dweller` at frame 151288 the two points are 2.39 m apart.\
 The track's point is the middle of the front face of the sidecar's `<_box3d>`.
 
@@ -411,7 +425,8 @@ See [The vehicles behind the truth](Vehicle_Catalogue.md).
 
 **`role_name`.**\
 In a sidecar it is the CARLA actor's role, `sumo` for every body a SUMO drive lent.\
-In the track it is the SUMO flow the vehicle came from, such as `arapahoe_east_to_west`, or the vehicle's own id where it came from no flow, such as `dweller`.
+In the track it is the SUMO flow the vehicle came from, such as `arapahoe_east_to_west`.\
+For a vehicle that came from no flow, it is the vehicle's own id, such as `dweller`.
 
 **Direction.**\
 The track's `course_deg` is SUMO's angle for the vehicle.\

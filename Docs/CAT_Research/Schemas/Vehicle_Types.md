@@ -48,7 +48,7 @@ Every attribute is written on every type, in this order.
 | `id` | string | | yes | The CARLA blueprint id, such as `vehicle.lincoln.mkz`. |
 | `vClass` | string | | yes | The class's `sumo_vclass`. |
 | `length` | number | meters | yes | The catalog's `length_m`. |
-| `width` | number | meters | yes | The catalog's `body_width_m`, the width without mirrors; its `width_m` where it holds no body width. |
+| `width` | number | meters | yes | The catalog's `body_width_m`, the width without mirrors. Where the catalog holds no body width, its `width_m`. |
 | `height` | number | meters | yes | The catalog's `height_m`. |
 | `minGap` | number | meters | yes | The class's `min_gap_m`. |
 | `maxSpeed` | number | m/s | yes | The class's `max_speed_mps`. |
@@ -73,7 +73,7 @@ Each `<vType>` has two or three of them, each key once:
 | Key | Value | Written | Meaning |
 |---|---|---|---|
 | `carla:blueprint` | a CARLA blueprint id, such as `vehicle.lincoln.mkz` | always | The body the type is drawn with. Its length, width and height in the `<vType>` are that body's, measured by the vehicle catalog (check 15). A type with no `carla:blueprint` is simulated by SUMO and never drawn. |
-| `carla:class_id` | the class id, such as `civ_car` | always | The class the body was drawn for. A class draws several bodies, one type each; this tells a reader which population a vehicle belongs to. A run's display convention names a vehicle's population by it. |
+| `carla:class_id` | the class id, such as `civ_car` | always | The class the body was drawn for. A class draws several bodies, one type each. This key tells a reader which population a vehicle belongs to. A run's display convention names a vehicle's population by it. |
 | `carla:catalogue_digest` | the catalog's `catalogue_digest` | when the catalog has one | The catalog the type was written from, so a reader holding a catalog can tell whether it is that one. `carla-cot-telemetry` warns once about a type written from another catalog. |
 
 In this file a type's id is its blueprint id.\
@@ -87,7 +87,8 @@ In a compiled route file it is `<class_id>.<blueprint>`, such as `car_quick.vehi
 </vType>
 ```
 
-Either way the id is for a person reading the file; what binds the type to a body is its `carla:blueprint`.
+Either way, the id is for a person reading the file.\
+What binds the type to a body is its `carla:blueprint`.
 
 ## `<vTypeDistribution>` attributes
 

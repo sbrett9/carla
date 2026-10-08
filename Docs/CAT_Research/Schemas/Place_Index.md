@@ -10,8 +10,10 @@ The index also says how much of the network its names cover, because on some map
 
 ## Who writes it and who reads it
 
-carlacontrol's `PlaceIndex` writes it when the world build publishes the authoring reference set, or when `carla-publish-reference-set` publishes it again.\
-It is made from `map.net.xml` alone, so it always describes the network beside it.
+When the world build publishes the authoring reference set, carlacontrol's `PlaceIndex` writes it.\
+It writes the file again each time `carla-publish-reference-set` publishes the set again.\
+It is made from `map.net.xml` alone.\
+It therefore always describes the network beside it.
 
 The scenario compiler reads it through `WorldPackageReader.place_index()` to resolve street places.\
 A scenario author can read it to see what names a world has.
@@ -24,11 +26,13 @@ Non-Latin names are written as they are, not escaped.
 Only normal edges: edges with no `function` attribute, or `function="normal"`.\
 Edges inside junctions are left out.
 
-An edge is listed under its `name` attribute, which netconvert writes from the OpenStreetMap street names because the world build passes `--output.street-names`.\
+An edge is listed under its `name` attribute.\
+Because the world build passes `--output.street-names`, netconvert writes that attribute from the OpenStreetMap street names.\
 An edge without a name is counted but not listed.
 
 A name is not an edge.\
-One street name is often carried by many edges, so a scenario narrows a street by direction and position before it names one edge.
+One street name is often carried by many edges.\
+A scenario therefore narrows a street by direction and position before it names one edge.
 
 ## Fields
 
@@ -39,7 +43,7 @@ One street name is often carried by many edges, so a scenario narrows a street b
 | `place_index_version` | integer, always 1 | | no | The format of this file. An index without it is version 1. |
 | `network_fingerprint` | string | | yes | Fingerprint of the network the index was made from, the same as `NetworkFingerprint` in `world.json`. |
 | `coverage` | object | | yes | How much of the network the names cover. |
-| `warnings` | array of strings | | yes | What the index warned about when it was made. |
+| `warnings` | array of strings | | yes | What the index warned about as it was made. |
 | `streets` | array of objects | | yes | One entry per street name, ordered by the name's UTF-8 bytes. |
 
 ### `coverage`
@@ -51,7 +55,7 @@ One street name is often carried by many edges, so a scenario narrows a street b
 | `named_fraction` | number | fraction | yes | `named_edges / normal_edges`, rounded to four decimals. 0 for a network with no edges. |
 | `distinct_names` | integer | count | yes | Different street names. |
 | `names_by_script` | object | count | yes | For each writing system, how many names use it. Keys are the first word of each letter's Unicode name, such as `LATIN` or `ARABIC`. `NONE` counts names with no letters. A name in two scripts counts under both. |
-| `largest_name` | object or null | | yes | The name carried by the most edges: `name` and `edge_count`. Null when no edge is named. |
+| `largest_name` | object or null | | yes | The name carried by the most edges: `name` and `edge_count`. Null for a network with no named edge. |
 | `warn_below_named_fraction` | number | fraction | yes | Below this `named_fraction`, 0.5, the index warns that names contribute little on this map. |
 
 ### `streets[]`
@@ -63,7 +67,7 @@ One street name is often carried by many edges, so a scenario narrows a street b
 | `edge_count` | integer | count | yes | Edges carrying the name. |
 | `length_m` | number | meters | yes | Their lengths added up, rounded to 0.01 m. |
 | `extent_carla_m` | array of 4 numbers | meters | yes | The rectangle around all their lanes in CARLA's frame: min x, min y, max x, max y. |
-| `directions` | object | | yes | For each of `north`, `east`, `south` and `west` that any edge heads, the edge ids heading that way, in the order a vehicle traveling that way meets them. A direction with no edge is left out. |
+| `directions` | object | | yes | For each direction that any edge heads (`north`, `east`, `south` and `west`), the edge ids heading that way. They are in the order a vehicle traveling that way meets them. A direction with no edge is left out. |
 | `edges` | array of objects | | yes | Every edge carrying the name, ordered by edge id. |
 
 ### `streets[].edges[]`
@@ -81,7 +85,8 @@ One street name is often carried by many edges, so a scenario narrows a street b
 | `speed_mps` | number | meters per second | yes | The rightmost lane's speed limit. |
 | `extent_carla_m` | array of 4 numbers | meters | yes | The rectangle around the edge's lanes in CARLA's frame: min x, min y, max x, max y, rounded to 0.01 m. |
 
-CARLA's frame has x east and y south, so CARLA (x, y) = SUMO (x, −y).\
+CARLA's frame has x east and y south.\
+Therefore CARLA (x, y) = SUMO (x, −y).\
 A bearing is the net direction of a whole edge.\
 On a curving edge it says little about the heading at any one point.
 
@@ -91,8 +96,8 @@ On a curving edge it says little about the heading at any one point.
 There is no other version.\
 A file without it is version 1.
 
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
-They name the version and the newest they read, rather than reading part of the file.\
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than read part of the file.\
+The refusal names the version and the newest version they read.\
 `WorldPackageReader` then checks the file against the schema.\
 If the file does not match, it refuses the file and names each problem.
 

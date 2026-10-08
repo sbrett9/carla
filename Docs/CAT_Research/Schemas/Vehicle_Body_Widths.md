@@ -4,7 +4,8 @@ A vehicle body's bounding box includes its mirrors.\
 SUMO's width is the body without them.\
 On a bus the difference is large: the Fuso Rosa's box is 3.93 m wide and its body 3.23 m, on 3.35 m lanes.
 
-A server cannot see a mesh's vertices, so the width without mirrors is measured from the mesh in the Unreal Editor and kept in this table.\
+A server cannot see a mesh's vertices.\
+So the width without mirrors is measured from the mesh in the Unreal Editor and kept in this table.\
 The [vehicle catalog](Vehicle_Catalogue.md) merges it as `body_width_m`.\
 The [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 
@@ -17,8 +18,10 @@ The [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 It is kept at `CarlaControl/catalogue/vehicle_body_widths.json`.\
 It is not installed with `carlacontrol`.
 
-`VehicleCatalogueBuilder.load_body_widths` reads it, when a catalog is built and when `apply_vehicle_body_widths.py` applies it to the existing catalog.\
-The merge refuses the table when a row's `full_width_m` differs from the catalog's `width_m` by more than 1 mm, because the two then measured different meshes.
+`VehicleCatalogueBuilder.load_body_widths` reads it during a catalog build.\
+It also reads it for `apply_vehicle_body_widths.py`, which applies the table to the existing catalog.\
+If a row's `full_width_m` differs from the catalog's `width_m` by more than 1 mm, the merge refuses the table.\
+In that case, the two measured different meshes.
 
 ## How a width is measured
 
@@ -49,7 +52,7 @@ All values are rounded to 0.1 mm.
 `body_widths_version` is 1.\
 There is no other version.\
 `load_body_widths` refuses any other value, or none.\
-Then it refuses a table that does not match the schema, naming each problem.
+Then it refuses a table that does not match the schema and names each problem.
 
 ## Example
 

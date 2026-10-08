@@ -6,16 +6,19 @@
 
 ## What it is
 
-Every still a recorder writes is a PNG with up to four text chunks between its header and its pixels.\
+Every still a recorder writes is a PNG with up to four text chunks.\
+They sit between its header and its pixels.\
 `carla:capture` says which capture the still is: the simulation frame and time it was rendered at, the run it belongs to and what wrote it.\
-It lets you trace a still to its frame, its run and the release that made it, even when the still has been separated from its truth sidecar.
+With it, you can trace a still to its frame, its run and the release that made it.\
+This works even for a still separated from its truth sidecar.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:capture`.\
 Its text is one line of compact JSON.\
-PNG text chunks are Latin-1; the writer replaces any character outside Latin-1 with `?`.
+PNG text chunks are Latin-1.\
+The writer replaces any character outside Latin-1 with `?`.
 
 Every still carries this chunk.\
-The other three (`carla:solar`, `carla:illumination`, `carla:sensor`) are written only when there is something to say.
+The other three (`carla:solar`, `carla:illumination`, `carla:sensor`) are written only where there is something to say.
 
 ## Who writes it and when
 
@@ -26,23 +29,23 @@ The CarlaNet recorder writes it into every still it saves, at the same moment it
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `format_version` | integer, always 1 | | No | The chunk's format version; absent from a chunk written before chunks carried one, which is version 1. |
-| `tick` | integer | | Yes | The simulation frame the image was rendered on; the same as the sidecar's `tick`. |
+| `format_version` | integer, always 1 | | No | The chunk's format version. A chunk written before chunks carried one has none and is version 1. |
+| `tick` | integer | | Yes | The simulation frame the image was rendered on. The same as the sidecar's `tick`. |
 | `sim_time_s` | number | seconds | Yes | Simulated time at that frame. |
-| `run_id` | string | | No | The run the still belongs to; every recorder names one. |
+| `run_id` | string | | No | The run the still belongs to. Every recorder names one. |
 | `scenario_id` | string | | No | The scenario driving the run, where there is one. |
 | `seed` | integer | | No | The seed the run was started with, where one was given. |
-| `producer` | object | | No | What made the still; absent from a still written before stills carried it. |
+| `producer` | object | | No | What made the still. Absent from a still written before stills carried it. |
 
 `producer`:
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `tool` | string | | Yes | The component that wrote the still, such as `carlacontrol.CaptureSession`. |
-| `tool_version` | string or null | | Yes | The release of the package the tool comes from; null where the tool did not say. |
+| `tool_version` | string or null | | Yes | The release of the package the tool comes from. Null where the tool did not say. |
 | `carlanet` | string | | Yes | The carlanet release: `0.10.0` for a tagged release, `0.10.0+g<commit>` for any other build. |
-| `server` | object or null | | Yes | The CARLA server's build identity (below); null where no server was used. |
-| `sumo` | string or null | | Yes | The SUMO release where SUMO drove the vehicles; null where it did not. |
+| `server` | object or null | | Yes | The CARLA server's build identity (below). Null where no server was used. |
+| `sumo` | string or null | | Yes | The SUMO release where SUMO drove the vehicles. Null where it did not. |
 | `written_utc` | string | | No | When the still was written, UTC to the millisecond, such as `2026-10-07T12:00:00.000Z`. |
 
 `server` has one of two shapes.\
@@ -75,8 +78,11 @@ The truth sidecar's `<_producer>` element, the run manifest's opening `producer`
 ## Format version
 
 This page describes format version 1.\
-A chunk without `format_version` was written before chunks carried one and is version 1; it has no `producer` either.\
-Readers read a version they know, refuse a newer one by name rather than reading it in part and read a chunk with no version as version 1.
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+It has no `producer` either.\
+Readers read a version they know.\
+They refuse a newer one by name rather than reading it in part.\
+They read a chunk with no version as version 1.
 
 ## Example
 

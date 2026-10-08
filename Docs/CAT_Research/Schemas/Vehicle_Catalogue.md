@@ -34,11 +34,11 @@ The script does these steps:
 
 These read it:
 
-- the scenario compiler, which draws each vehicle's type from a class and records the catalog's digest in the compiled scenario;
-- a capture run, which refuses a scenario compiled against another catalog;
-- the SUMO drive (CarlaNet's `VehicleCatalogue`), which places each SUMO vehicle's body from its measured box;
-- the truth recorder, which takes each vehicle's `base_type` and `special_type` from it;
-- `carla-cot-telemetry`, for the same two fields.
+- the scenario compiler, which draws each vehicle's type from a class and records the catalog's digest in the compiled scenario
+- a capture run, which refuses a scenario compiled against another catalog
+- the SUMO drive (CarlaNet's `VehicleCatalogue`), which places each SUMO vehicle's body from its measured box
+- the truth recorder, which takes each vehicle's `base_type` and `special_type` from it
+- `carla-cot-telemetry`, for the same two fields
 
 The file is JSON in one canonical form: keys sorted, two-space indent, UTF-8, a final newline.\
 The digest is defined over that form.
@@ -91,17 +91,17 @@ The bus takes a speed spread of 0.05 where SUMO's default is zero.
 
 The builder derives a base type from the measured box, then applies a short list of curated corrections:
 
-- height under 2.0 m: `car`;
-- height under 3.0 m and length under 7.0 m: `van`;
-- otherwise: `truck`.
+- height under 2.0 m: `car`
+- height under 3.0 m and length under 7.0 m: `van`
+- otherwise: `truck`
 
 The derivation never gives `bus`.\
 The corrections are for what a box cannot show:
 
-- the Nissan Patrol is a sport utility vehicle on a car chassis whose 2.06 m roof reads as a van;
-- the Fuso Rosa is a bus;
-- the ambulance, the police car and the fire truck are `emergency`;
-- the taxi is `taxi`.
+- The Nissan Patrol is a sport utility vehicle on a car chassis whose 2.06 m roof reads as a van.
+- The Fuso Rosa is a bus.
+- The ambulance, the police car and the fire truck are `emergency`.
+- The taxi is `taxi`.
 
 Each correction carries its reason in the builder's code.
 
@@ -135,7 +135,8 @@ For a model developer reading a capture's truth:
 
 - A vehicle's `base_type` and `special_type` are its class's `cot_base_type` and `cot_special_type`.\
   An empty `special_type` is the normal case and means "no special type".\
-  A planted vehicle has the same kind as any other vehicle of its body; which vehicles were planted is recorded separately.
+  A planted vehicle has the same kind as any other vehicle of its body.\
+  Which vehicles were planted is recorded separately.
 - A vehicle's `length_m`, `width_m` and `height_m` in the truth are the bounding box CARLA measures on the drawn body.\
   They match the catalog's `length_m`, `width_m` and `height_m`, so the width includes the mirrors.\
   SUMO was given `body_width_m`, the width without them.
@@ -146,8 +147,8 @@ For a model developer reading a capture's truth:
   CARLA places the body's origin behind it by `length_m / 2 + bbox_centre_m[0]` along the heading.\
   The truth's latitude, longitude and height are the body origin's.
 - The lights the truth records are the lights commanded on.\
-  `lamp_capability` says whether commanding a lamp changed the image when the catalog was built.\
-  In this catalog the optical pass found only one lamp that changes the image, the fire truck's high beams.\
+  `lamp_capability` says whether commanding a lamp changed the image during the catalog build.\
+  In this catalog, the lamp pass found only one lamp that changes the image: the fire truck's high beams.\
   Every other lamp is `unlit`.
 
 ## Fields
@@ -160,7 +161,7 @@ For a model developer reading a capture's truth:
 | `catalogue_id` | string | | yes | The catalog's name: `carla-<server version>-<os>` unless the builder was given one. |
 | `catalogue_digest` | string | | yes | SHA-256, lowercase hexadecimal, of the canonical file with this field empty. Compiled scenarios record it. |
 | `content_build_id` | string | | yes | Which content build was measured. Defaults to `catalogue_id`. |
-| `blueprint_set_digest` | string | | yes | SHA-256 over every blueprint and attribute the server declared. A server can recompute it to show its content has not changed. |
+| `blueprint_set_digest` | string | | yes | SHA-256 over every blueprint and attribute the server declared. A server can recompute it to show that its content is unchanged. |
 | `generated_at_utc` | string | | yes | When the sweep ran, ISO 8601 UTC to the millisecond. |
 | `generator` | string | | yes | The tool and its version: `carlacontrol.VehicleCatalogueBuilder/1.0.0`. |
 | `server_version` | string | | yes | The CARLA server's version. |
@@ -181,14 +182,14 @@ Every entry has these fields, measured or not:
 | `tags` | string | | yes | The blueprint's tags, comma separated. |
 | `declared_base_type` | string | | yes | The base type the content declares. Truth does not use it. |
 | `declared_special_type` | string | | yes | The special type the content declares. Truth does not use it. |
-| `number_of_wheels` | integer | | yes | Wheels the blueprint declares; −1 when it declares none. |
-| `generation` | integer | | yes | The CARLA generation the blueprint declares; −1 when none. |
+| `number_of_wheels` | integer | | yes | Wheels the blueprint declares. A blueprint that declares none gives −1. |
+| `generation` | integer | | yes | The CARLA generation the blueprint declares. A blueprint that declares none gives −1. |
 | `declared_has_lights` | boolean | | yes | Whether the blueprint declares lights. |
-| `settable_attributes` | array of objects | | yes | Each attribute a spawn may set: `id`, `type`, `restrict_to_recommended` and `recommended_values`. |
+| `settable_attributes` | array of objects | | yes | Each attribute a spawn can set: `id`, `type`, `restrict_to_recommended` and `recommended_values`. |
 | `colour_settable` | boolean | | yes | Whether the blueprint has a color attribute. |
 | `colour_palette` | array of strings | | yes | The body colors it recommends, each `R,G,B` from 0 to 255. A rendered body takes its color from here, never from SUMO. |
-| `colour_applied` | string | | yes | `true` when a requested color reached the body, `false` when it did not, `unknown` when the server log could not say. |
-| `lamp_capability` | object | | yes | For each of the eleven lamps (`position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special_1`, `special_2`): `lit`, the image changed; `unlit`, the lamp was commanded and the image did not change; `unknown`, not measured. |
+| `colour_applied` | string | | yes | `true`: a requested color reached the body. `false`: it did not. `unknown`: the server log did not say. |
+| `lamp_capability` | object | | yes | One value for each of the eleven lamps. `lit`: the image changed. `unlit`: the lamp was commanded and the image did not change. `unknown`: not measured. The lamps are `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special_1` and `special_2`. |
 | `measurement` | string | | yes | `measured` or `failed`. |
 
 A measured entry also has:
@@ -199,7 +200,7 @@ A measured entry also has:
 | `width_m` | number | meters | yes | Width of the bounding box, mirrors included. |
 | `height_m` | number | meters | yes | Height of the bounding box. |
 | `bbox_centre_m` | array of 3 numbers | meters | yes | The box's center in the vehicle's own frame: forward, right, up from the actor's origin. |
-| `body_width_m` | number | meters | no | Width of the body without mirrors, measured from the mesh. SUMO is given this width. Every measured entry has it in the current catalog; without it, no SUMO type can be written for the body. |
+| `body_width_m` | number | meters | no | Width of the body without mirrors, measured from the mesh. SUMO is given this width. Every measured entry has it in the current catalog. Without it, no SUMO type can be written for the body. |
 
 A failed entry has no dimensions.\
 It has `measurement_note`, the reason, instead.\
@@ -211,17 +212,17 @@ A reader refuses to place a body whose measurement failed.
 |---|---|---|---|---|
 | `class_id` | string | | yes | The class's id: a lowercase letter, then up to 31 lowercase letters, digits or underscores. |
 | `description` | string | | yes | The class in words. |
-| `sumo_vclass` | string | | yes | SUMO's vehicle class, which decides the lanes the vehicle may use. |
+| `sumo_vclass` | string | | yes | SUMO's vehicle class, which decides the lanes the vehicle can use. |
 | `cot_base_type` | string | | yes | The `base_type` truth records for every member: `car`, `van`, `truck`, `bus`, `motorcycle` or `bicycle`. |
 | `cot_special_type` | string | | no | The `special_type` truth records: `emergency`, `taxi`, `electric`, or empty. Absent means empty. |
 | `members` | array of objects | | yes | The bodies the class draws. Each has `blueprint_id` and `weight`, its relative chance, above 0. |
 | `max_speed_mps` | number | m/s | yes | SUMO `maxSpeed`: the top speed. |
 | `accel_mps2` | number | m/s² | yes | SUMO `accel`: the most the vehicle accelerates. |
-| `decel_mps2` | number | m/s² | yes | SUMO `decel`: how hard it brakes when it wants to. |
+| `decel_mps2` | number | m/s² | yes | SUMO `decel`: how hard it chooses to brake. |
 | `sigma` | number | | yes | SUMO `sigma`: the driver's imperfection in the Krauss car-following model, 0 (perfect) to 1. |
 | `speed_factor_mean` | number | | yes | SUMO `speedFactor`: the mean multiple of the speed limit the driver keeps. |
 | `speed_factor_dev` | number | | yes | SUMO `speedDev`: how much that multiple varies between drivers. |
-| `min_gap_m` | number | meters | yes | SUMO `minGap`: the gap left to the vehicle ahead when stopped. |
+| `min_gap_m` | number | meters | yes | SUMO `minGap`: the gap a stopped vehicle leaves to the vehicle ahead. |
 | `gui_shape` | string | | yes | SUMO `guiShape`. Read by sumo-gui only. |
 | `gui_colour` | string | | yes | The `#RRGGBB` color sumo-gui draws the class in. It never reaches the rendered body. |
 | `render_colour_policy` | string | | yes | How a rendered body's color is chosen: `palette`, from the body's `colour_palette`. Nothing reads it yet. |
@@ -234,7 +235,7 @@ A reader refuses to place a body whose measurement failed.
 | `reason` | string | | no | Why it did not run, or stopped. |
 | `solar_date`, `solar_time_hours` | string, number | date, hours | no | The date and solar time the sun was set to, at night so lamps stand out. |
 | `sun_elevation_deg` | number or null | degrees | no | The sun's elevation the server reported. |
-| `positive_control_pixels` | integer | pixels | no | Pixels that changed when the sun was moved to daylight, which shows the camera sees a change. |
+| `positive_control_pixels` | integer | pixels | no | Moving the sun to daylight changed this many pixels. This shows that the camera sees a change. |
 | `camera_poses` | array of objects | meters, degrees | no | Where the probe camera stood: `standoff_m`, `height_offset_m`, `pitch_deg`, `yaw_deg`, `fov_deg`. |
 | `image_size` | array of 2 integers | pixels | no | Probe image width and height. |
 | `luminance_threshold` | integer | of 255 | no | A pixel counts as gained above this brightness. |
@@ -251,17 +252,19 @@ Every catalog the builder wrote carries it, so a file without it is not a catalo
 
 - carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that declares 1.\
   They refuse any other value, or none.\
-  For a newer version the message says the file was written by a newer release.
-- `VehicleCatalogue.load` then checks the file against the schema and refuses it, naming each problem.\
+  For a newer version, the message says the file was written by a newer release.
+- `VehicleCatalogue.load` then checks the file against the schema.\
+  It refuses a file that does not match and names each problem.\
   Every vehicle and class entry must be complete.\
-  A header field that is present must have the right shape; one that is absent reads as empty.
+  A header field that is present must have the right shape.\
+  A header field that is absent reads as empty.
 
 `carlacontrol.WorldFileValidator`, given the catalog's folder, checks:
 
-- the whole catalog against its schema and the builder's rules;
-- that its digest is its content's;
-- `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives;
-- `vehicle_body_widths.json`, where it is present.
+- the whole catalog against its schema and the builder's rules
+- that its digest matches its content
+- `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives
+- `vehicle_body_widths.json`, where it is present
 
 `carla-validate CarlaControl/catalogue` runs it.
 

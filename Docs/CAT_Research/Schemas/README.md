@@ -1,12 +1,14 @@
 # Schemas of the files these tools write and read
 
 Each page in this folder describes one kind of file: what writes it, what reads it, every field and its format version.\
-Most kinds also have a schema in `CarlaControl/schemas/`, which carlacontrol installs.
+Most kinds also have a schema in `CarlaControl/schemas/`, installed with carlacontrol.
 
 Each schema names itself with a URN, `urn:carla-sumo-capture:schema:<kind>:<format version>`.\
-The URN is a name, not an address, so nothing has to serve it.
+The URN is a name, not an address.\
+Nothing has to serve it.
 
-The schemas are generated from the code that writes or reads each file, so they say what the writers write.\
+The schemas are generated from the code that writes or reads each file.\
+They therefore say what the writers write.\
 A few are written by hand and say so below.
 
 `carla-validate <path>` checks a capture folder, a world package, a vehicle catalog folder, or any folder holding the other files below, against the schemas.\
@@ -47,7 +49,7 @@ What `carla-capture` writes about a run beside the run's capture.
 
 | Page | Schema | URN | What it describes |
 |---|---|---|---|
-| [Run configuration](Run_Configuration.md) | `run_configuration.schema.json` | `urn:carla-sumo-capture:schema:run-configuration:1` | `<name>.run.json` and the run's own `run.effective.json`: the settings of a capture run. |
+| [Run configuration](Run_Configuration.md) | `run_configuration.schema.json` | `urn:carla-sumo-capture:schema:run-configuration:1` | `<name>.run.json` and the run's own `run.effective.json`: the configuration of a capture run. |
 | [Site profile](Site_Profile.md) | `site_profile.schema.json` | `urn:carla-sumo-capture:schema:site-profile:1` | The facts about one machine a run needs: the server's address, the SUMO installation and where files are kept. |
 | [Scenario specification](Scenario_Specification.md) | `scenario.schema.json`, in the authoring skill | `urn:carla-sumo-capture:schema:scenario:1` | `<scenario>.scenario.json`: one scenario as its author writes it. |
 | [Sweep](Sweep.md) | `sweep.schema.json`, in the authoring skill | `urn:carla-sumo-capture:schema:sweep:1` | `<sweep>.sweep.json`: one base scenario, the axes varied over it and counterfactual pairs. |
@@ -63,7 +65,7 @@ What `carla-compile-scenario` writes for a scenario or a sweep.
 |---|---|---|---|
 | [Scenario lock](Scenario_Lock.md) | `scenario_lock.schema.json` | `urn:carla-sumo-capture:schema:scenario-lock:1` | `<scenario_id>.lock.json`: what a compiled scenario is bound to, by the SHA-256 of every file that decides it. |
 | [Scenario resolution report](Scenario_Resolution_Report.md) | `scenario_resolution.schema.json` | `urn:carla-sumo-capture:schema:scenario-resolution:1` | `<scenario_id>.resolution.json`: what a compile resolved, every place, time, schedule and route, for its author to check. |
-| [Supervision plan](Supervision_Plan.md) | `supervision_plan.schema.json` | `urn:carla-sumo-capture:schema:supervision-plan:1` | `<scenario_id>.supervision.json`: the scenario's labels, fixed when it is compiled. The file is the only place they travel. |
+| [Supervision plan](Supervision_Plan.md) | `supervision_plan.schema.json` | `urn:carla-sumo-capture:schema:supervision-plan:1` | `<scenario_id>.supervision.json`: the scenario's labels, fixed at compile time. The file is the only place they travel. |
 | [Sweep index](Sweep_Index.md) | `sweep_index.schema.json` | `urn:carla-sumo-capture:schema:sweep-index:1` | `<sweep_id>.sweep-index.json`: every member of a compiled sweep, its axis values and every finding. |
 | [Scenario compiler checks](Scenario_Checks.md) | `scenario_checks.schema.json` | `urn:carla-sumo-capture:schema:scenario-checks:1` | `checks.json` beside the authoring skill: every check the compiler runs, by its stable id. |
 | [SUMO files](SUMO_Files.md) | none from these tools: SUMO's own XSDs | none | The route, additional, configuration, network and type files, in SUMO's own formats. |

@@ -11,12 +11,14 @@
 
 A Cursor-on-Target (CoT) type carries an affiliation: `a-n-G-E-V` is neutral, `a-f-G-E-V` friendly.\
 A TAK client colors each track by it.\
-A display convention gives each vehicle population the affiliation letter its tracks are drawn with, so a live picture is readable at a glance: a port's civilian traffic neutral and its naval traffic friendly, for example.
+A display convention gives each vehicle population (a vehicle class or a vehicle type) the affiliation letter its tracks are drawn with.\
+This makes a live picture readable at a glance.\
+For example, a port's civilian traffic is drawn neutral and its naval traffic friendly.
 
 It is a choice about how one run is displayed.\
 It is not part of the scenario, is not covered by the scenario's digests and is not checked by the compiler.
 
-A convention names **populations, never single vehicles**.\
+A convention names populations, never single vehicles.\
 In a compiled scenario a population is a vehicle class: the `carla:class_id` parameter of its vehicle types (see [SUMO files](SUMO_Files.md)).\
 In a hand-written route file, whose types name no class, it is the vehicle type's id.
 
@@ -25,16 +27,16 @@ A population the convention does not name takes the run's default, `carla-cot-te
 ## Who writes it and who reads it
 
 - **A scenario developer writes it**, beside the scenario, named for the stem of the scenario's `.sumocfg`: `Shahid_Bahonar_Port_PatternOfLife.display.json` for `Shahid_Bahonar_Port_PatternOfLife.sumocfg`.
-- **`carla-cot-telemetry` reads it**: the file `--display-convention` names, or the one beside `--config` when there is one.\
+- **`carla-cot-telemetry` reads it**: the file `--display-convention` names, or any convention file beside `--config`.\
   A file that cannot be read is refused.\
   The run records which convention it drew with.
 - The reader refuses a file in any of these cases:
-  - it is not a JSON object;
-  - it names planted vehicles (`marked_ids`);
-  - it has a key other than the three below;
-  - its `convention_version` is not 1;
-  - it has an affiliation letter that is not a CoT affiliation;
-  - it does not conform to the schema.
+  - it is not a JSON object
+  - it names planted vehicles (`marked_ids`)
+  - it has a key other than the three below
+  - its `convention_version` is not 1
+  - it has an affiliation letter that is not a CoT affiliation
+  - it does not conform to the schema
 
 ## Fields
 

@@ -12,11 +12,11 @@
 The scenario lock records what one compiled scenario is bound to.\
 It holds:
 
-- the SHA-256 of its specification and of every file the compile wrote that decides the traffic or the labels;
-- the world it was compiled against, the vehicle catalog and the vocabulary;
-- SUMO's seed, step and options;
-- what a SUMO-only run of the compiled files showed;
-- the epoch, the illumination default and the capture windows.
+- the SHA-256 of its specification and of every file the compile wrote that decides the traffic or the labels
+- the world it was compiled against, the vehicle catalog and the vocabulary (the terms the labels use)
+- SUMO's seed, step and options
+- what a SUMO-only run of the compiled files showed
+- the epoch (the civil time of simulated second zero), the illumination default and the capture windows
 
 The same specification, seed and world give the same traffic.\
 The lock is how a run proves that the files it is about to drive are the ones that were compiled.
@@ -27,16 +27,17 @@ A capture run writes `run.lock.json` about one run of the scenario (see [Run loc
 ## Who writes it and who reads it
 
 - **`carla-compile-scenario` writes it** with the scenario's other files.\
-  It writes it only when the compile succeeds.
+  It writes it only for a compile that succeeds.
 - **`carla-capture` reads it** to bind the scenario: by id under `paths.scenario_root`, by folder, or by path.\
   It takes the epoch, the SUMO step, seed and end, the catalog digest and the illumination default from it.\
   It refuses:
-  - a lock of another version (run check 6);
-  - a world that does not match (run check 5);
-  - a catalog that does not match (run check 48);
-  - a skipped SUMO-only run unless the run accepts it (run check 54).
-- **The co-simulation session reads it** when it starts, under `carla-capture` and `carla-drive` alike: the lock beside the `.sumocfg` it is given.\
-  It refuses a scenario whose configuration, route file, network, lane closures or supervision plan is not the one the lock digests, or whose catalog or epoch is not the one the lock records.\
+  - a lock of another version (run check 6)
+  - a world that does not match (run check 5)
+  - a catalog that does not match (run check 48)
+  - a skipped SUMO-only run that the capture run does not accept (run check 54)
+- **The co-simulation session reads it** as it starts, under `carla-capture` and `carla-drive` alike: the lock beside the `.sumocfg` it is given.\
+  It refuses a scenario whose configuration, route file, network, lane closures or supervision plan is not the one the lock digests.\
+  It also refuses a scenario whose catalog or epoch is not the one the lock records.\
   A scenario with no lock beside it still runs.\
   The run records it as uncompiled.
 
@@ -58,7 +59,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `files.routes` | `{path, sha256}` | | The route file, `<scenario_id>.rou.xml`. |
 | `files.config` | `{path, sha256}` | | The SUMO configuration, `<scenario_id>.sumocfg`. |
 | `files.network` | `{path, sha256}` | | The world's network, copied as `<MapName>.net.xml`. |
-| `files.additional` | `{path, sha256}` | | The lane closures, `<scenario_id>.add.xml`. Present only when the specification declares lane closures. |
+| `files.additional` | `{path, sha256}` | | The lane closures, `<scenario_id>.add.xml`. If the specification declares no lane closures, it is absent. |
 | `files.supervision` | `{path, sha256}` | | The supervision plan, `<scenario_id>.supervision.json`. |
 | `world.package` | string | | The world package's file name. |
 | `world.map_name` | string | | The map name. |
@@ -104,13 +105,15 @@ Every field is always present, except `producer` in a file written before Octobe
 | `planned_vehicles` | object | The vehicles the supervision plan names: `total` and how many were `inserted`. |
 | `collisions` | integer | How many collisions SUMO reported. |
 
-or `{"ran": false, "reason": "..."}` when the compile was run with `--skip-dry-run`.
+If the compile was run with `--skip-dry-run`, it is `{"ran": false, "reason": "..."}` instead.
 
 ## Versions
 
 This page describes version 1, the only version.\
-`carla-capture` and the co-simulation session read only version 1 and refuse any other, including a lock with no version.\
-A file written before October 7, 2026 has no `producer`; it is still version 1.
+`carla-capture` and the co-simulation session read only version 1 and refuse any other version.\
+They also refuse a lock with no version.\
+A file written before October 7, 2026 has no `producer`.\
+It is still version 1.
 
 ## Example
 

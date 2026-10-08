@@ -15,15 +15,17 @@ It records what was observed: how many captures each camera wrote, how each view
 It carries no overall pass or fail.\
 A reader decides what matters to them from the parts they care about.
 
-The process exit status is read from `outcome`, so the file and the exit status always agree.
+Because the process exit status is read from `outcome`, the file and the exit status always agree.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** in every outcome where the tool is not stopped first, including a refusal before any server was contacted.\
+- **`carla-capture` writes it** in every outcome where the tool is not stopped first.\
+  That includes a refusal before any server was contacted.\
   It goes to `--result` (the `result_path` field), or by default to `<paths.runs_root>/<session id>/run.result.json`.\
   It is always outside the capture folder.
-- It is written under a temporary name ending in `.partial` and then renamed, so a reader never sees a half-written result.\
-  If there is no result, the tool was stopped before it could write one.
+- It is written under a temporary name ending in `.partial` and then renamed.\
+  A reader therefore never sees a half-written result.\
+  If there is no result, the tool was stopped before it wrote one.
 - Three other records are written beside it, named after it.\
   The first is `<stem>.resolution.json` (see [Run resolution report](Run_Resolution_Report.md)).\
   When the offline checks accept, the other two are `<stem>.lock.json` (see [Run lock](Run_Lock.md)) and `<stem>.effective.json` (see [Run configuration](Run_Configuration.md)).\
@@ -49,17 +51,17 @@ Every field is always present, except `producer` in a file written before Octobe
 | `caller_label` | string or null | | yes | The caller's own label for the run. Never interpreted. |
 | `session_id` | string | | yes | The run's identity, `cap-<UTC date>-<UTC time>-<six hex digits>`. It names the capture folder. |
 | `tool_version` | string | | yes | The carlacontrol release. The same as `producer.tool_version`, kept for older readers. |
-| `schema_version` | integer or null | | yes | The run configuration format version the run was resolved against. Null when nothing was resolved. |
-| `effective_configuration_digest` | string or null | | yes | SHA-256 of `run.effective.json` without its producer. Null when nothing was resolved. |
-| `resolution_report` | string or null | | yes | Path of the resolution report. Null when none was written. |
-| `lock` | string or null | | yes | Path of the run lock. Null when the offline checks did not accept. |
-| `effective_configuration` | string or null | | yes | Path of `run.effective.json`. Null when the offline checks did not accept. |
-| `launch_echo` | object or null | | yes | What the run said it would do before it started. See [Launch echo](Launch_Echo.md). Null when the offline checks refused first. |
-| `authority_holder` | string or null | | yes | Who holds the world's population lease, when the outcome is `refused_authority`. |
+| `schema_version` | integer or null | | yes | The version of the run configuration format that the run was resolved against. If nothing was resolved, it is null. |
+| `effective_configuration_digest` | string or null | | yes | SHA-256 of `run.effective.json` without its producer. If nothing was resolved, it is null. |
+| `resolution_report` | string or null | | yes | Path of the resolution report. If none was written, it is null. |
+| `lock` | string or null | | yes | Path of the run lock. If the offline checks did not accept, it is null. |
+| `effective_configuration` | string or null | | yes | Path of `run.effective.json`. If the offline checks did not accept, it is null. |
+| `launch_echo` | object or null | | yes | What the run was about to do, as it said before it started. See [Launch echo](Launch_Echo.md). If the offline checks refused first, it is null. |
+| `authority_holder` | string or null | | yes | When the outcome is `refused_authority`, who holds the world's population lease (the exclusive claim to generate its vehicles). |
 | `refusals` | array of findings | | yes | Every refusal the launch made. |
 | `warnings` | array of findings | | yes | Every warning raised, with how it was handled. |
 | `expectations_declared` | integer | | yes | How many `expect` entries the configuration declared. |
-| `produced` | object or null | | yes | What the run produced and observed. Null when the run ended before the record was opened. |
+| `produced` | object or null | | yes | What the run produced and observed. If the run ended before the record was opened, it is null. |
 | `started_wall_utc` | string | | yes | When the launch began, ISO 8601 in UTC. |
 | `ended_wall_utc` | string | | yes | When the result was written, ISO 8601 in UTC. |
 
@@ -68,7 +70,7 @@ The outcomes and their exit statuses:
 | `exit_status` | `outcome` | Meaning |
 |---|---|---|
 | 0 | `run_finished` | The run reached its end: the window's end or the scenario's. |
-| 1 | `usage_error` | The invocation could not be resolved: an unknown key, an unreadable package, an override of a bound field. |
+| 1 | `usage_error` | Resolving the invocation failed: an unknown key, an unreadable package, an override of a bound field. |
 | 2 | `refused_offline` | The offline checks refused. No server was contacted. |
 | 3 | `refused_server` | The server checks refused, or the session refused while starting. |
 | 4 | `refused_authority` | Another client holds the world's population lease. `authority_holder` names it. |
@@ -78,14 +80,14 @@ The outcomes and their exit statuses:
 
 `closed_by` is one of:
 
-- `window_end`;
-- `scenario_end`;
-- `aborted_at_preroll`;
-- `operator_stop`;
-- `write_headroom`;
-- `signal:<name>` (such as `signal:SIGINT`);
-- `loud:<condition>` (an unattended run stopped by a loud condition such as `loud:recorder_dropped`);
-- `fault:<exception type>`.
+- `window_end`
+- `scenario_end`
+- `aborted_at_preroll`
+- `operator_stop`
+- `write_headroom`
+- `signal:<name>` (such as `signal:SIGINT`)
+- `loud:<condition>` (an unattended run stopped by a loud condition, a problem reported at once, such as `loud:recorder_dropped`)
+- `fault:<exception type>`
 
 ### A finding
 
@@ -99,14 +101,15 @@ Each entry of `refusals` and `warnings`:
 | `message` | string | yes | The finding in full. |
 | `catalogue` | string | yes | The catalog the check number belongs to: `carla-capture run checks`. |
 | `code` | string | warnings only | The warning's code, which `on_warning.<code>` handles. |
-| `adjudication` | `proceed` or null | warnings only | How the warning was handled. Null when nothing handled it. |
+| `adjudication` | `proceed` or null | warnings only | How the warning was handled. If nothing handled it, it is null. |
 | `adjudicated_by` | string or null | warnings only | Where that decision came from: the `on_warning` field's source, or "the operator at the terminal". |
 
 ### `produced`
 
-Present once the co-simulation session has started, whatever happened after.\
+Present once the co-simulation session started, whatever happened after.\
 A run that was refused before that, offline or by the server, has `produced` null.\
-Every field below is written; only `termination` is added at the very end.
+Every field below is written.\
+Only `termination` is added at the very end.
 
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
@@ -121,11 +124,11 @@ Every field below is written; only `termination` is added at the very end.
 | `window.end_reached_s` | number or null | s | The simulated second the run reached. |
 | `window.civil` | array of 2 strings | | The begin and the end reached, in civil time (ISO 8601 with offset). |
 | `channels` | array | | Each channel's recorder counts, below. |
-| `cameras` | array of objects | | Where each camera looked: `sensor_id`, `pattern`; for a stare its `form`, `look_at` and `pose`; for an orbit its `centre`, `radius_m`, `altitude_m` and `period_s`; and the `exposure` it was given. |
-| `readiness` | object or null | | How each view became ready before the window: the rule, the ceilings, each channel's state and when its tiles were in. |
+| `cameras` | array of objects | | Where each camera looked. Each entry has `sensor_id`, `pattern` and the `exposure` the camera was given. A stare also has its `form`, `look_at` and `pose`. An orbit also has its `centre`, `radius_m`, `altitude_m` and `period_s`. |
+| `readiness` | object or null | | How each view became ready before the window: the rule, the ceilings, each channel's state and the time its tiles were in. |
 | `gates` | array | | The closing gate records, below. |
 | `admissions` | object or null | | The render set's admission passes: `at_window_open` and a summary over the `window`. |
-| `session` | object | | What the co-simulation session established: its clock, SUMO, pace, sun, layers, drive lease, render set and draw distance in words; its compile lock and teleport checks. It also holds `last_snapshot`, the last figures it reported. |
+| `session` | object | | What the co-simulation session established: its clock, SUMO, pace, sun, layers, drive lease, render set and draw distance in words. Its compile lock and teleport checks are here too. It also holds `last_snapshot`, the last figures it reported. |
 | `preroll_achieved_factor` | number or null | sim s per wall s | The real-time factor the prewarm achieved. |
 | `recorder_run_id` | string | | The run id the recorders stamped on every still: the session id. |
 | `termination` | array | | The shutdown steps in order, each with `phase`, `step`, `ran`, `completed` and `failure`. |
@@ -139,7 +142,7 @@ Each entry of `produced.channels` (every count is an integer, or null where this
 | `captured` | Always null: the recorder does not count captures accepted into its queue. |
 | `written` | Captures written. |
 | `recorder_dropped` | Captures the recorder's queue had no room for. Any is a loud condition. |
-| `frame_unpaired` | Stills not written because the truth of their own frame was not available when the image arrived. |
+| `frame_unpaired` | Stills not written because the truth of their own frame was not available at the time the image arrived. |
 | `illumination_paired`, `illumination_unpaired` | Captures written with and without their frame's illumination declaration. |
 | `solar_block_missing` | Captures written with no recorded sun. They have no illumination band. |
 | `render_set_paired`, `render_set_unpaired` | Captures written with and without their frame's list of drawn vehicles. |
@@ -167,7 +170,7 @@ Each entry of `produced.gates`:
 | `observed` | number, boolean or null | What was observed. |
 | `threshold` | number, boolean or null | What it is compared against. |
 | `comparison` | `equals`, `at_least`, `at_most` or null | How. |
-| `met` | boolean or null | Whether the observation met the threshold. Null when skipped. |
+| `met` | boolean or null | Whether the observation met the threshold. If the gate was skipped, it is null. |
 | `skip_reason` | string | Why the gate was skipped. Present only on a skipped gate. |
 
 ## The producer record
@@ -179,15 +182,17 @@ Every file these tools write carries a `producer` object:
 | `tool` | string | The component that wrote the file, here `carlacontrol.CaptureSession`. |
 | `tool_version` | string | The carlacontrol release, with the commit it was built at. |
 | `carlanet` | string or null | The CarlaNet release the process loaded. |
-| `server` | object or null | The CARLA server's build identity once the run reached a server. If it could not be read, `available` is false and a `reason` is given. |
+| `server` | object or null | The CARLA server's build identity once the run reached a server. If reading it failed, `available` is false and a `reason` is given. |
 | `sumo` | string or null | The SUMO release, once the session started SUMO. |
 | `written_utc` | string | When the file was written, ISO 8601 in UTC. |
 
 ## Versions
 
 This page describes version 1, the only version.\
-`RunResult.read` reads a result with no `result_version` as version 1 and refuses a newer version, saying to read it with the release that wrote it.\
-A file written before October 7, 2026 has no `producer`; it is still version 1.
+`RunResult.read` reads a result with no `result_version` as version 1.\
+It refuses a newer version and says to read it with the release that wrote it.\
+A file written before October 7, 2026 has no `producer`.\
+It is still version 1.
 
 ## Example
 

@@ -5,7 +5,8 @@ The rows hold the same vehicles and instants as its [event file](SUMO_CoT_Event_
 
 When it opens the CSV, it also writes `<file stem>.summary.json` beside it.\
 The summary records the CSV's format version, its columns and what made it.\
-The CSV's own first line stays its header, so any CSV reader can read it.
+The CSV's own first line stays its header.\
+Any CSV reader can therefore read it.
 
 - Table schema: `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json` (Frictionless Table Schema)
 - Table schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1`
@@ -15,7 +16,8 @@ The CSV's own first line stays its header, so any CSV reader can read it.
 ## Who writes it and who reads it
 
 `carlacontrol.SumoCotBridge` writes both.\
-The table schema is generated from the bridge's column list, `SumoCotBridge.CSV_COLUMNS`, so the two cannot drift apart.
+The table schema is generated from the bridge's column list, `SumoCotBridge.CSV_COLUMNS`.\
+The two therefore cannot drift apart.
 
 `carla-check-label-leaks --csv` reads the CSV, to check that no column tells the planted vehicles from the others.\
 Given a folder holding them, `carla-validate` checks the CSV against the table schema and the summary against its schema.\
@@ -33,13 +35,13 @@ Every column is present in every row.
 |---|---|---|---|
 | `time_utc` | date-time | | When the update happened: the run's epoch plus `sim_time_s`, ISO 8601 UTC to the millisecond. |
 | `sim_time_s` | number | seconds | SUMO simulation time, two decimals. |
-| `uid` | string | | The track id: `<uid prefix>-<SUMO id>`. The prefix is `SUMO-TRUTH` unless `--uid-prefix` sets it. |
+| `uid` | string | | The track id: `<uid prefix>-<SUMO id>`. By default the prefix is `SUMO-TRUTH`. `--uid-prefix` sets a different one. |
 | `callsign` | string | | `<base_type>-<SUMO id>`. |
 | `cot_type` | string | | `a-<affiliation>-G-E-V`, with the affiliation the run's display convention gives the vehicle's population. |
 | `how` | string | | `m-g`: machine-generated truth. |
 | `lat` | number | degrees | WGS84 latitude of the front bumper's center, seven decimals, by SUMO's own projection. |
 | `lon` | number | degrees | WGS84 longitude, likewise. |
-| `hae_m` | number | meters | WGS84 ellipsoidal bare-earth ground height under the front bumper, from `bareearth.bin`; or `--hae` when there is no grid or the vehicle is off it. |
+| `hae_m` | number | meters | WGS84 ellipsoidal bare-earth ground height under the front bumper, from `bareearth.bin`. If there is no grid or the vehicle is off it, the value comes from `--hae`. |
 | `ce_m` | number | meters | Horizontal error: always `0.0`. |
 | `le_m` | number | meters | Vertical error: always `0.0`. |
 | `course_deg` | number | degrees | SUMO's heading, clockwise from north, one decimal. From 0 to 360: a heading just under 360 is written `360.0`. |
@@ -47,7 +49,7 @@ Every column is present in every row.
 | `vx` | number | m/s | Velocity east (CARLA's x). |
 | `vy` | number | m/s | Velocity south (CARLA's y). |
 | `vz` | number | m/s | Always `0.00`: a SUMO network is flat. |
-| `base_type` | string | | The vehicle catalog's `cot_base_type` for the blueprint the vehicle's type names, or its SUMO vehicle class's when the type names none. |
+| `base_type` | string | | The vehicle catalog's `cot_base_type` for the blueprint the vehicle's type names. If the type names none, it comes from the type's SUMO vehicle class. |
 | `type_id` | string | | The SUMO vehicle type id. |
 | `special_type` | string | | The catalog's `cot_special_type` for the blueprint: `emergency`, `taxi`, `electric`, or empty. |
 | `length_m` | number | meters | Length SUMO gives the vehicle. |
@@ -55,7 +57,7 @@ Every column is present in every row.
 | `height_m` | number | meters | Height SUMO gives the vehicle. |
 | `color` | string | | The type's sumo-gui color, `R,G,B`. Not the color CARLA renders. |
 | `role_name` | string | | The flow the vehicle came from: its SUMO id before the last dot. |
-| `marked` | boolean | | `1` when the scenario planted the vehicle, `0` otherwise. |
+| `marked` | boolean | | If the scenario planted the vehicle, `1`. If not, `0`. |
 | `edge` | string | | The SUMO edge the vehicle is on. |
 | `lane` | string | | The SUMO lane the vehicle is on. |
 | `sumo_x` | number | meters | SUMO x: east, in the network's projection. |
@@ -63,7 +65,7 @@ Every column is present in every row.
 | `carla_x` | number | meters | CARLA x: `sumo_x`. |
 | `carla_y` | number | meters | CARLA y: `−sumo_y`, since CARLA's y points south. |
 
-A vehicle is planted when its id is `--marked-vehicle` (`orbiter` by default) or is among a legacy labels file's `marked_ids`.
+If a vehicle's id is `--marked-vehicle` (`orbiter` by default) or is among a legacy labels file's `marked_ids`, the vehicle is planted.
 
 ## The summary
 
@@ -75,7 +77,8 @@ A vehicle is planted when its id is `--marked-vehicle` (`orbiter` by default) or
 | `columns` | array of strings | yes | The CSV's columns, in order: exactly its header. |
 
 The summary is named for the CSV's stem: `orbit_cot.csv` gets `orbit_cot.summary.json`.\
-It is written when the CSV is opened, so it exists even when the run stops early.
+It is written as the CSV is opened.\
+If the run stops early, the summary still exists.
 
 ## Format version
 
@@ -83,7 +86,7 @@ The CSV's format version is in its summary: `format_version` 1.\
 A CSV with no summary beside it was written before summaries existed and is version 1.
 
 Nothing checks the version today.\
-A reader that meets a version it does not know should refuse the CSV.
+If you write a reader, make it refuse a CSV whose version it does not know.
 
 ## Example
 

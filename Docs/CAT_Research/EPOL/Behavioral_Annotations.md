@@ -1,7 +1,8 @@
 # Behavioral annotations
 
 This page is for people who build pattern-of-life models from the captures these tools make.\
-It explains the labels a scenario's author writes into a scenario, how a run carries them onto the vehicles and where you find them in a capture.\
+It explains the labels a scenario's author writes into a scenario.\
+It also says how a run carries them onto the vehicles and where you find them in a capture.\
 [What a capture folder holds](Capture_Folder.md) explains the files.\
 [The vehicles behind the truth](Vehicle_Catalogue.md) explains the vehicles.
 
@@ -11,27 +12,29 @@ The truth around it states what the simulation did and what was measured.\
 No label carries a confidence, a pass mark or a judgment of how well a picture shows the behavior.\
 Whether a labeled behavior can be seen in a still is for your model to find out.
 
-The labels are fixed when the scenario is compiled, in its [supervision plan](../Schemas/Supervision_Plan.md), `<scenario_id>.supervision.json`.\
+When the scenario is compiled, its labels are fixed in its [supervision plan](../Schemas/Supervision_Plan.md), `<scenario_id>.supervision.json`.\
 A run never adds a label.\
 It only binds the plan's labels to the vehicles as SUMO drives them.\
-It also records when each one started and ended.
+It also records the times each one started and ended.
 
 ## Concepts
 
 ### The vocabulary and its version
 
-A label is a **term**, spelled `namespace:name`, such as `check:kerbside_dwell`.\
+A label is a term, spelled `namespace:name`, such as `check:kerbside_dwell`.\
 The vocabulary has two parts:
 
 - **The core**: a closed set of words that the tools themselves act on, such as the supervision states and the reasons an interval closes.\
   Its version is the `vocabulary` number on every sidecar and in the manifest: 3 in current captures.\
   The plan lists every core word by family, in `vocabulary.core`.
-- **Author namespaces**: the terms a scenario's author declares, such as `check` (version 1) in the Arapahoe supervision check and `bahonar` (version 2) in the Shahid Bahonar Port scenario.\
+- **Author namespaces**: the terms a scenario's author declares.\
+  The Arapahoe supervision check declares `check` (version 1).\
+  The Shahid Bahonar Port scenario declares `bahonar` (version 2).\
   Each namespace has its own version.
 
-Each author term has a written definition and says what it may label: `entity`, one authored vehicle, or `cohort`, every vehicle of a flow.\
-A term may also declare parameters, each with a type, a unit and a definition.\
-It may declare relations to other terms too: `contrast_with`, `counterfactual`, `hard_negative_for`, `broader`.\
+Each author term has a written definition and says what it can label: `entity`, one authored vehicle, or `cohort`, every vehicle of a flow.\
+A term can also declare parameters, each with a type, a unit and a definition.\
+It can declare relations to other terms too: `contrast_with`, `counterfactual`, `hard_negative_for`, `broader`.\
 Here is one term, as the Arapahoe supervision check declares it:
 
 ```json
@@ -71,7 +74,7 @@ Every label row asserts one of three states, which are core words:
   The vehicle carries out none of the target behaviors.\
   An author can choose it because it looks like one of them (see [Hard negatives](#hard-negatives)).
 - **`unlabelled`**: no assertion.\
-  It is not a negative: the author has said nothing about the vehicle.\
+  It is not a negative: the author says nothing about the vehicle.\
   The word is an identifier and keeps this spelling.
 
 Every SUMO vehicle a frame drew has a state in its sidecar record, `unlabelled` included.\
@@ -85,7 +88,7 @@ A plan holds three kinds of label rows ([Supervision plan](../Schemas/Supervisio
 
 - **An instance** is one assertion about one or more authored vehicles.\
   Its id is `<scenario_id>/<name>`, such as `Arapahoe_I25_SupervisionCheck/kerbside_dwell`.\
-  It has a state (`annotated` or `nominal`), its labels, its parameters and its **participants**: each a vehicle, by its `sumo_id`, with a **role**.\
+  It has a state (`annotated` or `nominal`), its labels, its parameters and its participants: each a vehicle, by its `sumo_id`, with a role.\
   A one-vehicle instance names its vehicle `subject`.\
   An instance with several vehicles uses roles its namespace declares: the Bahonar escort instance `pi_escort_drydock_d3` names one `bahonar:lead` and four `bahonar:follower`s.
 - **A series** reads a schedule as a recurring behavior.\
@@ -100,7 +103,7 @@ A plan holds three kinds of label rows ([Supervision plan](../Schemas/Supervisio
 
 ### Phases and intervals
 
-An instance can declare **intervals**: the stretches of time its labels hold, one for each participant and **phase**.\
+An instance can declare intervals: the stretches of time its labels hold, one for each participant and phase.\
 The author names the phases, such as `dwell`, `transit` and `past_the_kerb`.
 
 An interval is named by three things together: its instance, its participant and its phase.\
@@ -124,7 +127,7 @@ When a vehicle carries an instance's labels:
 - **An instance with intervals** labels each participant only while one of that participant's intervals is open.\
   The annotation's `phase` names the interval.\
   If two are open, the vehicle carries two annotations.\
-  Outside its intervals the vehicle is `unlabelled`, unless another row labels it.
+  Unless another row labels it, the vehicle is `unlabelled` outside its intervals.
 - **A participant with no intervals of its own** carries the instance's labels for as long as SUMO has it.\
   So does every vehicle of an instance that declares no intervals.
 - **A series** labels each slot's vehicle for as long as SUMO has it.\
@@ -144,7 +147,7 @@ An interval's start is recorded three ways, each from a different source:
 - **Observed**: when the drawn body showed it (`observed_start_s`, `observed_start_frame`).\
   For a departure it is the first frame that drew the vehicle.\
   For a stop it is the first frame on which the drawn body's speed was at or below 0.15 m/s.\
-  Frames between SUMO steps fill in the body's position, so the body can come to a standstill up to one SUMO step before the committed onset.\
+  The body can come to a standstill up to one SUMO step before the committed onset, because frames between SUMO steps fill in its position.\
   A start anchored to anything else, or declared by time, has no observed onset.\
   Neither has an interval that began before the capture window opened.
 
@@ -152,7 +155,8 @@ An interval opens at its committed onset where it has one.\
 Otherwise it opens at its declared start.\
 A missing onset is written as `null`, never filled in from another.
 
-The observed onset is known only after a frame has shown it, so the `interval_opened` row, written as the interval opens, always has it `null`.\
+The observed onset is known only after a frame shows it.\
+So the `interval_opened` row, written as the interval opens, always has it `null`.\
 Read it from the `interval_closed` row.
 
 ### Why an interval closed
@@ -174,7 +178,7 @@ The row's `not_drawn` lists the spans in which no body drew the vehicle while th
 ## Hard negatives
 
 A `nominal` row asserts that its vehicles carry out none of the target behaviors.\
-A **hard negative** is a nominal vehicle the author chose because it looks like a target behavior and is not one.
+A hard negative is a nominal vehicle the author chose because it looks like a target behavior and is not one.
 
 `hard_negative_for` lists the behaviors a nominal row is a matched negative for.\
 The list comes from the definition of the row's own labels: the term declares it.\
@@ -185,7 +189,8 @@ It does not mean "a negative for nothing".
 
 `hard_negative_for` is on the manifest's [`instance`](../Schemas/Run_Manifest.md#instance) and [`series`](../Schemas/Run_Manifest.md#series) rows and in the plan.\
 It is not in the sidecar.\
-To find it for a vehicle in a still, take the `instance` of the vehicle's `<annotation>` and look up that row.
+To find it for a vehicle in a still, take the `instance` of the vehicle's `<annotation>`.\
+Then look up that row.
 
 Two examples:
 
@@ -193,7 +198,7 @@ Two examples:
   A van, `brief_stopper`, stops at the same curb as the `dweller` for twenty seconds.\
   Its instance is `nominal`, labeled `check:brief_kerb_stop`.\
   Its manifest row says `"hard_negative_for":["check:kerbside_dwell"]`.\
-  The term's definition says why: the van makes "an ordinary stop where the dwell happens."\
+  The term's definition says why: this is "an ordinary stop where the dwell happens."\
   It pulls to the same curb for twenty seconds, as a delivery or a pick-up does.\
   Then it drives on.
 - **Shahid Bahonar Port.**\
@@ -212,17 +217,19 @@ An `unlabelled` vehicle is asserted nothing.
 
 Every label row is about a vehicle, or about the vehicles of a flow.\
 Nothing is labeled about a place, an area or the scene as a whole.\
-SUMO reports vehicles, not places, so a label always has a vehicle to follow.\
+SUMO reports vehicles, not places.\
+So a label always has a vehicle to follow.\
 That vehicle carries it in every still that draws it.
 
-This holds for an **omission** too: something expected that does not happen.\
+This holds for an omission too: something expected that does not happen.\
 Nothing is written for the place where it fails to happen.\
 The author labels the vehicle that deviates instead.
 
 The Bahonar scenario shows this.\
 Its schedule sends a guard to each of 16 towers at 07:00, 15:00 and 23:00 on each of 7 days: 336 postings.\
 On day 4 at 07:00 the guard due at tower 3 does not take up the post.\
-The schedule skips that posting, so the series has 335 slots and no vehicle is sent to tower 3.\
+The schedule skips that posting.\
+So the series has 335 slots and no vehicle is sent to tower 3.\
 Nothing is labeled about the empty tower.
 
 The guard vehicle that was due, `offpost_d4_h7_t3`, departs on time and parks on the west apron spur for the eight-hour shift.\
@@ -249,8 +256,10 @@ It carries the label, with parameters that name the tower and the shift it misse
 }
 ```
 
-The term's definition reads: "A guard due to relieve a tower departs on schedule but parks elsewhere for the shift; the tower it was due at goes unmanned."\
-The other 15 guards of that shift carry the series' `bahonar:tower_posting`, which is a hard negative for it.
+The term's definition says that a guard due to relieve a tower departs on schedule but parks elsewhere for the shift.\
+It adds that the tower the guard was due at goes unmanned.\
+The other 15 guards of that shift carry the series' `bahonar:tower_posting`.\
+That term is a hard negative for it.
 
 ## Where labels appear
 
@@ -266,15 +275,18 @@ It holds nothing from any other frame.
   - `instance`: the row.\
     `<scenario_id>/<name>` for an instance, `series:<series_id>` for a series, `cohort:<flow_id>` for a cohort.
   - `labels`: its terms, separated by spaces.
-  - `phase`: the open interval's phase; absent for a row with no intervals.
-  - `role`: the vehicle's role; absent where the row declares none, as a cohort does not.
+  - `phase`: the open interval's phase.\
+    It is absent for a row with no intervals.
+  - `role`: the vehicle's role.\
+    It is absent where the row declares none, as a cohort does not.
 
 A vehicle that one row labels `annotated` and another `nominal` is `annotated`.\
 Only its annotated rows are listed.\
 An `unlabelled` vehicle has no `<annotation>`.
 
 The `<events>` container names the plan in force, `plan_id`, with `vocabulary` and `vocabulary_digest`.\
-A container that says `supervision="unknown"` means a plan was in force but the frame's labels could not be read, so no vehicle in that still carries any.\
+A container that says `supervision="unknown"` means a plan was in force but the frame's labels were not readable.\
+So no vehicle in that still carries any.\
 Do not read those vehicles as `unlabelled`.
 
 In the sample capture, the car `transit` carries two annotations while it passes the curb, one for each open interval of its instance:
@@ -319,7 +331,7 @@ Among nine flows of background traffic, all `unlabelled` cohorts, it adds three 
 | Vehicle | What it does | Instance | State and label | Interval |
 |---|---|---|---|---|
 | `dweller` | departs at 20 s, waits 120 s at the curb, drives on | `kerbside_dwell` | `annotated`, `check:kerbside_dwell`, `dwell_s` 120 | `dwell`, from `stop:0` to `stop_end:0` |
-| `transit` | departs at 90 s and drives through, past the same curb | `through_transit` | `annotated`, `check:through_transit` | `transit`, from `depart`; `past_the_kerb`, from `phase:1` to `phase:2` |
+| `transit` | departs at 90 s and drives through, past the same curb | `through_transit` | `annotated`, `check:through_transit` | `transit`, from `depart`. `past_the_kerb`, from `phase:1` to `phase:2`. |
 | `brief_stopper` | departs at 200 s, stops 20 s at the same curb | `brief_stop` | `nominal`, `check:brief_kerb_stop`, hard negative for `check:kerbside_dwell` | `stop`, from `stop:0` to `stop_end:0` |
 
 The sample capture, `cap-20261008-041347-270d6d`, covers the window `dwell_golden`: 60 s to 240 s, two stills a second from one camera looking down at the curb.\
@@ -328,16 +340,16 @@ Here is what the record shows, on SUMO's clock:
 | SUMO time | What happened | Where it is recorded |
 |---|---|---|
 | 20.05 s | SUMO inserts `dweller`. A body draws it from frame 149499. | `render_admitted` |
-| 60 s | The capture window opens at frame 150298. The `dweller` is drawn and `unlabelled`. | `solar_window_open`; the first still |
+| 60 s | The capture window opens at frame 150298. The `dweller` is drawn and `unlabelled`. | `solar_window_open` and the first still |
 | 90.05 s | SUMO inserts `transit`. Its `transit` interval opens: declared 90, committed 90.05. | `interval_opened` |
 | 90.5 s | First still with `transit` `annotated`, phase `transit`. It is not in the picture yet. | sidecar, frame 150908 |
 | 104.0 s | `dweller` comes into the picture with its right turn signal on. | sidecar, frame 151178 |
-| 109.4 s | `dweller` stops at the curb. Its `dwell` interval opens: committed 109.4, observed 109.4 at frame 151286. | `interval_opened`; the observed onset on `interval_closed` |
+| 109.4 s | `dweller` stops at the curb. Its `dwell` interval opens: committed 109.4, observed 109.4 at frame 151286. | `interval_opened`, with the observed onset on `interval_closed` |
 | 109.5 s | First still with `dweller` `annotated`, phase `dwell`. | sidecar, frame 151288 |
 | 144.15 s | `transit` enters part 1 of its route, northbound on Yosemite from Arapahoe. Its `past_the_kerb` interval opens. | `interval_opened` |
 | 155.0 s to 159.5 s | `transit` is in the picture, with two annotations, beside the parked `dweller`. | sidecars, frames 152198 to 152288 |
 | 160.4 s | `transit` enters part 2 of its route. `past_the_kerb` closes by `trigger`. | `interval_closed` |
-| 200.05 s | SUMO inserts `brief_stopper`. It is drawn but never in the picture. It is `unlabelled`: its stop has not begun. | `render_admitted`; sidecars |
+| 200.05 s | SUMO inserts `brief_stopper`. It is drawn but never in the picture. It is `unlabelled`: its stop is yet to begin. | `render_admitted` and sidecars |
 | 229.4 s | `dweller` leaves the curb. `dwell` closes by `trigger`. | `interval_closed` |
 | 229.5 s | First still with `dweller` `unlabelled` again. | sidecar, frame 153688 |
 | 240 s | The window closes. The `transit` interval is still open and closes as `capture_window_end`. The `brief_stop` interval never opened. | `manifest_closed`: `open_intervals`, `never_opened` |
@@ -345,7 +357,8 @@ Here is what the record shows, on SUMO's clock:
 In numbers: 539 vehicle records in the 360 stills are `annotated`: 240 for the `dweller`'s dwell and 299 for `transit`.\
 The other 17,453 are `unlabelled`.
 
-No record is `nominal`, because the van's stop had not begun when the window closed.\
+The window closed before the van's stop began.\
+So no record is `nominal`.\
 Its `never_opened` entry is the record of that.
 
 Three things this shows:
@@ -357,7 +370,7 @@ Three things this shows:
   `transit` is `annotated` from 90.5 s but is in the picture only from 155.0 s to 159.5 s.\
   Use `in_frame` to tell the two apart.
 - **Some onsets are left empty.**\
-  The `transit` row was written as the interval opened, before a frame had drawn the car.\
+  The `transit` row was written as the interval opened, before any frame drew the car.\
   The interval never closed in the window.\
   So the manifest holds no observed onset for it.\
   Its `render_admitted` row shows the first frame that drew the car: frame 150899, at 90.05 s.

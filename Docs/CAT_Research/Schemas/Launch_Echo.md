@@ -11,17 +11,17 @@
 
 The launch echo is what a capture run says it is about to do, before it acquires the world or starts SUMO:
 
-- the simulated and civil span of the window;
-- how many captures it will make;
-- the sun it will set;
-- the world;
-- which vehicles get a body;
-- the disk space it will use;
-- where it writes;
-- the wait for each camera's view;
-- the warnings raised.
+- the simulated and civil span of the window
+- how many captures it will make
+- the sun it will set
+- the world
+- which vehicles get a body
+- the disk space it will use
+- where it writes
+- the wait for each camera's view
+- the warnings raised
 
-The echo shows you a run that is not the one you meant before any time is spent.
+Before any time is spent, the echo shows you a run that is not the one you meant.
 
 Every figure comes from the code that will act on it.\
 The echo also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
@@ -31,10 +31,10 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 - **`carla-capture` computes it** once, after the offline checks accept and before anything is acquired.\
   An attended run prints it at the terminal.
 - It is written into the run's resolution report and its result, as `launch_echo`.\
-  Both are null when the offline checks refused before the echo was computed.
+  If the offline checks refused before the echo was computed, both are null.
 - **An `expect` entry in the run configuration reads it.**\
   `expect` can name any value here as `launch_echo.<path>`, such as `launch_echo.captures.total`.\
-  The launch is refused if the value is not what the caller expected (run check 35).
+  If the value is not what the caller expected, the launch is refused (run check 35).
 
 ## Fields
 
@@ -64,7 +64,7 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `civil.first_rendered` | string | | The first rendered instant in civil time. |
 | `civil.epoch` | string | | The scenario's epoch in one line. |
 | `sun.policy` | one of `freeze_at_window_start`, `advance`, `freeze_at`, `ignore` | | What the sun does across the window. |
-| `sun.binds` | boolean | | Whether the policy sets the sun. False only for `ignore`, which leaves the world's sun alone and adds a `statement`. |
+| `sun.binds` | boolean | | Whether the policy sets the sun. False only for `ignore`. That policy leaves the world's sun alone and adds a `statement`. |
 | `sun.advances` | boolean | | Whether the sun moves across the window. |
 | `sun.rate` | number or null | sun s per sim s | Under `advance`, the sun's rate. |
 | `sun.elevation_kind` | string | | What the elevations are: `refraction_corrected`. |
@@ -78,7 +78,7 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `world.origin` | array of 2 numbers | degrees | Latitude and longitude of the map's origin. |
 | `render.set` | `all`, `circle` or `cameras` | | Which vehicles get a body. |
 | `render.region` | object or null | m | The render region, `{x_m, y_m, radius_m}`. |
-| `render.hysteresis_m`, `render.min_pixels`, `render.admit_lead_s`, `render.release_lag_s`, `render.cap` | number | | The render set's settings as resolved. |
+| `render.hysteresis_m`, `render.min_pixels`, `render.admit_lead_s`, `render.release_lag_s`, `render.cap` | number | | The render set's configuration as resolved. |
 | `render.limited` | boolean | | Whether an optional limit leaves vehicles without a body. |
 | `render.vehicles` | string | | Which vehicles get a body, in words. |
 | `render.left_out` | string or null | | What a limit leaves out. Null with no limit. |
@@ -101,7 +101,7 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `readiness.picture` | string | | What the picture's wait compares, or that it is not run. |
 | `readiness.tiles_ceiling_s` | number | s | Wall-clock seconds a view has for its tiles. |
 | `readiness.tiles_hold_s` | number | s | When the picture is not waited on: the tiles' lead before the window, in simulated seconds. |
-| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only when the picture-settled wait is on. The first says how the comparison skips the parts of the picture that drawn vehicles cover. The other three give the wait's ceiling and tolerance. |
+| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only with the picture-settled wait on. The first says how the comparison skips the parts of the picture that drawn vehicles cover. The other three give the wait's ceiling and tolerance. |
 | `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins and where the window opens. |
 | `readiness.traffic_stare_holds_from_s` | number or null | s | Where a stare aimed at the traffic stops following it. Null with no such stare. |
 | `readiness.not_ready`, `readiness.per_capture` | string | | The first says what happens to a view that is not ready. The second says what is not recorded per capture. |
@@ -114,7 +114,8 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 
 This page describes version 1, the only version.\
 No tool reads the echo back from a file.\
-A reader should read version 1 and refuse a newer version rather than read it in part.
+If you write a reader, have it read version 1.\
+Have it refuse a newer version rather than read it in part.
 
 ## Example
 

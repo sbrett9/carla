@@ -11,24 +11,26 @@
 
 The run lock records what one accepted capture run is bound to:
 
-- the digests of its scenario, world, vehicle catalog and epoch;
-- every field of its effective configuration, with the layer that set it and where that layer read it;
-- how each warning was handled;
-- this machine's site profile.
+- the digests of its scenario, world, vehicle catalog and epoch
+- every field of its effective configuration, with the layer that set it (the ranked source its value came from) and where that layer read it
+- how each warning was handled
+- this machine's site profile
 
-The run lock is the record to compare when two runs differ.
+When two runs differ, the run lock is the record to compare.
 
 **This is not the scenario lock.**\
-The scenario compiler writes `<scenario_id>.lock.json`, which records a compiled scenario (see [Scenario lock](Scenario_Lock.md)).\
+The scenario compiler writes `<scenario_id>.lock.json`, the record of a compiled scenario (see [Scenario lock](Scenario_Lock.md)).\
 A run lock records one run of that scenario.\
 It is always named after the run result: `run.lock.json` by default.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` writes it** beside the run result, as `<stem>.lock.json`, only when the offline checks accept the launch.\
-  It is written before any server is contacted, so its `producer` names no server.
+- **`carla-capture` writes it** beside the run result, as `<stem>.lock.json`.\
+  It is written only for a launch that the offline checks accept.\
+  Because it is written before any server is contacted, its `producer` names no server.
 - `run.effective.json` is written with it.\
-  That file reproduces the run; the lock explains it.
+  That file reproduces the run.\
+  The lock explains it.
 - No tool reads it back.\
   It is for people and for scripts that compare runs.
 
@@ -43,7 +45,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `session_id` | string | | The run's identity. |
 | `effective_configuration_sha256` | string, 64 hex digits | | SHA-256 of the replayable configuration, `run.effective.json` without its producer. Two machines resolving the same inputs get the same digest. |
 | `tool_version` | string | | The carlacontrol release that resolved the run. |
-| `schema_version` | constant `1` | | The run configuration format version. |
+| `schema_version` | constant `1` | | The version of the run configuration format. |
 | `caller` | `attended` or `unattended` | | Whether a person watched the launch. |
 | `caller_label` | string or null | | The caller's own label for the run. |
 | `inputs.scenario_lock_sha256` | string, 64 hex digits | | SHA-256 of the scenario's `.lock.json`. |
@@ -68,7 +70,7 @@ The `effective_configuration` object, which the [Run resolution report](Run_Reso
 |---|---|---|
 | `effective_configuration_version` | constant `1` | The format version of this block. |
 | `tool_version` | string | The carlacontrol release that resolved it. |
-| `schema_version` | constant `1` | The run configuration format version. |
+| `schema_version` | constant `1` | The version of the run configuration format. |
 | `digest` | string, 64 hex digits | The same digest as `effective_configuration_sha256`. |
 | `fields` | object | Every run configuration field, keyed by its dotted path, such as `capture.prewarm_s`. Every field is present. |
 | `channels` | array | One object per channel, keyed by channel field name. Every channel field is present. |
@@ -78,10 +80,10 @@ Each value in `fields` and in a channel object records one field:
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `value` | the field's type, or null | yes | The value the run uses. Null where the field does not apply or nothing supplied it. In the lock every value has its field's type. |
-| `layer` | string | yes | The layer that set it: `tool_default`, `site_profile`, `world_package`, `scenario_package`, `run_configuration` or `operator_override`; or `derived`, `pinned_by_policy`, `not_applicable`, `unsupplied`. |
+| `layer` | string | yes | The layer that set it: `tool_default`, `site_profile`, `world_package`, `scenario_package`, `run_configuration` or `operator_override`. It can also be `derived`, `pinned_by_policy`, `not_applicable` or `unsupplied`. |
 | `provenance` | string | yes | The file and key, or the command-line text, it was read from. |
 | `overridden` | array or null | yes | What lower layers gave and a higher one replaced, each with `layer`, `value` and `provenance`. Null where nothing was replaced. |
-| `tool_default` | the field's type, or null | for a field with a default | The tool's default, carried even where another layer set the value, so a deliberate match can be told from an accident. |
+| `tool_default` | the field's type, or null | for a field with a default | The tool's default, carried even where another layer set the value. This lets a reader tell a deliberate match from an accident. |
 | `dropped` | array | no | An illumination value of a lower layer that was dropped, because a higher layer chose a policy that does not take it. |
 | `note` | string | no | A note, such as a bound field restated with the same value. |
 | `environment_variable` | string | no | The environment variable the value was read from. |
@@ -100,15 +102,16 @@ The `site_profile` object, which the run resolution report carries too:
 | `values` | object | Every machine fact, keyed by its run configuration field (`server.port`, `paths.capture_root`, ...). The five `paths` and `sumo.home` are always present. |
 | `values.<field>.value` | string, number or null | The value. |
 | `values.<field>.provenance` | string | Where it came from. |
-| `values.<field>.environment_variable` | string or null | The environment variable it was read from, if any. |
+| `values.<field>.environment_variable` | string or null | The environment variable it was read from, or null for none. |
 
 ## Versions
 
 This page describes version 1, the only version.\
-A file written before October 7, 2026 has no `producer`; it is still version 1.
+A file written before October 7, 2026 has no `producer`.\
+It is still version 1.
 
-No tool reads a run lock back, so no tool refuses one.\
-A reader should read version 1 and refuse a newer version rather than read it in part.
+Because no tool reads a run lock back, no tool refuses one.\
+Read version 1 and refuse a newer version rather than read it in part.
 
 ## Example
 

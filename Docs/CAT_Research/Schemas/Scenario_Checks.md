@@ -47,7 +47,7 @@ A capture run's checks are a separate list with their own numbers, the carla-cap
 
 This page describes version 1, the only version.\
 No tool reads the file as input.\
-A reader should read version 1 and refuse a newer version rather than read it in part.
+In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
 
 ## Example
 

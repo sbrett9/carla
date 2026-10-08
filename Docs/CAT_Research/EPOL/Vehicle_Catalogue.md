@@ -46,7 +46,8 @@ Each body's measured size is listed on the schema page, under [The bodies](../Sc
 ### What `base_type` and `special_type` tell you
 
 - A truth record's `base_type` and `special_type` are the catalog class's, for the body that drew the vehicle.\
-  They do not come from what the CARLA content declares about itself, from SUMO's vehicle class, or from the names a scenario gives its own classes.
+  They do not come from what the CARLA content declares about itself or from SUMO's vehicle class.\
+  They also do not come from the names a scenario gives its own classes.
 - An empty `special_type` is the usual case.\
   It means the body has no special type.
 - `base_type` never says whether the scenario's author added a vehicle.\
@@ -54,9 +55,11 @@ Each body's measured size is listed on the schema page, under [The bodies](../Sc
 
 ### A scenario's own classes
 
-A scenario defines its own vehicle classes, each drawing bodies from the catalog with its own driving.\
+A scenario defines its own vehicle classes.\
+Each class draws bodies from the catalog and drives in its own way.\
 The Arapahoe supervision check has `car_quick`, `car`, `suv`, `van`, `truck` and `semi`.\
-`car_quick` and `car` draw the same nine cars and differ only in how they drive, so you cannot tell them apart in a picture.\
+`car_quick` and `car` draw the same nine cars and differ only in how they drive.\
+So you cannot tell them apart in a picture.\
 These are nine of the catalog's ten `civ_car` bodies: the scenario draws the tenth, `vehicle.nissan.patrol`, as its `suv` class.
 
 The scenario's class is the first part of the SUMO vehicle type: `vtype_id` in a sidecar and `type_id` in the world truth track.\
@@ -74,7 +77,8 @@ These names are for joining truth to truth.\
 Keep them out of anything your model sees.
 
 **The bodies are few.**\
-Most classes hold one body, so every vehicle of such a class looks alike.\
+Most classes hold one body.\
+So every vehicle of such a class looks alike.\
 In the Arapahoe check, every `suv` is the same Nissan Patrol.
 
 ## Body size
@@ -85,7 +89,8 @@ In the Arapahoe check, every `suv` is the same Nissan Patrol.
   The record's boxes, `box_px`, `box_oriented_px` and `<_box3d>`, are this box placed at the body's pose.
 - **In the world truth track**, they are the SUMO vehicle type's.\
   Length and height are the same.\
-  The width is `body_width_m`, the body without its mirrors, which is the width SUMO keeps clear on the road.\
+  The width is `body_width_m`, the body without its mirrors.\
+  It is the width SUMO keeps clear on the road.\
   For the Mustang the track says 4.72 × 1.84 × 1.30.
 - **Where the position is.**\
   SUMO places a vehicle by the middle of its front bumper.\
@@ -95,7 +100,8 @@ In the Arapahoe check, every `suv` is the same Nissan Patrol.
   For the Mustang that is 4.7175 / 2 + 0.0321 = 2.39 m.\
   In the sample capture, the track's point and the sidecar's `<point>` for the parked `dweller`, a Mustang, are 2.39 m apart.
 - **A class can be drawn smaller or larger than its name suggests.**\
-  The content has no articulated truck, so the Arapahoe check's `semi` class is drawn as `vehicle.carlamotors.european_hgv`, 7.92 m long.\
+  The content has no articulated truck.\
+  So the Arapahoe check's `semi` class is drawn as `vehicle.carlamotors.european_hgv`, 7.92 m long.\
   The scenario specification's notes on each class say so.
 
 ## Lights
@@ -103,9 +109,16 @@ In the Arapahoe check, every `suv` is the same Nissan Patrol.
 A sidecar's `lights` lists the lights commanded on for a vehicle on that frame.\
 Whether the picture shows a lit lamp depends on the body's 3D model.
 
-The catalog's `lamp_capability` records, for each body and each of eleven lamps, whether commanding the lamp changed the picture when the catalog was built: `lit` if it did, `unlit` if it was commanded and the picture did not change, `unknown` if it was not measured.\
+The catalog's `lamp_capability` records, for each body and each of eleven lamps, whether commanding the lamp changed the picture.\
+The catalog made this measurement as it was built.\
 The measurement ran with the sun far below the horizon (`lamp_probe.sun_elevation_deg` -59.88).\
-It first checked that its camera could see a change (`lamp_probe.positive_control_pixels` 157082).
+It first checked that its camera was able to see a change (`lamp_probe.positive_control_pixels` 157082).
+
+Each lamp has one of three values:
+
+- `lit`: the picture changed.
+- `unlit`: the lamp was commanded and the picture did not change.
+- `unknown`: the lamp was not measured.
 
 In the current catalog, one lamp is `lit`: the `high_beam` of `vehicle.firetruck.actors`.\
 Every other lamp of every body is `unlit`.\
@@ -113,7 +126,8 @@ So with this catalog, a `brake` or a `right_blinker` in the truth means the lamp
 The picture is not expected to show it lit.
 
 The sidecar and the catalog use the same lamp names, except for two.\
-The sidecar writes `special1` and `special2`; the catalog writes `special_1` and `special_2`.
+The sidecar writes `special1` and `special2`.\
+The catalog writes `special_1` and `special_2`.
 
 ## Color
 
@@ -124,9 +138,9 @@ The sidecar writes `special1` and `special2`; the catalog writes `special_1` and
   In the sample capture every Ford Mustang is `0,0,0`, every Nissan Patrol `2,35,54` and every Mercedes Sprinter `233,234,236`: for each body, the first entry of its `colour_palette`.\
   So color does not tell two vehicles of one body apart.\
   The class's `render_colour_policy`, `palette`, is declared, but nothing reads it yet.
-- **The color attribute may not be the paint.**\
-  Where the catalog says `colour_applied` is `false`, setting a color did not reach the body when the catalog was built.\
-  For those bodies the recorded `color` may not be what the picture shows.\
+- **The color attribute is not always the paint.**\
+  Where the catalog says `colour_applied` is `false`, setting a color did not reach the body during the catalog's build.\
+  For those bodies, it is possible that the recorded `color` is not what the picture shows.\
   In this catalog they are:
   - `vehicle.dodgecop.charger`
   - `vehicle.fuso.mitsubishi`
@@ -135,7 +149,8 @@ The sidecar writes `special1` and `special2`; the catalog writes `special_1` and
   - `vehicle.sprinter.mercedes`
 - **In the world truth track**, `color` is the color sumo-gui draws the SUMO vehicle type in: the scenario class's `gui_colour`.\
   It never reaches the picture.\
-  The Arapahoe check's `car` class is `#B3B8C7`, so every one of its cars is `179,184,199` in the track.
+  The Arapahoe check's `car` class is `#B3B8C7`.\
+  So every one of its cars is `179,184,199` in the track.
 
 ## Finding a record's body in the catalog
 

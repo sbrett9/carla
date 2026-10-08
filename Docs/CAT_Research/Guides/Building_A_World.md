@@ -15,19 +15,19 @@ The map name is the extract's file name without `.osm`: `Arapahoe_I25.osm` gives
 The file is a zip archive.\
 It holds:
 
-- `world.json`, the manifest: where the world sits on the Earth and how it was built;
-- `map.xodr`, the road network as OpenDRIVE, with heights, which CARLA loads;
-- `map.net.xml`, the SUMO network from the same netconvert run as `map.xodr`;
-- `bareearth.bin`, the ground height grids, in a draped world;
-- `map.tll.xml`, the ramp meter signal programs, when the extract has ramp meters;
+- `world.json`, the manifest: where the world sits on the Earth and how it was built
+- `map.xodr`, the road network as OpenDRIVE, with heights, which CARLA loads
+- `map.net.xml`, the SUMO network from the same netconvert run as `map.xodr`
+- `bareearth.bin`, the ground height grids, in a draped world (one fitted to the imagery point by point)
+- `map.tll.xml`, the signal programs of the ramp meters (only for an extract that has them)
 - the authoring reference set:
-  - `places.json`, which edges carry which street name;
-  - `solar.json`, facts about the world's sun;
-  - `areas.resolved.json`, the areas of interest placed on the roads;
-  - `areas.aoi.geojson`, the areas file you wrote, when you wrote one.
+  - `places.json`, which edges carry which street name
+  - `solar.json`, facts about the world's sun
+  - `areas.resolved.json`, the areas of interest placed on the roads
+  - `areas.aoi.geojson`, the areas file you wrote (only for a package built with one)
 
 The SUMO network in the package is the network every scenario on this world runs, byte for byte.\
-A scenario names it by its fingerprint.\
+A scenario names it by its fingerprint (a hash of the network's parsed content).\
 The scenario compiler refuses a scenario whose fingerprint is not the package's.
 
 The scenario compiler, `carla-drive`, `carla-capture` and the Unreal Editor's importer all read the package.\
@@ -37,7 +37,7 @@ For every entry, see [World package](../Schemas/World_Package.md) and [World pac
 
 - **A running CARLA server.**\
   Start it headless: `run-server.ps1` or `run-server.sh` in a CARLA distribution, or `Scripts/Windows/RunCarlaServer.ps1` or `Scripts/Linux/RunCarlaServer.sh` in a source checkout.\
-  The build connects to `127.0.0.1:2000` unless you give `--host` and `--port`.\
+  Unless you give `--host` and `--port`, the build connects to `127.0.0.1:2000`.\
   It builds the world on the server and leaves it loaded there.
 - **A Cesium ion access token.**\
   Set it in the `CESIUM_ION_TOKEN` environment variable, or give it with `--ion-token`.\
@@ -53,12 +53,13 @@ For every entry, see [World package](../Schemas/World_Package.md) and [World pac
 - **netconvert.**\
   The build runs it to convert the extract.\
   From a source checkout it is the one under `Build/sumo-install`, which `CarlaSetup` builds.\
-  In a distribution, dot-source `carla-env.ps1` (or source `carla-env.sh`) first: it sets `CARLA_NETCONVERT` and `SUMO_HOME`.
+  In a distribution, dot-source `carla-env.ps1` (or source `carla-env.sh`) first.\
+  It sets `CARLA_NETCONVERT` and `SUMO_HOME`.
 
 Two optional files sit beside the extract and are found by name:
 
-- `<name>.aoi.geojson`, the areas of interest (see [Areas of interest](#areas-of-interest));
-- `<name>.typ.xml`, the type map (see [The type map](#the-type-map)).
+- `<name>.aoi.geojson`, the areas of interest (see [Areas of interest](#areas-of-interest))
+- `<name>.typ.xml`, the type map (see [The type map](#the-type-map))
 
 ## Build the world
 
@@ -83,8 +84,8 @@ The build prints what it found before it starts:
 Read those lines.\
 When it finishes, the last line names the package: `world built; its package is <path of the .cwp>`.
 
-The exit status is 0 when the world was built and its package written.\
-It is 1 when either was not.
+If the world was built and its package written, the exit status is 0.\
+If either was not, it is 1.
 
 `carla-build-world` takes all the options of `carla-sctmv`.\
 The options for the interactive view, traffic, telemetry and recording are accepted and do nothing here.\
@@ -94,18 +95,18 @@ The options for the interactive view, traffic, telemetry and recording are accep
 
 ### The road filter
 
-By default, the build keeps only roads a passenger car may drive.\
+By default, the build keeps only roads that are open to passenger cars.\
 It passes netconvert `--keep-edges.by-vclass passenger`, keeps only the largest connected piece of the network and drops roads that connect to nothing.
 
 That removes every road that SUMO's own type map closes to passenger cars:
 
-- every `highway=service` road, which SUMO opens only to delivery vans, pedestrians and bicycles;
-- every road tagged `access=no`.
+- every `highway=service` road, which SUMO opens only to delivery vans, pedestrians and bicycles
+- every road tagged `access=no`
 
 netconvert does not read `access=private`, so a private residential road stays in.
 
-**Turn the filter off with `--no-road-filter` when your scenario needs those roads.**\
-A port, an airfield or a depot often has its whole interior mapped as service roads.\
+**If your scenario needs those roads, turn the filter off with `--no-road-filter`.**\
+Ports, airfields and depots often have only service roads mapped inside.\
 With the filter on, the interior is gone.\
 A delivery van stopping at a loading dock on a service road needs the filter off too.
 
@@ -130,7 +131,8 @@ An area of interest is a named place where a scenario can put behavior and a lab
 You declare areas in a GeoJSON file beside the extract, named `<name>.aoi.geojson`, or name the file with `--aoi`.
 
 An area is a `Polygon`, a `MultiPolygon`, or a `Point` with a `radius_m`, which is a circle.\
-Each one has an `id` (lower-case letters, digits and underscores, starting with a letter) and a `name`.\
+Each one has an `id` and a `name`.\
+The id starts with a letter and holds only lower-case letters, digits and the _ character.\
 It can have a `kind`, such as `shop:storefront`.\
 Positions are `[longitude, latitude]`, in that order.
 
@@ -154,7 +156,8 @@ The refusal names every problem.\
 The build then places each area on the world's lanes and publishes it into the package.
 
 A scenario uses an area as a place (`{"area": "shop_front"}`).\
-A stop at an area needs the area to hold exactly one lane, so keep a stop's area small.
+A stop at an area needs the area to hold exactly one lane.\
+So keep a stop's area small.
 
 Every field and rule is on [Areas of interest](../Schemas/Areas_Of_Interest.md).\
 To change areas later without building the world again, see [Refreshing a package's areas](#refreshing-a-packages-areas).
@@ -178,7 +181,7 @@ Without its comment, it reads:
 ```
 
 It opens the service roads of the airfield and the port to the `army` and `authority` classes.\
-On the world built without it, the compiler refuses the guard schedule's trips because their class may not drive those roads (check 10).
+On the world built without it, the compiler refuses the guard schedule's trips because those roads are closed to their class (check 10).
 
 What a road admits is part of the world.\
 The network in the package carries it.\
@@ -190,7 +193,7 @@ Things to know:
 - A type map cannot key on `access`.\
   It sets what every road of a type admits, private or not.
 - The build refuses a file that is not XML, a root other than `<types>` and a `<type>` without an `id`.\
-  netconvert refuses an unknown vehicle class when the conversion starts.
+  When the conversion starts, netconvert refuses an unknown vehicle class.
 - Do not also pass `--type-files` through `--netconvert-arg`.\
   The build refuses the two together.
 - A type map is often needed together with `--no-road-filter`.\
@@ -220,13 +223,13 @@ Two more settings decide heights:
 | Option | What it does |
 |---|---|
 | `--lat`, `--lon` | The world's origin. The default is the center of the extract's `<bounds>`. |
-| `--emit-world-package DIR` | Where the package goes. The default is `Build/world-packages` from a source checkout. It is `world-packages` under the current folder when installed. |
+| `--emit-world-package DIR` | Where the package goes. The default is `Build/world-packages` from a source checkout. With the installed commands, it is `world-packages` under the current folder. |
 | `--no-clip-bounds` | Keep roads that run past the extract's `<bounds>`. |
 | `--terrain-margin` | The width, in meters, of the staging ring just inside the map edge (default 30.48). |
-| `--road-offset-east`, `--road-offset-north` | Slide the whole road network a few meters when the roads come out beside the roadway in the imagery. Measure the error first. Keep it under about 10 m. |
-| `--save` | Where the elevated OpenDRIVE file goes. |
+| `--road-offset-east`, `--road-offset-north` | If the roads come out beside the roadway in the imagery, slide the whole road network a few meters. Measure the error first. Keep it under about 10 m. |
+| `--save` | Where the OpenDRIVE file with heights goes. |
 | `--log FILE` | Also write the console output to `FILE`, with timestamps. |
-| `--timeout` | How long, in seconds, each server call of the build may take (default 300). |
+| `--timeout` | How long, in seconds, each server call of the build can take (default 300). |
 
 ## How long a build takes
 
@@ -242,7 +245,10 @@ The drape cache skips the terrain sampling on a rebuild of the same area.
 ## What comes out
 
 - **The world package**, `<MapName>.cwp`, in the `--emit-world-package` folder.
-- **The intermediate files**, in `Build/sumo-smoketest/` from a source checkout (`sumo-smoketest/` under the current folder when installed): `<name>_clipped.osm` (the extract cut at its bounds) and `<name>_elevated.xodr` (the OpenDRIVE file with heights).
+- **The intermediate files.**\
+  From a source checkout, they are in `Build/sumo-smoketest/`.\
+  With the installed commands, they are in `sumo-smoketest/` under the current folder.\
+  They are `<name>_clipped.osm` (the extract cut at its bounds) and `<name>_elevated.xodr` (the OpenDRIVE file with heights).
 - **The world, loaded on the server.**\
   You can drive SUMO traffic in it right away (see [Writing a scenario](Writing_A_Scenario.md#running-and-looking-at-it)).
 
@@ -260,8 +266,10 @@ python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('Build/world-p
 
 Each build writes a new network.\
 When its fingerprint differs from the one a scenario names, the compiler refuses the scenario (check 1) and names the package's fingerprint.\
-Copy it into the scenario's `world.network_fingerprint`, compile again and read the resolution report.\
-An edge or lane your places named may have moved or changed its id.
+Copy it into the scenario's `world.network_fingerprint`.\
+Then compile again.\
+Read the resolution report.\
+It is possible that an edge or lane your places named moved or changed its id.
 
 ## Refreshing a package's areas
 
@@ -270,7 +278,8 @@ It needs no CARLA server.\
 It starts SUMO on the package's own network to place the areas.\
 Then it closes SUMO.
 
-Use it when you add or edit areas after the world is built, or for a world built before the reference set existed.\
+If you add or edit areas after the world is built, use it.\
+Also use it for a world built before the reference set existed.\
 An area edit changes no road, so it is no reason to build the world again.
 
 ```
@@ -281,15 +290,15 @@ carla-publish-reference-set --package Build/world-packages/Gardnerville_Centervi
 |---|---|
 | `--package` | The world package to publish into. Required. |
 | `--aoi` | The areas file. Without it: `<name>.aoi.geojson` beside the extract, then the areas the package already carries, then none. |
-| `--osm` | The extract the world was built from, whose `<bounds>` every area must reach into. The default is `Import/<MapName>.osm` from a source checkout. It is `<MapName>.osm` in the current folder when installed. Without an extract, the network's own extent is used. |
+| `--osm` | The extract the world was built from, whose `<bounds>` every area must reach into. The default is `Import/<MapName>.osm` from a source checkout. With the installed command, it is `<MapName>.osm` in the current folder. Without an extract, the network's own extent is used. |
 | `--output` | Publish into a copy at this path and leave `--package` as it is. |
 | `--near-m` | How close, in meters, a lane must pass to count as near an area. |
 | `--sumo-home` | The SUMO installation to place the areas with. |
-| `--allow-version-mismatch` | Continue when that SUMO is not the release that built the world. |
+| `--allow-version-mismatch` | If that SUMO is not the release that built the world, continue anyway. |
 
 Publishing replaces the whole reference set.
 
-The command exits 1 when the areas file has a problem or an area cannot be placed.\
+If the areas file has a problem or an area cannot be placed, the command exits 1.\
 It names every problem.\
 A file with a problem publishes nothing.\
 When the file is sound but an area cannot be placed, the place index and the solar frame are still published.
@@ -299,13 +308,13 @@ A place written as an area is resolved against the areas in the package.
 
 ## When the build stops
 
-The build stops before building anything when:
+If one of these is true, the build stops before it builds anything:
 
-- no `--osm` was given (from an installed command), or the extract is not found;
-- netconvert is not found;
-- the areas file or the type map has a problem, or the type map is given together with `--type-files`.
+- no `--osm` was given (from an installed command), or the extract is not found
+- netconvert is not found
+- the areas file or the type map has a problem, or the type map is given together with `--type-files`
 
-It stops with exit status 1 when the world was built but the package could not be written.\
+If the world was built but writing the package failed, it stops with exit status 1.\
 The line before says why.
 
 ## Next: making a level
