@@ -245,6 +245,9 @@ public static class WorldPackage
     /// "CWP1" — the grid binary's magic number; the trailing digit is the format version.
     private const int GridMagic = 0x43575031;
 
+    /// The grid binary's header: the magic number, six float64 values and the two int32 counts.
+    private const int GridHeaderBytes = sizeof(int) + 6 * sizeof(double) + 2 * sizeof(int);
+
     private static readonly JsonSerializerOptions ManifestJson = new()
     {
         WriteIndented = true,
@@ -599,7 +602,7 @@ public static class WorldPackage
         // is consumed as it comes.
         using var stream = grid.Open();
         using var reader = new BinaryReader(stream, new UTF8Encoding(false), leaveOpen: false);
-        (int numCols, int numRows) = ReadGridHeader(reader, packagePath);
+        (int numCols, int numRows) = ReadGridHeader(reader, grid.Length, packagePath);
         int count = numCols * numRows;
 
         offsetMeters = new float[count];
@@ -636,7 +639,7 @@ public static class WorldPackage
         // the header is read the stream stands at the first offset value.
         using var stream = grid.Open();
         using var reader = new BinaryReader(stream, new UTF8Encoding(false), leaveOpen: true);
-        (int numCols, int numRows) = ReadGridHeader(reader, packagePath);
+        (int numCols, int numRows) = ReadGridHeader(reader, grid.Length, packagePath);
         long bytes = (long)numCols * numRows * sizeof(float);
         offsetSha1 = HashNext(stream, bytes, packagePath);
         bareEarthDtmSha1 = HashNext(stream, bytes, packagePath);
@@ -647,8 +650,19 @@ public static class WorldPackage
     /// Read the grid entry's header, leaving the reader at the first offset value, and answer the
     /// grid's columns and rows.
     /// </summary>
-    private static (int Columns, int Rows) ReadGridHeader(BinaryReader reader, string packagePath)
+    /// <remarks>
+    /// An entry is its header and two whole grids, and nothing else: one of any other length
+    /// (<paramref name="entryLength"/>) was cut short or is not a grid, and a grid read short would be
+    /// heights from nowhere, so it is refused, as the Python reader of the same entry refuses it.
+    /// </remarks>
+    private static (int Columns, int Rows) ReadGridHeader(BinaryReader reader, long entryLength, string packagePath)
     {
+        if (entryLength < GridHeaderBytes)
+        {
+            throw new InvalidDataException(
+                $"world-package grid is {entryLength} bytes, shorter than its {GridHeaderBytes}-byte header: {packagePath}");
+        }
+
         if (reader.ReadInt32() != GridMagic)
         {
             throw new InvalidDataException($"not a world-package grid: {packagePath}");
@@ -664,6 +678,13 @@ public static class WorldPackage
         if (numCols < 2 || numRows < 2)
         {
             throw new InvalidDataException($"degenerate grid {numCols}x{numRows} in {packagePath}");
+        }
+        long whole = GridHeaderBytes + 2L * numCols * numRows * sizeof(float);
+        if (entryLength != whole)
+        {
+            throw new InvalidDataException(
+                $"world-package grid is not a whole {numCols}x{numRows} grid: that is {whole} bytes, and the "
+                + $"entry holds {entryLength}: {packagePath}");
         }
         return (numCols, numRows);
     }

@@ -189,6 +189,32 @@ public class WorldPackageTests : IDisposable
         Assert.Equal(WorldPackage.HashGrid(ground), groundSha1);
     }
 
+    [Theory]
+    [InlineData(4)]
+    [InlineData(-4)]
+    public void AGridEntryThatIsNotItsHeaderAndTwoWholeGridsIsRefused(int change)
+    {
+        // A stray tail after the second grid, or the second grid cut short: either way the entry is
+        // not the grid its header describes, and neither reader reads it.
+        var (offset, ground) = MakeGrids(21, 13);
+        WorldPackage.Write(_dir, DrapedManifest(cols: 21, rows: 13), Xodr, Net, offset, ground);
+        byte[] grid;
+        using (ZipArchive archive = ZipFile.OpenRead(Pkg))
+        using (Stream stream = archive.GetEntry("bareearth.bin")!.Open())
+        using (var buffer = new MemoryStream())
+        {
+            stream.CopyTo(buffer);
+            grid = buffer.ToArray();
+        }
+
+        Publish(("bareearth.bin", change > 0 ? [.. grid, .. new byte[change]] : grid[..^-change]));
+
+        InvalidDataException refused = Assert.Throws<InvalidDataException>(
+            () => WorldPackage.TryReadGrids(Pkg, out _, out _));
+        Assert.Contains("not a whole 21x13 grid", refused.Message);
+        Assert.Throws<InvalidDataException>(() => WorldPackage.TryReadGridDigests(Pkg, out _, out _));
+    }
+
     [Fact]
     public void AConstantShiftRecordsNoDigestsAndCarriesNoneToRead()
     {
