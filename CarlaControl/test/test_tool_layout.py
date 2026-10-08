@@ -97,6 +97,7 @@ def test_from_a_checkout_the_data_files_are_the_repository_s():
     assert layout.catalogue == CATALOGUE and layout.catalogue.is_file()
     assert layout.vehicle_types == VEHICLE_TYPES and layout.vehicle_types.is_file()
     assert layout.run_configuration_schema == SCHEMA and layout.run_configuration_schema.is_file()
+    assert layout.schema_directory == SCHEMA.parent
 
 
 def test_from_a_checkout_outputs_go_under_build_and_inputs_come_from_import():
@@ -142,6 +143,7 @@ def test_installed_the_data_files_are_the_package_s_own(installed):
     assert installed.catalogue.read_bytes() == CATALOGUE.read_bytes()
     assert installed.vehicle_types.read_bytes() == VEHICLE_TYPES.read_bytes()
     assert installed.run_configuration_schema.read_bytes() == SCHEMA.read_bytes()
+    assert installed.schema_directory == package_data / "schemas"
 
 
 def test_installed_the_current_folder_stands_in_for_build_and_import(installed):
@@ -281,6 +283,12 @@ def test_a_wheel_built_from_the_project_carries_the_commands_and_the_data(tmp_pa
     assert {"carlacontrol/data/catalogue/vehicles.catalogue.json",
             "carlacontrol/data/catalogue/vehicles.vtypes.rou.xml",
             "carlacontrol/data/schemas/run_configuration.schema.json",
+            # The schemas of what a capture writes, the XSD and the Table Schema among them.
+            "carlacontrol/data/schemas/truth_sidecar.xsd",
+            "carlacontrol/data/schemas/png_chunk_capture.schema.json",
+            "carlacontrol/data/schemas/run_manifest.schema.json",
+            "carlacontrol/data/schemas/world_truth_track.tableschema.json",
+            "carlacontrol/data/schemas/world_truth_track_summary.schema.json",
             "carlacontrol/commands/__init__.py"} <= names
     for command, target in tomllib.loads(
             (PROJECT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"].items():
