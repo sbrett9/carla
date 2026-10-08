@@ -927,6 +927,32 @@ def test_a_skipped_dry_run_is_refused_offline_before_anything_is_started_unless_
     assert result.launch_echo["scenario"]["dry_run"]["skipped_accepted"] is True
 
 
+def test_a_run_that_does_not_finish_says_why_on_the_screen(layout, server, caplog):
+    skipped = {"ran": False, "reason": "skipped at the author's request"}
+    write_scenario_package(layout.scenario_root, dry_run=skipped)
+    caplog.set_level("INFO")
+
+    _, result = capture(layout, server)
+
+    assert result.outcome == "refused_offline"
+    reasons = [r for r in caplog.records if r.getMessage().startswith("reason: ")]
+    assert [r.levelname for r in reasons] == ["ERROR"]
+    assert reasons[0].getMessage() == f"reason: {result.detail}"
+    # Printed before the closing line that names the result file.
+    lines = [r.getMessage() for r in caplog.records]
+    assert lines.index(reasons[0].getMessage()) < next(
+        i for i, line in enumerate(lines) if line.startswith("run result: "))
+
+
+def test_a_run_that_finishes_prints_no_reason(layout, server, caplog):
+    caplog.set_level("INFO")
+
+    _, result = capture(layout, server)
+
+    assert result.outcome == "run_finished"
+    assert not [r for r in caplog.records if r.getMessage().startswith("reason: ")]
+
+
 def test_by_default_the_session_is_told_to_accept_no_skipped_dry_run(layout, server):
     capture(layout, server)
     assert started_with(server)["accept_skipped_dry_run"] is False

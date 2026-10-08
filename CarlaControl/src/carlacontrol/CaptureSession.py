@@ -1257,6 +1257,9 @@ class CaptureSession:
             result.produced["termination"] = self.termination.report()
         path = self.result_path or self._result_path()
         written = result.write(path)
+        # A run that did not finish says why on the screen, not only in the result file.
+        if result.exit_status != 0 and result.detail:
+            self.logger.error("reason: %s", result.detail)
         self.logger.info("run result: %s (%s, exit status %d)", written, result.outcome,
                          result.exit_status)
 
