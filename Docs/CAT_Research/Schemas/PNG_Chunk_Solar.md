@@ -12,7 +12,7 @@ The truth sidecar's `<_solar>` element carries the same values.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:solar`, holding one line of compact JSON.
 
-## Who writes it, and when
+## Who writes it and when
 
 The CarlaNet recorder writes it into a still whenever the world reported a sun for that frame.\
 A still whose world reported no sun has no `carla:solar` chunk and no `<_solar>` in its sidecar; a capture run counts such stills and its closing checks require the count to be zero.

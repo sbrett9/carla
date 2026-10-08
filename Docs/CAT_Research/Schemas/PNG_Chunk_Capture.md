@@ -17,7 +17,7 @@ PNG text chunks are Latin-1; the writer replaces any character outside Latin-1 w
 Every still carries this chunk.\
 The other three (`carla:solar`, `carla:illumination`, `carla:sensor`) are written only when there is something to say.
 
-## Who writes it, and when
+## Who writes it and when
 
 The CarlaNet recorder writes it into every still it saves, at the same moment it writes the still's truth sidecar.\
 `carla-capture`, `carla-drive` and `carla-sctmv` all record through it.

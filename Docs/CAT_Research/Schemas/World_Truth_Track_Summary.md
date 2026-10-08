@@ -15,7 +15,7 @@ It holds:
 - what it holds so far;
 - why the run ended.
 
-## Who writes it, and when
+## Who writes it and when
 
 The SUMO drive session writes it with the track: once when the track opens, and again when the run ends.\
 Each time it writes the whole file under a temporary name and renames it into place, so a reader never sees half a summary.\

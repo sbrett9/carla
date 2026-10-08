@@ -18,7 +18,7 @@ The truth sidecar's `<_illumination>` element carries the same values.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:illumination`, holding one line of compact JSON.
 
-## Who writes it, and when
+## Who writes it and when
 
 The CarlaNet recorder writes it into a still when the run declares an illumination policy: a SUMO drive given one records a declaration for every frame it renders.\
 A run with no policy, such as traffic-manager traffic in `carla-sctmv`, writes none, and a still whose frame has no declaration has no chunk.\

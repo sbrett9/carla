@@ -35,7 +35,7 @@ An admission or an event is stamped with TraCI's clock for the SUMO frame it des
 A release is stamped with the instant of the first frame that no longer draws the vehicle, so an admission-to-release span holds exactly the frames that drew it.\
 A sun row is stamped with the frame whose sun it reads, to the microsecond.
 
-## Who writes it, and when
+## Who writes it and when
 
 The SUMO drive session in CarlaNet writes it when its caller names a path.\
 `carla-capture` always does, at `truth/manifest.jsonl` under the capture folder, and hands over a header (`run`) naming the run, its window and its channels.\

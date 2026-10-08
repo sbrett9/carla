@@ -18,7 +18,7 @@ A still whose frame's truth could not be read is not written at all, so a still 
 
 Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed sends, with extra detail elements whose names begin with `_`.
 
-## Who writes it, and when
+## Who writes it and when
 
 The CarlaNet recorder writes one sidecar for every still it saves, in the same moment as the PNG.\
 `carla-capture` runs a recorder for each camera of a capture run and puts each camera's stills in a folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a checkout).\

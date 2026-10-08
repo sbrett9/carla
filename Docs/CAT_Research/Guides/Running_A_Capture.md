@@ -303,7 +303,6 @@ How it moves:
   It goes from east through south, west and north, which is clockwise seen from above.
 - It is held at that opening pose through the prewarm, and starts moving as the window opens.
 - It advances by each tick's simulated time, so `orbit_period_s` counts simulated seconds.\
-  The field's help text says wall-clock seconds; the two agree only when the run is paced at a real-time factor of 1 (see [Pacing](#pacing)).\
   At the default 2 captures per second, a 240 s lap is 480 captures, 0.75 degrees apart.
 - The tile wait sees only the opening view.\
   The ground the orbit sweeps after the window opens may still be streaming in its first frames.
@@ -459,8 +458,7 @@ After every SUMO step of the prewarm, it asks the server whether each camera's t
 - A view that is not ready as the window opens refuses the run before the window (run check 50, exit status 5).\
   The window is never moved.
 
-The run result records, per channel, when its tiles came in, under `produced.readiness.channels`.\
-In a real run of the first capture's camera, the tiles were in after 658 ticks, 8.2 s of wall-clock time.
+The run result records, per channel, when its tiles came in, under `produced.readiness.channels`.
 
 ### The hold before the window
 

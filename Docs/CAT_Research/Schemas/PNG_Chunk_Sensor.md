@@ -12,7 +12,7 @@ The camera's exposure is in the sidecar's `<_carla_exposure>` only.
 
 The chunk is a PNG `tEXt` chunk with the keyword `carla:sensor`, holding one line of compact JSON.
 
-## Who writes it, and when
+## Who writes it and when
 
 The CarlaNet recorder writes it into a still when it records the camera as a platform and the world's georeference is known.\
 A recorder started through carlanet (`start_recording`), which every `carla-*` tool uses, always records the camera as a platform.

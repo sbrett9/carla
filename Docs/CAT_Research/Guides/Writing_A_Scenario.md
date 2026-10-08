@@ -617,7 +617,7 @@ The example compiles with two warnings:
   The report gives the figure, a table of labels by band, and ways to change the figure.\
   In the example, everything in the window is in the `day` band, so the figure is 0.000.
 
-### A refusal, and how to fix it
+### Fixing a refusal
 
 Take the example and drop `"at": "Cross Street"` from `east_at_cross`.\
 East Street then names two eastbound edges, one on each side of Cross Street.\

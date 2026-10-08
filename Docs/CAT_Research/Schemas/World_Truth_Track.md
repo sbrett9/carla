@@ -19,7 +19,7 @@ The file is plain CSV, UTF-8, with a header line and LF line endings.\
 A field holding a comma, such as `color`, is quoted.\
 An empty field is a missing value.
 
-## Who writes it, and when
+## Who writes it and when
 
 The SUMO drive session in CarlaNet writes it when its caller names a path.\
 `carla-capture` always does, at `truth/world_truth_track.csv` under the capture folder.\
