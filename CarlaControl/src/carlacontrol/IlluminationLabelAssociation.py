@@ -44,10 +44,9 @@ from carlacontrol.WindowSun import WindowSun
 STATES = ("annotated", "nominal", "unlabelled")
 
 REMEDIES = [
-    "pair an annotated behaviour with a displaced-in-time counterfactual, so the same annotation "
-    "appears in a second band (07 §7.3)",
-    "add a nominal twin inside the annotated band: a hard negative lit identically (07 §7.3, doc 20 "
-    "§2.7)",
+    "pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation "
+    "appears in a second band",
+    "add a nominal twin inside the annotated band: a hard negative lit identically",
     "add a capture window in a band where the annotated class is absent, which turns a degenerate "
     "band into a populated one",
 ]

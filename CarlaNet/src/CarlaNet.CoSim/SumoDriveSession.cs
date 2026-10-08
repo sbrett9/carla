@@ -522,7 +522,7 @@ public sealed class SumoDriveSession : IDisposable
         if (metres is { } asked && (!double.IsFinite(asked) || asked <= 0.0))
         {
             throw new ArgumentOutOfRangeException(nameof(metres), asked,
-                                                  "A draw distance is a positive number of metres, or null for none.");
+                                                  "A draw distance is a positive number of meters, or null for none.");
         }
 
         _drawDistanceAsked = metres;
@@ -2739,7 +2739,7 @@ public sealed class SumoDriveSession : IDisposable
                 + "window opens and held there, so the window is one lighting condition), advance "
                 + "(carried forward at a declared rate and written for every frame), freeze_at "
                 + "(held at a declared civil time of day) or ignore (left as the world holds it, and "
-                + "recorded as not honouring any epoch).");
+                + "recorded as not honoring any epoch).");
         }
 
         if (policy.BindsTheSun && options.Epoch is null)
@@ -2748,7 +2748,7 @@ public sealed class SumoDriveSession : IDisposable
                 $"The '{policy.Name}' policy binds the sun to the scenario's civil time, and the "
                 + "session declares no epoch to take it from. Declare what simulated second zero "
                 + "means in civil time, or run under 'ignore', which leaves the sun alone and records "
-                + "that the run's lighting honours no epoch.");
+                + "that the run's lighting honors no epoch.");
         }
     }
 
@@ -2820,7 +2820,7 @@ public sealed class SumoDriveSession : IDisposable
         {
             throw new CoSimSessionRefusedException(
                 $"The draw distance is {metres} m. It is how far from a camera a vehicle's body is "
-                + "drawn, so it has to be a positive number of metres; leave it unset to draw every "
+                + "drawn, so it has to be a positive number of meters; leave it unset to draw every "
                 + "body at any range.");
         }
     }
@@ -3148,9 +3148,9 @@ public sealed class SumoDriveSession : IDisposable
         if (network.NetOffset != (0.0, 0.0))
         {
             throw new CoSimSessionRefusedException(
-                $"The network in {options.WorldPackagePath} was normalised by "
+                $"The network in {options.WorldPackagePath} was normalized by "
                 + $"{network.NetOffset}, so its coordinates are not the world's. Build it with "
-                + "normalisation disabled.");
+                + "normalization disabled.");
         }
 
         if (network.Projection != manifest.GeoReferenceString)
@@ -3158,7 +3158,7 @@ public sealed class SumoDriveSession : IDisposable
             throw new CoSimSessionRefusedException(
                 $"The network projects as '{network.Projection}' and the world it is packaged with "
                 + $"as '{manifest.GeoReferenceString}'. A vehicle converted through the wrong one of "
-                + "those lands somewhere inside the sandbox and looks entirely ordinary.");
+                + "those ends up somewhere inside the sandbox and looks entirely ordinary.");
         }
 
         (double minX, double minY, double maxX, double maxY) = network.ConvBoundary;

@@ -232,7 +232,7 @@ class ManifestDiff:
                          "triple(s), their plan's own")
         if self.bound_differently:
             lines.append(f"{len(self.bound_differently)} interval(s) bound differently, as runs may "
-                         "(times and outcomes, D6.8):")
+                         "(in their times and outcomes):")
             lines.extend(f"  {line}" for line in self.bound_differently[:show])
             if len(self.bound_differently) > show:
                 lines.append(f"  ... and {len(self.bound_differently) - show} more")

@@ -70,7 +70,7 @@ class RenderRegionCoverage:
             return None
         centre_x, centre_y, whole = self.whole_map()
         return (f"the render set is a fixed circle of {radius:g} m around ({x:g}, {y:g}) in SUMO "
-                f"metres, and this world reaches {self.farthest_m(x, y):.0f} m from that centre: a "
+                f"meters, and this world reaches {self.farthest_m(x, y):.0f} m from that center: a "
                 f"free camera flown outside the circle sees roads with no vehicles on them. To render "
                 f"the whole map: --region-x {centre_x:g} --region-y {centre_y:g} --region-radius "
                 f"{whole:g}, or leave --render-set at 'all', which draws every vehicle SUMO has"

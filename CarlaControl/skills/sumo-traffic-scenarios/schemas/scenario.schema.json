@@ -53,11 +53,11 @@
     },
     "epoch": {
       "type": "object",
-      "description": "04_Contracts.md §11.3; read by SolarEpoch"
+      "description": "What simulated second zero is in civil time: the civil instant with its UTC offset, the same instant in UTC, whether the calendar advances and whether daylight saving is in effect; read by SolarEpoch"
     },
     "illumination": {
       "type": "object",
-      "description": "The authored default, 04_Contracts.md §11.5; read by IlluminationPolicy"
+      "description": "The authored default for what the sun does across a capture window, which the operator may override; read by IlluminationPolicy"
     },
     "seeds": {
       "type": "object",
@@ -980,7 +980,7 @@
               "cohort"
             ]
           },
-          "description": "The kinds of subject the term may label: one authored vehicle, or every vehicle a flow emits. A label follows a vehicle; nothing labels a place (06 §3.5)"
+          "description": "The kinds of subject the term may label: one authored vehicle, or every vehicle a flow emits. A label follows a vehicle; nothing labels a place"
         },
         "since": {
           "type": "integer",
@@ -1134,7 +1134,7 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "Namespace documents travelling in the bundle, relative to this file"
+          "description": "Namespace documents traveling in the bundle, relative to this file"
         },
         "namespaces": {
           "type": "array",

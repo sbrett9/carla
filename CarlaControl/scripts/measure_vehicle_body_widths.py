@@ -3,7 +3,7 @@
 
 The catalogue sweep measures a vehicle by spawning it and reading its bounding box, which spans the
 whole mesh, wing mirrors included. SUMO's width is the body's: it decides the room a vehicle takes in
-its lane and, under a lane change spread over time, which neighbouring lanes it overlaps. Measured
+its lane and, under a lane change spread over time, which neighboring lanes it overlaps. Measured
 with its mirrors, `vehicle.fuso.mitsubishi` is 3.93 m wide, wider than every 3.35 m lane on the shipped
 networks, and the Bahonar pattern of life deadlocked behind it; its body is 3.23 m. A server cannot
 see vertices, so the body width is measured from the mesh itself, exported from the editor, and the
@@ -13,11 +13,11 @@ catalogue carries it beside the bounding box as a measured input (`vehicle_body_
 blueprint the catalogue holds, find the skeletal mesh its vehicle mesh component draws, and export that
 mesh as FBX in ASCII format, level of detail 0, named `<blueprint id>.fbx`
 (`vehicle.fuso.mitsubishi.fbx`). The export keeps the mesh's own frame: X along the vehicle, Y across
-it, Z up, in centimetres. The 2026-10-02 measurement exported all nineteen through VibeUE from the
+it, Z up, in centimeters. The 2026-10-02 measurement exported all nineteen through VibeUE from the
 UE 5.7.4 editor.
 
 **The method.** Every LOD0 vertex is binned along the vehicle's length in 5 cm bins, and each side's
-widest vertex from the mesh's centre line is kept per bin. A side's body half-width is the largest
+widest vertex from the mesh's center line is kept per bin. A side's body half-width is the largest
 half-width held over at least 0.6 m of length -- over every run of twelve consecutive bins, the run's
 narrowest bin, and the largest of those -- a morphological opening that removes mirrors and any other
 protrusion shorter than 0.6 m along the vehicle. The body width is the two sides' sum. The full width

@@ -224,7 +224,7 @@ class AreaOfInterestResolver:
         """The resolved table. Raises `AreaOfInterestError` when the two frames disagree (V5.12)."""
         if any(self.net_offset):
             self.warnings.append(
-                f"the network carries netOffset {self.net_offset}: its metres are shifted from the "
+                f"the network carries netOffset {self.net_offset}: its meters are shifted from the "
                 "world's geographic frame, which only a road-offset build does on purpose")
             logger.warning(self.warnings[-1])
         placed: list[tuple[DeclaredArea, _PlacedArea, float]] = []

@@ -68,7 +68,7 @@ class ScenarioEpoch:
         if declaration is None:
             raise ScenarioEpochRefusedError([(PRESENT_CHECK, "the specification declares no epoch; every "
                                          "scenario declares what civil instant t = 0 is, with its "
-                                         "UTC offset (04_Contracts.md §11.3)")])
+                                         "UTC offset")])
         try:
             return cls(SolarEpoch.FromJson(json.dumps(declaration)))
         except CoSimSessionRefusedException as refusal:

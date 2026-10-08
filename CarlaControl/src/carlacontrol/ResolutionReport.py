@@ -132,7 +132,7 @@ class ResolutionReport:
         if not association:
             return []
         lines = ["## Illumination-label association (check 41)", "",
-                 f"{association['statistic']}, bands from {association['band_source']}, "
+                 f"{association['statistic']}; bands by {association['band_source']}; "
                  f"elevation {association['elevation_kind']}. Presence: "
                  f"{association['presence_estimate']}.", ""]
         for key, title in (("over_windows", "Over the declared windows"),
@@ -181,7 +181,7 @@ class ResolutionReport:
     def _rotas(rotas) -> list[str]:
         if not rotas:
             return []
-        lines = ["## Rotas", ""]
+        lines = ["## Schedules (rotas)", ""]
         for rota in rotas:
             lines.append(f"- **{rota['id']}**: {rota['entries']} entries")
             for skip in rota["skips"]:

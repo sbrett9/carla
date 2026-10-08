@@ -149,7 +149,7 @@ class VehicleCatalogueValidator:
                 found.append(
                     f"V1.15: class {class_entry.get('class_id')!r} gui_colour {colour!r} is not "
                     "#RRGGBB; a SUMO comma triple whose components are all at most 1 is re-read as "
-                    "fractions of 255 and changes colour silently")
+                    "fractions of 255 and changes color silently")
         return found
 
     def _check_lamps(self) -> list[str]:

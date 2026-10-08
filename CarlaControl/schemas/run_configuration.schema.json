@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://carla.local/schemas/run_configuration.schema.json",
-  "title": "SUMO behavioural-capture run configuration",
-  "description": "12_Operator_Control_Surface.md §3-§6. Positions are in CARLA's frame: metres, x east, y south.",
+  "title": "SUMO-driven capture run configuration",
+  "description": "One capture run's configuration: every field, its default, its mutability class and the layer that may supply it. Positions are in CARLA's frame: meters, x east, y south.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -31,7 +31,7 @@
         "attended",
         "unattended"
       ],
-      "description": "attended: a person reads the launch echo and adjudicates warnings at the terminal. unattended: warnings are adjudicated in advance by on_warning, and result_path is required. Recorded, because a corpus whose warnings a file adjudicated is not one a person watched.",
+      "description": "attended: a person reads the launch echo and adjudicates warnings at the terminal. unattended: warnings are adjudicated in advance by on_warning, and result_path is required. Recorded, because a dataset whose warnings a file adjudicated is not one a person watched.",
       "default": "attended",
       "x-mutability": "session_fixed",
       "x-supplied-by": "tool"
@@ -46,7 +46,7 @@
           "type": "null"
         }
       ],
-      "description": "An opaque label the caller recognises its own run by. Recorded and never interpreted.",
+      "description": "An opaque label the caller recognizes its own run by. Recorded and never interpreted.",
       "default": null,
       "x-mutability": "launch_provenance",
       "x-supplied-by": "tool"
@@ -153,7 +153,7 @@
         "prewarm_s": {
           "type": "number",
           "minimum": 0,
-          "description": "Simulated seconds rendered before the window opens and not recorded, so every camera's view is ready -- its tiles in, and its picture settled where capture.picture_settled_wait is true -- before the first capture (03 §9.5.1). A view not ready by the window's opening refuses the run; the window is not moved.",
+          "description": "Simulated seconds rendered before the window opens and not recorded, so every camera's view is ready -- its tiles in, and its picture settled where capture.picture_settled_wait is true -- before the first capture. A view not ready by the window's opening refuses the run; the window is not moved.",
           "default": 300.0,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -176,7 +176,7 @@
         },
         "picture_settled_wait": {
           "type": "boolean",
-          "description": "Whether the pre-roll also waits, once a camera's photoreal tiles are in, for its picture to settle (03 §9.5.1, checks 50 and 51). Off by default, by the owner's ruling of 2026-10-06, until the wait is fixed: it places each compared frame's rendered vehicles from the client's snapshot of that frame and is asked once per SUMO step, after the step's last tick, so with many ticks to a step -- twenty at Bahonar's 1 s step -- the client no longer holds the older frame's snapshot, every comparison is vehicles_unknown and the pre-roll refuses; the owner also found it too strict. Off, the pre-roll waits for the tiles alone, through capture.tiles_hold_s; no camera frame is compared, and capture.picture_ceiling_frames and capture.picture_tolerance_levels are not read. Set it true to run the wait as it stands.",
+          "description": "Whether the pre-roll also waits, once a camera's photoreal tiles are in, for its picture to settle (checks 50 and 51). Off by default until the wait is fixed: it places each compared frame's rendered vehicles from the client's snapshot of that frame and is asked once per SUMO step, after the step's last tick, so with many ticks to a step -- twenty at Bahonar's 1 s step -- the client no longer holds the older frame's snapshot, every comparison is vehicles_unknown and the pre-roll refuses; it has also proved too strict. Off, the pre-roll waits for the tiles alone, through capture.tiles_hold_s; no camera frame is compared, and capture.picture_ceiling_frames and capture.picture_tolerance_levels are not read. Set it true to run the wait as it stands.",
           "default": false,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -184,7 +184,7 @@
         "tiles_hold_s": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Read only where capture.picture_settled_wait is false, its default: the photoreal tiles' own lead before the window, in simulated seconds (03 §9.5.1). A stare aimed at the rendered traffic stops following it and holds the pose the window opens on this long before the window, rounded up to whole SUMO steps, so its tiles are asked about after every step of the hold; and every camera's prewarm must be at least this long, a stare aimed at the traffic one SUMO step longer to measure it on (check 51). 10 s covers every cold tile load measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s; one outlier took 712 ticks, 35.6 s. A view whose tiles are not in as the window opens still refuses the run (check 50). Where capture.picture_settled_wait is true, the picture's ceiling sets the hold instead.",
+          "description": "Read only where capture.picture_settled_wait is false, its default: the photoreal tiles' own lead before the window, in simulated seconds. A stare aimed at the rendered traffic stops following it and holds the pose the window opens on this long before the window, rounded up to whole SUMO steps, so its tiles are asked about after every step of the hold; and every camera's prewarm must be at least this long, a stare aimed at the traffic one SUMO step longer to measure it on (check 51). 10 s covers every cold tile load measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s; one outlier took 712 ticks, 35.6 s. A view whose tiles are not in as the window opens still refuses the run (check 50). Where capture.picture_settled_wait is true, the picture's ceiling sets the hold instead.",
           "default": 10.0,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -192,7 +192,7 @@
         "picture_ceiling_frames": {
           "type": "integer",
           "minimum": 1,
-          "description": "Read only where capture.picture_settled_wait is true. How many of its own frames a camera has, from its photoreal tiles being in, to settle its picture before the run is refused at pre-roll (03 §9.5.1, check 50): 60 is 30 s at 2 Hz. Counted in the camera's frames, not ticks, because what the renderer settles advances once per frame the camera draws. The prewarm must hold this many frames at the capture rate and the ten-tick comparison span (check 51).",
+          "description": "Read only where capture.picture_settled_wait is true. How many of its own frames a camera has, from its photoreal tiles being in, to settle its picture before the run is refused at pre-roll (check 50): 60 is 30 s at 2 Hz. Counted in the camera's frames, not ticks, because what the renderer settles advances once per frame the camera draws. The prewarm must hold this many frames at the capture rate and the ten-tick comparison span (check 51).",
           "default": 60,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -200,14 +200,14 @@
         "picture_tolerance_levels": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Read only where capture.picture_settled_wait is true. The gray levels by which a camera's frame may differ from its frame at least ten ticks earlier, in its worst 80-pixel block that no rendered vehicle covers, and count as settled (03 §9.5.1). Measured over 27 placements; recorded in the lock, so a run that loosens it says so.",
+          "description": "Read only where capture.picture_settled_wait is true. The gray levels by which a camera's frame may differ from its frame at least ten ticks earlier, in its worst 80-pixel block that no rendered vehicle covers, and count as settled. Measured over 27 placements; recorded in the lock, so a run that loosens it says so.",
           "default": 0.5,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
         },
         "road_layer_visible": {
           "type": "boolean",
-          "description": "Draw the generated road surface. Hidden by default: it is a flat ribbon over the photogrammetry of the real road, so drawn it is an artefact in every frame.",
+          "description": "Draw the generated road surface. Hidden by default: it is a flat ribbon over the photogrammetry of the real road, so drawn it is an artifact in every frame.",
           "default": false,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -258,7 +258,7 @@
               "type": "null"
             }
           ],
-          "description": "The circle vehicles get a body inside, in CARLA's frame (x east, y south, metres): for the whole run under render_set circle, which needs it, and under cameras only until the channels' cameras are placed. Read by no other render set (check 53).",
+          "description": "The circle vehicles get a body inside, in CARLA's frame (x east, y south, meters): for the whole run under render_set circle, which needs it, and under cameras only until the channels' cameras are placed. Read by no other render set (check 53).",
           "default": null,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -281,7 +281,7 @@
               "type": "null"
             }
           ],
-          "description": "How many vehicles may hold a body at once, under any render set; null (the default) for no limit. Under all, a vehicle drawn keeps its body and a newcomer takes a free place in the scenario seed's order; under circle the nearest the centre are drawn; under cameras a vehicle in view ranks ahead of one approaching, one drawn ahead of a newcomer, then the seed decides.",
+          "description": "How many vehicles may hold a body at once, under any render set; null (the default) for no limit. Under all, a vehicle drawn keeps its body and a newcomer takes a free place in the scenario seed's order; under circle the nearest the center are drawn; under cameras a vehicle in view ranks ahead of one approaching, one drawn ahead of a newcomer, then the seed decides.",
           "default": null,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -320,7 +320,7 @@
               "type": "null"
             }
           ],
-          "description": "An optional performance control, off when null (the default): how far from a camera, in metres, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its pose and its truth, and a body farther than this from a channel's camera is not in that channel's images, whose sidecars mark it beyond_draw_distance. It must reach the point every channel is aimed at (check 52).",
+          "description": "An optional performance control, off when null (the default): how far from a camera, in meters, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its pose and its truth, and a body farther than this from a channel's camera is not in that channel's images, whose sidecars mark it beyond_draw_distance. It must reach the point every channel is aimed at (check 52).",
           "default": null,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -349,7 +349,7 @@
               },
               "pattern": {
                 "type": "string",
-                "description": "stare holds one pose; orbit circles a centre with the view held on it.",
+                "description": "stare holds one pose; orbit circles a center with the view held on it.",
                 "default": "stare",
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -384,7 +384,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Orbit: the centre it circles, x metres. Required for an orbit.",
+                "description": "Orbit: the center it circles, x meters. Required for an orbit.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -398,28 +398,28 @@
                     "type": "null"
                   }
                 ],
-                "description": "Orbit: the centre it circles, y metres (south). Required for an orbit.",
+                "description": "Orbit: the center it circles, y meters (south). Required for an orbit.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               },
               "orbit_centre_z_m": {
                 "type": "number",
-                "description": "Orbit: the height the altitude is measured from, metres.",
+                "description": "Orbit: the height the altitude is measured from, meters.",
                 "default": 0.0,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               },
               "orbit_radius_m": {
                 "type": "number",
-                "description": "Orbit: radius, metres.",
+                "description": "Orbit: radius, meters.",
                 "default": 200.0,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               },
               "orbit_altitude_m": {
                 "type": "number",
-                "description": "Orbit: height above the centre, metres.",
+                "description": "Orbit: height above the center, meters.",
                 "default": 518.2,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -440,7 +440,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare: the point looked at, x metres; with stare_look_at_y_m. Or name stare_look_at_target, or give the five stare pose fields instead.",
+                "description": "Stare: the point looked at, x meters; with stare_look_at_y_m. Or name stare_look_at_target, or give the five stare pose fields instead.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -454,14 +454,14 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare: the point looked at, y metres (south).",
+                "description": "Stare: the point looked at, y meters (south).",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               },
               "stare_look_at_z_m": {
                 "type": "number",
-                "description": "Stare: the height of that point, metres. Not used with stare_look_at_target, whose point carries the vehicles' own height.",
+                "description": "Stare: the height of that point, meters. Not used with stare_look_at_target, whose point carries the vehicles' own height.",
                 "default": 0.0,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -475,21 +475,21 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare: a point named instead of given. rendered_traffic is the centre of the vehicles the session rendered on the last frame before the camera holds for the window; the camera follows it through the prewarm until capture.tiles_hold_s before the window opens (10 s at the default, in whole SUMO steps) -- or one SUMO step and the picture's ceiling where capture.picture_settled_wait is true (32 s at a 1 s step and the default ceiling: capture.picture_ceiling_frames at the capture rate and the ten-tick span, in whole steps) -- then holds the pose it resolves to while its view becomes ready and for the whole window, and the run result records that point. Needs a prewarm of at least one SUMO step to measure it on (check 47), and one SUMO step more than check 51 asks of a camera at a fixed pose.",
+                "description": "Stare: a point named instead of given. rendered_traffic is the center of the vehicles the session rendered on the last frame before the camera holds for the window; the camera follows it through the prewarm until capture.tiles_hold_s before the window opens (10 s at the default, in whole SUMO steps) -- or one SUMO step and the picture's ceiling where capture.picture_settled_wait is true (32 s at a 1 s step and the default ceiling: capture.picture_ceiling_frames at the capture rate and the ten-tick span, in whole steps) -- then holds the pose it resolves to while its view becomes ready and for the whole window, and the run result records that point. Needs a prewarm of at least one SUMO step to measure it on (check 47), and one SUMO step more than check 51 asks of a camera at a fixed pose.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               },
               "stare_altitude_m": {
                 "type": "number",
-                "description": "Stare: height above the point, metres.",
+                "description": "Stare: height above the point, meters.",
                 "default": 304.8,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
               },
               "stare_standoff_m": {
                 "type": "number",
-                "description": "Stare: horizontal distance back from the point, metres; 0 looks straight down.",
+                "description": "Stare: horizontal distance back from the point, meters; 0 looks straight down.",
                 "default": 0.0,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -510,7 +510,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare pose: x metres; all five pose fields or none.",
+                "description": "Stare pose: x meters; all five pose fields or none.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -524,7 +524,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare pose: y metres (south).",
+                "description": "Stare pose: y meters (south).",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -538,7 +538,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Stare pose: z metres.",
+                "description": "Stare pose: z meters.",
                 "default": null,
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -590,7 +590,7 @@
                   "manual",
                   "histogram"
                 ],
-                "description": "How the camera's exposure is set, over its profile: manual, fixed by exposure_iso, exposure_shutter_s and exposure_fstop; or histogram, metered by the engine from each frame, so the exposure follows what is in the picture. histogram warns (check 16): it suits a live exercise's operator picture, not captures meant to be compared (08 D8.26).",
+                "description": "How the camera's exposure is set, over its profile: manual, fixed by exposure_iso, exposure_shutter_s and exposure_fstop; or histogram, metered by the engine from each frame, so the exposure follows what is in the picture. histogram warns (check 16): it suits a live exercise's operator picture, not captures meant to be compared.",
                 "default": "manual",
                 "x-mutability": "session_fixed",
                 "x-supplied-by": "tool"
@@ -638,7 +638,7 @@
         "margin_m": {
           "type": "number",
           "minimum": 0,
-          "description": "How much nearer than a vehicle's own surface something must be to block it, metres.",
+          "description": "How much nearer than a vehicle's own surface something must be to block it, meters.",
           "default": 1.0,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -654,7 +654,7 @@
         "depth_max_range_m": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "The depth camera's range, metres. A surface beyond it reads as sky.",
+          "description": "The depth camera's range, meters. A surface beyond it reads as sky.",
           "default": 20000.0,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -668,7 +668,7 @@
         "position_divergence_limit_m": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "The closeout gate bridge.position_divergence: the largest distance, metres, between a pose the bridge commanded and the one the world applied to the body on the same tick that the gate accepts over the whole run. Measured over 39 drives on Arapahoe and Bahonar the worst was 0.0004 m, the single-precision wire's rounding; a read-back lagging the write by a frame is one tick's travel, 0.75 m at 15 m/s, and a wrong reference point half a body length.",
+          "description": "The closeout gate bridge.position_divergence: the largest distance, meters, between a pose the bridge commanded and the one the world applied to the body on the same tick that the gate accepts over the whole run. Measured over 39 drives on Arapahoe and Bahonar the worst was 0.0004 m, the single-precision wire's rounding; a read-back lagging the write by a frame is one tick's travel, 0.75 m at 15 m/s, and a wrong reference point half a body length.",
           "default": 0.01,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -676,7 +676,7 @@
         "velocity_divergence_limit_m_per_s": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "The closeout gate bridge.velocity_divergence: the largest difference, metres per second, between a velocity the bridge commanded and the one the world reported for the body that the gate accepts over the whole run. Measured over the same drives the worst was 0.000006 m/s; a body that reports no velocity is short by its whole speed, 21.8 m/s in the control run that sent none.",
+          "description": "The closeout gate bridge.velocity_divergence: the largest difference, meters per second, between a velocity the bridge commanded and the one the world reported for the body that the gate accepts over the whole run. Measured over the same drives the worst was 0.000006 m/s; a body that reports no velocity is short by its whole speed, 21.8 m/s in the control run that sent none.",
           "default": 0.01,
           "x-mutability": "session_fixed",
           "x-supplied-by": "tool"
@@ -763,7 +763,7 @@
               "type": "null"
             }
           ],
-          "description": "Under advance, pinned to 1.0: one sun-second per simulated second is the only rate under which recorded solar time is the scenario's clock (12 D12.8).",
+          "description": "Under advance, pinned to 1.0: one sun-second per simulated second is the only rate under which recorded solar time is the scenario's clock.",
           "default": null,
           "x-mutability": "bound",
           "x-supplied-by": "scenario"
@@ -991,7 +991,7 @@
         },
         "epoch": {
           "type": "object",
-          "description": "What simulated second zero means in civil time. A binding: a run that rendered another time would contradict its own scenario (12 D12.9).",
+          "description": "What simulated second zero means in civil time. A binding: a run that rendered another time would contradict its own scenario.",
           "x-mutability": "bound",
           "x-supplied-by": "scenario"
         },
@@ -1005,7 +1005,7 @@
         "sumo_step_s": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "SUMO's step. Never changed to suit the renderer (03 D3.6).",
+          "description": "SUMO's step. Never changed to suit the renderer.",
           "x-mutability": "bound",
           "x-supplied-by": "scenario"
         },

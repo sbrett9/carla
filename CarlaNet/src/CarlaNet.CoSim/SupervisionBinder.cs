@@ -609,7 +609,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
             CoSimSessionStage.Window,
             $"SUMO never inserted a subject of the supervision plan {_plan.PlanId}: {named}. Its intervals are "
             + "closed never_inserted, and a plan subject SUMO drops fails the run: the rows its author declared "
-            + "for it can bind nothing (06 D6.12). Make room for it to depart -- a later departure, another lane "
+            + "for it can bind nothing. Make room for it to depart -- a later departure, another lane "
             + "-- or a longer max-depart-delay, and recompile.");
     }
 
@@ -667,7 +667,7 @@ public sealed class SupervisionBinder : ISumoStepObserver
                 _defects.Add($"'{interval.Subject.Id}' ({interval.Instance.InstanceId}, {interval.Planned.Phase}): "
                              + $"SUMO inserted it at {Seconds(committed)} s and the first frame drew it at "
                              + $"{Seconds(frame.SimulatedTimeSeconds)} s; a vehicle is drawn from the frame SUMO "
-                             + "first reports it in, so the two are one frame (03 D3.6)");
+                             + "first reports it in, so the two are one frame");
             }
         }
     }

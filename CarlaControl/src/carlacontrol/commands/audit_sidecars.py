@@ -68,10 +68,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("capture", type=Path,
                         help="a capture directory, or one channel's directory within it")
     parser.add_argument("--margin", type=float, default=DEFAULT_MARGIN_M,
-                        help="metres below the lowest moving vehicle a record may stand and still "
+                        help="meters below the lowest moving vehicle a record may stand and still "
                              f"be on the ground (default {DEFAULT_MARGIN_M:g})")
     parser.add_argument("--floor-hae", type=float, default=None,
-                        help="the lowest plausible bare-earth hae in metres, stated outright, for "
+                        help="the lowest plausible bare-earth hae in meters, stated outright, for "
                              "a capture with no moving vehicle to draw the band from")
     parser.add_argument("--traffic-manager", action="store_true",
                         help="the capture is of traffic-manager traffic, whose records carry no "

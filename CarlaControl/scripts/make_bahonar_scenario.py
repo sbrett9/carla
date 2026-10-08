@@ -2,7 +2,7 @@
 """Write, and compile, the week-long pattern-of-life scenario for the Shahid Bahonar Port world.
 
 Shahid Bahonar is Bandar Abbas's older multipurpose and passenger port on the Strait of Hormuz, and
-also a naval harbour: a military airfield with a guard-tower perimeter to the west, a commercial and
+also a naval harbor: a military airfield with a guard-tower perimeter to the west, a commercial and
 ferry port with an oil depot and drydock to the east, joined by a coastal trunk corridor.
 
 Over seven simulated days the scenario establishes a rhythm: diurnal corridor traffic, ferry
@@ -23,12 +23,12 @@ kind of deviation a detector would have to catch:
     (temporal and spatial outlier);
   * ferry stay-behind -- a vehicle arrives on a ferry pulse and never leaves (persistence).
 
-**This script writes a specification, not SUMO XML** (`07_Scenario_Authoring.md` D7.2), and compiles
+**This script writes a specification, not SUMO XML**, and compiles
 it with the scenario compiler, so the generated scenario faces every check a hand-written one does.
 The specification, `<out-dir>/Shahid_Bahonar_Port_PatternOfLife.scenario.json`, is compiled against
 the world package, whose own network SUMO runs byte for byte: netconvert is not run here and no
 network is rewritten. What a road admits is the world's, set when it was built by its type map
-(`Import/Shahid_Bahonar_Port.typ.xml`, D7.33), so the naval traffic (vehicle class `army`) and the
+(`Import/Shahid_Bahonar_Port.typ.xml`), so the naval traffic (vehicle class `army`) and the
 port's cleared traffic (`authority`) drive the airfield's and the port's service roads because the
 world admits them there. A fence keyed on OpenStreetMap's `access=private` is not in the world -- a
 type map cannot key on access -- so a civilian may drive a private residential or tertiary road
@@ -45,25 +45,23 @@ it and the 06:00 sailing of day 7 inside it.
 **Bodies.** Every vehicle type is bound to a measured CARLA body through the catalogue, and a body
 the catalogue has not measured is refused by name (check 14): civilian cars draw the catalogue's own
 civilian cars (its `civ_car` class); the port's cleared cars the Nissan Patrol; taxis the taxi;
-lorries the European heavy goods vehicle; buses the Mitsubishi Fuso Rosa. Pickups, military jeeps,
+trucks the European heavy goods vehicle; buses the Mitsubishi Fuso Rosa. Pickups, military jeeps,
 guards and the escort share one body, the first of `JEEP_BODIES` the catalogue has measured: the
-Jeep Wrangler, and until the catalogue measures it the Nissan Patrol, the owner's stated
-alternative. The specification names the one chosen, so a catalogue that gains the Wrangler changes
+Jeep Wrangler, and until the catalogue measures it the Nissan Patrol, the stated alternative. The specification names the one chosen, so a catalogue that gains the Wrangler changes
 the scenario when the generator is next run, and says so. A planted vehicle is drawn from the class
 of the population it moves among wherever its driving model is that population's -- the gate probe
 is a civilian car, the escort is military jeeps -- so no vehicle type is carried by planted vehicles
-alone except where the difference is the behaviour itself: the perimeter shadow's crawl, and the
+alone except where the difference is the behavior itself: the perimeter shadow's crawl, and the
 stay-behind, a civilian car cleared into the port.
 
 **Supervision** goes to the supervision plan and nowhere else: the six anomalies as pattern instances,
 the guard postings and the air-freight hauls as nominal hard negatives, and the ferry pulses as a
-cleared-gate cohort. A label follows a vehicle (`06_Truth_And_Annotation.md` §3.5, the owner's ruling
-of 2026-10-05), so the omission is carried by the vehicle that deviates, as the owner ruled on
-2026-10-06: the guard schedule skips the posting, which writes no trip and no row, and the guard who
+cleared-gate cohort. A label follows a vehicle, so the omission is carried by the vehicle that
+deviates: the guard schedule skips the posting, which writes no trip and no row, and the guard who
 should have taken it is a planted vehicle of the guards' own type that departs the apron at the shift
 change, parks for the shift on the airside spur between the western aprons and returns, labeled
 `bahonar:posting_not_taken_up` with the tower and the shift it was due at. The terms are the
-scenario's own, in namespace `bahonar` (06 §9.4). A slot and an instance are sited at the world's
+scenario's own, in namespace `bahonar`. A slot and an instance are sited at the world's
 areas of interest, `Import/Shahid_Bahonar_Port.aoi.geojson`.
 Each anomaly's interval is anchored to the event of its vehicle that commits it: the escort's and the
 shadow's transits to their departures, each probe's standoff, the stay-behind's dwell and the guard's
@@ -234,7 +232,7 @@ VEHICLE_CLASSES = [
      "Civilian pickups and utility vehicles: the jeep body."),
     ("civ_taxi", [TAXI], "taxi", {"maxSpeed": "35"}, "taxi", "#E6CC33", "Taxis."),
     ("civ_truck", [HGV], "truck", {"maxSpeed": "25"}, "truck", "#998059",
-     "Civilian lorries: the European heavy goods vehicle."),
+     "Civilian trucks: the European heavy goods vehicle."),
     ("civ_bus", [MINIBUS], "bus", {"maxSpeed": "24"}, "bus", "#D9D9B3",
      "Buses: the Mitsubishi Fuso Rosa."),
     ("port_vehicle", [PATROL], "authority", {"maxSpeed": "30"}, "passenger", "#8CB3D9",
@@ -245,14 +243,14 @@ VEHICLE_CLASSES = [
     ("mil_jeep", JEEP_BODIES, "army", {"maxSpeed": "33"}, "passenger", "#4D6140",
      "Naval and base jeeps inside the wire: the jeep body. The escort convoy is five of them."),
     ("mil_truck", [HGV], "army", {"maxSpeed": "24"}, "truck", "#475738",
-     "Naval and base lorries, and the routine air-freight hauls: the European heavy goods "
+     "Naval and base trucks, and the routine air-freight hauls: the European heavy goods "
      "vehicle."),
     ("guard", JEEP_BODIES, "army", {"maxSpeed": "30"}, "passenger", "#59734D",
      "The guard posted at a tower for a shift: the jeep body."),
     ("army_car_crawl", CIVILIAN_CAR_CLASS, "army",
      {"maxSpeed": "33", "speedFactor": "0.45", "speedDev": "0"}, "passenger", "#FF3399",
      "A civilian car admitted inside the wire and driven at 0.45 of each limit, exactly: the "
-     "perimeter shadow's crawl, which is the behaviour itself."),
+     "perimeter shadow's crawl, which is the behavior itself."),
     ("port_car", CIVILIAN_CAR_CLASS, "authority", {"maxSpeed": "30"}, "passenger", "#FF4D00",
      "A civilian car cleared into the port: the ferry stay-behind."),
 ]
@@ -335,7 +333,7 @@ VOCABULARY = {"namespaces": [{
                                "bahonar:posting_not_taken_up"]},
         {"term": "bahonar:routine_freight_haul", "since": 1, "status": "active",
          "applies_to": ["entity"],
-         "definition": "A scheduled air-freight run by one lorry from the apron to the port.",
+         "definition": "A scheduled air-freight run by one truck from the apron to the port.",
          "hard_negative_for": ["bahonar:coordinated_group_transit",
                                "bahonar:destination_off_pattern"]},
         {"term": "bahonar:cleared_gate_transit", "since": 1, "status": "active",
@@ -792,7 +790,7 @@ def main() -> int:
     spec_path = out_dir / f"{SCENARIO_NAME}.scenario.json"
     spec_path.write_text(json.dumps(specification, indent=2, ensure_ascii=False) + "\n",
                          encoding="utf-8", newline="\n")
-    logging.info("specification %s (%d places, %d flows, %d actors, a %d-tower guard rota over %d "
+    logging.info("specification %s (%d places, %d flows, %d actors, a %d-tower guard schedule over %d "
                  "day(s), ends at %s)", spec_path, len(specification["places"]),
                  len(specification["flows"]), len(specification["actors"]), len(TOWER_POSTS),
                  args.days, specification["simulation"]["end"])

@@ -190,10 +190,10 @@ _FIELDS: tuple[RunField, ...] = (
        SESSION_FIXED, alias="--caller",
        help="attended: a person reads the launch echo and adjudicates warnings at the terminal. "
             "unattended: warnings are adjudicated in advance by on_warning, and result_path is "
-            "required. Recorded, because a corpus whose warnings a file adjudicated is not one a "
+            "required. Recorded, because a dataset whose warnings a file adjudicated is not one a "
             "person watched."),
     _F("caller_label", _nullable(_TEXT), None, LAUNCH_PROVENANCE, alias="--caller-label",
-       help="An opaque label the caller recognises its own run by. Recorded and never "
+       help="An opaque label the caller recognizes its own run by. Recorded and never "
             "interpreted."),
     _F("scenario_package", _TEXT, NO_DEFAULT, SESSION_FIXED, alias="--scenario",
        help="The compiled scenario: a scenario id (found as <id>/<id>.lock.json under "
@@ -235,7 +235,7 @@ _FIELDS: tuple[RunField, ...] = (
     _F("capture.prewarm_s", _NON_NEGATIVE, 300.0, SESSION_FIXED,
        help="Simulated seconds rendered before the window opens and not recorded, so every "
             "camera's view is ready -- its tiles in, and its picture settled where "
-            "capture.picture_settled_wait is true -- before the first capture (03 §9.5.1). A view "
+            "capture.picture_settled_wait is true -- before the first capture. A view "
             "not ready by the window's opening refuses the run; the window is not moved."),
     _F("capture.world_delta_s", _POSITIVE, 0.05, SESSION_FIXED,
        help="Simulated seconds per world tick. The SUMO step must be a whole number of them."),
@@ -244,18 +244,18 @@ _FIELDS: tuple[RunField, ...] = (
             "of world ticks."),
     _F("capture.picture_settled_wait", _BOOLEAN, PICTURE_SETTLED_WAIT, SESSION_FIXED,
        help="Whether the pre-roll also waits, once a camera's photoreal tiles are in, for its "
-            "picture to settle (03 §9.5.1, checks 50 and 51). Off by default, by the owner's ruling "
-            "of 2026-10-06, until the wait is fixed: it places each compared frame's rendered "
-            "vehicles from the client's snapshot of that frame and is asked once per SUMO step, "
-            "after the step's last tick, so with many ticks to a step -- twenty at Bahonar's 1 s "
-            "step -- the client no longer holds the older frame's snapshot, every comparison is "
-            "vehicles_unknown and the pre-roll refuses; the owner also found it too strict. Off, the "
+            "picture to settle (checks 50 and 51). Off by default until the wait is fixed: it "
+            "places each compared frame's rendered vehicles from the client's snapshot of that "
+            "frame and is asked once per SUMO step, after the step's last tick, so with many ticks "
+            "to a step -- twenty at Bahonar's 1 s step -- the client no longer holds the older "
+            "frame's snapshot, every comparison is vehicles_unknown and the pre-roll refuses; it "
+            "has also proved too strict. Off, the "
             "pre-roll waits for the tiles alone, through capture.tiles_hold_s; no camera frame is "
             "compared, and capture.picture_ceiling_frames and capture.picture_tolerance_levels are "
             "not read. Set it true to run the wait as it stands."),
     _F("capture.tiles_hold_s", _POSITIVE, TILES_HOLD_S, SESSION_FIXED,
        help="Read only where capture.picture_settled_wait is false, its default: the photoreal "
-            "tiles' own lead before the window, in simulated seconds (03 §9.5.1). A stare aimed at "
+            "tiles' own lead before the window, in simulated seconds. A stare aimed at "
             "the rendered traffic stops following it and holds the pose the window opens on this "
             "long before the window, rounded up to whole SUMO steps, so its tiles are asked about "
             "after every step of the hold; and every camera's prewarm must be at least this long, "
@@ -267,18 +267,18 @@ _FIELDS: tuple[RunField, ...] = (
     _F("capture.picture_ceiling_frames", _POSITIVE_INTEGER, PICTURE_CEILING_FRAMES, SESSION_FIXED,
        help="Read only where capture.picture_settled_wait is true. How many of its own frames a "
             "camera has, from its photoreal tiles being in, to settle its picture before the run is "
-            "refused at pre-roll (03 §9.5.1, check 50): 60 is 30 s at 2 Hz. Counted in the camera's "
+            "refused at pre-roll (check 50): 60 is 30 s at 2 Hz. Counted in the camera's "
             "frames, not ticks, because what the renderer settles advances once per frame the camera "
             "draws. The prewarm must hold this many frames at the capture rate and the ten-tick "
             "comparison span (check 51)."),
     _F("capture.picture_tolerance_levels", _POSITIVE, PICTURE_TOLERANCE_LEVELS, SESSION_FIXED,
        help="Read only where capture.picture_settled_wait is true. The gray levels by which a "
             "camera's frame may differ from its frame at least ten ticks earlier, in its worst "
-            "80-pixel block that no rendered vehicle covers, and count as settled (03 §9.5.1). "
+            "80-pixel block that no rendered vehicle covers, and count as settled. "
             "Measured over 27 placements; recorded in the lock, so a run that loosens it says so."),
     _F("capture.road_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated road surface. Hidden by default: it is a flat ribbon over the "
-            "photogrammetry of the real road, so drawn it is an artefact in every frame."),
+            "photogrammetry of the real road, so drawn it is an artifact in every frame."),
     _F("capture.signal_layer_visible", _BOOLEAN, False, SESSION_FIXED,
        help="Draw the generated traffic-light and sign meshes. Hidden by default; SUMO simulates "
             "the signals either way."),
@@ -295,7 +295,7 @@ _FIELDS: tuple[RunField, ...] = (
                   "required": ["x_m", "y_m", "radius_m"],
                   "properties": {"x_m": _NUMBER, "y_m": _NUMBER, "radius_m": _POSITIVE}}),
        None, SESSION_FIXED,
-       help="The circle vehicles get a body inside, in CARLA's frame (x east, y south, metres): for "
+       help="The circle vehicles get a body inside, in CARLA's frame (x east, y south, meters): for "
             "the whole run under render_set circle, which needs it, and under cameras only until the "
             "channels' cameras are placed. Read by no other render set (check 53)."),
     _F("capture.render_hysteresis_m", _POSITIVE, 60.0, SESSION_FIXED,
@@ -305,7 +305,7 @@ _FIELDS: tuple[RunField, ...] = (
     _F("capture.render_cap", _nullable(_POSITIVE_INTEGER), None, SESSION_FIXED,
        help="How many vehicles may hold a body at once, under any render set; null (the default) for "
             "no limit. Under all, a vehicle drawn keeps its body and a newcomer takes a free place in "
-            "the scenario seed's order; under circle the nearest the centre are drawn; under cameras a "
+            "the scenario seed's order; under circle the nearest the center are drawn; under cameras a "
             "vehicle in view ranks ahead of one approaching, one drawn ahead of a newcomer, then the "
             "seed decides."),
     _F("capture.render_min_pixels", _POSITIVE, 2.0, SESSION_FIXED,
@@ -321,7 +321,7 @@ _FIELDS: tuple[RunField, ...] = (
             "within reach of a camera's footprint, before it is released."),
     _F("capture.draw_distance_m", _nullable(_POSITIVE), None, SESSION_FIXED,
        help="An optional performance control, off when null (the default): how far from a camera, "
-            "in metres, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its "
+            "in meters, a vehicle's body is drawn. Rendering only: every vehicle keeps its body, its "
             "pose and its truth, and a body farther than this from a channel's camera is not in "
             "that channel's images, whose sidecars mark it beyond_draw_distance. It must reach the "
             "point every channel is aimed at (check 52)."),
@@ -331,21 +331,21 @@ _FIELDS: tuple[RunField, ...] = (
             "recorded."),
     # -- occlusion: measured on every channel, against a depth camera attached to its camera ---------
     _F("occlusion.margin_m", _NON_NEGATIVE, 1.0, SESSION_FIXED,
-       help="How much nearer than a vehicle's own surface something must be to block it, metres."),
+       help="How much nearer than a vehicle's own surface something must be to block it, meters."),
     _F("occlusion.samples", _POSITIVE_INTEGER, 24, SESSION_FIXED,
        help="How finely each vehicle's outline is sampled."),
     _F("occlusion.depth_max_range_m", _POSITIVE, 20000.0, SESSION_FIXED,
-       help="The depth camera's range, metres. A surface beyond it reads as sky."),
+       help="The depth camera's range, meters. A surface beyond it reads as sky."),
     # -- the bridge: what the world did with the poses it was commanded ------------------------------
     _F("bridge.position_divergence_limit_m", _POSITIVE, 0.01, SESSION_FIXED,
-       help="The closeout gate bridge.position_divergence: the largest distance, metres, between a "
+       help="The closeout gate bridge.position_divergence: the largest distance, meters, between a "
             "pose the bridge commanded and the one the world applied to the body on the same tick "
             "that the gate accepts over the whole run. Measured over 39 drives on Arapahoe and "
             "Bahonar the worst was 0.0004 m, the single-precision wire's rounding; a read-back "
             "lagging the write by a frame is one tick's travel, 0.75 m at 15 m/s, and a wrong "
             "reference point half a body length."),
     _F("bridge.velocity_divergence_limit_m_per_s", _POSITIVE, 0.01, SESSION_FIXED,
-       help="The closeout gate bridge.velocity_divergence: the largest difference, metres per "
+       help="The closeout gate bridge.velocity_divergence: the largest difference, meters per "
             "second, between a velocity the bridge commanded and the one the world reported for the "
             "body that the gate accepts over the whole run. Measured over the same drives the worst "
             "was 0.000006 m/s; a body that reports no velocity is short by its whole speed, 21.8 m/s "
@@ -371,7 +371,7 @@ _FIELDS: tuple[RunField, ...] = (
             "against the value it replaced."),
     _F("solar.rate_sun_s_per_sim_s", _nullable(_POSITIVE), None, BOUND, SUPPLIED_BY_SCENARIO,
        help="Under advance, pinned to 1.0: one sun-second per simulated second is the only rate "
-            "under which recorded solar time is the scenario's clock (12 D12.8)."),
+            "under which recorded solar time is the scenario's clock."),
     _F("solar.freeze_at_civil_time", _nullable(_CIVIL_TIME), None, SESSION_FIXED,
        SUPPLIED_BY_SCENARIO,
        help="Under freeze_at, the civil time of day the sun is held at, HH:MM:SS."),
@@ -428,11 +428,11 @@ _FIELDS: tuple[RunField, ...] = (
        help="The digest of the scenario lock the run binds."),
     _F("scenario.epoch", {"type": "object"}, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
        help="What simulated second zero means in civil time. A binding: a run that rendered "
-            "another time would contradict its own scenario (12 D12.9)."),
+            "another time would contradict its own scenario."),
     _F("scenario.epoch_block_sha256", _SHA256, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
        help="The epoch's digest."),
     _F("scenario.sumo_step_s", _POSITIVE, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
-       help="SUMO's step. Never changed to suit the renderer (03 D3.6)."),
+       help="SUMO's step. Never changed to suit the renderer."),
     _F("scenario.sumo_seed", {"type": "integer", "minimum": 0}, NO_DEFAULT, BOUND,
        SUPPLIED_BY_SCENARIO,
        help="SUMO's seed, compiled into the scenario's configuration."),
@@ -459,22 +459,22 @@ _CHANNEL_HELP = {
                  "server refuses it at pre-roll where a live camera in the world already holds it. "
                  "A single channel without one takes the name the server gives its camera, "
                  "Camera_<n>.",
-    "pattern": "stare holds one pose; orbit circles a centre with the view held on it.",
+    "pattern": "stare holds one pose; orbit circles a center with the view held on it.",
     "fov": "Horizontal field of view, degrees.",
     "width": "Picture width, pixels.",
     "height": "Picture height, pixels.",
-    "orbit_centre_x_m": "Orbit: the centre it circles, x metres. Required for an orbit.",
-    "orbit_centre_y_m": "Orbit: the centre it circles, y metres (south). Required for an orbit.",
-    "orbit_centre_z_m": "Orbit: the height the altitude is measured from, metres.",
-    "orbit_radius_m": "Orbit: radius, metres.",
-    "orbit_altitude_m": "Orbit: height above the centre, metres.",
+    "orbit_centre_x_m": "Orbit: the center it circles, x meters. Required for an orbit.",
+    "orbit_centre_y_m": "Orbit: the center it circles, y meters (south). Required for an orbit.",
+    "orbit_centre_z_m": "Orbit: the height the altitude is measured from, meters.",
+    "orbit_radius_m": "Orbit: radius, meters.",
+    "orbit_altitude_m": "Orbit: height above the center, meters.",
     "orbit_period_s": "Orbit: wall-clock seconds per revolution.",
-    "stare_look_at_x_m": "Stare: the point looked at, x metres; with stare_look_at_y_m. Or name "
+    "stare_look_at_x_m": "Stare: the point looked at, x meters; with stare_look_at_y_m. Or name "
                          "stare_look_at_target, or give the five stare pose fields instead.",
-    "stare_look_at_y_m": "Stare: the point looked at, y metres (south).",
-    "stare_look_at_z_m": "Stare: the height of that point, metres. Not used with "
+    "stare_look_at_y_m": "Stare: the point looked at, y meters (south).",
+    "stare_look_at_z_m": "Stare: the height of that point, meters. Not used with "
                          "stare_look_at_target, whose point carries the vehicles' own height.",
-    "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the centre "
+    "stare_look_at_target": "Stare: a point named instead of given. rendered_traffic is the center "
                             "of the vehicles the session rendered on the last frame before the "
                             "camera holds for the window; the camera follows it through the "
                             "prewarm until capture.tiles_hold_s before the window opens (10 s at "
@@ -486,14 +486,14 @@ _CHANNEL_HELP = {
                             "window, and the run result records that point. Needs a prewarm of at "
                             "least one SUMO step to measure it on (check 47), and one SUMO step "
                             "more than check 51 asks of a camera at a fixed pose.",
-    "stare_altitude_m": "Stare: height above the point, metres.",
-    "stare_standoff_m": "Stare: horizontal distance back from the point, metres; 0 looks "
+    "stare_altitude_m": "Stare: height above the point, meters.",
+    "stare_standoff_m": "Stare: horizontal distance back from the point, meters; 0 looks "
                         "straight down.",
     "stare_bearing_deg": "Stare: the compass direction the camera looks along, degrees clockwise "
                          "from north.",
-    "stare_x_m": "Stare pose: x metres; all five pose fields or none.",
-    "stare_y_m": "Stare pose: y metres (south).",
-    "stare_z_m": "Stare pose: z metres.",
+    "stare_x_m": "Stare pose: x meters; all five pose fields or none.",
+    "stare_y_m": "Stare pose: y meters (south).",
+    "stare_z_m": "Stare pose: z meters.",
     "stare_pitch_deg": "Stare pose: pitch, degrees; negative looks down.",
     "stare_yaw_deg": "Stare pose: yaw, degrees; 0 faces east, -90 north.",
     "post_process_profile": "The post-process profile the camera spawns with: Default, GoPro, "
@@ -505,7 +505,7 @@ _CHANNEL_HELP = {
                        "exposure_iso, exposure_shutter_s and exposure_fstop; or histogram, metered "
                        "by the engine from each frame, so the exposure follows what is in the "
                        "picture. histogram warns (check 16): it suits a live exercise's operator "
-                       "picture, not captures meant to be compared (08 D8.26).",
+                       "picture, not captures meant to be compared.",
     "exposure_iso": "The camera's sensitivity, ISO, at least 1. Under manual, doubling it brightens "
                     "the picture by one stop.",
     "exposure_shutter_s": "The shutter, seconds, from 1/8000 s to 100 s: 0.003125 is 1/320 s. Sent "
@@ -616,7 +616,7 @@ class RunConfiguration:
         if path == _WORLD_BUILD_KEY or path.startswith(_WORLD_BUILD_KEY + "."):
             findings.refuse(38, path, "a capture run binds a world package; it does not build one. "
                             "Build the world with run_SCTMV.py --build and name the package it "
-                            "writes (12 §3.10.4)")
+                            "writes")
             return
         if leaf in _BLUEPRINT_EXPOSURE_NAMES:
             field = _BLUEPRINT_EXPOSURE_NAMES[leaf]
@@ -787,9 +787,10 @@ class RunConfiguration:
         """The run configuration's schema, as published: every field's shape, default and class."""
         root: dict = {"$schema": "https://json-schema.org/draft/2020-12/schema",
                       "$id": "https://carla.local/schemas/run_configuration.schema.json",
-                      "title": "SUMO behavioural-capture run configuration",
-                      "description": "12_Operator_Control_Surface.md §3-§6. Positions are in "
-                                     "CARLA's frame: metres, x east, y south.",
+                      "title": "SUMO-driven capture run configuration",
+                      "description": "One capture run's configuration: every field, its default, "
+                                     "its mutability class and the layer that may supply it. "
+                                     "Positions are in CARLA's frame: meters, x east, y south.",
                       "type": "object", "additionalProperties": False, "properties": {}}
         for spec in cls.FIELDS.values():
             node = root

@@ -208,7 +208,7 @@ def test_the_key_during_the_wait_cancels_it(tmp_path):
 
     assert not recorder.waiting and not recorder.recording
     assert rig.started == []
-    assert rig.notices()[-1] == "recording cancelled while waiting for the tiles"
+    assert rig.notices()[-1] == "recording canceled while waiting for the tiles"
 
 
 def test_nothing_starts_before_the_capture_window_opens(tmp_path):

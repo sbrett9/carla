@@ -94,7 +94,7 @@ def parse_args() -> argparse.Namespace:
                              "carries no buildings and no vegetation, so with none of these the "
                              "directional shadow set is empty and the cache has nothing to lose")
     parser.add_argument("--clearance", type=float, default=25.0,
-                        help="metres above the highest road surface to place the casters")
+                        help="meters above the highest road surface to place the casters")
     return parser.parse_args()
 
 

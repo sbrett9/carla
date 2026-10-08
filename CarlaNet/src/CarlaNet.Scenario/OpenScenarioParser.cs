@@ -166,7 +166,7 @@ public sealed class OpenScenarioParser
             foreach (XElement kind in action.Elements())
                 if (!KnownInitActions.Contains(kind.Name.LocalName))
                     throw new ScenarioParseException(
-                        $"entity '{entityName}' is initialised with {kind.Name.LocalName}, " +
+                        $"entity '{entityName}' is initialized with {kind.Name.LocalName}, " +
                         "which is not supported");
     }
 

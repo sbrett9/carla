@@ -130,13 +130,15 @@ camera it is attached to.
 
 The first frames of a run whose camera looks somewhere Cesium has not streamed yet carry imagery
 that is still arriving -- an unattended capture has nobody watching the view fill in, where an
-operator flying the camera does. What that costs, and why the number of ticks it takes is not a
-caller's to supply, is in
-`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md` section 9.5.1.
+operator flying the camera does. How many ticks the tiles take depends on the view and on what is
+already cached -- from about 30 to over 700 ticks at 0.05 s have been measured -- so no fixed count
+is safe. Open the window later with `--window-opens-at`: the ticks before it stream the camera's
+tiles and nothing records them. carla-capture waits for each camera's tiles before its window opens,
+and refuses the run when they are not in.
 
 `--view free` replaces that one fixed camera with a camera you fly, in this process: the window,
 flight controls and heads-up display of carla-free-camera, opened over
-the centre of the world's staging bounds at `--camera-z`, looking straight down. F starts a
+the center of the world's staging bounds at `--camera-z`, looking straight down. F starts a
 recording span from that camera and F again ends it; each span is written to a folder of its own
 under `--record-dir`, named by the camera and the span's start (`<camera name>-<UTC>`), with the
 render set, illumination and occlusion the fixed camera's captures carry. A span starts once the
@@ -155,7 +157,7 @@ view over the whole of Gardnerville at the pace of real traffic:
 
 Two optional performance controls trade fidelity for speed, and both are off unless asked for.
 `--render-set` limits which vehicles get a body at all: `circle` only those inside the circle of
-`--region-radius` around `--region-x`, `--region-y` (SUMO's projected metres), released
+`--region-radius` around `--region-x`, `--region-y` (SUMO's projected meters), released
 `--region-hysteresis` beyond it; `cameras` those inside or about to enter the ground footprint of the
 camera this drive spawns or flies -- placed `--render-admit-lead` seconds of their own travel ahead of
 the view and taken away `--render-release-lag` seconds after they leave it, a view reaching the horizon
@@ -167,7 +169,7 @@ frame and no truth record; the launch says so, the pacing lines count what was l
 counts it again with the reasons each track ended. Under `circle` a free view is told when the circle is
 smaller than the world, with the arguments that take all of it in.
 
-`--draw-distance METRES` is the other: no camera draws a vehicle's body farther than that from it. Rendering only -- every vehicle still gets its body, is
+`--draw-distance METERS` is the other: no camera draws a vehicle's body farther than that from it. Rendering only -- every vehicle still gets its body, is
 posed and is in the truth -- and each capture's sidecar marks the vehicles its camera did not draw
 (`beyond_draw_distance`), so none is read as a vehicle the image shows. A server built before it
 carried the call refuses it, and the drive goes on drawing every body at any range and says so.
@@ -329,7 +331,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "--warm-up to it are a prewarm: a frozen sun is pinned here and an "
                              "advancing one anchored here. Default: the first rendered frame")
     parser.add_argument("--step-length", type=float, default=None,
-                        help="override the scenario's SUMO step length (behaviour-changing)")
+                        help="override the scenario's SUMO step length, which changes how the "
+                             "traffic behaves")
     parser.add_argument("--fixed-delta", type=float, default=0.05,
                         help="simulated seconds per CARLA tick")
     parser.add_argument("--render-set", choices=("all", "circle", "cameras"), default="all",
@@ -341,9 +344,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "where it is not. A vehicle left out is simulated by SUMO and is not in "
                              "CARLA: no body, no frame, no truth record")
     parser.add_argument("--region-x", type=float, default=0.0,
-                        help="circle and cameras: centre of the region circle, SUMO easting in metres")
+                        help="circle and cameras: center of the region circle, SUMO easting in meters")
     parser.add_argument("--region-y", type=float, default=0.0,
-                        help="circle and cameras: centre of the region circle, SUMO northing in metres")
+                        help="circle and cameras: center of the region circle, SUMO northing in meters")
     parser.add_argument("--region-radius", type=float, default=None,
                         help="circle: inside this a vehicle gets a body; required. cameras: the circle "
                              "that decides while no camera is registered; without it every vehicle "
@@ -365,7 +368,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--capacity", type=int, default=None,
                         help="how many vehicles may hold a body at once, under any render set. "
                              "Default: no limit")
-    parser.add_argument("--draw-distance", type=float, default=None, metavar="METRES",
+    parser.add_argument("--draw-distance", type=float, default=None, metavar="METERS",
                         help="an optional performance control, off unless given: how far from a "
                              "camera a vehicle's body is drawn. Rendering only: every vehicle still "
                              "has its body, is posed and is in the truth, and each capture marks "
@@ -387,9 +390,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "holds a manifest. Default: none written")
 
     parser.add_argument("--show-road-mesh", action="store_true",
-                        help="draw the generated road surface. Hidden by default: it is a flat grey "
+                        help="draw the generated road surface. Hidden by default: it is a flat gray "
                              "ribbon laid over the photogrammetry of the real road, so leaving it "
-                             "on puts the same rendering artefact in every frame of the corpus. "
+                             "on puts the same rendering artifact in every frame it records. "
                              "Turn it on to see where the network the vehicles drive on lies")
     parser.add_argument("--show-signals", action="store_true",
                         help="draw the generated traffic-light and sign actors. Hidden by default: "
@@ -408,7 +411,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "window opens and holds it; advance carries it forward at --solar-rate, "
                              "the session writing it for every frame; freeze_at holds it at "
                              "--freeze-at; ignore leaves it as "
-                             "the world holds it and records that the lighting honours no epoch")
+                             "the world holds it and records that the lighting honors no epoch")
     parser.add_argument("--solar-rate", type=float,
                         help="with --illumination advance: sun-clock seconds per simulated second; "
                              "1.0 keeps the sun on civil time")
@@ -448,16 +451,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "is the callsign of the camera's platform track. Default: the name the "
                              "server gives the camera, Camera_<n>")
     parser.add_argument("--camera-z", type=float, default=300.0,
-                        help="camera height, metres; a free view starts there over the centre of the "
+                        help="camera height, meters; a free view starts there over the center of the "
                              "world's staging bounds, looking straight down")
     parser.add_argument("--camera-standoff", type=float, default=300.0,
-                        help="fixed view: camera distance back from the point it looks at, metres")
+                        help="fixed view: camera distance back from the point it looks at, meters")
     parser.add_argument("--camera-yaw", type=float, default=0.0,
                         help="fixed view: bearing the camera stands off along, degrees clockwise "
                              "from north")
     parser.add_argument("--camera-aim", choices=("traffic", "world-centre"), default="traffic",
                         help="fixed view: what the camera looks at: 'traffic' the mean position of "
-                             "the vehicles rendered on the first step, 'world-centre' the centre of "
+                             "the vehicles rendered on the first step, 'world-centre' the center of "
                              "the world's staging bounds. The middle of a corridor scenario's world "
                              "is usually not where its traffic is")
     parser.add_argument("--flight-speed", type=float, default=60.0,
@@ -684,7 +687,8 @@ class PacingProgress:
                         "the last pass, %d admitted in all", admission.Population,
                         admission.NewlyAdmitted, admission.Released, admission.TotalAdmissions)
             return
-        logger.info("  sumo population %d, eligible %d, drawn %d, shed %d%s; %d without a body; %s",
+        logger.info("  sumo population %d, in the render set %d, drawn %d, shed %d%s; %d without a "
+                    "body; %s",
                     admission.Population, admission.Eligible, admission.Admitted, admission.Shed,
                     "" if admission.Capacity is None else f", capacity {admission.Capacity}",
                     admission.Population - admission.Admitted, self.rule(admission))
@@ -1180,7 +1184,7 @@ def main(argv: list[str] | None = None) -> int:
         # the factor once and is the one thing that holds the run to it.
         logger.info("pace: %s", PacingProgress.declared(session.Report.Pacing))
         logger.info("sun: %s", session.Sun if session.Sun is not None
-                    else "left as the world holds it; the run's lighting honours no epoch")
+                    else "left as the world holds it; the run's lighting honors no epoch")
         logger.info("layers: %s", ", ".join(
             f"{layer} {'drawn' if session.Report.LayerVisibility[layer] else 'hidden'}"
             for layer in session.Report.LayerVisibility.Keys))
@@ -1216,7 +1220,7 @@ def main(argv: list[str] | None = None) -> int:
                 steps += 1
                 if aim.centre() is None:
                     logger.warning("nothing was rendered on the first step, so the camera is aimed "
-                                   "at the centre of the world instead")
+                                   "at the center of the world instead")
                 else:
                     centre = aim.centre()
                     logger.info("aimed at %d rendered vehicles", aim.count)

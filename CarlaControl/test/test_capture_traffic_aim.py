@@ -187,7 +187,7 @@ def test_the_camera_starts_over_the_centre_of_the_world_s_staging_bounds(layout)
     assert pose_of(rgb.spawned_at) == pytest.approx(start, abs=1e-6)
     assert pose_of(depth.spawned_at) == pytest.approx(start, abs=1e-6)
     placed = result.produced["cameras"][0]["placed_before_the_prewarm"]
-    assert placed["look_at"]["source"] == "the centre of the world's staging bounds"
+    assert placed["look_at"]["source"] == "the center of the world's staging bounds"
     assert tuple(placed["pose"].values()) == pytest.approx(start, abs=1e-6)
 
 

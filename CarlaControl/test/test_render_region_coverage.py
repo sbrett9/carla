@@ -56,7 +56,7 @@ def test_a_smaller_region_is_said_with_the_arguments_that_take_in_the_whole_map(
 
     assert advice is not None
     assert "fixed circle of 400 m around (0, 0)" in advice
-    assert "reaches 955 m from that centre" in advice
+    assert "reaches 955 m from that center" in advice
     assert "sees roads with no vehicles on them" in advice
     assert "--region-x 0 --region-y -1 --region-radius 956" in advice
     assert "leave --render-set at 'all', which draws every vehicle SUMO has" in advice

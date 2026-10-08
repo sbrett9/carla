@@ -90,7 +90,7 @@ public sealed class SumoDriveSessionRenderSetLimitTests
             Assert.Contains(passes, pass => pass.Limited && pass.Population > pass.Eligible);
             Assert.All(passes, pass => Assert.Equal(RenderSetRule.Circle, pass.Rule));
             string report = session.Report.ToString();
-            Assert.Contains("render set         circle of 25 m around (70, -1.7) in SUMO metres", report);
+            Assert.Contains("render set         circle of 25 m around (70, -1.7) in SUMO meters", report);
             Assert.Contains("a vehicle outside it is simulated by SUMO and has no body, no frame and no truth record",
                             report);
             Assert.Contains("vehicle-passes outside the policy", report);

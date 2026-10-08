@@ -161,7 +161,7 @@ class ScenarioSweep:
             declared = axis.get("kind")
             if declared == "behaviour" and axis["illumination_axis"]:
                 self.findings.refuse(SWEEP_CHECK, f"axis {axis['path']}",
-                                     "is declared a behaviour axis, and it changes the light: its "
+                                     "is declared a behavior axis, and it changes the light: its "
                                      "path touches the epoch, the illumination policy or a "
                                      "window's begin")
         if rule == "hold" and lighting:
@@ -175,7 +175,7 @@ class ScenarioSweep:
             cells = 1
             for axis in axes:
                 cells *= len(axis["values"])
-            self.findings.warn(SWEEP_CHECK, "sweep", f"crosses behaviour ({', '.join(behaviour)}) "
+            self.findings.warn(SWEEP_CHECK, "sweep", f"crosses behavior ({', '.join(behaviour)}) "
                                f"with illumination ({', '.join(lighting)}) in {cells} cells; it is "
                                "not a controlled comparison of either, and the index records it so")
 

@@ -97,7 +97,10 @@ def test_the_bands_are_the_table_the_recorder_writes_every_capture_s_band_from()
         {"band": "day", "above_deg": 6.0}, {"band": "golden", "above_deg": 0.0},
         {"band": "civil_twilight", "above_deg": -6.0}, {"band": "nautical_twilight", "above_deg": -12.0},
         {"band": "astronomical_twilight", "above_deg": -18.0}, {"band": "night", "above_deg": None}]
-    assert BAND_SOURCE == str(IlluminationBands.Source) == "11_Time_And_Illumination.md §4.4"
+    assert BAND_SOURCE == str(IlluminationBands.Source) == (
+        "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, "
+        "civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, "
+        "night at -18 and below")
     for edge in (6.0, 0.0, -6.0, -12.0, -18.0):
         for elevation in (edge - 1e-9, edge, edge + 1e-9):
             assert IlluminationBand.of(elevation) == str(IlluminationBands.NameOf(elevation))

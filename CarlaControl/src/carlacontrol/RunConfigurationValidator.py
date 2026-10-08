@@ -139,7 +139,7 @@ class RunConfigurationValidator:
             if check == 12:
                 findings.refuse(12, "scenario.epoch", f"scenario {effective.scenario.describe()} "
                                 "declares no epoch. A capture cannot set a sun from simulated "
-                                "seconds without one (12 §4.3)")
+                                "seconds without one")
             elif path == "capture.window":
                 names = ", ".join(sorted(effective.scenario.windows)) or "none declared"
                 findings.refuse(2, path, "'capture.window' has no value and no default. Supply it "
@@ -148,7 +148,7 @@ class RunConfigurationValidator:
             elif path == "pacing.min_achieved_factor":
                 findings.refuse(2, path, "pacing.mode is wall_clock and pacing.min_achieved_factor "
                                 "has no default: state the achieved factor below which the live "
-                                "run has failed (12 §7.5 L3)")
+                                "run has failed")
             else:
                 findings.refuse(2, path, f"'{path}' has no value and no default. Supply it")
         if effective.value("caller") == "unattended" and effective.value("result_path") is None:
@@ -162,7 +162,7 @@ class RunConfigurationValidator:
         if mode != "sumo_driven_playback":
             findings.refuse(4, "mode", f"mode is '{mode}'; run_capture runs sumo_driven_playback "
                             "only. Ambient traffic under the traffic manager is run_SCTMV.py, and "
-                            "the two are mutually exclusive in one world (01 D1.7)")
+                            "the two are mutually exclusive in one world")
 
     # -- check 6 ----------------------------------------------------------------------------------
     @staticmethod
@@ -279,12 +279,12 @@ class RunConfigurationValidator:
                 continue
             findings.refuse(36, path, f"'{path}' resolved from {variable}, which the site profile "
                             "does not declare. An unattended run does not inherit host state it "
-                            "was not given (12 §3.10 M2)")
+                            "was not given")
         if searched:
             findings.refuse(36, "sumo.home", f"'sumo.home' names no installation, so the session "
                             f"will search {', then '.join(searched)} for one, which the site "
                             "profile does not declare. An unattended run does not inherit host "
-                            "state it was not given (12 §3.10 M2; 09 D9.6): name sumo.home in the "
+                            "state it was not given: name sumo.home in the "
                             "site profile")
 
     # -- checks 7 and 8 ---------------------------------------------------------------------------
@@ -379,7 +379,7 @@ class RunConfigurationValidator:
                               "follows what is in the picture -- a bright vehicle entering the frame "
                               "darkens the rest -- and two windows under different suns can come out "
                               "alike. It is permitted for a live exercise's operator picture and not "
-                              "for captures meant to be compared (08 D8.26); each capture records the "
+                              "for captures meant to be compared; each capture records the "
                               "method and no EV100")
 
     @staticmethod
@@ -503,7 +503,7 @@ class RunConfigurationValidator:
                 f"the picture's ceiling is {ceiling} of the camera's frames from its tiles being "
                 f"in, and a frame is judged against the camera's frame at least {PICTURE_SPAN_TICKS} "
                 f"ticks before it, which at one frame every {period} ticks is first possible on its "
-                f"frame {first_judged} since the tiles (03 §9.5.1): no picture could be witnessed "
+                f"frame {first_judged} since the tiles: no picture could be witnessed "
                 "settled inside the ceiling, so every run would be refused at pre-roll. Give a "
                 f"ceiling of at least {first_judged} frames"))
             return
@@ -531,8 +531,8 @@ class RunConfigurationValidator:
                 f"every channel's view is waited on inside the prewarm, and with the picture-settled "
                 f"wait off (capture.picture_settled_wait) its photoreal tiles have a lead of their "
                 f"own: every camera holds the pose the window opens on for capture.tiles_hold_s, "
-                f"{tiles_hold:g} s{rounded}, its tiles asked about after every step of it "
-                f"(03 §9.5.1): the prewarm is {prewarm:g} s (capture.prewarm_s, clipped "
+                f"{tiles_hold:g} s{rounded}, its tiles asked about after every step of it: "
+                f"the prewarm is {prewarm:g} s (capture.prewarm_s, clipped "
                 f"to the window's begin){following}, which leaves {max(held, 0.0):g} s of that hold, "
                 "so a view whose tiles are slow to arrive would be refused at pre-roll short of the "
                 f"lead. Give a prewarm of at least {needed:g} s, or a shorter capture.tiles_hold_s"))
@@ -547,7 +547,7 @@ class RunConfigurationValidator:
             f"of the camera's own frames from its tiles being in to settle "
             f"(capture.picture_ceiling_frames), each judged against the camera's frame at least "
             f"{PICTURE_SPAN_TICKS} ticks before it, all rendered after its tiles are first asked "
-            f"about, one SUMO step into the wait (03 §9.5.1): the prewarm is {prewarm:g} s "
+            f"about, one SUMO step into the wait: the prewarm is {prewarm:g} s "
             f"(capture.prewarm_s, clipped to the window's begin){following}"
             f", which leaves {max(ticks, 0.0):g} ticks against the {needed_ticks} that {ceiling} "
             f"frames at one every {period} ticks and the {PICTURE_SPAN_TICKS}-tick span need, so a "
@@ -584,12 +584,12 @@ class RunConfigurationValidator:
                             f"{float(policy.Rate):g} sun-seconds per simulated second "
                             f"({effective.resolution('solar.rate_sun_s_per_sim_s').provenance}). A "
                             "capture run permits only 1.0: any other rate makes recorded solar "
-                            "time disagree with the scenario's clock (12 D12.8). Choose another "
+                            "time disagree with the scenario's clock. Choose another "
                             "policy with --solar, or use the interactive viewer for look "
                             "development")
         if not bool(policy.BindsTheSun):
             findings.warn(15, "solar.policy", "the policy is 'ignore': the sun is left as the world "
-                          "holds it, so the run's lighting honours no epoch and depends on whatever "
+                          "holds it, so the run's lighting honors no epoch and depends on whatever "
                           "the last session left")
 
     # -- check 41 ---------------------------------------------------------------------------------
@@ -622,7 +622,7 @@ class RunConfigurationValidator:
                 resolved.parents:
             findings.refuse(40, "result_path", f"result_path '{result_path}' is inside the capture "
                             f"root {root}. The result must survive a refusal that produces no "
-                            "corpus, and is not a corpus artifact")
+                            "captures, and is not part of the dataset")
             return
         existing = RunConfigurationValidator.nearest_existing(resolved.parent)
         if existing is None or not os.access(existing, os.W_OK):
@@ -645,7 +645,7 @@ class RunConfigurationValidator:
                    f"{effective.value('capture.capture_hz'):g} Hz x {effective.channel_count} "
                    f"channel(s); {free / 1e9:.1f} GB free under {capture_directory} is "
                    f"{headroom_s / 3600:.2f} h of capture, and the floor keeps {floor_s:g} s of it. "
-                   "Estimated from doc 10's measured PNG size; the truth sidecars, which grow with "
+                   "Estimated from a measured 2.25 MiB per 1280x720 PNG; the truth sidecars, which grow with "
                    "the traffic in frame, are not counted")
         if window.end_source == "the scenario's own end: the window declares none":
             findings.warn(19, "capture.window", message + ". This window declares no end")
@@ -735,7 +735,7 @@ class RunConfigurationValidator:
                                 f"caller is unattended. Set on_warning.{code} to 'proceed' -- which "
                                 "is recorded against this configuration -- or change what raised "
                                 f"it. An unattended run does not proceed past an unadjudicated "
-                                f"warning (12 §6.4): {warning.message}")
+                                f"warning: {warning.message}")
 
     # =============================================================================================
     # the server checks

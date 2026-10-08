@@ -35,13 +35,13 @@ public sealed record PatternInstance
         {
             reading.Problem($"{where}.supervision", "is unlabelled. An instance asserts something; a subject "
                                                     + "nothing is asserted of is written as an entity's or a "
-                                                    + "cohort's state, never as an instance (06 §3.1)");
+                                                    + "cohort's state, never as an instance");
         }
 
         if (Participants.Length == 0)
         {
             reading.Problem($"{where}.participants", "is empty. An instance is an assertion about one or more "
-                                                     + "vehicles, and a label follows its vehicle (06 §3.5)");
+                                                     + "vehicles, and a label follows its vehicle");
         }
 
         HashSet<string> participants = [.. Participants.Select(participant => participant.EntityId)];
@@ -145,7 +145,7 @@ public sealed record PlannedInterval
         if (Anchor is null && DeclaredStartSeconds is null)
         {
             reading.Problem(where, "has neither an anchor nor a declared start; an interval is declared by "
-                                   + "its civil begin or by the events that commit it (06 §3.3)");
+                                   + "its civil begin or by the events that commit it");
         }
     }
 
@@ -399,7 +399,7 @@ public sealed record CohortSupervision
         {
             reading.Problem($"{where}.supervision", "is nominal on a cohort. A flow's members are generated, "
                                                     + "not authored one by one, so nothing can assert that "
-                                                    + "every member executes no target pattern (06 D6.2)");
+                                                    + "every member executes no target pattern");
         }
     }
 

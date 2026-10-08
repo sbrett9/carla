@@ -44,7 +44,7 @@ public sealed class RegionRenderSetPolicy : IRenderSetPolicy
     {
         if (!double.IsFinite(centreX) || !double.IsFinite(centreY))
         {
-            throw new ArgumentOutOfRangeException(nameof(centreX), "the centre must be a finite point");
+            throw new ArgumentOutOfRangeException(nameof(centreX), "the center must be a finite point");
         }
 
         if (!double.IsFinite(admitRadiusMetres))
@@ -101,9 +101,9 @@ public sealed class RegionRenderSetPolicy : IRenderSetPolicy
     /// <inheritdoc/>
     public string Description =>
         FormattableString.Invariant(
-            $"circle of {_admitRadius:0.#} m around ({_centreX:0.#}, {_centreY:0.#}) in SUMO metres, released beyond {_releaseRadius:0.#} m")
+            $"circle of {_admitRadius:0.#} m around ({_centreX:0.#}, {_centreY:0.#}) in SUMO meters, released beyond {_releaseRadius:0.#} m")
         + (Capacity is { } capacity
-            ? ", up to " + capacity.ToString(CultureInfo.InvariantCulture) + " at once, nearest the centre first"
+            ? ", up to " + capacity.ToString(CultureInfo.InvariantCulture) + " at once, nearest the center first"
             : string.Empty);
 
     /// <inheritdoc/>

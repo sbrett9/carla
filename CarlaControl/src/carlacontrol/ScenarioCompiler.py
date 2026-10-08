@@ -248,9 +248,10 @@ class ScenarioCompiler:
                                  f"GeoReferenceString is '{georeference}'")
         offset = [float(v) for v in location.get("netOffset", "0,0").split(",")[:2]]
         if any(offset):
-            self.findings.refuse(5, "world", f"the network carries netOffset {offset}, so its metres "
+            self.findings.refuse(5, "world", f"the network carries netOffset {offset}, so its meters "
                                  "are displaced from the world's geographic frame (a road-offset "
-                                 "build); 07 §12 question 12")
+                                 "build). Rebuild the world without a road offset to compile a "
+                                 "scenario against it")
         built_with = self.package.netconvert_version
         self._check_routing_release(built_with)
         self.report.set("world", {
@@ -335,7 +336,7 @@ class ScenarioCompiler:
         if declared is None:
             self.findings.refuse(39, "illumination", "the specification declares no illumination "
                                  "default. There is none to assume: a frozen run and an "
-                                 "unconfigured one write identical records (11 D11.6); "
+                                 "unconfigured one write identical records; "
                                  "freeze_at_window_start is the recommended value")
             return
         try:
@@ -447,7 +448,7 @@ class ScenarioCompiler:
             if isinstance(subjects, dict):
                 set_name = subjects["place_set"]
                 if set_name not in self.place_sets:
-                    self.findings.refuse(8, f"rota {rota_id}", f"names place_set '{set_name}', "
+                    self.findings.refuse(8, f"rotas[{rota_id}]", f"names place_set '{set_name}', "
                                          "which place_sets does not declare")
                     continue
                 subjects = self.place_sets[set_name]
@@ -472,7 +473,7 @@ class ScenarioCompiler:
             template = self.rota_templates[rota_id]
             for entry in entries:
                 body = self._substitute(template, entry.subject)
-                where = f"rota {rota_id} entry {entry.entry_id}"
+                where = f"rotas[{rota_id}] entry {entry.entry_id}"
                 if self.resolver.require_in_span(entry.depart, f"{where} depart"):
                     self._add_actor(body, entry.entry_id, entry.depart, where, f"rota:{rota_id}")
 
@@ -825,14 +826,14 @@ class ScenarioCompiler:
         policy_name = str(self.policy.Name)
         self.report.set("illumination_default", {
             "declared": self.spec.get("illumination"), "policy": policy_name,
-            "status": "an authored default the operator may override (07 §3.9)",
+            "status": "an authored default the operator may override",
             "declared_elevation_kind": WindowSun.ELEVATION_KIND})
         self.report.set("zone", {"declared_offset_hours": self.epoch.utc_offset_hours,
                                  "engine_time_zone_hours": engine_zone,
                                  "difference_hours": None if engine_zone is None
                                  else self.epoch.utc_offset_hours - engine_zone,
                                  "written_by_the_session": "set_solar_epoch writes the declared "
-                                                           "offset as the sun's zone (04 D4.19)"})
+                                                           "offset as the sun's zone"})
         self.report.set("capture_windows", self.windows)
         association = IlluminationLabelAssociation(self.window_sun)
         self.association = association.compute(self.windows, self._association_entries())

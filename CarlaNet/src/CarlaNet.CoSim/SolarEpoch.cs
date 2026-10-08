@@ -255,7 +255,7 @@ public sealed class SolarEpoch
             if (Array.IndexOf(KnownFields, property.Name) < 0)
             {
                 problems.Add($"'{property.Name}' is not an epoch field. A field this consumer does "
-                             + "not read is one somebody will later believe was honoured");
+                             + "not read is one somebody will later believe was honored");
             }
         }
 

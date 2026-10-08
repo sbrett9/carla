@@ -227,7 +227,7 @@ class ChannelDescription:
         pose = self.declares_pose()
         if self.declares_orbit_centre():
             problems.append(
-                "an orbit centre was given for a stare; set pattern to 'orbit' or drop it")
+                "an orbit center was given for a stare; set pattern to 'orbit' or drop it")
         forms = [name for name, given in (("a look-at point", look_at),
                                           ("a look-at target", target),
                                           ("an explicit pose", pose)) if given]
@@ -242,7 +242,7 @@ class ChannelDescription:
         if target and self.stare_look_at_target not in self.STARE_LOOK_AT_TARGETS:
             problems.append(f"stare_look_at_target {self.stare_look_at_target!r} is not a target "
                             f"this channel can aim at; the one that exists is "
-                            f"'{self.RENDERED_TRAFFIC}', the centre of the vehicles the session "
+                            f"'{self.RENDERED_TRAFFIC}', the center of the vehicles the session "
                             "has rendered when the window opens")
         missing_look_at = [n for n in self.STARE_LOOK_AT_FIELDS if getattr(self, n) is None]
         if look_at and missing_look_at:
@@ -261,5 +261,5 @@ class ChannelDescription:
                             "orbit; set pattern to 'stare' or drop it")
         missing = [n for n in self.ORBIT_CENTRE_FIELDS if getattr(self, n) is None]
         if missing:
-            problems.append(f"an orbit needs a centre; missing {', '.join(missing)}")
+            problems.append(f"an orbit needs a center; missing {', '.join(missing)}")
         return problems

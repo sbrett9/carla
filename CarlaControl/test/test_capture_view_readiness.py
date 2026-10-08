@@ -334,7 +334,7 @@ def test_the_result_records_how_each_view_became_ready(layout):
         "scenario": "s", "window_name": "w", "sim_time_s": None, "window": {},
         "channels": [], "readiness": readiness}, [])
     assert "view OVERWATCH-1: tiles in at frame 1100 after 100 ticks, 0.5 s; picture settled at " \
-           "frame 1110, its frame 2 since its tiles (10 ticks), worst judged block 0.00 grey " \
+           "frame 1110, its frame 2 since its tiles (10 ticks), worst judged block 0.00 gray " \
            "levels with 100% of its blocks judged" in text
 
 
@@ -488,7 +488,7 @@ def test_the_refusal_lists_every_judged_comparison_against_the_camera_s_frames(l
     _, result = capture(layout, server, overrides=["capture.picture_ceiling_frames=12"])
     refused_by_check_50(server, result)
     assert ("the 11 judged comparisons read 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, 2.00, 1.00, 1.00, "
-            "2.00, 1.00 grey levels in order, from the camera's frame 3 to its frame 13"
+            "2.00, 1.00 gray levels in order, from the camera's frame 3 to its frame 13"
             in result.detail)
     assert len(the_view(result)["comparison_history"]) == 11
 

@@ -376,7 +376,7 @@ class ScenarioVehicleMix:
                 "of SUMO's own shapes")
         if entry.gui_colour and not GUI_COLOUR_PATTERN.match(entry.gui_colour):
             problems.append(
-                f"class {entry.class_id!r} declares colour {entry.gui_colour!r}; a SUMO artifact "
+                f"class {entry.class_id!r} declares color {entry.gui_colour!r}; a SUMO artifact "
                 "writes #RRGGBB, because SUMO re-reads a comma triple of small numbers as "
                 "fractions of 255")
         return problems

@@ -216,7 +216,7 @@ class AnnotationVocabulary:
                     + (f" (they declare {', '.join(known)})" if known
                        else " (they declare none)" if labels else ", and it carries no label")
                     + ". A parameter is a key its label's term declares in parameters{} with a "
-                    "type, a unit and a definition (06 §3.8): declare it there, or remove it")
+                    "type, a unit and a definition: declare it there, or remove it")
                 continue
             for label, declaration in declaring:
                 if ScenarioSchema.validate_against(value, {"type": declaration["type"]}):

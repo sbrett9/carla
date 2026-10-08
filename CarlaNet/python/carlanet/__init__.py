@@ -2762,7 +2762,7 @@ class World:
                              "render_set 'circle' or 'cameras' to limit the render set to it")
         if render_set == "circle" and region_radius_m is None:
             raise ValueError("render_set 'circle' needs the circle: give region_radius_m, and "
-                             "region_centre in SUMO's metres")
+                             "region_centre in SUMO's meters")
         limit = None if capacity is None else int(capacity)
         circle = None
         if region_radius_m is not None:

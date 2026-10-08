@@ -102,7 +102,7 @@ class SessionMonitor:
                            if pacing["paced"] else ""))
         admission = snapshot.get("admission")
         if admission is not None and admission.get("limited"):
-            rows.append(f"sumo  population {admission['population']}   eligible "
+            rows.append(f"sumo  population {admission['population']}   in the render set "
                         f"{admission['eligible']}   drawn {admission['admitted']}   shed "
                         f"{admission['shed']}   without a body {admission['left_out']}   admitted "
                         f"in all {admission['total_admissions']:,}")
