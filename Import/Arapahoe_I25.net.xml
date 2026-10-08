@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2026-10-05T20:38:46.195752-08:00 by Eclipse SUMO netconvert 1.27.0
+<!-- generated on 2026-10-07T10:32:17.982802-08:00 by Eclipse SUMO netconvert 1.27.0
 <netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
-        <tllogic-files value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_9b6b407941f243bf8da289b879f81e96.tll.xml"/>
+        <tllogic-files value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_60987ecf9df7484e866bf2f181729538.tll.xml"/>
         <osm-files value="G:\Projects\CarlaUE_5_7_4\carla\Build\sumo-smoketest\Arapahoe_I25_clipped.osm"/>
     </input>
 
     <output>
-        <output-file value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_99067283f2e84b96867625e755f886b0.net.xml"/>
-        <opendrive-output value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_41be94fd04f34371b91a4118d299648f.xodr"/>
+        <output-file value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_e26724c6f2fc4069ab0c223f888a743d.net.xml"/>
+        <opendrive-output value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_2cc61b5d41a242f691606cd45ca98dc7.xodr"/>
         <output.street-names value="true"/>
         <output.original-names value="true"/>
     </output>

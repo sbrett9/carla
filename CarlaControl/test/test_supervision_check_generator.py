@@ -95,6 +95,7 @@ def test_the_shipped_check_is_what_its_generator_compiles(tmp_path):
     lock = shipped("lock.json")
     for each in (lock, regenerated):
         each.pop("specification_sha256")
+        each.pop("producer", None)  # the record of what made the file names its own time of writing
         each["files"]["network"].pop("sha256")
     assert regenerated == lock
     specification = json.loads((tmp_path / f"{SCENARIO}.scenario.json").read_text(encoding="utf-8"))

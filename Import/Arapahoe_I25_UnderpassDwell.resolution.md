@@ -2,6 +2,8 @@
 
 **Outcome:** compiled
 
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8c9c0f287.dirty, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:13:23.260Z
+
 One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.
 
 ## Findings
@@ -240,7 +242,7 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
 {
   "routes": {
     "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
-    "sha256": "728d66ea19a2378b08ffbc090ce294fbfba5117fbcf735b80bc4b136fcff21b6"
+    "sha256": "2e24449e8dc8cccab1c72f1d7d3f2e17acc70b0f1ec774344cb8de93997bd8d7"
   },
   "config": {
     "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
@@ -248,15 +250,15 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
+    "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
   },
   "additional": {
     "path": "Arapahoe_I25_UnderpassDwell.add.xml",
-    "sha256": "e36c37f8c6e183e8338f395621d8380743c62ee9a8c3fd8145e3c4187fc78d76"
+    "sha256": "25260f609a53c8d3ac7fae8d7c7ccc15a6c2e1000d2affaae080e2b6c49dc119"
   },
   "supervision": {
     "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
-    "sha256": "e55b9d5d3eb64e8caa121a3784b62e1845c9c96c2e0590069466795025096628"
+    "sha256": "8c12ed24be1e351d96d29617f8429b0dde16e6267fd3fbbfb843a782e77b26ca"
   }
 }
 ```

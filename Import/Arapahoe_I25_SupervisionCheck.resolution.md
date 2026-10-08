@@ -2,6 +2,8 @@
 
 **Outcome:** compiled
 
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8c9c0f287, carlanet unknown, SUMO 1.27.0, at 2026-10-08T01:11:23.904Z
+
 Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the kerb, a second car drives through, and a van stops at the same kerb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.
 
 ## Findings
@@ -232,7 +234,7 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
 {
   "routes": {
     "path": "Arapahoe_I25_SupervisionCheck.rou.xml",
-    "sha256": "08d1ad4acbc21105bc7f407394325206262c4ae9fdbf693aaf20ca11dc1058c0"
+    "sha256": "f5026c3ab65203c71dc176835c575cd349514fb15d153b0f1a2b24e7c98e41b5"
   },
   "config": {
     "path": "Arapahoe_I25_SupervisionCheck.sumocfg",
@@ -240,11 +242,11 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
+    "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
   },
   "supervision": {
     "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-    "sha256": "2ce5636f05c05724994dabc8bddca60d493a7f577a90577d1868124b2ede829d"
+    "sha256": "8b68f5e2b661319f1e31643c38e29e6539e20b6ac53ad10141630e8c7c4552a8"
   }
 }
 ```

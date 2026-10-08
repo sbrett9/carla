@@ -141,6 +141,7 @@ def test_the_shipped_scenario_is_what_its_generator_writes_today(tmp_path):
         regenerated = json.loads((tmp_path / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
         for lock in (shipped, regenerated):
             lock.pop("specification_sha256")
+            lock.pop("producer", None)  # the record of what made the file names its own time of writing
             lock["files"]["network"].pop("sha256")
         assert regenerated == shipped
         return
@@ -153,6 +154,7 @@ def test_the_shipped_scenario_is_what_its_generator_writes_today(tmp_path):
     regenerated = json.loads((tmp_path / f"{SCENARIO}.resolution.json").read_text(encoding="utf-8"))
     for report in (shipped, regenerated):
         report["scenario"].pop("specification_sha256")
+        report.pop("producer", None)  # the record of what made the file names its own time of writing
     assert regenerated == shipped
     assert shipped["outcome"] == "refused"
     refusals = [f for f in shipped["findings"] if f["outcome"] == "refuse"]

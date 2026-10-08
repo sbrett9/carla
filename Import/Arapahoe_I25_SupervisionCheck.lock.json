@@ -7,12 +7,20 @@
   "specification_sha256": "53477560f61a8668649984059c4850140eb379836ea9c1d4d62bce183d94fd9f",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
-    "version": "1.0.0"
+    "version": "0.10.0"
+  },
+  "producer": {
+    "tool": "carlacontrol.ScenarioCompiler",
+    "tool_version": "0.10.0+g8c9c0f287",
+    "carlanet": "unknown",
+    "server": null,
+    "sumo": "1.27.0",
+    "written_utc": "2026-10-08T01:11:23.903Z"
   },
   "files": {
     "routes": {
       "path": "Arapahoe_I25_SupervisionCheck.rou.xml",
-      "sha256": "08d1ad4acbc21105bc7f407394325206262c4ae9fdbf693aaf20ca11dc1058c0"
+      "sha256": "f5026c3ab65203c71dc176835c575cd349514fb15d153b0f1a2b24e7c98e41b5"
     },
     "config": {
       "path": "Arapahoe_I25_SupervisionCheck.sumocfg",
@@ -20,11 +28,11 @@
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
-      "sha256": "7f10b6a9436cb1fff3c1ee11c9a89f363948eba0772cd0d26c5abda5935698ad"
+      "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
     },
     "supervision": {
       "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
-      "sha256": "2ce5636f05c05724994dabc8bddca60d493a7f577a90577d1868124b2ede829d"
+      "sha256": "8b68f5e2b661319f1e31643c38e29e6539e20b6ac53ad10141630e8c7c4552a8"
     }
   },
   "world": {

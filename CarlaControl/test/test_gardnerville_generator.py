@@ -53,6 +53,7 @@ def test_the_shipped_orbit_is_what_its_generator_compiles(tmp_path):
     regenerated = json.loads((tmp_path / f"{SCENARIO}.lock.json").read_text(encoding="utf-8"))
     for lock in (shipped, regenerated):
         lock.pop("specification_sha256")
+        lock.pop("producer", None)  # the record of what made the file names its own time of writing
         lock["files"]["network"].pop("sha256")
     assert regenerated == shipped
     specification = json.loads((tmp_path / f"{SCENARIO}.scenario.json").read_text(encoding="utf-8"))

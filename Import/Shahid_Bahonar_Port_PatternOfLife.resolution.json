@@ -1,5 +1,13 @@
 {
   "resolution_version": 1,
+  "producer": {
+    "tool": "carlacontrol.ScenarioCompiler",
+    "tool_version": "0.10.0+g8c9c0f287.dirty",
+    "carlanet": "unknown",
+    "server": null,
+    "sumo": "1.27.0",
+    "written_utc": "2026-10-08T01:15:25.368Z"
+  },
   "outcome": "compiled",
   "scenario": {
     "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
@@ -250,7 +258,7 @@
     ],
     "georeference": "+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
-      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\.claude\\worktrees\\agent-a4a8d795ca078f479\\Build\\sumo-install",
+      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-install",
       "version": "1.27.0",
       "matched_by": "explicit",
       "release_agreement": "SameRelease",
@@ -35657,12 +35665,20 @@
     "specification_sha256": "841afe55e6bf262ec6b3b3ec7827b28e279cd29e6f38cace8a1d302cb87cc61e",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
-      "version": "1.0.0"
+      "version": "0.10.0"
+    },
+    "producer": {
+      "tool": "carlacontrol.ScenarioCompiler",
+      "tool_version": "0.10.0+g8c9c0f287.dirty",
+      "carlanet": "unknown",
+      "server": null,
+      "sumo": "1.27.0",
+      "written_utc": "2026-10-08T01:15:25.360Z"
     },
     "files": {
       "routes": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
-        "sha256": "4ffd77d313bdbc31155687848847572a7ce6b8c5c37b781cdf51ed48113e1710"
+        "sha256": "7cd4d3fdea5ba87d988750038922264ecc9cff4b8aa42dd84312bb11bbf538cf"
       },
       "config": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
@@ -35670,11 +35686,11 @@
       },
       "network": {
         "path": "Shahid_Bahonar_Port.net.xml",
-        "sha256": "c4a92ccaa51bd04f6011b683aea5f82026a1f96c7b99782b06eb7ee2b714d0bd"
+        "sha256": "0748b0203054841ee2107e7e685e843dcbda920ca1f79358df7bb407689081c0"
       },
       "supervision": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-        "sha256": "ccec6c9c68c21e2485e495db1123201d5f685a209ddc9b9181c7f3be96293cbf"
+        "sha256": "dc378852784602f6668cba94de28ef66cd01853baa736055003895ac47b4eb65"
       }
     },
     "world": {

@@ -1,5 +1,13 @@
 {
   "resolution_version": 1,
+  "producer": {
+    "tool": "carlacontrol.ScenarioCompiler",
+    "tool_version": "0.10.0+g8c9c0f287.dirty",
+    "carlanet": "unknown",
+    "server": null,
+    "sumo": "1.27.0",
+    "written_utc": "2026-10-08T01:11:30.067Z"
+  },
   "outcome": "compiled",
   "scenario": {
     "scenario_id": "Gardnerville_Centerville_Lane_NeighborhoodOrbit",
@@ -155,7 +163,7 @@
     ],
     "georeference": "+proj=tmerc +lat_0=38.91108 +lon_0=-119.7645965 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
     "routing_sumo": {
-      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\.claude\\worktrees\\agent-a51c65ccb59bc7e64\\Build\\sumo-install",
+      "home": "G:\\Projects\\CarlaUE_5_7_4\\carla\\Build\\sumo-install",
       "version": "1.27.0",
       "matched_by": "explicit",
       "release_agreement": "SameRelease",
@@ -2759,12 +2767,20 @@
     "specification_sha256": "84864407e01a2f65af863a66229e31184824bc29119e7505eaa8d2009189ba06",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
-      "version": "1.0.0"
+      "version": "0.10.0"
+    },
+    "producer": {
+      "tool": "carlacontrol.ScenarioCompiler",
+      "tool_version": "0.10.0+g8c9c0f287.dirty",
+      "carlanet": "unknown",
+      "server": null,
+      "sumo": "1.27.0",
+      "written_utc": "2026-10-08T01:11:30.066Z"
     },
     "files": {
       "routes": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml",
-        "sha256": "948937c47d9be280a42e083a56160f22440a94a74b448bc69acd0d34e85d8449"
+        "sha256": "46cf46341b25746059b5ee6e4724ebb5cd22d272113a6ac376d07b7c4d8c0826"
       },
       "config": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg",
@@ -2776,7 +2792,7 @@
       },
       "supervision": {
         "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
-        "sha256": "47f8806a0f288094115c068e03f60956c6fe0132617b68d6229ef26d32f47b0f"
+        "sha256": "d66b3efcd402ed8ef227abb4aa0f553560fa714a1bc87e87d43c2d38d5a18010"
       }
     },
     "world": {
