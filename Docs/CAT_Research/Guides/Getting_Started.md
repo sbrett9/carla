@@ -128,11 +128,11 @@ A world installed with `world-tools/InstallWorld` is loaded by starting the serv
 
 ## Settings to make after installing
 
-### A Cesium ion token, for building worlds
+### A Cesium ion token
 
-`carla-build-world` and `carla-sctmv` stream terrain and imagery from Cesium ion.\
-They need an access token.\
-Set `CESIUM_ION_TOKEN` to it, or pass `--ion-token <token>`:
+Every user needs a Cesium ion access token, whether SUMO or CARLA's own traffic manager drives the vehicles.\
+The server streams terrain and imagery from Cesium ion with it.\
+Set `CESIUM_ION_TOKEN` to the token in the terminal that starts the server:
 
 ```powershell
 $env:CESIUM_ION_TOKEN = "<your token>"     # Windows, this terminal only
@@ -141,6 +141,10 @@ $env:CESIUM_ION_TOKEN = "<your token>"     # Windows, this terminal only
 ```sh
 export CESIUM_ION_TOKEN="<your token>"     # Linux, this shell only
 ```
+
+`carla-build-world` and `carla-sctmv` read the variable too.\
+Set it in the terminal that runs them as well.\
+In place of the variable, they also take `--ion-token <token>`.
 
 ### Your own SUMO, for `sumo-gui`
 

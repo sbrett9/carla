@@ -90,7 +90,8 @@ It also checks that the installation is complete.
   Every user needs one, in both modes.\
   The server streams terrain and imagery from Cesium ion with it.\
   Set `CESIUM_ION_TOKEN` to the token in the terminal that starts the server.\
-  Set it in the terminal that runs the commands too.
+  `carla-build-world` and `carla-sctmv` read the variable too.\
+  Set it in the terminal that runs them as well.
 - Your own SUMO DIST_SUMO, only to watch a drive in `sumo-gui`.\
   The bundled SUMO has no `sumo-gui`.\
   Give the folder of your SUMO to `carla-drive --sumo-gui` with `--sumo-home <folder>`.\
