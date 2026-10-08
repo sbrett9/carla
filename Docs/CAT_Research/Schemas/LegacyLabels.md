@@ -7,7 +7,7 @@ its compiled supervision plan. The tools still read a labels file, so that runs 
 can be repeated.
 
 - Schema: `CarlaControl/schemas/legacy_labels.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:legacy_labels:1`
+- Schema id: `urn:carla-sumo-capture:schema:legacy-labels:1`
 
 ## Who reads it
 

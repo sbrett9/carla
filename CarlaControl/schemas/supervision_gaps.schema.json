@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:supervision_gaps:1",
+  "$id": "urn:carla-sumo-capture:schema:supervision-gaps:1",
   "title": "Legacy supervision gaps (<name>.supervision.json beside a SUMO bridge run)",
   "description": "The supervision gaps a legacy scenario's labels file describes -- an absence, such as a guard who never arrives, which no vehicle record can carry -- placed on the clock of the run that wrote them. Written beside the run's XML or CSV, never into it. A compiled scenario's supervision is its compiled supervision plan, a different file with the same suffix.",
   "type": "object",

@@ -9,7 +9,7 @@ This is a different file from the `world.json` inside a world package (`.cwp`), 
 [WorldPackageManifest.md](WorldPackageManifest.md).
 
 - Schema: `CarlaControl/schemas/level_package_manifest.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:level_package_manifest:1`
+- Schema id: `urn:carla-sumo-capture:schema:level-package-manifest:1`
 
 ## Who writes it and who reads it
 

@@ -5,12 +5,19 @@ state into a Cursor-on-Target event at a chosen rate. Given `--xml <file>`, it w
 the run to one XML file. The file is truth: each event carries the whole record, including the
 scenario author's names for its vehicle types and flows, and which vehicles it planted.
 
-- Schema: `CarlaControl/schemas/cot_telemetry.xsd` (XSD 1.0), root element `<events>`
-- Schema id: `urn:carla-sumo-capture:schema:cot_telemetry:1`
+- Schema: `CarlaControl/schemas/sumo_cot_events.xsd` (XSD 1.0), root element `<events>`
+- Schema id: `urn:carla-sumo-capture:schema:sumo-cot-events:1`
 
 The events have the shape of the live feed's events, described in
-[CotTelemetryStream.md](CotTelemetryStream.md). The same run can also write a CSV, described in
-[SumoCotTable.md](SumoCotTable.md), and send the live feed.
+[CotTelemetryStream.md](CotTelemetryStream.md); each one, taken alone, is also a valid datagram. The
+same run can also write a CSV, described in [SumoCotTable.md](SumoCotTable.md), and send the live
+feed.
+
+The schema includes `cot_event_body.xsd`, the event's own parts, which the datagram schema includes
+too. It cannot include `truth_sidecar.xsd` as the datagram schema does: this file's root and a truth
+sidecar's root are both `<events>`, with no namespace, and one schema can describe only one of them.
+So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types, and a
+test holds each copy to the sidecar's.
 
 ## Who writes it and who reads it
 
@@ -51,7 +58,7 @@ was recorded.
 |---|---|---|---|
 | `tool` | string | yes | `carlacontrol.SumoCotBridge`. |
 | `tool_version` | string | no | The carlacontrol release. |
-| `carlanet` | string | no | The CarlaNet release the process loaded, when it loaded one. |
+| `carlanet` | string | no | The CarlaNet release the process loaded, when it loaded one. The truth sidecar's `_producer` always has it; the bridge may run without CarlaNet. |
 | `sumo` | string | no | The SUMO release that ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was opened, ISO 8601 UTC to the millisecond. |
 

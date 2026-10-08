@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:areas_resolved:1",
+  "$id": "urn:carla-sumo-capture:schema:areas-resolved:1",
   "title": "Resolved areas of interest (areas.resolved.json in a .cwp)",
   "description": "The declared areas of interest placed on the built world: in CARLA meters, and on the SUMO lanes inside, crossing or near each one. Always written when the reference set is published; with no areas declared, the list is empty.",
   "type": "object",
@@ -157,7 +157,7 @@
           },
           "geographic": {
             "type": "object",
-            "description": "The area's GeoJSON geometry, copied from the areas file: [longitude, latitude] in WGS84 degrees.",
+            "description": "The area's GeoJSON geometry, copied from the areas file: [longitude, latitude] in WGS84 degrees. The areas file's schema is area_of_interest.schema.json.",
             "required": [
               "type",
               "coordinates"

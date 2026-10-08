@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:level_package_manifest:1",
+  "$id": "urn:carla-sumo-capture:schema:level-package-manifest:1",
   "title": "Level package manifest (world.json in a PackageWorld zip)",
   "description": "What one separately delivered world is and what it needs from the CARLA package it is installed into. An installer compares the world interface version; the commit hashes identify the build and are never compared.",
   "type": "object",

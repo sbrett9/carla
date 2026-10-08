@@ -1,6 +1,6 @@
 {
   "$schema": "https://datapackage.org/profiles/2.0/tableschema.json",
-  "$id": "urn:carla-sumo-capture:schema:sumo_cot_telemetry:1",
+  "$id": "urn:carla-sumo-capture:schema:sumo-cot-telemetry:1",
   "name": "sumo_cot_telemetry",
   "title": "SUMO bridge CoT telemetry table (carla-cot-telemetry --csv)",
   "description": "One row per vehicle per update of a SUMO run. The first line is the header. Comma separated, UTF-8. Its format version and what made it are in <name>.summary.json beside it. An empty cell is a value, the empty string, never a missing one.",

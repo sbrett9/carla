@@ -13,7 +13,9 @@ the optional ones are present. The JSON entries each have a JSON Schema here, pu
 `bareearth.bin` is binary, and its layout is `BARE_EARTH_HEADER` here and the format page in
 `Docs/CAT_Research/Schemas/BareEarthGrid.md`. The OpenDRIVE and SUMO entries are external standards
 and have no schema of ours. `areas.aoi.geojson` is the author's input file copied byte for byte; its
-schema is the areas-of-interest input schema.
+schema is the areas-of-interest input's, `area_of_interest.schema.json`.
+
+`WorldFileValidator` checks a whole package against all of this.
 
 `WorldPackageReader` checks each JSON entry it reads against these schemas. It checks `world.json`
 without insisting on the fields CarlaNet requires, because it reads only some of them and must keep
@@ -90,7 +92,7 @@ ENTRIES: tuple[PackageEntry, ...] = (
     PackageEntry("areas.resolved.json", "JSON", False,
                  "once the authoring reference set is published, unless the areas were refused",
                  "carlacontrol.AuthoringReferenceSet", AREAS_RESOLVED_SCHEMA),
-    PackageEntry("areas.aoi.geojson", "GeoJSON (RFC 7946)", False,
+    PackageEntry("areas.aoi.geojson", "GeoJSON (RFC 7946), area_of_interest.schema.json", False,
                  "when areas of interest were declared and published", "carlacontrol.AuthoringReferenceSet"),
     PackageEntry("places.json", "JSON", False, "once the authoring reference set is published",
                  "carlacontrol.AuthoringReferenceSet", PLACE_INDEX_SCHEMA),
@@ -471,7 +473,9 @@ class WorldPackageSchemas:
                                                                 "the areas file gives none."),
                 "geographic": {"type": "object",
                                "description": "The area's GeoJSON geometry, copied from the areas "
-                                              "file: [longitude, latitude] in WGS84 degrees.",
+                                              "file: [longitude, latitude] in WGS84 degrees. The "
+                                              "areas file's schema is "
+                                              "area_of_interest.schema.json.",
                                "required": ["type", "coordinates"],
                                "properties": {"type": {"enum": list(GEOMETRY_TYPES)},
                                               "coordinates": {"type": "array"}}},

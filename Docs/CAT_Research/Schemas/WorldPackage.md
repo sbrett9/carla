@@ -45,7 +45,7 @@ These programs read it:
 | `places.json` | JSON | no | once the reference set is published | [PlaceIndex.md](PlaceIndex.md) |
 | `solar.json` | JSON | no | once the reference set is published | [SolarFrame.md](SolarFrame.md) |
 | `areas.resolved.json` | JSON | no | once the reference set is published, unless the areas were refused | [AreasResolved.md](AreasResolved.md) |
-| `areas.aoi.geojson` | GeoJSON (RFC 7946) | no | when areas of interest were declared and published | the areas-of-interest input schema |
+| `areas.aoi.geojson` | GeoJSON (RFC 7946) | no | when areas of interest were declared and published | [AreasOfInterest.md](AreasOfInterest.md), `area_of_interest.schema.json` |
 
 A package holds no other entry. Entry names do not include the map's name, because the package's file
 name already does.
@@ -82,6 +82,11 @@ entry's page says what a reader does with an older or newer version.
 
 `WorldPackageReader` (Python) also checks every JSON entry against its published schema in
 `CarlaControl/schemas/`, and refuses an entry that does not match, naming each problem.
+
+`carlacontrol.WorldFileValidator` checks a whole package: the entries it holds and how they are
+stored, every JSON entry against its schema and version, `bareearth.bin` against its format page and
+the digests in `world.json`, and the network fingerprints and area digest the entries record. Given
+a folder, it checks every package in it.
 
 ## Example
 

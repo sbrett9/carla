@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:world_package_manifest:1",
+  "$id": "urn:carla-sumo-capture:schema:world-package-manifest:1",
   "title": "World package manifest (world.json in a .cwp)",
   "description": "What a generated world is: its geographic origin, how its roads were seated on the photoreal imagery, the imagery layers, the traffic staging rectangle, and how it was built. Keys are PascalCase. CARLA's frame has x east, y south and z up, in meters. Heights are WGS84 ellipsoidal heights in meters.",
   "type": "object",

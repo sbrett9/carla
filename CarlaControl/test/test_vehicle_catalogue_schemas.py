@@ -93,7 +93,7 @@ def test_a_catalogue_that_departs_from_its_schema_is_refused_naming_each_departu
         VehicleCatalogue.load(path)
     message = str(refused.value)
     assert str(path) in message
-    assert "urn:carla-sumo-capture:schema:vehicle_catalogue:1" in message
+    assert "urn:carla-sumo-capture:schema:vehicle-catalogue:1" in message
     assert "'fog' is required" in message
     assert "$.classes[0].gui_colour" in message
 

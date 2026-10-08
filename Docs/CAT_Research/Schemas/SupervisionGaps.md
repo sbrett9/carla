@@ -11,7 +11,7 @@ supervision plan, a different file that also ends in `.supervision.json`, and la
 deviates rather than describing a gap.
 
 - Schema: `CarlaControl/schemas/supervision_gaps.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:supervision_gaps:1`
+- Schema id: `urn:carla-sumo-capture:schema:supervision-gaps:1`
 
 ## Who writes it and who reads it
 

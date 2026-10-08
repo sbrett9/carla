@@ -6,11 +6,14 @@ instant. The feed is a moving-map display. It carries what a display needs, and 
 the truth files carry.
 
 - Schema: `CarlaControl/schemas/cot_telemetry.xsd` (XSD 1.0), root element `<event>`
-- Schema id: `urn:carla-sumo-capture:schema:cot_telemetry:1`
+- Schema id: `urn:carla-sumo-capture:schema:cot-telemetry:1`
 
 A vehicle event has the same shape as a vehicle event in a capture's truth sidecar, and the attributes
-they share mean the same thing. Their meanings are given in full on the truth sidecar's page and in
-`truth_sidecar.xsd`. This page lists the fields, and says where the stream differs.
+they share mean the same thing. Their meanings are given in full in [Truth_Sidecar.md](Truth_Sidecar.md).
+The schema does not repeat them: it includes `truth_sidecar.xsd` and takes `<point>`, `<track>`,
+`<contact>` and the simple types under them from it, so the two cannot drift apart. The event's own
+parts are in `cot_event_body.xsd`, which the schema also includes. All three files must sit in one
+folder. This page lists the fields, and says where the stream differs from the sidecar.
 
 ## Who sends it and who receives it
 
@@ -88,7 +91,7 @@ as one XML document. Datagrams are UTF-8 and carry no XML declaration.
 | `base_type` | string | | yes | `car`, `van`, `truck`, `bus`, `motorcycle` or `bicycle`, from the vehicle catalogue. |
 | `special_type` | string | | no | `emergency`, `taxi`, `electric`, or empty. Left out of a SUMO bridge datagram. |
 | `length_m`, `width_m`, `height_m` | decimal | meters | yes | The vehicle's size, two decimals. CARLA's is the drawn body's bounding box; the bridge's is SUMO's. |
-| `color` | string | | yes | `R,G,B`. CARLA's body color, or the SUMO type's sumo-gui color from the bridge. |
+| `color` | string | | yes | `R,G,B`. CARLA's body color, empty for a blueprint with none; or the SUMO type's sumo-gui color from the bridge. |
 | `role_name` | string | | no | The CARLA role name. Left out of a SUMO bridge datagram. |
 | `vx`, `vy`, `vz` | decimal | m/s | yes | Velocity in CARLA's frame: east, south, up. |
 | `heading_deg` | decimal | degrees | no | The direction the body points, clockwise from north. CARLA vehicles only. |

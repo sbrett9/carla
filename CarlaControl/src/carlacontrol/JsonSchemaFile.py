@@ -4,8 +4,9 @@ A schema generated here is a Python dict, held by the module of the file it desc
 to `CarlaControl/schemas/` by `write`: two-space indent, keys in the order the module gives them, UTF-8
 with a final newline, so the published file is byte-stable and a test can hold it equal to the dict.
 
-Its `$id` is a URN, `urn:carla-sumo-capture:schema:<name>:<version>`, naming the kind of file and the
-format version the schema describes. It names no host, because none serves the schemas.
+Its `$id` is a URN, `urn:carla-sumo-capture:schema:<kind>:<version>`, naming the kind of file, its
+words joined by hyphens, and the format version the schema describes. It names no host, because none
+serves the schemas.
 
 `problems` checks a document against such a schema with the validator the scenario compiler uses
 (`ScenarioSchema.validate_against`). That validator implements a subset of JSON Schema and refuses to
@@ -21,12 +22,15 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 
 from carlacontrol.ScenarioSchema import ScenarioSchema
 
 DRAFT = "https://json-schema.org/draft/2020-12/schema"
 URN_PREFIX = "urn:carla-sumo-capture:schema:"
+# A kind of file, as a schema's URN names it.
+KIND = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")
 DEFINITIONS = "$defs"
 LOCAL_REFERENCE = "#/$defs/"
 
@@ -51,8 +55,14 @@ class JsonSchemaFile:
 
     @staticmethod
     def identifier(name: str, version: int) -> str:
-        """The schema's `$id`: `urn:carla-sumo-capture:schema:<name>:<version>`."""
-        return f"{URN_PREFIX}{name}:{version}"
+        """The schema's `$id`: `urn:carla-sumo-capture:schema:<kind>:<version>`, the kind in lower case
+        with words joined by hyphens, as every schema of ours spells it (`world-package-manifest`).
+        `name` may join its words with underscores, as the schema's file name does."""
+        kind = name.replace("_", "-")
+        if not KIND.fullmatch(kind) or isinstance(version, bool) or not isinstance(version, int) \
+                or version < 1:
+            raise ValueError(f"{name!r} version {version!r} cannot name a schema")
+        return f"{URN_PREFIX}{kind}:{version}"
 
     @staticmethod
     def nullable(schema: dict, description: str | None = None) -> dict:

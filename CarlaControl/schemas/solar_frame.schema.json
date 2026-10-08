@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:solar_frame:1",
+  "$id": "urn:carla-sumo-capture:schema:solar-frame:1",
   "title": "Solar frame (solar.json in a .cwp)",
   "description": "The facts about the world's sun that a scenario's start time is checked against without a server: the origin the engine computes the sun from, and the time zone the engine sets from its longitude.",
   "type": "object",

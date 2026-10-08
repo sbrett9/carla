@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:place_index:1",
+  "$id": "urn:carla-sumo-capture:schema:place-index:1",
   "title": "Place index (places.json in a .cwp)",
   "description": "Which edges of the world's SUMO network carry which street name, and which way they head. Derived from map.net.xml alone.",
   "type": "object",

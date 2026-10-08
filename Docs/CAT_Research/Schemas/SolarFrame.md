@@ -11,7 +11,7 @@ time zone. At a site near 56.2° E it is +03:44:43, while the local civil time i
 compiler reports the difference between the two. The file never claims a civil time zone.
 
 - Schema: `CarlaControl/schemas/solar_frame.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:solar_frame:1`
+- Schema id: `urn:carla-sumo-capture:schema:solar-frame:1`
 
 ## Who writes it and who reads it
 

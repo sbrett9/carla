@@ -6,7 +6,7 @@ it. The index also says how much of the network its names cover, because on some
 named.
 
 - Schema: `CarlaControl/schemas/place_index.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:place_index:1`
+- Schema id: `urn:carla-sumo-capture:schema:place-index:1`
 
 ## Who writes it and who reads it
 

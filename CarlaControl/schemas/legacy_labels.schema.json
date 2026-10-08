@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:legacy_labels:1",
+  "$id": "urn:carla-sumo-capture:schema:legacy-labels:1",
   "title": "Legacy scenario labels (*.labels.json)",
   "description": "What a scenario made before compiled scenarios planted: the planted vehicles, an affiliation per vehicle type, and the described gaps. Nothing writes this file any more; a compiled scenario's labels are its supervision plan. Every key may be absent, and a reader ignores a key it does not name.",
   "type": "object",

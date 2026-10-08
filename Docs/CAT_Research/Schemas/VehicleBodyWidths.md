@@ -7,7 +7,7 @@ Unreal Editor and kept in this table. The [vehicle catalogue](VehicleCatalogue.m
 `body_width_m`, and the [SUMO vehicle types](VehicleTypes.md) use it as their `width`.
 
 - Schema: `CarlaControl/schemas/vehicle_body_widths.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:vehicle_body_widths:1`
+- Schema id: `urn:carla-sumo-capture:schema:vehicle-body-widths:1`
 
 ## Who writes it and who reads it
 

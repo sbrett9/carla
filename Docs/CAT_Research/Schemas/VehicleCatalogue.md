@@ -15,7 +15,7 @@ It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout, and 
 The body widths without mirrors come from [`vehicle_body_widths.json`](VehicleBodyWidths.md).
 
 - Schema: `CarlaControl/schemas/vehicle_catalogue.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:vehicle_catalogue:1`
+- Schema id: `urn:carla-sumo-capture:schema:vehicle-catalogue:1`
 
 ## Who writes it and who reads it
 
@@ -242,6 +242,11 @@ so a file without it is not a catalogue.
 - `VehicleCatalogue.load` then checks the file against the schema and refuses it, naming each problem.
   Every vehicle and class entry must be whole. A header field that is present must have the right
   shape; one that is absent reads as empty.
+
+`carlacontrol.WorldFileValidator`, given the catalogue's folder, checks the whole catalogue against
+its schema and the builder's rules, checks that its digest is its content's, checks
+`vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalogue gives, and
+checks `vehicle_body_widths.json` where it is there.
 
 ## Example
 

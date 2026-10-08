@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:vehicle_catalogue:1",
+  "$id": "urn:carla-sumo-capture:schema:vehicle-catalogue:1",
   "title": "Vehicle catalogue (vehicles.catalogue.json)",
   "description": "Every CARLA vehicle blueprint, measured by spawning it on a running server, and the classes a scenario draws vehicles from. Meters, seconds and degrees throughout.",
   "type": "object",

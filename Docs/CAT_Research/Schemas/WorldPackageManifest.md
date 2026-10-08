@@ -9,7 +9,7 @@ This is a different file from the `world.json` in a level package. That one is d
 [LevelPackageManifest.md](LevelPackageManifest.md).
 
 - Schema: `CarlaControl/schemas/world_package_manifest.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:world_package_manifest:1`
+- Schema id: `urn:carla-sumo-capture:schema:world-package-manifest:1`
 
 ## Who writes it and who reads it
 
@@ -126,12 +126,12 @@ packages written before the field existed have.
 ## Example
 
 A draped world. The `Producer` values are typical of a package written by `carla-build-world`, which
-names itself by its program name and gives no tool version.
+names itself and carlacontrol's release.
 
 ```json
 {
   "FormatVersion": 1,
-  "Producer": {"tool": "carla-build-world", "tool_version": null, "carlanet": "0.10.0+g252f459d0",
+  "Producer": {"tool": "carla-build-world", "tool_version": "0.10.0+g252f459d0", "carlanet": "0.10.0+g252f459d0",
                "server": {"available": true, "release": "0.10.0", "world_interface": "1.0",
                           "build": "package", "configuration": "Development",
                           "carla_commit": "252f459d0a1b2c3d4e5f60718293a4b5c6d7e8f9",

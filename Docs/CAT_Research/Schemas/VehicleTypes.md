@@ -9,7 +9,7 @@ The file is a SUMO route file that holds only types, so SUMO's own `routes_file.
 schema is narrower: it describes exactly what the writer writes.
 
 - Schema: `CarlaControl/schemas/vehicle_types.xsd` (XSD 1.0)
-- Schema id: `urn:carla-sumo-capture:schema:vehicle_types:1`
+- Schema id: `urn:carla-sumo-capture:schema:vehicle-types:1`
 
 ## Who writes it and who reads it
 

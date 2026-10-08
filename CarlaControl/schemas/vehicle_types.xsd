@@ -2,8 +2,6 @@
 <!--
   The SUMO vehicle types generated from the vehicle catalogue: vehicles.vtypes.rou.xml.
 
-  Identifier: urn:carla-sumo-capture:schema:vehicle_types:1
-
   The file is a SUMO route file holding only vehicle types, so SUMO's own data/xsd/routes_file.xsd
   accepts it too. This schema is narrower: it describes exactly what
   carlacontrol.SumoVehicleTypeWriter writes. Each measured CARLA blueprint is one <vType>, whose id is
@@ -22,8 +20,16 @@
 
   No element is in a namespace. The file carries no format version: it is version 1.
 -->
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified"
-           attributeFormDefault="unqualified" version="1">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation"
+           elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
+  <xs:annotation>
+    <xs:documentation>The SUMO vehicle types written from the vehicle catalogue,
+      vehicles.vtypes.rou.xml. The file carries no format version; it is version 1.</xs:documentation>
+    <xs:appinfo>
+      <cap:id>urn:carla-sumo-capture:schema:vehicle-types:1</cap:id>
+      <cap:formatVersion>1</cap:formatVersion>
+    </xs:appinfo>
+  </xs:annotation>
 
   <xs:element name="routes">
     <xs:complexType>

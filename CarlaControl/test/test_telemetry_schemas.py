@@ -4,8 +4,10 @@ The SUMO bridge is run over a stand-in for TraCI -- a few vehicles of the catalo
 planted, for a few updates -- with every sink on: the UDP feed (its datagrams caught as they are sent),
 the XML file and the CSV. Then:
 
-  * each datagram, and the XML file, are valid against `cot_telemetry.xsd`; a SUMO vehicle's datagram
-    leaves out the fields the files keep;
+  * each datagram is valid against `cot_telemetry.xsd`, which takes the parts it shares with the truth
+    sidecar from `truth_sidecar.xsd`, and the XML file against `sumo_cot_events.xsd`, whose copies of
+    those parts are held equal to the sidecar's; a SUMO vehicle's datagram leaves out the fields the
+    files keep;
   * the CSV meets `sumo_cot_telemetry.tableschema.json`, whose fields are the bridge's columns, and its
     `.summary.json` meets its schema;
   * a CARLA vehicle's datagram, as carla-sctmv sends it with the capture tick and the sun, is valid too;
@@ -42,7 +44,16 @@ from carlacontrol.TelemetrySchemas import CSV_TABLE_SCHEMA, TelemetrySchemas  # 
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
-COT_SCHEMA = SCHEMAS / "cot_telemetry.xsd"
+DATAGRAM_SCHEMA = SCHEMAS / "cot_telemetry.xsd"
+EVENTS_SCHEMA = SCHEMAS / "sumo_cot_events.xsd"
+SIDECAR_SCHEMA = SCHEMAS / "truth_sidecar.xsd"
+XSD = "{http://www.w3.org/2001/XMLSchema}"
+# The datagram's schema includes the truth sidecar's, which the capture schemas publish.
+NO_SIDECAR = "truth_sidecar.xsd, which cot_telemetry.xsd includes, is not in CarlaControl/schemas"
+needs_sidecar = pytest.mark.skipif(not SIDECAR_SCHEMA.is_file(), reason=NO_SIDECAR)
+# The truth sidecar's parts the SUMO bridge's event file holds copies of.
+SHARED_PARTS = ("Instant", "CalendarDate", "TrueOrFalse", "Latitude", "Longitude", "Bearing",
+                "NonNegativeDecimal", "CotType", "Color", "Point", "Track", "Contact", "Server")
 CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 LEGACY_LABELS = _REPO / "CarlaControl" / "test" / "fixtures" / \
     "Shahid_Bahonar_Port_PatternOfLife.shipped.labels.json"
@@ -150,17 +161,46 @@ def run(tmp_path_factory, request):
 
 
 @pytest.fixture(scope="module")
-def cot_schema() -> etree.XMLSchema:
-    return etree.XMLSchema(etree.parse(str(COT_SCHEMA)))
+def datagram_schema() -> etree.XMLSchema:
+    if not SIDECAR_SCHEMA.is_file():
+        pytest.skip(NO_SIDECAR)
+    return etree.XMLSchema(etree.parse(str(DATAGRAM_SCHEMA)))
 
 
-def test_every_datagram_is_one_valid_event(run, cot_schema):
+@pytest.fixture(scope="module")
+def events_schema() -> etree.XMLSchema:
+    return etree.XMLSchema(etree.parse(str(EVENTS_SCHEMA)))
+
+
+def test_the_datagram_schema_takes_the_shared_parts_from_the_sidecar_s():
+    included = [node.get("schemaLocation")
+                for node in etree.parse(str(DATAGRAM_SCHEMA)).getroot().findall(f"{XSD}include")]
+    assert included == ["truth_sidecar.xsd", "cot_event_body.xsd"]
+
+
+def structure(node: etree._Element) -> tuple:
+    """A schema component without its annotations: what it allows, not what it says."""
+    return (node.tag, tuple(sorted(node.attrib.items())),
+            tuple(structure(child) for child in node
+                  if isinstance(child.tag, str) and child.tag != f"{XSD}annotation"))
+
+
+@needs_sidecar
+@pytest.mark.parametrize("name", SHARED_PARTS)
+def test_the_event_file_s_copy_of_a_sidecar_part_allows_what_the_sidecar_s_does(name):
+    def component(path: Path) -> etree._Element:
+        (found,) = [node for node in etree.parse(str(path)).getroot() if node.get("name") == name]
+        return found
+    assert structure(component(EVENTS_SCHEMA)) == structure(component(SIDECAR_SCHEMA))
+
+
+def test_every_datagram_is_one_valid_event(run, datagram_schema):
     assert len(run.sent) == len(ROSTER) * Playback.STEPS
     for datagram in run.sent:
         assert not datagram.startswith(b"<?xml")
         event = etree.fromstring(datagram)
         assert event.tag == "event"
-        assert cot_schema.validate(event), cot_schema.error_log
+        assert datagram_schema.validate(event), datagram_schema.error_log
 
 
 def test_a_sumo_vehicle_s_datagram_leaves_out_what_the_files_keep(run):
@@ -169,9 +209,9 @@ def test_a_sumo_vehicle_s_datagram_leaves_out_what_the_files_keep(run):
         assert not set(AUTHORED_TRUTH_FIELDS) & set(carla.attrib)
 
 
-def test_the_xml_file_is_valid_and_keeps_every_field(run, cot_schema):
+def test_the_xml_file_is_valid_and_keeps_every_field(run, events_schema):
     document = etree.parse(str(run.directory / "fixture.xml"))
-    assert cot_schema.validate(document), cot_schema.error_log
+    assert events_schema.validate(document), events_schema.error_log
     root = document.getroot()
     assert root.get("format_version") == "1"
     assert root[0].tag == "_producer" and root[0].get("sumo") == "1.27.0"
@@ -180,6 +220,12 @@ def test_the_xml_file_is_valid_and_keeps_every_field(run, cot_schema):
     assert marked["SUMO-TRUTH-orbiter"] == "1" and marked["SUMO-TRUTH-traffic.0"] == "0"
     for event in root.findall("event"):
         assert set(AUTHORED_TRUTH_FIELDS) <= set(event.find("detail/_carla").attrib)
+
+
+def test_each_event_of_the_xml_file_is_also_a_valid_datagram(run, datagram_schema):
+    for event in etree.parse(str(run.directory / "fixture.xml")).getroot().findall("event"):
+        alone = etree.fromstring(etree.tostring(event))
+        assert datagram_schema.validate(alone), datagram_schema.error_log
 
 
 def check_table(rows: list[dict], header: list[str], table: dict) -> list[str]:
@@ -254,7 +300,7 @@ def test_the_csv_summary_meets_its_schema(run):
 
 # -- a CARLA vehicle's datagram -----------------------------------------------------------------------
 
-def test_a_carla_vehicle_s_datagram_with_its_tick_and_sun_is_valid(cot_schema):
+def test_a_carla_vehicle_s_datagram_with_its_tick_and_sun_is_valid(datagram_schema):
     record = {"id": 214, "type_id": "vehicle.lincoln.mkz", "base_type": "car", "special_type": "",
               "color": "17,213,91", "role_name": "autopilot", "lat": 39.5943123, "lon": -104.8844901,
               "hae": 1716.25, "hae_dtm": 1715.70, "speed_mps": 12.5, "course_deg": 271.3,
@@ -266,22 +312,28 @@ def test_a_carla_vehicle_s_datagram_with_its_tick_and_sun_is_valid(cot_schema):
     clock = types.SimpleNamespace(attributes=lambda: {"tick": "4520"})
     event = etree.fromstring(CotUdpEmitter.vehicle_telemetry_to_cot(
         record, solar=solar, capture=clock, when=EPOCH).encode("utf-8"))
-    assert cot_schema.validate(event), cot_schema.error_log
+    assert datagram_schema.validate(event), datagram_schema.error_log
     assert event.get("uid") == "CARLA-TRUTH-SUMO-traffic.17"
     assert [child.tag for child in event.find("detail")] == ["track", "contact", "_carla", "_capture",
                                                              "_solar"]
+    # A blueprint with no color attribute is reported with an empty color, as the sidecar allows.
+    uncolored = etree.fromstring(CotUdpEmitter.vehicle_telemetry_to_cot(
+        {**record, "color": ""}, when=EPOCH).encode("utf-8"))
+    assert datagram_schema.validate(uncolored), datagram_schema.error_log
 
 
-def test_an_event_the_schema_does_not_describe_is_refused(cot_schema):
-    """The control: a datagram with its point's height missing and a type that is not a vehicle."""
+def test_an_event_the_schema_does_not_describe_is_refused(events_schema):
+    """The control: an event with its point's height missing and a type that is not a vehicle."""
     event = etree.fromstring(
+        '<events source="sumo" scenario="s" epoch="2026-03-21T05:00:00.000Z">'
         '<event version="2.0" uid="X-1" type="a-n-A-M-F" how="m-g" time="2026-03-21T05:00:00.000Z" '
         'start="2026-03-21T05:00:00.000Z" stale="2026-03-21T05:00:03.000Z">'
         '<point lat="1" lon="2" ce="0" le="0"/><detail><track course="0" speed="0"/>'
         '<contact callsign="car-1"/><_carla source="truth" actor_id="1" base_type="car" '
-        'length_m="1" width_m="1" height_m="1" color="1,2,3" vx="0" vy="0" vz="0"/></detail></event>')
-    assert not cot_schema.validate(event)
-    messages = " ".join(error.message for error in cot_schema.error_log)
+        'length_m="1" width_m="1" height_m="1" color="1,2,3" vx="0" vy="0" vz="0"/></detail></event>'
+        '</events>')
+    assert not events_schema.validate(event)
+    messages = " ".join(error.message for error in events_schema.error_log)
     assert "hae" in messages and "a-n-A-M-F" in messages
 
 

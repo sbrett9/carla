@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:sumo_cot_telemetry_summary:1",
+  "$id": "urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1",
   "title": "SUMO bridge CSV summary (<name>.summary.json)",
   "description": "Written beside a carla-cot-telemetry --csv file when the CSV is opened: the CSV's format version, its file name, its columns, and what made it.",
   "type": "object",

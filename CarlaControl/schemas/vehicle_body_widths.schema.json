@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:carla-sumo-capture:schema:vehicle_body_widths:1",
+  "$id": "urn:carla-sumo-capture:schema:vehicle-body-widths:1",
   "title": "Vehicle body widths (vehicle_body_widths.json)",
   "description": "Each vehicle body's width without its mirrors, measured from the mesh in the Unreal Editor, keyed by CARLA blueprint id.",
   "type": "object",

@@ -10,8 +10,10 @@
   * `*.labels.json`, a legacy scenario's labels, which `carla-cot-telemetry --labels` and
     `carla-check-label-leaks --labels` read and nothing in this repository writes any more.
 
-The Cursor-on-Target XML -- one `<event>` per UDP datagram, and the `--xml` file of every event -- is
-`CarlaControl/schemas/cot_telemetry.xsd`, written by hand.
+The Cursor-on-Target XML is described by XSDs written by hand in `CarlaControl/schemas/`: one
+`<event>` per UDP datagram by `cot_telemetry.xsd`, which takes the parts a vehicle event shares with
+the truth sidecar from `truth_sidecar.xsd`; the `--xml` file of every event by `sumo_cot_events.xsd`;
+and the event's own parts, which both include, by `cot_event_body.xsd`.
 
 Each schema is published to `CarlaControl/schemas/` by `write` and held equal to this module by a test,
 which also runs the bridge and checks what it writes against them.

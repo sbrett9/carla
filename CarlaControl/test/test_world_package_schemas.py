@@ -213,7 +213,7 @@ def test_a_manifest_field_of_the_wrong_shape_is_refused_by_name(tmp_path):
         WorldPackageReader(path)
     message = str(refused.value)
     assert "world.json does not match its schema" in message
-    assert "urn:carla-sumo-capture:schema:world_package_manifest:1" in message
+    assert "urn:carla-sumo-capture:schema:world-package-manifest:1" in message
     assert "$.DrapeActive: must be boolean" in message
     assert "$.HeightAlignMode" in message
 

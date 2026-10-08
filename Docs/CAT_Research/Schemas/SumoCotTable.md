@@ -6,9 +6,9 @@ opens the CSV, it writes `<file stem>.summary.json`, which records the CSV's for
 and what made it. The CSV's own first line stays its header, so any CSV reader can read it.
 
 - Table schema: `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json` (Frictionless Table Schema)
-- Table schema id: `urn:carla-sumo-capture:schema:sumo_cot_telemetry:1`
+- Table schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1`
 - Summary schema: `CarlaControl/schemas/sumo_cot_telemetry_summary.schema.json` (JSON Schema)
-- Summary schema id: `urn:carla-sumo-capture:schema:sumo_cot_telemetry_summary:1`
+- Summary schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1`
 
 ## Who writes it and who reads it
 
