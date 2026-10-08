@@ -18,8 +18,12 @@ public sealed class SupervisionPlanTests
     private const string Arapahoe = "Arapahoe_I25_UnderpassDwell";
     private const string Gardnerville = "Gardnerville_Centerville_Lane_NeighborhoodOrbit";
 
-    /// <summary>The shipped Bahonar plan's vocabulary digest, over the core at version 3 and the bahonar namespace at version 2.</summary>
-    private const string BahonarDigest = "9b05590face51d69a086fb526cf1667108e8aa862b3024d55a01fed78abd7355";
+    /// <summary>
+    /// The shipped Bahonar plan's vocabulary digest, over the core at version 3 and the bahonar namespace at
+    /// version 2, as the plan records it: the reader recomputes it, and a recompiled plan records its own.
+    /// The digest's computation is pinned on a fixed document by <see cref="TheVocabularyIsDigestedByTheCompilersOwnCanonicalForm"/>.
+    /// </summary>
+    private static readonly string BahonarDigest = RecordedVocabularyDigest(Bahonar);
 
     private readonly ITestOutputHelper _output;
 
@@ -516,6 +520,12 @@ public sealed class SupervisionPlanTests
     private static AuthorTerm Term(AuthorNamespace space, string term) => space.Terms.Single(t => t.Term == term);
 
     internal static string ShippedPlan(string scenario) => ShippedFile(scenario, ".supervision.json");
+
+    private static string RecordedVocabularyDigest(string scenario)
+    {
+        using JsonDocument plan = JsonDocument.Parse(File.ReadAllText(ShippedPlan(scenario)));
+        return plan.RootElement.GetProperty("vocabulary_digest").GetString()!;
+    }
 
     private static string ShippedFile(string scenario, string extension) =>
         ScenarioLockCheckTests.RepositoryFile("Import", scenario + extension);
