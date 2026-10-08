@@ -192,7 +192,7 @@ Any other value, such as `0` or `"1"`, is refused, because the field accepts onl
 }
 ```
 
-Run it unattended, with the result written to a chosen place:
+Run it unattended, with the result written to a path you choose:
 
 ```
 carla-capture --run Import/Arapahoe_I25_SupervisionCheck.run.json --caller unattended --result out/check.result.json

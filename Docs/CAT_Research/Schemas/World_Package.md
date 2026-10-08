@@ -24,7 +24,7 @@ The world build writes it, in two steps:
 2. The same build then publishes the authoring reference set into the package (`carlacontrol.AuthoringReferenceSet`): `places.json`, `solar.json`, `areas.resolved.json` and, when areas of interest were declared, `areas.aoi.geojson`.\
    `carla-publish-reference-set` publishes it again for an existing package.\
    Publishing replaces the whole set.\
-   Writing the world again drops the set until it is published again.
+   Writing the world again removes the set until it is published again.
 
 These programs read it:
 
@@ -32,7 +32,7 @@ These programs read it:
   It needs no server.
 - A capture run and a SUMO drive read `world.json`, `map.xodr`, `map.net.xml` and `bareearth.bin`.\
   They check that the package describes the world the server has loaded.\
-  They seat each vehicle on the ground the grids describe.
+  They place each vehicle on the ground the grids describe.
 - The Unreal Editor's World Package Importer reads `world.json`, `map.xodr` and `bareearth.bin`, and saves them as assets of a new level.
 - `carla-cot-telemetry` reads the ground heights from `bareearth.bin`.
 

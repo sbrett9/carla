@@ -246,7 +246,7 @@ Every catalog the builder wrote carries it, so a file without it is not a catalo
   They refuse any other value, or none.\
   For a newer version the message says the file was written by a newer release.
 - `VehicleCatalogue.load` then checks the file against the schema and refuses it, naming each problem.\
-  Every vehicle and class entry must be whole.\
+  Every vehicle and class entry must be complete.\
   A header field that is present must have the right shape; one that is absent reads as empty.
 
 `carlacontrol.WorldFileValidator`, given the catalog's folder, checks:

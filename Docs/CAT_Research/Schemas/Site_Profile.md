@@ -45,7 +45,7 @@ SUMO is found in this order when no profile names `sumo.home`:
 | `server.host` | string | | no | `"127.0.0.1"` | The CARLA server's address. |
 | `server.port` | integer, at least 1 | | no | `2000` | The CARLA server's RPC port. |
 | `server.timeout_s` | number, above 0 | s | no | `30.0` | Seconds to wait for the server to answer a request. |
-| `sumo.home` | string or null | | no | `null` | The SUMO installation the session launches: the folder holding `bin/sumo`. Null, the session searches `SUMO_HOME` and then `PATH`. |
+| `sumo.home` | string or null | | no | `null` | The SUMO installation the session launches: the folder holding `bin/sumo`. When null, the session searches `SUMO_HOME` and then `PATH`. |
 | `paths.scenario_root` | string or null | | no | from the layout | Where compiled scenario packages are found by id. |
 | `paths.world_package_root` | string or null | | no | from the layout | Where world packages are found by the name a scenario lock records. |
 | `paths.catalogue` | string or null | | no | from the layout | The measured vehicle catalog. Its digest must match the scenario lock's (run check 48). |

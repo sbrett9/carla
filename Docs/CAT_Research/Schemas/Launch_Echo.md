@@ -16,12 +16,12 @@ The launch echo is what a capture run says it is about to do, before it acquires
 - the sun it will set;
 - the world;
 - which vehicles get a body;
-- the disk it will cost;
+- the disk space it will use;
 - where it writes;
 - the wait for each camera's view;
 - the warnings raised.
 
-The echo lets you see that a run is not the run you meant before any time is spent.
+The echo shows you a run that is not the one you meant before any time is spent.
 
 Every figure comes from the code that will act on it.\
 The echo also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.

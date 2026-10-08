@@ -186,7 +186,10 @@ Two examples:
   Its `hard_negative_for` is `bahonar:standoff_dwell_at_access_point`, `bahonar:arrival_without_departure` and `bahonar:posting_not_taken_up`.\
   The 21 routine freight hauls are `nominal` `bahonar:routine_freight_haul`, a hard negative for `bahonar:coordinated_group_transit` and `bahonar:destination_off_pattern`.
 
-So, for a behavior X, the record says three different things: a vehicle `annotated` with X is asserted to carry out X during its interval; a `nominal` vehicle whose `hard_negative_for` holds X is asserted not to, and was chosen because it resembles X; an `unlabelled` vehicle is asserted nothing.
+So, for a behavior X, the record says three different things.\
+A vehicle `annotated` with X is asserted to carry out X during its interval.\
+A `nominal` vehicle whose `hard_negative_for` holds X is asserted not to, and was chosen because it resembles X.\
+An `unlabelled` vehicle is asserted nothing.
 
 ## A label follows its vehicle
 

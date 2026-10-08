@@ -4,7 +4,8 @@ Some of what a scenario asserts is an absence: a guard who never arrives at a to
 No vehicle record can carry it, because there is no vehicle.
 
 A legacy scenario's labels file describes such gaps in its `anomaly_notes`.\
-When `carla-cot-telemetry` runs that scenario, it writes the gaps to this file, each with its time window placed on the run's own clock, so whoever holds the run's output can find the hours a gap covers.
+When `carla-cot-telemetry` runs that scenario, it writes the gaps to this file, each with its time window placed on the run's own clock.\
+This lets whoever holds the run's output find the hours a gap covers.
 
 This file is for legacy scenarios only.\
 A compiled scenario states its supervision in its compiled supervision plan, a different file that also ends in `.supervision.json`, and labels the vehicle that deviates rather than describing a gap.

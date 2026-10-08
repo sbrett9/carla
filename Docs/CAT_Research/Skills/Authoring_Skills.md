@@ -1,7 +1,7 @@
 # Authoring skills
 
 Reference bundles that an AI coding assistant loads to work on this repository.\
-Two kinds, kept apart on purpose.
+There are two kinds, and they are kept apart on purpose.
 
 ## This fork's skills: `CarlaControl/skills/`
 
@@ -39,7 +39,7 @@ That is true only while everything under it is this fork's own.
 
 **Do not edit the vendored files.**\
 A local fix is invisible to upstream and is lost at the next update.\
-Replace the directory wholesale from a fresh clone and move the pin, here and in `PROVENANCE.md`.
+Replace the whole directory from a fresh clone and move the pin, here and in `PROVENANCE.md`.
 
 ## Where an assistant finds skills
 

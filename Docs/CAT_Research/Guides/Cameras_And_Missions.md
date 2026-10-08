@@ -11,7 +11,7 @@ This page shows the other ways to work with cameras:
 It ends with the drive lease, which decides who may move vehicles while SUMO drives them.
 
 These pages use the installed command names.\
-[Getting started](Getting_Started.md#running-the-commands-from-a-checkout) lists the script each one is in a checkout.
+[Getting started](Getting_Started.md#running-the-commands-from-a-checkout) lists the script behind each one in a checkout.
 
 ## Where things are
 
@@ -199,7 +199,7 @@ It never advances the world's clock, never changes the world's settings, sun, we
 So you can start it before, during or after a drive.
 
 While a drive owns the clock, frames arrive at the drive's tick rate; when nothing does, at the server's own rate.\
-If no frame arrives for 3 seconds it says so once in the log, rather than look frozen.
+If no frame arrives for 3 seconds it says so once in the log, so that it does not look frozen.
 
 It records nothing.\
 To record, use `carla-capture` or `carla-drive`.

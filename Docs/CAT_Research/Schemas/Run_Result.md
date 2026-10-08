@@ -177,7 +177,7 @@ Every file these tools write carries a `producer` object:
 | `tool` | string | The component that wrote the file, here `carlacontrol.CaptureSession`. |
 | `tool_version` | string | The carlacontrol release, with the commit it was built at. |
 | `carlanet` | string or null | The CarlaNet release the process loaded. |
-| `server` | object or null | The CARLA server's build identity once the run reached a server. If it could not be had, `available` is false and a `reason` is given. |
+| `server` | object or null | The CARLA server's build identity once the run reached a server. If it could not be read, `available` is false and a `reason` is given. |
 | `sumo` | string or null | The SUMO release, once the session started SUMO. |
 | `written_utc` | string | When the file was written, ISO 8601 in UTC. |
 

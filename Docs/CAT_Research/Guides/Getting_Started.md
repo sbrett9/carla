@@ -62,7 +62,8 @@ Every command takes `--help`.
 - **SUMO 1.27.0, only if you want `sumo-gui`.**\
   The distribution's own SUMO has no `sumo-gui`.\
   If you want to watch a drive in SUMO's window, install SUMO 1.27.0 yourself.\
-  It must be the release that converted the world, which for the worlds this release builds is 1.27.0.
+  It must be the release that converted the world.\
+  For the worlds this release builds, that is 1.27.0.
 
 ## Set up
 

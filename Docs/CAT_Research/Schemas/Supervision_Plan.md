@@ -9,7 +9,7 @@
 
 ## What it is
 
-The supervision plan carries a scenario's labels, and it is the only place they travel.\
+The supervision plan holds a scenario's labels, and no other file carries them.\
 Every labeled assertion about authored vehicles and flows is fixed here at compile time.
 
 A run only binds these rows to the vehicles as they appear; it never adds one.\

@@ -63,7 +63,7 @@ Numbers are written with up to six significant digits and no trailing `.0`.
 
 A vehicle type is bound to the CARLA body it is drawn with through SUMO's generic `<param key="..." value="..."/>` element, which SUMO stores and never acts on.\
 Two files carry these parameters, in the same keys: this one, and the route file the scenario compiler writes for each scenario (`<scenario_id>.rou.xml`, see [SUMO files](SUMO_Files.md)).\
-They are the only parameters a compiled route file carries (check 52): labels never travel here, only in the supervision plan.
+They are the only parameters a compiled route file carries (check 52): labels never appear here, only in the supervision plan.
 
 Each `<vType>` has two or three of them, each key once:
 

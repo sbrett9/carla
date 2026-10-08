@@ -715,7 +715,7 @@ See [Sweep](../Schemas/Sweep.md) and [Sweep index](../Schemas/Sweep_Index.md).
 
 On Windows, compile a sweep into a folder with a short path, such as `C:\sweeps\shop_deliveries`.\
 A member's files are named after the member, so their paths get long.\
-SUMO cannot open a file whose full path is longer than 260 characters, and a member that hits that limit is refused.
+SUMO cannot open a file whose full path is longer than 260 characters, and a member that reaches that limit is refused.
 
 ### Sweeping the light
 

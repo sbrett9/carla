@@ -105,7 +105,7 @@ Every other lamp of every body is `unlit`.\
 So with this catalog, a `brake` or a `right_blinker` in the truth means the lamp was commanded.\
 The picture is not expected to show it lit.
 
-The lamp names match between the two files except two.\
+The sidecar and the catalog use the same lamp names, except for two.\
 The sidecar writes `special1` and `special2`; the catalog writes `special_1` and `special_2`.
 
 ## Color

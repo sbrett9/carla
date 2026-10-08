@@ -3,7 +3,7 @@
 `world.json` says what a generated world is:
 
 - where it sits on the Earth;
-- how its roads were seated on the photoreal imagery;
+- how its roads were aligned with the photoreal imagery;
 - which imagery it streams;
 - where traffic may enter and leave;
 - how it was built.
@@ -53,7 +53,7 @@ The current writer writes every field.
 | `OriginLongitude` | number | degrees | yes | Longitude of CARLA's (0, 0). |
 | `OriginHeightMeters` | number | meters | yes | Ellipsoidal height that CARLA's z = 0 stands for. |
 | `GeoReferenceString` | string | | no | The OpenDRIVE projection, a PROJ string, copied from `map.xodr`. Empty when `map.xodr` has none. |
-| `HeightAlignMode` | string | | yes | How roads were seated on the photoreal imagery: `none`, `area`, `origin` or `drape`. |
+| `HeightAlignMode` | string | | yes | How roads were aligned with the photoreal imagery: `none`, `area`, `origin` or `drape`. |
 | `DrapeActive` | boolean | | yes | `true` when the drivable surface was fitted to the imagery point by point. Then `bareearth.bin` holds the grids. |
 | `HeightAlignOffsetMeters` | number | meters | yes | The one height added to the road surface by the `area` and `origin` modes. 0 for `none` and for `drape`. |
 | `GridMinXMeters` | number | meters | no | CARLA x of the grid's first column. 0 when there is no grid. |

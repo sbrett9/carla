@@ -29,7 +29,7 @@ If swapping the two would put an area inside the extract, the reader names the l
   It reads the resolved table in the world package, and refuses an `aoi_ref` that names no area there (check 20).
 - The reader refuses the whole file, naming every problem.\
   It also refuses a file that does not conform to the schema.\
-  It warns and carries on for an altitude on a position, a property it does not read, and a `crs` member.
+  It warns and keeps reading for an altitude on a position, a property it does not read, and a `crs` member.
 
 ## Fields
 
