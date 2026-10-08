@@ -215,10 +215,16 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 				Copied->RoadNetwork = Network;
 			}
 
+			// Assign the loaded asset, as for the road network. A soft path built from the package name
+			// alone has no asset name, so it loads nothing. The world then has no drivable ground.
 			const FString FieldCopy = FString::Printf(TEXT("/%s/%s_BareEarthField"), *Name, *Name);
 			if (UEditorAssetLibrary::DoesAssetExist(FieldCopy))
 			{
-				Copied->OffsetField = TSoftObjectPtr<UBareEarthOffsetField>(FSoftObjectPath(FieldCopy));
+				if (UBareEarthOffsetField* Field =
+						Cast<UBareEarthOffsetField>(UEditorAssetLibrary::LoadAsset(FieldCopy)))
+				{
+					Copied->OffsetField = Field;
+				}
 			}
 
 			UEditorAssetLibrary::SaveAsset(SettingsCopy, false);
