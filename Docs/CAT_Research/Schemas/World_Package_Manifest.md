@@ -1,43 +1,52 @@
 # World package manifest (`world.json` in a `.cwp`)
 
-`world.json` says what a generated world is: where it sits on the Earth, how its roads were seated on
-the photoreal imagery, which imagery it streams, where traffic may enter and leave, and how it was
-built. It is the one entry every world package must have. See [World_Package.md](World_Package.md) for
-the other entries.
+`world.json` says what a generated world is:
 
-This is a different file from the `world.json` in a level package. That one is described in
-[Level_Package_Manifest.md](Level_Package_Manifest.md).
+- where it sits on the Earth
+- how its roads were aligned with the photoreal imagery
+- which imagery it streams
+- where traffic can enter and leave
+- how it was built
+
+It is the one entry every world package must have.\
+See [World_Package.md](World_Package.md) for the other entries.
+
+This is a different file from the `world.json` in a level package.\
+That one is described in [Level_Package_Manifest.md](Level_Package_Manifest.md).
 
 - Schema: `CarlaControl/schemas/world_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:world-package-manifest:1`
 
 ## Who writes it and who reads it
 
-CarlaNet's `WorldPackage.Write` writes it when the world build writes the package. The build reads the
-origin and the staging rectangle back from the server, so the file records what the world ended up
-with, not what was asked for. The file is indented JSON, UTF-8, with PascalCase keys. The writer writes
-every field, in the order of the table below.
+When the world build writes the package, CarlaNet's `WorldPackage.Write` writes this file.\
+The build reads the origin and the staging rectangle (the extent of the area traffic uses) back from the server.\
+So the file records what the world ended up with, not what was asked for.
+
+The file is indented JSON, UTF-8, with PascalCase keys.\
+The writer writes every field, in the order of the table below.
 
 These read it:
 
-- CarlaNet's `WorldPackage.ReadManifest`, which a SUMO drive and a capture run use to check the
-  package against the world the server has loaded;
-- carlacontrol's `WorldPackageReader`, which the scenario compiler, the capture run's configuration
-  and `carla-publish-reference-set` use;
-- the Unreal Editor's World Package Importer, which copies the origin, the height settings, the imagery
-  layers, the staging rectangle and the provenance fields into the level's world settings asset.
+- CarlaNet's `WorldPackage.ReadManifest`\
+  A SUMO drive and a capture run use it to make sure that the package matches the world loaded on the server.
+- carlacontrol's `WorldPackageReader`\
+  The scenario compiler, the capture run's configuration and `carla-publish-reference-set` use it.
+- The Unreal Editor's World Package Importer\
+  It copies the origin, the height settings, the imagery layers, the staging rectangle and the provenance fields into the level's world settings asset.
 
 ## Frames and units
 
-- Positions are in CARLA's frame: meters, x east, y south, z up. CARLA's (0, 0) is at
-  `OriginLatitude`, `OriginLongitude`.
-- Heights are WGS84 ellipsoidal heights in meters. CARLA's z = 0 is `OriginHeightMeters`.
+- Positions are in CARLA's frame: meters, x east, y south, z up.\
+  CARLA's (0, 0) is at `OriginLatitude`, `OriginLongitude`.
+- Heights are WGS84 ellipsoidal heights in meters.\
+  CARLA's z = 0 is `OriginHeightMeters`.
 - Latitude and longitude are WGS84 degrees.
 
 ## Fields
 
-"Required" means CarlaNet's reader refuses a manifest without the field. The current writer writes
-every field.
+"Required" means CarlaNet's reader refuses a manifest without the field.\
+The current writer writes every field.
 
 | Field | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -47,16 +56,16 @@ every field.
 | `OriginLatitude` | number | degrees | yes | Latitude of CARLA's (0, 0). |
 | `OriginLongitude` | number | degrees | yes | Longitude of CARLA's (0, 0). |
 | `OriginHeightMeters` | number | meters | yes | Ellipsoidal height that CARLA's z = 0 stands for. |
-| `GeoReferenceString` | string | | no | The OpenDRIVE projection, a PROJ string, copied from `map.xodr`. Empty when `map.xodr` has none. |
-| `HeightAlignMode` | string | | yes | How roads were seated on the photoreal imagery: `none`, `area`, `origin` or `drape`. |
-| `DrapeActive` | boolean | | yes | `true` when the drivable surface was fitted to the imagery point by point. Then `bareearth.bin` holds the grids. |
+| `GeoReferenceString` | string | | no | The OpenDRIVE projection, a PROJ string, copied from `map.xodr`. If `map.xodr` has none, it is empty. |
+| `HeightAlignMode` | string | | yes | How roads were aligned with the photoreal imagery: `none`, `area`, `origin` or `drape`. |
+| `DrapeActive` | boolean | | yes | Whether the drivable surface was fitted to the imagery point by point. If it is `true`, `bareearth.bin` holds the grids. |
 | `HeightAlignOffsetMeters` | number | meters | yes | The one height added to the road surface by the `area` and `origin` modes. 0 for `none` and for `drape`. |
 | `GridMinXMeters` | number | meters | no | CARLA x of the grid's first column. 0 when there is no grid. |
 | `GridMinYMeters` | number | meters | no | CARLA y of the grid's first row. 0 when there is no grid. |
 | `GridCellSizeMeters` | number | meters | no | Spacing between grid points. 0 when there is no grid. |
 | `GridNumCols` | integer | | no | Grid points along x. 0 when there is no grid. |
 | `GridNumRows` | integer | | no | Grid points along y. 0 when there is no grid. |
-| `BareEarthOffsetSha1` | string | | no | SHA-1, lowercase hexadecimal, of the offset plane's bytes in `bareearth.bin`. Empty when there is no grid, and on packages written before it was recorded. |
+| `BareEarthOffsetSha1` | string | | no | SHA-1, lowercase hexadecimal, of the offset plane's bytes in `bareearth.bin`. If there is no grid, it is empty. It is also empty on packages written before it was recorded. |
 | `BareEarthDtmSha1` | string | | no | SHA-1 of the ground height plane's bytes in `bareearth.bin`. Empty as above. |
 | `PhotorealIonAssetId` | integer | | no | Cesium ion asset id of the photoreal imagery. |
 | `GroundIonAssetId` | integer | | no | Cesium ion asset id of the bare-earth terrain the road heights came from. 1 is Cesium World Terrain. 0 means the heights came from the photoreal surface. |
@@ -66,10 +75,10 @@ every field.
 | `StagingMaxYMeters` | number | meters | no | South edge of the staging rectangle, CARLA y. |
 | `StagingMarginMeters` | number | meters | no | Width of the ring inside the staging rectangle where traffic enters and leaves. |
 | `SourceOsmFileName` | string | | no | File name of the OpenStreetMap extract the world was built from. |
-| `SourceOsmSha256` | string | | no | Fingerprint of that extract: SHA-256 over its parsed content, so two copies of one extract match whatever order their elements are in. Older packages hold a SHA-256 of the file's bytes instead. |
-| `OpenDriveSha256` | string | | no | SHA-256 of `map.xodr` from its root element on, with the header's `date` blanked, so two builds of one world compare equal. |
+| `SourceOsmSha256` | string | | no | Fingerprint of that extract: SHA-256 over its parsed content. Two copies of one extract match whatever order their elements are in. Older packages hold a SHA-256 of the file's bytes instead. |
+| `OpenDriveSha256` | string | | no | SHA-256 of `map.xodr` from its root element on, with the header's `date` blanked. Two builds of one world then compare equal. |
 | `NetworkFingerprint` | string | | no | Fingerprint of `map.net.xml`: SHA-256 over its parsed content. Empty on a package without a network. A scenario records it and is refused against a package whose network differs. |
-| `NetconvertArgv` | array of strings | | no | Every argument netconvert was given, in order. Its output files appear as `<opendrive-output>` and `<output-file>`, and a ramp meter program file as `<tllogic-files>`. The input extract appears as the path the build used. |
+| `NetconvertArgv` | array of strings | | no | Every argument netconvert was given, in order. Its output files appear as `<opendrive-output>` and `<output-file>`. A ramp meter program file appears as `<tllogic-files>`. The input extract appears as the path the build used. |
 | `NetconvertPath` | string | | no | The netconvert program that ran. Empty on older packages. |
 | `NetconvertVersion` | string | | no | What that netconvert reported as its version, such as `Eclipse SUMO netconvert 1.27.0`. Empty on older packages. |
 | `SampleStepMeters` | number | meters | no | Spacing of the height samples along each road's reference line (`--step`). |
@@ -79,7 +88,8 @@ every field.
 | `GeneratorVersion` | string | | no | Assembly version of the CarlaNet client that wrote the package, such as `1.0.0.0`. |
 | `NetconvertExtraArgs` | array of strings | | no | The arguments, among `NetconvertArgv`, that the build added to the standard set, such as the road filter. |
 
-No other field is allowed. The Cesium ion access token is never recorded.
+No other field is allowed.\
+The Cesium ion access token is never recorded.
 
 ### The height modes
 
@@ -89,12 +99,13 @@ No other field is allowed. The Cesium ion access token is never recorded.
 | `area`, `origin` | `false` | the one shift added to roads and ground | absent |
 | `drape` | `true` | 0 | present |
 
-In every mode the truth a capture records is bare-earth height. The shift exists only so that vehicles
-are drawn on the photoreal surface.
+In every mode the truth a capture records is bare-earth height.\
+The shift exists only so that vehicles are drawn on the photoreal surface.
 
 ### The producer record
 
-`Producer` is the record every file our tools write carries. Its keys are snake_case:
+`Producer` is the record every file these tools write carries.\
+Its keys are snake_case:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -105,28 +116,37 @@ are drawn on the photoreal surface.
 | `sumo` | string or null | yes | The SUMO release where SUMO ran, such as `1.27.0`. |
 | `written_utc` | string | no | When the file was written, ISO 8601 UTC to the millisecond. |
 
-A server that answered has `available` `true` and `release`, `world_interface`, `build` (`package` or
-`editor`), `configuration`, `carla_commit`, `content_commit`, `engine_commit` and `commits_from`
-(`version_file`, `compiled` or `none`). A server that could not answer has `available` `false`,
-`release`, `world_interface` and `reason`. A value the server cannot know is the word `unknown`.
+A server that answered has `available` `true` and:
+
+- `release`
+- `world_interface`
+- `build` (`package` or `editor`)
+- `configuration`
+- `carla_commit`, `content_commit` and `engine_commit`
+- `commits_from` (`version_file`, `compiled` or `none`)
+
+A server that did not answer has `available` `false`, `release`, `world_interface` and `reason`.\
+A value the server cannot know is the word `unknown`.
 
 ## Format version
 
-`FormatVersion` is 1. A manifest that has no `FormatVersion` is read as version 1, which is the shape
-packages written before the field existed have.
+`FormatVersion` is 1.\
+A manifest that has no `FormatVersion` is read as version 1.\
+Packages written before the field existed have that shape.
 
-- CarlaNet's reader and carlacontrol's reader refuse a manifest whose `FormatVersion` is newer than
-  they support, or is not an integer. The message names the file, the version it declares and the
-  newest the reader supports. They check the version before any other field.
+- CarlaNet's reader and carlacontrol's reader refuse a manifest whose `FormatVersion` is newer than they support, or is not an integer.\
+  The message names the file, the version it declares and the newest the reader supports.\
+  They make sure that the version is acceptable before they look at any other field.
 - The Unreal importer refuses a `FormatVersion` above 1.
-- carlacontrol's reader then checks every field the manifest carries against the schema, and refuses a
-  field of the wrong type or a field the schema does not name. It does not insist on the required
-  fields, because it reads only some of them.
+- carlacontrol's reader then makes sure that every field the manifest carries matches the schema.\
+  It refuses a field of the wrong type or a field the schema does not name.\
+  It does not insist on the required fields, because it reads only some of them.
 
 ## Example
 
-A draped world. The `Producer` values are typical of a package written by `carla-build-world`, which
-names itself and carlacontrol's release.
+A draped world.\
+The `Producer` values are typical of a package written by `carla-build-world`.\
+That tool names itself and carlacontrol's release.
 
 ```json
 {
@@ -179,5 +199,5 @@ names itself and carlacontrol's release.
 }
 ```
 
-The writer escapes some characters as `\uXXXX` (a `+` is written `\u002B`, `<` is `\u003C`). Any JSON
-reader decodes them.
+The writer escapes some characters as `\uXXXX` (a `+` is written `\u002B`, `<` is `\u003C`).\
+Any JSON reader decodes them.

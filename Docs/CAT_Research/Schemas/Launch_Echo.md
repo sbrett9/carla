@@ -9,24 +9,32 @@
 
 ## What it is
 
-The launch echo is what a capture run says it is about to do, before it acquires the world or starts
-SUMO: the simulated and civil span of the window, how many captures it will make, the sun it will
-set, the world, which vehicles get a body, the disk it will cost, where it writes, the wait for each
-camera's view, and the warnings raised. It lets you see that a run is not the run you
-meant before any time is spent.
+The launch echo is what a capture run says it is about to do, before it acquires the world or starts SUMO:
 
-Every figure comes from the code that will act on it. It also says what it cannot predict, in
-`not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
+- the simulated and civil span of the window
+- how many captures it will make
+- the sun it will set
+- the world
+- which vehicles get a body
+- the disk space it will use
+- where it writes
+- the wait for each camera's view
+- the warnings raised
+
+Before any time is spent, the echo shows you a run that is not the one you meant.
+
+Every figure comes from the code that will act on it.\
+The echo also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
 
 ## Who writes it and who reads it
 
-- **`carla-capture` computes it** once, after the offline checks accept and before anything is
-  acquired. An attended run prints it at the terminal.
-- It is written into the run's resolution report and its result, as `launch_echo`. Both are null
-  when the offline checks refused before the echo was computed.
-- **An `expect` entry in the run configuration reads it**: `expect` can name any value here as
-  `launch_echo.<path>`, such as `launch_echo.captures.total`, and the launch is refused if the value
-  is not what the caller expected (run check 35).
+- `carla-capture` computes it once, after the offline checks accept and before anything is acquired.\
+  An attended run prints it at the terminal.
+- It is written into the run's resolution report and its result, as `launch_echo`.\
+  If the offline checks refused before the echo was computed, both are null.
+- An `expect` entry in the run configuration reads it.\
+  `expect` can name any value here as `launch_echo.<path>`, such as `launch_echo.captures.total`.\
+  If the value is not what the caller expected, the launch is refused (run check 35).
 
 ## Fields
 
@@ -56,21 +64,21 @@ Every figure comes from the code that will act on it. It also says what it canno
 | `civil.first_rendered` | string | | The first rendered instant in civil time. |
 | `civil.epoch` | string | | The scenario's epoch in one line. |
 | `sun.policy` | one of `freeze_at_window_start`, `advance`, `freeze_at`, `ignore` | | What the sun does across the window. |
-| `sun.binds` | boolean | | Whether the policy sets the sun. False only for `ignore`, which leaves the world's sun alone and adds a `statement`. |
+| `sun.binds` | boolean | | Whether the policy sets the sun. False only for `ignore`. That policy leaves the world's sun alone and adds a `statement`. |
 | `sun.advances` | boolean | | Whether the sun moves across the window. |
 | `sun.rate` | number or null | sun s per sim s | Under `advance`, the sun's rate. |
 | `sun.elevation_kind` | string | | What the elevations are: `refraction_corrected`. |
 | `sun.window_open_s` | number | s | The simulated second the window opens and the sun is set. |
 | `sun.at_begin`, `sun.at_end` | object | | The sun at the window's first and last instant: `seconds`, `sun_date`, `sun_clock`, `elevation_deg`, `geometric_elevation_deg`, `azimuth_deg` (degrees clockwise from north) and `band`. |
 | `sun.held_at` | string | | For a frozen sun, the date and clock it is held at. |
-| `sun.held_at_note` | string | | When the sun is pinned, and what the prewarm is lit by. |
+| `sun.held_at_note` | string | | A note on when the sun is pinned and what the prewarm is lit by. |
 | `world.map_name` | string | | The world's map name. |
 | `world.package` | string | | The world package's file name. |
 | `world.network_fingerprint` | string | | The canonical fingerprint of the world's SUMO network. |
 | `world.origin` | array of 2 numbers | degrees | Latitude and longitude of the map's origin. |
 | `render.set` | `all`, `circle` or `cameras` | | Which vehicles get a body. |
 | `render.region` | object or null | m | The render region, `{x_m, y_m, radius_m}`. |
-| `render.hysteresis_m`, `render.min_pixels`, `render.admit_lead_s`, `render.release_lag_s`, `render.cap` | number | | The render set's settings as resolved. |
+| `render.hysteresis_m`, `render.min_pixels`, `render.admit_lead_s`, `render.release_lag_s`, `render.cap` | number | | The render set's configuration as resolved. |
 | `render.limited` | boolean | | Whether an optional limit leaves vehicles without a body. |
 | `render.vehicles` | string | | Which vehicles get a body, in words. |
 | `render.left_out` | string or null | | What a limit leaves out. Null with no limit. |
@@ -93,20 +101,21 @@ Every figure comes from the code that will act on it. It also says what it canno
 | `readiness.picture` | string | | What the picture's wait compares, or that it is not run. |
 | `readiness.tiles_ceiling_s` | number | s | Wall-clock seconds a view has for its tiles. |
 | `readiness.tiles_hold_s` | number | s | When the picture is not waited on: the tiles' lead before the window, in simulated seconds. |
-| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only when the picture-settled wait is on: how the comparison skips the parts of the picture that drawn vehicles cover, and the wait's ceiling and tolerance. |
-| `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins, and the window's opening. |
+| `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only with the picture-settled wait on. The first says how the comparison skips the parts of the picture that drawn vehicles cover. The other three give the wait's ceiling and tolerance. |
+| `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins and where the window opens. |
 | `readiness.traffic_stare_holds_from_s` | number or null | s | Where a stare aimed at the traffic stops following it. Null with no such stare. |
-| `readiness.not_ready`, `readiness.per_capture` | string | | What happens to a view that is not ready, and what is not recorded per capture. |
+| `readiness.not_ready`, `readiness.per_capture` | string | | The first says what happens to a view that is not ready. The second says what is not recorded per capture. |
 | `warnings` | array of strings | | The codes of the warnings the offline checks raised. |
 | `not_predicted` | array of strings | | What the echo cannot say before the run. |
 
-`band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and
-`night`.
+`band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and `night`.
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads the echo back from a file. A reader
-should read version 1 and refuse a newer version rather than read it in part.
+This page describes version 1, the only version.\
+No tool reads the echo back from a file.\
+If you write a reader, have it read version 1.\
+Have it refuse a newer version rather than read it in part.
 
 ## Example
 

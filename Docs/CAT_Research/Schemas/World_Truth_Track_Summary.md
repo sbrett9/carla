@@ -1,40 +1,46 @@
 # World truth track summary
 
-**Schema:** `CarlaControl/schemas/world_truth_track_summary.schema.json` (JSON Schema 2020-12)
-**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track-summary:2`
+**Schema:** `CarlaControl/schemas/world_truth_track_summary.schema.json` (JSON Schema 2020-12)\
+**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track-summary:2`\
 **Format version described:** 2 (`world_truth_track_version`)
 
 ## What the file is
 
-The summary sits beside a world truth track, with the track's name and `.summary.json` for its
-extension: `truth/world_truth_track.summary.json` in a capture folder. It holds the track's format
-version, what made it, its columns and sampling rate, what it holds so far and why the run ended.
+The summary sits beside a world truth track.\
+It takes the track's name, with `.summary.json` for its extension: `truth/world_truth_track.summary.json` in a capture folder.\
+It holds:
 
-## Who writes it, and when
+- the track's format version
+- what made it
+- its columns and sampling rate
+- what it holds so far
+- why the run ended
 
-The SUMO drive session writes it with the track: once when the track opens, and again when the run ends.
-Each time it writes the whole file under a temporary name and renames it into place, so a reader never
-sees half a summary. A summary whose `ended` is null belongs to a track still being written, or to a run
-that was killed.
+## Who writes it and when
+
+The SUMO drive session writes it twice, with the track: as the track opens and as the run ends.\
+Each time, it writes the whole file under a temporary name and renames it into place.\
+So a reader never sees half a summary.\
+A summary whose `ended` is null belongs to a track still being written, or to a run that was killed.
 
 ## Fields
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `world_truth_track_version` | integer, always 2 | | Yes | The format version of the track and its summary. |
-| `producer` | object | | No | What made the track, stamped each time the summary is written, in the same shape as a manifest's or a still's (see the `carla:capture` page); absent from a summary written before summaries carried it. |
+| `producer` | object | | No | What made the track, stamped each time the summary is written. It has the same shape as a manifest's or a still's (see the `carla:capture` page). Absent from a summary written before summaries carried it. |
 | `track` | string | | Yes | The track's file name, beside the summary. |
 | `columns` | array of strings | | Yes | The track's columns, in order: its header line. Version 2 has exactly the 41 columns on the World truth track page. |
 | `instant` | string, always `traci_clock` | | Yes | Every row's `sim_time_s` is TraCI's clock for the SUMO frame the row describes. |
 | `sumo_step_s` | number | seconds | Yes | SUMO's step length. |
 | `interval_s` | number | seconds | Yes | Simulated time between samples. |
-| `every_sumo_steps` | integer | | Yes | How many SUMO frames apart the samples are; 1 samples every frame. |
+| `every_sumo_steps` | integer | | Yes | How many SUMO frames apart the samples are. A value of 1 samples every frame. |
 | `outside_window_interval_s` | null, always | | Yes | Nothing is written outside the capture window. |
 | `samples` | integer | | Yes | Samples written so far. |
 | `rows` | integer | | Yes | Rows written so far, one per vehicle per sample. |
-| `first_sample_s` | number or null | seconds | Yes | The first sample's instant; null before one is written. |
-| `last_sample_s` | number or null | seconds | Yes | The last sample's instant; null before one is written. |
-| `ended` | object or null | | Yes | How the run ended (below); null while the track is being written, or where the run was killed. |
+| `first_sample_s` | number or null | seconds | Yes | The first sample's instant. Null before one is written. |
+| `last_sample_s` | number or null | seconds | Yes | The last sample's instant. Null before one is written. |
+| `ended` | object or null | | Yes | How the run ended (below). Null while the track is being written, or where the run was killed. |
 
 `ended`:
 
@@ -44,21 +50,24 @@ that was killed.
 | `stage` | string | | Only where `reason` is `run_stopped` | The stage the run stopped at: `Validation`, `Launch`, `Authority`, `PreRoll` or `Window`. |
 | `cause` | string | | Only where `reason` is `run_stopped` | Why it stopped: `sumo-connection-lost`, `world-connection-lost`, `world-tick-timeout`, `solar-state-disagreement`, `missing-blueprint` or `none`. |
 | `last_sumo_frame_s` | number | seconds | Yes | The last SUMO frame read. |
-| `last_rendered_s` | number or null | seconds | Yes | The last frame rendered; null where none was. |
+| `last_rendered_s` | number or null | seconds | Yes | The last frame rendered. Null where none was. |
 | `last_rendered_frame` | integer or null | | Yes | That frame's number. |
 
 Once `ended` is set, `rows` equals the number of rows in the track.
 
 ## Format version
 
-This page describes `world_truth_track_version` 2, which is also the track's version. Summaries written
-before the producer record was added have no `producer` and are valid against this schema. A summary
-without `world_truth_track_version` is version 1, an older shape this schema does not describe. Readers
-read a version they know and refuse a newer one by name rather than reading it in part.
+This page describes `world_truth_track_version` 2.\
+That is also the track's version.\
+Summaries written before the producer record was added have no `producer` and are valid against this schema.
+
+A summary without `world_truth_track_version` is version 1, an older shape this schema does not describe.\
+Readers read a version they know and refuse a newer one by name rather than reading it in part.
 
 ## Example
 
-The file lists each column on a line of its own; they are run together here.
+The file lists each column on a line of its own.\
+They are run together here.
 
 ```json
 {
@@ -110,5 +119,5 @@ The file lists each column on a line of its own; they are run together here.
 
 ## Checking a file
 
-`carla-validate <capture folder>` checks the summary against this schema and, once the run has ended,
-that it counts the rows the track holds.
+`carla-validate <capture folder>` checks the summary against this schema.\
+After the run ends, it also checks that the summary counts the rows the track holds.

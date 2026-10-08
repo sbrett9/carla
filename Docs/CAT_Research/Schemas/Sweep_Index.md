@@ -9,34 +9,38 @@
 
 ## What it is
 
-The sweep index lists what a sweep compiled. For every member it gives:
+The sweep index lists what a sweep compiled.\
+A sweep is many runs of one scenario with parameters varied.\
+For every member it gives:
 
-- the axis values the member took;
-- its epoch and illumination;
-- the SHA-256 of each file its lock digests;
-- its capture windows, with their civil dates and the sun each opens under.
+- the axis values the member took
+- its epoch and illumination
+- the SHA-256 of each file its lock digests
+- its capture windows, with their civil dates and the sun each opens under
 
-It also lists every counterfactual pair and every finding. The index is how you find the member that
-holds a given combination of values, and how you tell two members apart.
+It also lists every counterfactual pair (two members that differ in one actor only) and every finding.\
+The index is how you find the member that holds a given combination of values and tell two members apart.
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario --sweep FILE --out-dir DIR`** writes it into `DIR`, beside the members'
-  folders. Each member is compiled in full into `DIR/<member id>/`, with its own specification,
-  lock, resolution report and supervision plan.
-- It is written whether the sweep compiled or was refused. A sweep refused before its members were
-  made, for example by its own schema, has only `sweep_version`, `producer`, `sweep_id`, empty
-  `members` and `pairs`, its `findings` and the `outcome`.
-- No tool reads it as input. It is for a scenario developer and for the scripts that schedule
-  captures of the members.
+- `carla-compile-scenario --sweep FILE --out-dir DIR` writes it into `DIR`, beside the members' folders.\
+  Each member is compiled in full into `DIR/<member id>/`, with its own specification, lock, resolution report and supervision plan.
+- It is written whether the sweep compiled or was refused.\
+  A sweep refused before its members were made, for example by its own schema, has only:
+  - `sweep_version`, `producer` and `sweep_id`
+  - empty `members` and `pairs`
+  - its `findings`
+  - the `outcome`
+- No tool reads it as input.\
+  It is for a scenario developer and for the scripts that schedule captures of the members.
 
 ## Fields
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `sweep_version` | constant `1` | yes | The format version of the sweep compiled, and of this index. |
+| `sweep_version` | constant `1` | yes | The format version of both the sweep compiled and this index. |
 | `producer` | object | no | What wrote the file, with the SUMO release that routed the members. See [Run result](Run_Result.md#the-producer-record). |
-| `sweep_id` | string or null | yes | The sweep's id. Null when the sweep file gave none. |
+| `sweep_id` | string or null | yes | The sweep's id. If the sweep file gave none, it is null. |
 | `members` | array | yes | Every member, the twins of counterfactual pairs included. See below. |
 | `pairs` | array | yes | Every counterfactual pair. See below. |
 | `findings` | array | yes | The sweep's own findings and every member's refusals: `check`, `outcome`, `subject`, `message`. |
@@ -44,7 +48,7 @@ holds a given combination of values, and how you tell two members apart.
 | `base_sha256` | string, 64 hex digits | no | SHA-256 of the base specification. |
 | `pairing` | `cross` or `zip` | no | How the axes were combined. |
 | `illumination` | `hold`, `vary` or `factorial` | no | How the sweep treats axes that change the light. |
-| `axes` | array | no | Each axis: `path`, `values`, and `illumination_axis`, whether it changes the light. |
+| `axes` | array | no | Each axis: `path`, `values` and `illumination_axis`, whether it changes the light. |
 | `outcome` | `compiled` or `refused` | yes | Whether every member compiled. |
 
 ### A member (`members[]`)
@@ -59,7 +63,7 @@ holds a given combination of values, and how you tell two members apart.
 | `epoch_block_sha256` | string | compiled only | SHA-256 of the member's epoch. |
 | `illumination` | object | compiled only | The member's illumination default. |
 | `files` | object | compiled only | Each file the member's lock digests, by role, to its SHA-256. |
-| `windows` | array | compiled only | Each capture window: `id`, `civil_begin`, `civil_date`, and `sun_open`, the sun at its opening (or null). |
+| `windows` | array | compiled only | Each capture window: `id`, `civil_begin`, `civil_date` and `sun_open`, the sun at its opening (or null). |
 | `counterfactual` | object | twins only | The pair this member is the twin in. |
 
 ### A pair (`pairs[]`)
@@ -71,15 +75,17 @@ holds a given combination of values, and how you tell two members apart.
 | `actor` | string | The actor the twin changes. |
 | `mode` | `absent`, `nominal` or `displaced` | How the twin differs. |
 | `displaced_in` | array of `time`, `space` | For `displaced`: how it was moved. |
-| `illumination_differs` | boolean | Whether the twin is lit differently: true only when displaced in time. |
+| `illumination_differs` | boolean | Whether the twin is lit differently. It is true only for a twin displaced in time. |
 | `trajectories_expected_to_match` | constant `false` | Car-following reacts to what is in front, so later trajectories differ. |
 | `statement` | string | The same, in words. |
 
 ## Versions
 
-This page describes version 1, the only version. No tool reads an index as input. A reader should
-read version 1 and refuse a newer version rather than read it in part. The skill's recorded example
-leaves out `producer`. It is still version 1.
+This page describes version 1, the only version.\
+No tool reads an index as input.\
+In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
+
+The skill's recorded example leaves out `producer` but is still version 1.
 
 ## Example
 

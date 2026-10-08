@@ -9,38 +9,39 @@
 
 ## What it is
 
-A sweep is many runs of one scenario with parameters varied. It names a base specification, the axes
-to vary over it, and counterfactual pairs. The compiler compiles every member in full, each in its
-own folder, so a member that would not route fails at compile time and not partway through a set of
-captures.
+A sweep is many runs of one scenario with parameters varied.\
+It names a base specification, the axes to vary over it and counterfactual pairs.\
+The compiler compiles every member in full, each in its own folder.\
+So a member that does not route fails at compile time, not partway through a set of captures.
 
-A member's id comes from the base scenario's id and the member's axis values, with no counter and no
-time in it, so members can be joined across rebuilds.
+A member's id comes from the base scenario's id and the member's axis values.\
+It holds no counter and no time, so members can be joined across rebuilds.
 
-**Light is an axis of its own.** Any axis whose path touches `epoch`, `illumination` or a capture
-window's `begin` changes the light, whatever it is declared as. `illumination` says how the sweep
-treats such axes. `hold` refuses them, `vary` refuses any other kind, and `factorial` allows both and
-warns that the result is not a controlled comparison of either (check 43).
+Light is an axis of its own.\
+Any axis whose path touches `epoch`, `illumination` or a capture window's `begin` changes the light.\
+This is true whatever kind the axis is declared as.
 
-A counterfactual pair holds the inputs fixed except one actor. The mode says how the twin differs:
+`illumination` says how the sweep treats such axes (check 43).\
+`hold` refuses them.\
+`vary` refuses any other kind.\
+`factorial` allows both and warns that the result is not a controlled comparison of either.
 
-- `absent` removes the actor;
-- `nominal` keeps its type, route and timing, removes what you name (`stops` or `via`) and labels it
-  nominal;
+A counterfactual pair holds the inputs fixed except one actor.\
+The mode says how the twin (the member that changes the actor) differs:
+
+- `absent` removes the actor.
+- `nominal` keeps its type, route and timing, removes what you name (`stops` or `via`) and labels it nominal.
 - `displaced` moves it by a time `shift` and/or by place substitutions (`places`).
 
-Car-following models react to what is in front of them, so a pair is identical inputs except one
-vehicle, never identical trajectories.
+Car-following models react to what is in front of them, so a pair is identical inputs except one vehicle, never identical trajectories.
 
 ## Who writes it and who reads it
 
-- **A scenario developer writes it**, beside the base specification.
-- **`carla-compile-scenario --sweep FILE --out-dir DIR`** reads it, checks it against this schema
-  (check 53), compiles each member into `DIR/<member id>/`, and writes the
-  [Sweep index](Sweep_Index.md) into `DIR`.
+- A scenario developer writes it, beside the base specification.
+- `carla-compile-scenario --sweep FILE --out-dir DIR` reads it, checks it against this schema (check 53), compiles each member into `DIR/<member id>/` and writes the [Sweep index](Sweep_Index.md) into `DIR`.
 
-The schema ships with the authoring skill. `carla-compile-scenario --write-sweep-schema PATH` writes
-it.
+The schema ships with the authoring skill.\
+`carla-compile-scenario --write-sweep-schema PATH` writes it.
 
 ## Fields
 
@@ -53,7 +54,7 @@ it.
 | `axes[].path` | string | yes | | The specification field to vary, such as `seeds.sumo` or `actors.probe.stops[0].duration`. A list entry is named by its `id`, `name`, `class_id`, `series_id` or `flow`. `epoch.date` moves the epoch's date and keeps it valid. |
 | `axes[].values` | array, at least one | yes | | The values the field takes. |
 | `axes[].kind` | `illumination` or `behaviour` | no | | What the author says the axis varies. An axis declared `behaviour` that changes the light is refused. |
-| `pairing` | `cross` or `zip` | no | `cross` | `cross` makes every combination of the axes' values; `zip` takes the n-th value of each axis together, and needs axes of equal length. |
+| `pairing` | `cross` or `zip` | no | `cross` | `cross` makes every combination of the axes' values. `zip` takes the n-th value of each axis together. It needs axes of equal length. |
 | `illumination` | `hold`, `vary` or `factorial` | no | `hold` | How the sweep treats axes that change the light. |
 | `counterfactuals` | array | no | none | Pairs made for every member. |
 | `counterfactuals[].actor` | string | yes | | The actor the twin changes. |
@@ -65,13 +66,12 @@ it.
 
 ## Versions
 
-This page describes version 1, the only version. The compiler refuses a sweep with no
-`sweep_version` or any other value (check 53).
+This page describes version 1, the only version.\
+The compiler refuses a sweep with no `sweep_version` or any other value (check 53).
 
 ## Example
 
-The authoring skill's `examples/counterfactual/probe_standoff_pairs.sweep.json`: three twins of the
-base, one per mode.
+The authoring skill's `examples/counterfactual/probe_standoff_pairs.sweep.json`: three twins of the base, one per mode.
 
 ```json
 {

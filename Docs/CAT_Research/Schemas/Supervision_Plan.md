@@ -9,36 +9,42 @@
 
 ## What it is
 
-The supervision plan carries a scenario's labels, and it is the only place they travel. Every
-labeled assertion about authored vehicles and flows is fixed here at compile time. A run only binds
-these rows to the vehicles as they appear; it never adds one. The route file carries no labels, and
-the compiler refuses one that does (check 52).
+The supervision plan holds a scenario's labels.\
+No other file carries them.\
+Every labeled assertion about authored vehicles and flows is fixed here at compile time.
+
+A run only binds these rows to the vehicles as they appear.\
+It never adds a row.\
+The route file carries no labels.\
+The compiler refuses one that does (check 52).
 
 A plan has three kinds of rows:
 
-- an **instance** is an assertion about one or more authored vehicles (actors): `annotated`, executing
-  the labeled pattern, or `nominal`, executing no target pattern (a matched negative), with its
-  participants, their roles and the intervals of each phase;
-- a **series** is a schedule read as a recurring pattern, with one slot for each vehicle the schedule
-  sends;
-- a **cohort** is a flow's whole-life label: `annotated` or `unlabelled`, never `nominal`, and never
-  with intervals.
+- An instance is an assertion about one or more authored vehicles (actors).\
+  An `annotated` instance says its vehicles execute the labeled pattern.\
+  A `nominal` instance says they execute no target pattern (a matched negative).\
+  An instance holds its participants, their roles and the intervals of each phase.
+- A series is a schedule read as a recurring pattern, with one slot for each vehicle the schedule sends.
+- A cohort is a flow's whole-life label: `annotated` or `unlabelled`, never `nominal`.\
+  A cohort never has intervals.
 
-Every actor no row names is listed as `unlabelled` in `entities`, and every flow no cohort names as an
-`unlabelled` cohort, because a missing row must never stand for an asserted negative.
+Every actor no row names is listed as `unlabelled` in `entities`.\
+Every flow no cohort names is listed as an `unlabelled` cohort.\
+Both are listed because a missing row must never stand for an asserted negative.
 
-The plan is bound to the compiled files by their digests, and carries no time of writing, so two
-compiles of one specification write byte-for-byte identical plans.
+The plan is bound to the compiled files by their digests.\
+It carries no time of writing.\
+Two compiles of one specification therefore write byte-for-byte identical plans.
 
 ## Who writes it and who reads it
 
-- **`carla-compile-scenario` writes it** with the scenario's other files. The scenario lock digests it.
-- **The co-simulation session reads it** when a compiled scenario starts, under `carla-capture` and
-  `carla-drive`. It refuses a plan whose digests do not match the files it runs. During the run, it
-  reports each interval opening and closing in the run manifest, and each still's sidecar carries the
-  supervision of its own frame.
-- The scenario resolution report repeats the plan's rows (see
-  [Scenario resolution report](Scenario_Resolution_Report.md)).
+- `carla-compile-scenario` writes it with the scenario's other files.\
+  The scenario lock digests it.
+- The co-simulation session reads it at the start of a compiled scenario, under `carla-capture` and `carla-drive`.\
+  It refuses a plan whose digests do not match the files it runs.\
+  During the run, it reports each interval opening and closing in the run manifest.\
+  Each still's sidecar carries the supervision of its own frame.
+- The scenario resolution report repeats the plan's rows (see [Scenario resolution report](Scenario_Resolution_Report.md)).
 
 ## Fields
 
@@ -54,12 +60,12 @@ compiles of one specification write byte-for-byte identical plans.
 | `additional_digest` | string or null | SHA-256 of the lane closures' `.add.xml`. Null where there is none. |
 | `vocabulary_version` | integer | The core vocabulary's version. |
 | `vocabulary_digest` | string, 64 hex digits | SHA-256 of `vocabulary`, keys sorted, two-space indent. |
-| `vocabulary.core` | object | The closed core: `vocabulary_version`, `source`, and `terms`, the terms the pipeline's own code branches on, by family (`supervision_state`, `subject_kind`, `interval_onset`, `closed_by`, `illumination_band`, `cadence`, `reserved_role`, `interval_anchor`, `render_state`, `render_reason`). |
+| `vocabulary.core` | object | The closed core: `vocabulary_version`, `source` and `terms`. The terms are the ones the pipeline's own code branches on. They are listed by family: `supervision_state`, `subject_kind`, `interval_onset`, `closed_by`, `illumination_band`, `cadence`, `reserved_role`, `interval_anchor`, `render_state`, `render_reason`. |
 | `vocabulary.namespaces` | array | Every author namespace, declared or imported, as the specification declares one (see [Scenario specification](Scenario_Specification.md#the-vocabulary-and-the-supervision)). |
 | `instances` | array | The instances. See below. |
 | `series` | array | The series. See below. |
 | `cohorts` | array | Every flow: `flow_id`, `supervision` (`annotated` or `unlabelled`), `labels` and `parameters`. |
-| `entities` | array | Every actor: `entity_id`, its `supervision` states (for example `["nominal"]`, or `["unlabelled"]`), and `refs`, the rows that name it. |
+| `entities` | array | Every actor: `entity_id`, its `supervision` states (for example `["nominal"]`, or `["unlabelled"]`) and `refs`, the rows that name it. |
 
 ### An instance (`instances[]`)
 
@@ -81,14 +87,14 @@ compiles of one specification write byte-for-byte identical plans.
 |---|---|---|---|
 | `entity_id` | string | | The participant the phase is about. |
 | `phase` | string | | The phase's name, as authored. |
-| `anchor` | object or null | | Where the interval is anchored to the participant's own events: `start` and `end` (or null for an open end), each with its `event` (`depart`, `stop:<i>`, `stop_end:<i>` or `phase:<i>`, counted from 0) and what the session needs to recognize it: a stop's `lane` and `end_pos_m`, or a phase's `route_index` and `edge`. Null for an interval declared in civil time. |
+| `anchor` | object or null | | Where the interval is anchored to the participant's own events. It holds `start` and `end` (or null for an open end). Each has its `event` (`depart`, `stop:<i>`, `stop_end:<i>` or `phase:<i>`, counted from 0). Each also has what the session needs to recognize that event: a stop's `lane` and `end_pos_m`, or a phase's `route_index` and `edge`. Null for an interval declared in civil time. |
 | `declared_start_s` | number or null | s | The start as declared, in simulated seconds. Null where an anchored start declares no time, as a stop's arrival does. |
 | `declared_start_civil` | string or null | | The same, in civil time. |
 | `declared_end_s`, `declared_end_civil` | number or null, string or null | s | The end as declared. |
 | `declared_duration_s` | number or null | s | The length as declared, such as a stop's duration. |
 
-The actual start and end of an anchored interval are what the run observes, and the run manifest
-records them.
+The actual start and end of an anchored interval are what the run observes.\
+The run manifest records them.
 
 ### A series (`series[]`)
 
@@ -104,9 +110,9 @@ records them.
 
 ## Versions
 
-This page describes version 1, the only version. The co-simulation session reads only version 1 and
-refuses any other, including a plan with no version: a field that moved silently is worse than one
-that is absent.
+This page describes version 1, the only version.\
+The co-simulation session reads only version 1.\
+It refuses any other version, including a plan with no version, because a field that moved silently is worse than one that is absent.
 
 ## Example
 
