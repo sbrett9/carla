@@ -17,7 +17,9 @@
       osm\           the example OpenStreetMap maps worlds can be built from
       Scenarios\     the example scenarios, whole, with the OpenStreetMap extracts they are built on
       docs\          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
-                     Docs\CAT_Research\, with their folder structure kept so their links resolve
+                     Docs\CAT_Research\, with their folder structure kept so their links resolve.
+                     Links that leave it are pointed at the bundle by
+                     Scripts\Distribution\rewrite_doc_links.py, which needs python on PATH
       tools\sumo\    the SUMO toolchain laid out as a SUMO installation: bin\ with netconvert, sumo,
                      duarouter and the DLLs they import, SUMO's typemap/xsd data, its traci/sumolib
                      modules, and PROJ data
@@ -433,6 +435,17 @@ function Copy-UserDocs {
         if (-not (Test-Path $src)) { throw "user documentation folder not found at $src" }
         Copy-Item -Recurse -Force -Path $src -Destination (Join-Path $docsDest $folder)
     }
+    # A link that leaves the documentation names a file by its place in the repository. The helper
+    # the Linux script runs too points it at the bundle's own copy, or keeps only its text when the
+    # target does not ship. It reads what shipped from the bundle, so it runs after step 3b.
+    $rewriter = Join-Path $CarlaRoot 'Scripts\Distribution\rewrite_doc_links.py'
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        throw "python is not on PATH; it is needed to point the documentation's links at the bundle."
+    }
+    $rewritten = @(& python $rewriter $docsDest)
+    $exitCode = $LASTEXITCODE
+    $rewritten | ForEach-Object { Write-Info "$_" }
+    if ($exitCode -ne 0) { throw "rewriting the documentation's links failed (exit $exitCode)." }
     Write-Info "[dist] docs: $($userDocFolders -join ', ') ($(@(Get-ChildItem -Recurse -File $docsDest).Count) files)"
     Add-ManifestRow -Component "user documentation ($($userDocFolders -join ', '))" `
                     -Provenance 'built from this repository, Docs\CAT_Research\' `

@@ -12,7 +12,9 @@
 #   osm/           the example OpenStreetMap maps worlds can be built from
 #   Scenarios/     the example scenarios, whole, with the OpenStreetMap extracts they are built on
 #   docs/          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
-#                  Docs/CAT_Research/, with their folder structure kept so their links resolve
+#                  Docs/CAT_Research/, with their folder structure kept so their links resolve.
+#                  Links that leave it are pointed at the bundle by
+#                  Scripts/Distribution/rewrite_doc_links.py, which needs python3 (or $PYTHON)
 #   tools/sumo/    the SUMO toolchain laid out as a SUMO installation: bin/ with netconvert, sumo and
 #                  duarouter, lib/ with the shared libraries they load, SUMO's typemap/xsd data, its
 #                  traci/sumolib modules, and PROJ data
@@ -243,6 +245,14 @@ copy_user_docs() {
         fi
         cp -a "$root/Docs/CAT_Research/$folder" "$dist/docs/"
     done
+    # A link that leaves the documentation names a file by its place in the repository. The helper
+    # the Windows script runs too points it at the bundle's own copy, or keeps only its text when the
+    # target does not ship. It reads what shipped from the bundle, so it runs after step 3b.
+    if ! command -v "${PYTHON:-python3}" >/dev/null 2>&1; then
+        echo "[dist] ERROR: ${PYTHON:-python3} not found; it is needed to point the documentation's links at the bundle." >&2
+        exit 1
+    fi
+    "${PYTHON:-python3}" "$root/Scripts/Distribution/rewrite_doc_links.py" "$dist/docs"
     echo "[dist] docs: ${user_doc_folders// /, } ($(find "$dist/docs" -type f | wc -l) files)"
     add_manifest_row "user documentation (${user_doc_folders// /, })" \
                      "built from this repository, Docs/CAT_Research/" \
