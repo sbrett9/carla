@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Gardnerville Centerville Lane neighborhood orbit: compiled by carlacontrol.ScenarioCompiler 0.10.0 from the specification of Gardnerville_Centerville_Lane_NeighborhoodOrbit; edit that, not this. The epoch that gives these seconds their civil meaning is stated in Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg. Every time in this file is simulated seconds from t = 0. Supervision is not in this file: it is in Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <!-- Saloons, hatchbacks and coupes. Designed around a 4.6 m car; the nine measured bodies run 4.18 m
+         to 5.37 m and average 4.82 m, so the class is 0.22 m longer on average than it was drawn up as
+         and considerably more varied than the single body it used to be. -->
+    <vType id="car.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9667" height="1.3853" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.audi.tt"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.mini.cooper" vClass="passenger" length="4.5526" width="2.0897" height="1.7725" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.mini.cooper"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.bmw.grantourer" vClass="passenger" length="4.611" width="2.144" height="1.6673" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.bmw.grantourer"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.mercedes.ccc" vClass="passenger" length="4.6736" width="1.805" height="1.4419" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.mercedes.ccc"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.ford.mustang" vClass="passenger" length="4.7175" width="1.8354" height="1.3009" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.mustang"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.lincoln.mkz" vClass="passenger" length="4.892" width="1.8335" height="1.5241" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.lincoln.mkz"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.dodge.charger" vClass="passenger" length="5.006" width="1.854" height="1.5403" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.dodge.charger"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.chevrolet.impala" vClass="passenger" length="5.3575" width="1.7793" height="1.4107" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.chevrolet.impala"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.ford.crown" vClass="passenger" length="5.3657" width="1.7822" height="1.575" maxSpeed="55" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.crown"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- The only sport utility in the content build: a 5.59 x 2.15 x 2.06 m body, against the 5.0 x 1.95
+         m this class was designed around, so every SUV here is 0.59 m longer than intended. One body
+         means every SUV on the map looks the same, which is a property of the content and not of this
+         scenario. -->
+    <vType id="suv.vehicle.nissan.patrol" vClass="passenger" length="5.5912" width="2.1466" height="2.059" maxSpeed="52" speedFactor="normc(1.00,0.10,0.80,1.20)" guiShape="passenger">
+        <param key="carla:blueprint" value="vehicle.nissan.patrol"/>
+        <param key="carla:class_id" value="suv"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- A panel van measuring 5.92 m against the 5.9 m designed around: the closest agreement of any
+         class here, at 0.02 m. -->
+    <vType id="van.vehicle.sprinter.mercedes" vClass="delivery" length="5.9151" width="1.9817" height="2.726" maxSpeed="45" speedFactor="normc(0.95,0.08,0.75,1.10)" guiShape="delivery">
+        <param key="carla:blueprint" value="vehicle.sprinter.mercedes"/>
+        <param key="carla:class_id" value="van"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- The two rigid trucks in the content build, a two-axle box truck measuring 8.00 m and a three-
+         axle heavy goods vehicle measuring 7.92 m, drawn equally. Both are about 1.5 m shorter than the
+         9.5 m this class was designed around. The Fuso Rosa is a light bus, not a truck, and is not
+         drawn as one. -->
+    <vType id="truck.vehicle.carlacola.actors" vClass="truck" length="8.0037" width="2.787" height="4.0546" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
+        <param key="carla:blueprint" value="vehicle.carlacola.actors"/>
+        <param key="carla:class_id" value="truck"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="truck.vehicle.carlamotors.european_hgv" vClass="truck" length="7.9241" width="2.787" height="3.7833" maxSpeed="35" speedFactor="normc(0.90,0.06,0.75,1.05)" guiShape="truck">
+        <param key="carla:blueprint" value="vehicle.carlamotors.european_hgv"/>
+        <param key="carla:class_id" value="truck"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- The marked vehicle. speedDev is zeroed so its speed multiple is exact rather than drawn from a
+         distribution around it. -->
+    <vType id="orbiter.vehicle.lincoln.mkz" vClass="passenger" length="4.892" width="1.8335" height="1.5241" maxSpeed="55" sigma="0.20" speedDev="0" speedFactor="1.25" tau="1.20" guiShape="passenger" color="#FF8C00">
+        <param key="carla:blueprint" value="vehicle.lincoln.mkz"/>
+        <param key="carla:class_id" value="orbiter"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+
+    <vTypeDistribution id="car" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown" probabilities="1 1 1 1 1 1 1 1 1"/>
+    <vTypeDistribution id="suv" vTypes="suv.vehicle.nissan.patrol" probabilities="1"/>
+    <vTypeDistribution id="van" vTypes="van.vehicle.sprinter.mercedes" probabilities="1"/>
+    <vTypeDistribution id="truck" vTypes="truck.vehicle.carlacola.actors truck.vehicle.carlamotors.european_hgv" probabilities="1 1"/>
+    <vTypeDistribution id="orbiter" vTypes="orbiter.vehicle.lincoln.mkz" probabilities="1"/>
+
+    <vTypeDistribution id="ambient_mix" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes truck.vehicle.carlacola.actors truck.vehicle.carlamotors.european_hgv" probabilities="0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.0666667 0.24 0.0933333 0.0333333 0.0333333"/>
+
+    <flow id="corridor_west_to_northeast" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="210" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 108141475#5 108141475#6 1236933617#0 1236933617#1 1236933617#2"/>
+    </flow>
+    <flow id="corridor_northeast_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="55" departLane="free" departSpeed="max">
+        <route edges="-1236933617#2 -1236933617#1 755567030 -108141475#5 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="corridor_west_to_east" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="240" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 108141475#5 108141475#6 1419984783#0 1419984783#1"/>
+    </flow>
+    <flow id="corridor_east_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="60" departLane="free" departSpeed="max">
+        <route edges="-1419984783#1 -1419984783#0 -108141475#6 -108141475#5 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="corridor_northeast_to_east" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="55" departLane="free" departSpeed="max">
+        <route edges="-1236933617#2 -1236933617#1 -1236933617#0 1419984783#0 1419984783#1"/>
+    </flow>
+    <flow id="corridor_east_to_northeast" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="55" departLane="free" departSpeed="max">
+        <route edges="-1419984783#1 -1419984783#0 1236933617#0 1236933617#1 1236933617#2"/>
+    </flow>
+    <flow id="edna_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="8" departLane="free" departSpeed="max">
+        <route edges="14286827 -108141475#1"/>
+    </flow>
+    <flow id="west_to_edna" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="25" departLane="free" departSpeed="max">
+        <route edges="108141475#0 -14286827"/>
+    </flow>
+    <flow id="marianne_to_east" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="28" departLane="free" departSpeed="max">
+        <route edges="14288285 108141475#4 108141475#5 108141475#6 1419984783#0 1419984783#1"/>
+    </flow>
+    <flow id="west_to_marianne" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="28" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 -14288285"/>
+    </flow>
+    <flow id="rubio_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="9" departLane="free" departSpeed="max">
+        <route edges="14289737 -1419984783#0 -108141475#6 -108141475#5 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="east_to_rubio" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="28" departLane="free" departSpeed="max">
+        <route edges="-1419984783#1 -14289737"/>
+    </flow>
+    <flow id="heavenlyview_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="8" departLane="free" departSpeed="max">
+        <route edges="-14286316 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="west_to_heavenlyview" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="25" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 14286316"/>
+    </flow>
+    <flow id="northstub_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="9" departLane="free" departSpeed="max">
+        <route edges="-1428171646 -1236933617#1 755567030 -108141475#5 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="west_to_northstub" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="28" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 108141475#5 108141475#6 1236933617#0 1236933617#1 1428171646"/>
+    </flow>
+    <flow id="turningcircle_to_east" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="20" departLane="free" departSpeed="max">
+        <route edges="14285460 108141475#3 108141475#4 108141475#5 108141475#6 1419984783#0 1419984783#1"/>
+    </flow>
+    <flow id="east_to_turningcircle" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="20" departLane="free" departSpeed="max">
+        <route edges="-1419984783#1 -1419984783#0 -108141475#6 -108141475#5 -108141475#4 -108141475#3 -14285460"/>
+    </flow>
+    <flow id="neighbourhood_through_north" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="40" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 219060581#0 219060581#1 219060581#2 -219060583 219060582#1 219060582#2 108141475#5 108141475#6 1236933617#0 1236933617#1 1428171646"/>
+    </flow>
+    <flow id="neighbourhood_through_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="20" departLane="free" departSpeed="max">
+        <route edges="-1236933617#2 -1236933617#1 755567030 -108141475#5 -219060582#2 -219060582#1 219060583 -219060581#2 -219060581#1 -219060581#0 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="neighbourhood_south_to_north" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="30" departLane="free" departSpeed="max">
+        <route edges="14288285 219060581#0 219060584#0 -219060581#4 219060581#4 -219060581#4 -219060581#3 -219060583 219060582#1 219060582#2 108141475#5 108141475#6 1236933617#0 1236933617#1 1428171646"/>
+    </flow>
+    <flow id="neighbourhood_north_to_south" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="30" departLane="free" departSpeed="max">
+        <route edges="-1428171646 -1236933617#1 755567030 -108141475#5 -219060582#2 -219060582#1 219060583 219060581#3 -219060582#1 -219060582#0 -219060581#1 -219060581#0 -14288285"/>
+    </flow>
+    <flow id="cobblestone_to_east" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="30" departLane="free" departSpeed="max">
+        <route edges="219060582#0 219060582#1 219060582#2 108141475#5 108141475#6 1419984783#0 1419984783#1"/>
+    </flow>
+    <flow id="east_to_cobblestone" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="30" departLane="free" departSpeed="max">
+        <route edges="-1419984783#1 -1419984783#0 -108141475#6 -108141475#5 -219060582#2 -219060582#1 -219060582#0"/>
+    </flow>
+    <flow id="lostriver_to_east" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="25" departLane="free" departSpeed="max">
+        <route edges="219060583 219060581#3 219060582#2 108141475#5 108141475#6 1419984783#0 1419984783#1"/>
+    </flow>
+    <flow id="west_to_lostriver" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="25" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 -219060582#2 -219060582#1 219060583 -219060583"/>
+    </flow>
+    <flow id="rockterrace_local_north" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="25" departLane="free" departSpeed="max">
+        <route edges="-219060581#4 219060582#2 108141475#5 108141475#6 1236933617#0 1236933617#1 1428171646"/>
+    </flow>
+    <flow id="rockterrace_local_in" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="25" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 219060581#0 219060581#1 219060581#2"/>
+    </flow>
+    <flow id="keystone_to_west" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="12" departLane="free" departSpeed="max">
+        <route edges="-219060584#1 -219060581#4 219060582#2 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+    </flow>
+    <flow id="west_to_keystone" type="ambient_mix" begin="0.00" end="2220.00" vehsPerHour="30" departLane="free" departSpeed="max">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 -219060582#2 219060581#4 219060584#1"/>
+    </flow>
+    <vehicle id="orbiter" type="orbiter" depart="60.00" departLane="free" departSpeed="20.12" arrivalSpeed="current">
+        <route edges="108141475#0 108141475#2 108141475#3 108141475#4 -219060582#2 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060581#4 -219060584#0 219060581#1 219060581#2 219060581#3 219060582#2 -108141475#4 -108141475#3 -108141475#2 -108141475#1"/>
+        <stop lane="108141475#0_0" startPos="0.00" endPos="561.26" speed="20.12"/>
+        <stop lane="108141475#2_0" startPos="0.00" endPos="338.69" speed="20.12"/>
+        <stop lane="108141475#3_0" startPos="0.00" endPos="150.78" speed="20.12"/>
+        <stop lane="108141475#4_0" startPos="0.00" endPos="192.00" speed="20.12"/>
+        <stop lane="-219060582#2_0" startPos="0.00" endPos="80.47" speed="13.89"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+        <stop lane="219060581#4_0" startPos="0.00" endPos="76.62" speed="11.00"/>
+        <stop lane="-219060584#0_0" startPos="0.00" endPos="92.69" speed="11.00"/>
+        <stop lane="219060581#1_0" startPos="0.00" endPos="135.79" speed="11.00"/>
+        <stop lane="219060581#2_0" startPos="0.00" endPos="292.18" speed="11.00"/>
+        <stop lane="219060581#3_0" startPos="0.00" endPos="251.15" speed="11.00"/>
+    </vehicle>
+
+</routes>

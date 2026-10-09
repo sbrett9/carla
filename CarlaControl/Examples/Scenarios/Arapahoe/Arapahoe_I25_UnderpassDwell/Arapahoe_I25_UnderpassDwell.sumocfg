@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Compiled by carlacontrol.ScenarioCompiler from the specification of Arapahoe_I25_UnderpassDwell; edit that, not this. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="Arapahoe_I25.net.xml"/>
+        <route-files value="Arapahoe_I25_UnderpassDwell.rou.xml"/>
+        <additional-files value="Arapahoe_I25_UnderpassDwell.add.xml"/>
+    </input>
+    <!-- t = 0 is 2026-09-29T07:00:00-06:00 (2026-09-29T13:00:00Z), UTC-06:00 including daylight saving, calendar advances, America/Denver. The run ends at 2026-09-29T07:45:00-06:00. begin and end below are simulated seconds from t = 0. -->
+    <time>
+        <begin value="0"/>
+        <end value="2700"/>
+        <step-length value="0.05"/>
+    </time>
+    <random_number>
+        <seed value="42"/>
+    </random_number>
+    <processing>
+        <time-to-teleport value="-1"/>
+        <max-depart-delay value="900"/>
+        <collision.action value="warn"/>
+        <lanechange.duration value="3"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+        <duration-log.statistics value="true"/>
+    </report>
+</configuration>

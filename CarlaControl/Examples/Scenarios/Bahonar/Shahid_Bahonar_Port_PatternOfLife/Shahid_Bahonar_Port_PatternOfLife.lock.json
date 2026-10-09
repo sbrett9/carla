@@ -1,0 +1,186 @@
+{
+  "lock_version": 1,
+  "scenario_id": "Shahid_Bahonar_Port_PatternOfLife",
+  "scenario_name": "Shahid Bahonar Port pattern of life",
+  "spec_version": 1,
+  "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
+  "specification_sha256": "d4dda20498ccca715721224bbda260ac1d3d0822d25d038100e4d64aece2c015",
+  "compiler": {
+    "name": "carlacontrol.ScenarioCompiler",
+    "version": "0.10.0"
+  },
+  "producer": {
+    "tool": "carlacontrol.ScenarioCompiler",
+    "tool_version": "0.10.0+ga2baed579",
+    "carlanet": "0.10.0+g67d967b06.dirty",
+    "server": null,
+    "sumo": "1.27.0",
+    "written_utc": "2026-10-09T00:29:28.115Z"
+  },
+  "files": {
+    "routes": {
+      "path": "Shahid_Bahonar_Port_PatternOfLife.rou.xml",
+      "sha256": "5ea60913369e038ebb0940acc415e4d8e50d7c72963d090b96e06ed71b52214f"
+    },
+    "config": {
+      "path": "Shahid_Bahonar_Port_PatternOfLife.sumocfg",
+      "sha256": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f"
+    },
+    "network": {
+      "path": "Shahid_Bahonar_Port.net.xml",
+      "sha256": "11002de743af11d85ba089e9e7c5d16aff7fdad5a96df8165415f27de207c354"
+    },
+    "supervision": {
+      "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
+      "sha256": "980afbf96d0649d8e1137d9a8febe2c3c2284ca2cf2e1c53415ed2fc5aca2aab"
+    }
+  },
+  "world": {
+    "package": "Shahid_Bahonar_Port.cwp",
+    "map_name": "Shahid_Bahonar_Port",
+    "network_fingerprint": "3966113a337bb878b0f34f55153214dded7b62faabaec3deefc1934fe7eb991f",
+    "netconvert_argv": [
+      "--osm-files",
+      "Shahid_Bahonar_Port_clipped.osm",
+      "--opendrive-output",
+      "<opendrive-output>",
+      "--proj",
+      "+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+      "--default.lanewidth",
+      "3.35",
+      "--default.sidewalk-width",
+      "2.8",
+      "--tls.guess",
+      "true",
+      "--geometry.remove",
+      "--roundabouts.guess",
+      "--osm.turn-lanes",
+      "--output.street-names",
+      "true",
+      "--output.original-names",
+      "true",
+      "--offset.disable-normalization",
+      "--junctions.join",
+      "--tls.default-type",
+      "actuated",
+      "--output-file",
+      "<output-file>",
+      "--junctions.join-dist",
+      "25",
+      "--remove-edges.by-type",
+      "highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway",
+      "--type-files",
+      "${SUMO_HOME}/data/typemap/osmNetconvert.typ.xml,Shahid_Bahonar_Port.typ.xml"
+    ],
+    "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+    "opendrive_sha256": "8b942852c622448c5f35d959da74bf87eda21d29a2b56a499ab67675b374db85",
+    "source_osm_sha256": "803111b56bf129de7ca3f16cdcabef510631201e5f310e3220049896c900a511",
+    "origin_latitude": 27.15012,
+    "origin_longitude": 56.18065,
+    "georeference": "+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+  },
+  "catalogue": {
+    "catalogue_id": "carla-0.10.0-windows",
+    "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
+    "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
+    "content_build_id": "carla-0.10.0-windows"
+  },
+  "vocabulary": {
+    "core_version": 3,
+    "namespaces": [
+      {
+        "namespace": "bahonar",
+        "version": 2
+      }
+    ],
+    "vocabulary_digest": "d3c2af61bdd520654c08c8e0d6037f2b882072a1b7202ad0286e249e833830fb"
+  },
+  "traffic": {
+    "sumo_seed": 42,
+    "step_length_s": 1.0,
+    "end_s": 604800.0,
+    "processing": {
+      "time-to-teleport": "-1",
+      "max-depart-delay": "900",
+      "collision.action": "warn",
+      "lanechange.duration": "3"
+    },
+    "routed_by": {
+      "tool": "duarouter",
+      "version": "1.27.0",
+      "world_converter": "Eclipse SUMO netconvert 1.27.0",
+      "release_agreement": "SameRelease",
+      "mismatch_accepted": false
+    }
+  },
+  "dry_run": {
+    "ran": true,
+    "sumo_release": "1.27.0",
+    "begin_s": 0.0,
+    "end_s": 604800.0,
+    "vehicles": {
+      "loaded": 69246,
+      "inserted": 69246,
+      "discarded": 0,
+      "waiting_at_end": 0
+    },
+    "planned_vehicles": {
+      "total": 366,
+      "inserted": 366
+    },
+    "collisions": 0
+  },
+  "epoch": {
+    "calendar_advances": true,
+    "civil_datetime": "2026-09-29T07:00:00+03:30",
+    "dst_in_effect": false,
+    "epoch_version": 1,
+    "note": "Shahid Bahonar Port, Bandar Abbas: simulated second zero is 07:00 local time on 29 September 2026, the first morning shift change; the civil date advances",
+    "time_zone_id": "Asia/Tehran",
+    "utc_datetime": "2026-09-29T03:30:00Z",
+    "utc_offset_hours": 3.5
+  },
+  "epoch_block_sha256": "f1ba0ddab35f800a4b78ebc902fa9a1dd9d47a64fee72eb3cfab687969bbecdf",
+  "illumination": {
+    "illumination_version": 1,
+    "policy": "freeze_at_window_start"
+  },
+  "capture_windows": [],
+  "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
+  "illumination_label_association": {
+    "normalized_mutual_information": 0.142,
+    "bands": {
+      "day": {
+        "annotated": 86,
+        "nominal": 244,
+        "unlabelled": 73,
+        "total": 403
+      },
+      "golden": {
+        "annotated": 7,
+        "nominal": 0,
+        "unlabelled": 21,
+        "total": 28
+      },
+      "nautical_twilight": {
+        "annotated": 7,
+        "nominal": 0,
+        "unlabelled": 0,
+        "total": 7
+      },
+      "astronomical_twilight": {
+        "annotated": 7,
+        "nominal": 0,
+        "unlabelled": 0,
+        "total": 7
+      },
+      "night": {
+        "annotated": 1,
+        "nominal": 112,
+        "unlabelled": 56,
+        "total": 169
+      }
+    },
+    "entries": 614
+  }
+}

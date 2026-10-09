@@ -1,0 +1,18 @@
+{
+ "convention_version": 1,
+ "description": "How a TAK client draws the Shahid Bahonar pattern of life: the public corridor's civilian traffic and the port's cleared traffic neutral, the naval base's traffic friendly. A run display convention, not part of the scenario, keyed by the specification's vehicle classes. The perimeter crawl's class is army and drives inside the wire, so it is drawn as the base's traffic is; the port's cleared car as the port's.",
+ "affiliation_by_type": {
+  "civ_car": "n",
+  "civ_pickup": "n",
+  "civ_taxi": "n",
+  "civ_truck": "n",
+  "civ_bus": "n",
+  "port_vehicle": "n",
+  "port_truck": "n",
+  "port_car": "n",
+  "mil_jeep": "f",
+  "mil_truck": "f",
+  "guard": "f",
+  "army_car_crawl": "f"
+ }
+}
