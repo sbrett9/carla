@@ -358,7 +358,11 @@ carla-capture --site-profile site.json --run gate_probe.run.json --set paths.sce
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
-The scenario's sun policy, `freeze_at_window_start`, holds the sun at the civil time the window opens.\
+The scenario's sun policy, `freeze_at_window_start`, holds the sun at the clock time the window opens.\
+The sun keeps the epoch's date, 29 September, on every day of the week.\
+This window opens at 11:04:34 on 1 October.\
+So the echo shows the sun held at 2026-09-29 11:04:34.\
+That way, the sun follows the same path across the sky on each day of the week.\
 Then run it for real:
 
 ```
