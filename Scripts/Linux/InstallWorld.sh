@@ -27,12 +27,13 @@ force=0
 
 usage() {
     cat <<'EOF'
-Usage: InstallWorld.sh --package <world.zip> --into <package directory> [--force]
+Usage: InstallWorld.sh --package <world.zip|world.tar.xz> --into <package directory> [--force]
 
 Install a packaged world into an existing CARLA package.
 
 Options:
-  --package <path>   The .zip written by PackageWorld.sh (required).
+  --package <path>   The .zip written by PackageWorld.sh, or a .tar.xz holding the same contents
+                     (required).
   --into <path>      The CARLA package: a cooked package's root (the directory holding CarlaUnreal/),
                      or a CARLA distribution's root (the one holding CarlaServer/ and VERSION). Run
                      from a distribution's world-tools folder, it defaults to that distribution.
@@ -92,7 +93,16 @@ interface_ini="$into/CarlaUnreal/Config/DefaultWorldInterface.ini"
 unpacked="$(mktemp -d)"
 trap 'rm -rf "$unpacked"' EXIT
 
-unzip -q "$package" -d "$unpacked" || { echo "ERROR: could not unpack $package (is 'unzip' installed?)" >&2; exit 1; }
+# A level pack is the .zip that PackageWorld writes. The example packs under a distribution's
+# Scenarios/ hold the same contents as a .tar.xz, about half the size.
+case "$package" in
+    *.zip)
+        unzip -q "$package" -d "$unpacked" || { echo "ERROR: could not unpack $package (is 'unzip' installed?)" >&2; exit 1; } ;;
+    *.tar.xz|*.txz)
+        tar -xJf "$package" -C "$unpacked" || { echo "ERROR: could not unpack $package (are 'tar' and 'xz' installed?)" >&2; exit 1; } ;;
+    *)
+        echo "ERROR: $package is neither a .zip nor a .tar.xz level pack." >&2; exit 1 ;;
+esac
 
 manifest="$unpacked/world.json"
 [ -f "$manifest" ] || { echo "ERROR: $package carries no world.json; it was not written by PackageWorld.sh." >&2; exit 1; }

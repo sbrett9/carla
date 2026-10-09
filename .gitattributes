@@ -8,3 +8,14 @@ Import/*.rou.xml -text
 Import/*.add.xml -text
 Import/*.sumocfg -text
 Import/*.json -text
+
+# The example scenarios under CarlaControl/Examples/Scenarios ship compiled, with their locks. Store
+# their SUMO and JSON files exactly as written, like the ones in Import/. Their world packages and
+# level packs are binary.
+CarlaControl/Examples/Scenarios/**/*.net.xml -text
+CarlaControl/Examples/Scenarios/**/*.rou.xml -text
+CarlaControl/Examples/Scenarios/**/*.add.xml -text
+CarlaControl/Examples/Scenarios/**/*.sumocfg -text
+CarlaControl/Examples/Scenarios/**/*.json -text
+CarlaControl/Examples/Scenarios/**/*.cwp binary
+CarlaControl/Examples/Scenarios/**/*.tar.xz binary

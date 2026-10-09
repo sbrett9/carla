@@ -19,7 +19,7 @@
     installer reads them as.
 
 .PARAMETER Package
-    The .zip written by PackageWorld.ps1.
+    The .zip written by PackageWorld.ps1, or a .tar.xz holding the same contents.
 
 .PARAMETER Into
     The CARLA package to install into: a cooked package's root (the directory holding CarlaUnreal\
@@ -58,12 +58,43 @@ function Write-Info { param([Parameter(ValueFromPipeline)][string]$Message) Writ
 function Write-Warn { param([Parameter(ValueFromPipeline)][string]$Message) Write-Host $Message -ForegroundColor Yellow }
 function Write-Fail { param([Parameter(ValueFromPipeline)][string]$Message) Write-Host $Message -ForegroundColor Red }
 
+# A level pack is the .zip that PackageWorld writes. The example packs under a distribution's
+# Scenarios\ hold the same contents as a .tar.xz, about half the size. Windows' own tar.exe unpacks
+# a .tar.xz on current builds. Where it cannot, Python's tarfile does: Python is already a
+# prerequisite of the distribution.
+function Expand-WorldPackage {
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Destination)
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    if ($Path -match '\.zip$') {
+        Expand-Archive -Path $Path -DestinationPath $Destination
+        return
+    }
+    if ($Path -notmatch '\.(tar\.xz|txz)$') {
+        Write-Fail "$Path is neither a .zip nor a .tar.xz level pack."
+        exit 1
+    }
+    $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+    if (Test-Path $tar) {
+        & $tar -xf $Path -C $Destination 2>$null
+        if ($LASTEXITCODE -eq 0) { return }
+    }
+    $unpack = "import sys, tarfile`n" +
+              "with tarfile.open(sys.argv[1], 'r:xz') as pack:`n" +
+              "    try: pack.extractall(sys.argv[2], filter='data')`n" +
+              "    except TypeError: pack.extractall(sys.argv[2])"
+    & python -c $unpack $Path $Destination
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "Could not unpack $Path. Neither tar.exe nor Python could read it."
+        exit 1
+    }
+}
+
 if ($Help) {
     @'
 InstallWorld.ps1 - install a packaged world into an existing CARLA package.
 
 USAGE:
-  .\InstallWorld.ps1 -Package <world.zip> -Into <package directory> [-Force]
+  .\InstallWorld.ps1 -Package <world.zip|world.tar.xz> -Into <package directory> [-Force]
 
 The package directory is a cooked package's root (holding CarlaUnreal\ and VERSION) or a CARLA
 distribution's root (holding CarlaServer\ and VERSION). Run from a distribution's world-tools
@@ -108,7 +139,7 @@ $RunServer = Join-Path (Split-Path $VersionFile -Parent) 'run-server.ps1'
 $Unpacked = Join-Path ([System.IO.Path]::GetTempPath()) "carla-install-$PID"
 if (Test-Path $Unpacked) { Remove-Item -Recurse -Force $Unpacked }
 try {
-    Expand-Archive -Path $Package -DestinationPath $Unpacked
+    Expand-WorldPackage -Path $Package -Destination $Unpacked
 
     $ManifestPath = Join-Path $Unpacked 'world.json'
     if (-not (Test-Path $ManifestPath)) {
