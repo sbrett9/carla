@@ -1,0 +1,399 @@
+{
+  "supervision_plan_version": 1,
+  "plan_id": "Arapahoe_I25_UnderpassDwell",
+  "spec_version": 1,
+  "scenario_id": "Arapahoe_I25_UnderpassDwell",
+  "routes_digest": "6d55aab12aa8b00895a5b116dded80cc310e15833da1edf1f897599d2c5a14d5",
+  "network_digest": "ffe490b1ee677d5b48ac2350f3a579e8112f68155bbd80893eebd137c724bfdc",
+  "config_digest": "ead68759a136dddff82943cdcc2d7d897638d4f515a68c9fd346e4ca1b2b56ed",
+  "additional_digest": "25260f609a53c8d3ac7fae8d7c7ccc15a6c2e1000d2affaae080e2b6c49dc119",
+  "vocabulary_version": 3,
+  "vocabulary_digest": "19936053b6fae2261e8b204ce9f0e330720a20864e2a3223cb6e761d6c1ac51b",
+  "vocabulary": {
+    "core": {
+      "vocabulary_version": 3,
+      "source": "CarlaNet.Types.Supervision.CoreVocabulary",
+      "terms": {
+        "supervision_state": [
+          "annotated",
+          "nominal",
+          "unlabelled"
+        ],
+        "subject_kind": [
+          "entity",
+          "cohort"
+        ],
+        "interval_onset": [
+          "declared",
+          "committed",
+          "observed"
+        ],
+        "closed_by": [
+          "trigger",
+          "entity_arrived",
+          "sumo_removed",
+          "never_inserted",
+          "physical_predicate_never_held",
+          "render_released",
+          "capture_window_end",
+          "scenario_end"
+        ],
+        "illumination_band": [
+          "day",
+          "golden",
+          "civil_twilight",
+          "nautical_twilight",
+          "astronomical_twilight",
+          "night"
+        ],
+        "cadence": [
+          "enumerated",
+          "period_s + offsets_s[] + span"
+        ],
+        "reserved_role": [
+          "subject"
+        ],
+        "interval_anchor": [
+          "depart",
+          "stop",
+          "stop_end",
+          "phase"
+        ],
+        "render_state": [
+          "rendered",
+          "simulated_only"
+        ],
+        "render_reason": [
+          "no_world",
+          "left_the_simulation",
+          "vanished",
+          "outside_limit",
+          "no_blueprint",
+          "unknown_extent",
+          "no_ground",
+          "not_drawn"
+        ]
+      }
+    },
+    "namespaces": []
+  },
+  "instances": [],
+  "series": [],
+  "cohorts": [
+    {
+      "flow_id": "i25_north_through",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_through",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_north_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_north_to_arapahoe_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_arapahoe_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_west_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_i25_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_west_to_i25_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_west_to_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "yosemite_north_to_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "yosemite_south_to_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "yosemite_north_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_yosemite_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "clinton_to_arapahoe_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_west_to_clinton",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "caley_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_caley",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "peakview_west_to_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "peakview_east_to_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "boston_court_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arbor_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "willow_to_yosemite_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "wabash_to_arapahoe_west",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "underpass_north_to_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "underpass_south_to_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "underpass_caley_to_yosemite",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "davies_avenue_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_davies_avenue",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "costilla_place_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_costilla_place",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "costilla_avenue_to_i25_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_north_to_costilla_avenue",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "davies_place_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_davies_place",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "briarwood_place_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_briarwood_place",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "briarwood_boulevard_to_i25_south",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_north_to_briarwood_boulevard",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "briarwood_avenue_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_briarwood_avenue",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "easter_place_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_easter_place",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "fremont_circle_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "i25_south_to_fremont_circle",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "xanthia_street_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "xanthia_way_to_i25_north",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "alton_way_to_arapahoe_east",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    },
+    {
+      "flow_id": "arapahoe_east_to_alton_way",
+      "supervision": "unlabelled",
+      "labels": [],
+      "parameters": {}
+    }
+  ],
+  "entities": [
+    {
+      "entity_id": "marked",
+      "supervision": [
+        "unlabelled"
+      ],
+      "refs": []
+    }
+  ]
+}

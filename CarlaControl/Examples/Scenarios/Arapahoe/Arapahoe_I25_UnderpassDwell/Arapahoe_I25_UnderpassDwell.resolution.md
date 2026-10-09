@@ -1,0 +1,264 @@
+# Resolution report: Arapahoe_I25_UnderpassDwell
+
+**Outcome:** compiled
+
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+ga2baed579, carlanet 0.10.0+g67d967b06.dirty, SUMO 1.27.0, at 2026-10-09T00:26:05.178Z
+
+One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.
+
+## Findings
+
+| Check | Outcome | Subject | Finding |
+|---|---|---|---|
+| 17 | warn | vehicle class suv | draws one body, vehicle.nissan.patrol, so every vehicle of the class looks the same and its appearance can become its label |
+| 17 | warn | vehicle class van | draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label |
+| 17 | warn | vehicle class truck | draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label |
+| 17 | warn | vehicle class semi | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
+| 17 | warn | vehicle class marked | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = undefined (one supervision state only) over 52 entries (at their departures; no capture window is declared). Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
+
+## Epoch
+
+t = 0 is 2026-09-29T07:00:00-06:00 (2026-09-29T13:00:00Z), UTC-06:00 including daylight saving, calendar advances, America/Denver; the run ends at 2026-09-29T07:45:00-06:00.
+
+`epoch_block_sha256` ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f. The zone name, when declared, is carried and never resolved.
+
+## The sun's zone
+
+Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_epoch writes the declared offset as the sun's zone.
+
+## Illumination default
+
+Policy `freeze_at_window_start`: an authored default the operator may override.
+
+## Illumination-label association (check 41)
+
+I(band; supervision) / H(supervision), base 2; bands by the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
+
+### Over the declared windows
+
+Not computed: no capture window is declared.
+
+### Over the span, at each departure
+
+Normalized mutual information: undefined over 52 entries.
+
+| Band | annotated | nominal | unlabelled | total |
+|---|---|---|---|---|
+| golden | 0 | 0 | 52 | 52 |
+
+Bands where one state alone occurs: none. Bands where both occur: none.
+
+Remedies:
+
+- pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band
+- add a nominal twin inside the annotated band: a hard negative lit identically
+- add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one
+
+## Places
+
+| Place | Authored | Became | Street |
+|---|---|---|---|
+| i25_north_in | `{"gateway": "south", "travel": "in", "street": "South Valley Highway"}` | 37722905 | South Valley Highway |
+| i25_north_out | `{"gateway": "north", "travel": "out", "street": "South Valley Highway"}` | 106308386 | South Valley Highway |
+| i25_south_in | `{"gateway": "north", "travel": "in", "street": "South Valley Highway"}` | 472478085 | South Valley Highway |
+| i25_south_out | `{"gateway": "south", "travel": "out", "street": "South Valley Highway"}` | 908324823 | South Valley Highway |
+| i25_north_short_of_arapahoe | `{"edge": "907700111"}` | 907700111 | South Valley Highway |
+| i25_north_past_arapahoe | `{"edge": "1001791386"}` | 1001791386 | South Valley Highway |
+| i25_north_at_loop_merge | `{"edge": "1342047649"}` | 1342047649 | South Valley Highway |
+| arapahoe_east_in | `{"edge": "131933384"}` | 131933384 | East Arapahoe Road |
+| arapahoe_east_out | `{"edge": "427819527"}` | 427819527 | East Arapahoe Road |
+| arapahoe_west_in | `{"edge": "427819540#0"}` | 427819540#0 | East Arapahoe Road |
+| arapahoe_west_out | `{"edge": "427819541#0"}` | 427819541#0 | East Arapahoe Road |
+| arapahoe_westbound_west_of_i25 | `{"edge": "629675735"}` | 629675735 | East Arapahoe Road |
+| i25_north_exit_to_arapahoe_east | `{"edge": "131933449#0"}` | 131933449#0 |  |
+| xanthia_street_northbound | `{"edge": "-17003602#7"}` | -17003602#7 | South Xanthia Street |
+| arapahoe_westbound_at_yosemite | `{"edge": "427819537#1"}` | 427819537#1 | East Arapahoe Road |
+| yosemite_northbound_from_arapahoe | `{"edge": "1026993839#0"}` | 1026993839#0 | South Yosemite Street |
+| underpass_westbound | `{"edge": "218965860#0"}` | 218965860#0 | South Yosemite Street |
+| underpass_eastbound | `{"edge": "-223315781"}` | -223315781 | South Yosemite Street |
+| underpass_dwell | `{"lat": 39.600357, "lon": -104.88649, "max_snap_m": 2.0, "vclass": "passenger"}` | 218965860#0_0 at 88.63 m | South Yosemite Street |
+| yosemite_north_in | `{"edge": "427819547"}` | 427819547 | South Yosemite Street |
+| yosemite_north_out | `{"edge": "-427819547"}` | -427819547 | South Yosemite Street |
+| yosemite_south_in | `{"edge": "-629629570"}` | -629629570 | South Yosemite Street |
+| yosemite_south_out | `{"edge": "629629570"}` | 629629570 | South Yosemite Street |
+| clinton_in | `{"edge": "-629634784"}` | -629634784 | South Clinton Street |
+| clinton_out | `{"edge": "629634784"}` | 629634784 | South Clinton Street |
+| caley_in | `{"edge": "132833790"}` | 132833790 | East Caley Avenue |
+| caley_out | `{"edge": "629653938"}` | 629653938 | East Caley Avenue |
+| peakview_west_in | `{"edge": "16999218"}` | 16999218 | East Peakview Avenue |
+| peakview_east_out | `{"edge": "292396861#1"}` | 292396861#1 | East Peakview Avenue |
+| peakview_east_in | `{"edge": "633447921"}` | 633447921 | East Peakview Avenue |
+| peakview_west_out | `{"edge": "46107902#0"}` | 46107902#0 | East Peakview Avenue |
+| boston_court_in | `{"edge": "17000739"}` | 17000739 | South Boston Court |
+| arbor_in | `{"edge": "16998684#0"}` | 16998684#0 | East Arbor Drive |
+| willow_in | `{"edge": "550665536#0"}` | 550665536#0 | South Willow Drive |
+| wabash_in | `{"edge": "427479206"}` | 427479206 | South Wabash Way |
+| davies_avenue_in | `{"edge": "16993828#0"}` | 16993828#0 | East Davies Avenue |
+| davies_avenue_out | `{"edge": "-16993828#0"}` | -16993828#0 | East Davies Avenue |
+| costilla_place_in | `{"edge": "16996647"}` | 16996647 | East Costilla Place |
+| costilla_place_out | `{"edge": "-16996647"}` | -16996647 | East Costilla Place |
+| costilla_avenue_in | `{"edge": "16996898"}` | 16996898 | East Costilla Avenue |
+| costilla_avenue_out | `{"edge": "-16996898"}` | -16996898 | East Costilla Avenue |
+| davies_place_in | `{"edge": "17001552#0"}` | 17001552#0 | East Davies Place |
+| davies_place_out | `{"edge": "-17001552#1"}` | -17001552#1 | East Davies Place |
+| briarwood_place_in | `{"edge": "17003522"}` | 17003522 | East Briarwood Place |
+| briarwood_place_out | `{"edge": "-17003522"}` | -17003522 | East Briarwood Place |
+| briarwood_boulevard_in | `{"edge": "17007347#0"}` | 17007347#0 | East Briarwood Boulevard |
+| briarwood_boulevard_out | `{"edge": "-17007347#0"}` | -17007347#0 | East Briarwood Boulevard |
+| briarwood_avenue_in | `{"edge": "224876698"}` | 224876698 | East Briarwood Avenue |
+| briarwood_avenue_out | `{"edge": "-224876698"}` | -224876698 | East Briarwood Avenue |
+| easter_place_in | `{"edge": "17006662#0"}` | 17006662#0 | East Easter Place |
+| easter_place_out | `{"edge": "-17006662#0"}` | -17006662#0 | East Easter Place |
+| fremont_circle_in | `{"edge": "-16991914"}` | -16991914 | East Fremont Circle |
+| fremont_circle_out | `{"edge": "16991914"}` | 16991914 | East Fremont Circle |
+| xanthia_street_in | `{"edge": "-17003598#2"}` | -17003598#2 | South Xanthia Street |
+| xanthia_way_in | `{"edge": "-17006541"}` | -17006541 | South Xanthia Way |
+| alton_way_in | `{"edge": "-17003147#17"}` | -17003147#17 | South Alton Way |
+| alton_way_out | `{"edge": "17003147#12"}` | 17003147#12 | South Alton Way |
+
+## Routes
+
+| Id | Type | Departs | Route | Length | Free-flow |
+|---|---|---|---|---|---|
+| marked | marked | 2026-09-29T07:02:00-06:00 | 37722905 37748865 629675805 629675780 427819562#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 45798671#1 629653894 572762876#1 1107125073 218965860#0 -787011390 1035917283#0 223289022#0 45798671#1 629653894 629653907 218965865#0 223928717 629634742#0 629634747 629634762 629634763 629634764#0 45760891#1 629634767 629634776 629634775 629634777 629634778#0 132789653 694506252#0 1037832984 16990310#0 218679786 1037827831 106308386 | 5251.8 m | 257.9 s |
+| i25_north_through | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 37722905 907700111 1342047649 1001791386 37722913 106308386 | 2094.46 m | 72.1 s |
+| i25_south_through | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 106308389 39451713 908324823 | 2096.91 m | 72.2 s |
+| i25_north_to_arapahoe_east | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 37722905 37748865 629675805 629675780 131933449#0 427819525 131933321#0 427819527 | 1316.05 m | 56.3 s |
+| i25_north_to_arapahoe_west | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 37722905 37748865 629675805 629675780 427819562#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819541#0 | 1456.17 m | 63.7 s |
+| i25_south_to_arapahoe_east | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679720#0 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 427819527 | 1416.83 m | 62.7 s |
+| i25_south_to_arapahoe_west | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819541#0 | 1177.61 m | 49 s |
+| arapahoe_east_to_i25_north | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 132789653 694506252#0 1037832984 16990310#0 218679786 1037827831 106308386 | 1331.3 m | 59.6 s |
+| arapahoe_west_to_i25_north | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 1690.37 m | 69.2 s |
+| arapahoe_east_to_i25_south | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 132789653 694506252#0 1037832984 75609577 629675735 626534263 223207859#0 223207859#2 946861047 908324823 | 1606.2 m | 69.5 s |
+| arapahoe_west_to_i25_south | freeway_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223207859#0 223207859#2 946861047 908324823 | 1388.22 m | 57.4 s |
+| arapahoe_east_to_west | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 132789653 694506252#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819541#0 | 703.77 m | 38.9 s |
+| arapahoe_west_to_east | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 427819527 | 714.56 m | 40 s |
+| yosemite_north_to_south | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819547 714754657#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 629653795 629653803 629629558 629629560 629629562 629629564 629629566 629629568 629629570 | 1824.71 m | 115.5 s |
+| yosemite_south_to_north | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -629629570 -629629568 -629629566 -629629564 -629629562 -629629560 -629629558 -629653803 -629653795 -16999684 -629653811#1 629653818 427819551#1 1025703939#0 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 -714754657#0 -427819547 | 1856.91 m | 105.5 s |
+| yosemite_north_to_arapahoe_east | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819547 714754657#0 45798671#1 629653894 629653907 218965865#0 223928717 629634742#0 629634747 629634762 629634763 629634764#0 45760891#1 629634767 629634776 629634775 629634777 629634778#0 427819527 | 1142.93 m | 45.7 s |
+| arapahoe_east_to_yosemite_north | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 629634769#0 629634768#0 629634766 629634765#0 629634760#1 1074718490 629634759 16996152#0 629634736 629653921 629653901 629653887#0 1389992986 1389992987 45798675#0 -714754657#0 -427819547 | 1133.32 m | 44.1 s |
+| clinton_to_arapahoe_west | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -629634784 -629634783#2 45760824#0 629634780 629634781#0 132789653 694506252#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819541#0 | 860.32 m | 41.9 s |
+| arapahoe_west_to_clinton | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 903817668#0 1384299163 629634782 629634784 | 871.05 m | 42.6 s |
+| caley_to_arapahoe_east | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 132833790 629653945 629653927 45760825 223928717 629634742#0 629634747 629634762 629634763 629634764#0 45760891#1 629634767 629634776 629634775 629634777 629634778#0 427819527 | 905.55 m | 36.9 s |
+| arapahoe_east_to_caley | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 629634769#0 629634768#0 629634766 629634765#0 629634760#1 1074718490 629634759 16996152#0 629634736 629653933 596754659#0 629653938 | 902.36 m | 36.2 s |
+| peakview_west_to_east | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 16999218 223052085#0 16999198#0 -427819557 -427819554#2 45798671#1 629653894 629653907 218965865#0 223928717 629634742#0 629634747 629634762 629634763 629634764#0 292396861#1 | 1388.62 m | 67.1 s |
+| peakview_east_to_west | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 633447921 629634758#0 1074718490 629634759 16996152#0 629634736 629653921 629653901 629653887#0 1389992986 1389992987 45798675#0 427819554#2 -45806432 427819544 427819552#0 46107902#0 | 1372.67 m | 65.8 s |
+| boston_court_to_arapahoe_east | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 17000739 45760825 223928717 629634742#0 629634747 629634762 629634763 629634764#0 45760891#1 629634767 629634776 629634775 629634777 629634778#0 427819527 | 852.17 m | 36.4 s |
+| arbor_to_arapahoe_east | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 16998684#0 629653945 629653927 45760825 223928717 629634742#0 629634747 629634762 629634763 629634764#0 45760891#1 629634767 629634776 629634775 629634777 629634778#0 427819527 | 979.47 m | 42.2 s |
+| willow_to_yosemite_south | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 550665536#0 1035917283#0 223289022#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 629653795 629653803 629629558 629629560 629629562 629629564 629629566 629629568 629629570 | 1935.93 m | 126.5 s |
+| wabash_to_arapahoe_west | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427479206 550665532 737508780#0 1035917283#0 223289022#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819541#0 | 1186.69 m | 81.7 s |
+| underpass_north_to_south | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 427819547 714754657#0 45798671#1 629653894 572762876#1 1107125073 218965860#0 -787011390 1035917283#0 223289022#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 629653795 629653803 629629558 629629560 629629562 629629564 629629566 629629568 629629570 | 2707.49 m | 177 s |
+| underpass_south_to_north | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -629629570 -629629568 -629629566 -629629564 -629629562 -629629560 -629629558 -629653803 -629653795 -16999684 -629653811#1 629653818 427819551#1 1025703939#0 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 892466867#1 696713869#0 223290451#1 -223315781 -1107125073 -572762876#8 629653887#0 1389992986 1389992987 45798675#0 -714754657#0 -427819547 | 2727.52 m | 166.7 s |
+| underpass_caley_to_yosemite | arterial_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 132833790 629653945 629653927 629653921 629653901 572762876#1 1107125073 218965860#0 -787011390 1035917283#0 223289022#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 629653795 629653803 629629558 629629560 629629562 629629564 629629566 629629568 629629570 | 2818.72 m | 181.5 s |
+| davies_avenue_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 16993828#0 16993828#1 16993828#2 16993828#3 16993828#4 -16999684 -629653811#1 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2521.69 m | 137.1 s |
+| i25_south_to_davies_avenue | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -16993828#2 -16993828#1 -16993828#0 | 2106.86 m | 118.6 s |
+| costilla_place_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 16996647 17010076#2 17010076#3 17010076#4 17007347#1 17007347#2 1047338037#0 629653818 427819551#1 1025703939#0 1026993836#0 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2756.47 m | 146.6 s |
+| i25_south_to_costilla_place | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -17003603#2 -17007347#1 -17010076#5 -17010076#3 -17010076#2 -16996647 | 2432.53 m | 146.8 s |
+| costilla_avenue_to_i25_south | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 16996898 17010076#3 17010076#4 17007347#1 17007347#2 1047338037#0 629653818 427819551#1 1025703939#0 1026993836#0 1059880022 10378085 626534263 223207859#0 223207859#2 946861047 908324823 | 2378.31 m | 127.9 s |
+| i25_north_to_costilla_avenue | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 37722905 37748865 629675805 629675780 427819562#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -17003603#2 -17007347#1 -17010076#5 -17010076#3 -16996898 | 2635.23 m | 154.7 s |
+| davies_place_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 17001552#0 17010076#4 17007347#1 17007347#2 1047338037#0 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2500.85 m | 138.4 s |
+| i25_south_to_davies_place | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -17003603#2 -17007347#1 -17010076#5 -17001552#1 | 2280.81 m | 134.1 s |
+| briarwood_place_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 17003522 17010076#1 17010076#2 17010076#3 17010076#4 17007347#1 17007347#2 1047338037#0 629653818 427819551#1 1025703939#0 1026993836#0 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2829.55 m | 153.3 s |
+| i25_south_to_briarwood_place | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -17003603#2 -17007347#1 -17010076#5 -17010076#3 -17010076#2 -17010076#1 -17003522 | 2505.88 m | 153.5 s |
+| briarwood_boulevard_to_i25_south | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 17007347#0 17007347#1 17007347#2 1047338037#0 629653818 427819551#1 1025703939#0 1026993836#0 1059880022 10378085 626534263 223207859#0 223207859#2 946861047 908324823 | 2224.93 m | 115.1 s |
+| i25_north_to_briarwood_boulevard | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 37722905 37748865 629675805 629675780 427819562#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -17003603#2 -17007347#1 -17007347#0 | 2481.75 m | 141.9 s |
+| briarwood_avenue_to_arapahoe_east | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 224876698 17010076#0 17010076#1 17010076#2 17010076#3 17010076#4 17007347#1 17007347#2 1047338037#0 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 427819527 | 1813.01 m | 134.4 s |
+| arapahoe_east_to_briarwood_avenue | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 132789653 694506252#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -17003603#2 -17007347#1 -17010076#5 -17010076#3 -17010076#2 -17010076#1 -17010076#0 -224876698 | 2099.09 m | 149.7 s |
+| easter_place_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 17006662#0 -17010082#0 16993828#1 16993828#2 16993828#3 16993828#4 -16999684 -629653811#1 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2671.99 m | 148.5 s |
+| i25_south_to_easter_place | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 -16993828#5 -16993828#3 -16993828#2 -16993828#1 17010082#0 -17006662#0 | 2257.03 m | 129.9 s |
+| fremont_circle_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -16991914 -17003598#0 1037840512 1037840511 -629629564 -629629562 -629629560 -629629558 -629653803 -629653795 -16999684 -629653811#1 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2700.83 m | 141.5 s |
+| i25_south_to_fremont_circle | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 472478085 16990020 633436191 427884544 218679741#0 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 629653795 629653803 629629558 629629560 629629562 629629564 1037840513#0 -1037840512 17003598#0 16991914 | 2282.67 m | 124.5 s |
+| xanthia_street_to_arapahoe_east | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -17003598#2 -17003598#1 -17003598#0 1037840512 1037840511 -629629564 -629629562 -629629560 -629629558 -629653803 -629653795 -16999684 -629653811#1 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 427819527 | 1734.41 m | 112.9 s |
+| xanthia_way_to_i25_north | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -17006541 -17003598#1 -17003598#0 1037840512 1037840511 -629629564 -629629562 -629629560 -629629558 -629653803 -629653795 -16999684 -629653811#1 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 223207864#0 223207864#2 982413823 1342047649 1001791386 37722913 106308386 | 2711.31 m | 142.2 s |
+| alton_way_to_arapahoe_east | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | -17003147#17 -17003147#11 -1037841385#3 629653818 427819551#1 -17003602#7 -17003602#4 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 427819527 | 1699.45 m | 124.7 s |
+| arapahoe_east_to_alton_way | residential_mix | 2026-09-29T07:00:00-06:00 to 2026-09-29T07:45:00-06:00 | 131933384 427819534 427819530#0 132789653 694506252#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819543#0 629653843 -427819551#8 -427819551#0 1037841385#0 17003147#0 17003147#12 | 1781.1 m | 124.1 s |
+
+## Lane closures
+
+| Id | Edge | Closed lanes | Open lanes | From | To | Notified on |
+|---|---|---|---|---|---|---|
+| incident | 1001791386 South Valley Highway | 1001791386_0 1001791386_1 1001791386_2 1001791386_3 1001791386_4 | 1 | 2026-09-29T07:15:00-06:00 | 2026-09-29T07:18:00-06:00 | 907700111 1342047649 |
+
+## Vehicle types
+
+Bodies from catalogue `carla-0.10.0-windows` (vehicles.catalogue.json, digest `6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d`). The lights are whether each lights up on the body when the session drives it: headlights by the sun, brake lights and turn signals from SUMO's signals.
+
+- car_quick: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0
+- car: 9 measured bodies, length 4.18-5.37 m, mean 4.82 m, share 0
+- suv: 1 measured body, length 5.59-5.59 m, mean 5.59 m, share 0
+- van: 1 measured body, length 5.92-5.92 m, mean 5.92 m, share 0
+- truck: 1 measured body, length 8.00-8.00 m, mean 8.00 m, share 0
+- semi: 1 measured body, length 7.92-7.92 m, mean 7.92 m, share 0
+- marked: 1 measured body, length 3.87-3.87 m, mean 3.87 m, share 0
+
+| Type | Body | Length (m) | Body width (m) | Height (m) | Headlights | Brake lights | Turn signals |
+|---|---|---|---|---|---|---|---|
+| car_quick.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car_quick.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car_quick.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car_quick.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car_quick.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| car.vehicle.ue4.audi.tt | vehicle.ue4.audi.tt | 4.181 | 1.967 | 1.385 | unlit | unlit | unlit |
+| car.vehicle.mini.cooper | vehicle.mini.cooper | 4.553 | 2.090 | 1.772 | unlit | unlit | unlit |
+| car.vehicle.ue4.bmw.grantourer | vehicle.ue4.bmw.grantourer | 4.611 | 2.144 | 1.667 | unlit | unlit | unlit |
+| car.vehicle.ue4.mercedes.ccc | vehicle.ue4.mercedes.ccc | 4.674 | 1.805 | 1.442 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.mustang | vehicle.ue4.ford.mustang | 4.718 | 1.835 | 1.301 | unlit | unlit | unlit |
+| car.vehicle.lincoln.mkz | vehicle.lincoln.mkz | 4.892 | 1.833 | 1.524 | unlit | unlit | unlit |
+| car.vehicle.dodge.charger | vehicle.dodge.charger | 5.006 | 1.854 | 1.540 | unlit | unlit | unlit |
+| car.vehicle.ue4.chevrolet.impala | vehicle.ue4.chevrolet.impala | 5.357 | 1.779 | 1.411 | unlit | unlit | unlit |
+| car.vehicle.ue4.ford.crown | vehicle.ue4.ford.crown | 5.366 | 1.782 | 1.575 | unlit | unlit | unlit |
+| suv.vehicle.nissan.patrol | vehicle.nissan.patrol | 5.591 | 2.147 | 2.059 | unlit | unlit | unlit |
+| van.vehicle.sprinter.mercedes | vehicle.sprinter.mercedes | 5.915 | 1.982 | 2.726 | unlit | unlit | unlit |
+| truck.vehicle.carlacola.actors | vehicle.carlacola.actors | 8.004 | 2.787 | 4.055 | unlit | unlit | unlit |
+| semi.vehicle.carlamotors.european_hgv | vehicle.carlamotors.european_hgv | 7.924 | 2.787 | 3.783 | unlit | unlit | unlit |
+| marked.vehicle.jeep.wrangler_rubicon | vehicle.jeep.wrangler_rubicon | 3.866 | 1.855 | 1.878 | unlit | unlit | unlit |
+
+## Supervision
+
+
+## Dry run (check 59)
+
+SUMO 1.27.0 alone over 2700 s: 7433 vehicles loaded, 7433 inserted, 0 discarded after waiting max-depart-delay, 0 still waiting at the end; 0 collisions, 0 teleports, 4 emergency stops, 7 emergency braking. 0 of the 0 vehicles the plan names entered; of the others, 0 were discarded and 0 were still waiting at the end.
+
+## Traffic
+
+SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into the configuration rather than left to SUMO's default:
+
+| Option | Value |
+|---|---|
+| `time-to-teleport` | -1 |
+| `max-depart-delay` | 900 |
+| `collision.action` | warn |
+| `lanechange.duration` | 3 |
+
+## Lock
+
+```json
+{
+  "routes": {
+    "path": "Arapahoe_I25_UnderpassDwell.rou.xml",
+    "sha256": "6d55aab12aa8b00895a5b116dded80cc310e15833da1edf1f897599d2c5a14d5"
+  },
+  "config": {
+    "path": "Arapahoe_I25_UnderpassDwell.sumocfg",
+    "sha256": "ead68759a136dddff82943cdcc2d7d897638d4f515a68c9fd346e4ca1b2b56ed"
+  },
+  "network": {
+    "path": "Arapahoe_I25.net.xml",
+    "sha256": "df268001dce59d11b6affbf484af5d67d2e5a4d5f0e05584561d1e9c1056dae3"
+  },
+  "additional": {
+    "path": "Arapahoe_I25_UnderpassDwell.add.xml",
+    "sha256": "25260f609a53c8d3ac7fae8d7c7ccc15a6c2e1000d2affaae080e2b6c49dc119"
+  },
+  "supervision": {
+    "path": "Arapahoe_I25_UnderpassDwell.supervision.json",
+    "sha256": "66284013c58feb54403a54973273c4ee5e68e61959b55e79d04d1d5526ff9b98"
+  }
+}
+```

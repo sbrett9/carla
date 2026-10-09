@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The TraCI client this bridge reads SUMO through, the world package it reads the road network
+         and the ground surface out of, and the CARLA client it writes poses through.
+
+         The write side reaches CARLA through ICarlaWorld, which is fourteen operations wide, so the
+         session and everything under it is exercised against a recording implementation with no
+         server anywhere. CarlaClientWorld is the only file in this assembly that names a
+         CarlaClient, and it is the only one a live run is needed to exercise. -->
+    <ProjectReference Include="..\CarlaNet.Sumo\CarlaNet.Sumo.csproj" />
+    <ProjectReference Include="..\CarlaNet.Map\CarlaNet.Map.csproj" />
+    <ProjectReference Include="..\CarlaNet.Transport\CarlaNet.Transport.csproj" />
+    <!-- The recorder's contract for a frame's illumination declaration, which the session answers
+         for every frame it renders. -->
+    <ProjectReference Include="..\CarlaNet.Recording\CarlaNet.Recording.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CarlaNet.CoSim.Tests" />
+  </ItemGroup>
+
+</Project>

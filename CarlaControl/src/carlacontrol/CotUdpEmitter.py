@@ -6,7 +6,7 @@ CoT-aware systems. Supports both unicast and multicast.
 
 import socket
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 
 class CotUdpEmitter:
@@ -73,7 +73,14 @@ class CotUdpEmitter:
         """Convert vehicle telemetry record to CoT XML event string.
 
         Args:
-            rec: Telemetry dict from world.get_vehicle_telemetry()
+            rec: Telemetry dict from world.get_vehicle_telemetry(). `type_id`, `special_type`,
+                `role_name` and `marked` are optional: each is written only when the record carries
+                it, so a producer whose categories are ground truth can withhold them at source.
+                A record that carries `sumo_id` -- a pooled body a SUMO drive lent, which draws a
+                succession of vehicles over a run -- is the track of that SUMO vehicle: its uid is
+                `<uid_prefix>-SUMO-<sumo_id>` and its callsign `<base_type>-<sumo_id>`, as the
+                recorded truth sidecar writes them, and `sumo_id`, `vtype_id` and `admitted_tick`
+                ride in `_carla` beside the actor id of the body that drew it.
             affiliation: CoT affiliation code (n=neutral, f=friendly, h=hostile)
             stale_seconds: How long until event is considered stale
             source: Source type ("truth" for ground truth, "m-f" for fusion)
@@ -84,14 +91,20 @@ class CotUdpEmitter:
         Returns:
             CoT XML event string
         """
-        now = when or datetime.now(timezone.utc)
+        now = when or datetime.now(UTC)
         stale = now + timedelta(seconds=stale_seconds)
+
+        # The track is the SUMO vehicle where the record names one, and the actor otherwise; the
+        # uid says which, so a SUMO id that happens to be a number is never read as an actor id.
+        sumo_id = rec.get("sumo_id")
+        track = str(sumo_id) if sumo_id is not None else str(rec["id"])
+        uid = f"{uid_prefix}-SUMO-{track}" if sumo_id is not None else f"{uid_prefix}-{track}"
 
         ev = ET.Element(
             "event",
             {
                 "version": "2.0",
-                "uid": f"{uid_prefix}-{rec['id']}",
+                "uid": uid,
                 "type": f"a-{affiliation}-G-E-V",
                 "how": "m-g" if source == "truth" else "m-f",
                 "time": CotUdpEmitter.format_cot_timestamp(now),
@@ -125,28 +138,48 @@ class CotUdpEmitter:
             detail,
             "contact",
             {
-                "callsign": f"{rec['base_type']}-{rec['id']}",
+                "callsign": f"{rec['base_type']}-{track}",
             },
         )
-        ET.SubElement(
-            detail,
-            "_carla",
-            {
-                "source": source,
-                "actor_id": str(rec["id"]),
-                "type_id": rec["type_id"],
-                "base_type": rec["base_type"],
-                "special_type": rec["special_type"],
-                "length_m": f"{rec['length_m']:.2f}",
-                "width_m": f"{rec['width_m']:.2f}",
-                "height_m": f"{rec['height_m']:.2f}",
-                "color": rec["color"],
-                "role_name": rec["role_name"],
-                "vx": f"{rec['vx']:.2f}",
-                "vy": f"{rec['vy']:.2f}",
-                "vz": f"{rec['vz']:.2f}",
-            },
-        )
+        # `type_id`, `special_type` and `role_name` are written only when the caller supplies them.
+        # A CARLA vehicle has all three as blueprint facts. A SUMO-driven one does not: there
+        # `type_id` and `role_name` are the scenario author's own names and SUMO reports no kind,
+        # so the bridge writes all three to its truth sidecar and hands its datagram feed a record
+        # without them (SumoCotBridge's AUTHORED_TRUTH_FIELDS). Writing them empty instead would
+        # still mark which records were withheld, so the attribute is omitted rather than blanked.
+        carla = {"source": source, "actor_id": str(rec["id"])}
+        if "type_id" in rec:
+            carla["type_id"] = rec["type_id"]
+        carla["base_type"] = rec["base_type"]
+        if "special_type" in rec:
+            carla["special_type"] = rec["special_type"]
+        carla["length_m"] = f"{rec['length_m']:.2f}"
+        carla["width_m"] = f"{rec['width_m']:.2f}"
+        carla["height_m"] = f"{rec['height_m']:.2f}"
+        carla["color"] = rec["color"]
+        if "role_name" in rec:
+            carla["role_name"] = rec["role_name"]
+        # `marked` is not a contract field. The SUMO bridge's truth sidecar supplies it to say
+        # which vehicles the author planted, 1 or 0 as in its CSV column, and so leaves
+        # `special_type` to say what kind of vehicle it is (06 D6.18). No CARLA record and no
+        # datagram carries it.
+        if "marked" in rec:
+            carla["marked"] = "1" if rec["marked"] else "0"
+        carla["vx"] = f"{rec['vx']:.2f}"
+        carla["vy"] = f"{rec['vy']:.2f}"
+        carla["vz"] = f"{rec['vz']:.2f}"
+        # The direction the body points, beside the track's course, the direction it moves.
+        if "heading_deg" in rec:
+            carla["heading_deg"] = f"{rec['heading_deg']:.1f}"
+        # Who a pooled body was drawing: the SUMO vehicle that joins the record to the scenario's
+        # supervision, its declared type, and the frame its rendered span began on.
+        if sumo_id is not None:
+            carla["sumo_id"] = str(sumo_id)
+            if "vtype_id" in rec:
+                carla["vtype_id"] = str(rec["vtype_id"])
+            if "admitted_tick" in rec:
+                carla["admitted_tick"] = str(rec["admitted_tick"])
+        ET.SubElement(detail, "_carla", carla)
 
         if capture is not None:
             ET.SubElement(detail, "_capture", capture.attributes())

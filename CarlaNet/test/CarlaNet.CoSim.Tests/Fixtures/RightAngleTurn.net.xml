@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2026-09-22T11:08:56.564710-08:00 by Eclipse SUMO netconvert 1.27.0
+<netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <node-files value="RightAngleTurn.nod.xml"/>
+        <edge-files value="RightAngleTurn.edg.xml"/>
+    </input>
+
+    <output>
+        <output-file value="RightAngleTurn.net.xml"/>
+    </output>
+
+    <processing>
+        <offset.disable-normalization value="true"/>
+    </processing>
+
+    <building_defaults>
+        <default.lanewidth value="3.35"/>
+    </building_defaults>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+    </junctions>
+
+</netconvertConfiguration>
+-->
+
+<net version="1.20" junctionCornerDetail="5" limitTurnSpeed="5.50" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/net_file.xsd">
+
+    <location netOffset="0.00,0.00" convBoundary="-100.00,-100.00,100.00,100.00" origBoundary="-100.00,-100.00,100.00,100.00" projParameter="!"/>
+
+    <edge id=":centre_0" function="internal">
+        <lane id=":centre_0_0" index="0" speed="6.56" length="9.15" width="3.35" shape="5.03,-7.35 5.38,-4.87 6.44,-3.09 8.22,-2.03 10.70,-1.68"/>
+    </edge>
+    <edge id=":centre_1" function="internal">
+        <lane id=":centre_1_0" index="0" speed="27.78" length="15.16" width="3.35" shape="5.03,-7.35 4.50,-2.58 3.35,0.95 2.20,4.00 1.68,7.35"/>
+    </edge>
+    <edge id=":centre_2" function="internal">
+        <lane id=":centre_2_0" index="0" speed="7.41" length="11.98" width="3.35" shape="1.68,-7.35 1.32,-3.40 0.26,-0.58 -1.52,1.11 -4.00,1.68"/>
+    </edge>
+
+    <edge id="ahead" from="centre" to="north" priority="-1">
+        <lane id="ahead_0" index="0" speed="27.78" length="92.65" width="3.35" shape="1.68,7.35 1.68,100.00"/>
+    </edge>
+    <edge id="approach" from="south" to="centre" priority="-1">
+        <lane id="approach_0" index="0" speed="27.78" length="92.65" width="3.35" shape="5.03,-100.00 5.03,-7.35"/>
+        <lane id="approach_1" index="1" speed="27.78" length="92.65" width="3.35" shape="1.68,-100.00 1.68,-7.35"/>
+    </edge>
+    <edge id="turn_east" from="centre" to="east" priority="-1">
+        <lane id="turn_east_0" index="0" speed="27.78" length="89.30" width="3.35" shape="10.70,-1.68 100.00,-1.68"/>
+    </edge>
+    <edge id="turn_west" from="centre" to="west" priority="-1">
+        <lane id="turn_west_0" index="0" speed="27.78" length="96.00" width="3.35" shape="-4.00,1.68 -100.00,1.68"/>
+    </edge>
+
+    <junction id="centre" type="priority" x="0.00" y="0.00" incLanes="approach_0 approach_1" intLanes=":centre_0_0 :centre_1_0 :centre_2_0" shape="0.00,7.35 3.35,7.35 3.55,5.10 4.17,3.27 5.19,1.84 6.62,0.82 8.45,0.20 10.70,0.00 10.70,-3.35 8.48,-3.79 7.70,-4.35 7.14,-5.13 6.81,-6.13 6.70,-7.35 0.00,-7.35 -0.11,-5.10 -0.44,-3.27 -1.00,-1.84 -1.78,-0.82 -2.78,-0.20 -4.00,0.00 -4.00,3.35 -1.78,3.79 -1.00,4.35 -0.44,5.13 -0.11,6.13">
+        <request index="0" response="000" foes="000" cont="0"/>
+        <request index="1" response="000" foes="000" cont="0"/>
+        <request index="2" response="000" foes="000" cont="0"/>
+    </junction>
+    <junction id="east" type="dead_end" x="100.00" y="0.00" incLanes="turn_east_0" intLanes="" shape="100.00,-3.35 100.00,0.00"/>
+    <junction id="north" type="dead_end" x="0.00" y="100.00" incLanes="ahead_0" intLanes="" shape="3.35,100.00 0.00,100.00"/>
+    <junction id="south" type="dead_end" x="0.00" y="-100.00" incLanes="" intLanes="" shape="0.00,-100.00 6.70,-100.00"/>
+    <junction id="west" type="dead_end" x="-100.00" y="0.00" incLanes="turn_west_0" intLanes="" shape="-100.00,3.35 -100.00,0.00"/>
+
+    <connection from="approach" to="turn_east" fromLane="0" toLane="0" via=":centre_0_0" dir="r" state="M"/>
+    <connection from="approach" to="ahead" fromLane="0" toLane="0" via=":centre_1_0" dir="s" state="M"/>
+    <connection from="approach" to="turn_west" fromLane="1" toLane="0" via=":centre_2_0" dir="l" state="M"/>
+
+    <connection from=":centre_0" to="turn_east" fromLane="0" toLane="0" dir="r" state="M"/>
+    <connection from=":centre_1" to="ahead" fromLane="0" toLane="0" dir="s" state="M"/>
+    <connection from=":centre_2" to="turn_west" fromLane="0" toLane="0" dir="l" state="M"/>
+
+</net>

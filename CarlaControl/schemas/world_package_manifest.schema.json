@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:world-package-manifest:1",
+  "title": "World package manifest (world.json in a .cwp)",
+  "description": "What a generated world is: its geographic origin, how its roads were seated on the photoreal imagery, the imagery layers, the traffic staging rectangle, and how it was built. Keys are PascalCase. CARLA's frame has x east, y south and z up, in meters. Heights are WGS84 ellipsoidal heights in meters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "MapName",
+    "OriginLatitude",
+    "OriginLongitude",
+    "OriginHeightMeters",
+    "HeightAlignMode",
+    "DrapeActive",
+    "HeightAlignOffsetMeters"
+  ],
+  "properties": {
+    "FormatVersion": {
+      "const": 1,
+      "description": "The format of this file. A manifest without it is version 1."
+    },
+    "Producer": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool",
+            "tool_version",
+            "carlanet",
+            "server",
+            "sumo"
+          ],
+          "description": "What made the file: the tool that wrote it and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+          "properties": {
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+            },
+            "tool_version": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+            },
+            "carlanet": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+            },
+            "server": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "available",
+                    "release",
+                    "world_interface",
+                    "build",
+                    "configuration",
+                    "carla_commit",
+                    "content_commit",
+                    "engine_commit",
+                    "commits_from"
+                  ],
+                  "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+                  "properties": {
+                    "available": {
+                      "const": true
+                    },
+                    "release": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The CARLA release the server was compiled with."
+                    },
+                    "world_interface": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The world interface version the server declares, Major.Minor."
+                    },
+                    "build": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "package for a cooked server, editor for one run from the editor."
+                    },
+                    "configuration": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The build configuration, such as Development or Shipping."
+                    },
+                    "carla_commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The CARLA commit."
+                    },
+                    "content_commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The content commit."
+                    },
+                    "engine_commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The Unreal Engine commit."
+                    },
+                    "commits_from": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "available",
+                    "release",
+                    "world_interface",
+                    "reason"
+                  ],
+                  "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+                  "properties": {
+                    "available": {
+                      "const": false
+                    },
+                    "release": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The CARLA release, or unknown."
+                    },
+                    "world_interface": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The world interface version, or unknown."
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Why the identity is not available."
+                    }
+                  }
+                }
+              ],
+              "description": "The CARLA server's build identity, where a server was used. Null where none was."
+            },
+            "sumo": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+            },
+            "written_utc": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+              "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What made the package. Absent from a package written before it was recorded."
+    },
+    "MapName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The world's name. The package file is <MapName>.cwp."
+    },
+    "OriginLatitude": {
+      "type": "number",
+      "description": "WGS84 latitude, degrees, of CARLA's (0, 0)."
+    },
+    "OriginLongitude": {
+      "type": "number",
+      "description": "WGS84 longitude, degrees, of CARLA's (0, 0)."
+    },
+    "OriginHeightMeters": {
+      "type": "number",
+      "description": "Ellipsoidal height, meters, that CARLA's z = 0 stands for."
+    },
+    "GeoReferenceString": {
+      "type": "string",
+      "description": "The OpenDRIVE geoReference projection, a PROJ string, copied verbatim from map.xodr. Empty when the OpenDRIVE carries none."
+    },
+    "HeightAlignMode": {
+      "enum": [
+        "none",
+        "area",
+        "origin",
+        "drape"
+      ],
+      "description": "How roads were seated on the photoreal imagery: none, area, origin or drape."
+    },
+    "DrapeActive": {
+      "type": "boolean",
+      "description": "True when the drivable surface was fitted to the imagery cell by cell, and bareearth.bin holds the grids."
+    },
+    "HeightAlignOffsetMeters": {
+      "type": "number",
+      "description": "The one height, meters, added to the road surface by the area and origin modes. 0 for none and for drape."
+    },
+    "GridMinXMeters": {
+      "type": "number",
+      "description": "CARLA x, meters, of the grid's first column. 0 when there is no grid."
+    },
+    "GridMinYMeters": {
+      "type": "number",
+      "description": "CARLA y, meters, of the grid's first row. 0 when there is no grid."
+    },
+    "GridCellSizeMeters": {
+      "type": "number",
+      "description": "Spacing, meters, between grid points. 0 when there is no grid."
+    },
+    "GridNumCols": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Grid points along x. 0 when there is no grid."
+    },
+    "GridNumRows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Grid points along y. 0 when there is no grid."
+    },
+    "BareEarthOffsetSha1": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40})?$",
+      "description": "SHA-1, lowercase hexadecimal, of the offset plane's bytes in bareearth.bin. Empty when there is no grid, and on older packages."
+    },
+    "BareEarthDtmSha1": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40})?$",
+      "description": "SHA-1, lowercase hexadecimal, of the ground height plane's bytes in bareearth.bin. Empty when there is no grid, and on older packages."
+    },
+    "PhotorealIonAssetId": {
+      "type": "integer",
+      "description": "Cesium ion asset id of the photoreal imagery tileset."
+    },
+    "GroundIonAssetId": {
+      "type": "integer",
+      "description": "Cesium ion asset id of the bare-earth terrain the road heights were taken from. 1 is Cesium World Terrain; 0 means heights came from the photoreal surface."
+    },
+    "StagingMinXMeters": {
+      "type": "number",
+      "description": "CARLA x, meters, of the staging rectangle's west edge."
+    },
+    "StagingMinYMeters": {
+      "type": "number",
+      "description": "CARLA y, meters, of the staging rectangle's north edge."
+    },
+    "StagingMaxXMeters": {
+      "type": "number",
+      "description": "CARLA x, meters, of the staging rectangle's east edge."
+    },
+    "StagingMaxYMeters": {
+      "type": "number",
+      "description": "CARLA y, meters, of the staging rectangle's south edge."
+    },
+    "StagingMarginMeters": {
+      "type": "number",
+      "description": "Width, meters, of the ring inside the staging rectangle where traffic enters and leaves."
+    },
+    "SourceOsmFileName": {
+      "type": "string",
+      "description": "File name of the OpenStreetMap extract the world was built from."
+    },
+    "SourceOsmSha256": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64})?$",
+      "description": "Fingerprint of that extract: SHA-256 over its parsed content, not its bytes. Older packages hold a digest of the bytes instead."
+    },
+    "OpenDriveSha256": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64})?$",
+      "description": "SHA-256 of map.xodr from its root element on, with the header's date blanked."
+    },
+    "NetworkFingerprint": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64})?$",
+      "description": "Fingerprint of map.net.xml: SHA-256 over its parsed content. Empty on a package without a network."
+    },
+    "NetconvertArgv": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Every argument netconvert was given, in order. Its output files are named <opendrive-output>, <output-file> and <tllogic-files>."
+    },
+    "NetconvertPath": {
+      "type": "string",
+      "description": "The netconvert executable that ran. Empty on older packages."
+    },
+    "NetconvertVersion": {
+      "type": "string",
+      "description": "What that netconvert reported as its version, such as Eclipse SUMO netconvert 1.27.0. Empty on older packages."
+    },
+    "SampleStepMeters": {
+      "type": "number",
+      "description": "Spacing, meters, of the road reference-line height samples."
+    },
+    "TerrainResolutionMeters": {
+      "type": "number",
+      "description": "Spacing, meters, of the drivable surface points in drape mode."
+    },
+    "TerrainMarginMeters": {
+      "type": "number",
+      "description": "The staging margin the build was asked for, meters."
+    },
+    "GeneratedAtUtc": {
+      "type": "string",
+      "description": "When the package was written, ISO 8601 UTC."
+    },
+    "GeneratorVersion": {
+      "type": "string",
+      "description": "Assembly version of the CarlaNet client that wrote the package."
+    },
+    "NetconvertExtraArgs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The arguments, among NetconvertArgv, that the caller added to the standard set."
+    }
+  }
+}

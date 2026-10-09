@@ -7,6 +7,15 @@ connection, world building, EO observer, traffic, telemetry, and recording.
 import argparse
 import os
 import random
+import sys
+from pathlib import Path
+
+from carlacontrol.CameraName import CameraName
+from carlacontrol.ToolLayout import ToolLayout
+
+# The extract a world is built from when none is named, in a source checkout's Import/ folder. An
+# installed command has no such folder to take one from, so there it must be named.
+CHECKOUT_DEFAULT_OSM = "Lakeview_Carson.osm"
 
 
 class CarlaControlArgumentParser:
@@ -16,21 +25,21 @@ class CarlaControlArgumentParser:
     viewing, traffic management, telemetry, and recording subsystems.
     """
 
-    def __init__(self, repo_root: str, description: str | None = None):
+    def __init__(self, layout: ToolLayout | str | Path, description: str | None = None):
         """Initialize the argument parser.
 
         Args:
-            repo_root: Path to repository root for default paths
+            layout: Where the default paths come from (`ToolLayout`), or a source checkout's root
             description: Program description (uses default if None)
         """
-        self.repo_root = repo_root
+        self.layout = layout if isinstance(layout, ToolLayout) else ToolLayout(layout)
         self.description = description or "SCTMV — Single Client Traffic Manager & Viewer"
         self._parser = self._build_parser()
 
     def _build_parser(self) -> argparse.ArgumentParser:
         """Build the argument parser with all argument groups."""
         ap = argparse.ArgumentParser(
-            description=self.description,
+            prog=os.path.basename(sys.argv[0]), description=self.description,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
 
@@ -45,6 +54,11 @@ class CarlaControlArgumentParser:
         self._add_orbit_args(ap)
 
         return ap
+
+    def _build_relative(self, *parts: str) -> str:
+        """A default under the layout's output folder, as a help text names it."""
+        prefix = ("Build",) if not self.layout.installed else (".",)
+        return "/".join((*prefix, *parts))
 
     def _add_connection_args(self, ap: argparse.ArgumentParser) -> None:
         """Add connection and mode arguments."""
@@ -84,14 +98,24 @@ class CarlaControlArgumentParser:
             help="don't build a world; attach to the one already on the server "
             "(skip straight to viewing / traffic)",
         )
+        if self.layout.installed:
+            build.add_argument(
+                "--osm", default=None,
+                help="the OpenStreetMap extract to build the world from (required to build)")
+        else:
+            build.add_argument(
+                "--osm", default=str(self.layout.import_directory / CHECKOUT_DEFAULT_OSM),
+                help=f"the OpenStreetMap extract to build the world from (default "
+                f"Import/{CHECKOUT_DEFAULT_OSM})")
         build.add_argument(
-            "--osm", default=os.path.join(self.repo_root, "Import", "Lakeview_Carson.osm")
+            "--lat", type=float, default=None,
+            help="origin latitude (default: the center of the OSM bounds, rounded to 7 decimal places, "
+                 "the precision OSM uses)"
         )
         build.add_argument(
-            "--lat", type=float, default=None, help="origin lat (default: OSM bounds center)"
-        )
-        build.add_argument(
-            "--lon", type=float, default=None, help="origin lon (default: OSM bounds center)"
+            "--lon", type=float, default=None,
+            help="origin longitude (default: the center of the OSM bounds, rounded to 7 decimal places, "
+                 "the precision OSM uses)"
         )
         build.add_argument(
             "--step", type=float, default=10.0, help="reference-line sample spacing (m)"
@@ -150,8 +174,8 @@ class CarlaControlArgumentParser:
             "--road-offset-east",
             type=float,
             default=0.0,
-            metavar="METRES",
-            help="slide the whole generated road network this many metres east of where the "
+            metavar="METERS",
+            help="slide the whole generated road network this many meters east of where the "
             "map data puts it (negative = west). For when the roads come out beside the "
             "roadway in the photoreal imagery rather than on it: the imagery and every "
             "latitude/longitude the telemetry reports stay pinned where they are, only the "
@@ -166,8 +190,8 @@ class CarlaControlArgumentParser:
             "--road-offset-north",
             type=float,
             default=0.0,
-            metavar="METRES",
-            help="slide the whole generated road network this many metres north (negative = "
+            metavar="METERS",
+            help="slide the whole generated road network this many meters north (negative = "
             "south). See --road-offset-east.",
         )
         build.add_argument(
@@ -190,15 +214,21 @@ class CarlaControlArgumentParser:
             help="disable collision on the bare-earth ground (default ON)",
         )
         build.add_argument(
-            "--settle",
-            type=float,
-            default=10.0,
-            help="Cesium settle seconds during build",
-        )
-        build.add_argument(
             "--no-road-filter",
             action="store_true",
             help="don't restrict netconvert to car-drivable roads",
+        )
+        build.add_argument(
+            "--netconvert-arg",
+            action="append",
+            default=[],
+            metavar="ARGS",
+            help="one more netconvert option and its value, quoted together and repeatable: "
+            "--netconvert-arg '--remove-edges.by-type highway.footway'. Keeping the pair in one quoted token is what carries a "
+            "value through; giving them separately reads the second as an option of its own. An option "
+            "taking no value is the one case needing --netconvert-arg=--no-turnarounds. A SUMO scenario checks its "
+            "own flag set against the one recorded in the world package, so a world a scenario "
+            "needs built differently is built with these",
         )
         build.add_argument(
             "--no-clip-bounds",
@@ -208,7 +238,8 @@ class CarlaControlArgumentParser:
         build.add_argument(
             "--save",
             default=None,
-            help="output elevated .xodr (default: Build/sumo-smoketest/<osm>_elevated.xodr)",
+            help="output elevated .xodr (default: "
+            f"{self._build_relative('sumo-smoketest', '<osm>_elevated.xodr')})",
         )
         build.add_argument(
             "--emit-world-package",
@@ -216,7 +247,29 @@ class CarlaControlArgumentParser:
             metavar="DIR",
             help="also write a durable record of the built world to DIR: the road network, the "
             "per-cell grids that convert driven height to true ground height, and a manifest "
-            "describing the origin, the imagery layers and how it was built",
+            "describing the origin, the imagery layers and how it was built. The authoring "
+            "reference set -- areas of interest, the place index and the solar frame -- is "
+            "published into the same package",
+        )
+        build.add_argument(
+            "--aoi",
+            default=None,
+            metavar="GEOJSON",
+            help="areas of interest for this world, as GeoJSON (RFC 7946, positions "
+            "[longitude, latitude]). Default: <extract>.aoi.geojson beside --osm, when one exists. "
+            "Validated before the build starts, which a malformed file refuses; resolved to CARLA "
+            "meters and SUMO lanes and published with --emit-world-package",
+        )
+        build.add_argument(
+            "--type-map",
+            default=None,
+            metavar="TYP_XML",
+            help="netconvert edge types for this world, layered over SUMO's own OSM type map: a "
+            "<types> file whose <type> entries replace the defaults attribute by attribute, e.g. "
+            "which vehicle classes a highway.service road admits. Default: <extract>.typ.xml "
+            "beside --osm, when one exists. Validated before the build starts, and recorded in "
+            "the world package's netconvert argument list; the world's network carries what it "
+            "sets, so every scenario on the world inherits it",
         )
         build.add_argument("--timeout", type=float, default=300.0, help="build RPC timeout (s)")
 
@@ -226,32 +279,38 @@ class CarlaControlArgumentParser:
         view.add_argument(
             "--z", type=float, default=1000.0, help="start altitude in FEET (default 1000)"
         )
-        view.add_argument("--x", type=float, default=0.0, help="camera start x (CARLA metres)")
+        view.add_argument("--x", type=float, default=0.0, help="camera start x (CARLA meters)")
         view.add_argument(
             "--y",
             type=float,
             default=0.0,
-            help="camera start y (CARLA metres; -Y is North)",
+            help="camera start y (CARLA meters; -Y is North)",
         )
         view.add_argument("--fov", type=float, default=90.0)
         view.add_argument(
             "--ev",
             type=float,
             default=0.0,
-            help="camera exposure_compensation (EV); >0 brightens",
+            help="camera exposure compensation, EV, added to the camera's exposure (the Default "
+            "profile's manual ISO 100, 1/320 s, f/4, EV100 +12.32); above 0 brightens, +1 doubles "
+            "the brightness. Recorded on every capture",
         )
         view.add_argument(
             "--time",
             default=None,
-            help="start local solar time as HH:MM or decimal hours (default: 12:00, local "
-            "solar noon). The sun's time zone is derived from the map longitude, so "
-            "noon is high sun wherever the OSM origin is.",
+            help="start local solar time as HH:MM or decimal hours. Omit it and the sun keeps "
+            "whatever clock the world already has, which is reported at startup rather than "
+            "replaced -- illumination is only a controlled setting if it was asked for. The "
+            "sun's time zone is derived from the map longitude, so noon is high sun wherever "
+            "the OSM origin is.",
         )
         view.add_argument(
             "--date",
             default=None,
-            help="scene date as YYYY-MM-DD (default: host system date). Sets the seasonal "
-            "sun angle; not for historical/almanac accuracy.",
+            help="scene date as YYYY-MM-DD. Sets the seasonal sun angle, which at mid latitudes "
+            "moves the noon sun by more than forty degrees between the solstices; not for "
+            "historical/almanac accuracy. Omit it and the world keeps the date it already has, "
+            "rather than being given the host machine's calendar.",
         )
         view.add_argument(
             "--time-advance",
@@ -275,13 +334,13 @@ class CarlaControlArgumentParser:
             "--depth-max-range",
             type=float,
             default=20000.0,
-            help="how far the depth camera can measure, in metres (default 20000). Depth is what "
+            help="how far the depth camera can measure, in meters (default 20000). Depth is what "
             "Ctrl+LMB measures a point with and what tells the recorder whether a vehicle is "
             "hidden behind something; anything further away than this reads the same as empty "
             "sky. CARLA's own default of 1000 runs out at about 3250 ft looking straight down, "
             "and sooner when the camera is tilted. Raising it costs no accuracy worth "
             "measuring, but accuracy does fall off with distance either way: a reading is short "
-            "by roughly 0.1%% of the distance for every kilometre of distance.",
+            "by roughly 0.1%% of the distance for every kilometer of distance.",
         )
 
     def _add_traffic_args(self, ap: argparse.ArgumentParser) -> None:
@@ -366,11 +425,11 @@ class CarlaControlArgumentParser:
             "--lane-spawn-spacing",
             type=float,
             default=15.0,
-            metavar="METRES",
+            metavar="METERS",
             help="place spawn sites this far apart along every drivable lane that passes through "
             "the staging ring, instead of relying only on the one point CARLA puts at each road "
-            "entry. A road clipped by the map edge otherwise offers just the few metres at its "
-            "entry, however much of the same carriageway lies inside the ring. 0 uses road-entry "
+            "entry. A road clipped by the map edge otherwise offers just the few meters at its "
+            "entry, however much of the same roadway lies inside the ring. 0 uses road-entry "
             "points only.",
         )
         traf.add_argument(
@@ -390,7 +449,7 @@ class CarlaControlArgumentParser:
             action="store_true",
             help="give each vehicle its road speed the instant it is created, instead of "
             "letting it accelerate from rest. OFF by default: this sets the body's "
-            "velocity while its wheels are still stationary, so the tyre model sees "
+            "velocity while its wheels are still stationary, so the tire model sees "
             "full slip and the vehicle briefly has no grip — which can carry it off "
             "the road before the traffic manager has any say.",
         )
@@ -403,7 +462,7 @@ class CarlaControlArgumentParser:
             "Lower it to run the whole fleet slower without flattening the "
             "differences between roads: 40 gives 40%% of the limit everywhere, so a "
             "65 mph freeway becomes 26 mph and a 25 mph street becomes 10. Useful "
-            "for telling apart behaviour that degrades with speed from behaviour "
+            "for telling apart behavior that degrades with speed from behavior "
             "that is wrong at any speed.",
         )
         traf.add_argument(
@@ -458,6 +517,16 @@ class CarlaControlArgumentParser:
             "Positions are resolved against the road network the server has loaded, so "
             "the storyboard must have been authored against this same world.",
         )
+        scen.add_argument(
+            "--scenario-id",
+            default=None,
+            help="name of the scenario this run is executing, recorded on every capture's "
+            "Cursor-on-Target sidecar so the truth written beside a still says which scenario "
+            "produced it. Defaults to the name of the --scenario file when one is given. It is "
+            "deliberately kept out of the image metadata: a scenario name is a handle on a whole "
+            "set of scenes, so an image carrying it lets a model key on the scenario instead of "
+            "on what the scene shows.",
+        )
 
     def _add_telemetry_args(self, ap: argparse.ArgumentParser) -> None:
         """Add CoT telemetry arguments."""
@@ -503,11 +572,14 @@ class CarlaControlArgumentParser:
         rec = ap.add_argument_group("recording (F hotkey)")
         rec.add_argument(
             "--record-dir",
-            default=os.path.join(self.repo_root, "Build", "SCTMV_recordings"),
-            help="folder for recordings (default Build/SCTMV_recordings). F toggles recording: "
+            default=str(self.layout.build_directory / "SCTMV_recordings"),
+            help=f"folder for recordings (default {self._build_relative('SCTMV_recordings')}). "
+            "F toggles recording: "
             "each capture writes a lossless PNG of the clean streamed imagery (no HUD) plus "
             "a matching .xml Cursor-on-Target sidecar at that instant — the vehicle tracks "
-            "and the collection platform (the camera itself) as an air track.",
+            "and the collection platform (the camera itself) as an air track — named "
+            "<camera name>_<local capture time to the millisecond> (see --camera-name). "
+            "Captures from before cameras were named are SCTMV_<local capture time>.",
         )
         rec.add_argument(
             "--record-hz",
@@ -530,34 +602,43 @@ class CarlaControlArgumentParser:
             "own asset) / n neutral / u unknown / h hostile.",
         )
         rec.add_argument(
+            "--camera-name",
             "--platform-callsign",
-            default="OVERWATCH",
-            help="callsign for the recorded platform track (default OVERWATCH).",
+            dest="camera_name",
+            type=CameraName.argument,
+            default=None,
+            metavar="NAME",
+            help="the camera's name, given as it is created, such as Overwatch_1, "
+            "Southeast_1700m_orbit or NapOfEarth_2: 1 to 63 characters, each an ASCII letter, "
+            "digit, underscore or hyphen, and not a Windows device name (CON, NUL, COM1, ...), a "
+            "stock sensor role name (front, back, left, right, ...), the server's own "
+            "Camera_<number> or CARLA-SENSOR-<number>. Every capture is named after it, "
+            "<NAME>_<local capture time>.png and .xml, and it is the callsign of the camera's "
+            "platform track, so cameras sharing a world are told apart in their files and their "
+            "telemetry. A name is used as given or refused, never rewritten, and the server refuses "
+            "one a live camera in the world holds, in any case, when the camera is spawned. "
+            "Default: the name the server gives the camera, Camera_<n>, which no other camera on "
+            "the server holds. --platform-callsign is the older spelling.",
         )
         rec.add_argument(
             "--platform-uid",
             default=None,
-            help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>).",
+            help="CoT track uid for the platform (default: CARLA-SENSOR-<camera id>, whatever the "
+            "camera is named).",
         )
-        rec.add_argument(
-            "--no-occlusion",
-            dest="occlusion",
-            action="store_false",
-            help="do not record how much of each vehicle the camera can actually see. By default "
-            "every capture measures, per vehicle, the fraction of it hidden behind buildings, "
-            "trees, terrain or other vehicles, and writes it into the sidecar as occlusion "
-            "(0 = fully visible, 1 = fully hidden) plus a coarse occlusion_level band, so a "
-            "process drawing training boxes can drop the ones it cannot see and label the rest. "
-            "The measurement reads the depth camera, adding a second subscription to its frames.",
-        )
+        # Every capture measures, per vehicle, the fraction of it hidden behind buildings, trees,
+        # terrain or other vehicles, against the rig's depth camera, and writes it into the sidecar
+        # as occlusion (0 = fully visible, 1 = fully hidden) with a coarse occlusion_level band.
+        # There is no switch to turn the measurement off; the two settings below shape it.
         rec.add_argument(
             "--occlusion-margin",
             type=float,
             default=1.0,
-            help="metres nearer than a vehicle's own surface that something must be before it "
+            help="meters nearer than a vehicle's own surface that something must be before it "
             "counts as hiding it (default 1.0). Absorbs the gap between the vehicle's bounding "
             "box and its real bodywork; raise it if vehicles report occlusion with a clear view, "
-            "lower it if an obstruction pressed right against a vehicle is being missed.",
+            "lower it if an obstruction pressed right against a vehicle is being missed. The "
+            "measurement itself is on for every capture and has no switch.",
         )
         rec.add_argument(
             "--occlusion-samples",
@@ -576,12 +657,12 @@ class CarlaControlArgumentParser:
             help="start with the orbit camera running instead of free flight; O toggles "
             "between the two at any time either way",
         )
-        orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA metres)")
+        orbit.add_argument("--orbit-x", type=float, default=None, help="orbit center X (CARLA meters)")
         orbit.add_argument(
             "--orbit-y",
             type=float,
             default=None,
-            help="orbit center Y (CARLA metres; -Y is North)",
+            help="orbit center Y (CARLA meters; -Y is North)",
         )
         orbit.add_argument(
             "--orbit-lat",
@@ -605,13 +686,13 @@ class CarlaControlArgumentParser:
             "--orbit-altitude",
             type=float,
             default=1700,
-            help="camera altitude above the orbit centre, in FEET (default 1700).",
+            help="camera altitude above the orbit center, in FEET (default 1700).",
         )
         orbit.add_argument(
             "--orbit-speed",
             type=float,
             default=240.0,
-            help="orbit speed in seconds (default 240 = 4 min)",
+            help="simulated seconds per revolution of the orbit (default 240 = 4 min)",
         )
 
     def parse(self, args: list[str] | None = None) -> dict:

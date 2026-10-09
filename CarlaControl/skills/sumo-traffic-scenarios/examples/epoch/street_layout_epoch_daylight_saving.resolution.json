@@ -1,0 +1,623 @@
+{
+  "resolution_version": 1,
+  "outcome": "compiled",
+  "scenario": {
+    "scenario_id": "street_layout_epoch_daylight_saving",
+    "scenario_name": "Street layout, epoch daylight saving",
+    "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
+    "specification": "street_layout_epoch_daylight_saving.scenario.json",
+    "specification_sha256": "7813a0feb4156c79a41af00ac694a29000d8277b36ed6de3594f0d480211c880",
+    "spec_version": 1
+  },
+  "findings": [
+    {
+      "check": 17,
+      "outcome": "warn",
+      "subject": "vehicle class saloon",
+      "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 41,
+      "outcome": "warn",
+      "subject": "supervision",
+      "message": "I(band; supervision) / H(supervision) = undefined (one supervision state only) over 2 entries (captured by the declared windows). Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
+    }
+  ],
+  "epoch": {
+    "declared": {
+      "calendar_advances": true,
+      "civil_datetime": "2026-03-21T06:00:00-06:00",
+      "dst_in_effect": true,
+      "epoch_version": 1,
+      "note": "Colorado after daylight saving began: -06:00 with dst_in_effect, one offset for the whole run",
+      "time_zone_id": "America/Denver",
+      "utc_datetime": "2026-03-21T12:00:00Z",
+      "utc_offset_hours": -6
+    },
+    "epoch_block_sha256": "0a788db80f87b96115e5a1d7ec543eb43725dd4c920106b46fd4ad9b2d049e72",
+    "statement": "t = 0 is 2026-03-21T06:00:00-06:00 (2026-03-21T12:00:00Z), UTC-06:00 including daylight saving, calendar advances, America/Denver; the run ends at 2026-03-21T08:00:00-06:00",
+    "t0_civil": "2026-03-21T06:00:00-06:00",
+    "end_s": 7200.0,
+    "end_civil": "2026-03-21T08:00:00-06:00",
+    "time_zone_id": "America/Denver",
+    "time_zone_id_resolved": false
+  },
+  "zone": {
+    "declared_offset_hours": -6.0,
+    "engine_time_zone_hours": -6.993333333333334,
+    "difference_hours": 0.9933333333333341,
+    "written_by_the_session": "set_solar_epoch writes the declared offset as the sun's zone"
+  },
+  "illumination_default": {
+    "declared": {
+      "illumination_version": 1,
+      "policy": "freeze_at_window_start"
+    },
+    "policy": "freeze_at_window_start",
+    "status": "an authored default the operator may override",
+    "declared_elevation_kind": "refraction_corrected"
+  },
+  "capture_windows": [
+    {
+      "id": "morning",
+      "begin": {
+        "authored": "d0 06:55",
+        "form": "day_clock",
+        "seconds": 3300.0,
+        "civil": "2026-03-21T06:55:00-06:00"
+      },
+      "length_s": 900.0,
+      "end_s": 4200.0,
+      "end_civil": "2026-03-21T07:10:00-06:00",
+      "civil_date": "2026-03-21",
+      "sun_open": {
+        "seconds": 3300.0,
+        "sun_date": "2026-03-21",
+        "sun_clock": "06:55:00",
+        "elevation_deg": -1.948,
+        "geometric_elevation_deg": -2.105,
+        "azimuth_deg": 87.9158
+      },
+      "sun_close": {
+        "seconds": 4200.0,
+        "sun_date": "2026-03-21",
+        "sun_clock": "06:55:00",
+        "elevation_deg": -1.948,
+        "geometric_elevation_deg": -2.105,
+        "azimuth_deg": 87.9158
+      },
+      "sun_lowest": {
+        "elevation_deg": -1.948,
+        "elevation_kind": "refraction_corrected",
+        "band": "civil_twilight",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      }
+    }
+  ],
+  "illumination_label_association": {
+    "statistic": "I(band; supervision) / H(supervision), base 2",
+    "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below",
+    "band_edges": [
+      {
+        "band": "day",
+        "above_deg": 6.0
+      },
+      {
+        "band": "golden",
+        "above_deg": 0.0
+      },
+      {
+        "band": "civil_twilight",
+        "above_deg": -6.0
+      },
+      {
+        "band": "nautical_twilight",
+        "above_deg": -12.0
+      },
+      {
+        "band": "astronomical_twilight",
+        "above_deg": -18.0
+      },
+      {
+        "band": "night",
+        "above_deg": null
+      }
+    ],
+    "elevation_kind": "refraction_corrected",
+    "presence_estimate": "a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end",
+    "over_windows": {
+      "entries": 2,
+      "table": {
+        "civil_twilight": {
+          "annotated": 0,
+          "nominal": 0,
+          "unlabelled": 2,
+          "total": 2
+        }
+      },
+      "state_totals": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 2
+      },
+      "annotated_rate": {
+        "civil_twilight": 0.0
+      },
+      "base_annotated_rate": 0.0,
+      "normalized_mutual_information": null,
+      "degenerate_bands": [],
+      "mixed_bands": [],
+      "windows": [
+        "morning"
+      ]
+    },
+    "over_span": {
+      "entries": 2,
+      "table": {
+        "civil_twilight": {
+          "annotated": 0,
+          "nominal": 0,
+          "unlabelled": 1,
+          "total": 1
+        },
+        "astronomical_twilight": {
+          "annotated": 0,
+          "nominal": 0,
+          "unlabelled": 1,
+          "total": 1
+        }
+      },
+      "state_totals": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 2
+      },
+      "annotated_rate": {
+        "civil_twilight": 0.0,
+        "astronomical_twilight": 0.0
+      },
+      "base_annotated_rate": 0.0,
+      "normalized_mutual_information": null,
+      "degenerate_bands": [],
+      "mixed_bands": []
+    },
+    "normalized_mutual_information": null,
+    "bands": {
+      "civil_twilight": {
+        "annotated": 0,
+        "nominal": 0,
+        "unlabelled": 2,
+        "total": 2
+      }
+    },
+    "entries": 2,
+    "measured_over": "windows",
+    "remedies": [
+      "pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band",
+      "add a nominal twin inside the annotated band: a hard negative lit identically",
+      "add a capture window in a band where the annotated class is absent, which turns a degenerate band into a populated one"
+    ]
+  },
+  "world": {
+    "package": "StreetLayout.cwp",
+    "map_name": "StreetLayout",
+    "network_fingerprint": "44194b18d22c91a25e85babe0469d43d064f3fb9aabe15fa62a486cd8fb4e2e0",
+    "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+    "origin": [
+      39.5,
+      -104.9
+    ],
+    "georeference": "+proj=tmerc +lat_0=39.5 +lon_0=-104.9 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+    "routing_sumo": {
+      "version": "1.27.0",
+      "matched_by": "explicit",
+      "release_agreement": "SameRelease",
+      "verdict": "the world was converted by 'Eclipse SUMO netconvert 1.27.0', the same release"
+    }
+  },
+  "instants": {},
+  "places": {
+    "west_gate": {
+      "name": "west_gate",
+      "authored": {
+        "gateway": "west",
+        "travel": "in"
+      },
+      "form": "gateway",
+      "edges": [
+        "900"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "",
+      "detail": "1 edge(s) entering on the west side",
+      "edge_details": [
+        {
+          "edge": "900",
+          "street": "West Street",
+          "length_m": 201.27,
+          "speed_mps": 13.41
+        }
+      ]
+    },
+    "east_gate": {
+      "name": "east_gate",
+      "authored": {
+        "gateway": "east",
+        "travel": "out"
+      },
+      "form": "gateway",
+      "edges": [
+        "901#1"
+      ],
+      "lane": null,
+      "start_pos": null,
+      "end_pos": null,
+      "street": "",
+      "detail": "1 edge(s) leaving on the east side",
+      "edge_details": [
+        {
+          "edge": "901#1",
+          "street": "East Street",
+          "length_m": 93.28,
+          "speed_mps": 13.41
+        }
+      ]
+    },
+    "survey_point": {
+      "name": "survey_point",
+      "authored": {
+        "lat": 39.49998486682519,
+        "lon": -104.89941869548137,
+        "max_snap_m": 5
+      },
+      "form": "point",
+      "edges": [
+        "901#0"
+      ],
+      "lane": "901#0_0",
+      "start_pos": null,
+      "end_pos": 50.0,
+      "street": "East Street",
+      "detail": "snapped 0.00 m to 901#0_0",
+      "edge_details": [
+        {
+          "edge": "901#0",
+          "street": "East Street",
+          "length_m": 93.29,
+          "speed_mps": 13.41
+        }
+      ]
+    }
+  },
+  "rotas": [],
+  "routes": [
+    {
+      "id": "probe",
+      "type": "saloon",
+      "from": "900",
+      "to": "901#1",
+      "via": [],
+      "route": [
+        "900",
+        "901#0",
+        "901#1"
+      ],
+      "route_length_m": 387.84,
+      "free_flow_s": 28.9,
+      "stops": [
+        {
+          "place": "survey_point",
+          "lane": "901#0_0",
+          "start_pos": null,
+          "end_pos": 50.0,
+          "parking": false,
+          "duration": 300.0
+        }
+      ],
+      "depart": {
+        "authored": "d0 07:00",
+        "form": "day_clock",
+        "seconds": 3600.0,
+        "civil": "2026-03-21T07:00:00-06:00"
+      },
+      "origin": "actor"
+    },
+    {
+      "id": "ambient",
+      "type": "ambient_mix",
+      "from": "900",
+      "to": "901#1",
+      "via": [],
+      "route": [
+        "900",
+        "901#0",
+        "901#1"
+      ],
+      "route_length_m": 387.84,
+      "free_flow_s": 28.9,
+      "stops": [],
+      "begin": {
+        "authored": "d0 06:00",
+        "form": "day_clock",
+        "seconds": 0.0,
+        "civil": "2026-03-21T06:00:00-06:00"
+      },
+      "end": {
+        "authored": "d0 08:00",
+        "form": "day_clock",
+        "seconds": 7200.0,
+        "civil": "2026-03-21T08:00:00-06:00"
+      },
+      "vehs_per_hour": 200.0
+    }
+  ],
+  "vehicle_types": {
+    "catalogue": {
+      "path": "vehicles.catalogue.json",
+      "catalogue_id": "carla-0.10.0-windows",
+      "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4"
+    },
+    "classes": [
+      "car: 3 measured bodies, length 4.55-5.01 m, mean 4.82 m, share 1",
+      "saloon: 1 measured body, length 4.89-4.89 m, mean 4.89 m, share 0"
+    ],
+    "mix": {
+      "id": "ambient_mix",
+      "probabilities": {
+        "car.vehicle.lincoln.mkz": 0.3333333333333333,
+        "car.vehicle.dodge.charger": 0.3333333333333333,
+        "car.vehicle.mini.cooper": 0.3333333333333333
+      }
+    },
+    "mixes": [],
+    "types": {
+      "car.vehicle.lincoln.mkz": {
+        "blueprint": "vehicle.lincoln.mkz",
+        "length_m": 4.892,
+        "width_m": 1.8356,
+        "body_width_m": 1.8335,
+        "height_m": 1.5241,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
+      },
+      "car.vehicle.dodge.charger": {
+        "blueprint": "vehicle.dodge.charger",
+        "length_m": 5.006,
+        "width_m": 1.881,
+        "body_width_m": 1.854,
+        "height_m": 1.5403,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
+      },
+      "car.vehicle.mini.cooper": {
+        "blueprint": "vehicle.mini.cooper",
+        "length_m": 4.5526,
+        "width_m": 2.0956,
+        "body_width_m": 2.0897,
+        "height_m": 1.7725,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
+      },
+      "saloon.vehicle.lincoln.mkz": {
+        "blueprint": "vehicle.lincoln.mkz",
+        "length_m": 4.892,
+        "width_m": 1.8356,
+        "body_width_m": 1.8335,
+        "height_m": 1.5241,
+        "lights": {
+          "headlights": "unlit",
+          "brake_lights": "unlit",
+          "turn_signals": "unlit"
+        }
+      }
+    }
+  },
+  "supervision": {
+    "instances": [],
+    "cohorts": [
+      {
+        "flow_id": "ambient",
+        "supervision": "unlabelled",
+        "labels": [],
+        "parameters": {}
+      }
+    ],
+    "series": []
+  },
+  "dry_run": {
+    "ran": true,
+    "sumo_release": "1.27.0",
+    "begin_s": 0.0,
+    "end_s": 7200.0,
+    "vehicles": {
+      "loaded": 401,
+      "inserted": 401,
+      "discarded": 0,
+      "waiting_at_end": 0
+    },
+    "planned_vehicles": {
+      "total": 0,
+      "inserted": 0
+    },
+    "collisions": 0,
+    "teleports": 0,
+    "emergency_stops": 0,
+    "emergency_braking": 0,
+    "other_vehicles_discarded": 0,
+    "other_vehicles_waiting_at_end": 0,
+    "planned": [],
+    "collision_list": []
+  },
+  "lock": {
+    "lock_version": 1,
+    "scenario_id": "street_layout_epoch_daylight_saving",
+    "scenario_name": "Street layout, epoch daylight saving",
+    "spec_version": 1,
+    "specification": "street_layout_epoch_daylight_saving.scenario.json",
+    "specification_sha256": "7813a0feb4156c79a41af00ac694a29000d8277b36ed6de3594f0d480211c880",
+    "compiler": {
+      "name": "carlacontrol.ScenarioCompiler",
+      "version": "0.10.0"
+    },
+    "files": {
+      "routes": {
+        "path": "street_layout_epoch_daylight_saving.rou.xml",
+        "sha256": "72515e189ca88ee8cab07edc801355014d0ba16d09dff9a9b8fe563d08c93cb4"
+      },
+      "config": {
+        "path": "street_layout_epoch_daylight_saving.sumocfg",
+        "sha256": "e874d900f6416ff64cb6356af96b49aba8d819a5c3395b244fbe7b47461fe1c1"
+      },
+      "network": {
+        "path": "StreetLayout.net.xml",
+        "sha256": "09aa2a8cad92df5f08c0bb8259b23cb6d3303ec3e88ccf62f87e6133d460f9ae"
+      },
+      "supervision": {
+        "path": "street_layout_epoch_daylight_saving.supervision.json",
+        "sha256": "8163573fb4de3d0b35bd93e378afcd5be7df94d9c01cd320d2c837558d06cfc7"
+      }
+    },
+    "world": {
+      "package": "StreetLayout.cwp",
+      "map_name": "StreetLayout",
+      "network_fingerprint": "44194b18d22c91a25e85babe0469d43d064f3fb9aabe15fa62a486cd8fb4e2e0",
+      "netconvert_argv": [
+        "--osm-files",
+        "map.osm",
+        "--opendrive-output",
+        "<opendrive-output>",
+        "--proj",
+        "+proj=tmerc +lat_0=39.59431 +lon_0=-104.88449 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+        "--default.lanewidth",
+        "3.35",
+        "--default.sidewalk-width",
+        "2.8",
+        "--tls.guess",
+        "true",
+        "--geometry.remove",
+        "--roundabouts.guess",
+        "--osm.turn-lanes",
+        "--output.street-names",
+        "true",
+        "--output.original-names",
+        "true",
+        "--offset.disable-normalization",
+        "--junctions.join",
+        "--tls.default-type",
+        "actuated",
+        "--output-file",
+        "<output-file>",
+        "--junctions.join-dist",
+        "25",
+        "--keep-edges.by-vclass",
+        "passenger",
+        "--keep-edges.components",
+        "1",
+        "--remove-edges.isolated",
+        "true"
+      ],
+      "netconvert_version": "Eclipse SUMO netconvert 1.27.0",
+      "opendrive_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "source_osm_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "origin_latitude": 39.5,
+      "origin_longitude": -104.9,
+      "georeference": "+proj=tmerc +lat_0=39.5 +lon_0=-104.9 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+    },
+    "catalogue": {
+      "catalogue_id": "carla-0.10.0-windows",
+      "catalogue_digest": "6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d",
+      "blueprint_set_digest": "a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4",
+      "content_build_id": "carla-0.10.0-windows"
+    },
+    "vocabulary": {
+      "core_version": 3,
+      "namespaces": [],
+      "vocabulary_digest": "19936053b6fae2261e8b204ce9f0e330720a20864e2a3223cb6e761d6c1ac51b"
+    },
+    "traffic": {
+      "sumo_seed": 42,
+      "step_length_s": 0.05,
+      "end_s": 7200.0,
+      "processing": {
+        "time-to-teleport": "-1",
+        "max-depart-delay": "900",
+        "collision.action": "warn",
+        "lanechange.duration": "3"
+      },
+      "routed_by": {
+        "tool": "duarouter",
+        "version": "1.27.0",
+        "world_converter": "Eclipse SUMO netconvert 1.27.0",
+        "release_agreement": "SameRelease",
+        "mismatch_accepted": false
+      }
+    },
+    "dry_run": {
+      "ran": true,
+      "sumo_release": "1.27.0",
+      "begin_s": 0.0,
+      "end_s": 7200.0,
+      "vehicles": {
+        "loaded": 401,
+        "inserted": 401,
+        "discarded": 0,
+        "waiting_at_end": 0
+      },
+      "planned_vehicles": {
+        "total": 0,
+        "inserted": 0
+      },
+      "collisions": 0
+    },
+    "epoch": {
+      "calendar_advances": true,
+      "civil_datetime": "2026-03-21T06:00:00-06:00",
+      "dst_in_effect": true,
+      "epoch_version": 1,
+      "note": "Colorado after daylight saving began: -06:00 with dst_in_effect, one offset for the whole run",
+      "time_zone_id": "America/Denver",
+      "utc_datetime": "2026-03-21T12:00:00Z",
+      "utc_offset_hours": -6
+    },
+    "epoch_block_sha256": "0a788db80f87b96115e5a1d7ec543eb43725dd4c920106b46fd4ad9b2d049e72",
+    "illumination": {
+      "illumination_version": 1,
+      "policy": "freeze_at_window_start"
+    },
+    "capture_windows": [
+      {
+        "id": "morning",
+        "begin_s": 3300.0,
+        "end_s": 4200.0,
+        "civil_begin": "2026-03-21T06:55:00-06:00",
+        "civil_end": "2026-03-21T07:10:00-06:00",
+        "civil_date": "2026-03-21"
+      }
+    ],
+    "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
+    "illumination_label_association": {
+      "normalized_mutual_information": null,
+      "bands": {
+        "civil_twilight": {
+          "annotated": 0,
+          "nominal": 0,
+          "unlabelled": 2,
+          "total": 2
+        }
+      },
+      "entries": 2
+    }
+  }
+}

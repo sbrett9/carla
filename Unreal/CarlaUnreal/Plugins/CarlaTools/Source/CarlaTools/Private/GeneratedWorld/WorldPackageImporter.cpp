@@ -110,6 +110,21 @@ namespace
 			OutError = TEXT("the world manifest is not readable JSON");
 			return nullptr;
 		}
+
+		// The manifest's own format (CarlaNet.Map.WorldPackage.FormatVersion). A package written before
+		// the manifest carried one is version 1; a newer one is refused rather than imported in part,
+		// since a field that moved would be read as absent.
+		constexpr int32 SupportedFormatVersion = 1;
+		double DeclaredFormatVersion = 1.0;
+		if (Json->TryGetNumberField(TEXT("FormatVersion"), DeclaredFormatVersion)
+			&& DeclaredFormatVersion > SupportedFormatVersion)
+		{
+			OutError = FString::Printf(
+				TEXT("the world manifest declares FormatVersion %d, and this importer supports FormatVersion %d "
+					 "and earlier: the package was written by a newer release"),
+				static_cast<int32>(DeclaredFormatVersion), SupportedFormatVersion);
+			return nullptr;
+		}
 		return Json;
 	}
 

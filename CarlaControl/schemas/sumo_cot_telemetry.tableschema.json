@@ -1,0 +1,283 @@
+{
+  "$schema": "https://datapackage.org/profiles/2.0/tableschema.json",
+  "$id": "urn:carla-sumo-capture:schema:sumo-cot-telemetry:1",
+  "name": "sumo_cot_telemetry",
+  "title": "SUMO bridge CoT telemetry table (carla-cot-telemetry --csv)",
+  "description": "One row per vehicle per update of a SUMO run. The first line is the header. Comma separated, UTF-8. Its format version and what made it are in <name>.summary.json beside it. An empty cell is a value, the empty string, never a missing one.",
+  "missingValues": [],
+  "fields": [
+    {
+      "name": "time_utc",
+      "type": "datetime",
+      "format": "%Y-%m-%dT%H:%M:%S.%fZ",
+      "description": "When the update happened, UTC to the millisecond: the run's epoch plus sim_time_s.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "sim_time_s",
+      "type": "number",
+      "constraints": {
+        "minimum": 0,
+        "required": true
+      },
+      "description": "SUMO simulation time, seconds."
+    },
+    {
+      "name": "uid",
+      "type": "string",
+      "description": "The track id: <uid prefix>-<SUMO vehicle id>. The uid prefix is SUMO-TRUTH unless --uid-prefix sets it.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "callsign",
+      "type": "string",
+      "description": "<base_type>-<SUMO vehicle id>.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "cot_type",
+      "type": "string",
+      "constraints": {
+        "pattern": "a-[a-z]-G-E-V",
+        "required": true
+      },
+      "description": "The CoT type: a ground vehicle, with the affiliation the run's display convention gives the vehicle's population."
+    },
+    {
+      "name": "how",
+      "type": "string",
+      "constraints": {
+        "enum": [
+          "m-g"
+        ],
+        "required": true
+      },
+      "description": "How the position was found: m-g, machine-generated truth."
+    },
+    {
+      "name": "lat",
+      "type": "number",
+      "description": "WGS84 latitude, degrees, of the front bumper's center.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "lon",
+      "type": "number",
+      "description": "WGS84 longitude, degrees, of the front bumper's center.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "hae_m",
+      "type": "number",
+      "description": "Bare-earth ground height under the vehicle, WGS84 ellipsoidal meters, from the world package's bareearth.bin; the configured constant when there is no grid or the vehicle is off it.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "ce_m",
+      "type": "number",
+      "description": "Horizontal error, meters. Always 0.0 for truth.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "le_m",
+      "type": "number",
+      "description": "Vertical error, meters. Always 0.0 for truth.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "course_deg",
+      "type": "number",
+      "constraints": {
+        "minimum": 0,
+        "maximum": 360,
+        "required": true
+      },
+      "description": "The vehicle's heading as SUMO reports it, degrees clockwise from north."
+    },
+    {
+      "name": "speed_mps",
+      "type": "number",
+      "constraints": {
+        "minimum": 0,
+        "required": true
+      },
+      "description": "Speed, meters per second."
+    },
+    {
+      "name": "vx",
+      "type": "number",
+      "description": "Velocity east, meters per second (CARLA's x).",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "vy",
+      "type": "number",
+      "description": "Velocity south, meters per second (CARLA's y).",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "vz",
+      "type": "number",
+      "description": "Vertical velocity. Always 0.00: SUMO is flat.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "base_type",
+      "type": "string",
+      "description": "What kind of vehicle it is: the catalogue's cot_base_type for the blueprint the vehicle's type names, or its SUMO vehicle class's when the type names none.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "type_id",
+      "type": "string",
+      "description": "The SUMO vehicle type id.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "special_type",
+      "type": "string",
+      "constraints": {
+        "enum": [
+          "",
+          "electric",
+          "emergency",
+          "taxi"
+        ],
+        "required": true
+      },
+      "description": "The catalogue's cot_special_type for the vehicle's blueprint: emergency, taxi, electric, or empty."
+    },
+    {
+      "name": "length_m",
+      "type": "number",
+      "constraints": {
+        "minimum": 0,
+        "required": true
+      },
+      "description": "Length SUMO gives the vehicle, meters."
+    },
+    {
+      "name": "width_m",
+      "type": "number",
+      "constraints": {
+        "minimum": 0,
+        "required": true
+      },
+      "description": "Width SUMO gives the vehicle, meters."
+    },
+    {
+      "name": "height_m",
+      "type": "number",
+      "constraints": {
+        "minimum": 0,
+        "required": true
+      },
+      "description": "Height SUMO gives the vehicle, meters."
+    },
+    {
+      "name": "color",
+      "type": "string",
+      "constraints": {
+        "pattern": "[0-9]{1,3},[0-9]{1,3},[0-9]{1,3}",
+        "required": true
+      },
+      "description": "The vehicle type's sumo-gui color, R,G,B from 0 to 255. Not the color CARLA renders."
+    },
+    {
+      "name": "role_name",
+      "type": "string",
+      "description": "The flow the vehicle came from: its SUMO id before the last dot.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "marked",
+      "type": "boolean",
+      "trueValues": [
+        "1"
+      ],
+      "falseValues": [
+        "0"
+      ],
+      "description": "1 when the vehicle is one the scenario planted (--marked-vehicle or a legacy labels file's marked_ids), 0 otherwise.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "edge",
+      "type": "string",
+      "description": "The SUMO edge the vehicle is on.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "lane",
+      "type": "string",
+      "description": "The SUMO lane the vehicle is on.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "sumo_x",
+      "type": "number",
+      "description": "SUMO x, meters east in the network's projection.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "sumo_y",
+      "type": "number",
+      "description": "SUMO y, meters north in the network's projection.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "carla_x",
+      "type": "number",
+      "description": "CARLA x, meters east: sumo_x.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "carla_y",
+      "type": "number",
+      "description": "CARLA y, meters south: -sumo_y.",
+      "constraints": {
+        "required": true
+      }
+    }
+  ]
+}

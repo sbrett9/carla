@@ -40,7 +40,8 @@ podman build -f Util/Docker/Base.alma8.Dockerfile -t carla-base:alma8 Util/Docke
 ```
 
 This encodes the full RHEL 8 prerequisite set: EPEL + PowerTools, the build toolchain and `-devel`
-libraries, `nasm`/`patchelf`, `xerces-c`/`proj` (for SUMO), CMake ≥ 3.28 (Kitware binary), .NET SDK 10
+libraries, `nasm`/`patchelf`, `xerces-c`/`proj` (for SUMO), FOX 1.6 built from its pinned source (for
+`sumo-gui`; EL8 packages none), CMake ≥ 3.28 (Kitware binary), .NET SDK 10
 (Microsoft feed), and Python 3.11 — i.e. the same packages you'd `dnf install` on bare RHEL 8.
 
 ## 2. Start a build container with a persistent workspace

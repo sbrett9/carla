@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Compiled by carlacontrol.ScenarioCompiler from the specification of Shahid_Bahonar_Port_PatternOfLife; edit that, not this. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="Shahid_Bahonar_Port.net.xml"/>
+        <route-files value="Shahid_Bahonar_Port_PatternOfLife.rou.xml"/>
+    </input>
+    <!-- t = 0 is 2026-09-29T07:00:00+03:30 (2026-09-29T03:30:00Z), UTC+03:30, calendar advances, Asia/Tehran. The run ends at 2026-10-06T07:00:00+03:30. begin and end below are simulated seconds from t = 0. -->
+    <time>
+        <begin value="0"/>
+        <end value="604800"/>
+        <step-length value="1.0"/>
+    </time>
+    <random_number>
+        <seed value="42"/>
+    </random_number>
+    <processing>
+        <time-to-teleport value="-1"/>
+        <max-depart-delay value="900"/>
+        <collision.action value="warn"/>
+        <lanechange.duration value="3"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+        <duration-log.statistics value="true"/>
+    </report>
+</configuration>

@@ -1,0 +1,2058 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:run-resolution:1",
+  "title": "Capture run resolution report",
+  "description": "What one carla-capture launch resolved, every field with the layer that set it, and every finding of the offline checks. Written beside the run result as <stem>.resolution.json on every path, whether the launch was accepted or refused. Not the scenario compiler's <scenario>.resolution.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "resolution_version",
+    "outcome",
+    "session_id",
+    "check_catalogue",
+    "findings",
+    "launch_echo",
+    "effective_configuration",
+    "site_profile"
+  ],
+  "properties": {
+    "resolution_version": {
+      "const": 1,
+      "description": "The format version of this file."
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "description": "What made the file: the tool that wrote it and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+        },
+        "carlanet": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "build",
+                "configuration",
+                "carla_commit",
+                "content_commit",
+                "engine_commit",
+                "commits_from"
+              ],
+              "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+              "properties": {
+                "available": {
+                  "const": true
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release the server was compiled with."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version the server declares, Major.Minor."
+                },
+                "build": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "package for a cooked server, editor for one run from the editor."
+                },
+                "configuration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The build configuration, such as Development or Shipping."
+                },
+                "carla_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA commit."
+                },
+                "content_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content commit."
+                },
+                "engine_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The Unreal Engine commit."
+                },
+                "commits_from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "reason"
+              ],
+              "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+              "properties": {
+                "available": {
+                  "const": false
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release, or unknown."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version, or unknown."
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Why the identity is not available."
+                }
+              }
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used. Null where none was."
+        },
+        "sumo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+        }
+      }
+    },
+    "outcome": {
+      "enum": [
+        "accepted",
+        "usage_error",
+        "refused_offline"
+      ],
+      "description": "accepted: the offline checks passed and the lock was written. usage_error or refused_offline: the launch stopped here."
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The run's identity, as in the run result."
+    },
+    "check_catalogue": {
+      "type": "string",
+      "examples": [
+        "carla-capture run checks"
+      ],
+      "description": "The catalogue the findings' check numbers belong to: carla-capture run checks."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "description": "Every refusal and warning, in the order made."
+    },
+    "launch_echo": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/launch_echo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The launch echo; null where the offline checks refused first."
+    },
+    "effective_configuration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/effective_configuration"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Every field, its value and where it came from; null where nothing resolved."
+    },
+    "site_profile": {
+      "$ref": "#/$defs/site_profile"
+    }
+  },
+  "$defs": {
+    "launch_echo": {
+      "type": "object",
+      "description": "What the run is about to do, stated before anything is acquired.",
+      "required": [
+        "launch_echo_version",
+        "session_id",
+        "caller",
+        "scenario",
+        "simulated",
+        "captures",
+        "civil",
+        "sun",
+        "world",
+        "render",
+        "cost",
+        "writes",
+        "pacing",
+        "readiness",
+        "warnings",
+        "not_predicted"
+      ],
+      "properties": {
+        "launch_echo_version": {
+          "const": 1,
+          "description": "The format version of this block."
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run's identity."
+        },
+        "caller": {
+          "enum": [
+            "attended",
+            "unattended"
+          ]
+        },
+        "scenario": {
+          "type": "object",
+          "description": "The scenario and window.",
+          "required": [
+            "scenario_id",
+            "lock",
+            "window",
+            "dry_run"
+          ],
+          "properties": {
+            "scenario_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "lock": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The scenario as <scenario_id>@<first 12 digits of its lock's SHA-256>."
+            },
+            "window": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The declared window's id, or explicit."
+            },
+            "dry_run": {
+              "type": "object",
+              "description": "What the scenario lock records of the compiler's SUMO-only run.",
+              "required": [
+                "ran",
+                "skipped_accepted",
+                "statement"
+              ],
+              "properties": {
+                "ran": {
+                  "type": "boolean",
+                  "description": "Whether the compile ran the scenario in SUMO alone."
+                },
+                "skipped_accepted": {
+                  "type": "boolean",
+                  "description": "Whether a skipped run was accepted for this launch."
+                },
+                "statement": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "simulated": {
+          "type": "object",
+          "description": "The simulated span.",
+          "required": [
+            "begin_s",
+            "end_s",
+            "length_s",
+            "end_source",
+            "prewarm_s",
+            "first_rendered_s"
+          ],
+          "properties": {
+            "begin_s": {
+              "type": "number",
+              "description": "Where the window begins, simulated seconds."
+            },
+            "end_s": {
+              "type": "number",
+              "description": "Where it ends."
+            },
+            "length_s": {
+              "type": "number",
+              "description": "Its length."
+            },
+            "end_source": {
+              "type": "string",
+              "description": "Where the end came from."
+            },
+            "prewarm_s": {
+              "type": "number",
+              "description": "Seconds rendered before the window and not recorded."
+            },
+            "first_rendered_s": {
+              "type": "number",
+              "description": "The first simulated second rendered."
+            }
+          },
+          "additionalProperties": false
+        },
+        "captures": {
+          "type": "object",
+          "description": "The captures the window will make.",
+          "required": [
+            "capture_hz",
+            "channels",
+            "per_channel",
+            "total",
+            "frames_per_hour"
+          ],
+          "properties": {
+            "capture_hz": {
+              "type": "number",
+              "description": "Captures per simulated second on each channel."
+            },
+            "channels": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many channels."
+            },
+            "per_channel": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Captures each channel will make."
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Captures over every channel."
+            },
+            "frames_per_hour": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Captures per simulated hour over every channel."
+            }
+          },
+          "additionalProperties": false
+        },
+        "civil": {
+          "type": "object",
+          "description": "The civil span.",
+          "required": [
+            "begin",
+            "end",
+            "first_rendered",
+            "epoch"
+          ],
+          "properties": {
+            "begin": {
+              "type": "string",
+              "description": "The window's begin in civil time, ISO 8601 with offset."
+            },
+            "end": {
+              "type": "string",
+              "description": "Its end."
+            },
+            "first_rendered": {
+              "type": "string",
+              "description": "The first rendered instant."
+            },
+            "epoch": {
+              "type": "string",
+              "description": "The epoch in one line."
+            }
+          },
+          "additionalProperties": false
+        },
+        "sun": {
+          "anyOf": [
+            {
+              "type": "object",
+              "description": "A policy that binds no sun: the world's own is left as it is.",
+              "required": [
+                "policy",
+                "binds",
+                "statement"
+              ],
+              "properties": {
+                "policy": {
+                  "enum": [
+                    "freeze_at_window_start",
+                    "advance",
+                    "freeze_at",
+                    "ignore"
+                  ]
+                },
+                "binds": {
+                  "const": false
+                },
+                "statement": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A policy that binds the sun, and the sun at the window's first and last instant.",
+              "required": [
+                "policy",
+                "binds",
+                "advances",
+                "rate",
+                "elevation_kind",
+                "window_open_s",
+                "at_begin",
+                "at_end"
+              ],
+              "properties": {
+                "policy": {
+                  "enum": [
+                    "freeze_at_window_start",
+                    "advance",
+                    "freeze_at",
+                    "ignore"
+                  ]
+                },
+                "binds": {
+                  "const": true
+                },
+                "advances": {
+                  "type": "boolean",
+                  "description": "Whether the sun moves across the window."
+                },
+                "rate": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Sun-clock seconds per simulated second, under advance."
+                },
+                "elevation_kind": {
+                  "type": "string",
+                  "description": "What the elevations are: refraction-corrected or geometric."
+                },
+                "window_open_s": {
+                  "type": "number",
+                  "description": "The simulated second the window opens and the sun is bound."
+                },
+                "at_begin": {
+                  "$ref": "#/$defs/sun_at"
+                },
+                "at_end": {
+                  "$ref": "#/$defs/sun_at"
+                },
+                "held_at": {
+                  "type": "string",
+                  "description": "The sun's date and clock where it is held."
+                },
+                "held_at_note": {
+                  "type": "string",
+                  "description": "When the sun is pinned, and what the prewarm is lit by."
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "The policy holding the sun, and the sun it binds."
+        },
+        "world": {
+          "type": "object",
+          "description": "The world.",
+          "required": [
+            "map_name",
+            "package",
+            "network_fingerprint",
+            "origin"
+          ],
+          "properties": {
+            "map_name": {
+              "type": "string"
+            },
+            "package": {
+              "type": "string",
+              "description": "The world package's file name."
+            },
+            "network_fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "origin": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              },
+              "description": "[latitude, longitude] of the map's origin, degrees."
+            }
+          },
+          "additionalProperties": false
+        },
+        "render": {
+          "type": "object",
+          "description": "What is rendered: the render set's fields as resolved.",
+          "required": [
+            "set",
+            "region",
+            "hysteresis_m",
+            "min_pixels",
+            "admit_lead_s",
+            "release_lag_s",
+            "cap",
+            "limited",
+            "vehicles",
+            "left_out",
+            "road_layer_visible",
+            "signal_layer_visible",
+            "draw_distance_m",
+            "draw_distance"
+          ],
+          "properties": {
+            "set": {
+              "enum": [
+                "all",
+                "circle",
+                "cameras"
+              ]
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x_m",
+                    "y_m",
+                    "radius_m"
+                  ],
+                  "properties": {
+                    "x_m": {
+                      "type": "number"
+                    },
+                    "y_m": {
+                      "type": "number"
+                    },
+                    "radius_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hysteresis_m": {
+              "type": "number"
+            },
+            "min_pixels": {
+              "type": "number"
+            },
+            "admit_lead_s": {
+              "type": "number"
+            },
+            "release_lag_s": {
+              "type": "number"
+            },
+            "cap": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "limited": {
+              "type": "boolean",
+              "description": "Whether an optional limit leaves vehicles without a body."
+            },
+            "vehicles": {
+              "type": "string",
+              "description": "Which vehicles get a body, in words."
+            },
+            "left_out": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "What a limit leaves out; null with no limit."
+            },
+            "road_layer_visible": {
+              "type": "boolean"
+            },
+            "signal_layer_visible": {
+              "type": "boolean"
+            },
+            "draw_distance_m": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "draw_distance": {
+              "type": "string",
+              "description": "The draw distance in words."
+            }
+          },
+          "additionalProperties": false
+        },
+        "cost": {
+          "type": "object",
+          "description": "The disk the window will cost.",
+          "required": [
+            "bytes_per_captured_second",
+            "estimated_bytes",
+            "free_bytes",
+            "headroom_s",
+            "basis"
+          ],
+          "properties": {
+            "bytes_per_captured_second": {
+              "type": "number"
+            },
+            "estimated_bytes": {
+              "type": "number",
+              "description": "The window's estimated size on disk."
+            },
+            "free_bytes": {
+              "type": "number",
+              "description": "Free space where captures are written."
+            },
+            "headroom_s": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Captured seconds the free space holds."
+            },
+            "basis": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "writes": {
+          "type": "object",
+          "description": "Where the run writes.",
+          "required": [
+            "capture_directory",
+            "result_path"
+          ],
+          "properties": {
+            "capture_directory": {
+              "type": "string"
+            },
+            "result_path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "pacing": {
+          "type": "object",
+          "description": "The pacing.",
+          "required": [
+            "mode",
+            "real_time_factor",
+            "min_achieved_factor"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "as_available",
+                "wall_clock"
+              ]
+            },
+            "real_time_factor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "min_achieved_factor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "readiness": {
+          "type": "object",
+          "description": "The wait for every channel's view before the window opens.",
+          "required": [
+            "waits",
+            "rule",
+            "tiles",
+            "picture_settled_wait",
+            "picture",
+            "tiles_ceiling_s",
+            "from_s",
+            "until_s",
+            "traffic_stare_holds_from_s",
+            "not_ready",
+            "per_capture"
+          ],
+          "properties": {
+            "waits": {
+              "const": true
+            },
+            "rule": {
+              "type": "string"
+            },
+            "tiles": {
+              "type": "string",
+              "description": "What a view's tiles being in means."
+            },
+            "picture_settled_wait": {
+              "type": "boolean",
+              "description": "Whether the picture is also waited on."
+            },
+            "picture": {
+              "type": "string",
+              "description": "What the picture's wait compares, or that it is not run."
+            },
+            "vehicles": {
+              "type": "string"
+            },
+            "tiles_ceiling_s": {
+              "type": "number",
+              "description": "Wall-clock seconds a view has for its tiles."
+            },
+            "tiles_hold_s": {
+              "type": "number",
+              "description": "The tiles' lead before the window, simulated seconds."
+            },
+            "picture_ceiling_frames": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "picture_ceiling_s": {
+              "type": "number"
+            },
+            "picture_tolerance_levels": {
+              "type": "number"
+            },
+            "from_s": {
+              "type": "number",
+              "description": "The simulated second the wait begins."
+            },
+            "until_s": {
+              "type": "number",
+              "description": "The simulated second the window opens."
+            },
+            "traffic_stare_holds_from_s": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where a stare aimed at the traffic holds its pose; null with no such stare."
+            },
+            "not_ready": {
+              "type": "string"
+            },
+            "per_capture": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "capture_may_outrun_disk",
+              "exposure_follows_the_scene",
+              "lighting_honours_no_epoch",
+              "prewarm_clipped"
+            ]
+          },
+          "description": "The codes of the warnings the offline checks raised."
+        },
+        "not_predicted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What the echo cannot say before the run."
+        }
+      },
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check",
+        "outcome",
+        "subject",
+        "message",
+        "catalogue"
+      ],
+      "properties": {
+        "check": {
+          "enum": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54
+          ],
+          "description": "The run check's number in the carla-capture run checks."
+        },
+        "outcome": {
+          "enum": [
+            "refuse",
+            "warn"
+          ],
+          "description": "refuse: the launch stops. warn: it goes on, and the warning must be adjudicated."
+        },
+        "subject": {
+          "type": "string",
+          "description": "What the finding is about: a field path, a channel, a package."
+        },
+        "message": {
+          "type": "string",
+          "description": "The finding in full."
+        },
+        "catalogue": {
+          "type": "string",
+          "examples": [
+            "carla-capture run checks"
+          ],
+          "description": "The catalogue the check belongs to: carla-capture run checks."
+        },
+        "code": {
+          "enum": [
+            "capture_may_outrun_disk",
+            "exposure_follows_the_scene",
+            "lighting_honours_no_epoch",
+            "prewarm_clipped"
+          ],
+          "description": "A warning's code, which on_warning.<code> adjudicates. Present on a warning only."
+        }
+      }
+    },
+    "effective_configuration": {
+      "type": "object",
+      "description": "Every field the run is subject to, its value, the layer that set it and where that layer read it.",
+      "required": [
+        "effective_configuration_version",
+        "tool_version",
+        "schema_version",
+        "digest",
+        "fields",
+        "channels"
+      ],
+      "properties": {
+        "effective_configuration_version": {
+          "const": 1,
+          "description": "The format version of this block."
+        },
+        "tool_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The carlacontrol release that resolved it."
+        },
+        "schema_version": {
+          "const": 1,
+          "description": "The run configuration format version."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the replayable run configuration."
+        },
+        "fields": {
+          "type": "object",
+          "description": "Every run configuration field, keyed by its dotted path.",
+          "required": [
+            "run_configuration_version",
+            "mode",
+            "caller",
+            "caller_label",
+            "scenario_package",
+            "world_package",
+            "result_path",
+            "write_headroom_floor_s",
+            "monitor",
+            "collision_detail",
+            "on_warning",
+            "expect",
+            "capture.window",
+            "capture.prewarm_s",
+            "capture.world_delta_s",
+            "capture.capture_hz",
+            "capture.picture_settled_wait",
+            "capture.tiles_hold_s",
+            "capture.picture_ceiling_frames",
+            "capture.picture_tolerance_levels",
+            "capture.road_layer_visible",
+            "capture.signal_layer_visible",
+            "capture.render_set",
+            "capture.render_region",
+            "capture.render_hysteresis_m",
+            "capture.render_cap",
+            "capture.render_min_pixels",
+            "capture.render_admit_lead_s",
+            "capture.render_release_lag_s",
+            "capture.draw_distance_m",
+            "capture.channels",
+            "occlusion.margin_m",
+            "occlusion.samples",
+            "occlusion.depth_max_range_m",
+            "bridge.position_divergence_limit_m",
+            "bridge.velocity_divergence_limit_m_per_s",
+            "pacing.mode",
+            "pacing.real_time_factor",
+            "pacing.min_achieved_factor",
+            "pacing.window_s",
+            "solar.policy",
+            "solar.rate_sun_s_per_sim_s",
+            "solar.freeze_at_civil_time",
+            "solar.freeze_date_advances",
+            "solar.require_sun",
+            "solar.note",
+            "sumo.allow_version_mismatch",
+            "sumo.home",
+            "server.host",
+            "server.port",
+            "server.timeout_s",
+            "paths.scenario_root",
+            "paths.world_package_root",
+            "paths.catalogue",
+            "paths.capture_root",
+            "paths.runs_root",
+            "world.map_name",
+            "world.network_fingerprint",
+            "world.opendrive_sha256",
+            "world.origin_latitude",
+            "world.origin_longitude",
+            "world.netconvert_version",
+            "scenario.scenario_id",
+            "scenario.lock_sha256",
+            "scenario.epoch",
+            "scenario.epoch_block_sha256",
+            "scenario.sumo_step_s",
+            "scenario.sumo_seed",
+            "scenario.end_s",
+            "scenario.catalogue_digest",
+            "scenario.accept_skipped_dry_run"
+          ],
+          "properties": {
+            "run_configuration_version": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "mode": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "caller": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "caller_label": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "scenario_package": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world_package": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "result_path": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "write_headroom_floor_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "monitor": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "collision_detail": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "on_warning": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "expect": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.window": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "capture.prewarm_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.world_delta_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.capture_hz": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.picture_settled_wait": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.tiles_hold_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.picture_ceiling_frames": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.picture_tolerance_levels": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.road_layer_visible": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.signal_layer_visible": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_set": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_region": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_hysteresis_m": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_cap": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_min_pixels": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_admit_lead_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.render_release_lag_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.draw_distance_m": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "capture.channels": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "occlusion.margin_m": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "occlusion.samples": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "occlusion.depth_max_range_m": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "bridge.position_divergence_limit_m": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "bridge.velocity_divergence_limit_m_per_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "pacing.mode": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "pacing.real_time_factor": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "pacing.min_achieved_factor": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "pacing.window_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "solar.policy": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "solar.rate_sun_s_per_sim_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "solar.freeze_at_civil_time": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "solar.freeze_date_advances": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "solar.require_sun": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "solar.note": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "sumo.allow_version_mismatch": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "sumo.home": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "server.host": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "server.port": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "server.timeout_s": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            },
+            "paths.scenario_root": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "paths.world_package_root": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "paths.catalogue": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "paths.capture_root": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "paths.runs_root": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world.map_name": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world.network_fingerprint": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world.opendrive_sha256": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world.origin_latitude": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world.origin_longitude": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "world.netconvert_version": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.scenario_id": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.lock_sha256": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.epoch": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.epoch_block_sha256": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.sumo_step_s": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.sumo_seed": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.end_s": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.catalogue_digest": {
+              "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.accept_skipped_dry_run": {
+              "$ref": "#/$defs/resolved_field_with_default"
+            }
+          },
+          "additionalProperties": false
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One channel, every field of it.",
+            "required": [
+              "sensor_id",
+              "pattern",
+              "fov",
+              "width",
+              "height",
+              "orbit_centre_x_m",
+              "orbit_centre_y_m",
+              "orbit_centre_z_m",
+              "orbit_radius_m",
+              "orbit_altitude_m",
+              "orbit_period_s",
+              "stare_look_at_x_m",
+              "stare_look_at_y_m",
+              "stare_look_at_z_m",
+              "stare_look_at_target",
+              "stare_altitude_m",
+              "stare_standoff_m",
+              "stare_bearing_deg",
+              "stare_x_m",
+              "stare_y_m",
+              "stare_z_m",
+              "stare_pitch_deg",
+              "stare_yaw_deg",
+              "post_process_profile",
+              "exposure_method",
+              "exposure_iso",
+              "exposure_shutter_s",
+              "exposure_fstop",
+              "exposure_compensation_ev"
+            ],
+            "properties": {
+              "sensor_id": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "pattern": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "fov": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "width": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "height": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "orbit_centre_x_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "orbit_centre_y_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "orbit_centre_z_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "orbit_radius_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "orbit_altitude_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "orbit_period_s": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_look_at_x_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_look_at_y_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_look_at_z_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_look_at_target": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_altitude_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_standoff_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_bearing_deg": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_x_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_y_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_z_m": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_pitch_deg": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "stare_yaw_deg": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "post_process_profile": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "exposure_method": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "exposure_iso": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "exposure_shutter_s": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "exposure_fstop": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              },
+              "exposure_compensation_ev": {
+                "$ref": "#/$defs/resolved_field_with_default"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Each channel's fields, in the order declared."
+        }
+      },
+      "additionalProperties": false
+    },
+    "resolved_field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "layer",
+        "provenance",
+        "overridden"
+      ],
+      "properties": {
+        "value": {
+          "description": "The value the run uses, of the field's type in the run configuration's schema; null where the field does not apply or nothing supplied it."
+        },
+        "layer": {
+          "enum": [
+            "tool_default",
+            "site_profile",
+            "world_package",
+            "scenario_package",
+            "run_configuration",
+            "operator_override",
+            "derived",
+            "pinned_by_policy",
+            "not_applicable",
+            "unsupplied"
+          ],
+          "description": "The layer that set it: a configuration layer, or derived, pinned_by_policy, not_applicable or unsupplied."
+        },
+        "provenance": {
+          "type": "string",
+          "description": "The file and key, or the command-line text, it was read from."
+        },
+        "overridden": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "layer",
+                  "value",
+                  "provenance"
+                ],
+                "properties": {
+                  "layer": {
+                    "enum": [
+                      "tool_default",
+                      "site_profile",
+                      "world_package",
+                      "scenario_package",
+                      "run_configuration",
+                      "operator_override",
+                      "derived",
+                      "pinned_by_policy",
+                      "not_applicable",
+                      "unsupplied"
+                    ]
+                  },
+                  "value": {
+                    "description": "The value that layer gave."
+                  },
+                  "provenance": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What lower layers gave and a higher one replaced; null where nothing was replaced."
+        },
+        "dropped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layer",
+              "value",
+              "provenance"
+            ],
+            "properties": {
+              "layer": {
+                "enum": [
+                  "tool_default",
+                  "site_profile",
+                  "world_package",
+                  "scenario_package",
+                  "run_configuration",
+                  "operator_override",
+                  "derived",
+                  "pinned_by_policy",
+                  "not_applicable",
+                  "unsupplied"
+                ]
+              },
+              "value": {
+                "description": "The value that layer gave."
+              },
+              "provenance": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "An illumination value of a lower layer dropped because a higher layer chose a policy that does not take it."
+        },
+        "note": {
+          "type": "string",
+          "description": "A note, such as a binding restated with the same value."
+        },
+        "environment_variable": {
+          "type": "string",
+          "description": "The environment variable the value was read from."
+        }
+      },
+      "description": "One field: its value, the layer that set it and where that layer read it."
+    },
+    "resolved_field_with_default": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "layer",
+        "provenance",
+        "overridden",
+        "tool_default"
+      ],
+      "properties": {
+        "value": {
+          "description": "The value the run uses, of the field's type in the run configuration's schema; null where the field does not apply or nothing supplied it."
+        },
+        "layer": {
+          "enum": [
+            "tool_default",
+            "site_profile",
+            "world_package",
+            "scenario_package",
+            "run_configuration",
+            "operator_override",
+            "derived",
+            "pinned_by_policy",
+            "not_applicable",
+            "unsupplied"
+          ],
+          "description": "The layer that set it: a configuration layer, or derived, pinned_by_policy, not_applicable or unsupplied."
+        },
+        "provenance": {
+          "type": "string",
+          "description": "The file and key, or the command-line text, it was read from."
+        },
+        "overridden": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "layer",
+                  "value",
+                  "provenance"
+                ],
+                "properties": {
+                  "layer": {
+                    "enum": [
+                      "tool_default",
+                      "site_profile",
+                      "world_package",
+                      "scenario_package",
+                      "run_configuration",
+                      "operator_override",
+                      "derived",
+                      "pinned_by_policy",
+                      "not_applicable",
+                      "unsupplied"
+                    ]
+                  },
+                  "value": {
+                    "description": "The value that layer gave."
+                  },
+                  "provenance": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What lower layers gave and a higher one replaced; null where nothing was replaced."
+        },
+        "dropped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layer",
+              "value",
+              "provenance"
+            ],
+            "properties": {
+              "layer": {
+                "enum": [
+                  "tool_default",
+                  "site_profile",
+                  "world_package",
+                  "scenario_package",
+                  "run_configuration",
+                  "operator_override",
+                  "derived",
+                  "pinned_by_policy",
+                  "not_applicable",
+                  "unsupplied"
+                ]
+              },
+              "value": {
+                "description": "The value that layer gave."
+              },
+              "provenance": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "An illumination value of a lower layer dropped because a higher layer chose a policy that does not take it."
+        },
+        "note": {
+          "type": "string",
+          "description": "A note, such as a binding restated with the same value."
+        },
+        "environment_variable": {
+          "type": "string",
+          "description": "The environment variable the value was read from."
+        },
+        "tool_default": {
+          "description": "The tool's default, carried even where another layer set the value."
+        }
+      },
+      "description": "One field: its value, the layer that set it and where that layer read it, and the tool's default."
+    },
+    "site_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "declared_environment",
+        "host_searched",
+        "values"
+      ],
+      "description": "This machine's facts as the launch resolved them, each with where it came from.",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The profile file the values were read from, or the layout they were derived from."
+        },
+        "declared_environment": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The environment variables the profile file names."
+        },
+        "host_searched": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "SUMO_HOME",
+              "PATH"
+            ]
+          },
+          "description": "The variables the session searches for SUMO because no field names one; empty where a field does."
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "paths.scenario_root",
+            "paths.world_package_root",
+            "paths.catalogue",
+            "paths.capture_root",
+            "paths.runs_root",
+            "sumo.home"
+          ],
+          "description": "Every machine fact, keyed by its run configuration field.",
+          "properties": {
+            "server.host": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "server.port": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "server.timeout_s": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "sumo.home": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "paths.scenario_root": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "paths.world_package_root": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "paths.catalogue": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "paths.capture_root": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            },
+            "paths.runs_root": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "provenance",
+                "environment_variable"
+              ],
+              "properties": {
+                "value": {
+                  "description": "The value the launch uses: text, a number, or null."
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the value came from: the profile file, the layout the tool runs from, or an environment variable."
+                },
+                "environment_variable": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The environment variable the value was read from; null where it was read from none."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "sun_at": {
+      "type": "object",
+      "description": "The declared sun at one instant.",
+      "required": [
+        "seconds",
+        "sun_date",
+        "sun_clock",
+        "elevation_deg",
+        "geometric_elevation_deg",
+        "azimuth_deg",
+        "band"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "description": "The simulated second."
+        },
+        "sun_date": {
+          "type": "string",
+          "description": "The date the sun is computed for, YYYY-MM-DD."
+        },
+        "sun_clock": {
+          "type": "string",
+          "description": "The clock time the sun is computed for, HH:MM:SS."
+        },
+        "elevation_deg": {
+          "type": "number",
+          "description": "Refraction-corrected elevation, degrees."
+        },
+        "geometric_elevation_deg": {
+          "type": "number",
+          "description": "Geometric elevation, degrees."
+        },
+        "azimuth_deg": {
+          "type": "number",
+          "description": "Azimuth, degrees clockwise from north."
+        },
+        "band": {
+          "enum": [
+            "day",
+            "golden",
+            "civil_twilight",
+            "nautical_twilight",
+            "astronomical_twilight",
+            "night"
+          ],
+          "description": "The illumination band of the elevation."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

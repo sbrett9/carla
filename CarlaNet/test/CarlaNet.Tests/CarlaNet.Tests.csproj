@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Real netconvert output the network-fingerprint tests read; see NetworkFingerprintTests. -->
+    <None Include="Map\Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\CarlaNet.Types\CarlaNet.Types.csproj" />
     <ProjectReference Include="..\..\src\CarlaNet.Transport\CarlaNet.Transport.csproj" />
     <ProjectReference Include="..\..\src\CarlaNet.Sensors\CarlaNet.Sensors.csproj" />

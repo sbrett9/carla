@@ -23,6 +23,7 @@ Environment:
 import sys
 import os
 import time
+import json as _json
 import math as _math
 import threading
 import fnmatch
@@ -30,6 +31,48 @@ import fnmatch
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir in sys.path:
     sys.path.remove(_this_dir)
+
+
+# ── Release version ───────────────────────────────────────────────────────────
+# The distribution's one release number, which carlacontrol and the server carry too: CARLA_VERSION
+# in the top-level CMakeLists.txt, with the short CARLA commit as a PEP 440 local part on a build that
+# is not the tagged release (0.10.0+g1a2b3c4d5). A wheel reads what its build stamped into
+# carlanet/_version.py (python/setup.py); the shim run from a checkout, which holds no stamp, reads the
+# checkout it sits in (Util/ReleaseVersion.py); outside both it is "unknown", never a guess. The
+# assemblies loaded below carry the same number as their informational version, which
+# CarlaNet.Types.Provenance.Producer.CarlaNetVersion reads.
+def _release_version_from_checkout():
+    import importlib.util as _importlib_util
+    # CarlaNet/python/carlanet/__init__.py: the checkout's root is three directories up.
+    checkout = os.path.normpath(os.path.join(_this_dir, "..", "..", ".."))
+    path = os.path.join(checkout, "Util", "ReleaseVersion.py")
+    if not os.path.isfile(path):
+        return "unknown"
+    try:
+        spec = _importlib_util.spec_from_file_location("carla_release_version", path)
+        module = _importlib_util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if not module.ReleaseVersion.is_checkout_root(checkout):
+            return "unknown"
+        return module.ReleaseVersion.of_checkout(checkout)
+    except Exception:
+        return "unknown"
+
+
+def _stamped_release_version():
+    # Read as text beside this file rather than imported, so a shim loaded by path under another name
+    # never imports an installed carlanet to find it.
+    path = os.path.join(_this_dir, "_version.py")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as stamped:
+        for line in stamped:
+            if line.startswith("__version__"):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    return None
+
+
+__version__ = _stamped_release_version() or _release_version_from_checkout()
 
 # ── .NET runtime selection ────────────────────────────────────────────────────
 import clr_loader
@@ -109,6 +152,35 @@ try:
     _CARLANET_SCENARIO_AVAILABLE = True
 except FileNotFoundError:
     _CARLANET_SCENARIO_AVAILABLE = False
+
+# SUMO co-simulation (CarlaNet.Sumo + CarlaNet.CoSim): a TraCI client and the playback bridge that
+# drives a world's vehicles from a SUMO microsimulation. Python starts and ends a session and reads
+# its report; every pose is computed and written in .NET off the tick thread's critical path.
+# Optional — a missing assembly leaves sumo_drive_world() unavailable.
+try:
+    _ref("CarlaNet.Sumo")
+    _ref("CarlaNet.CoSim")
+    _CARLANET_COSIM_AVAILABLE = True
+except FileNotFoundError:
+    _CARLANET_COSIM_AVAILABLE = False
+
+# ── What made a file ──────────────────────────────────────────────────────────
+# Every file the CarlaNet writers produce records the tool that ran them (CarlaNet.Types.Provenance).
+# A component that runs as a tool declares itself -- carlacontrol's capture session declares
+# carlacontrol.CaptureSession and its release -- and until one does, the program's own name stands,
+# with no version, since a script's release cannot be told from its name.
+def _program_name():
+    argv0 = sys.argv[0] if sys.argv and sys.argv[0] else ""
+    stem = os.path.splitext(os.path.basename(argv0))[0]
+    return stem or "python"
+
+
+try:
+    from CarlaNet.Types.Provenance import Producer as _Producer
+    _Producer.DeclareDefaultTool(_program_name(), None)
+except Exception:
+    # Assemblies built before the record existed: their writers record nothing of who ran them.
+    _Producer = None
 
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
@@ -519,6 +591,13 @@ def _sync(task):
     return task.GetAwaiter().GetResult()
 
 
+def _names_no_such_function(failure):
+    """Whether a server answered that it binds no function of that name: a server built before the
+    call existed. rpclib's words, and CarlaNet's own server's."""
+    text = str(getattr(failure, "Message", None) or failure)
+    return "could not find function" in text or "unknown method" in text
+
+
 def _to_cs_geo(p):
     """Coerce a Python (lat, lon[, alt]) tuple / object to a C# GeoLocation."""
     if isinstance(p, GeoLocation):
@@ -664,8 +743,9 @@ class BlueprintLibrary:
 # ── Map wrapper ───────────────────────────────────────────────────────────────
 
 class Map:
-    def __init__(self, name: str, spawn_points):
+    def __init__(self, name: str, spawn_points, client=None):
         self.name = name
+        self._client = client
         # Wrap each C# Transform into the mutable Python Transform so callers
         # can safely do `sp.location.z += 2.0` without the C# init-only struct
         # silently swallowing the write.
@@ -681,8 +761,99 @@ class Map:
         # Transform values.
         return [Transform(sp.location, sp.rotation) for sp in self._spawn_points]
 
+    def to_opendrive(self) -> str:
+        """The OpenDRIVE text the server serves for this map, as upstream's Map.to_opendrive."""
+        if self._client is None:
+            raise RuntimeError("this Map was built without a client, so it cannot fetch its OpenDRIVE")
+        return str(_sync(self._client.GetMapDataAsync()) or "")
+
     def __repr__(self):
         return f"Map(name={self.name!r}, spawn_points={len(self._spawn_points)})"
+
+
+# ── Camera names ──────────────────────────────────────────────────────────────
+# Every camera has a name, held on the server as its role_name. Every still recorded from the camera
+# is named after it and it is the callsign of the camera's platform track, so two cameras in one world
+# never write files of one name or report under one callsign. The server issues the names and refuses
+# the duplicates: a camera spawned with no name (World.spawn_camera) is Camera_<n> from a counter the
+# server keeps for its lifetime, a name a live camera holds is refused at spawn, and so is a
+# client-given name of the server's form. Every client reads a camera's name back from the spawned
+# actor's attributes (World.camera_name), so every process holds the same name for one camera. The
+# rule a client-given name must meet is CarlaNet.Recording.CameraName's; names are compared without
+# regard to case, as a Windows file system compares file names. A server built before it named cameras
+# hands an unnamed camera back with its blueprint's role name; such a camera is CARLA-SENSOR-<actor id>,
+# the form every platform track's uid takes, and the shim says so once.
+
+_server_names_no_cameras_said = False
+
+
+def default_camera_name(camera_id) -> str:
+    """The uid of a camera's platform track, CARLA-SENSOR-<actor id>, and the name of a camera a
+    server built before it named cameras left unnamed."""
+    return f"CARLA-SENSOR-{int(camera_id)}"
+
+
+def camera_name_problem(name, camera_id=None):
+    """Why `name` cannot be a name a client gives a camera, or None when it can, by
+    CarlaNet.Recording.CameraName's rule: 1 to 63 characters, each an ASCII letter, digit,
+    underscore or hyphen, such as Overwatch_1 or Southeast_1700m_orbit; not a name Windows keeps for
+    a device, not a role name the server gives sensors (front, back, left, right, ...), not the
+    server's own form, Camera_<n>, and not the default form unless it is `camera_id`'s own default. A
+    name is used as given or refused, never rewritten, and every refusal says what is allowed."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraName
+    problem = CameraName.Problem(None if name is None else str(name),
+                                 None if camera_id is None else int(camera_id))
+    return None if problem is None else str(problem)
+
+
+def camera_name_of(camera) -> str:
+    """The name `camera` holds on the server, read from the actor's attributes: its role_name where
+    that is a name -- the server's Camera_<n>, or the one its client gave -- and otherwise, from a
+    server built before it named cameras, its default, CARLA-SENSOR-<actor id>."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraName
+    return str(CameraName.Of(camera._actor))
+
+
+def camera_named_by_server(camera) -> bool:
+    """Whether the server named `camera`: it carries a name of the server's form, Camera_<n>."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraName
+    return bool(CameraName.NamedByServer(camera._actor))
+
+
+def camera_exposure_of(camera):
+    """The exposure `camera` was given, read from the actor's attributes as the server spawned it, as a
+    CarlaNet.Recording.CameraExposure: the post_process_profile it names, and the exposure_mode, iso,
+    shutter_speed (per second), fstop and exposure_compensation set over that profile. None for a camera
+    that does not carry all six -- one of a server built before it published its exposure, or one with no
+    post-process pair, such as the depth camera. Every capture recorded from the camera carries it as
+    `<_carla_exposure>` (`start_recording`), and the run manifest's camera entry as `exposure`."""
+    if not _CARLANET_RECORDING_AVAILABLE:
+        raise RuntimeError("camera exposure is read by CarlaNet.Recording, which is not loaded "
+                           "(rebuild the wheel/DLLs)")
+    from CarlaNet.Recording import CameraExposure
+    return CameraExposure.Of(camera._actor)
+
+
+def _say_server_names_no_cameras(camera) -> None:
+    """Said once per process: the server handed an unnamed camera back without a name of its own,
+    so it was built before it named cameras, and the camera is its default."""
+    global _server_names_no_cameras_said
+    if _server_names_no_cameras_said:
+        return
+    _server_names_no_cameras_said = True
+    print(f"this server names no cameras: camera {int(camera.id)} was spawned without a name and "
+          f"came back with role_name {camera.attributes.get('role_name', '')!r}, so it is "
+          f"{default_camera_name(camera.id)}; a server that names cameras gives it Camera_<n> "
+          "(rebuild the server)", file=sys.stderr)
 
 
 # ── Actor wrapper ─────────────────────────────────────────────────────────────
@@ -989,9 +1160,116 @@ class WalkerAIController(Actor):
         nav.SetMaxSpeed(self._target_id(), float(speed))
 
 
+class OrbitNotOnServerError(RuntimeError):
+    """The server binds no orbit call: it was built before the Carla plugin flew orbits, so nothing
+    on it can fly a camera round a circle. Rebuild the plugin. Nothing in the client moves the camera
+    in the server's place."""
+
+
+class OrbitState:
+    """Where a sensor's server-side orbit stands (`Sensor.get_orbit_state`): the angle in radians
+    the server last placed it at, in [0, 2 pi), and whether the orbit is enabled and paused. A
+    sensor given no orbit reads angle 0, not enabled, not paused."""
+
+    def __init__(self, angle: float, enabled: bool, paused: bool) -> None:
+        self.angle = float(angle)
+        self.enabled = bool(enabled)
+        self.paused = bool(paused)
+
+    def __repr__(self) -> str:
+        return f"OrbitState(angle={self.angle:.6f}, enabled={self.enabled}, paused={self.paused})"
+
+
+_ORBIT_NOT_ON_SERVER = (
+    "this server cannot fly an orbit: it binds no {call}, so it was built before the Carla plugin "
+    "carried the orbit mover. Rebuild the plugin. Nothing in the client moves the camera in the "
+    "server's place (the server said: {said})")
+
+
+def _orbit_call(call: str, task):
+    """Wait on an orbit call, saying plainly when the server has no such call."""
+    try:
+        return _sync(task)
+    except Exception as failure:
+        if _names_no_such_function(failure):
+            said = str(getattr(failure, "Message", None) or failure)
+            raise OrbitNotOnServerError(_ORBIT_NOT_ON_SERVER.format(call=call, said=said)) from failure
+        raise
+
+
 class Sensor(Actor):
-    """Marker subclass for sensor.* actors. listen/stop/is_listening live on Actor."""
-    pass
+    """A sensor.* actor. listen/stop/is_listening live on Actor; the orbit calls are here, because
+    the actor the server flies round a circle is a camera."""
+
+    def set_orbit(self, centre, radius: float, altitude: float, period: float, *,
+                  clockwise: bool = True, start_angle: float = 0.0, pitch=None,
+                  enabled: bool = True) -> None:
+        """Have the server fly this sensor round a circle, from these parameters and no pose after.
+
+        The server puts an orbit mover on the sensor (`set_orbit`), which advances the angle by each
+        tick's delta on the simulation clock -- the fixed delta under synchronous ticking -- and sets
+        the sensor on the circle with its boresight on the centre before the frame's sensors capture,
+        so the image, its header and the frame's snapshot agree on the pose, and anything attached to
+        the sensor (a depth camera) rides with it. The client sends nothing per frame; where a client
+        thread used to push a pose fifty times a second on its own wall clock, the server's tick rate
+        on a loaded world fell by half and a synchronous run's camera turned as far per captured frame
+        as the pace was high.
+
+        The pose at an angle a is `OrbitSensorController.orbit_transform`'s: on the circle at
+        (centre.x + radius cos a, centre.y + radius sin a, centre.z + altitude), yaw to the centre,
+        pitch the depression to it, roll zero. With the angle increasing the sensor goes from the
+        centre's east through its south -- clockwise seen from above where -y is north -- so the
+        angle at any simulated instant is start_angle + (2 pi / period) * seconds since enabling,
+        signed by direction, and a client that shows it computes it rather than asking.
+
+        While the orbit is enabled the mover owns the sensor's transform, paused or not: call
+        `set_orbit_enabled(False)` before moving the sensor by hand.
+
+        Args:
+            centre: The point circled and looked at, CARLA metres: a Location, or (x, y, z).
+            radius: Metres; positive.
+            altitude: Metres above the centre's height.
+            period: Simulated seconds per revolution; positive.
+            clockwise: The angle increases; False runs it the other way.
+            start_angle: Radians; zero is east of the centre.
+            pitch: Degrees to hold the pitch at instead of the depression to the centre, or None.
+            enabled: Start moving at once. False configures the orbit and leaves the sensor where it
+                is until `set_orbit_enabled(True)`: a capture that holds its opening pose through a
+                pre-roll sends that, having spawned the sensor at the pose of `start_angle`.
+
+        Raises:
+            OrbitNotOnServerError: The server binds no set_orbit; it was built before the orbit
+                mover. Nothing here moves the sensor in its place.
+        """
+        from CarlaNet.Types.Rpc.Orbit import OrbitParameters as _OrbitParameters
+        if hasattr(centre, "x"):
+            cx, cy, cz = float(centre.x), float(centre.y), float(centre.z)
+        else:
+            cx, cy, cz = (float(v) for v in centre)
+        parameters = _OrbitParameters(cx, cy, cz, float(radius), float(altitude), float(period),
+                                      bool(clockwise), float(start_angle), pitch is not None,
+                                      0.0 if pitch is None else float(pitch), bool(enabled))
+        _orbit_call("set_orbit", self._client.SetOrbitAsync(self._actor.Id, parameters))
+
+    def set_orbit_enabled(self, enabled: bool) -> None:
+        """Start or stop the server flying this sensor's orbit. Enabled, the server places the sensor
+        on its circle at the angle it holds at once and advances from there each tick; disabled, the
+        sensor stays where it is and may be moved by hand. Disabling a sensor with no orbit is
+        nothing to do; enabling one is refused by the server, since there is no circle to fly."""
+        _orbit_call("set_orbit_enabled",
+                    self._client.SetOrbitEnabledAsync(self._actor.Id, bool(enabled)))
+
+    def set_orbit_paused(self, paused: bool) -> None:
+        """Hold this sensor's orbit at its angle, or let it advance again. The sensor stays on the
+        circle meanwhile. Refused by the server for a sensor with no orbit."""
+        _orbit_call("set_orbit_paused",
+                    self._client.SetOrbitPausedAsync(self._actor.Id, bool(paused)))
+
+    def get_orbit_state(self) -> OrbitState:
+        """Where this sensor's orbit stands on the server. For a check, not a loop: the angle is
+        predictable from the parameters and the simulated clock, and asking costs a round trip."""
+        state = _orbit_call("get_orbit_state", self._client.GetOrbitStateAsync(self._actor.Id))
+        return OrbitState(state.AngleRadians, state.Enabled, state.Paused)
 
 
 class TrafficSign(Actor):
@@ -1466,7 +1744,7 @@ class World:
 
     def get_map(self) -> Map:
         info = _sync(self._client.GetMapInfoAsync())
-        return Map(str(info.Name), info.RecommendedSpawnPoints)
+        return Map(str(info.Name), info.RecommendedSpawnPoints, self._client)
 
     def get_spectator(self) -> Actor:
         return _wrap_actor(_sync(self._client.GetSpectatorAsync()), self._client)
@@ -1508,12 +1786,39 @@ class World:
         Returns False if the world has no CesiumSunSky."""
         return bool(_sync(self._client.SetSolarDateAsync(int(year), int(month), int(day))))
 
+    def set_solar_epoch(self, year: int, month: int, day: int, hours: float,
+                        utc_offset_hours: float):
+        """Bind the sun's whole epoch in one call: the civil calendar date, the civil clock
+        `hours` (0-24, wraps) and `utc_offset_hours`, the UTC offset in force at that instant
+        (signed decimal hours; half-hour zones such as +03:30 are representable).
+
+        Setting the offset as the sun's time zone is what makes `hours` CIVIL time. `set_solar_time`
+        alone leaves the zone at map-longitude/15, so its `hours` is local MEAN SOLAR time -- at
+        longitude 56.18 that is +03:44.7 against a civil +03:30, and within a quarter hour of
+        sunrise or sunset that is the difference between a sun above and below the horizon. It also
+        means get_solar_state reads back the civil instant that was set. One lighting refresh for
+        the whole epoch, so no frame is rendered with the new time on the old date.
+
+        Returns False if the world has no CesiumSunSky or the date is not a calendar date (an
+        out-of-calendar date otherwise yields a sun at -180 degrees of elevation)."""
+        return bool(_sync(self._client.SetSolarEpochAsync(
+            int(year), int(month), int(day), float(hours), float(utc_offset_hours))))
+
     def get_solar_state(self):
         """Current sun clock/date/origin/angles, or None if the world has no CesiumSunSky. Returns a
         dict: {solar_time, year, month, day, time_zone, lat, lon, sun_elevation_deg, sun_azimuth_deg,
-        advancing, rate}. sun_elevation_deg is degrees above the horizon; sun_azimuth_deg is degrees
-        clockwise from North. Reads the world-observer cache (paired to the latest tick, no RPC); falls
-        back to an on-demand RPC if the observer cache isn't populated yet."""
+        advancing, rate, sun_corrected_elevation_deg}. sun_elevation_deg is GEOMETRIC degrees above
+        the horizon; sun_azimuth_deg is degrees clockwise from North.
+
+        sun_corrected_elevation_deg is the same elevation with atmospheric refraction applied, which
+        is what the sun's directional light is actually rotated by. Near the horizon the two differ
+        by a few tenths of a degree -- a large fraction of a low sun's elevation, so a threshold on
+        one is not a threshold on the other. It is None when the value came from the world-observer
+        cache of a server built before its header carried the corrected elevation; force the
+        on-demand RPC path if you need it from one of those.
+
+        Reads the world-observer cache (paired to the latest tick, no RPC); falls back to an
+        on-demand RPC if the observer cache isn't populated yet."""
         vals = None
         try:
             cached = self._client.GetCachedSolarState()
@@ -1530,7 +1835,8 @@ class World:
                 "lat": float(vals[5]), "lon": float(vals[6]),
                 "sun_elevation_deg": float(vals[7]), "sun_azimuth_deg": float(vals[8]),
                 "advancing": bool(vals[9]) if vals.Count > 9 else False,
-                "rate": float(vals[10]) if vals.Count > 10 else 1.0}
+                "rate": float(vals[10]) if vals.Count > 10 else 1.0,
+                "sun_corrected_elevation_deg": (float(vals[11]) if vals.Count > 11 else None)}
 
     def set_time_advance(self, enabled: bool, rate: float = 1.0):
         """Enable/disable automatic advancement of the sun's solar clock (the sun moves as the scene
@@ -1605,11 +1911,76 @@ class World:
         return {"min_x": float(vals[0]), "min_y": float(vals[1]),
                 "max_x": float(vals[2]), "max_y": float(vals[3]), "margin": float(vals[4])}
 
+    def drive_lease_holder(self):
+        """Who holds the world's drive lease, or None while nobody does.
+
+        The drive lease is the server-held claim to be the one traffic system that drives the
+        world's vehicles; a SUMO drive session takes it before SUMO starts. While a holder has it the
+        server refuses `set_autopilot(True)`, vehicle control, Ackermann control and physics control
+        for every actor and every client, naming the holder, so a traffic tool asks here before it
+        spawns anything and says who to stop. A server built before it carried the lease answers
+        None: nothing on such a server stops another traffic system."""
+        try:
+            holder = _sync(self._client.GetDriveLeaseHolderAsync())
+        except Exception as failure:
+            if _names_no_such_function(failure):
+                return None
+            raise
+        return None if holder is None else str(holder)
+
+    def break_drive_lease(self):
+        """End whatever drive lease is held on the world, from any client, and return the holder
+        whose lease was ended, or None where none was held.
+
+        The recovery for a drive that died without releasing its lease: the server gives no notice
+        of a disconnect, so such a lease is held until the world is reloaded or this is called. The
+        server logs it as a warning naming the holder, so a lease broken under a live drive is on
+        the record. A server built before it carried the lease answers None."""
+        try:
+            broken = _sync(self._client.BreakDriveLeaseAsync())
+        except Exception as failure:
+            if _names_no_such_function(failure):
+                return None
+            raise
+        return None if broken is None else str(broken)
+
     def get_cesium_origin(self):
         """Cesium georeference origin as (latitude, longitude, height_m). The true elevation
         of a local point at Unreal Z is height_m + Z."""
         g = _sync(self._client.GetCesiumOriginAsync())
         return (g.Latitude, g.Longitude, g.Altitude)
+
+    def get_view_readiness(self, actor):
+        """Whether a camera's photoreal tiles have arrived, as of the end of the last tick.
+
+        Returns {"frame", "published", "tilesets": [{"ion_asset_id", "visible", "load_progress",
+        "loading": {"worker_queue", "main_queue", "kicked"}, "failed_in_view", "failed_loaded"}]},
+        one entry per tileset in the world, hidden ones included and flagged. "published" says the
+        camera's view drove the tilesets' selection on that tick; until it does, a tileset reads fully
+        loaded for a view it never had. A failed tile is drawn empty and counts as loaded, so
+        load_progress 100 with failed_in_view above zero is a frame with a hole.
+
+        An unknown, dormant or non-camera actor raises; it is never answered as None, which a caller
+        could mistake for ready.
+        """
+        actor_id = int(getattr(actor, "id", actor))
+        packed = list(_sync(self._client.GetViewReadinessAsync(actor_id)))
+        if len(packed) < 4 or packed[3] < 8 or len(packed) < 4 + int(packed[2]) * int(packed[3]):
+            raise RuntimeError(f"get_view_readiness answered a malformed reply: {packed!r}")
+        count, row_length = int(packed[2]), int(packed[3])
+        tilesets = []
+        for index in range(count):
+            row = packed[4 + index * row_length: 4 + index * row_length + 8]
+            tilesets.append({
+                "ion_asset_id": int(row[0]),
+                "visible": row[1] != 0.0,
+                "load_progress": float(row[2]),
+                "loading": {"worker_queue": int(row[3]), "main_queue": int(row[4]),
+                            "kicked": int(row[5])},
+                "failed_in_view": int(row[6]),
+                "failed_loaded": int(row[7]),
+            })
+        return {"frame": int(packed[0]), "published": packed[1] != 0.0, "tilesets": tilesets}
 
     def ground_z_below(self, x, y, z, search=4000.0):
         """Raycast straight down from (x, y, z) metres; return the surface Z (metres) hit
@@ -1781,9 +2152,27 @@ class World:
         opaque has not arrived yet and is left out. Vehicles nobody fades are reported from the moment
         they spawn, so this makes no difference to a run without staging traffic.
 
+        During a SUMO drive the vehicles are a pool of bodies, each lent to a SUMO vehicle while it
+        is drawn and parked out of sight 300 m below the ground between loans. The session names each
+        body to the server as it lends it and gives it back, and every world-observer snapshot carries
+        that render set, so this lists the bodies the newest frame drew and no parked body, whichever
+        process calls it, and a lent body's dict also carries sumo_id (the SUMO vehicle it was drawn
+        for), vtype_id (that vehicle's declared type) and admitted_tick (the first frame it was drawn
+        for that vehicle) -- the same names the recorded truth sidecar gives it. Outside a drive no
+        body is named and every vehicle is reported, without those three keys.
+
+        `base_type` and `special_type` are the vehicle's base type and kind as the measured vehicle
+        catalogue curates them for the vehicle's blueprint, once a SUMO drive started on this client
+        has handed this client its catalogue (06_Truth_And_Annotation D6.18): the class's base type,
+        and its kind, empty where it curates none, whatever the blueprint declares. A blueprint no
+        catalogue handed over curates, and every vehicle on a client no drive was started on, carries
+        what its blueprint declares, its base type from its wheel count where it declares none.
+
         Each dict: id, type_id, base_type, special_type, color, role_name, lat, lon, hae, hae_dtm,
-        speed_mps, course_deg, vx, vy, vz, length_m, width_m, height_m. Heights are ELLIPSOIDAL
-        WGS84 (HAE)."""
+        speed_mps, course_deg, heading_deg, vx, vy, vz, length_m, width_m, height_m, and sumo_id,
+        vtype_id, admitted_tick for a body a SUMO drive lent. heading_deg is the direction the body
+        points (its yaw), course_deg the direction it moves; during a SUMO drive the body's heading
+        comes from the path it takes. Heights are ELLIPSOIDAL WGS84 (HAE)."""
         # Recover the surface shift before either path reads it, so a client that did not build this
         # world reports the same bare-earth truth as the one that did.
         self._ensure_bare_earth_reference()
@@ -1801,10 +2190,18 @@ class World:
             offset = 0.0
         drape = self._drape_grid()                       # per-cell offset/ground grids (or None)
         table = None if drape is not None else self._bare_earth_dtm_table()
+        # The render set the newest snapshot carried, where a SUMO drive named its bodies: a parked
+        # body is not a vehicle in the scene, and a lent one is named by its SUMO vehicle.
+        try:
+            render_set = self._client.GetCachedRenderSet()
+        except Exception:
+            render_set = None                              # a client built before the render set
         out = []
         for v in self.get_actors().filter("vehicle.*"):
             if not self._client.IsActorEstablished(v.id):
                 continue                                   # still fading in from the staging ring
+            if render_set is not None and render_set.IsParked(v.id):
+                continue                                   # parked out of sight between loans
             tf = v.get_transform()
             vel = v.get_velocity()
             loc = tf.location
@@ -1823,25 +2220,28 @@ class World:
                 dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
             speed = _m.hypot(vx, vy)
-            # Course over ground, degrees true north (CARLA +X=East, -Y=North); yaw fallback ~stopped.
-            if speed >= 0.5:
-                course = _m.degrees(_m.atan2(vx, -vy)) % 360.0
-            else:
-                yaw = _m.radians(tf.rotation.yaw)
-                course = _m.degrees(_m.atan2(_m.cos(yaw), -_m.sin(yaw))) % 360.0
+            # Course over ground, degrees true north (CARLA +X=East, -Y=North); heading fallback ~stopped.
+            yaw = _m.radians(tf.rotation.yaw)
+            heading = _m.degrees(_m.atan2(_m.cos(yaw), -_m.sin(yaw))) % 360.0
+            course = _m.degrees(_m.atan2(vx, -vy)) % 360.0 if speed >= 0.5 else heading
             attrs = v.attributes
             ext = v.bounding_box.extent
             base = attrs.get("base_type", "") or (
                 "motorcycle" if attrs.get("number_of_wheels", "4") == "2" else "car")
-            out.append({
+            rec = {
                 "id": v.id, "type_id": v.type_id,
                 "base_type": base, "special_type": attrs.get("special_type", ""),
                 "color": attrs.get("color", ""), "role_name": attrs.get("role_name", ""),
                 "lat": geo.Latitude, "lon": geo.Longitude, "hae": hae, "hae_dtm": dtm_at_veh,
-                "speed_mps": speed, "course_deg": course,
+                "speed_mps": speed, "course_deg": course, "heading_deg": heading,
                 "vx": vx, "vy": vy, "vz": vz,
                 "length_m": 2.0 * ext.x, "width_m": 2.0 * ext.y, "height_m": 2.0 * ext.z,
-            })
+            }
+            body = render_set.Lent(v.id) if render_set is not None else None
+            if body is not None:
+                rec.update(sumo_id=str(body.VehicleId), vtype_id=str(body.VehicleTypeId),
+                           admitted_tick=int(body.AdmittedFrame))
+            out.append(rec)
         return out
 
     def _vehicle_telemetry_native(self, origin=None):
@@ -1858,34 +2258,56 @@ class World:
         cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
         out = []
         for r in svc.Compute(cs_origin):
-            out.append({
+            rec = {
                 "id": int(r.Id), "type_id": r.TypeId,
                 "base_type": r.BaseType, "special_type": r.SpecialType,
                 "color": r.Color, "role_name": r.RoleName,
                 "lat": float(r.Lat), "lon": float(r.Lon),
                 "hae": float(r.Hae), "hae_dtm": float(r.HaeDtm),
                 "speed_mps": float(r.SpeedMps), "course_deg": float(r.CourseDeg),
+                "heading_deg": float(r.HeadingDeg),
                 "vx": float(r.Vx), "vy": float(r.Vy), "vz": float(r.Vz),
                 "length_m": float(r.LengthM), "width_m": float(r.WidthM), "height_m": float(r.HeightM),
-            })
+            }
+            # The SUMO vehicle a lent body was drawn for, named as the recorded sidecar names it.
+            rendered = getattr(r, "Rendered", None)
+            if rendered is not None:
+                rec.update(sumo_id=str(rendered.SumoId), vtype_id=str(rendered.VehicleTypeId),
+                           admitted_tick=int(rendered.AdmittedTick))
+            out.append(rec)
         return out
 
     def start_recording(self, camera, record_dir, hz=2.0, affiliation="n", stale=3.0,
                         fov=90.0, platform_type="uas-fixed", platform_affiliation="f",
-                        platform_callsign="OVERWATCH", platform_uid=None, distortion="none",
+                        platform_callsign=None, platform_uid=None, distortion="none",
                         run_id=None, scenario_id=None, seed=None, depth_camera=None,
-                        occlusion_margin_m=1.0, occlusion_samples=24):
+                        occlusion_margin_m=1.0, occlusion_samples=24, illumination=None,
+                        render_set=None, draw_distance_m=None, camera_name=None, sumo_version=None):
         """Start native (C#) recording of `camera`'s imagery to `record_dir`: every 1/hz seconds a
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
+
+        Every still is named after the camera, `<camera name>_<local capture time>.png` and `.xml`, the
+        time to the millisecond, and the name is the callsign of the camera's platform track, so two
+        cameras never share files or a callsign. The name is the one the camera holds on the server
+        (`camera_name`): the one it was spawned under (`spawn_camera`), the server's Camera_<n> for a
+        camera spawned with none, or, from a server built before it named cameras, its default,
+        CARLA-SENSOR-<camera id>. `camera_name` given here must be that name, and any other is refused:
+        a camera is named when it is spawned. A second recorder in this process cannot record under a
+        name a live recorder holds. `platform_callsign` is the older spelling of `camera_name`, kept
+        for callers written before cameras had names; giving both with different values is refused.
 
         The collection platform (the airborne camera) is recorded as a CoT air track: `fov` is the camera
         horizontal field of view (degrees, for the sensor field-of-view and pinhole intrinsics);
         `platform_type` is an airframe class ('uas-fixed', 'uas-rotary', 'manned-fixed', 'manned-rotary')
         or a raw CoT type string; `platform_affiliation` is the CoT standard identity (default 'f' friend,
-        as the platform is our own collection asset); `platform_callsign`/`platform_uid` name the track
-        (uid defaults to CARLA-SENSOR-<camera id>); `distortion` describes the lens model ('none' at CARLA
-        defaults).
+        as the platform is our own collection asset); the track's callsign is the camera's name and
+        `platform_uid` its uid (default CARLA-SENSOR-<camera id>, whatever the camera is named);
+        `distortion` describes the lens model ('none' at CARLA defaults). Every capture's platform event
+        also carries the exposure the camera was given, `<_carla_exposure>`, read from the camera's own
+        attributes (`camera_exposure_of`): its `post_process_profile`, `method` (`manual` or
+        `histogram`), `iso`, `shutter_s` in seconds, `fstop`, `compensation_ev`, and under manual the
+        `ev100` they make; a camera that carries none writes none.
 
         Every capture records the simulation tick that produced it, so a still and its sidecar are bound
         to a simulation instant rather than to wall-clock time, which does not track the simulation
@@ -1899,18 +2321,92 @@ class World:
         (`occlusion` and `occlusion_level` in the sidecar's truth extras). `occlusion_margin_m` is how
         much nearer than a vehicle's own surface something has to be before it counts as blocking it,
         and `occlusion_samples` how finely each vehicle's outline is sampled. Measuring costs a second
-        subscription to that camera's stream, so it happens only when a depth camera is given."""
+        subscription to that camera's stream, so it happens only when a depth camera is given.
+
+        With or without one, every vehicle record says where the vehicle's box fell against this
+        camera's picture, `in_frame` -- `wholly`, `partly`, `none` or `behind_camera` -- with its
+        `apparent_width_px` and `apparent_height_px` wherever the box has a footprint, projected with
+        `fov` from the capture's own camera pose; and where the five occlusion fields are absent,
+        `occlusion_unmeasured` says why in one word (`no_depth_camera`, `outside_frame`,
+        `behind_camera`, `beyond_draw_distance`, `no_depth_capture`, `depth_out_of_step`,
+        `depth_pose_mismatch`, `beyond_depth_range` or `no_sample`), so an absent fraction is never
+        read as an unhidden vehicle. `audit_truth_sidecars.py` holds every record to it.
+
+        Pass `illumination` -- a SUMO drive session's `session.Illumination` -- to have each capture
+        also record what its sun was declared to be: the scenario epoch's digest, the illumination
+        policy, the frame's civil instant, the sun declared for it with both its geometric and its
+        refraction-corrected elevation, and the audit's residual on the tick that rendered it, as an
+        `<_illumination>` element beside `<_solar>` and a `carla:illumination` PNG chunk. The recorder's
+        `IlluminationUnpaired` counts captures that went without one.
+
+        Every capture's `<_solar>` element and `carla:solar` PNG chunk carry the sun of the snapshot
+        nearest its pixels and its `illumination_band` (doc 11 §4.4's six), cut from the
+        refraction-corrected elevation wherever the server carries it, with
+        `illumination_band_elevation` naming the elevation it was cut from. A capture whose snapshot
+        carried no sun is written with neither, and `SolarBlockMissing` counts it.
+
+        Pass `render_set` -- a SUMO drive session's `session.RenderSet` -- to have each capture list
+        only the vehicle bodies its own frame rendered, each named by the SUMO vehicle it rendered
+        (`sumo_id`, `vtype_id` and `admitted_tick` in the truth extras, uid
+        `CARLA-TRUTH-SUMO-<sumo_id>`, callsign `<base_type>-<sumo_id>`), and leave out the bodies
+        parked out of sight between loans. The set is looked up for the frame the capture's truth
+        describes, not the newest; a frame whose set the session no longer holds lists no vehicle
+        and says `vehicles="unknown"` on the sidecar rather than guessing. `RenderSetPaired` and
+        `RenderSetUnpaired` count the two, and `RenderSetBodiesMissing` the rendered bodies no truth
+        record described. Without it every vehicle actor is listed, which is right wherever each
+        actor is its own vehicle.
+
+        Where a SUMO drive's supervision plan is in force, each capture carries the supervision the
+        server held on its own frame -- nothing is passed for it, and a recorder in any process writes
+        the same: `plan_id`, `vocabulary` and `vocabulary_digest` on the sidecar's container, and on
+        every drawn SUMO vehicle a `<_supervision state="annotated|nominal|unlabelled">` with an
+        `<annotation>` (instance, labels, phase, role) per pattern instance in force. A capture whose
+        own frame the client no longer held, or whose supervision it could not read, says
+        `supervision="unknown"` and carries none. `SupervisionPaired` and `SupervisionUnpaired`
+        count the two. The PNG carries no supervision.
+
+        A SUMO drive run with a draw distance (`start_sumo_drive(draw_distance_m=...)`, off by
+        default) draws no body farther than that from a camera, while every vehicle stays in the
+        world and in the truth. Each capture then states the distance on its container
+        (`draw_distance_m`) and marks, in the truth extras, every vehicle its camera did not draw:
+        `beyond_draw_distance="wholly"` for one the image shows nothing of, `"partly"` for one the
+        distance falls across, each with the `camera_range_m` it rests on; a vehicle wholly beyond it
+        is never measured for occlusion. With `render_set` given, each frame's own set says the
+        distance it was drawn under -- none where the server refused it -- and `draw_distance_m` here
+        is not read; give it to a recorder with no `render_set`, in another process, with the
+        distance the drive's report states. `DrawDistanceCaptures`, `VehiclesBeyondDrawDistance` and
+        `VehiclesPartlyBeyondDrawDistance` count what was marked.
+
+        Each capture's platform pose, and the pose its occlusion is measured from, is the camera's in
+        the client's snapshot of the image's own frame, with the transform in the image's header
+        checked against it rather than trusted; the depth camera's capture is checked the same way.
+        `SensorPoseFromSnapshot` counts the captures placed from their frame's snapshot,
+        `SensorPoseHeaderDisagreed` those among them whose header said otherwise (zero from a server
+        that stamps the header when it captures the frame), and `SensorPoseFromHeader` those whose
+        frame the client no longer held, written from the header; `OcclusionDepthPose*` count the
+        same for the depth captures.
+
+        Every still says what made it -- a `<_producer>` first under the sidecar's container, and a
+        `producer` object in the PNG's `carla:capture` chunk, beside each file's `format_version`:
+        the tool this process declared (the program's name until a component declares itself), its
+        release, the carlanet release, the server's build identity (`Client.get_build_identity`,
+        asked once as the recorder starts; a server built before it says it could not), and
+        `sumo_version`, the SUMO release driving the vehicles, which a SUMO drive session's
+        `render_set` or `illumination` gives where it is not given here."""
         if not _CARLANET_RECORDING_AVAILABLE:
             print("native recording unavailable: CarlaNet.Recording assembly not loaded "
                   "(rebuild the wheel/DLLs).", file=sys.stderr)
             return None
         from CarlaNet.Recording import FrameRecorder, OcclusionOptions, SensorPlatformOptions
+        # Settled before the recorder this handle holds is stopped, so a name refused stops nothing.
+        name = self._recording_camera_name(camera, camera_name, platform_callsign)
         self.stop_recording()
         token = camera._actor.StreamToken
-        uid = platform_uid or f"CARLA-SENSOR-{camera.id}"
+        uid = platform_uid or default_camera_name(camera.id)
         cot_type = SensorPlatformOptions.ResolveCotType(str(platform_type), str(platform_affiliation))
-        opts = SensorPlatformOptions(float(fov), cot_type, str(platform_callsign), str(uid),
-                                     "sensor.camera.rgb", str(distortion))
+        # The exposure the camera was given, read from its own attributes, rides on every capture.
+        opts = SensorPlatformOptions(float(fov), cot_type, name, str(uid),
+                                     "sensor.camera.rgb", str(distortion), camera_exposure_of(camera))
         depth_token = None if depth_camera is None else depth_camera._actor.StreamToken
         occlusion = None
         if depth_camera is not None:
@@ -1926,7 +2422,11 @@ class World:
                                        None if run_id is None else str(run_id),
                                        None if scenario_id is None else str(scenario_id),
                                        None if seed is None else int(seed),
-                                       depth_token, occlusion)
+                                       depth_token, occlusion, illumination, render_set,
+                                       int(camera.id),
+                                       None if depth_camera is None else int(depth_camera.id),
+                                       None if draw_distance_m is None else float(draw_distance_m),
+                                       name, None if sumo_version is None else str(sumo_version))
         return self._recorder
 
     def start_scenario(self, path, traffic_manager, report=None):
@@ -1974,6 +2474,446 @@ class World:
             except Exception:
                 pass
             self._scenario = None
+
+    def start_sumo_drive(self, scenario, world_package, catalogue,
+                         fixed_delta=0.05, record_hz=2.0,
+                         warm_up_to=0.0, window_opens_at=None, step_length=None,
+                         road_layer_visible=False, signal_layer_visible=False,
+                         epoch=None, illumination=None,
+                         real_time_factor=0.0, pacing_window_s=5.0,
+                         sumo_home=None, allow_sumo_version_mismatch=False, sumo_gui=False,
+                         allow_teleporting=False, accept_skipped_dry_run=False,
+                         sumo_answer_timeout_s=60.0,
+                         vehicle_lamps=True, headlight_on_below_deg=3.0,
+                         headlight_off_above_deg=6.0, draw_distance_m=None,
+                         render_set="all", region_centre=None, region_radius_m=None,
+                         region_hysteresis_m=60.0, capacity=None, render_min_pixels=2.0,
+                         render_admit_lead_s=3.0, render_release_lag_s=5.0,
+                         render_max_speed_mps=40.0,
+                         world_truth_track=None, world_truth_track_interval_s=None,
+                         run_manifest=None, run_manifest_header=None,
+                         collision_detail=False,
+                         on_pose=None, on_release=None, on_divergence=None,
+                         on_admission_pass=None, on_collision=None,
+                         on_vehicle_not_inserted=None):
+        """Drive this world's vehicles from a SUMO microsimulation. Returns the session, or None if
+        the co-simulation assemblies are not loaded.
+
+        The session owns the advance of simulated time on BOTH sides: call `session.Advance()` in a
+        loop and call nothing else that ticks — not `world.tick()`, and no traffic manager. It puts
+        the world into synchronous mode at `fixed_delta` and restores whatever settings it found
+        when it is disposed, on its failure paths as well as its normal one, so it belongs in a
+        `try`/`finally` or a `with`-equivalent. Ambient traffic cannot run beside it: the session
+        takes the world's population lease and names whoever already holds it.
+
+        `scenario` is a .sumocfg, `world_package` the .cwp the world was built as (the ground
+        surface the poses are seated on and the road network they are interpolated along), and
+        `catalogue` the measured vehicle catalogue. A vType that names no blueprint the catalogue
+        holds a measurement for is simulated and never rendered — no body of another shape stands in
+        for it. The catalogue also says what kind of vehicle each body is: the session hands this
+        client its tables of curated base types and special types as it starts, so every truth
+        reader on this client -- the recorder and `get_vehicle_telemetry` alike -- reports each body's
+        `base_type` (and the callsign built from it) and `special_type` as its catalogue class
+        curates them (06_Truth_And_Annotation D6.18). A reader on another client is not handed them
+        and reports what each blueprint declares.
+
+        By default every vehicle SUMO has is rendered: the scenario is the only arbiter of
+        population. A vehicle holds a body from the frame SUMO first reports it in to the frame of
+        the last step SUMO reports it in, or until the session ends, wherever it is and however many
+        others there are, parked vehicles included; one SUMO inserts during the run is drawn first
+        where SUMO inserted it, moving from there, and never before; one SUMO stops reporting is drawn
+        last where SUMO last had it, on that step's own frame, and never after. Every vehicle SUMO
+        has at `warm_up_to` is drawn on the first rendered frame. Nothing caps the count unless asked to; a scenario heavier than the machine is
+        comfortable with makes a synchronous run slower on the wall clock, never different in content.
+
+        `render_set` limits which vehicles get a body, an optional performance control: 'all', the
+        default, draws every vehicle SUMO has; 'circle' only those inside the circle of
+        `region_radius_m` around `region_centre` (SUMO's projected metres, y north), released
+        `region_hysteresis_m` beyond it; 'cameras' those inside or about to enter the ground footprint
+        of a camera registered with `session.AddCamera(camera.id)` -- remove one with
+        `session.RemoveCamera(camera.id)` before destroying it -- with the circle deciding while no
+        camera is registered where a radius is given, and every vehicle where none is. A footprint is
+        the camera's frustum on the ground, capped where the catalogue's longest body covers fewer than
+        `render_min_pixels` pixels along its length at the picture's corners and swept along the
+        camera's own motion; a vehicle is admitted `render_admit_lead_s` of its travel ahead of it, plus
+        the bodies' reach and a step at `render_max_speed_mps`, kept within `region_hysteresis_m`
+        beyond the widest admission threshold, and released `render_release_lag_s` after it last was.
+        `capacity` caps how many hold a body at once, under any of the three: under 'all' the vehicles
+        drawn keep their bodies and a newcomer takes a free place in the seed's order; under 'circle'
+        the nearest the centre are drawn; under 'cameras' a vehicle in view ranks ahead of one
+        approaching, one drawn ahead of a newcomer, then the seed. Every value is refused where it is
+        built if it is unusable, and a region given to 'all' is refused rather than ignored.
+
+        A vehicle a limit leaves out is still simulated by SUMO -- its traffic is the scenario's -- and
+        has no body in CARLA, so it is in no frame and in no truth record. Every vehicle inside the limit
+        is drawn exactly as with none: subscribed to its full state throughout, so one admitted
+        part-way through its drive is drawn from its admission at its interpolated position, and one
+        SUMO inserts from the frame SUMO first reports it in. `session.Report.RenderSetPolicy` states
+        the policy, `RenderSetLimits` whether it can leave a vehicle out, `VehiclePassesOutsideThePolicy`
+        and `CapacityDeclines` what it left out, `Releases` why each track ended -- 'LeftTheRegion'
+        and 'Capacity' among them -- and `CameraFootprints` each camera's range cap. `warm_up_to` fast-forwards SUMO to
+        a simulated second before the first world tick, and `step_length` overrides the scenario's
+        own SUMO step (behaviour-changing, and recorded as such).
+
+        `draw_distance_m` is an optional performance control, off by default (None): how far from a
+        camera, in metres, a vehicle's body is drawn. Rendering only -- every vehicle still gets its
+        body, is posed on every tick and is in the truth; a body farther than this from a camera is
+        simply not drawn in that camera's image. The session sets it once on each pooled body as the
+        body is spawned (the server's `set_actors_max_draw_distance`, the maximum draw distance of the
+        body's meshes and lamps), so it holds for every camera at once, and
+        `session.SetDrawDistance(metres)` changes it during a run (None draws every body at any range
+        again). Each frame's render set records the distance it was drawn under, so a recorder given
+        `session.RenderSet` marks in that camera's sidecar every vehicle beyond it. A server built
+        before it carried the call refuses it: the run goes on with every body drawn at any range,
+        and `session.Report.DrawDistanceRefused` says why. `session.Report.DrawDistanceMetres` is
+        what was asked for, `session.DrawDistanceMetres` what the bodies carry. A value that is not a
+        positive number of metres is refused before anything starts.
+
+        `world_truth_track` is where the session writes the world truth track, None (the default)
+        writing none: every vehicle SUMO has, drawn or not, at each sampled SUMO frame inside the
+        capture window, one CSV row per vehicle -- the record of what the world contained, which a base
+        rate is taken over (06_Truth_And_Annotation §8.3). Every value is SUMO's, at TraCI's clock for
+        the frame; each row says whether a body drew the vehicle on the frame stamped with that instant
+        (`render_state` 'rendered', with its `actor_id`) or why none did ('simulated_only', with a
+        `render_reason`), and carries the sun the world reported for the frame. Rows are appended whole
+        and flushed together once each SUMO frame's are written, so a run cut off loses at most the
+        rows of the frame it was writing, and a summary beside it (`<name>.summary.json`) states the
+        rate and, once the session ends, what the track holds and why it ended. A path that already
+        holds a track is refused before anything starts.
+        `world_truth_track_interval_s` samples every so many simulated seconds from the window's
+        opening, a whole number of SUMO steps, where None samples every SUMO frame.
+        `session.WorldTruthTrack` says where it is going and how many rows it holds.
+
+        `run_manifest` is where the session writes the run manifest, None (the default) writing none:
+        one JSON object per line, each appended and flushed as it is written -- `manifest_opened` with
+        what the run is (`run_manifest_header`, a dict or its JSON text, carried verbatim beside what the
+        session established: the compile lock's digests, the supervision plan and its vocabulary, the
+        SUMO settings it runs under, the epoch and illumination), `sensor_placed` for each camera named
+        with `session.RunManifest.PlaceSensor(name, camera.id, world.camera_exposure(camera))`, with
+        the exposure the camera was given where it carries one, `render_admitted` and
+        `render_released` for every vehicle entering and leaving the render set, the events that change
+        the population (`collision_began`, `collision_ended`, `vehicle_not_inserted`,
+        `emergency_stop`, `teleport`) at TraCI's clock, the sun at the window's first and last capture
+        tick (`solar_window_open`, `solar_window_end`), and last `manifest_closed` saying why the run
+        ended (04_Contracts §12.7, 06_Truth_And_Annotation §8.4). A manifest without that row is one whose
+        run was interrupted. `session.RunManifest.Close(reason)` writes it now -- for a caller that
+        reads its closing gates before disposing the session -- and the session's end writes it
+        otherwise. A path that already holds a manifest is refused before anything starts.
+
+        `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
+        because the imagery this mode produces is of the photogrammetry: the generated road mesh is
+        a flat grey ribbon drawn over the real road surface and the generated signal meshes are
+        frequently misaligned against it, so either left on is a rendering artefact in every frame.
+        The session writes them once before the first tick and never again — a layer that changed
+        mid-run would make two frames of one capture incomparable — and puts them back on every exit
+        path, including a failure. Hiding is rendering-only: the road keeps its collision and a
+        hidden signal keeps its stop-line trigger. `session.Report.LayerVisibility` carries what was
+        set, since a capture with no road mesh and a capture of a world that has none look alike.
+
+        `epoch` says what simulated second zero means in civil time at the site -- the `epoch` object
+        of a scenario.json, as a dict or its JSON text: `civil_datetime` with its numeric offset,
+        `utc_offset_hours`, the same instant again as `utc_datetime`, `calendar_advances`,
+        `dst_in_effect`, and optionally `time_zone_id` (carried, never resolved) and `note`. A
+        malformed one is refused, naming every rule it breaks. `illumination` says what the sun does
+        across the window -- the `illumination` object, as a dict or JSON, or just a policy name:
+        'freeze_at_window_start', 'advance' (with `rate_sun_s_per_sim_s`), 'freeze_at' (with
+        `freeze_at_civil_time`) or 'ignore'. **There is no default**, because a frozen run and an
+        unconfigured one write identical records: a session that renders a world and declares no
+        policy is refused. 'freeze_at_window_start' is the recommended one -- the sun is set, after
+        SUMO's fast-forward and before the first tick, to the civil instant the window opens, read
+        back to confirm the world took it, and held there. The sun the world was found with is given
+        back when the session ends. `session.Sun` says what was bound and what the world reported.
+
+        `window_opens_at` is the simulated second the capture window opens -- its first captured
+        frame -- where the session renders a prewarm from `warm_up_to` before it; left as None, the
+        window opens at the first rendered frame. A frozen sun is pinned there and an advancing one
+        anchored there, so a run that renders five minutes of prewarm before a 10:05:00 window pins
+        its sun at 10:05:00, not 10:00:00, and each prewarm frame's illumination declaration says it
+        was lit by that sun. A window before `warm_up_to` is refused. A refusal raised by
+        `session.Advance()` on a prewarm tick, before the window opens, is at 'PreRoll'; from the
+        window's opening on, at 'Window'. `session.WindowOpensAtSeconds` and
+        `session.FirstRenderedSeconds` say which instants the session took.
+
+        `real_time_factor` holds the world's ticks to the wall clock: simulated seconds per
+        wall-clock second, so 1.0 is the pace of real traffic, 0.5 half of it and 2.0 twice it. 0,
+        the default, holds them to nothing and the world ticks as fast as the machine allows. It is
+        read once, when the session starts, and a negative, infinite or NaN factor is refused. The
+        warm-up is never paced -- it ticks no world -- and pacing starts at the first tick. What the
+        run actually held is on `session.Report.Pacing`, paced or not and live while it runs:
+        `AchievedFactor` over the whole run, `LastWindowFactor` over the latest `pacing_window_s` of
+        wall clock, `WorstWindowFactor`, and for a paced run `BehindScheduleSeconds`. Nothing stops a
+        run for falling behind; it says so.
+
+        The session also refuses a `world_package` that does not describe the world this server has
+        loaded -- another build's origin, surface grid or road network -- and a world that carries no
+        bare-earth record at all, which is any stock map. It checks before it touches the world, and
+        compares the bare-earth grids by the digests the server computes of them rather than by
+        fetching them. Once it has admitted the package it gives this client the package's grids for
+        its truth telemetry, where the server's digests match, so a recorder started on this client
+        never fetches them either.
+
+        `sumo_home` is the SUMO installation to launch, the directory holding `bin/sumo`. Left as
+        None, the session searches: `CARLANET_SUMO_HOME`, then the repository's pinned build found
+        upward from the CarlaNet assemblies, then `SUMO_HOME`, then PATH. Loaded from an installed
+        wheel, the assemblies sit in site-packages with no repository above them, so it is
+        `SUMO_HOME` that decides -- name the installation that converted the world rather than
+        leaving it to that. Whichever it is, the session compares its release against the converter
+        the world package records, by release number (`Eclipse SUMO netconvert 1.27.0` and `1.27.0`
+        are the same release), and refuses a different one before SUMO is started, naming both.
+        `allow_sumo_version_mismatch` runs anyway. A package that records no converter runs
+        unchecked. `session.Report.Sumo` carries the installation, its release, the rule that found
+        it and how it stood against the world's converter -- an accepted mismatch and an unchecked
+        world included.
+
+        `sumo_gui` launches the installation's `sumo-gui` in place of `sumo`: one SUMO process, the
+        one the session steps, so SUMO's own window shows exactly the simulation driving this world.
+        It gets `sumo`'s arguments and `--start --quit-on-end --delay 0 --message-log stdout
+        --error-log stderr`, so it runs without anyone pressing play, closes when the session does,
+        never paces the run, and still writes the warnings the report counts to the console. The
+        release compared against the world's converter is the one `sumo-gui` itself reports, and
+        `session.Report.Sumo.Binary` names the binary that ran. An installation with no `sumo-gui` is
+        refused before anything starts, naming the file; the repository's setup script
+        (CarlaSetup.ps1 / CarlaSetup.sh) builds and stages it. Pausing the GUI pauses the run -- past
+        `sumo_answer_timeout_s` it stops as a SUMO that stopped answering -- and closing its window
+        stops the run as a SUMO that died.
+
+        A compiled scenario carries a compile lock beside its configuration (`<stem>.lock.json`, as
+        the scenario compiler writes it). The session refuses, before SUMO is started, a scenario
+        whose configuration, route file or network is not the one the lock digests, or whose lock
+        records another catalogue digest than `catalogue` declares, or another epoch than `epoch`
+        digests as -- naming every disagreement. A scenario with no lock beside it runs as an
+        uncompiled one. `session.Report.CompileLock` says which, and for a compiled scenario the
+        SUMO release that routed it and the world it was compiled for.
+
+        The lock also says whether the compiler ran the scenario in SUMO alone before writing it
+        (its check 59), which is what finds a vehicle the supervision plan names that never enters
+        the simulation. The session refuses, before SUMO is started, a lock that says the run was
+        skipped (`compile_scenario.py --skip-dry-run`) or records none -- a lock written before the
+        compiler ran the check -- naming the scenario and the lock's reason, because a capture that
+        started would find the same fault only when SUMO dropped the vehicle, hours of rendering in.
+        `accept_skipped_dry_run` runs anyway, and `session.Report.CompileLock.DryRunText` records
+        that the skipped run was accepted; where the run happened it accepts nothing, and the text
+        says what the run found.
+
+        The session also refuses a scenario whose configuration lets SUMO teleport a blocked vehicle:
+        a positive `time-to-teleport`, or none, which SUMO takes as 300 s. `-1` and `0` disable it,
+        as the scenario compiler writes. `allow_teleporting` runs anyway, and
+        `session.Report.Teleporting` records that it was accepted. SUMO's other teleport triggers are
+        refused and accepted the same way; a `collision.action` other than `warn`, a positive
+        `random-depart-offset` and `random` are refused with no override; and
+        `session.Report.DistributionEdits` names each as the run ran it, with the demand scale and the
+        insertion limits. It refuses, with no override, a
+        scenario that sets `ignore-route-errors`: SUMO then keeps a vehicle it cannot route standing at
+        the end of the last edge it can reach and says nothing, where by default it stops at the route
+        and names it, and the run stops with it. `session.Report.LaneChanges` says how long SUMO
+        takes over a lane change -- spread over the scenario's `lanechange.duration`, which the
+        scenario compiler sets to 3 s, or made inside one step at SUMO's default of 0 -- and through a
+        spread change each body is drawn where SUMO has it across its lane.
+
+        `sumo_answer_timeout_s` bounds how long the session waits for SUMO to answer any one command,
+        a step included. A SUMO that has hung keeps its socket open and never answers; past the bound
+        the run stops as for any other SUMO failure and everything is given back. It must exceed the
+        slowest step the scenario produces -- measured steps are milliseconds -- and be positive.
+
+        The session takes the world's drive lease on the server before SUMO starts, as
+        "<holder> (process <pid> on <machine>)". While it holds it the server refuses every other
+        traffic system's control writes -- `set_autopilot(True)`, vehicle, Ackermann and physics
+        control, direct or in a batch -- for every actor and every client, naming the holder, so a
+        traffic manager in any process moves nothing and a second drive session is refused at its own
+        claim. `session.Drive` is the hold; `session.Report.DriveLeaseHolder` the name. A server built
+        before it carried the lease refuses the claim: the run goes on, `session.Report.DriveLeaseRefused`
+        carries the server's words, and nothing on that server stops another traffic system. The lease
+        is given back when the session is disposed; a drive that dies without disposing leaves it held
+        until the world is reloaded or `world.break_drive_lease()` ends it.
+
+        Every refusal -- from this call or from `session.Advance()` -- is a
+        `CarlaNet.CoSim.CoSimSessionRefusedException` (a held population is its subclass
+        `PopulationAuthorityHeldException`, with `HeldBy`, whether the process-local lease or the
+        server's drive lease refused it; a failed solar audit is
+        `SolarAuditFailedException`) whose `Stage` says how far the session had got, and whose
+        `StageName` gives it as text: 'Validation' (nothing started or written), 'Authority' (a lease
+        is held by another; taken before SUMO starts, so nothing started or written), 'Launch' (the
+        leases taken, SUMO started and the world's clock and layers taken),
+        'PreRoll' (before the window opens: the fast-forward, the sun's binding and
+        its read-back, and a prewarm tick) or 'Window' (from `Advance`, from the window's opening on).
+        A SUMO failure is such a refusal too, quoting what SUMO last wrote to its console, and so is a
+        failure of the connection to this CARLA server -- a dropped socket, or a call such as the tick
+        cue left unanswered past the client's timeout -- with that failure as its `InnerException`.
+        `CauseName` says which side failed: 'sumo-connection-lost' (SUMO died, closed the connection,
+        stopped answering within `sumo_answer_timeout_s`, or refused a command), 'world-connection-lost',
+        'world-tick-timeout' (the tick was answered and its frame never arrived),
+        'solar-state-disagreement' (the sun disagreed, was absent from a snapshot, or refused a frame's
+        write), 'missing-blueprint', or 'none' for a refusal of something the session was given. A run
+        stopped from `Advance` stays stopped -- advancing it again refuses without touching either side
+        -- and `session.Report.Stopped` records the stage, the cause and the last frame whose truth
+        holds. Whatever the stage, everything the session took is given back; what only an unreachable
+        server could hold is named instead, in the refusal's `GiveBackFailures` for a start and in the
+        exception `Dispose()` raises for a run.
+
+        The three callbacks are handed a record per vehicle per tick from the tick thread and must
+        not block: `on_pose` the computed pose, `on_release` a completed render interval, and
+        `on_divergence` the commanded pose and velocity against the transform and velocity the world
+        reported for the body. The run's summary is on `session.Report` either way. A render interval
+        says why it ended in `ReleaseReason`: 'Vanished' is a vehicle that stopped reporting without
+        SUMO listing it as arrived -- taken out between two steps -- drawn last where SUMO last had it,
+        as an arrival is. An interval ends at the instant of the first frame that no longer draws its
+        vehicle; for one SUMO removed, `on_release` is handed it once the frame of its last step has
+        rendered.
+
+        `vehicle_lamps` drives each body's lamps: SUMO's brake and indicator signals mapped bit by bit
+        (SUMO's right blinker is 1 where CARLA's is 0x10, so a cast would light the parking lights), and
+        headlights from the sun -- on once the geometric elevation the world reports falls below
+        `headlight_on_below_deg`, off once it rises above `headlight_off_above_deg`, driven only where the
+        session binds the sun. A body's lamps are written when it is lent, whatever they are, when they
+        change, and switched off when it is given back; every pose record carries the vehicle's raw
+        `Signals` word and the `Lamps` its body holds. Off, no lamp is ever written, as a control.
+
+        `on_collision` is handed each collision SUMO registered once it is over (`CollisionSpan`: the
+        collider, the victim, SUMO's `Kind`, lane and position, `BeganAtSeconds`, `EndedAtSeconds` and
+        the bodies that rendered both). A collision does not stop the run; it is a fact about the
+        corpus to filter on. The session runs only under `warn`, which the compiler writes: SUMO
+        registers each collision and changes nothing about the traffic. `session.Report.CollisionSpans`
+        keeps every one, `Collisions` counts them, `SumoCollisionWarnings` keeps every collision warning
+        SUMO wrote, and `CollisionListReads` counts the round trips spent asking SUMO for its collision
+        list -- only on the first frame and the steps a collision began or went on, since whether one
+        began arrives with each step's own answer. `collision_detail` decides only what the printed
+        report shows: off (the default), the counts; on, every collision and every SUMO collision
+        warning. Nothing recorded and nothing about the traffic depends on it.
+        `on_vehicle_not_inserted` is handed each vehicle SUMO gave up inserting -- it drops one past
+        `max-depart-delay` without a word, so this is the only account of it.
+        `session.Report.SumoWarnings` counts SUMO's console warnings, its collision warnings included,
+        and keeps the first few of the others.
+
+        The render set's admission pass is published as it is made, once per SUMO step:
+        `session.Report.LastAdmissionPass` holds the latest, replaced whole -- `Population` (every
+        vehicle SUMO has), `NewlyAdmitted` and `Released` at that pass, and the running
+        `TotalAdmissions`; under a limit (`Limited`), also `Eligible` (admitted by the circle or the
+        cameras, or held by the release lag), `Admitted` (holding a body after the pass), `Shed`
+        (declined for the capacity), `Held`, `Capacity`, `Rule` and `Cameras`. With no limit `Eligible`
+        and `Admitted` are the population. Read it between advances for a live monitor;
+        `on_admission_pass` is handed every pass, including the two made while the session starts,
+        for a writer that keeps the whole ledger. It is called from the tick thread once per SUMO
+        step and must not block.
+
+        Vehicles are rendered by a pool of bodies, lent to a SUMO vehicle on admission and parked
+        out of sight, about 300 m below the ground, between loans -- so the world's vehicle actors
+        are not the scene's vehicles, and an actor id names each vehicle its body carries in turn.
+        The pool has no ceiling: it grows to as many bodies of each blueprint as the session ever
+        draws vehicles of it at once (`session.Report.BodiesSpawned`).
+        `session.RenderSet` answers, for each frame the session rendered, which bodies the frame
+        drew, the SUMO vehicle each one drew, its vType and the frame its rendered span began on,
+        keyed by the frame the tick produced; the last 256 frames are held. Hand it to
+        `start_recording(render_set=...)` so the truth sidecars list the rendered vehicles by SUMO
+        id and leave the parked bodies out.
+
+        Every pose the session writes carries its velocity: SUMO's speed along the lane, pointed along
+        the body's yaw, climbing with the ground it is seated on. A vehicle whose physics is disabled
+        reports the velocity it was last given, so `get_velocity`, the truth telemetry and the
+        recorder read SUMO's speed for a driven body and zero for a parked one -- on a server built
+        with the kinematic-velocity change. On one built before it every driven body reads zero, and
+        `session.Report.MeanVelocityDivergenceMetresPerSecond` equals the mean commanded speed."""
+        if not _CARLANET_COSIM_AVAILABLE:
+            print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
+                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            return None
+        from CarlaNet.CoSim import (AdmissionPass, CameraFootprintRenderSetPolicy, CarlaClientWorld,
+                                    CollisionSpan, CoSimPoseRecord, EveryVehicleRenderSetPolicy,
+                                    IlluminationPolicy, PoseDivergence, RegionRenderSetPolicy,
+                                    RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
+                                    SumoDriveSessionOptions, VehicleNotInserted)
+        from System import Action
+
+        if render_set not in ("all", "circle", "cameras"):
+            raise ValueError(f"render_set is 'all', 'circle' or 'cameras', not {render_set!r}")
+        if render_set == "all" and region_radius_m is not None:
+            raise ValueError("render_set 'all' draws every vehicle SUMO has and reads no region; give "
+                             "render_set 'circle' or 'cameras' to limit the render set to it")
+        if render_set == "circle" and region_radius_m is None:
+            raise ValueError("render_set 'circle' needs the circle: give region_radius_m, and "
+                             "region_centre in SUMO's meters")
+        limit = None if capacity is None else int(capacity)
+        circle = None
+        if region_radius_m is not None:
+            centre_x, centre_y = region_centre if region_centre is not None else (0.0, 0.0)
+            circle = RegionRenderSetPolicy(float(centre_x), float(centre_y), float(region_radius_m),
+                                           float(region_hysteresis_m), limit)
+        if render_set == "all":
+            policy = EveryVehicleRenderSetPolicy(limit)
+        elif render_set == "circle":
+            policy = circle
+        else:
+            policy = CameraFootprintRenderSetPolicy(
+                circle if circle is not None else EveryVehicleRenderSetPolicy(limit),
+                float(region_hysteresis_m), float(render_admit_lead_s), float(render_release_lag_s),
+                float(render_min_pixels), float(render_max_speed_mps))
+
+        options = SumoDriveSessionOptions(
+            str(scenario), str(world_package), str(catalogue),
+            f"{self._client.Endpoint}/{self.get_map().name}")
+        # Attaching starts the world-observer stream the pose read-back is taken from, if this
+        # client has not already got one.
+        options.World = CarlaClientWorld.Attach(self._client, True)
+        options.WorldDeltaSeconds = float(fixed_delta)
+        options.CaptureRateHz = float(record_hz)
+        options.WarmUpToSimulatedSecond = float(warm_up_to)
+        if window_opens_at is not None:
+            options.WindowOpensAtSimulatedSecond = float(window_opens_at)
+        if step_length is not None:
+            options.SumoStepOverrideSeconds = float(step_length)
+        options.RoadLayerVisible = bool(road_layer_visible)
+        options.SignalLayerVisible = bool(signal_layer_visible)
+        options.RealTimeFactor = float(real_time_factor)
+        options.PacingWindowSeconds = float(pacing_window_s)
+        if sumo_home is not None:
+            options.SumoHome = str(sumo_home)
+        options.AllowSumoVersionMismatch = bool(allow_sumo_version_mismatch)
+        if sumo_gui:
+            options.SumoGui = True
+        options.AllowTeleporting = bool(allow_teleporting)
+        options.AcceptSkippedDryRun = bool(accept_skipped_dry_run)
+        options.SumoAnswerTimeoutSeconds = float(sumo_answer_timeout_s)
+        options.VehicleLampsDriven = bool(vehicle_lamps)
+        options.HeadlightOnBelowDegrees = float(headlight_on_below_deg)
+        options.HeadlightOffAboveDegrees = float(headlight_off_above_deg)
+        if draw_distance_m is not None:
+            options.DrawDistanceMetres = float(draw_distance_m)
+        if world_truth_track is not None:
+            options.WorldTruthTrackPath = str(world_truth_track)
+        if world_truth_track_interval_s is not None:
+            options.WorldTruthTrackIntervalSeconds = float(world_truth_track_interval_s)
+        if run_manifest is not None:
+            options.RunManifestPath = str(run_manifest)
+        if run_manifest_header is not None:
+            options.RunManifestHeader = (run_manifest_header if isinstance(run_manifest_header, str)
+                                         else _json.dumps(run_manifest_header))
+        options.CollisionDetail = bool(collision_detail)
+        options.RenderSet = policy
+        # Both are read by the C# side, which is the one validator: a declaration checked twice is
+        # a declaration two implementations will eventually disagree about.
+        if epoch is not None:
+            options.Epoch = SolarEpoch.FromJson(
+                epoch if isinstance(epoch, str) else _json.dumps(epoch))
+        if illumination is not None:
+            if isinstance(illumination, str) and not illumination.lstrip().startswith("{"):
+                illumination = {"illumination_version": 1, "policy": illumination}
+            options.Illumination = IlluminationPolicy.FromJson(
+                illumination if isinstance(illumination, str) else _json.dumps(illumination))
+        # Each callback is bound to the delegate type it is assigned to. A bare Python callable
+        # does not convert to a generic Action<T> and the assignment fails outright, which is worth
+        # knowing here rather than at the far end of a caller's own wiring.
+        if on_pose is not None:
+            options.OnPose = Action[CoSimPoseRecord](on_pose)
+        if on_release is not None:
+            options.OnRelease = Action[RenderedVehicleInterval](on_release)
+        if on_divergence is not None:
+            options.OnDivergence = Action[PoseDivergence](on_divergence)
+        if on_admission_pass is not None:
+            options.OnAdmissionPass = Action[AdmissionPass](on_admission_pass)
+        if on_collision is not None:
+            options.OnCollision = Action[CollisionSpan](on_collision)
+        if on_vehicle_not_inserted is not None:
+            options.OnVehicleNotInserted = Action[VehicleNotInserted](on_vehicle_not_inserted)
+        return SumoDriveSession.Start(options)
 
     def stop_recording(self):
         """Stop native recording (flushes pending captures)."""
@@ -2078,6 +3018,66 @@ class World:
             return self.spawn_actor(blueprint, transform, attach_to, attachment_type)
         except Exception:
             return None
+
+    def spawn_camera(self, blueprint, transform: Transform, name=None,
+                     attach_to=None, attachment_type=None) -> Actor:
+        """Spawn a camera under a name: the name every still recorded from it begins with, and the
+        callsign of its platform track (`start_recording`).
+
+        `name` is the client's to choose, so that cameras sharing a world can be told apart in their
+        files and their telemetry. It is used as given where the rule allows it and refused, with the
+        reason, where it does not (`camera_name_problem`). It is sent as the camera's `role_name`,
+        and the server refuses it, by raising from the spawn, where a live camera in the world
+        holds it, compared without regard to case. None lets the server name the camera Camera_<n>,
+        from a counter it keeps for its lifetime, so no two cameras on the server are ever named
+        alike; a client cannot claim a name of that form. Either way the camera's name is read back
+        from the spawned actor (`camera_name`), so every client holds the same name for it.
+
+        Raises ValueError for a name refused, saying why: by the rule before the spawn, or by the
+        server, with the server's reason."""
+        if name is not None:
+            name = str(name)
+            problem = camera_name_problem(name)
+            if problem is not None:
+                raise ValueError(problem)
+            blueprint.set_attribute("role_name", name)
+        try:
+            camera = self.spawn_actor(blueprint, transform, attach_to, attachment_type)
+        except Exception as refused:
+            # The server's refusal of the name -- held by a live camera, or of the server's own form
+            # -- is the RPC's error, said here as every refusal of a name is said.
+            if name is not None and "camera name '" in str(refused):
+                raise ValueError(str(refused)) from None
+            raise
+        if name is None and not camera_named_by_server(camera):
+            _say_server_names_no_cameras(camera)
+        return camera
+
+    def camera_name(self, camera) -> str:
+        """The name `camera` holds on the server, read from the actor's attributes: the one it was
+        spawned under -- the server's Camera_<n>, or the one its client gave -- or, from a server
+        built before it named cameras, its default, CARLA-SENSOR-<actor id>."""
+        return camera_name_of(camera)
+
+    def camera_exposure(self, camera):
+        """The exposure `camera` was given, read from the actor's attributes (`camera_exposure_of`):
+        a CarlaNet.Recording.CameraExposure, or None for a camera that carries none."""
+        return camera_exposure_of(camera)
+
+    def _recording_camera_name(self, camera, asked, callsign) -> str:
+        """The name `camera` is recorded under: the name it holds on the server (`camera_name`). A
+        name asked for that is not that name is refused: the server's name is the one every file and
+        every callsign carries."""
+        if asked is not None and callsign is not None and str(asked) != str(callsign):
+            raise ValueError(f"camera_name '{asked}' and platform_callsign '{callsign}' differ: the "
+                             "platform track's callsign is the camera's name, so give one of them")
+        asked = asked if asked is not None else callsign
+        held = self.camera_name(camera)
+        if asked is not None and str(asked) != held:
+            raise ValueError(f"camera {int(camera.id)} is named '{held}' on the server, and is "
+                             f"recorded under that name, not '{asked}': a camera is named when it "
+                             "is spawned (spawn_camera)")
+        return held
 
     def destroy_actor(self, actor) -> bool:
         actor_id = int(actor.id) if isinstance(actor, Actor) else int(actor)
@@ -2270,6 +3270,19 @@ class Client:
         """
         return str(_sync(self._inner.GetWorldInterfaceVersionAsync()))
 
+    def get_build_identity(self) -> dict:
+        """What the server was built from, as every file's record of what made it holds it.
+
+        A dict: `available`, then `release` (the release version compiled in), `world_interface`, and,
+        where available, `build` (`package` or `editor`), `configuration`, `carla_commit`,
+        `content_commit`, `engine_commit` and `commits_from` (`version_file`, the package's VERSION;
+        `compiled`, the CARLA commit compiled into an editor build; or `none`). A value the server
+        cannot know is "unknown", never a guess. A server built before the call -- or one that cannot
+        be reached -- gives `available` false and a `reason`, with the release and world interface its
+        older calls still answer; this never raises for that, so a caller records it and carries on.
+        Asked once per connection."""
+        return _json.loads(str(_sync(self._inner.GetBuildIdentityAsync()).ToJson()))
+
     def list_delivered_worlds(self) -> list[str]:
         """Worlds delivered into this server's package, each marked "(mounted)" when loadable.
 
@@ -2352,7 +3365,6 @@ class Client:
                                                outlier_threshold=4.0,
                                                height_align="none",
                                                ground_collision=True,
-                                               cesium_settle_seconds=5.0,
                                                terrain_res=2.0,
                                                terrain_margin=30.48,
                                                drape_chunk_cells=64,
@@ -2393,15 +3405,13 @@ class Client:
         drape_cache_dir caches the (slow) drape sampling per area so rebuilds are fast. osm_options
         should pin the origin; if origin_height is None the height sampled at the origin is the datum.
         """
-        from System import TimeSpan
         from System.Threading import CancellationToken
         params = _default_osm_opendrive_params() if parameters is None else parameters
-        settle = TimeSpan.FromSeconds(float(cesium_settle_seconds)) if cesium_settle_seconds else TimeSpan(0)
         oh = None if origin_height is None else float(origin_height)
         xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
             osm_path, str(ion_token), int(ion_asset_id), int(ground_ion_asset_id),
             osm_options, params, float(sample_step_meters), oh,
-            float(outlier_threshold), str(height_align), bool(ground_collision), settle,
+            float(outlier_threshold), str(height_align), bool(ground_collision),
             float(terrain_res), float(terrain_margin), int(drape_chunk_cells),
             float(drape_max_drape), (None if drape_cache_dir is None else str(drape_cache_dir)),
             CancellationToken(False)))

@@ -1,0 +1,3078 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:scenario-resolution:1",
+  "title": "Scenario resolution report",
+  "description": "What a scenario compile resolved, so its author can check it against what they meant: every place, instant, route, vehicle type, lane closure, capture window and the sun it opens under, the supervision, what a SUMO-only run showed, every finding and the lock. Written by carla-compile-scenario as <scenario_id>.resolution.json, with <scenario_id>.resolution.md beside it for reading, whether the compile succeeded or was refused; a refused compile writes only the report. Sections appear in this order, and only those the compile reached. Not a capture run's run.resolution.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "resolution_version",
+    "outcome",
+    "findings"
+  ],
+  "properties": {
+    "resolution_version": {
+      "const": 1,
+      "description": "The format version of this file."
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "description": "What made the file: the tool that wrote it and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+        },
+        "carlanet": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "build",
+                "configuration",
+                "carla_commit",
+                "content_commit",
+                "engine_commit",
+                "commits_from"
+              ],
+              "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+              "properties": {
+                "available": {
+                  "const": true
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release the server was compiled with."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version the server declares, Major.Minor."
+                },
+                "build": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "package for a cooked server, editor for one run from the editor."
+                },
+                "configuration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The build configuration, such as Development or Shipping."
+                },
+                "carla_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA commit."
+                },
+                "content_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content commit."
+                },
+                "engine_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The Unreal Engine commit."
+                },
+                "commits_from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "reason"
+              ],
+              "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+              "properties": {
+                "available": {
+                  "const": false
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release, or unknown."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version, or unknown."
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Why the identity is not available."
+                }
+              }
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used. Null where none was."
+        },
+        "sumo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+        }
+      }
+    },
+    "outcome": {
+      "enum": [
+        "compiled",
+        "refused"
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "description": "The specification compiled.",
+      "required": [
+        "scenario_id",
+        "scenario_name",
+        "description",
+        "specification",
+        "specification_sha256",
+        "spec_version"
+      ],
+      "properties": {
+        "scenario_id": {
+          "type": "string"
+        },
+        "scenario_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "specification": {
+          "type": "string"
+        },
+        "specification_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "spec_version": {
+          "const": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "description": "Every refusal and warning, in full."
+    },
+    "epoch": {
+      "type": "object",
+      "description": "The epoch, and when the run ends.",
+      "required": [
+        "declared",
+        "epoch_block_sha256",
+        "statement",
+        "t0_civil",
+        "end_s",
+        "end_civil",
+        "time_zone_id",
+        "time_zone_id_resolved"
+      ],
+      "properties": {
+        "declared": {
+          "$ref": "#/$defs/epoch"
+        },
+        "epoch_block_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "statement": {
+          "type": "string",
+          "description": "The epoch and the run's end in one line."
+        },
+        "t0_civil": {
+          "type": "string"
+        },
+        "end_s": {
+          "type": "number"
+        },
+        "end_civil": {
+          "type": "string"
+        },
+        "time_zone_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_zone_id_resolved": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "zone": {
+      "type": "object",
+      "description": "The declared offset against the zone the world's georeference configures.",
+      "required": [
+        "declared_offset_hours",
+        "engine_time_zone_hours",
+        "difference_hours",
+        "written_by_the_session"
+      ],
+      "properties": {
+        "declared_offset_hours": {
+          "type": "number"
+        },
+        "engine_time_zone_hours": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "difference_hours": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "written_by_the_session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "illumination_default": {
+      "type": "object",
+      "description": "The specification's illumination default.",
+      "required": [
+        "declared",
+        "policy",
+        "status",
+        "declared_elevation_kind"
+      ],
+      "properties": {
+        "declared": {
+          "type": "object"
+        },
+        "policy": {
+          "enum": [
+            "freeze_at_window_start",
+            "advance",
+            "freeze_at",
+            "ignore"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "declared_elevation_kind": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "capture_windows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One capture window, resolved.",
+        "required": [
+          "id",
+          "begin",
+          "length_s",
+          "end_s",
+          "end_civil",
+          "civil_date",
+          "sun_open",
+          "sun_close"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "begin": {
+            "$ref": "#/$defs/instant"
+          },
+          "length_s": {
+            "type": "number"
+          },
+          "end_s": {
+            "type": "number"
+          },
+          "end_civil": {
+            "type": "string"
+          },
+          "civil_date": {
+            "type": "string"
+          },
+          "sun_open": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/window_sun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sun_close": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/window_sun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sun": {
+            "type": "string",
+            "description": "Where the default policy binds no sun."
+          },
+          "sun_lowest": {
+            "type": "object",
+            "description": "The lowest the sun reaches over the window, and its band.",
+            "required": [
+              "elevation_deg",
+              "elevation_kind",
+              "band",
+              "band_source"
+            ],
+            "properties": {
+              "elevation_deg": {
+                "type": "number"
+              },
+              "elevation_kind": {
+                "type": "string"
+              },
+              "band": {
+                "enum": [
+                  "day",
+                  "golden",
+                  "civil_twilight",
+                  "nautical_twilight",
+                  "astronomical_twilight",
+                  "night"
+                ]
+              },
+              "band_source": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "illumination_label_association": {
+      "type": "object",
+      "description": "How far the illumination band predicts the supervision state (check 41).",
+      "required": [
+        "statistic",
+        "band_source",
+        "band_edges",
+        "elevation_kind",
+        "presence_estimate",
+        "over_windows",
+        "over_span",
+        "normalized_mutual_information",
+        "bands",
+        "entries",
+        "measured_over",
+        "remedies"
+      ],
+      "properties": {
+        "statistic": {
+          "type": "string"
+        },
+        "band_source": {
+          "type": "string"
+        },
+        "band_edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One band's lower edge.",
+            "required": [
+              "band",
+              "above_deg"
+            ],
+            "properties": {
+              "band": {
+                "enum": [
+                  "day",
+                  "golden",
+                  "civil_twilight",
+                  "nautical_twilight",
+                  "astronomical_twilight",
+                  "night"
+                ]
+              },
+              "above_deg": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "elevation_kind": {
+          "type": "string"
+        },
+        "presence_estimate": {
+          "type": "string"
+        },
+        "over_windows": {
+          "type": "object",
+          "description": "The association over the declared windows, or not_computed and why."
+        },
+        "over_span": {
+          "type": "object",
+          "description": "The association over the span at each departure, or not_computed and why."
+        },
+        "normalized_mutual_information": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bands": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "day": {
+                  "type": "object",
+                  "description": "How many route entries of each supervision state fall in the band.",
+                  "required": [
+                    "annotated",
+                    "nominal",
+                    "unlabelled",
+                    "total"
+                  ],
+                  "properties": {
+                    "annotated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unlabelled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "golden": {
+                  "type": "object",
+                  "description": "How many route entries of each supervision state fall in the band.",
+                  "required": [
+                    "annotated",
+                    "nominal",
+                    "unlabelled",
+                    "total"
+                  ],
+                  "properties": {
+                    "annotated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unlabelled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "civil_twilight": {
+                  "type": "object",
+                  "description": "How many route entries of each supervision state fall in the band.",
+                  "required": [
+                    "annotated",
+                    "nominal",
+                    "unlabelled",
+                    "total"
+                  ],
+                  "properties": {
+                    "annotated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unlabelled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "nautical_twilight": {
+                  "type": "object",
+                  "description": "How many route entries of each supervision state fall in the band.",
+                  "required": [
+                    "annotated",
+                    "nominal",
+                    "unlabelled",
+                    "total"
+                  ],
+                  "properties": {
+                    "annotated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unlabelled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "astronomical_twilight": {
+                  "type": "object",
+                  "description": "How many route entries of each supervision state fall in the band.",
+                  "required": [
+                    "annotated",
+                    "nominal",
+                    "unlabelled",
+                    "total"
+                  ],
+                  "properties": {
+                    "annotated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unlabelled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "night": {
+                  "type": "object",
+                  "description": "How many route entries of each supervision state fall in the band.",
+                  "required": [
+                    "annotated",
+                    "nominal",
+                    "unlabelled",
+                    "total"
+                  ],
+                  "properties": {
+                    "annotated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nominal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unlabelled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "description": "Route entries by illumination band and supervision state."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "entries": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "measured_over": {
+          "enum": [
+            "windows",
+            "span"
+          ]
+        },
+        "remedies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "world": {
+      "type": "object",
+      "description": "The world package the scenario was compiled against.",
+      "required": [
+        "package",
+        "map_name",
+        "network_fingerprint",
+        "netconvert_version",
+        "origin",
+        "georeference",
+        "routing_sumo"
+      ],
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "map_name": {
+          "type": "string"
+        },
+        "network_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "netconvert_version": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          },
+          "description": "[latitude, longitude], degrees."
+        },
+        "georeference": {
+          "type": "string"
+        },
+        "routing_sumo": {
+          "type": "object",
+          "description": "The SUMO that routed the scenario.",
+          "required": [
+            "version",
+            "matched_by",
+            "release_agreement",
+            "verdict"
+          ],
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "matched_by": {
+              "type": "string"
+            },
+            "release_agreement": {
+              "enum": [
+                "SameRelease",
+                "NotRecorded",
+                "MismatchAccepted",
+                "Mismatch"
+              ]
+            },
+            "verdict": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "instants": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/instant"
+      },
+      "description": "Every named instant the specification declares."
+    },
+    "places": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "description": "What a declared place became.",
+        "required": [
+          "name",
+          "authored",
+          "form",
+          "edges",
+          "lane",
+          "start_pos",
+          "end_pos",
+          "street",
+          "detail",
+          "edge_details"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "authored": {
+            "type": "object"
+          },
+          "form": {
+            "type": "string"
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_pos": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_pos": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "street": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "edge_details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One candidate edge.",
+              "required": [
+                "edge",
+                "street",
+                "length_m",
+                "speed_mps"
+              ],
+              "properties": {
+                "edge": {
+                  "type": "string"
+                },
+                "street": {
+                  "type": "string"
+                },
+                "length_m": {
+                  "type": "number"
+                },
+                "speed_mps": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Every declared place and what it became."
+    },
+    "rotas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One schedule.",
+        "required": [
+          "id",
+          "entries",
+          "skips"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skips": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One skipped entry and why.",
+              "required": [
+                "entry",
+                "seconds",
+                "civil",
+                "because"
+              ],
+              "properties": {
+                "entry": {
+                  "type": "string"
+                },
+                "seconds": {
+                  "type": "number"
+                },
+                "civil": {
+                  "type": "string"
+                },
+                "because": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One routed actor or flow, as duarouter produced it.",
+        "required": [
+          "id",
+          "type",
+          "from",
+          "to",
+          "via",
+          "route",
+          "route_length_m",
+          "free_flow_s",
+          "stops"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "via": {
+            "type": "array"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_length_m": {
+            "type": "number"
+          },
+          "free_flow_s": {
+            "type": "number"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "phases": {
+            "type": "array"
+          },
+          "waypoints": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "depart": {
+            "$ref": "#/$defs/instant",
+            "description": "An actor's departure."
+          },
+          "origin": {
+            "type": "string",
+            "description": "Where an actor came from: actor, or rota:<id>."
+          },
+          "begin": {
+            "$ref": "#/$defs/instant",
+            "description": "A flow's begin."
+          },
+          "end": {
+            "$ref": "#/$defs/instant",
+            "description": "A flow's end."
+          },
+          "vehs_per_hour": {
+            "type": "number",
+            "description": "A flow's rate."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "lane_closures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One lane closure, resolved.",
+        "required": [
+          "id",
+          "edge",
+          "street",
+          "lanes",
+          "open_lanes",
+          "notify",
+          "allow",
+          "begin",
+          "end"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "edge": {
+            "type": "string"
+          },
+          "street": {
+            "type": "string"
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "open_lanes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "notify": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allow": {
+            "type": "string",
+            "description": "The vehicle class a closed lane still admits."
+          },
+          "begin": {
+            "$ref": "#/$defs/instant"
+          },
+          "end": {
+            "$ref": "#/$defs/instant"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "vehicle_types": {
+      "type": "object",
+      "description": "The vehicle types and the bodies they bind.",
+      "required": [
+        "catalogue",
+        "classes",
+        "mix",
+        "mixes",
+        "types"
+      ],
+      "properties": {
+        "catalogue": {
+          "type": "object",
+          "description": "The catalogue read.",
+          "required": [
+            "path",
+            "catalogue_id",
+            "catalogue_digest",
+            "blueprint_set_digest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "catalogue_id": {
+              "type": "string"
+            },
+            "catalogue_digest": {
+              "type": "string"
+            },
+            "blueprint_set_digest": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "One line per class: its bodies and lengths."
+        },
+        "mix": {
+          "type": "object",
+          "description": "The whole-mix distribution: each vehicle type's probability.",
+          "required": [
+            "id",
+            "probabilities"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "probabilities": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "mixes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One named mix.",
+            "required": [
+              "id",
+              "shares",
+              "probabilities"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "shares": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "probabilities": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "types": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "description": "The measured body a vehicle type binds.",
+            "required": [
+              "blueprint",
+              "length_m",
+              "width_m",
+              "body_width_m",
+              "height_m",
+              "lights"
+            ],
+            "properties": {
+              "blueprint": {
+                "type": "string"
+              },
+              "length_m": {
+                "type": "number"
+              },
+              "width_m": {
+                "type": "number"
+              },
+              "body_width_m": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "height_m": {
+                "type": "number"
+              },
+              "lights": {
+                "type": "object",
+                "description": "Whether the body's headlights, brake_lights and turn_signals light up: lit, unlit or unknown."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Every vehicle type id and the body it binds."
+        }
+      },
+      "additionalProperties": false
+    },
+    "supervision": {
+      "type": "object",
+      "description": "The supervision plan's rows; a series gives its count of slots.",
+      "required": [
+        "instances",
+        "cohorts",
+        "series"
+      ],
+      "properties": {
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/instance"
+          }
+        },
+        "cohorts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cohort"
+          }
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/report_series"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dry_run": {
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "What the SUMO-only run showed: the lock's record, every planned vehicle's wait, the other vehicles that never got in, and every collision.",
+          "required": [
+            "ran",
+            "sumo_release",
+            "end_s",
+            "vehicles",
+            "planned_vehicles",
+            "collisions",
+            "planned",
+            "collision_list"
+          ],
+          "properties": {
+            "ran": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "The run was skipped.",
+          "required": [
+            "ran",
+            "reason"
+          ],
+          "properties": {
+            "ran": {
+              "const": false
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "lock": {
+      "$ref": "#/$defs/lock"
+    }
+  },
+  "$defs": {
+    "epoch": {
+      "description": "What simulated second zero means in civil time at the site: one instant, written in civil time with its offset and again in UTC. A scenario carries it as its epoch object; carla-drive --epoch reads it from a file of its own or from a scenario.json. The offset is the declaration, daylight saving included; the zone name is carried for a reader and never looked up.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "epoch_version",
+        "civil_datetime",
+        "utc_offset_hours",
+        "utc_datetime",
+        "calendar_advances",
+        "dst_in_effect"
+      ],
+      "properties": {
+        "epoch_version": {
+          "const": 1,
+          "description": "The format version of this object. A reader refuses any other."
+        },
+        "civil_datetime": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?(Z|[+-]\\d{2}:\\d{2})$",
+          "examples": [
+            "2026-03-21T00:00:00+03:30"
+          ],
+          "description": "Simulated second zero in civil time, ISO 8601 with its offset, which must equal utc_offset_hours. Z only where the offset is zero."
+        },
+        "utc_offset_hours": {
+          "type": "number",
+          "minimum": -12.0,
+          "maximum": 14.0,
+          "multipleOf": 0.25,
+          "description": "The site's offset from UTC in hours, daylight saving included: 3.5 for +03:30. A whole number of quarter hours from -12 to +14."
+        },
+        "utc_datetime": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?(Z|[+-]00:00)$",
+          "examples": [
+            "2026-03-20T20:30:00Z"
+          ],
+          "description": "The same instant in UTC, ISO 8601 with Z or +00:00. It must agree with civil_datetime to the second."
+        },
+        "calendar_advances": {
+          "type": "boolean",
+          "description": "Whether the civil date advances when simulated time passes a civil midnight. False holds the sun's date at the epoch's own while the clock runs on."
+        },
+        "dst_in_effect": {
+          "type": "boolean",
+          "description": "Whether utc_offset_hours already includes daylight saving."
+        },
+        "time_zone_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The IANA time zone of the site, such as America/Denver, for a reader. Never looked up."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "One sentence saying what simulated second zero is in the scenario's own terms."
+        }
+      }
+    },
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lock_version",
+        "scenario_id",
+        "scenario_name",
+        "spec_version",
+        "specification",
+        "specification_sha256",
+        "compiler",
+        "files",
+        "world",
+        "catalogue",
+        "vocabulary",
+        "traffic",
+        "dry_run",
+        "epoch",
+        "epoch_block_sha256",
+        "illumination",
+        "capture_windows",
+        "ephemeris",
+        "illumination_label_association"
+      ],
+      "properties": {
+        "lock_version": {
+          "const": 1,
+          "description": "The format version of this file. carla-capture refuses any other (run check 6)."
+        },
+        "scenario_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "scenario_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "spec_version": {
+          "const": 1
+        },
+        "specification": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The specification's file name."
+        },
+        "specification_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "compiler": {
+          "type": "object",
+          "description": "The compiler and its release.",
+          "required": [
+            "name",
+            "version"
+          ],
+          "properties": {
+            "name": {
+              "const": "carlacontrol.ScenarioCompiler"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The compiler's release, without the commit."
+            }
+          },
+          "additionalProperties": false
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool",
+            "tool_version",
+            "carlanet",
+            "server",
+            "sumo"
+          ],
+          "description": "What made the file: the tool that wrote it and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+          "properties": {
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+            },
+            "tool_version": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+            },
+            "carlanet": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+            },
+            "server": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "available",
+                    "release",
+                    "world_interface",
+                    "build",
+                    "configuration",
+                    "carla_commit",
+                    "content_commit",
+                    "engine_commit",
+                    "commits_from"
+                  ],
+                  "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+                  "properties": {
+                    "available": {
+                      "const": true
+                    },
+                    "release": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The CARLA release the server was compiled with."
+                    },
+                    "world_interface": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The world interface version the server declares, Major.Minor."
+                    },
+                    "build": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "package for a cooked server, editor for one run from the editor."
+                    },
+                    "configuration": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The build configuration, such as Development or Shipping."
+                    },
+                    "carla_commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The CARLA commit."
+                    },
+                    "content_commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The content commit."
+                    },
+                    "engine_commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The Unreal Engine commit."
+                    },
+                    "commits_from": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "available",
+                    "release",
+                    "world_interface",
+                    "reason"
+                  ],
+                  "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+                  "properties": {
+                    "available": {
+                      "const": false
+                    },
+                    "release": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The CARLA release, or unknown."
+                    },
+                    "world_interface": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The world interface version, or unknown."
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Why the identity is not available."
+                    }
+                  }
+                }
+              ],
+              "description": "The CARLA server's build identity, where a server was used. Null where none was."
+            },
+            "sumo": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+            },
+            "written_utc": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+              "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+            }
+          }
+        },
+        "files": {
+          "type": "object",
+          "description": "Every file the compile wrote that decides the traffic or the supervision, by role: the routes, the .sumocfg, the network, the lane closures where there are any, and the supervision plan.",
+          "required": [
+            "routes",
+            "config",
+            "network",
+            "supervision"
+          ],
+          "properties": {
+            "routes": {
+              "type": "object",
+              "description": "One file the lock digests.",
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The file's name, beside the lock."
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "config": {
+              "type": "object",
+              "description": "One file the lock digests.",
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The file's name, beside the lock."
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "network": {
+              "type": "object",
+              "description": "One file the lock digests.",
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The file's name, beside the lock."
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "additional": {
+              "type": "object",
+              "description": "One file the lock digests.",
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The file's name, beside the lock."
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "supervision": {
+              "type": "object",
+              "description": "One file the lock digests.",
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The file's name, beside the lock."
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "world": {
+          "type": "object",
+          "description": "The world package the scenario was compiled against.",
+          "required": [
+            "package",
+            "map_name",
+            "network_fingerprint",
+            "netconvert_argv",
+            "netconvert_version",
+            "opendrive_sha256",
+            "source_osm_sha256",
+            "origin_latitude",
+            "origin_longitude",
+            "georeference"
+          ],
+          "properties": {
+            "package": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The world package's file name."
+            },
+            "map_name": {
+              "type": "string"
+            },
+            "network_fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "The canonical fingerprint of the network."
+            },
+            "netconvert_argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The netconvert invocation that built the world, machine paths replaced by <placeholders>."
+            },
+            "netconvert_version": {
+              "type": "string"
+            },
+            "opendrive_sha256": {
+              "type": "string"
+            },
+            "source_osm_sha256": {
+              "type": "string"
+            },
+            "origin_latitude": {
+              "type": "number",
+              "description": "Degrees."
+            },
+            "origin_longitude": {
+              "type": "number",
+              "description": "Degrees."
+            },
+            "georeference": {
+              "type": "string",
+              "description": "The PROJ string of the map's projection."
+            }
+          },
+          "additionalProperties": false
+        },
+        "catalogue": {
+          "type": "object",
+          "description": "The measured vehicle catalogue.",
+          "required": [
+            "catalogue_id",
+            "catalogue_digest",
+            "blueprint_set_digest",
+            "content_build_id"
+          ],
+          "properties": {
+            "catalogue_id": {
+              "type": "string"
+            },
+            "catalogue_digest": {
+              "type": "string"
+            },
+            "blueprint_set_digest": {
+              "type": "string"
+            },
+            "content_build_id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "vocabulary": {
+          "type": "object",
+          "description": "The vocabulary the labels resolve against.",
+          "required": [
+            "core_version",
+            "namespaces",
+            "vocabulary_digest"
+          ],
+          "properties": {
+            "core_version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "namespaces": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "One author namespace.",
+                "required": [
+                  "namespace",
+                  "version"
+                ],
+                "properties": {
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "vocabulary_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "traffic": {
+          "type": "object",
+          "description": "What decides how the traffic is placed and moves.",
+          "required": [
+            "sumo_seed",
+            "step_length_s",
+            "end_s",
+            "processing",
+            "routed_by"
+          ],
+          "properties": {
+            "sumo_seed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "step_length_s": {
+              "type": "number",
+              "description": "SUMO's step, seconds."
+            },
+            "end_s": {
+              "type": "number",
+              "description": "The simulated second the scenario ends."
+            },
+            "processing": {
+              "type": "object",
+              "description": "The SUMO options the compiler fixes and writes into the .sumocfg.",
+              "required": [
+                "time-to-teleport",
+                "max-depart-delay",
+                "collision.action",
+                "lanechange.duration"
+              ],
+              "properties": {
+                "time-to-teleport": {
+                  "const": "-1"
+                },
+                "max-depart-delay": {
+                  "const": "900"
+                },
+                "collision.action": {
+                  "const": "warn"
+                },
+                "lanechange.duration": {
+                  "const": "3"
+                }
+              },
+              "additionalProperties": false
+            },
+            "routed_by": {
+              "type": "object",
+              "description": "The router, and whether its release is the world converter's.",
+              "required": [
+                "tool",
+                "version",
+                "world_converter",
+                "release_agreement",
+                "mismatch_accepted"
+              ],
+              "properties": {
+                "tool": {
+                  "const": "duarouter"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "world_converter": {
+                  "type": "string"
+                },
+                "release_agreement": {
+                  "enum": [
+                    "SameRelease",
+                    "NotRecorded",
+                    "MismatchAccepted",
+                    "Mismatch"
+                  ]
+                },
+                "mismatch_accepted": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "dry_run": {
+          "anyOf": [
+            {
+              "type": "object",
+              "description": "The compiled scenario was run in SUMO alone over its whole span.",
+              "required": [
+                "ran",
+                "sumo_release",
+                "begin_s",
+                "end_s",
+                "vehicles",
+                "planned_vehicles",
+                "collisions"
+              ],
+              "properties": {
+                "ran": {
+                  "const": true
+                },
+                "sumo_release": {
+                  "type": "string"
+                },
+                "begin_s": {
+                  "type": "number"
+                },
+                "end_s": {
+                  "type": "number"
+                },
+                "vehicles": {
+                  "type": "object",
+                  "description": "SUMO's own counts over the run.",
+                  "required": [
+                    "loaded",
+                    "inserted",
+                    "discarded",
+                    "waiting_at_end"
+                  ],
+                  "properties": {
+                    "loaded": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "inserted": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "discarded": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "waiting_at_end": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "planned_vehicles": {
+                  "type": "object",
+                  "description": "The vehicles the supervision plan names.",
+                  "required": [
+                    "total",
+                    "inserted"
+                  ],
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "inserted": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "collisions": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "The SUMO-only run was skipped (--skip-dry-run).",
+              "required": [
+                "ran",
+                "reason"
+              ],
+              "properties": {
+                "ran": {
+                  "const": false
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "epoch": {
+          "$ref": "#/$defs/epoch"
+        },
+        "epoch_block_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the epoch object, keys sorted, two-space indent."
+        },
+        "illumination": {
+          "type": "object",
+          "description": "The specification's illumination default, verbatim."
+        },
+        "capture_windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One declared capture window.",
+            "required": [
+              "id",
+              "begin_s",
+              "end_s",
+              "civil_begin",
+              "civil_end",
+              "civil_date"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "begin_s": {
+                "type": "number"
+              },
+              "end_s": {
+                "type": "number"
+              },
+              "civil_begin": {
+                "type": "string"
+              },
+              "civil_end": {
+                "type": "string"
+              },
+              "civil_date": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "ephemeris": {
+          "type": "string",
+          "description": "What computes the sun."
+        },
+        "illumination_label_association": {
+          "type": "object",
+          "description": "The headline of the illumination-label association (check 41).",
+          "required": [
+            "normalized_mutual_information",
+            "bands",
+            "entries"
+          ],
+          "properties": {
+            "normalized_mutual_information": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bands": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "day": {
+                      "type": "object",
+                      "description": "How many route entries of each supervision state fall in the band.",
+                      "required": [
+                        "annotated",
+                        "nominal",
+                        "unlabelled",
+                        "total"
+                      ],
+                      "properties": {
+                        "annotated": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nominal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlabelled": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "golden": {
+                      "type": "object",
+                      "description": "How many route entries of each supervision state fall in the band.",
+                      "required": [
+                        "annotated",
+                        "nominal",
+                        "unlabelled",
+                        "total"
+                      ],
+                      "properties": {
+                        "annotated": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nominal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlabelled": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "civil_twilight": {
+                      "type": "object",
+                      "description": "How many route entries of each supervision state fall in the band.",
+                      "required": [
+                        "annotated",
+                        "nominal",
+                        "unlabelled",
+                        "total"
+                      ],
+                      "properties": {
+                        "annotated": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nominal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlabelled": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "nautical_twilight": {
+                      "type": "object",
+                      "description": "How many route entries of each supervision state fall in the band.",
+                      "required": [
+                        "annotated",
+                        "nominal",
+                        "unlabelled",
+                        "total"
+                      ],
+                      "properties": {
+                        "annotated": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nominal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlabelled": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "astronomical_twilight": {
+                      "type": "object",
+                      "description": "How many route entries of each supervision state fall in the band.",
+                      "required": [
+                        "annotated",
+                        "nominal",
+                        "unlabelled",
+                        "total"
+                      ],
+                      "properties": {
+                        "annotated": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nominal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlabelled": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "night": {
+                      "type": "object",
+                      "description": "How many route entries of each supervision state fall in the band.",
+                      "required": [
+                        "annotated",
+                        "nominal",
+                        "unlabelled",
+                        "total"
+                      ],
+                      "properties": {
+                        "annotated": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "nominal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlabelled": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Route entries by illumination band and supervision state."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entries": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "description": "One refusal or warning of the compile.",
+      "required": [
+        "check",
+        "outcome",
+        "subject",
+        "message"
+      ],
+      "properties": {
+        "check": {
+          "enum": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59
+          ],
+          "description": "The check's id in checks.json."
+        },
+        "outcome": {
+          "enum": [
+            "refuse",
+            "warn"
+          ],
+          "description": "refuse: nothing is emitted. warn: the compile goes on and the warning is carried in full."
+        },
+        "subject": {
+          "type": "string",
+          "description": "What it is about, in the specification's own names."
+        },
+        "message": {
+          "type": "string",
+          "description": "The finding in full."
+        }
+      },
+      "additionalProperties": false
+    },
+    "instant": {
+      "type": "object",
+      "description": "An authored time and what it resolved to.",
+      "required": [
+        "authored",
+        "form",
+        "seconds",
+        "civil"
+      ],
+      "properties": {
+        "authored": {
+          "description": "The time as written in the specification."
+        },
+        "form": {
+          "type": "string",
+          "description": "Which form it was written in."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Simulated seconds from t = 0."
+        },
+        "civil": {
+          "type": "string",
+          "description": "The civil instant, ISO 8601 with the epoch's offset."
+        }
+      },
+      "additionalProperties": false
+    },
+    "window_sun": {
+      "type": "object",
+      "description": "The sun the session will declare at one instant.",
+      "required": [
+        "seconds",
+        "sun_date",
+        "sun_clock",
+        "elevation_deg",
+        "geometric_elevation_deg",
+        "azimuth_deg"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "description": "The simulated second."
+        },
+        "sun_date": {
+          "type": "string",
+          "description": "The date the sun is computed for, YYYY-MM-DD."
+        },
+        "sun_clock": {
+          "type": "string",
+          "description": "The clock time the sun is computed for, HH:MM:SS."
+        },
+        "elevation_deg": {
+          "type": "number",
+          "description": "Refraction-corrected elevation, degrees."
+        },
+        "geometric_elevation_deg": {
+          "type": "number",
+          "description": "Geometric elevation, degrees."
+        },
+        "azimuth_deg": {
+          "type": "number",
+          "description": "Azimuth, degrees clockwise from north."
+        }
+      },
+      "additionalProperties": false
+    },
+    "instance": {
+      "type": "object",
+      "description": "One pattern instance.",
+      "required": [
+        "instance_id",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "counterfactual",
+        "aoi_refs",
+        "participants",
+        "intervals"
+      ],
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[^/]+/[a-z0-9_]+$",
+          "description": "<scenario_id>/<authored name>."
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "nominal"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        },
+        "hard_negative_for": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A nominal row's copy of its terms' hard_negative_for; null where unspecified."
+        },
+        "counterfactual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/counterfactual"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aoi_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One participant and its role.",
+            "required": [
+              "entity_id",
+              "role",
+              "sumo_id"
+            ],
+            "properties": {
+              "entity_id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "sumo_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "intervals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One declared interval.",
+            "required": [
+              "entity_id",
+              "phase",
+              "anchor",
+              "declared_start_s",
+              "declared_start_civil",
+              "declared_end_s",
+              "declared_end_civil",
+              "declared_duration_s"
+            ],
+            "properties": {
+              "entity_id": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string",
+                "description": "The phase's name, as authored."
+              },
+              "anchor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "description": "The participant's events that commit the interval.",
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "object",
+                        "description": "One end of an anchor: depart, stop:<i>, stop_end:<i> or phase:<i>.",
+                        "required": [
+                          "event"
+                        ],
+                        "properties": {
+                          "event": {
+                            "type": "string",
+                            "pattern": "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
+                          },
+                          "lane": {
+                            "type": "string",
+                            "description": "The stop's lane."
+                          },
+                          "end_pos_m": {
+                            "type": "number",
+                            "description": "The stop's end position, meters."
+                          },
+                          "route_index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Where in the compiled route the phase is entered."
+                          },
+                          "edge": {
+                            "type": "string",
+                            "description": "The edge it is entered on."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "end": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "description": "One end of an anchor: depart, stop:<i>, stop_end:<i> or phase:<i>.",
+                            "required": [
+                              "event"
+                            ],
+                            "properties": {
+                              "event": {
+                                "type": "string",
+                                "pattern": "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
+                              },
+                              "lane": {
+                                "type": "string",
+                                "description": "The stop's lane."
+                              },
+                              "end_pos_m": {
+                                "type": "number",
+                                "description": "The stop's end position, meters."
+                              },
+                              "route_index": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Where in the compiled route the phase is entered."
+                              },
+                              "edge": {
+                                "type": "string",
+                                "description": "The edge it is entered on."
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_start_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_start_civil": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_end_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_end_civil": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_duration_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "series": {
+      "type": "object",
+      "description": "A schedule read as a recurring series.",
+      "required": [
+        "series_id",
+        "rota_ref",
+        "cadence",
+        "member_role",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "slots"
+      ],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "rota_ref": {
+          "type": "string"
+        },
+        "cadence": {
+          "const": "enumerated"
+        },
+        "member_role": {
+          "type": "string"
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        },
+        "hard_negative_for": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One occasion of the schedule.",
+            "required": [
+              "slot_key",
+              "aoi_ref",
+              "declared_start_s",
+              "declared_start_civil",
+              "declared_end_s",
+              "declared_end_civil",
+              "entity_id"
+            ],
+            "properties": {
+              "slot_key": {
+                "type": "string"
+              },
+              "aoi_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_start_s": {
+                "type": "number"
+              },
+              "declared_start_civil": {
+                "type": "string"
+              },
+              "declared_end_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_end_civil": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "report_series": {
+      "type": "object",
+      "description": "A series, its slots counted.",
+      "required": [
+        "series_id",
+        "rota_ref",
+        "cadence",
+        "member_role",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "slots"
+      ],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "rota_ref": {
+          "type": "string"
+        },
+        "cadence": {
+          "const": "enumerated"
+        },
+        "member_role": {
+          "type": "string"
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        },
+        "hard_negative_for": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slots": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many slots the series has."
+        }
+      },
+      "additionalProperties": false
+    },
+    "cohort": {
+      "type": "object",
+      "description": "One flow's whole-life supervision.",
+      "required": [
+        "flow_id",
+        "supervision",
+        "labels",
+        "parameters"
+      ],
+      "properties": {
+        "flow_id": {
+          "type": "string"
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "unlabelled"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        }
+      },
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "description": "One authored vehicle's states and the rows naming it.",
+      "required": [
+        "entity_id",
+        "supervision",
+        "refs"
+      ],
+      "properties": {
+        "entity_id": {
+          "type": "string"
+        },
+        "supervision": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "annotated",
+              "nominal",
+              "unlabelled"
+            ]
+          }
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "counterfactual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "series",
+            "cohort",
+            "instance",
+            "term"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

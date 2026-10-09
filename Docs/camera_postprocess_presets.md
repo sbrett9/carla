@@ -26,3 +26,18 @@ camera_bp.set_attribute('post_process_profile', 'GoPro')
 camera = world.spawn_actor(camera_bp, carla.Transform(carla.location(0,0,1.5), carla.Rotation()))
 ```
 
+### The exposure is set by the camera's own attributes, over the preset
+
+The RGB camera's exposure attributes -- `exposure_mode` (`manual` or `histogram`), `iso`, `shutter_speed`
+(per second, so `320.0` is 1/320 s), `fstop` and `exposure_compensation` (EV) -- are applied after the
+preset loads, so they set the exposure whichever preset the camera names, and the preset sets the rest
+of the picture. The Python API sends every attribute of a blueprint, so a camera given none of them
+takes their defaults, which are the `Default` preset's exposure: manual, ISO 100, 1/320 s, f/4 and no
+compensation. To render with another preset's exposure, set these attributes to its values:
+
+```py
+camera_bp.set_attribute('post_process_profile', 'GoPro')
+camera_bp.set_attribute('shutter_speed', '60.0')   # GoPro.json's 1/60 s
+camera_bp.set_attribute('fstop', '6.0')            # and its f/6
+```
+

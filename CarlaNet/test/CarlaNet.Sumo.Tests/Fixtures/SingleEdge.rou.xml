@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Two vehicles on the single edge, used by the subscription tests. The second departs a second
+     after the first so a test can watch the vehicle list grow between steps. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="car" vClass="passenger" length="4.60" maxSpeed="13.89" accel="2.60" decel="4.50"/>
+    <route id="eastbound" edges="west_to_east"/>
+    <vehicle id="first" type="car" route="eastbound" depart="0.00" departSpeed="0.00"/>
+    <vehicle id="second" type="car" route="eastbound" depart="1.00" departSpeed="0.00"/>
+</routes>

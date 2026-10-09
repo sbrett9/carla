@@ -1,0 +1,2070 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:run-result:1",
+  "title": "Capture run result",
+  "description": "How one carla-capture run ended and where everything it wrote is. Written in every outcome the tool survives, to --result or <paths.runs_root>/<session id>/run.result.json, outside the capture directory. It records observations and carries no overall verdict.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result_version",
+    "outcome",
+    "exit_status",
+    "closed_by",
+    "detail",
+    "caller",
+    "caller_label",
+    "session_id",
+    "tool_version",
+    "schema_version",
+    "effective_configuration_digest",
+    "resolution_report",
+    "lock",
+    "effective_configuration",
+    "launch_echo",
+    "authority_holder",
+    "refusals",
+    "warnings",
+    "expectations_declared",
+    "produced",
+    "started_wall_utc",
+    "ended_wall_utc"
+  ],
+  "properties": {
+    "result_version": {
+      "const": 1,
+      "description": "The format version of this file."
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "description": "What made the file: the tool that wrote it and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+        },
+        "carlanet": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "build",
+                "configuration",
+                "carla_commit",
+                "content_commit",
+                "engine_commit",
+                "commits_from"
+              ],
+              "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+              "properties": {
+                "available": {
+                  "const": true
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release the server was compiled with."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version the server declares, Major.Minor."
+                },
+                "build": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "package for a cooked server, editor for one run from the editor."
+                },
+                "configuration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The build configuration, such as Development or Shipping."
+                },
+                "carla_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA commit."
+                },
+                "content_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content commit."
+                },
+                "engine_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The Unreal Engine commit."
+                },
+                "commits_from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "reason"
+              ],
+              "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+              "properties": {
+                "available": {
+                  "const": false
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release, or unknown."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version, or unknown."
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Why the identity is not available."
+                }
+              }
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used. Null where none was."
+        },
+        "sumo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+        }
+      }
+    },
+    "outcome": {
+      "enum": [
+        "run_finished",
+        "usage_error",
+        "refused_offline",
+        "refused_server",
+        "refused_authority",
+        "refused_preroll",
+        "run_stopped",
+        "internal_error"
+      ],
+      "description": "How the run ended. The exit status is read from it."
+    },
+    "exit_status": {
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "description": "The process exit status: 0 run_finished, 1 usage_error, 2 refused_offline, 3 refused_server, 4 refused_authority, 5 refused_preroll, 6 run_stopped, 7 internal_error."
+    },
+    "closed_by": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What closed the run, where something did: window_end, scenario_end, aborted_at_preroll, operator_stop, write_headroom, signal:<name>, loud:<condition>, fault:<exception type>."
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "One line on how the run ended: the first refusal, or the fault."
+    },
+    "caller": {
+      "enum": [
+        "attended",
+        "unattended"
+      ],
+      "description": "Whether a person watched the launch at a terminal."
+    },
+    "caller_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The caller's own label for the run, never interpreted."
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The run's identity: cap-<UTC date>-<UTC time>-<six hex digits>. It names the capture directory."
+    },
+    "tool_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The carlacontrol release, kept beside producer for readers written before it."
+    },
+    "schema_version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The run configuration format version the run was resolved against; null where nothing was resolved."
+    },
+    "effective_configuration_digest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "SHA-256 of the replayable run configuration; null where nothing was resolved."
+    },
+    "resolution_report": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Path of run.resolution.json; null where none was written."
+    },
+    "lock": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Path of run.lock.json; null where the offline checks did not accept."
+    },
+    "effective_configuration": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Path of run.effective.json; null where the offline checks did not accept."
+    },
+    "launch_echo": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/launch_echo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the run said it would do before committing; null where the offline checks did not get that far."
+    },
+    "authority_holder": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Who holds the world's population lease, under refused_authority."
+    },
+    "refusals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/refusal"
+      },
+      "description": "Every refusal the launch made."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/adjudicated_warning"
+      },
+      "description": "Every warning raised, with how it was adjudicated."
+    },
+    "expectations_declared": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many expect entries the configuration declared."
+    },
+    "produced": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/produced"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the run produced and observed; null where it ended before the record was opened."
+    },
+    "started_wall_utc": {
+      "type": "string",
+      "minLength": 1,
+      "description": "When the launch began, ISO 8601 in UTC."
+    },
+    "ended_wall_utc": {
+      "type": "string",
+      "minLength": 1,
+      "description": "When the result was written, ISO 8601 in UTC."
+    }
+  },
+  "$defs": {
+    "launch_echo": {
+      "type": "object",
+      "description": "What the run is about to do, stated before anything is acquired.",
+      "required": [
+        "launch_echo_version",
+        "session_id",
+        "caller",
+        "scenario",
+        "simulated",
+        "captures",
+        "civil",
+        "sun",
+        "world",
+        "render",
+        "cost",
+        "writes",
+        "pacing",
+        "readiness",
+        "warnings",
+        "not_predicted"
+      ],
+      "properties": {
+        "launch_echo_version": {
+          "const": 1,
+          "description": "The format version of this block."
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run's identity."
+        },
+        "caller": {
+          "enum": [
+            "attended",
+            "unattended"
+          ]
+        },
+        "scenario": {
+          "type": "object",
+          "description": "The scenario and window.",
+          "required": [
+            "scenario_id",
+            "lock",
+            "window",
+            "dry_run"
+          ],
+          "properties": {
+            "scenario_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "lock": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The scenario as <scenario_id>@<first 12 digits of its lock's SHA-256>."
+            },
+            "window": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The declared window's id, or explicit."
+            },
+            "dry_run": {
+              "type": "object",
+              "description": "What the scenario lock records of the compiler's SUMO-only run.",
+              "required": [
+                "ran",
+                "skipped_accepted",
+                "statement"
+              ],
+              "properties": {
+                "ran": {
+                  "type": "boolean",
+                  "description": "Whether the compile ran the scenario in SUMO alone."
+                },
+                "skipped_accepted": {
+                  "type": "boolean",
+                  "description": "Whether a skipped run was accepted for this launch."
+                },
+                "statement": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "simulated": {
+          "type": "object",
+          "description": "The simulated span.",
+          "required": [
+            "begin_s",
+            "end_s",
+            "length_s",
+            "end_source",
+            "prewarm_s",
+            "first_rendered_s"
+          ],
+          "properties": {
+            "begin_s": {
+              "type": "number",
+              "description": "Where the window begins, simulated seconds."
+            },
+            "end_s": {
+              "type": "number",
+              "description": "Where it ends."
+            },
+            "length_s": {
+              "type": "number",
+              "description": "Its length."
+            },
+            "end_source": {
+              "type": "string",
+              "description": "Where the end came from."
+            },
+            "prewarm_s": {
+              "type": "number",
+              "description": "Seconds rendered before the window and not recorded."
+            },
+            "first_rendered_s": {
+              "type": "number",
+              "description": "The first simulated second rendered."
+            }
+          },
+          "additionalProperties": false
+        },
+        "captures": {
+          "type": "object",
+          "description": "The captures the window will make.",
+          "required": [
+            "capture_hz",
+            "channels",
+            "per_channel",
+            "total",
+            "frames_per_hour"
+          ],
+          "properties": {
+            "capture_hz": {
+              "type": "number",
+              "description": "Captures per simulated second on each channel."
+            },
+            "channels": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many channels."
+            },
+            "per_channel": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Captures each channel will make."
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Captures over every channel."
+            },
+            "frames_per_hour": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Captures per simulated hour over every channel."
+            }
+          },
+          "additionalProperties": false
+        },
+        "civil": {
+          "type": "object",
+          "description": "The civil span.",
+          "required": [
+            "begin",
+            "end",
+            "first_rendered",
+            "epoch"
+          ],
+          "properties": {
+            "begin": {
+              "type": "string",
+              "description": "The window's begin in civil time, ISO 8601 with offset."
+            },
+            "end": {
+              "type": "string",
+              "description": "Its end."
+            },
+            "first_rendered": {
+              "type": "string",
+              "description": "The first rendered instant."
+            },
+            "epoch": {
+              "type": "string",
+              "description": "The epoch in one line."
+            }
+          },
+          "additionalProperties": false
+        },
+        "sun": {
+          "anyOf": [
+            {
+              "type": "object",
+              "description": "A policy that binds no sun: the world's own is left as it is.",
+              "required": [
+                "policy",
+                "binds",
+                "statement"
+              ],
+              "properties": {
+                "policy": {
+                  "enum": [
+                    "freeze_at_window_start",
+                    "advance",
+                    "freeze_at",
+                    "ignore"
+                  ]
+                },
+                "binds": {
+                  "const": false
+                },
+                "statement": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A policy that binds the sun, and the sun at the window's first and last instant.",
+              "required": [
+                "policy",
+                "binds",
+                "advances",
+                "rate",
+                "elevation_kind",
+                "window_open_s",
+                "at_begin",
+                "at_end"
+              ],
+              "properties": {
+                "policy": {
+                  "enum": [
+                    "freeze_at_window_start",
+                    "advance",
+                    "freeze_at",
+                    "ignore"
+                  ]
+                },
+                "binds": {
+                  "const": true
+                },
+                "advances": {
+                  "type": "boolean",
+                  "description": "Whether the sun moves across the window."
+                },
+                "rate": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Sun-clock seconds per simulated second, under advance."
+                },
+                "elevation_kind": {
+                  "type": "string",
+                  "description": "What the elevations are: refraction-corrected or geometric."
+                },
+                "window_open_s": {
+                  "type": "number",
+                  "description": "The simulated second the window opens and the sun is bound."
+                },
+                "at_begin": {
+                  "$ref": "#/$defs/sun_at"
+                },
+                "at_end": {
+                  "$ref": "#/$defs/sun_at"
+                },
+                "held_at": {
+                  "type": "string",
+                  "description": "The sun's date and clock where it is held."
+                },
+                "held_at_note": {
+                  "type": "string",
+                  "description": "When the sun is pinned, and what the prewarm is lit by."
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "The policy holding the sun, and the sun it binds."
+        },
+        "world": {
+          "type": "object",
+          "description": "The world.",
+          "required": [
+            "map_name",
+            "package",
+            "network_fingerprint",
+            "origin"
+          ],
+          "properties": {
+            "map_name": {
+              "type": "string"
+            },
+            "package": {
+              "type": "string",
+              "description": "The world package's file name."
+            },
+            "network_fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "origin": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              },
+              "description": "[latitude, longitude] of the map's origin, degrees."
+            }
+          },
+          "additionalProperties": false
+        },
+        "render": {
+          "type": "object",
+          "description": "What is rendered: the render set's fields as resolved.",
+          "required": [
+            "set",
+            "region",
+            "hysteresis_m",
+            "min_pixels",
+            "admit_lead_s",
+            "release_lag_s",
+            "cap",
+            "limited",
+            "vehicles",
+            "left_out",
+            "road_layer_visible",
+            "signal_layer_visible",
+            "draw_distance_m",
+            "draw_distance"
+          ],
+          "properties": {
+            "set": {
+              "enum": [
+                "all",
+                "circle",
+                "cameras"
+              ]
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x_m",
+                    "y_m",
+                    "radius_m"
+                  ],
+                  "properties": {
+                    "x_m": {
+                      "type": "number"
+                    },
+                    "y_m": {
+                      "type": "number"
+                    },
+                    "radius_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hysteresis_m": {
+              "type": "number"
+            },
+            "min_pixels": {
+              "type": "number"
+            },
+            "admit_lead_s": {
+              "type": "number"
+            },
+            "release_lag_s": {
+              "type": "number"
+            },
+            "cap": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "limited": {
+              "type": "boolean",
+              "description": "Whether an optional limit leaves vehicles without a body."
+            },
+            "vehicles": {
+              "type": "string",
+              "description": "Which vehicles get a body, in words."
+            },
+            "left_out": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "What a limit leaves out; null with no limit."
+            },
+            "road_layer_visible": {
+              "type": "boolean"
+            },
+            "signal_layer_visible": {
+              "type": "boolean"
+            },
+            "draw_distance_m": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "draw_distance": {
+              "type": "string",
+              "description": "The draw distance in words."
+            }
+          },
+          "additionalProperties": false
+        },
+        "cost": {
+          "type": "object",
+          "description": "The disk the window will cost.",
+          "required": [
+            "bytes_per_captured_second",
+            "estimated_bytes",
+            "free_bytes",
+            "headroom_s",
+            "basis"
+          ],
+          "properties": {
+            "bytes_per_captured_second": {
+              "type": "number"
+            },
+            "estimated_bytes": {
+              "type": "number",
+              "description": "The window's estimated size on disk."
+            },
+            "free_bytes": {
+              "type": "number",
+              "description": "Free space where captures are written."
+            },
+            "headroom_s": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Captured seconds the free space holds."
+            },
+            "basis": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "writes": {
+          "type": "object",
+          "description": "Where the run writes.",
+          "required": [
+            "capture_directory",
+            "result_path"
+          ],
+          "properties": {
+            "capture_directory": {
+              "type": "string"
+            },
+            "result_path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "pacing": {
+          "type": "object",
+          "description": "The pacing.",
+          "required": [
+            "mode",
+            "real_time_factor",
+            "min_achieved_factor"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "as_available",
+                "wall_clock"
+              ]
+            },
+            "real_time_factor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "min_achieved_factor": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "readiness": {
+          "type": "object",
+          "description": "The wait for every channel's view before the window opens.",
+          "required": [
+            "waits",
+            "rule",
+            "tiles",
+            "picture_settled_wait",
+            "picture",
+            "tiles_ceiling_s",
+            "from_s",
+            "until_s",
+            "traffic_stare_holds_from_s",
+            "not_ready",
+            "per_capture"
+          ],
+          "properties": {
+            "waits": {
+              "const": true
+            },
+            "rule": {
+              "type": "string"
+            },
+            "tiles": {
+              "type": "string",
+              "description": "What a view's tiles being in means."
+            },
+            "picture_settled_wait": {
+              "type": "boolean",
+              "description": "Whether the picture is also waited on."
+            },
+            "picture": {
+              "type": "string",
+              "description": "What the picture's wait compares, or that it is not run."
+            },
+            "vehicles": {
+              "type": "string"
+            },
+            "tiles_ceiling_s": {
+              "type": "number",
+              "description": "Wall-clock seconds a view has for its tiles."
+            },
+            "tiles_hold_s": {
+              "type": "number",
+              "description": "The tiles' lead before the window, simulated seconds."
+            },
+            "picture_ceiling_frames": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "picture_ceiling_s": {
+              "type": "number"
+            },
+            "picture_tolerance_levels": {
+              "type": "number"
+            },
+            "from_s": {
+              "type": "number",
+              "description": "The simulated second the wait begins."
+            },
+            "until_s": {
+              "type": "number",
+              "description": "The simulated second the window opens."
+            },
+            "traffic_stare_holds_from_s": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where a stare aimed at the traffic holds its pose; null with no such stare."
+            },
+            "not_ready": {
+              "type": "string"
+            },
+            "per_capture": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "capture_may_outrun_disk",
+              "exposure_follows_the_scene",
+              "lighting_honours_no_epoch",
+              "prewarm_clipped"
+            ]
+          },
+          "description": "The codes of the warnings the offline checks raised."
+        },
+        "not_predicted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What the echo cannot say before the run."
+        }
+      },
+      "additionalProperties": false
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check",
+        "outcome",
+        "subject",
+        "message",
+        "catalogue"
+      ],
+      "properties": {
+        "check": {
+          "enum": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54
+          ],
+          "description": "The run check's number in the carla-capture run checks."
+        },
+        "outcome": {
+          "const": "refuse",
+          "description": "refuse: the launch stops. warn: it goes on, and the warning must be adjudicated."
+        },
+        "subject": {
+          "type": "string",
+          "description": "What the finding is about: a field path, a channel, a package."
+        },
+        "message": {
+          "type": "string",
+          "description": "The finding in full."
+        },
+        "catalogue": {
+          "type": "string",
+          "examples": [
+            "carla-capture run checks"
+          ],
+          "description": "The catalogue the check belongs to: carla-capture run checks."
+        },
+        "code": {
+          "enum": [
+            "capture_may_outrun_disk",
+            "exposure_follows_the_scene",
+            "lighting_honours_no_epoch",
+            "prewarm_clipped"
+          ],
+          "description": "A warning's code, which on_warning.<code> adjudicates. Present on a warning only."
+        }
+      }
+    },
+    "adjudicated_warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check",
+        "outcome",
+        "subject",
+        "message",
+        "catalogue",
+        "code",
+        "adjudication",
+        "adjudicated_by"
+      ],
+      "properties": {
+        "check": {
+          "enum": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54
+          ],
+          "description": "The run check's number in the carla-capture run checks."
+        },
+        "outcome": {
+          "const": "warn",
+          "description": "refuse: the launch stops. warn: it goes on, and the warning must be adjudicated."
+        },
+        "subject": {
+          "type": "string",
+          "description": "What the finding is about: a field path, a channel, a package."
+        },
+        "message": {
+          "type": "string",
+          "description": "The finding in full."
+        },
+        "catalogue": {
+          "type": "string",
+          "examples": [
+            "carla-capture run checks"
+          ],
+          "description": "The catalogue the check belongs to: carla-capture run checks."
+        },
+        "code": {
+          "enum": [
+            "capture_may_outrun_disk",
+            "exposure_follows_the_scene",
+            "lighting_honours_no_epoch",
+            "prewarm_clipped"
+          ],
+          "description": "A warning's code, which on_warning.<code> adjudicates. Present on a warning only."
+        },
+        "adjudication": {
+          "anyOf": [
+            {
+              "enum": [
+                "proceed"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the warning was adjudicated; null where nothing adjudicated it."
+        },
+        "adjudicated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the adjudication came from: the on_warning field's source, or the operator at the terminal."
+        }
+      }
+    },
+    "produced": {
+      "type": "object",
+      "description": "What the run produced and observed.",
+      "required": [
+        "capture_directory",
+        "world_truth_track",
+        "run_manifest",
+        "closed_by",
+        "window",
+        "channels",
+        "cameras",
+        "readiness",
+        "gates",
+        "admissions",
+        "session",
+        "preroll_achieved_factor",
+        "recorder_run_id"
+      ],
+      "properties": {
+        "capture_directory": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the captures are: one directory per channel."
+        },
+        "world_truth_track": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of truth/world_truth_track.csv."
+        },
+        "run_manifest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of truth/manifest.jsonl."
+        },
+        "closed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What closed the run."
+        },
+        "window": {
+          "type": "object",
+          "description": "The window as declared and as reached.",
+          "required": [
+            "name",
+            "begin_s",
+            "end_declared_s",
+            "end_source",
+            "end_reached_s",
+            "civil"
+          ],
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The declared window's id; null for an explicit one."
+            },
+            "begin_s": {
+              "type": "number"
+            },
+            "end_declared_s": {
+              "type": "number"
+            },
+            "end_source": {
+              "type": "string"
+            },
+            "end_reached_s": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The simulated second the run reached."
+            },
+            "civil": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "description": "The begin and the end reached in civil time."
+            }
+          },
+          "additionalProperties": false
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One channel's recorder counts; null where its recorder did not count it.",
+            "required": [
+              "sensor_id",
+              "directory",
+              "captured",
+              "written",
+              "recorder_dropped",
+              "frame_unpaired",
+              "illumination_paired",
+              "illumination_unpaired",
+              "solar_block_missing",
+              "render_set_paired",
+              "render_set_unpaired",
+              "supervision_paired",
+              "supervision_unpaired",
+              "lights_unknown",
+              "pose_source_unknown",
+              "occlusion_measured",
+              "occlusion_unmatched",
+              "sensor_pose_from_snapshot",
+              "sensor_pose_header_disagreed",
+              "sensor_pose_from_header",
+              "depth_pose_header_disagreed",
+              "depth_pose_from_header",
+              "draw_distance_captures",
+              "vehicles_beyond_draw_distance",
+              "vehicles_partly_beyond_draw_distance"
+            ],
+            "properties": {
+              "sensor_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The channel's camera name."
+              },
+              "directory": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The channel's capture directory."
+              },
+              "captured": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "written": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "recorder_dropped": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "frame_unpaired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "illumination_paired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "illumination_unpaired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "solar_block_missing": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "render_set_paired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "render_set_unpaired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "supervision_paired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "supervision_unpaired": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lights_unknown": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pose_source_unknown": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "occlusion_measured": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "occlusion_unmatched": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sensor_pose_from_snapshot": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sensor_pose_header_disagreed": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sensor_pose_from_header": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "depth_pose_header_disagreed": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "depth_pose_from_header": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "draw_distance_captures": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "vehicles_beyond_draw_distance": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "vehicles_partly_beyond_draw_distance": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cameras": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Where one channel's camera looked: sensor_id, pattern, and for a stare its form, look_at and pose, for an orbit the point it circles with radius_m, altitude_m and period_s, and the exposure the camera was given."
+          }
+        },
+        "readiness": {
+          "anyOf": [
+            {
+              "type": "object",
+              "description": "How each view became ready before the window: the rule, the ceilings, and per channel its state and when its tiles were in."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One gate record: an observation against a threshold, never a verdict.",
+            "required": [
+              "id",
+              "name",
+              "owner",
+              "status",
+              "observed",
+              "threshold",
+              "comparison",
+              "met"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The gate, such as capture.recorder_dropped[<sensor_id>]."
+              },
+              "name": {
+                "type": "string",
+                "description": "What it observes."
+              },
+              "owner": {
+                "type": "string",
+                "description": "What publishes the observation."
+              },
+              "status": {
+                "enum": [
+                  "evaluated",
+                  "skipped"
+                ]
+              },
+              "observed": {
+                "description": "What was observed: a number or a boolean; null where skipped."
+              },
+              "threshold": {
+                "description": "What it is compared against; null where skipped."
+              },
+              "comparison": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "equals",
+                      "at_least",
+                      "at_most"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "met": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Whether the observation met the threshold; null where skipped."
+              },
+              "skip_reason": {
+                "type": "string",
+                "description": "Why the gate was skipped."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "admissions": {
+          "anyOf": [
+            {
+              "type": "object",
+              "description": "The render set's admission passes as the window saw them.",
+              "required": [
+                "at_window_open",
+                "window"
+              ],
+              "properties": {
+                "at_window_open": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "description": "One admission pass of the render set.",
+                      "required": [
+                        "sim_time_s",
+                        "world_tick",
+                        "population",
+                        "newly_admitted",
+                        "released",
+                        "total_admissions",
+                        "limited",
+                        "eligible",
+                        "admitted",
+                        "shed",
+                        "held",
+                        "capacity",
+                        "rule",
+                        "left_out"
+                      ],
+                      "properties": {
+                        "sim_time_s": {
+                          "type": "number"
+                        },
+                        "world_tick": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "population": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "newly_admitted": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "released": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "total_admissions": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "limited": {
+                          "type": "boolean"
+                        },
+                        "eligible": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "admitted": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "shed": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "held": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "capacity": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "left_out": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Vehicles SUMO had and the render set gave no body."
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "window": {
+                  "type": "object",
+                  "description": "A summary of the passes inside the window.",
+                  "required": [
+                    "passes",
+                    "most_population",
+                    "limited",
+                    "passes_leaving_out",
+                    "most_left_out",
+                    "most_shed",
+                    "first_frame_s",
+                    "last_frame_s"
+                  ],
+                  "properties": {
+                    "passes": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "most_population": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "limited": {
+                      "type": "boolean"
+                    },
+                    "passes_leaving_out": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "most_left_out": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "most_shed": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "first_frame_s": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "last_frame_s": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session": {
+          "type": "object",
+          "description": "What the co-simulation session established: its clock, SUMO, pace, sun, layers, drive lease, render set and draw distance in words, its compile lock and teleporting checks, and the last snapshot's figures (pacing, render, admission, illumination, solar_audit, divergence)."
+        },
+        "preroll_achieved_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The real-time factor the prewarm achieved."
+        },
+        "recorder_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run id the recorders stamped: the session id."
+        },
+        "termination": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One shutdown step as it ran.",
+            "required": [
+              "phase",
+              "step",
+              "ran",
+              "completed",
+              "failure"
+            ],
+            "properties": {
+              "phase": {
+                "enum": [
+                  "stop work",
+                  "drain capture",
+                  "close the record",
+                  "write the result",
+                  "release the world",
+                  "close the external chain"
+                ]
+              },
+              "step": {
+                "type": "string"
+              },
+              "ran": {
+                "type": "boolean"
+              },
+              "completed": {
+                "type": "boolean"
+              },
+              "failure": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "The shutdown steps, in order."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sun_at": {
+      "type": "object",
+      "description": "The declared sun at one instant.",
+      "required": [
+        "seconds",
+        "sun_date",
+        "sun_clock",
+        "elevation_deg",
+        "geometric_elevation_deg",
+        "azimuth_deg",
+        "band"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "description": "The simulated second."
+        },
+        "sun_date": {
+          "type": "string",
+          "description": "The date the sun is computed for, YYYY-MM-DD."
+        },
+        "sun_clock": {
+          "type": "string",
+          "description": "The clock time the sun is computed for, HH:MM:SS."
+        },
+        "elevation_deg": {
+          "type": "number",
+          "description": "Refraction-corrected elevation, degrees."
+        },
+        "geometric_elevation_deg": {
+          "type": "number",
+          "description": "Geometric elevation, degrees."
+        },
+        "azimuth_deg": {
+          "type": "number",
+          "description": "Azimuth, degrees clockwise from north."
+        },
+        "band": {
+          "enum": [
+            "day",
+            "golden",
+            "civil_twilight",
+            "nautical_twilight",
+            "astronomical_twilight",
+            "night"
+          ],
+          "description": "The illumination band of the elevation."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

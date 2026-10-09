@@ -1,0 +1,393 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1887954,
+          27.1592876
+        ]
+      },
+      "properties": {
+        "id": "tower_00",
+        "name": "Guard tower 0",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1843457,
+          27.1585015
+        ]
+      },
+      "properties": {
+        "id": "tower_01",
+        "name": "Guard tower 1",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1798794,
+          27.1576747
+        ]
+      },
+      "properties": {
+        "id": "tower_02",
+        "name": "Guard tower 2",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1754362,
+          27.1569088
+        ]
+      },
+      "properties": {
+        "id": "tower_03",
+        "name": "Guard tower 3",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.171012,
+          27.1561165
+        ]
+      },
+      "properties": {
+        "id": "tower_04",
+        "name": "Guard tower 4",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1670892,
+          27.1544967
+        ]
+      },
+      "properties": {
+        "id": "tower_05",
+        "name": "Guard tower 5",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1568534,
+          27.1546025
+        ]
+      },
+      "properties": {
+        "id": "tower_06",
+        "name": "Guard tower 6",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1561991,
+          27.1572885
+        ]
+      },
+      "properties": {
+        "id": "tower_07",
+        "name": "Guard tower 7",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1562188,
+          27.1593798
+        ]
+      },
+      "properties": {
+        "id": "tower_08",
+        "name": "Guard tower 8",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1626639,
+          27.1627067
+        ]
+      },
+      "properties": {
+        "id": "tower_09",
+        "name": "Guard tower 9",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1642224,
+          27.1610843
+        ]
+      },
+      "properties": {
+        "id": "tower_10",
+        "name": "Guard tower 10",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1648341,
+          27.1618036
+        ]
+      },
+      "properties": {
+        "id": "tower_11",
+        "name": "Guard tower 11",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1691254,
+          27.1621131
+        ]
+      },
+      "properties": {
+        "id": "tower_12",
+        "name": "Guard tower 12",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1836334,
+          27.1647327
+        ]
+      },
+      "properties": {
+        "id": "tower_13",
+        "name": "Guard tower 13",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1874445,
+          27.1647397
+        ]
+      },
+      "properties": {
+        "id": "tower_14",
+        "name": "Guard tower 14",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.1879656,
+          27.1627141
+        ]
+      },
+      "properties": {
+        "id": "tower_15",
+        "name": "Guard tower 15",
+        "kind": "bahonar:guard_post",
+        "radius_m": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          56.2008123,
+          27.1594589
+        ]
+      },
+      "properties": {
+        "id": "port_gate",
+        "name": "Port gate, eastern checkpoint approach",
+        "kind": "bahonar:gate",
+        "radius_m": 45
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [
+                56.2108439,
+                27.1475223
+              ],
+              [
+                56.2108721,
+                27.1457582
+              ],
+              [
+                56.211164,
+                27.1457647
+              ],
+              [
+                56.2111464,
+                27.1475192
+              ],
+              [
+                56.2108439,
+                27.1475223
+              ]
+            ]
+          ],
+          [
+            [
+              [
+                56.2113153,
+                27.1471374
+              ],
+              [
+                56.2113361,
+                27.1457685
+              ],
+              [
+                56.211593,
+                27.1457741
+              ],
+              [
+                56.2115685,
+                27.1471374
+              ],
+              [
+                56.2113153,
+                27.1471374
+              ]
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "drydock",
+        "name": "Ship repair drydock",
+        "kind": "bahonar:drydock"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              56.2040721,
+              27.1541915
+            ],
+            [
+              56.2045546,
+              27.1541933
+            ],
+            [
+              56.2045549,
+              27.1541382
+            ],
+            [
+              56.2048435,
+              27.1541393
+            ],
+            [
+              56.2048422,
+              27.1544059
+            ],
+            [
+              56.2045636,
+              27.1544049
+            ],
+            [
+              56.2045637,
+              27.1543821
+            ],
+            [
+              56.204516,
+              27.154382
+            ],
+            [
+              56.2040712,
+              27.1543803
+            ],
+            [
+              56.2040721,
+              27.1541915
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "ferry_terminal",
+        "name": "Shahid Bahonar Ferry Terminal",
+        "kind": "bahonar:ferry_terminal"
+      }
+    }
+  ]
+}

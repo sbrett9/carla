@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:png-chunk-capture:1",
+  "title": "PNG text chunk carla:capture, format version 1",
+  "description": "The identity of one still: the simulation frame and time it was rendered at, and the run it belongs to, so a still separated from its sidecar still says which capture it is. This schema describes format version 1; a chunk with no format_version was written before chunks carried one and is version 1.",
+  "type": "object",
+  "properties": {
+    "format_version": {
+      "const": 1,
+      "description": "The chunk's format version. Absent from a chunk written before chunks carried one, which is version 1."
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The simulation frame the image was rendered on. It pairs the still with its truth sidecar and identifies the same instant across runs."
+    },
+    "sim_time_s": {
+      "type": "number",
+      "description": "Simulated time at that frame, seconds.",
+      "x-unit": "seconds"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^.+$",
+      "description": "The run the still belongs to. A recorder always names one; it is left out only when empty."
+    },
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^.+$",
+      "description": "The scenario driving the run, where one is."
+    },
+    "seed": {
+      "type": "integer",
+      "description": "The seed the run was started with, where one was given."
+    },
+    "producer": {
+      "$ref": "#/$defs/producer",
+      "description": "What made the still. Absent from a still written before stills carried it."
+    }
+  },
+  "required": [
+    "tick",
+    "sim_time_s"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "producer": {
+      "type": "object",
+      "description": "What made the file: the tool and its release, the carlanet release, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "The component that wrote the file, such as carlacontrol.CaptureSession, or the program's name where no component declared itself; unknown where neither is known."
+        },
+        "tool_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The release version of the package the tool comes from; null where the tool did not say."
+        },
+        "carlanet": {
+          "type": "string",
+          "description": "The carlanet release that wrote the file: 0.10.0 for a tagged release, 0.10.0+g<commit> for any other build."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/server"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used; null where none was."
+        },
+        "sumo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran; null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, in UTC to the millisecond."
+        }
+      },
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "additionalProperties": false
+    },
+    "server": {
+      "description": "What the CARLA server says it was built from.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "A server that answered the build identity call. Each value is the server's own, unknown where it cannot know it.",
+          "properties": {
+            "available": {
+              "const": true,
+              "description": "The server answered."
+            },
+            "release": {
+              "type": "string",
+              "description": "The CARLA release the server was compiled with, such as 0.10.0."
+            },
+            "world_interface": {
+              "type": "string",
+              "description": "The world interface version the server declares, major.minor, such as 1.0."
+            },
+            "build": {
+              "type": "string",
+              "description": "package for a cooked server, editor for one run from the editor."
+            },
+            "configuration": {
+              "type": "string",
+              "description": "The build configuration, such as Development or Shipping."
+            },
+            "carla_commit": {
+              "type": "string",
+              "description": "The CARLA commit the server was built from."
+            },
+            "content_commit": {
+              "type": "string",
+              "description": "The content commit its package was cooked from."
+            },
+            "engine_commit": {
+              "type": "string",
+              "description": "The Unreal Engine commit its package was built with."
+            },
+            "commits_from": {
+              "type": "string",
+              "description": "Where the commits came from: version_file (the package's VERSION file), compiled (the CARLA commit compiled into the server) or none."
+            }
+          },
+          "required": [
+            "available",
+            "release",
+            "world_interface",
+            "build",
+            "configuration",
+            "carla_commit",
+            "content_commit",
+            "engine_commit",
+            "commits_from"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "A server built before the build identity call, with what its other calls said.",
+          "properties": {
+            "available": {
+              "const": false,
+              "description": "The server did not answer the call."
+            },
+            "release": {
+              "type": "string",
+              "description": "The release its version call reported, or unknown."
+            },
+            "world_interface": {
+              "type": "string",
+              "description": "The world interface version it reported, or unknown."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the identity is not available."
+            }
+          },
+          "required": [
+            "available",
+            "release",
+            "world_interface",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

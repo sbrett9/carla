@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A vehicle SUMO can never insert: `blocker` departs standing 8 m along the right-hand approach lane
+     and stops there at once for 100 s, and `late`, due a second later at the lane's start, has no room to
+     enter. Under a max-depart-delay of 3 s, measured on SUMO 1.27.0 at a 1 s step, SUMO holds `late` in its
+     insertion queue from 2 s to 5 s and drops it before 6 s without a word. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+
+    <route id="right" edges="approach turn_east"/>
+
+    <vehicle id="blocker" type="measured_truck" route="right" depart="0.00" departLane="0" departPos="8"
+             departSpeed="0">
+        <stop lane="approach_0" endPos="8.00" duration="100.00"/>
+    </vehicle>
+    <vehicle id="late" type="measured_truck" route="right" depart="1.00" departLane="0" departPos="base"
+             departSpeed="0"/>
+</routes>

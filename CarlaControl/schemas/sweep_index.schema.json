@@ -1,0 +1,571 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:sweep-index:1",
+  "title": "Sweep index",
+  "description": "What a sweep compiled: every member with the axis values it took and the files its lock digests, each counterfactual pair, and every finding. Written by carla-compile-scenario --sweep as <sweep_id>.sweep-index.json beside the members' directories. A sweep refused before its members were made carries only the version, producer, id, empty lists, its findings and the outcome.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sweep_version",
+    "sweep_id",
+    "members",
+    "pairs",
+    "findings",
+    "outcome"
+  ],
+  "properties": {
+    "sweep_version": {
+      "const": 1,
+      "description": "The format version of the sweep compiled."
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "description": "What made the file: the tool that wrote it and its release, the CarlaNet release the process loaded, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+        },
+        "carlanet": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "build",
+                "configuration",
+                "carla_commit",
+                "content_commit",
+                "engine_commit",
+                "commits_from"
+              ],
+              "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+              "properties": {
+                "available": {
+                  "const": true
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release the server was compiled with."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version the server declares, Major.Minor."
+                },
+                "build": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "package for a cooked server, editor for one run from the editor."
+                },
+                "configuration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The build configuration, such as Development or Shipping."
+                },
+                "carla_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA commit."
+                },
+                "content_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content commit."
+                },
+                "engine_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The Unreal Engine commit."
+                },
+                "commits_from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "reason"
+              ],
+              "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+              "properties": {
+                "available": {
+                  "const": false
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release, or unknown."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version, or unknown."
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Why the identity is not available."
+                }
+              }
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used. Null where none was."
+        },
+        "sumo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+        }
+      }
+    },
+    "sweep_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The sweep's id; null where the sweep file gave none."
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One member of the sweep, compiled in full in its own directory.",
+        "required": [
+          "member_id",
+          "assignments",
+          "outcome",
+          "specification",
+          "findings"
+        ],
+        "properties": {
+          "member_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "<base scenario id>.base, or .m<10 hex digits of the assignment's SHA-256>; a twin's is its pair id."
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One axis value of a member.",
+              "required": [
+                "path",
+                "value"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The axis path."
+                },
+                "value": {
+                  "description": "The value the member takes on it."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "outcome": {
+            "enum": [
+              "compiled",
+              "refused"
+            ]
+          },
+          "specification": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The member's specification, relative to the output directory, in forward slashes. An index written before 2026-10-07 on Windows separates them with backslashes."
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/finding"
+            }
+          },
+          "epoch_block_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "illumination": {
+            "type": "object",
+            "description": "The member's illumination default, from its lock."
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "description": "Each file the member's lock digests, by role, to its SHA-256."
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One of the member's capture windows.",
+              "required": [
+                "id",
+                "civil_begin",
+                "civil_date",
+                "sun_open"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "civil_begin": {
+                  "type": "string"
+                },
+                "civil_date": {
+                  "type": "string"
+                },
+                "sun_open": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/window_sun"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "counterfactual": {
+            "$ref": "#/$defs/pair"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "pairs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pair"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "description": "The sweep's findings, and every member's refusals."
+    },
+    "base": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The base specification's file name."
+    },
+    "base_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "pairing": {
+      "enum": [
+        "cross",
+        "zip"
+      ]
+    },
+    "illumination": {
+      "enum": [
+        "hold",
+        "vary",
+        "factorial"
+      ]
+    },
+    "axes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One axis, as the compiler read it.",
+        "required": [
+          "path",
+          "values",
+          "illumination_axis"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "values": {
+            "type": "array"
+          },
+          "illumination_axis": {
+            "type": "boolean",
+            "description": "Whether the axis changes the light: its path touches the epoch, the illumination or a window's begin."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "outcome": {
+      "enum": [
+        "compiled",
+        "refused"
+      ]
+    }
+  },
+  "$defs": {
+    "pair": {
+      "type": "object",
+      "description": "A counterfactual pair: identical inputs except one vehicle.",
+      "required": [
+        "counterfactual_pair_id",
+        "base_member",
+        "counterfactual_member",
+        "actor",
+        "mode",
+        "displaced_in",
+        "illumination_differs",
+        "trajectories_expected_to_match",
+        "statement"
+      ],
+      "properties": {
+        "counterfactual_pair_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "<base member>.cf.<actor>.<mode>, the twin's member id."
+        },
+        "base_member": {
+          "type": "string",
+          "minLength": 1
+        },
+        "counterfactual_member": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The actor the twin changes."
+        },
+        "mode": {
+          "enum": [
+            "absent",
+            "nominal",
+            "displaced"
+          ]
+        },
+        "displaced_in": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "time",
+              "space"
+            ]
+          }
+        },
+        "illumination_differs": {
+          "type": "boolean",
+          "description": "Whether the twin is lit differently: a displacement in time."
+        },
+        "trajectories_expected_to_match": {
+          "const": false
+        },
+        "statement": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "description": "One refusal or warning of the compile.",
+      "required": [
+        "check",
+        "outcome",
+        "subject",
+        "message"
+      ],
+      "properties": {
+        "check": {
+          "enum": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59
+          ],
+          "description": "The check's id in checks.json."
+        },
+        "outcome": {
+          "enum": [
+            "refuse",
+            "warn"
+          ],
+          "description": "refuse: nothing is emitted. warn: the compile goes on and the warning is carried in full."
+        },
+        "subject": {
+          "type": "string",
+          "description": "What it is about, in the specification's own names."
+        },
+        "message": {
+          "type": "string",
+          "description": "The finding in full."
+        }
+      },
+      "additionalProperties": false
+    },
+    "window_sun": {
+      "type": "object",
+      "description": "The sun the session will declare at one instant.",
+      "required": [
+        "seconds",
+        "sun_date",
+        "sun_clock",
+        "elevation_deg",
+        "geometric_elevation_deg",
+        "azimuth_deg"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "description": "The simulated second."
+        },
+        "sun_date": {
+          "type": "string",
+          "description": "The date the sun is computed for, YYYY-MM-DD."
+        },
+        "sun_clock": {
+          "type": "string",
+          "description": "The clock time the sun is computed for, HH:MM:SS."
+        },
+        "elevation_deg": {
+          "type": "number",
+          "description": "Refraction-corrected elevation, degrees."
+        },
+        "geometric_elevation_deg": {
+          "type": "number",
+          "description": "Geometric elevation, degrees."
+        },
+        "azimuth_deg": {
+          "type": "number",
+          "description": "Azimuth, degrees clockwise from north."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

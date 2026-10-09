@@ -1,7 +1,11 @@
 """Convert CARLA CoT-XML recording sidecars to CSV format.
 
-Reads Cursor-on-Target XML files produced by SCTMV recording sessions and extracts
-vehicle truth data into a consolidated CSV file suitable for analysis or ML training.
+Reads Cursor-on-Target XML files produced by the native recorder (run_SCTMV.py, run_capture.py,
+run_sumo_drive.py) and extracts vehicle truth data into a consolidated CSV file suitable for analysis
+or ML training. Every .xml in the input directory is read whatever it is named: the recorder names
+each after its camera, <camera name>_<local capture time>.xml, beside the .png of the same stem, and
+files written before cameras were named are SCTMV_<local capture time>.xml. A directory holding
+several cameras' stills is read whole; the frame_file column names each row's file, so its camera.
 
 Each XML file represents one captured frame containing:
   * Timestamp

@@ -112,6 +112,30 @@ public class TrafficLightInjectorTests
         }
     }
 
+    // A ramp meter's green is SUMO's 's' -- stop at the line, then go -- and it has no amber. It is
+    // still a green: without one, the meter's heads would get no controller and fall into CARLA's
+    // orphan branch (issue #1).
+    [Fact]
+    public void Inject_AStopThenGoGreen_IsAPhaseLikeAnyOther()
+    {
+        const string meterNet =
+@"<net>
+  <tlLogic id=""J1"" type=""static"" programID=""0"">
+    <phase duration=""2"" state=""ssrr""/>
+    <phase duration=""1"" state=""rrrr""/>
+    <phase duration=""2"" state=""rrss""/>
+    <phase duration=""1"" state=""rrrr""/>
+  </tlLogic>
+</net>";
+
+        var root = XDocument.Parse(TrafficLightInjector.InjectTrafficLights(Xodr, meterNet)).Root!;
+
+        Assert.Equal(new[] { "J1_p0", "J1_p1" },
+                     root.Elements("controller").Select(c => c.Attribute("id")!.Value));
+        var junction = root.Elements("junction").Single(j => j.Attribute("name")!.Value == "J1");
+        Assert.Equal(2, junction.Elements("controller").Count());
+    }
+
     [Fact]
     public void Inject_NoTlLogic_ReturnsInputUnchanged()
     {

@@ -65,8 +65,19 @@ namespace detail {
     bool has_traffic_light;
     rpc::ActorId traffic_light_id;
     rpc::VehicleFailureState failure_state;
+    /// The lights commanded on for the vehicle on this frame, as rpc::VehicleLightState's flags
+    /// (rpc::VehicleLightState::flag_type). Zero is every light off, and is also what a server built
+    /// before it filled this field leaves here, so a reader tells the two apart by the snapshot's
+    /// EpisodeStateSerializer::VehicleLightStateCarried flag, never by the value.
+    uint32_t light_state;
   };
 #pragma pack(pop)
+
+  // The light state sits in bytes of the union no other vehicle field used, so a vehicle's state is
+  // still no wider than a traffic light's and every actor in the snapshot keeps its size.
+  static_assert(
+      sizeof(VehicleData) == 34u,
+      "Invalid VehicleData size! The CarlaNet reader (ActorSnapshot) decodes it at fixed offsets.");
 
 #pragma pack(push, 1)
   class PackedWalkerControl {
@@ -116,6 +127,10 @@ namespace detail {
     char sign_id[32u];
   };
 #pragma pack(pop)
+
+  static_assert(
+      sizeof(VehicleData) <= sizeof(TrafficLightData),
+      "VehicleData must fit the type-dependent union without widening ActorDynamicState.");
 } // namespace detail
 
 #pragma pack(push, 1)

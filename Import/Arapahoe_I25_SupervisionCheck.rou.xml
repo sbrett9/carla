@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Arapahoe supervision check: compiled by carlacontrol.ScenarioCompiler 0.10.0 from the specification of Arapahoe_I25_SupervisionCheck; edit that, not this. The epoch that gives these seconds their civil meaning is stated in Arapahoe_I25_SupervisionCheck.sumocfg. Every time in this file is simulated seconds from t = 0. Supervision is not in this file: it is in Arapahoe_I25_SupervisionCheck.supervision.json. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <!-- Quick freeway drivers, who work their way to the left lanes. A driver, not a body: they draw the
+         same nine measured cars as car, so a fast vehicle is not told apart by its shape. Designed
+         around a 4.6 m car; the nine bodies run 4.18 m to 5.37 m and average 4.82 m. -->
+    <vType id="car_quick.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9667" height="1.3853" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.ue4.audi.tt"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.mini.cooper" vClass="passenger" length="4.5526" width="2.0897" height="1.7725" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.mini.cooper"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.ue4.bmw.grantourer" vClass="passenger" length="4.611" width="2.144" height="1.6673" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.ue4.bmw.grantourer"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.ue4.mercedes.ccc" vClass="passenger" length="4.6736" width="1.805" height="1.4419" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.ue4.mercedes.ccc"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.ue4.ford.mustang" vClass="passenger" length="4.7175" width="1.8354" height="1.3009" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.mustang"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.lincoln.mkz" vClass="passenger" length="4.892" width="1.8335" height="1.5241" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.lincoln.mkz"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.dodge.charger" vClass="passenger" length="5.006" width="1.854" height="1.5403" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.dodge.charger"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.ue4.chevrolet.impala" vClass="passenger" length="5.3575" width="1.7793" height="1.4107" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.ue4.chevrolet.impala"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car_quick.vehicle.ue4.ford.crown" vClass="passenger" length="5.3657" width="1.7822" height="1.575" lcAssertive="1.5" lcKeepRight="0.3" lcSpeedGain="3.0" maxSpeed="60" sigma="0.4" speedFactor="normc(1.18,0.06,1.05,1.35)" tau="0.9" guiShape="passenger" color="#D9D9E6">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.crown"/>
+        <param key="carla:class_id" value="car_quick"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- Ordinary cars: saloons, hatchbacks and coupes, the nine measured bodies car_quick draws too.
+         Designed around a 4.6 m car; they average 4.82 m. -->
+    <vType id="car.vehicle.ue4.audi.tt" vClass="passenger" length="4.1812" width="1.9667" height="1.3853" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.ue4.audi.tt"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.mini.cooper" vClass="passenger" length="4.5526" width="2.0897" height="1.7725" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.mini.cooper"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.bmw.grantourer" vClass="passenger" length="4.611" width="2.144" height="1.6673" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.ue4.bmw.grantourer"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.mercedes.ccc" vClass="passenger" length="4.6736" width="1.805" height="1.4419" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.ue4.mercedes.ccc"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.ford.mustang" vClass="passenger" length="4.7175" width="1.8354" height="1.3009" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.mustang"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.lincoln.mkz" vClass="passenger" length="4.892" width="1.8335" height="1.5241" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.lincoln.mkz"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.dodge.charger" vClass="passenger" length="5.006" width="1.854" height="1.5403" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.dodge.charger"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.chevrolet.impala" vClass="passenger" length="5.3575" width="1.7793" height="1.4107" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.ue4.chevrolet.impala"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <vType id="car.vehicle.ue4.ford.crown" vClass="passenger" length="5.3657" width="1.7822" height="1.575" lcKeepRight="1.0" lcSpeedGain="1.2" maxSpeed="55" sigma="0.5" speedFactor="normc(1.02,0.06,0.90,1.15)" tau="1.1" guiShape="passenger" color="#B3B8C7">
+        <param key="carla:blueprint" value="vehicle.ue4.ford.crown"/>
+        <param key="carla:class_id" value="car"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- The full-size sport utility: a 5.59 x 2.15 m body against the 5.0 x 1.95 m this type was
+         designed around, so every SUV is 0.59 m longer than intended. One body, so every SUV on the map
+         looks the same: a property of the content. -->
+    <vType id="suv.vehicle.nissan.patrol" vClass="passenger" length="5.5912" width="2.1466" height="2.059" lcKeepRight="1.5" lcSpeedGain="1.0" maxSpeed="52" sigma="0.5" speedFactor="normc(1.00,0.06,0.88,1.12)" tau="1.1" guiShape="passenger" color="#596673">
+        <param key="carla:blueprint" value="vehicle.nissan.patrol"/>
+        <param key="carla:class_id" value="suv"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- A panel van measuring 5.92 m against the 5.9 m designed around. The ambulance is a van too, and
+         liveried, so it is not drawn as one. -->
+    <vType id="van.vehicle.sprinter.mercedes" vClass="delivery" length="5.9151" width="1.9817" height="2.726" lcKeepRight="2.5" lcSpeedGain="0.6" maxSpeed="45" sigma="0.5" speedFactor="normc(0.94,0.05,0.82,1.05)" tau="1.2" guiShape="delivery" color="#E6E6E6">
+        <param key="carla:blueprint" value="vehicle.sprinter.mercedes"/>
+        <param key="carla:class_id" value="van"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- The two-axle box truck, 8.00 m, the catalogue's civilian truck: 4.0 m shorter than the 12.0 m
+         rigid truck this type was designed around. -->
+    <vType id="truck.vehicle.carlacola.actors" vClass="truck" length="8.0037" width="2.787" height="4.0546" lcKeepRight="4.0" lcSpeedGain="0.4" maxSpeed="35" sigma="0.5" speedFactor="normc(0.86,0.04,0.78,0.95)" tau="1.4" guiShape="truck" color="#99734D">
+        <param key="carla:blueprint" value="vehicle.carlacola.actors"/>
+        <param key="carla:class_id" value="truck"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+    <!-- The content build has no articulated truck, so the 16.5 m semitrailer this type was designed
+         around is drawn as the heaviest rigid one, the three-axle heavy goods vehicle: 7.92 m, so each
+         semitrailer reserves 8.6 m less road than designed. It keeps the slowest and most right-keeping
+         driving model on the freeway. -->
+    <vType id="semi.vehicle.carlamotors.european_hgv" vClass="truck" length="7.9241" width="2.787" height="3.7833" lcKeepRight="5.0" lcSpeedGain="0.3" maxSpeed="32" sigma="0.5" speedFactor="normc(0.84,0.03,0.78,0.92)" tau="1.6" guiShape="truck" color="#735940">
+        <param key="carla:blueprint" value="vehicle.carlamotors.european_hgv"/>
+        <param key="carla:class_id" value="semi"/>
+        <param key="carla:catalogue_digest" value="6037e3bb2bde6f45de45e31925236593d16653989293fe414d9060a78bfbe90d"/>
+    </vType>
+
+    <vTypeDistribution id="car_quick" vTypes="car_quick.vehicle.ue4.audi.tt car_quick.vehicle.mini.cooper car_quick.vehicle.ue4.bmw.grantourer car_quick.vehicle.ue4.mercedes.ccc car_quick.vehicle.ue4.ford.mustang car_quick.vehicle.lincoln.mkz car_quick.vehicle.dodge.charger car_quick.vehicle.ue4.chevrolet.impala car_quick.vehicle.ue4.ford.crown" probabilities="1 1 1 1 1 1 1 1 1"/>
+    <vTypeDistribution id="car" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown" probabilities="1 1 1 1 1 1 1 1 1"/>
+    <vTypeDistribution id="suv" vTypes="suv.vehicle.nissan.patrol" probabilities="1"/>
+    <vTypeDistribution id="van" vTypes="van.vehicle.sprinter.mercedes" probabilities="1"/>
+    <vTypeDistribution id="truck" vTypes="truck.vehicle.carlacola.actors" probabilities="1"/>
+    <vTypeDistribution id="semi" vTypes="semi.vehicle.carlamotors.european_hgv" probabilities="1"/>
+
+    <!-- Freeway mix: mostly cars, a realistic tail of heavy vehicles. -->
+    <vTypeDistribution id="freeway_mix" vTypes="car_quick.vehicle.ue4.audi.tt car_quick.vehicle.mini.cooper car_quick.vehicle.ue4.bmw.grantourer car_quick.vehicle.ue4.mercedes.ccc car_quick.vehicle.ue4.ford.mustang car_quick.vehicle.lincoln.mkz car_quick.vehicle.dodge.charger car_quick.vehicle.ue4.chevrolet.impala car_quick.vehicle.ue4.ford.crown car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes truck.vehicle.carlacola.actors semi.vehicle.carlamotors.european_hgv" probabilities="0.0288889 0.0288889 0.0288889 0.0288889 0.0288889 0.0288889 0.0288889 0.0288889 0.0288889 0.0388889 0.0388889 0.0388889 0.0388889 0.0388889 0.0388889 0.0388889 0.0388889 0.0388889 0.2 0.08 0.07 0.04"/>
+
+    <!-- Arterial mix: Arapahoe Road is lined with commercial frontage, so vans and box trucks make up a
+         much larger share of it than they do of the freeway. -->
+    <vTypeDistribution id="arterial_mix" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes truck.vehicle.carlacola.actors" probabilities="0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.24 0.2 0.11"/>
+
+    <!-- Residential mix: commuters, nothing heavy. -->
+    <vTypeDistribution id="residential_mix" vTypes="car.vehicle.ue4.audi.tt car.vehicle.mini.cooper car.vehicle.ue4.bmw.grantourer car.vehicle.ue4.mercedes.ccc car.vehicle.ue4.ford.mustang car.vehicle.lincoln.mkz car.vehicle.dodge.charger car.vehicle.ue4.chevrolet.impala car.vehicle.ue4.ford.crown suv.vehicle.nissan.patrol van.vehicle.sprinter.mercedes" probabilities="0.0644444 0.0644444 0.0644444 0.0644444 0.0644444 0.0644444 0.0644444 0.0644444 0.0644444 0.33 0.09"/>
+
+    <flow id="arapahoe_east_to_west" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="350" departLane="free" departSpeed="max">
+        <route edges="131933384 427819534 427819530#0 132789653 694506252#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819541#0"/>
+    </flow>
+    <flow id="arapahoe_west_to_east" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="330" departLane="free" departSpeed="max">
+        <route edges="427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 427819527"/>
+    </flow>
+    <flow id="yosemite_north_to_south" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="130" departLane="free" departSpeed="max">
+        <route edges="427819547 714754657#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819543#0 629653843 -427819551#8 -427819551#0 629653811#0 16999684 629653795 629653803 629629558 629629560 629629562 629629564 629629566 629629568 629629570"/>
+    </flow>
+    <flow id="yosemite_south_to_north" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="120" departLane="free" departSpeed="max">
+        <route edges="-629629570 -629629568 -629629566 -629629564 -629629562 -629629560 -629629558 -629653803 -629653795 -16999684 -629653811#1 629653818 427819551#1 1025703939#0 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 -714754657#0 -427819547"/>
+    </flow>
+    <flow id="yosemite_north_to_arapahoe_east" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="90" departLane="free" departSpeed="max">
+        <route edges="427819547 714754657#0 45798671#1 629653894 629653907 218965865#0 223928717 629634742#0 629634747 629634762 629634763 629634764#0 45760891#1 629634767 629634776 629634775 629634777 629634778#0 427819527"/>
+    </flow>
+    <flow id="arapahoe_east_to_yosemite_north" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="85" departLane="free" departSpeed="max">
+        <route edges="131933384 427819534 427819530#0 629634769#0 629634768#0 629634766 629634765#0 629634760#1 1074718490 629634759 16996152#0 629634736 629653921 629653901 629653887#0 1389992986 1389992987 45798675#0 -714754657#0 -427819547"/>
+    </flow>
+    <flow id="clinton_to_arapahoe_west" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="75" departLane="free" departSpeed="max">
+        <route edges="-629634784 -629634783#2 45760824#0 629634780 629634781#0 132789653 694506252#0 1037832984 75609577 629675735 775963749 132789650 427819537#0 427819537#1 427819541#0"/>
+    </flow>
+    <flow id="arapahoe_west_to_clinton" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="70" departLane="free" departSpeed="max">
+        <route edges="427819540#0 427819539#0 1026993836#0 1059880022 10378085 626534263 223306870 1037832983#0 775965544 427884543 427819525 131933321#0 903817668#0 1384299163 629634782 629634784"/>
+    </flow>
+    <flow id="wabash_to_arapahoe_west" type="arterial_mix" begin="0.00" end="360.00" vehsPerHour="40" departLane="free" departSpeed="max">
+        <route edges="427479206 550665532 737508780#0 1035917283#0 223289022#0 427819554#2 -45806432 427819544 427819552#0 -427819558#1 -427819545#1 -427819548 -427819546 -427819555#1 -427819553#3 629653852 1278080473#0 1025703940 427819559#0 427819541#0"/>
+    </flow>
+    <vehicle id="dweller" type="car" depart="20.00" departLane="best" departSpeed="max" arrivalSpeed="current">
+        <route edges="427819540#0 427819539#0 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 -714754657#0 -427819547"/>
+        <stop lane="427819553#0_0" endPos="70.00" duration="120.00" parking="true"/>
+    </vehicle>
+    <vehicle id="transit" type="car" depart="90.00" departLane="best" departSpeed="max" arrivalSpeed="current">
+        <route edges="427819540#0 427819539#0 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 -714754657#0 -427819547"/>
+    </vehicle>
+    <vehicle id="brief_stopper" type="van" depart="200.00" departLane="best" departSpeed="max" arrivalSpeed="current">
+        <route edges="427819540#0 427819539#0 1026993839#0 427819553#0 427819555#0 427819546 427819548 427819545#0 427819558#0 16999198#0 -427819557 -427819554#2 -714754657#0 -427819547"/>
+        <stop lane="427819553#0_0" endPos="40.00" duration="20.00" parking="true"/>
+    </vehicle>
+
+</routes>

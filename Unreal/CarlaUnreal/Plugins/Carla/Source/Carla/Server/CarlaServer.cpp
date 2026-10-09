@@ -19,14 +19,23 @@
 #include "Carla/Walker/WalkerBase.h"
 #include "Carla/Game/Tagger.h"
 #include "Carla/Game/CarlaStatics.h"
+#include "Carla/Game/CarlaEngine.h"
 #include "Carla/Vehicle/MovementComponents/CarSimManagerComponent.h"
 #include "Carla/Vehicle/MovementComponents/ChronoMovementComponent.h"
 #include "Carla/Lights/CarlaLightSubsystem.h"
 #include "Carla/Actor/ActorData.h"
+#include "Carla/Actor/ActorSupervision.h"
+#include "Carla/Actor/CarlaActor.h"
+#include "Carla/Actor/RenderSetMembership.h"
+#include "Carla/Game/DriveLease.h"
+#include "Carla/Game/WorldSupervisionState.h"
+#include "Carla/Sensor/OrbitMoverComponent.h"
 #include "CarlaServerResponse.h"
 #include "Carla/Util/BoundingBoxCalculator.h"
+#include "Components/LightComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/Actor.h"
 
 #include <util/disable-ue4-macros.h>
 #include <carla/Functional.h>
@@ -48,9 +57,12 @@
 #include <carla/rpc/LightState.h>
 #include <carla/rpc/MapInfo.h>
 #include <carla/rpc/MapLayer.h>
+#include <carla/rpc/OrbitParameters.h>
+#include <carla/rpc/OrbitState.h>
 #include <carla/rpc/Response.h>
 #include <carla/rpc/Server.h>
 #include <carla/rpc/String.h>
+#include <carla/rpc/SupervisionUpdate.h>
 #include <carla/rpc/Transform.h>
 #include <carla/rpc/Vector2D.h>
 #include <carla/rpc/Vector3D.h>
@@ -77,15 +89,20 @@
 #include "Animation/PoseSnapshot.h"
 #include "BareEarthReference.h"
 #include "CesiumHeightSampler.h"
+#include "CesiumViewReadiness.h"
 #include "DrapedTerrain.h"
 #include "StagingBounds.h"
 #include <util/ue-header-guard-end.h>
 
 #include <vector>
+#include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <map>
+#include <string>
 #include <tuple>
 #include <limits>
+#include <utility>
 
 template <typename T>
 using R = carla::rpc::Response<T>;
@@ -128,6 +145,106 @@ static TArray<AActor *> GetRoadSurfaceActors(UWorld *World)
   return Result;
 }
 
+// -- Camera names -------------------------------------------------------------
+//
+// Every camera has a name, carried as its role_name. Every still a client records from the camera and
+// its truth sidecar are named after it, and it is the callsign of the camera's platform track in every
+// sidecar, so two cameras in one world must never hold one name. The server issues the names and
+// refuses the duplicates: a client that checked the actor list before it spawned could be passed by
+// two clients in the same tick. A camera spawned with no role_name, or with the one its blueprint
+// carries by default, is named Camera_<n> from a counter held for the server's lifetime (FPimpl), so a
+// number is never issued twice while the server runs, whatever world is loaded; a client-given name of
+// that form is refused, and so is one a live camera already holds, compared without regard to case,
+// because a Windows file system holds Deck and deck as one file name.
+
+/// The blueprints whose names the server issues.
+static const char CameraBlueprintPrefix[] = "sensor.camera.";
+
+/// What every name the server issues begins with.
+static const TCHAR *const ServerCameraNamePrefix = TEXT("Camera_");
+
+static bool IsCameraDescription(const carla::rpc::ActorDescription &Description)
+{
+  return Description.id.compare(0, sizeof(CameraBlueprintPrefix) - 1, CameraBlueprintPrefix) == 0;
+}
+
+/// The description's role_name attribute, or null where it carries none.
+static carla::rpc::ActorAttributeValue *FindRoleNameAttribute(carla::rpc::ActorDescription &Description)
+{
+  for (carla::rpc::ActorAttributeValue &Attribute : Description.attributes)
+  {
+    if (Attribute.id == "role_name")
+    {
+      return &Attribute;
+    }
+  }
+  return nullptr;
+}
+
+/// The role_name a blueprint carries when its client sets none: the first value the server recommends
+/// for it, which is the value its definition is sent with (carla/rpc/ActorAttribute.h). Empty where
+/// the definition is not found or recommends none.
+static FString BlueprintDefaultRoleName(const TArray<FActorDefinition> &Definitions, uint32 UId)
+{
+  for (const FActorDefinition &Definition : Definitions)
+  {
+    if (Definition.UId != UId)
+    {
+      continue;
+    }
+    for (const FActorVariation &Variation : Definition.Variations)
+    {
+      if (Variation.Id == TEXT("role_name") && Variation.RecommendedValues.Num() > 0)
+      {
+        return Variation.RecommendedValues[0];
+      }
+    }
+  }
+  return FString();
+}
+
+/// Whether Name has the form the server gives every camera it names, Camera_<digits>, in any case.
+static bool IsServerIssuedCameraName(const FString &Name)
+{
+  const int32 PrefixLength = FCString::Strlen(ServerCameraNamePrefix);
+  if (Name.Len() <= PrefixLength || !Name.StartsWith(ServerCameraNamePrefix, ESearchCase::IgnoreCase))
+  {
+    return false;
+  }
+  for (int32 Index = PrefixLength; Index < Name.Len(); ++Index)
+  {
+    if (!FChar::IsDigit(Name[Index]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// The live camera whose role_name is Name, compared without regard to case, or null.
+static const FCarlaActor *FindCameraHoldingName(const FActorRegistry &Registry, const FString &Name)
+{
+  for (const auto &Named : Registry)
+  {
+    const FCarlaActor *View = Named.Value.Get();
+    if (View == nullptr || View->GetActorInfo() == nullptr)
+    {
+      continue;
+    }
+    const FActorDescription &Description = View->GetActorInfo()->Description;
+    if (!Description.Id.StartsWith(TEXT("sensor.camera.")))
+    {
+      continue;
+    }
+    const FActorAttribute *Held = Description.Variations.Find(TEXT("role_name"));
+    if (Held != nullptr && Held->Value.Equals(Name, ESearchCase::IgnoreCase))
+    {
+      return View;
+    }
+  }
+  return nullptr;
+}
+
 // =============================================================================
 // -- FCarlaServer::FPimpl -----------------------------------------------
 // =============================================================================
@@ -166,10 +283,65 @@ public:
 
   std::atomic_size_t TickCuesReceived { 0u };
 
+  /// How many cameras the server has named since it started: the n of the last Camera_<n> issued.
+  /// Held here, not on the episode, so a world reload resets nothing and no number is issued twice
+  /// while the server runs.
+  uint64 CamerasNamed { 0u };
+
+  /// Settles a camera's role_name before it is spawned: names a camera given no name, or its
+  /// blueprint's default, Camera_<n>; refuses a client-given name of that form, or one a live camera
+  /// holds. Returns the refusal, or empty where the description may be spawned as it now reads. A
+  /// description that is not a camera's is left as it is. Needs the episode.
+  FString SettleCameraName(carla::rpc::ActorDescription &Description);
+
 private:
 
   void BindActions();
 };
+
+FString FCarlaServer::FPimpl::SettleCameraName(carla::rpc::ActorDescription &Description)
+{
+  if (!IsCameraDescription(Description))
+  {
+    return FString();
+  }
+  carla::rpc::ActorAttributeValue *RoleName = FindRoleNameAttribute(Description);
+  const FString Given = RoleName != nullptr ? carla::rpc::ToFString(RoleName->value) : FString();
+  if (Given.IsEmpty() || Given == BlueprintDefaultRoleName(Episode->GetActorDefinitions(), Description.uid))
+  {
+    const FString Issued = FString::Printf(TEXT("%s%llu"), ServerCameraNamePrefix, ++CamerasNamed);
+    if (RoleName != nullptr)
+    {
+      RoleName->value = carla::rpc::FromFString(Issued);
+    }
+    else
+    {
+      carla::rpc::ActorAttributeValue Attribute;
+      Attribute.id = "role_name";
+      Attribute.type = carla::rpc::ActorAttributeType::String;
+      Attribute.value = carla::rpc::FromFString(Issued);
+      Description.attributes.push_back(Attribute);
+    }
+    UE_LOG(LogCarlaServer, Log, TEXT("camera %s named %s"), *carla::rpc::ToFString(Description.id), *Issued);
+    return FString();
+  }
+  if (IsServerIssuedCameraName(Given))
+  {
+    return FString::Printf(
+        TEXT("camera name '%s' has the form the server gives every camera spawned without one, %s<n>, "
+             "which a client cannot claim; choose another, such as Overwatch_1"),
+        *Given, ServerCameraNamePrefix);
+  }
+  const FCarlaActor *Holder = FindCameraHoldingName(Episode->GetActorRegistry(), Given);
+  if (Holder != nullptr)
+  {
+    return FString::Printf(
+        TEXT("camera name '%s' is already held in this world by camera %u (%s): two cameras under one "
+             "name would write files of one name and report under one callsign; choose another"),
+        *Given, Holder->GetActorId(), *Holder->GetActorInfo()->Description.Id);
+  }
+  return FString();
+}
 
 // =============================================================================
 // -- Define helper macros -----------------------------------------------------
@@ -198,6 +370,26 @@ private:
     if (!GameMode) \
     { \
       RESPOND_ERROR("unable to find CARLA game mode"); \
+    }
+
+/// The refusal a vehicle-control RPC answers while a client holds the world's drive lease
+/// (take_drive_lease): the call, and who holds it, so the refused client can say who to stop.
+static FString DriveLeaseRefusal(const TCHAR *Call, const FDriveLease &Lease)
+{
+  return FString::Printf(
+      TEXT("%s: refused while %s holds the drive lease on this world; no other traffic drives a "
+           "vehicle here until the holder releases it (release_drive_lease), the world is reloaded, "
+           "or the lease is broken (break_drive_lease)"),
+      Call,
+      *carla::rpc::ToFString(Lease.Holder));
+}
+
+/// Refuse the call while a drive lease is held. After REQUIRE_CARLA_EPISODE().
+#define REQUIRE_NO_DRIVE_LEASE(call) \
+    if (Episode->GetDriveLease().IsHeld()) \
+    { \
+      const FString DriveLeaseRefused = DriveLeaseRefusal(TEXT(call), Episode->GetDriveLease()); \
+      RESPOND_ERROR_FSTRING(DriveLeaseRefused); \
     }
 
 carla::rpc::ResponseError RespondError(
@@ -339,6 +531,23 @@ void FCarlaServer::FPimpl::BindActions()
   BIND_ASYNC(get_world_interface_version) << [] () -> R<std::string>
   {
     return carla::rpc::FromFString(GetCarlaWorldInterfaceVersion());
+  };
+
+  // What this server was built from, so a file a client writes can record it: the release version
+  // compiled in, the world interface version, package or editor, the configuration, and the CARLA,
+  // content and engine commits, each "unknown" where the server cannot know it (GetCarlaBuildIdentity).
+  // A map of strings, so a later server can add a name without breaking a client that reads these;
+  // identity_version is the map's own format, raised only if a name's meaning changes.
+  BIND_ASYNC(get_build_identity) << [] () -> R<std::map<std::string, std::string>>
+  {
+    std::map<std::string, std::string> Identity;
+    for (const TPair<FString, FString>& Entry : GetCarlaBuildIdentity())
+    {
+      Identity[carla::rpc::FromFString(Entry.Key)] = carla::rpc::FromFString(Entry.Value);
+    }
+    Identity["identity_version"] = "1";
+    Identity["release"] = carla::version();
+    return Identity;
   };
 
   // ~~ Delivered worlds ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -634,9 +843,32 @@ void FCarlaServer::FPimpl::BindActions()
         World, static_cast<int32>(year), static_cast<int32>(month), static_cast<int32>(day));
   };
 
+  // Bind the whole solar epoch in one call: the civil date, the civil clock and the UTC offset in
+  // force at that instant. Setting the time zone is what makes `hours` a CIVIL clock -- without it
+  // the zone stays at map-longitude/15, so `hours` is local MEAN SOLAR time (at longitude 56.18,
+  // +03:44.7 against a civil +03:30) and near the horizon that is the difference between a sun above
+  // and below it. It is also one UpdateSun rather than two, so no frame can observe the new time on
+  // the old date. An out-of-calendar date is refused, not clamped. `set_solar_time` and
+  // `set_solar_date` are unchanged and remain the interactive path.
+  BIND_SYNC(set_solar_epoch) << [this](int64_t year, int64_t month, int64_t day, double hours,
+      double utc_offset_hours) -> R<bool>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to set the solar epoch in");
+    }
+    return UCesiumHeightSampler::SetSolarEpoch(
+        World, static_cast<int32>(year), static_cast<int32>(month), static_cast<int32>(day),
+        hours, utc_offset_hours);
+  };
+
   // Current solar clock/date/origin/angles, packed as
-  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate];
-  // empty if there is no sun.
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+  // corrected_elevation_deg]; empty if there is no sun. elevation_deg is geometric;
+  // corrected_elevation_deg has atmospheric refraction applied and is what the sun light is rotated
+  // by. It is last so the first eleven entries keep the positions their readers index by.
   BIND_SYNC(get_solar_state) << [this]() -> R<std::vector<double>>
   {
     REQUIRE_CARLA_EPISODE();
@@ -932,6 +1164,28 @@ void FCarlaServer::FPimpl::BindActions()
     return std::vector<float>(Grid.GetData(), Grid.GetData() + Grid.Num());
   };
 
+  // The SHA-1 of each bare-earth grid, lowercase hexadecimal, as [offset_grid_sha1, dtm_grid_sha1]:
+  // each over the grid's float32 values as little-endian bytes, row-major -- the bytes a world
+  // package's bareearth.bin holds -- computed when the record is set. It lets a client prove the
+  // loaded world's grids are a package's bit for bit without transferring them: on the Bahonar world
+  // each grid is 7,611,381 floats, and the two fetches above took 146 s and 153 s. Empty when the
+  // world has no record or was not draped.
+  BIND_SYNC(get_bare_earth_digest) << [this]() -> R<std::vector<std::string>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    UWorld* World = Episode->GetWorld();
+    if (!World)
+    {
+      RESPOND_ERROR("no world to read a bare-earth digest from");
+    }
+    FString OffsetSha1, DtmSha1;
+    if (!UBareEarthReference::GetGridDigests(World, OffsetSha1, DtmSha1) || OffsetSha1.IsEmpty())
+    {
+      return std::vector<std::string>{};   // no record, or a constant shift with no grids
+    }
+    return std::vector<std::string>{ cr::FromFString(OffsetSha1), cr::FromFString(DtmSha1) };
+  };
+
   // Returns the Cesium georeference origin (latitude, longitude, ellipsoidal height in m),
   // so a client can turn a local Unreal Z into a true elevation (originHeight + localZ).
   BIND_SYNC(get_cesium_origin) << [this]() -> R<cg::GeoLocation>
@@ -944,6 +1198,72 @@ void FCarlaServer::FPimpl::BindActions()
     }
     const FVector O = UCesiumHeightSampler::GetCesiumOrigin(World); // (lon, lat, height)
     return cg::GeoLocation{ O.Y, O.X, O.Z };                        // (lat, lon, alt)
+  };
+
+  // Whether a camera's photoreal tiles have arrived, as of the end of the last tick. Only the server
+  // can see tiles stream, so this is the tile half of a capture's readiness; whether the picture has
+  // settled is for the camera's own frames to say. Packed as a header and then one row per
+  // ACesium3DTileset in the world, hidden ones included:
+  //   [frame, published, tileset_count, row_length,
+  //    then per tileset: ion_asset_id, visible, load_progress, worker_queue, main_queue, kicked,
+  //                      failed_in_view, failed_loaded]
+  // frame is the frame of the tick this state is from: RPCs are served before the frame counter
+  // advances, so it is the frame that tick returned. published says the camera's view was written
+  // to the Cesium camera manager on that tick, and so was in every tileset's selection. The row
+  // figures are FCesiumTilesetReadiness's; flags are 0 or 1. row_length lets a reader index rows
+  // while columns are appended to their end. A world with no tileset and no publisher answers with
+  // no rows. An unknown id, a dormant actor, an actor that is not a camera the publisher can
+  // register, and a world whose tilesets have no publisher are errors, never an empty answer.
+  BIND_SYNC(get_view_readiness) << [this](cr::ActorId ActorId) -> R<std::vector<double>>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "get_view_readiness",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    AActor* Actor = CarlaActor->GetActor();
+    if (CarlaActor->IsDormant() || Actor == nullptr)
+    {
+      return RespondError(
+          "get_view_readiness",
+          TEXT("the actor is dormant, so it has no view"),
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    FCesiumViewReadiness Readiness;
+    FString Refusal;
+    if (!FCesiumViewReadiness::Read(Actor, Readiness, Refusal))
+    {
+      return RespondError(
+          "get_view_readiness",
+          Refusal,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+
+    constexpr size_t HeaderLength = 4u;
+    constexpr size_t RowLength = 8u;
+    const size_t TilesetCount = static_cast<size_t>(Readiness.Tilesets.Num());
+    std::vector<double> Out;
+    Out.reserve(HeaderLength + TilesetCount * RowLength);
+    Out.push_back(static_cast<double>(FCarlaEngine::GetFrameCounter()));
+    Out.push_back(Readiness.bPublished ? 1.0 : 0.0);
+    Out.push_back(static_cast<double>(TilesetCount));
+    Out.push_back(static_cast<double>(RowLength));
+    for (const FCesiumTilesetReadiness& Row : Readiness.Tilesets)
+    {
+      Out.push_back(static_cast<double>(Row.IonAssetId));
+      Out.push_back(Row.bVisible ? 1.0 : 0.0);
+      Out.push_back(static_cast<double>(Row.LoadProgress));
+      Out.push_back(static_cast<double>(Row.WorkerThreadLoadQueueLength));
+      Out.push_back(static_cast<double>(Row.MainThreadLoadQueueLength));
+      Out.push_back(static_cast<double>(Row.TilesKicked));
+      Out.push_back(static_cast<double>(Row.FailedInView));
+      Out.push_back(static_cast<double>(Row.FailedLoaded));
+    }
+    return Out;
   };
 
   BIND_SYNC(apply_texture_to_actor) << [this](
@@ -1314,6 +1634,13 @@ void FCarlaServer::FPimpl::BindActions()
   {
     REQUIRE_CARLA_EPISODE();
 
+    // A camera's name is the server's to issue and to keep unique; the actor returned carries it.
+    const FString NameRefusal = SettleCameraName(Description);
+    if (!NameRefusal.IsEmpty())
+    {
+      RESPOND_ERROR_FSTRING(NameRefusal);
+    }
+
     auto Result = Episode->SpawnActorWithInfo(Transform, std::move(Description));
 
     if (Result.Key != EActorSpawnResultStatus::Success)
@@ -1338,6 +1665,12 @@ void FCarlaServer::FPimpl::BindActions()
       cr::AttachmentType InAttachmentType) -> R<cr::Actor>
   {
     REQUIRE_CARLA_EPISODE();
+
+    const FString NameRefusal = SettleCameraName(Description);
+    if (!NameRefusal.IsEmpty())
+    {
+      RESPOND_ERROR_FSTRING(NameRefusal);
+    }
 
     auto Result = Episode->SpawnActorWithInfo(Transform, std::move(Description));
     if (Result.Key != EActorSpawnResultStatus::Success)
@@ -1416,6 +1749,647 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("internal error: unable to destroy actor");
     }
     return true;
+  };
+
+  // Name the bodies a co-simulation session's pool has lent, each with the vehicle it is drawn for
+  // and that vehicle's declared type, and the bodies it has given back, which stand parked out of
+  // sight and are drawn for nobody. Sent by the session only when its lending changes, before the
+  // tick cue of the frame the change is drawn in. The world observer carries every named body on
+  // each snapshot from the next frame on, so the truth telemetry of every client lists the bodies a
+  // frame drew, named by their vehicles, and leaves the parked ones out.
+  //
+  // Only the actors named here are affected, and what they are named is held on the actor's own
+  // record, so it ends with the actor: a session that destroys its bodies leaves nothing behind,
+  // and one that stops without doing so leaves its parked bodies named parked, which is what they
+  // are. Bodies given back are applied before bodies lent, so one given back and lent again in one
+  // change ends lent. A body given back, or lent to a vehicle other than the one it drew, loses the
+  // supervision held for it (update_supervision), which was the author's assertion about that
+  // vehicle and not about whatever the body draws next, and the pose source named for it
+  // (update_pose_source), which was that loan's. Answers how many of the named actors were found.
+  BIND_SYNC(update_render_set) << [this](
+      const std::vector<FCarlaActor::IdType> &lent_ids,
+      const std::vector<std::string> &vehicle_ids,
+      const std::vector<std::string> &vehicle_type_ids,
+      const std::vector<FCarlaActor::IdType> &parked_ids) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+    if (vehicle_ids.size() != lent_ids.size() || vehicle_type_ids.size() != lent_ids.size())
+    {
+      RESPOND_ERROR("update_render_set: every lent body needs one vehicle id and one vehicle type");
+    }
+
+    // The first frame a body lent now is drawn in: the frame after the one in progress, which is
+    // also the frame tick_cue answers with.
+    const uint64_t NextFrame = FCarlaEngine::GetFrameCounter() + 1u;
+    uint32_t Found = 0u;
+
+    for (const FCarlaActor::IdType Id : parked_ids)
+    {
+      FCarlaActor* View = Episode->FindCarlaActor(Id);
+      if (View == nullptr)
+      {
+        continue;
+      }
+      FRenderSetMembership Parked;
+      Parked.State = FRenderSetMembership::EState::Parked;
+      View->SetRenderSetMembership(Parked);
+      View->SetSupervision(FActorSupervision());
+      ++Found;
+    }
+
+    for (size_t Index = 0u; Index < lent_ids.size(); ++Index)
+    {
+      FCarlaActor* View = Episode->FindCarlaActor(lent_ids[Index]);
+      if (View == nullptr)
+      {
+        continue;
+      }
+      const FRenderSetMembership &Held = View->GetRenderSetMembership();
+      // A body still lent to the same vehicle keeps the frame that vehicle's span began on.
+      const bool bSameVehicle =
+          Held.State == FRenderSetMembership::EState::Lent && Held.VehicleId == vehicle_ids[Index];
+      FRenderSetMembership Lent;
+      Lent.State = FRenderSetMembership::EState::Lent;
+      Lent.VehicleId = vehicle_ids[Index];
+      Lent.VehicleTypeId = vehicle_type_ids[Index];
+      Lent.AdmittedFrame = bSameVehicle ? Held.AdmittedFrame : NextFrame;
+      Lent.PoseSource = bSameVehicle ? Held.PoseSource : FRenderSetMembership::EPoseSource::FollowsStep;
+      View->SetRenderSetMembership(Lent);
+      if (!bSameVehicle)
+      {
+        View->SetSupervision(FActorSupervision());
+      }
+      ++Found;
+    }
+
+    return Found;
+  };
+
+  // Hold the supervision a co-simulation session has put in force: what the scenario's author
+  // asserts of the vehicle each of its lent bodies draws -- annotated, nominal or unlabelled, with
+  // the pattern instances in force -- with the plan every row is bound from and the vocabulary
+  // version and digest that pin what its terms mean. Every row is a vehicle's: nothing is held for
+  // the world apart from the plan, because SUMO reports vehicles, not places, and a label follows the
+  // vehicle it is about (06_Truth_And_Annotation.md §3.5). The world observer carries what is held
+  // on every snapshot from the next frame on, after the render set's entries, so every client of the
+  // world reads the same truth for the same frame; nothing about it is kept in one client's process.
+  // Sent by the session only when the supervision changes, after its render set and before the tick
+  // cue of the frame the change is drawn in.
+  //
+  // A change replaces each named body's supervision whole and is bound to one plan: a change naming
+  // another plan than the one held must start afresh, which drops every row held before it, and a
+  // change naming no plan withdraws everything, so the snapshot carries no supervision block again.
+  // A body's supervision is held on its own record and only while the render set names it lent; a
+  // body given back or handed to another vehicle loses it (update_render_set), and a body not lent is
+  // not given one. Everything is checked before anything is changed, so a refused change leaves what
+  // was held. Answers how many of the named bodies were found lent and took their supervision.
+  BIND_SYNC(update_supervision) << [this](const cr::SupervisionUpdate &update) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+
+    std::vector<FActorSupervision::EState> States;
+    States.reserve(update.actors.size());
+    for (const cr::SupervisionUpdateActor &Row : update.actors)
+    {
+      // The core vocabulary's three spellings, and no other: the server branches on which.
+      FActorSupervision::EState State = FActorSupervision::EState::Unlabelled;
+      if (Row.state == "annotated")
+      {
+        State = FActorSupervision::EState::Annotated;
+      }
+      else if (Row.state == "nominal")
+      {
+        State = FActorSupervision::EState::Nominal;
+      }
+      else if (Row.state != "unlabelled")
+      {
+        RESPOND_ERROR("update_supervision: a vehicle's state is annotated, nominal or unlabelled");
+      }
+
+      if (State == FActorSupervision::EState::Unlabelled && !Row.annotations.empty())
+      {
+        RESPOND_ERROR("update_supervision: an unlabelled vehicle carries no annotation");
+      }
+      if (State == FActorSupervision::EState::Annotated && Row.annotations.empty())
+      {
+        RESPOND_ERROR("update_supervision: an annotated vehicle names the instance it executes");
+      }
+      for (const cr::SupervisionUpdateAnnotation &Annotation : Row.annotations)
+      {
+        if (Annotation.instance_id.empty())
+        {
+          RESPOND_ERROR("update_supervision: every annotation names its instance");
+        }
+      }
+      States.push_back(State);
+    }
+
+    FWorldSupervisionState &WorldSupervision = Episode->GetWorldSupervision();
+    // Every body's supervision dropped, wherever it is held.
+    auto ClearEveryBody = [this]()
+    {
+      for (auto& Named : Episode->GetActorRegistry())
+      {
+        FCarlaActor* View = Named.Value.Get();
+        if (View != nullptr)
+        {
+          View->SetSupervision(FActorSupervision());
+        }
+      }
+    };
+
+    if (update.plan_id.empty())
+    {
+      if (!update.actors.empty())
+      {
+        RESPOND_ERROR("update_supervision: a change naming no plan withdraws all supervision and carries nothing else");
+      }
+      ClearEveryBody();
+      WorldSupervision = FWorldSupervisionState();
+      return 0u;
+    }
+
+    const bool bSamePlan =
+        WorldSupervision.PlanId == update.plan_id &&
+        WorldSupervision.VocabularyVersion == update.vocabulary_version &&
+        WorldSupervision.VocabularyDigest == update.vocabulary_digest;
+    if (WorldSupervision.IsHeld() && !bSamePlan && !update.fresh)
+    {
+      const FString Refusal = FString::Printf(
+          TEXT("update_supervision: plan %s is in force, and a change naming plan %s starts afresh"),
+          *cr::ToFString(WorldSupervision.PlanId),
+          *cr::ToFString(update.plan_id));
+      RESPOND_ERROR_FSTRING(Refusal);
+    }
+
+    if (update.fresh || !WorldSupervision.IsHeld())
+    {
+      ClearEveryBody();
+      WorldSupervision = FWorldSupervisionState();
+    }
+    WorldSupervision.PlanId = update.plan_id;
+    WorldSupervision.VocabularyVersion = update.vocabulary_version;
+    WorldSupervision.VocabularyDigest = update.vocabulary_digest;
+
+    uint32_t Applied = 0u;
+    for (size_t Index = 0u; Index < update.actors.size(); ++Index)
+    {
+      const cr::SupervisionUpdateActor &Row = update.actors[Index];
+      FCarlaActor* View = Episode->FindCarlaActor(Row.actor_id);
+      if (View == nullptr ||
+          View->GetRenderSetMembership().State != FRenderSetMembership::EState::Lent)
+      {
+        continue;
+      }
+
+      FActorSupervision Supervision;
+      Supervision.State = States[Index];
+      Supervision.Annotations.reserve(Row.annotations.size());
+      for (const cr::SupervisionUpdateAnnotation &Annotation : Row.annotations)
+      {
+        FSupervisionAnnotation Held;
+        Held.InstanceId = Annotation.instance_id;
+        Held.Labels = Annotation.labels;
+        Held.Phase = Annotation.phase;
+        Held.Role = Annotation.role;
+        Supervision.Annotations.push_back(std::move(Held));
+      }
+      View->SetSupervision(Supervision);
+      ++Applied;
+    }
+
+    return Applied;
+  };
+
+  // Hold where the pose each of a co-simulation session's lent bodies is drawn at comes from. The
+  // session poses its bodies every world tick from SUMO steps a whole number of ticks apart, so it
+  // declares the step once -- ticks_per_step, falling on the frame after the one in progress, which
+  // is also the frame tick_cue answers with -- and every frame a whole number of steps after that one
+  // shows SUMO's own position (sumo), every other one filled in along the lane (interpolated). A body
+  // whose pose follows neither is named as its case begins and named cleared as it ends: one shown at
+  // SUMO's later position for every frame of a step too far from the last to drive in one step (jump),
+  // one standing where it was last drawn because the session could not place it (stale). The world
+  // observer carries the step and every lent body named on every snapshot from the next frame on, so
+  // every client of the world reads the same pose source for the same frame, and nothing about it is
+  // kept in one client's process or sent per tick.
+  //
+  // declare_step with a ticks_per_step of zero withdraws everything: the step, and every body's name,
+  // so the snapshot carries no pose source block again; it carries nothing else. A body's name is held
+  // on its render set record and only while it is lent: a body not lent is not given one, and a body
+  // given back or handed to another vehicle loses it (update_render_set). Cleared bodies are applied
+  // first, then sumo, then stale, then jump. A withdrawal naming any body is refused before anything is
+  // changed. Answers how many of the named bodies were found, and lent where they were named sumo,
+  // stale or jump.
+  //
+  // jump_ids is the sixth argument, after the five a server built before the jump state takes, so a
+  // client that finds this call refused for its argument count is talking to such a server: it sends
+  // the five, and names a jumping body sumo, the one name that server has for it.
+  BIND_SYNC(update_pose_source) << [this](
+      const bool declare_step,
+      const uint32_t ticks_per_step,
+      const std::vector<FCarlaActor::IdType> &sumo_ids,
+      const std::vector<FCarlaActor::IdType> &stale_ids,
+      const std::vector<FCarlaActor::IdType> &cleared_ids,
+      const std::vector<FCarlaActor::IdType> &jump_ids) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+    using EPoseSource = FRenderSetMembership::EPoseSource;
+
+    const bool bWithdrawal = declare_step && ticks_per_step == 0u;
+    if (bWithdrawal &&
+        (!sumo_ids.empty() || !stale_ids.empty() || !cleared_ids.empty() || !jump_ids.empty()))
+    {
+      RESPOND_ERROR("update_pose_source: a withdrawal withdraws every body's pose source and carries nothing else");
+    }
+
+    if (bWithdrawal)
+    {
+      Episode->GetSumoStepPhase() = FSumoStepPhase();
+      for (auto& Named : Episode->GetActorRegistry())
+      {
+        FCarlaActor* View = Named.Value.Get();
+        if (View == nullptr)
+        {
+          continue;
+        }
+        FRenderSetMembership Membership = View->GetRenderSetMembership();
+        if (Membership.PoseSource != EPoseSource::FollowsStep)
+        {
+          Membership.PoseSource = EPoseSource::FollowsStep;
+          View->SetRenderSetMembership(Membership);
+        }
+      }
+      return 0u;
+    }
+
+    if (declare_step)
+    {
+      FSumoStepPhase &Phase = Episode->GetSumoStepPhase();
+      Phase.TicksPerStep = ticks_per_step;
+      Phase.StepFrame = FCarlaEngine::GetFrameCounter() + 1u;
+    }
+
+    uint32_t Found = 0u;
+    // Name each body found; a body named sumo, stale or jump only while the render set holds it lent.
+    auto NameEach = [this, &Found](const std::vector<FCarlaActor::IdType> &Ids, EPoseSource Source)
+    {
+      for (const FCarlaActor::IdType Id : Ids)
+      {
+        FCarlaActor* View = Episode->FindCarlaActor(Id);
+        if (View == nullptr)
+        {
+          continue;
+        }
+        FRenderSetMembership Membership = View->GetRenderSetMembership();
+        if (Source != EPoseSource::FollowsStep &&
+            Membership.State != FRenderSetMembership::EState::Lent)
+        {
+          continue;
+        }
+        Membership.PoseSource = Source;
+        View->SetRenderSetMembership(Membership);
+        ++Found;
+      }
+    };
+    NameEach(cleared_ids, EPoseSource::FollowsStep);
+    NameEach(sumo_ids, EPoseSource::Sumo);
+    NameEach(stale_ids, EPoseSource::Stale);
+    NameEach(jump_ids, EPoseSource::Jump);
+    return Found;
+  };
+
+  // Take the drive lease on this world: the claim to be the one traffic system that drives its
+  // vehicles. Held on the episode, so a map load ends it. While it is held, set_actor_autopilot
+  // (enabling), apply_control_to_vehicle, apply_ackermann_control_to_vehicle and
+  // apply_physics_control -- direct and in a batch -- are refused for every actor, naming the
+  // holder, so a traffic manager started against this server moves nothing and a second drive
+  // session is refused here, before it starts anything. A SUMO drive session takes it before SUMO is
+  // started and gives it back on every exit path. Refused while any holder has it, the same name
+  // included: two sessions under one name are still two sessions.
+  //
+  // The RPC server gives no notice of a client disconnecting, so a holder that dies without
+  // releasing leaves the lease held until the world is reloaded or break_drive_lease is called.
+  BIND_SYNC(take_drive_lease) << [this](const std::string &holder) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    if (holder.empty())
+    {
+      RESPOND_ERROR("take_drive_lease: the holder names itself, so a refusal can say who to stop");
+    }
+    FDriveLease &Lease = Episode->GetDriveLease();
+    if (Lease.IsHeld())
+    {
+      const FString Refusal = FString::Printf(
+          TEXT("take_drive_lease: refused; %s holds the drive lease on this world since frame %llu, "
+               "and no other traffic may drive its vehicles until that holder releases it, the world "
+               "is reloaded, or the lease is broken (break_drive_lease)"),
+          *cr::ToFString(Lease.Holder),
+          static_cast<unsigned long long>(Lease.TakenFrame));
+      RESPOND_ERROR_FSTRING(Refusal);
+    }
+    Lease.Holder = holder;
+    Lease.TakenFrame = FCarlaEngine::GetFrameCounter();
+    UE_LOG(LogCarlaServer, Log, TEXT("drive lease taken by %s on frame %llu"),
+        *cr::ToFString(holder), static_cast<unsigned long long>(Lease.TakenFrame));
+    return R<void>::Success();
+  };
+
+  // Give the drive lease back. Only its holder may, named as it named itself when it took it, so a
+  // client that did not take the lease cannot end another's drive by mistake; a client that has lost
+  // its holder's name uses break_drive_lease and is logged doing so.
+  BIND_SYNC(release_drive_lease) << [this](const std::string &holder) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FDriveLease &Lease = Episode->GetDriveLease();
+    if (!Lease.IsHeld())
+    {
+      RESPOND_ERROR("release_drive_lease: no drive lease is held on this world");
+    }
+    if (Lease.Holder != holder)
+    {
+      const FString Refusal = FString::Printf(
+          TEXT("release_drive_lease: refused; the drive lease is held by %s, not by %s, and only its "
+               "holder gives it back (break_drive_lease ends it from anywhere, and is logged)"),
+          *cr::ToFString(Lease.Holder),
+          *cr::ToFString(holder));
+      RESPOND_ERROR_FSTRING(Refusal);
+    }
+    UE_LOG(LogCarlaServer, Log, TEXT("drive lease released by %s"), *cr::ToFString(holder));
+    Lease = FDriveLease();
+    return R<void>::Success();
+  };
+
+  // End whatever drive lease is held, from any client: the recovery for a holder that died without
+  // releasing, since the RPC server gives no notice of a disconnect. Logged as a warning naming the
+  // holder whose lease was ended, so a lease broken under a live drive is on the record. Answers the
+  // holder's name, or an empty string where none was held.
+  BIND_SYNC(break_drive_lease) << [this]() -> R<std::string>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FDriveLease &Lease = Episode->GetDriveLease();
+    const std::string Broken = Lease.Holder;
+    if (Lease.IsHeld())
+    {
+      UE_LOG(LogCarlaServer, Warning,
+          TEXT("drive lease BROKEN: the lease %s took on frame %llu was ended by break_drive_lease, "
+               "not released by its holder; if that holder is still driving, its traffic now shares "
+               "the world with whoever drives next"),
+          *cr::ToFString(Broken), static_cast<unsigned long long>(Lease.TakenFrame));
+      Lease = FDriveLease();
+    }
+    else
+    {
+      UE_LOG(LogCarlaServer, Log, TEXT("break_drive_lease: no drive lease was held"));
+    }
+    return Broken;
+  };
+
+  // Who holds the drive lease on this world: the holder's name, or an empty string while nobody
+  // does. A traffic tool asks before it spawns anything, so it is refused before its first vehicle
+  // rather than at its hundredth control write.
+  BIND_SYNC(get_drive_lease) << [this]() -> R<std::string>
+  {
+    REQUIRE_CARLA_EPISODE();
+    return Episode->GetDriveLease().Holder;
+  };
+
+  // Set how far from a camera the actors named are drawn: the max draw distance of every primitive
+  // component of each actor and of every actor attached to it, and of their light components, so
+  // nothing of a body farther than that from a view is rendered in that view, the light its lamps
+  // cast included. The renderer culls each primitive per view, by its own bounds, so the one setting
+  // applies to every camera at once: a primitive is not drawn in a view whose origin is farther than
+  // the distance from the nearest point of its bounding sphere, and a light is not drawn where its
+  // bounding sphere's centre is farther than it. r.ViewDistanceScale and
+  // r.LightMaxDrawDistanceScale, both 1 at the engine's defaults, scale the two.
+  //
+  // Rendering only: an actor keeps its transform, its collision and every other state, and the world
+  // observer reports it as before. A cull distance volume never touches these components, since it
+  // affects static primitives only and a vehicle's are movable.
+  //
+  // The distance is in metres, and zero clears it, so the components are drawn at any range. A
+  // co-simulation session sends it for the bodies its pool spawns, once each, and for every body
+  // when the distance changes. Answers how many of the named actors were found with an actor in the
+  // world to set it on.
+  BIND_SYNC(set_actors_max_draw_distance) << [this](
+      const std::vector<FCarlaActor::IdType> &actor_ids,
+      double max_draw_distance_m) -> R<uint32_t>
+  {
+    REQUIRE_CARLA_EPISODE();
+    if (!FMath::IsFinite(max_draw_distance_m) || max_draw_distance_m < 0.0)
+    {
+      RESPOND_ERROR("set_actors_max_draw_distance: the distance is zero, for no limit, or a positive number of metres");
+    }
+
+    // Unreal measures in centimetres.
+    const float DistanceCm = static_cast<float>(max_draw_distance_m * 100.0);
+    uint32_t Found = 0u;
+    for (const FCarlaActor::IdType Id : actor_ids)
+    {
+      FCarlaActor* View = Episode->FindCarlaActor(Id);
+      AActor* Actor = View != nullptr ? View->GetActor() : nullptr;
+      if (!IsValid(Actor))
+      {
+        continue;
+      }
+
+      // The actor and everything attached to it, which travels with it and is drawn with it.
+      TArray<AActor*> Drawn;
+      Actor->GetAttachedActors(Drawn, true, true);
+      Drawn.Add(Actor);
+      for (AActor* Each : Drawn)
+      {
+        if (!IsValid(Each))
+        {
+          continue;
+        }
+
+        TArray<UPrimitiveComponent*> Primitives;
+        Each->GetComponents<UPrimitiveComponent>(Primitives);
+        for (UPrimitiveComponent* Primitive : Primitives)
+        {
+          if (Primitive != nullptr)
+          {
+            Primitive->SetCullDistance(DistanceCm);
+          }
+        }
+
+        TArray<ULightComponent*> Lights;
+        Each->GetComponents<ULightComponent>(Lights);
+        for (ULightComponent* Light : Lights)
+        {
+          if (Light != nullptr)
+          {
+            Light->SetMaxDrawDistance(DistanceCm);
+          }
+        }
+      }
+      ++Found;
+    }
+
+    return Found;
+  };
+
+  // -- The orbit mover --------------------------------------------------------
+  //
+  // An orbiting camera is a pure function of simulated time, so the server flies it: set_orbit puts
+  // a UOrbitMoverComponent on the actor, which advances the angle by each tick's delta in
+  // TG_PrePhysics and sets the actor on the circle with its boresight on the centre, before the
+  // sensors capture and the world observer reports the frame. The client sends the circle once and
+  // nothing per frame, where it used to push a pose about fifty times a second on its own wall
+  // clock -- measured to halve the server's tick rate on a loaded world, and to turn the camera as
+  // far per captured frame as a synchronous run's pace was high. Whatever is attached to the actor,
+  // a depth camera spawned rigidly on a colour camera, rides with it, so the two are never a frame
+  // apart.
+  //
+  // The pose rule is the client's (OrbitSensorController.orbit_transform; UOrbitMoverComponent::
+  // PoseAt), so a client predicts the angle from the parameters and the simulated clock and never
+  // asks per frame; get_orbit_state is there for a check, not a loop. While the orbit is enabled the
+  // mover owns the actor's transform, paused or not: a client that wants to move the actor itself
+  // disables the orbit first, so the two never fight over the pose.
+
+  BIND_SYNC(set_orbit) << [this](
+      cr::ActorId ActorId,
+      cr::OrbitParameters Parameters) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_orbit",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    if (CarlaActor->IsDormant())
+    {
+      RESPOND_ERROR("set_orbit: the actor is dormant, so nothing in the world can fly it");
+    }
+    AActor* Actor = CarlaActor->GetActor();
+    if (!IsValid(Actor))
+    {
+      RESPOND_ERROR("set_orbit: the actor is gone from the world");
+    }
+    if (!FMath::IsFinite(Parameters.centre_x_m) || !FMath::IsFinite(Parameters.centre_y_m) ||
+        !FMath::IsFinite(Parameters.centre_z_m))
+    {
+      RESPOND_ERROR("set_orbit: the centre is three finite numbers of metres");
+    }
+    if (!FMath::IsFinite(Parameters.radius_m) || Parameters.radius_m <= 0.0)
+    {
+      RESPOND_ERROR("set_orbit: the radius is a positive number of metres");
+    }
+    if (!FMath::IsFinite(Parameters.altitude_m))
+    {
+      RESPOND_ERROR("set_orbit: the altitude is a finite number of metres above the centre");
+    }
+    if (!FMath::IsFinite(Parameters.period_s) || Parameters.period_s <= 0.0)
+    {
+      RESPOND_ERROR("set_orbit: the period is a positive number of simulated seconds per revolution");
+    }
+    if (!FMath::IsFinite(Parameters.start_angle_rad))
+    {
+      RESPOND_ERROR("set_orbit: the start angle is a finite number of radians");
+    }
+    if (Parameters.pitch_overridden && !FMath::IsFinite(Parameters.pitch_deg))
+    {
+      RESPOND_ERROR("set_orbit: a pitch override is a finite number of degrees");
+    }
+
+    // Unreal measures in centimetres.
+    FOrbitMoverParameters Circle;
+    Circle.Centre = FVector(
+        Parameters.centre_x_m * 100.0,
+        Parameters.centre_y_m * 100.0,
+        Parameters.centre_z_m * 100.0);
+    Circle.RadiusCm = Parameters.radius_m * 100.0;
+    Circle.AltitudeCm = Parameters.altitude_m * 100.0;
+    Circle.PeriodSeconds = Parameters.period_s;
+    Circle.bClockwise = Parameters.clockwise;
+    Circle.StartAngleRadians = Parameters.start_angle_rad;
+    if (Parameters.pitch_overridden)
+    {
+      Circle.PitchDegrees = Parameters.pitch_deg;
+    }
+
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::FindOrAdd(Actor);
+    if (Mover == nullptr)
+    {
+      RESPOND_ERROR("set_orbit: the orbit mover could not be added to the actor");
+    }
+    Mover->Configure(Circle, Parameters.enabled);
+    return R<void>::Success();
+  };
+
+  // Disabling an actor that carries no orbit is nothing to do and succeeds; enabling one is a
+  // mistake and is refused, since there is no circle to fly.
+  BIND_SYNC(set_orbit_enabled) << [this](
+      cr::ActorId ActorId,
+      bool enabled) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_orbit_enabled",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::Find(CarlaActor->GetActor());
+    if (Mover == nullptr)
+    {
+      if (!enabled)
+      {
+        return R<void>::Success();
+      }
+      RESPOND_ERROR("set_orbit_enabled: the actor has no orbit; give it one with set_orbit first");
+    }
+    Mover->SetEnabled(enabled);
+    return R<void>::Success();
+  };
+
+  BIND_SYNC(set_orbit_paused) << [this](
+      cr::ActorId ActorId,
+      bool paused) -> R<void>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "set_orbit_paused",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::Find(CarlaActor->GetActor());
+    if (Mover == nullptr)
+    {
+      RESPOND_ERROR("set_orbit_paused: the actor has no orbit; give it one with set_orbit first");
+    }
+    Mover->SetPaused(paused);
+    return R<void>::Success();
+  };
+
+  BIND_SYNC(get_orbit_state) << [this](cr::ActorId ActorId) -> R<cr::OrbitState>
+  {
+    REQUIRE_CARLA_EPISODE();
+    FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
+    if (!CarlaActor)
+    {
+      return RespondError(
+          "get_orbit_state",
+          ECarlaServerResponse::ActorNotFound,
+          " Actor Id: " + FString::FromInt(ActorId));
+    }
+    cr::OrbitState State;
+    UOrbitMoverComponent* Mover = UOrbitMoverComponent::Find(CarlaActor->GetActor());
+    if (Mover != nullptr)
+    {
+      State.angle_rad = Mover->GetAngleRadians();
+      State.enabled = Mover->IsEnabled();
+      State.paused = Mover->IsPaused();
+    }
+    return State;
   };
 
   BIND_SYNC(console_command) << [this](std::string cmd) -> R<bool>
@@ -1962,6 +2936,7 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
       cr::VehiclePhysicsControl PhysicsControl) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    REQUIRE_NO_DRIVE_LEASE("apply_physics_control");
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {
@@ -2270,11 +3245,17 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
 
   // ~~ Apply control ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+  // The vehicle-control calls, and set_actor_autopilot below, are refused for every actor while a
+  // client holds the drive lease (take_drive_lease): the .NET traffic manager drives through
+  // apply_control_to_vehicle in a batch, so refusing the autopilot flag alone would not stop it. The
+  // batch forms call these same lambdas, so the refusal reaches them too.
+
   BIND_SYNC(apply_control_to_vehicle) << [this](
       cr::ActorId ActorId,
       cr::VehicleControl Control) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    REQUIRE_NO_DRIVE_LEASE("apply_control_to_vehicle");
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {
@@ -2300,6 +3281,7 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
       cr::VehicleAckermannControl Control) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    REQUIRE_NO_DRIVE_LEASE("apply_ackermann_control_to_vehicle");
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {
@@ -2510,11 +3492,18 @@ BIND_SYNC(is_sensor_enabled_for_ros) << [this](carla::streaming::detail::stream_
     return R<void>::Success();
   };
 
+  // Enabling the autopilot is refused for every actor while a drive lease is held; disabling it is
+  // not, so a traffic tool shutting down while a drive holds the world can still take its vehicles
+  // off the autopilot before it destroys them.
   BIND_SYNC(set_actor_autopilot) << [this](
       cr::ActorId ActorId,
       bool bEnabled) -> R<void>
   {
     REQUIRE_CARLA_EPISODE();
+    if (bEnabled)
+    {
+      REQUIRE_NO_DRIVE_LEASE("set_actor_autopilot");
+    }
     FCarlaActor* CarlaActor = Episode->FindCarlaActor(ActorId);
     if (!CarlaActor)
     {

@@ -16,4 +16,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The msgpack message framer is internal: it is how the RPC client and server read the wire,
+         not a published surface. The tests split messages at every byte to check it. -->
+    <InternalsVisibleTo Include="CarlaNet.Tests" />
+  </ItemGroup>
+
 </Project>

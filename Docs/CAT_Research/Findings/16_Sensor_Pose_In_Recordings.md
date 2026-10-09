@@ -52,6 +52,15 @@ possible level (same frame, same header) — no world-observer cache lookup, no 
 The local→geodetic conversion is the same `Geodesy.CarlaLocalToGeodetic(origin, x, y, z)` already used for
 vehicle truth and for the interactive pixel picker.
 
+**Correction (2026-09-30).** For the cameras the header was not the pose the pixels were rendered from.
+The server wrote an image's header in the GPU read-back callback, from the camera's transform and the
+episode's clock as they stood then, and put back only the frame number; under a camera moved between
+synchronous ticks the header carried the next frame's pose in 89 of 90 images measured on Bahonar. The
+server now stamps the header when it captures the frame (`ASensor::MakeCaptureHeader`), and
+`FrameRecorder` takes the pose from the client's snapshot of the image's own frame, with the header
+checked against it and a disagreement counted
+([`Plans/SUMO_Behavioral_Capture/12`](../Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md) §9.6).
+
 The **optics** (horizontal FOV, any lens-distortion parameters) are camera-blueprint attributes, known
 client-side at spawn; the **platform identity** (airframe class, callsign) is collection configuration,
 also client-side (§6). The recorder combines the frame-header pose with these client-supplied inputs and

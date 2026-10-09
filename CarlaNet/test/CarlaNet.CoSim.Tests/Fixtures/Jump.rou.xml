@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- One measured vehicle on the straight route over the cross that stops part-way along the approach
+     and then jumps: a stop's `jump` attribute moves it, once the stop is over, to the start of the next
+     edge of its route, the exit beyond the junction. The two SUMO steps either side of the jump are
+     further apart than any vehicle drives in one step, which is the discontinuous step the session
+     places a body across at SUMO's later position rather than sliding it along the lane. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+
+    <route id="straight" edges="approach ahead"/>
+
+    <vehicle id="jumper" type="measured_truck" route="straight" depart="0.00" departLane="1"
+             departSpeed="0">
+        <stop lane="approach_1" endPos="30.00" duration="1.00" jump="0"/>
+    </vehicle>
+</routes>

@@ -1,0 +1,40 @@
+{
+ "marked_ids": [
+  "escort_0",
+  "escort_1",
+  "escort_2",
+  "escort_3",
+  "escort_4",
+  "probe_d2",
+  "probe_d5",
+  "shadow",
+  "staybehind"
+ ],
+ "affiliation_by_type": {
+  "civ_car": "n",
+  "civ_pickup": "n",
+  "civ_taxi": "n",
+  "civ_truck": "n",
+  "civ_bus": "n",
+  "port_vehicle": "n",
+  "port_truck": "n",
+  "mil_jeep": "f",
+  "mil_truck": "f",
+  "guard": "f",
+  "anomaly_probe": "u",
+  "anomaly_escort": "u",
+  "anomaly_shadow": "u",
+  "anomaly_staybehind": "u"
+ },
+ "anomaly_notes": [
+  {
+   "kind": "guard_no_show",
+   "tower_index": 3,
+   "edge": "26413459",
+   "edge_pos_m": 58.9,
+   "begin_s": 370800,
+   "end_s": 399600,
+   "note": "one tower left unmanned for a shift; the detectable signal is a missing guard arrival while the other fifteen towers are relieved as usual"
+  }
+ ]
+}

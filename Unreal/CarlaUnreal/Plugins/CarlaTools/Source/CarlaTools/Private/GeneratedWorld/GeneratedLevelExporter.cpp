@@ -3,6 +3,7 @@
 #include "GeneratedWorld/GeneratedLevelExporter.h"
 
 #include "CarlaTools.h"
+#include "GeneratedWorld/GeoreferencedWorldInitializer.h"
 #include "GeneratedWorld/GeoreferencedWorldSettings.h"
 
 #include <util/ue-header-guard-begin.h>
@@ -214,10 +215,16 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 				Copied->RoadNetwork = Network;
 			}
 
+			// Assign the loaded asset, as for the road network. A soft path built from the package name
+			// alone has no asset name, so it loads nothing. The world then has no drivable ground.
 			const FString FieldCopy = FString::Printf(TEXT("/%s/%s_BareEarthField"), *Name, *Name);
 			if (UEditorAssetLibrary::DoesAssetExist(FieldCopy))
 			{
-				Copied->OffsetField = TSoftObjectPtr<UBareEarthOffsetField>(FSoftObjectPath(FieldCopy));
+				if (UBareEarthOffsetField* Field =
+						Cast<UBareEarthOffsetField>(UEditorAssetLibrary::LoadAsset(FieldCopy)))
+				{
+					Copied->OffsetField = Field;
+				}
 			}
 
 			UEditorAssetLibrary::SaveAsset(SettingsCopy, false);
@@ -289,15 +296,30 @@ FGeneratedLevelExportResult UGeneratedLevelExporter::ExportLevelAsPlugin(
 			++Repointed;
 		}
 
-		if (Copied.Num() > 0)
+		// The level's initializer still names the settings under /Game: duplicating the level copies
+		// the soft pointer as it was. A base that lacks this world has no such asset. The DLC cook
+		// then stops on content outside the plugin. Point the initializer at the plugin's own copy.
+		const TSoftObjectPtr<UGeoreferencedWorldSettings> OwnSettings(FSoftObjectPath(FString::Printf(
+			TEXT("/%s/%s_WorldSettings.%s_WorldSettings"), *Name, *Name, *Name)));
+		int32 InitializersRepointed = 0;
+		for (AActor* Actor : CopiedWorld->PersistentLevel->Actors)
+		{
+			if (AGeoreferencedWorldInitializer* Initializer = Cast<AGeoreferencedWorldInitializer>(Actor))
+			{
+				Initializer->Settings = OwnSettings;
+				++InitializersRepointed;
+			}
+		}
+
+		if (Copied.Num() > 0 || InitializersRepointed > 0)
 		{
 			// The level now names the copies, so it has to be written back; without this the plugin
 			// holds the meshes and the level still points outside it.
 			UEditorAssetLibrary::SaveAsset(Result.LevelPackageName, false);
 			UE_LOG(LogCarlaTools, Display,
 				TEXT("[GeneratedLevelExporter] brought %d road surface mesh(es) into %s, "
-					 "repointing %d actor(s)"),
-				Copied.Num(), *Name, Repointed);
+					 "repointing %d actor(s) and %d world initializer(s)"),
+				Copied.Num(), *Name, Repointed, InitializersRepointed);
 		}
 	}
 

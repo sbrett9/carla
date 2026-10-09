@@ -1,0 +1,94 @@
+Vehicle catalogue carla-0.10.0-windows
+  generated 2026-09-29T19:13:25.921Z by carlacontrol.VehicleCatalogueBuilder/1.0.0
+  server 0.10.0, content build carla-0.10.0-windows
+  blueprint set digest a51cfaacc5ceb15351f445575e8d3208e47dfe5c4c239c9805717be6cc9770b4
+
+Measured bodies. length, width and height are twice the spawned actor's bounding-box
+extent; the box centre is in the actor's own frame and is what the bumper-to-origin
+shift is computed from.
+
+blueprint                         length   width  height  centre x  centre y  bumper  colour
+vehicle.ambulance.ford             6.357   2.351   2.431    -0.293     0.002   2.886  true
+vehicle.carlacola.actors           8.004   2.912   4.055    -0.023     0.000   3.979  true
+vehicle.carlamotors.european_hgv   7.924   2.865   3.783     0.017    -0.000   3.979  unknown
+vehicle.dodge.charger              5.006   1.881   1.540    -0.006     0.000   2.497  true
+vehicle.dodgecop.charger           5.237   1.924   1.644     0.109     0.000   2.728  false
+vehicle.firetruck.actors           8.580   2.901   3.827    -0.198     0.005   4.092  true
+vehicle.fuso.mitsubishi           10.174   3.928   4.241    -0.493    -0.092   4.594  false
+vehicle.jeep.wrangler_rubicon      3.866   1.905   1.878     0.000     0.001   1.933  unknown
+vehicle.lincoln.mkz                4.892   1.836   1.524    -0.006     0.000   2.440  false
+vehicle.mini.cooper                4.553   2.096   1.772    -0.034     0.000   2.242  false
+vehicle.nissan.patrol              5.591   2.147   2.059     0.041     0.000   2.837  true
+vehicle.sprinter.mercedes          5.915   1.988   2.726    -0.011     0.004   2.947  false
+vehicle.taxi.ford                  5.354   1.789   1.575     0.180     0.000   2.858  true
+vehicle.ue4.audi.tt                4.181   1.994   1.385    -0.000    -0.000   2.090  true
+vehicle.ue4.bmw.grantourer         4.611   2.242   1.667     0.000    -0.001   2.305  true
+vehicle.ue4.chevrolet.impala       5.357   2.033   1.411     0.000     0.002   2.679  true
+vehicle.ue4.ford.crown             5.366   1.801   1.575     0.185    -0.000   2.868  true
+vehicle.ue4.ford.mustang           4.718   1.895   1.301     0.032    -0.000   2.391  true
+vehicle.ue4.mercedes.ccc           4.674   1.812   1.442    -0.003     0.000   2.334  true
+
+Where the content's own metadata disagrees with the measurement. A copy of the
+content build's vehicle metadata with these corrections applied is written as
+VehicleParameters.corrected.json beside this report; the catalogue's own class
+assignment is what truth reads, so the correction is for the next content build
+rather than something a consumer of this catalogue has to wait for.
+
+  vehicle.ambulance.ford: curated: ambulance; the box measures as a van and the emergency role is not visible in it
+  vehicle.dodgecop.charger: curated: police car; identical in shape to the civilian Charger it is built from
+  vehicle.firetruck.actors: curated: fire appliance; the box measures as a truck and the emergency role is not visible in it
+  vehicle.fuso.mitsubishi: curated: Mitsubishi Fuso Rosa light bus; a box cannot tell a bus from a lorry of the same size, so the height band files it as a truck. The content declares it a bus and upstream CARLA publishes it as one
+  vehicle.nissan.patrol: curated: sport utility on a car chassis; its 2.06 m roof reads as a van to the height band, and it is the only measured body within 0.06 m of that edge
+  vehicle.taxi.ford: curated: taxi; identical in shape to the Crown saloon it is built from
+
+Lamp capability, measured optically.
+
+  sun at solar hour 1.0 on 2026-03-21, elevation -59.88318634033203 degrees
+  a pixel counts as gained above 24/255, and a lamp needs more of them than 8 and than 4.0 times the largest difference measured between two captures of the same state
+  positive control (sun moved to daylight): 157082 pixels
+  'unlit' means the lamp was commanded, the vehicle was rendered and the
+  image did not change. It does not say why, and it is not 'unknown'.
+  vehicle.ambulance.ford           no lamp changed the image  (strongest lamp 3 px, worst same-state control 5 px, needed more than 20 px)
+  vehicle.carlacola.actors         no lamp changed the image  (strongest lamp 43 px, worst same-state control 98 px, needed more than 392 px)
+  vehicle.carlamotors.european_hgv no lamp changed the image  (strongest lamp 4 px, worst same-state control 10 px, needed more than 40 px)
+  vehicle.dodge.charger            no lamp changed the image  (strongest lamp 2 px, worst same-state control 2 px, needed more than 8 px)
+  vehicle.dodgecop.charger         no lamp changed the image  (strongest lamp 1 px, worst same-state control 2 px, needed more than 8 px)
+  vehicle.firetruck.actors         lit: high_beam  (strongest lamp 374 px, worst same-state control 45 px, needed more than 180 px)
+  vehicle.fuso.mitsubishi          no lamp changed the image  (strongest lamp 31 px, worst same-state control 36 px, needed more than 144 px)
+  vehicle.jeep.wrangler_rubicon    no lamp changed the image  (strongest lamp 4 px, worst same-state control 1 px, needed more than 8 px)
+  vehicle.lincoln.mkz              no lamp changed the image  (strongest lamp 1 px, worst same-state control 1 px, needed more than 8 px)
+  vehicle.mini.cooper              no lamp changed the image  (strongest lamp 11 px, worst same-state control 7 px, needed more than 28 px)
+  vehicle.nissan.patrol            no lamp changed the image  (strongest lamp 4 px, worst same-state control 5 px, needed more than 20 px)
+  vehicle.sprinter.mercedes        no lamp changed the image  (strongest lamp 2 px, worst same-state control 4 px, needed more than 16 px)
+  vehicle.taxi.ford                no lamp changed the image  (strongest lamp 2 px, worst same-state control 5 px, needed more than 20 px)
+  vehicle.ue4.audi.tt              no lamp changed the image  (strongest lamp 2 px, worst same-state control 3 px, needed more than 12 px)
+  vehicle.ue4.bmw.grantourer       no lamp changed the image  (strongest lamp 0 px, worst same-state control 8 px, needed more than 32 px)
+  vehicle.ue4.chevrolet.impala     no lamp changed the image  (strongest lamp 5 px, worst same-state control 8 px, needed more than 32 px)
+  vehicle.ue4.ford.crown           no lamp changed the image  (strongest lamp 1 px, worst same-state control 1 px, needed more than 8 px)
+  vehicle.ue4.ford.mustang         no lamp changed the image  (strongest lamp 19 px, worst same-state control 48 px, needed more than 192 px)
+  vehicle.ue4.mercedes.ccc         no lamp changed the image  (strongest lamp 2 px, worst same-state control 5 px, needed more than 20 px)
+
+Body widths without mirrors, measured in the editor
+  2026-10-02, UE 5.7.4 editor via VibeUE, the CARLA content as loaded; vehicle_body_widths.json
+  LOD0 vertices of the vehicle's own skeletal mesh (the mesh the blueprint drives), exported from the editor as ASCII FBX; width profile along the vehicle's length in 5 cm bins, each side separately; body half-width per side = the largest width held over at least 0.6 m of length (a morphological opening), which removes mirrors and other short protrusions; body width = left + right body half-widths. Full width = the plain vertex extent, equal to the catalogue's width_m. Computed by CarlaControl/scripts/measure_vehicle_body_widths.py.
+
+  blueprint                        box width    body
+  vehicle.ambulance.ford               2.351   2.286
+  vehicle.carlacola.actors             2.912   2.787
+  vehicle.carlamotors.european_hgv     2.865   2.787
+  vehicle.dodge.charger                1.881   1.854
+  vehicle.dodgecop.charger             1.924   1.854
+  vehicle.firetruck.actors             2.901   2.896
+  vehicle.fuso.mitsubishi              3.928   3.233
+  vehicle.jeep.wrangler_rubicon        1.905   1.855
+  vehicle.lincoln.mkz                  1.836   1.833
+  vehicle.mini.cooper                  2.096   2.090
+  vehicle.nissan.patrol                2.147   2.147
+  vehicle.sprinter.mercedes            1.988   1.982
+  vehicle.taxi.ford                    1.789   1.779
+  vehicle.ue4.audi.tt                  1.994   1.967
+  vehicle.ue4.bmw.grantourer           2.242   2.144
+  vehicle.ue4.chevrolet.impala         2.033   1.779
+  vehicle.ue4.ford.crown               1.801   1.782
+  vehicle.ue4.ford.mustang             1.895   1.835
+  vehicle.ue4.mercedes.ccc             1.812   1.805

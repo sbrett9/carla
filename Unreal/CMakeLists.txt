@@ -442,9 +442,13 @@ function (
   # silently invalidate every already-exported level, so treat this as a decision rather than an
   # oversight and change it together with those ini values, or not at all.
   #
-  # -CreateReleaseVersion is deliberately absent too. It would archive the metadata needed to cook
-  # DLC against this build later, but it is incompatible with the -iterate below and is not needed
-  # for adding a level to a loose package.
+  # -CreateReleaseVersion is not in this list: the generated cook script adds it
+  # (Package/CookGeneratedWorlds.cmake.in, on by default through CARLA_COOK_CREATE_RELEASE_VERSION
+  # below). It archives this cook's asset registries under Releases/<short commit>/<platform>/, which
+  # is what a world cooked later as DLC against this build reads. It does not conflict with the
+  # -iterate below: UAT refuses iterative cooking only with -BasedOnReleaseVersion (ProjectParams.cs),
+  # which binds the per-world DLC cook, not this one. Turning it on costs one full recook, after which
+  # cooks are incremental again (Docs/CAT_Research/Findings/24a_Shipping_A_Generated_World.md).
   set (
     CARLA_COOK_UAT_ARGS
       BuildCookRun

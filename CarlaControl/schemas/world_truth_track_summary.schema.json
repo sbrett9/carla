@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:world-truth-track-summary:2",
+  "title": "World truth track summary, format version 2",
+  "description": "The summary written beside a world truth track, <track>.summary.json: the track's format version, what made it, its columns and sampling rate, what it holds so far and why it ended. It is written when the track opens and again when the run ends; ended null is a track still being written, or one whose run was killed. This schema describes world_truth_track_version 2; a summary without the field is version 1, an older shape with fewer columns that this schema does not describe.",
+  "type": "object",
+  "properties": {
+    "world_truth_track_version": {
+      "const": 2,
+      "description": "The format version of the track and its summary."
+    },
+    "producer": {
+      "$ref": "#/$defs/producer",
+      "description": "What made the track, stamped each time the summary is written. Absent from a summary written before summaries carried it."
+    },
+    "track": {
+      "type": "string",
+      "description": "The track's file name, beside the summary."
+    },
+    "columns": {
+      "const": [
+        "time_utc",
+        "sim_time_s",
+        "uid",
+        "callsign",
+        "cot_type",
+        "how",
+        "lat",
+        "lon",
+        "hae_m",
+        "ce_m",
+        "le_m",
+        "course_deg",
+        "speed_mps",
+        "vx",
+        "vy",
+        "vz",
+        "base_type",
+        "type_id",
+        "special_type",
+        "length_m",
+        "width_m",
+        "height_m",
+        "color",
+        "role_name",
+        "edge",
+        "lane",
+        "sumo_x",
+        "sumo_y",
+        "carla_x",
+        "carla_y",
+        "sumo_id",
+        "entity_id",
+        "frame",
+        "render_state",
+        "render_reason",
+        "actor_id",
+        "in_window",
+        "sun_elevation_deg",
+        "sun_corrected_elevation_deg",
+        "illumination_band",
+        "illumination_band_elevation"
+      ],
+      "description": "The track's columns, in order: its header line."
+    },
+    "instant": {
+      "const": "traci_clock",
+      "description": "The clock every row's sim_time_s is read on: TraCI's, for the SUMO frame the row describes."
+    },
+    "sumo_step_s": {
+      "type": "number",
+      "description": "SUMO's step length.",
+      "x-unit": "seconds"
+    },
+    "interval_s": {
+      "type": "number",
+      "description": "Simulated time between samples.",
+      "x-unit": "seconds"
+    },
+    "every_sumo_steps": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many SUMO frames inside the window each sample is apart; 1 samples every frame."
+    },
+    "outside_window_interval_s": {
+      "const": null,
+      "description": "Always null: nothing is written outside the capture window."
+    },
+    "samples": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Samples written so far."
+    },
+    "rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rows written so far, one per vehicle per sample."
+    },
+    "first_sample_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "The first sample's instant; null before one is written.",
+      "x-unit": "seconds"
+    },
+    "last_sample_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "The last sample's instant; null before one is written.",
+      "x-unit": "seconds"
+    },
+    "ended": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "How the run ended.",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "scenario_finished",
+            "caller_stopped",
+            "run_stopped"
+          ],
+          "description": "Why the run ended."
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "Validation",
+            "Launch",
+            "Authority",
+            "PreRoll",
+            "Window"
+          ],
+          "description": "The stage a stopped run stopped at. Only where reason is run_stopped."
+        },
+        "cause": {
+          "type": "string",
+          "enum": [
+            "none",
+            "sumo-connection-lost",
+            "world-connection-lost",
+            "world-tick-timeout",
+            "solar-state-disagreement",
+            "missing-blueprint"
+          ],
+          "description": "Why a stopped run stopped. Only where reason is run_stopped."
+        },
+        "last_sumo_frame_s": {
+          "type": "number",
+          "description": "The last SUMO frame read.",
+          "x-unit": "seconds"
+        },
+        "last_rendered_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The last frame rendered; null where none was.",
+          "x-unit": "seconds"
+        },
+        "last_rendered_frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The last frame rendered; null where none was."
+        }
+      },
+      "required": [
+        "reason",
+        "last_sumo_frame_s",
+        "last_rendered_s",
+        "last_rendered_frame"
+      ],
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "reason": {
+            "const": "run_stopped"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "stage",
+          "cause"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "stage"
+              ]
+            },
+            {
+              "required": [
+                "cause"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "world_truth_track_version",
+    "track",
+    "columns",
+    "instant",
+    "sumo_step_s",
+    "interval_s",
+    "every_sumo_steps",
+    "outside_window_interval_s",
+    "samples",
+    "rows",
+    "first_sample_s",
+    "last_sample_s",
+    "ended"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "producer": {
+      "type": "object",
+      "description": "What made the file: the tool and its release, the carlanet release, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "The component that wrote the file, such as carlacontrol.CaptureSession, or the program's name where no component declared itself; unknown where neither is known."
+        },
+        "tool_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The release version of the package the tool comes from; null where the tool did not say."
+        },
+        "carlanet": {
+          "type": "string",
+          "description": "The carlanet release that wrote the file: 0.10.0 for a tagged release, 0.10.0+g<commit> for any other build."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/server"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used; null where none was."
+        },
+        "sumo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran; null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, in UTC to the millisecond."
+        }
+      },
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "additionalProperties": false
+    },
+    "server": {
+      "description": "What the CARLA server says it was built from.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "A server that answered the build identity call. Each value is the server's own, unknown where it cannot know it.",
+          "properties": {
+            "available": {
+              "const": true,
+              "description": "The server answered."
+            },
+            "release": {
+              "type": "string",
+              "description": "The CARLA release the server was compiled with, such as 0.10.0."
+            },
+            "world_interface": {
+              "type": "string",
+              "description": "The world interface version the server declares, major.minor, such as 1.0."
+            },
+            "build": {
+              "type": "string",
+              "description": "package for a cooked server, editor for one run from the editor."
+            },
+            "configuration": {
+              "type": "string",
+              "description": "The build configuration, such as Development or Shipping."
+            },
+            "carla_commit": {
+              "type": "string",
+              "description": "The CARLA commit the server was built from."
+            },
+            "content_commit": {
+              "type": "string",
+              "description": "The content commit its package was cooked from."
+            },
+            "engine_commit": {
+              "type": "string",
+              "description": "The Unreal Engine commit its package was built with."
+            },
+            "commits_from": {
+              "type": "string",
+              "description": "Where the commits came from: version_file (the package's VERSION file), compiled (the CARLA commit compiled into the server) or none."
+            }
+          },
+          "required": [
+            "available",
+            "release",
+            "world_interface",
+            "build",
+            "configuration",
+            "carla_commit",
+            "content_commit",
+            "engine_commit",
+            "commits_from"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "A server built before the build identity call, with what its other calls said.",
+          "properties": {
+            "available": {
+              "const": false,
+              "description": "The server did not answer the call."
+            },
+            "release": {
+              "type": "string",
+              "description": "The release its version call reported, or unknown."
+            },
+            "world_interface": {
+              "type": "string",
+              "description": "The world interface version it reported, or unknown."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the identity is not available."
+            }
+          },
+          "required": [
+            "available",
+            "release",
+            "world_interface",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

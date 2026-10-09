@@ -1,0 +1,46 @@
+using ActorId = uint;
+
+namespace CarlaNet.CoSim;
+
+/// <summary>
+/// The span of simulated time one SUMO vehicle held a rendered actor for.
+/// </summary>
+/// <param name="VehicleId">SUMO's vehicle id.</param>
+/// <param name="Actor">
+/// The pooled body that rendered it, or zero where it held none -- a vehicle whose type names no
+/// measured blueprint, one with no ground under it on every frame it had, one whose every frame was read
+/// after the last frame the run rendered, or a run with no CARLA attached.
+/// </param>
+/// <param name="AdmittedAtSeconds">
+/// Simulated second the vehicle entered the render set: with no limit, the SUMO frame it was first
+/// reported in, which is the first frame its body is drawn on; under an optional limit, the frame of
+/// the pass that admitted it.
+/// </param>
+/// <param name="ReleasedAtSeconds">
+/// Simulated second it left: the instant of the first frame that no longer draws it, so that the interval
+/// holds the instants of exactly the frames that drew it. For a vehicle SUMO removed, the frame after the
+/// one of its last SUMO step, which draws it; for one still in the render set when the session ends, the
+/// frame after the last rendered. Under an optional limit, a vehicle the limit releases is stamped with
+/// the frame of the pass that released it, as its admission is.
+/// </param>
+/// <param name="ReleaseReason">
+/// Why it left: SUMO listing it as arrived, it vanishing without being listed, or the session ending;
+/// under an optional limit, also the policy no longer admitting it, or a capacity ranking it out.
+/// </param>
+/// <remarks>
+/// <para>These two instants are what lets anyone later reconcile "SUMO simulated sixty-eight
+/// thousand vehicles" against "the collect shows N tracks", and they are the only honest account of
+/// a track that starts or stops mid-scene. They are recorded facts about the run rather than visual
+/// transitions, and they cost nothing to emit because the bridge computes both anyway.</para>
+///
+/// <para>The actor is on the record for the same reason. A pooled body carries a succession of
+/// vehicles over a run, so an actor id on its own names nothing; an actor id with the interval it
+/// was lent over names exactly one vehicle, which is what a consumer holding a track in the imagery
+/// has to resolve against.</para>
+/// </remarks>
+public readonly record struct RenderedVehicleInterval(
+    string VehicleId,
+    ActorId Actor,
+    double AdmittedAtSeconds,
+    double ReleasedAtSeconds,
+    RenderSetReleaseReason ReleaseReason);

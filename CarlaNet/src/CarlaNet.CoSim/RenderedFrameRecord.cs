@@ -1,0 +1,65 @@
+using CarlaNet.Recording;
+
+namespace CarlaNet.CoSim;
+
+/// <summary>
+/// One world frame the session rendered and completed, as every observer is told of it.
+/// </summary>
+/// <param name="Frame">
+/// The frame the tick produced: the world's own frame number, or for a session with no world, the
+/// session's count of its ticks. What a recorder keys a capture by.
+/// </param>
+/// <param name="TickIndex">Ticks since the session's first, counting from zero.</param>
+/// <param name="SimulatedTimeSeconds">The simulated instant the frame rendered.</param>
+/// <param name="IsCaptureTick">Whether a recorder emits a frame on this tick.</param>
+/// <param name="InWindow">
+/// Whether the frame is the capture window's -- at or after its opening instant -- rather than the
+/// prewarm's. A sun frozen at the window's start corresponds to nothing before it.
+/// </param>
+/// <param name="RenderSet">
+/// The bodies the frame drew and the SUMO vehicle each drew, as a recorder lists them beside its
+/// capture; null where the session renders no world.
+/// </param>
+/// <param name="Illumination">
+/// What the frame's illumination was declared to be and the sun audit's residual on its tick, as a
+/// recorder writes it beside its capture; null where the session renders no world.
+/// </param>
+/// <remarks>
+/// Taken from the session's own per-frame stores as the tick completes, so it is the same render set
+/// and the same declaration a recorder asking by this frame is answered with.
+/// </remarks>
+public sealed record RenderedFrameRecord(
+    ulong Frame,
+    long TickIndex,
+    double SimulatedTimeSeconds,
+    bool IsCaptureTick,
+    bool InWindow,
+    RenderSet? RenderSet,
+    IlluminationDeclaration? Illumination)
+{
+    /// <summary>
+    /// The sun the world reported on the frame's tick: the achieved sun, read from the same snapshot as
+    /// the <c>_solar</c> block a recorder writes beside the frame's capture, rather than the one declared
+    /// for it -- its clock, date and zone, where it is, and whether it is advancing. Null where the
+    /// session audits no sun.
+    /// </summary>
+    public SolarReading? Sun { get; init; }
+
+    /// <summary>The geometric elevation of that sun, degrees; null where there is none.</summary>
+    public double? SunElevationDegrees => Sun?.ElevationDegrees;
+
+    /// <summary>
+    /// Its refraction-corrected elevation, degrees: the elevation the sun's light is rotated by, which
+    /// the illumination bands are cut from. Null where the session audits no sun, or the world's reading
+    /// carries only the geometric one.
+    /// </summary>
+    public double? SunCorrectedElevationDegrees => Sun?.CorrectedElevationDegrees;
+
+    /// <summary>
+    /// The pose, velocity included, written to each body the frame drew, by the vehicle it drew: what the
+    /// body was given to apply on this tick, from which a reader takes the rendered body's speed. Empty
+    /// where the session renders no world. Lent from the session: valid during the call, and refilled by
+    /// the next tick, so copy what is kept.
+    /// </summary>
+    public IReadOnlyList<VehiclePose> AppliedPoses { get; init; } = [];
+}

@@ -1,0 +1,1485 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation" elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
+  <xs:annotation>
+    <xs:documentation>The truth sidecar, format version 1: one XML file beside every still, &lt;camera&gt;_&lt;local capture time&gt;.xml, holding the truth of the still's own simulation frame. The root &lt;events&gt; carries the capture's identity; under it come what made the file, the sun the world reported, what the run declared the sun to be, the camera platform's event and one Cursor-on-Target event per vehicle. A sidecar with no format_version was written before sidecars carried one and is version 1, which this schema describes. Units are in each attribute's cap:unit annotation; cap:onlyInPicture marks the attributes written only for a vehicle whose box fell in the picture (in_frame of wholly or partly). Positions are WGS84 latitude and longitude, and heights are meters above the WGS84 ellipsoid in the bare-earth convention.</xs:documentation>
+    <xs:appinfo>
+      <cap:id>urn:carla-sumo-capture:schema:truth-sidecar:1</cap:id>
+      <cap:formatVersion>1</cap:formatVersion>
+    </xs:appinfo>
+  </xs:annotation>
+  <xs:element name="events" type="Events">
+    <xs:annotation>
+      <xs:documentation>The sidecar's root: one capture of one camera.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+  <xs:simpleType name="FormatVersion">
+    <xs:annotation>
+      <xs:documentation>A format version: an integer from 1.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:positiveInteger" />
+  </xs:simpleType>
+  <xs:simpleType name="Instant">
+    <xs:annotation>
+      <xs:documentation>An instant in UTC to the millisecond, with a trailing Z.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="CalendarDate">
+    <xs:annotation>
+      <xs:documentation>A date, year-month-day.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:date">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="CivilInstant">
+    <xs:annotation>
+      <xs:documentation>A civil instant with its UTC offset, to the second or a fraction of it.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,7})?[+\-][0-9]{2}:[0-9]{2}" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="UtcInstant">
+    <xs:annotation>
+      <xs:documentation>An instant in UTC, to the second or a fraction of it, with a trailing Z.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,7})?Z" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ClockTime">
+    <xs:annotation>
+      <xs:documentation>A time of day, hours:minutes:seconds.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{2}:[0-9]{2}:[0-9]{2}" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="TrueOrFalse">
+    <xs:annotation>
+      <xs:documentation>true or false, spelled out.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:boolean">
+      <xs:pattern value="true|false" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Latitude">
+    <xs:annotation>
+      <xs:documentation>A WGS84 latitude.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="-90" />
+      <xs:maxInclusive value="90" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Longitude">
+    <xs:annotation>
+      <xs:documentation>A WGS84 longitude.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="-180" />
+      <xs:maxInclusive value="180" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Bearing">
+    <xs:annotation>
+      <xs:documentation>A direction clockwise from true north, 0 to 360 (360 only where rounding reaches it).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0" />
+      <xs:maxInclusive value="360" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="NonNegativeDecimal">
+    <xs:annotation>
+      <xs:documentation>A decimal number, 0 or more.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Fraction">
+    <xs:annotation>
+      <xs:documentation>A share, 0 (none) to 1 (all).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0" />
+      <xs:maxInclusive value="1" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Sha256">
+    <xs:annotation>
+      <xs:documentation>A SHA-256 digest in lowercase hexadecimal.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-f]{64}" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="CotType">
+    <xs:annotation>
+      <xs:documentation>A Cursor-on-Target atom type, such as a-n-G-E-V.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="a-.+" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Color">
+    <xs:annotation>
+      <xs:documentation>A color as red,green,blue, each 0 to 255, or empty where the blueprint has none.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="([0-9]{1,3},[0-9]{1,3},[0-9]{1,3})?" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Unknown">
+    <xs:annotation>
+      <xs:documentation>The one word unknown.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="unknown" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="VehiclesListed">
+    <xs:annotation>
+      <xs:documentation>Which vehicles the events are, where they are not every vehicle actor the world held: rendered, exactly the bodies the frame drew, each named by the vehicle it drew; unknown, the frame's render set was no longer held, so no vehicle is listed and the empty list is not an empty scene.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="rendered" />
+      <xs:enumeration value="unknown" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="InFrame">
+    <xs:annotation>
+      <xs:documentation>Where the vehicle's box fell against the picture, from its eight corners projected through the camera: wholly inside it; partly, crossing an edge; none, wholly outside it; behind_camera, a corner at or behind the lens, so the box has no projection.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="wholly" />
+      <xs:enumeration value="partly" />
+      <xs:enumeration value="none" />
+      <xs:enumeration value="behind_camera" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="OcclusionUnmeasured">
+    <xs:annotation>
+      <xs:documentation>Why occlusion was not measured, the reason nearest the vehicle where several hold.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="behind_camera" />
+      <xs:enumeration value="outside_frame" />
+      <xs:enumeration value="beyond_draw_distance" />
+      <xs:enumeration value="no_depth_camera" />
+      <xs:enumeration value="no_depth_capture" />
+      <xs:enumeration value="depth_out_of_step" />
+      <xs:enumeration value="depth_pose_mismatch" />
+      <xs:enumeration value="beyond_depth_range" />
+      <xs:enumeration value="no_sample" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="PoseSource">
+    <xs:annotation>
+      <xs:documentation>Where a SUMO vehicle's drawn pose came from on this frame: sumo, the frame falls on a SUMO step and the position is SUMO's own; interpolated, between SUMO steps, filled in along the lane; jump, SUMO reported a step too far to drive in one step and the body is shown at SUMO's later position; stale, the body could not be placed and stands where it was last drawn.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="sumo" />
+      <xs:enumeration value="interpolated" />
+      <xs:enumeration value="jump" />
+      <xs:enumeration value="stale" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="DrawDistanceReach">
+    <xs:annotation>
+      <xs:documentation>Where the draw distance fell on the vehicle: partly, across its bounding sphere, so the image may show its body without the parts beyond; wholly, the image shows nothing of it.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="partly" />
+      <xs:enumeration value="wholly" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="IlluminationBand">
+    <xs:annotation>
+      <xs:documentation>An illumination band. The bands are cut by the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="day" />
+      <xs:enumeration value="golden" />
+      <xs:enumeration value="civil_twilight" />
+      <xs:enumeration value="nautical_twilight" />
+      <xs:enumeration value="astronomical_twilight" />
+      <xs:enumeration value="night" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ElevationKind">
+    <xs:annotation>
+      <xs:documentation>Which of the sun's two elevations is meant.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="geometric" />
+      <xs:enumeration value="refraction_corrected" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="IlluminationPolicy">
+    <xs:annotation>
+      <xs:documentation>The illumination policy a run followed.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="freeze_at_window_start" />
+      <xs:enumeration value="advance" />
+      <xs:enumeration value="freeze_at" />
+      <xs:enumeration value="ignore" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ExposureMethod">
+    <xs:annotation>
+      <xs:documentation>manual, a fixed exposure set by the ISO, shutter and aperture; histogram, metered by the engine from each frame.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="manual" />
+      <xs:enumeration value="histogram" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="SupervisionState">
+    <xs:annotation>
+      <xs:documentation>What the scenario's author asserts of the vehicle: annotated, it carries out the named pattern; nominal, an authored negative; unlabelled, no assertion, and never a negative.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="annotated" />
+      <xs:enumeration value="nominal" />
+      <xs:enumeration value="unlabelled" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="OcclusionLevel">
+    <xs:annotation>
+      <xs:documentation>The occlusion fraction as a band: 0 nothing hidden, 1 less than 30 %, 2 30 % to less than 60 %, 3 60 % to less than 90 %, 4 90 % or more.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:integer">
+      <xs:minInclusive value="0" />
+      <xs:maxInclusive value="4" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="LightWord">
+    <xs:annotation>
+      <xs:documentation>One light commanded on: a named light, or bit&lt;n&gt; for a light CARLA declares that no word names.</xs:documentation>
+    </xs:annotation>
+    <xs:union>
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:enumeration value="position" />
+          <xs:enumeration value="low_beam" />
+          <xs:enumeration value="high_beam" />
+          <xs:enumeration value="brake" />
+          <xs:enumeration value="right_blinker" />
+          <xs:enumeration value="left_blinker" />
+          <xs:enumeration value="reverse" />
+          <xs:enumeration value="fog" />
+          <xs:enumeration value="interior" />
+          <xs:enumeration value="special1" />
+          <xs:enumeration value="special2" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:pattern value="bit([0-9]|[12][0-9]|3[01])" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+  <xs:simpleType name="LightWords">
+    <xs:annotation>
+      <xs:documentation>The lights commanded on, one word each, separated by single spaces, in the order of CARLA's flags.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:list itemType="LightWord" />
+      </xs:simpleType>
+      <xs:minLength value="1" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Lights">
+    <xs:annotation>
+      <xs:documentation>The lights commanded on for the vehicle, or none where none is.</xs:documentation>
+    </xs:annotation>
+    <xs:union memberTypes="LightWords">
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:enumeration value="none" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+  <xs:simpleType name="Term">
+    <xs:annotation>
+      <xs:documentation>A vocabulary term, namespace:name in lower case, digits and underscores.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:token">
+      <xs:pattern value="[a-z0-9_]+:[a-z0-9_]+" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Terms">
+    <xs:annotation>
+      <xs:documentation>Vocabulary terms separated by single spaces.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:list itemType="Term" />
+      </xs:simpleType>
+      <xs:minLength value="1" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="PixelRectangle">
+    <xs:annotation>
+      <xs:documentation>Four numbers: x min, y min, x max, y max, pixels; x across from the picture's left edge, y down from its top edge.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:list itemType="xs:decimal" />
+      </xs:simpleType>
+      <xs:length value="4" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="PixelQuadrilateral">
+    <xs:annotation>
+      <xs:documentation>Four corners as x y pairs, pixels, clockwise in the picture from the top-most corner (of two at the same height, the left one).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:list itemType="xs:decimal" />
+      </xs:simpleType>
+      <xs:length value="8" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:complexType name="Events">
+    <xs:annotation>
+      <xs:documentation>One capture: its identity on the container, then what made it, the sun, the declaration, the platform event and the vehicle events.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="_producer" type="Producer" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>What made the sidecar. Absent from a sidecar written before sidecars carried it.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="_solar" type="Solar" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>The sun the world reported on the tick nearest the pixels. Absent where the world reported no sun.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="_illumination" type="Illumination" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>What the run declared the sun to be for this frame. Written only in a run that declares its illumination.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="event" type="Event" minOccurs="0" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>A Cursor-on-Target event: first the camera platform's, where the recorder was given a platform, then one per vehicle.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="format_version" type="FormatVersion" use="optional" fixed="1">
+      <xs:annotation>
+        <xs:documentation>The sidecar's format version, 1. Absent from a sidecar written before sidecars carried one, which is version 1.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="captured" type="Instant" use="required">
+      <xs:annotation>
+        <xs:documentation>When the still was captured, by the wall clock, in UTC.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="count" type="xs:nonNegativeInteger" use="required">
+      <xs:annotation>
+        <xs:documentation>How many vehicle events follow. The platform event is not counted.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="source" type="xs:string" use="required" fixed="truth">
+      <xs:annotation>
+        <xs:documentation>Always truth: the records are the simulator's ground truth.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="tick" type="xs:nonNegativeInteger" use="optional">
+      <xs:annotation>
+        <xs:documentation>The simulation frame the image was rendered on; every record below is that frame's truth. Written by every recorder.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sim_time_s" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>Simulated time at that frame.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>seconds</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="run_id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The run the capture belongs to. A recorder always names one.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="scenario_id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The scenario driving the run, where one is.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="seed" type="xs:long" use="optional">
+      <xs:annotation>
+        <xs:documentation>The seed the run was started with, where one was given.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vehicles" type="VehiclesListed" use="optional">
+      <xs:annotation>
+        <xs:documentation>Which vehicles the events are. Absent, they are every vehicle actor the world held.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="draw_distance_m" type="NonNegativeDecimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The draw distance the image was rendered under. Absent, the image drew vehicles at any range.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="supervision" type="Unknown" use="optional">
+      <xs:annotation>
+        <xs:documentation>unknown: a supervision plan was in force and this frame's supervision could not be read, so no vehicle carries any. Absent where it was read or no plan was in force.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="plan_id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The supervision plan in force on the frame, where one was.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vocabulary" type="xs:positiveInteger" use="optional">
+      <xs:annotation>
+        <xs:documentation>The annotation vocabulary's core version the plan was compiled against, beside plan_id.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vocabulary_digest" type="Sha256" use="optional">
+      <xs:annotation>
+        <xs:documentation>The digest of the plan's vocabulary, which pins what every label means, beside plan_id.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lights" type="Unknown" use="optional">
+      <xs:annotation>
+        <xs:documentation>unknown: a vehicle in the picture carries no lights because the frame's snapshot did not carry them. Absent where every vehicle in the picture carries them.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="pose_source" type="Unknown" use="optional">
+      <xs:annotation>
+        <xs:documentation>unknown: a SUMO vehicle in the picture carries no pose_source because the frame's snapshot did not carry one. Absent where every SUMO vehicle in the picture carries it.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Producer">
+    <xs:annotation>
+      <xs:documentation>What made the sidecar: the tool and its release, the carlanet release, the SUMO release where SUMO ran, when the file was written, and the CARLA server's build identity.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="_server" type="Server" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>The CARLA server's build identity.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="tool" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The component that wrote the file, such as carlacontrol.CaptureSession.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="tool_version" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The release version of the tool's package, where it said.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="carlanet" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The carlanet release the writing process loaded. Absent where it loaded none, as carlacontrol.ProducerRecord writes the record; CarlaNet's own writers always give it.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sumo" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The SUMO release, where SUMO ran.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="written_utc" type="Instant" use="optional">
+      <xs:annotation>
+        <xs:documentation>When the file was written, in UTC.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Server">
+    <xs:annotation>
+      <xs:documentation>What the CARLA server says it was built from. A server that answered carries build, configuration and the three commits, each unknown where it cannot know it; one built before the call carries reason.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="available" type="TrueOrFalse" use="required">
+      <xs:annotation>
+        <xs:documentation>Whether the server answered the build identity call.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="release" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The CARLA release the server was compiled with.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="world_interface" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The world interface version it declares, major.minor.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="build" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>package or editor. Where available is true.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="configuration" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The build configuration. Where available is true.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="carla_commit" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The CARLA commit. Where available is true.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="content_commit" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The content commit. Where available is true.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="engine_commit" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The Unreal Engine commit. Where available is true.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="commits_from" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>version_file, compiled or none: where the commits came from. Where available is true.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="reason" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>Why the identity is not available. Where available is false.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Solar">
+    <xs:annotation>
+      <xs:documentation>The sun the world reported, and its illumination band, derived from that sun alone.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="solar_time" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The sun's clock in its own time zone, 0 up to 24.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>hours</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="date" type="CalendarDate" use="required">
+      <xs:annotation>
+        <xs:documentation>The sun's calendar date.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="time_zone" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The time zone the sun's clock is read in, from UTC.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>hours</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lat" type="Latitude" use="required">
+      <xs:annotation>
+        <xs:documentation>The latitude the sun is computed for: the world's georeference origin.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lon" type="Longitude" use="required">
+      <xs:annotation>
+        <xs:documentation>The longitude the sun is computed for.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_elevation_deg" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The sun's geometric elevation, with no atmosphere.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_corrected_elevation_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The sun's elevation with refraction applied: the elevation the frame was lit at. Where the server reports it.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_azimuth_deg" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The sun's azimuth, clockwise from true north.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="advancing" type="TrueOrFalse" use="required">
+      <xs:annotation>
+        <xs:documentation>Whether the engine itself moved the sun's clock. false in a SUMO drive, which writes the sun itself.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="rate" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Sun-clock seconds per simulated second while the engine advances it.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>seconds per second</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="illumination_band" type="IlluminationBand" use="optional">
+      <xs:annotation>
+        <xs:documentation>The band of this sun. Absent where the elevation is not a sun's.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="illumination_band_elevation" type="ElevationKind" use="optional">
+      <xs:annotation>
+        <xs:documentation>Which elevation the band was cut from: refraction_corrected wherever the block carries it. Written with illumination_band.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Illumination">
+    <xs:annotation>
+      <xs:documentation>What the run declared the sun to be for this frame, and the audit's residual against the world's sun.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="policy" type="IlluminationPolicy" use="required">
+      <xs:annotation>
+        <xs:documentation>The illumination policy the run followed.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="epoch_honoured" type="TrueOrFalse" use="required">
+      <xs:annotation>
+        <xs:documentation>Whether the frame was lit by the sun of its own declared civil instant.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="audited" type="TrueOrFalse" use="required">
+      <xs:annotation>
+        <xs:documentation>Whether the world's sun was compared against the declaration on this frame's tick.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="rate" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>Sun-clock seconds per simulated second, under advance only.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>seconds per second</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="freeze_at_civil_time" type="ClockTime" use="optional">
+      <xs:annotation>
+        <xs:documentation>The time of day the sun is held at, under freeze_at only.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="epoch_digest" type="Sha256" use="optional">
+      <xs:annotation>
+        <xs:documentation>SHA-256 of the scenario's epoch.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="epoch_civil" type="CivilInstant" use="optional">
+      <xs:annotation>
+        <xs:documentation>The civil instant simulated second zero stands for.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="utc_offset_hours" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The epoch's declared UTC offset.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>hours</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="declared_civil" type="CivilInstant" use="optional">
+      <xs:annotation>
+        <xs:documentation>This frame's simulated instant as a civil time.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="declared_utc" type="UtcInstant" use="optional">
+      <xs:annotation>
+        <xs:documentation>The same instant in UTC.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_declared" type="CivilInstant" use="optional">
+      <xs:annotation>
+        <xs:documentation>The date and clock the sun was declared to hold for this frame: the frame's own civil instant under a policy that honors the epoch, the window's opening instant under a freeze.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_elevation_declared_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The declared sun's geometric elevation.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_corrected_elevation_declared_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The declared sun's refraction-corrected elevation.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="declared_elevation" type="ElevationKind" use="optional">
+      <xs:annotation>
+        <xs:documentation>Which of the two elevations a declared window elevation means.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="residual_clock_s" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The world's sun clock minus the declared one.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>seconds</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="residual_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The angle between the world's sun and the declared sun.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="residual_corrected_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The world's corrected elevation minus the declared one, where the world reports it.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Event">
+    <xs:annotation>
+      <xs:documentation>A Cursor-on-Target event. The camera platform's event has uid CARLA-SENSOR-&lt;id&gt; or the camera's own uid, an air-track type and a detail of contact, track, sensor and intrinsics; a vehicle's event has uid CARLA-TRUTH-SUMO-&lt;sumo_id&gt; where a SUMO drive lent its body, CARLA-TRUTH-&lt;actor_id&gt; otherwise, type a-&lt;affiliation&gt;-G-E-V, and a detail of track, contact and _carla.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="point" type="Point">
+        <xs:annotation>
+          <xs:documentation>Where the camera or the vehicle was.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="detail" type="Detail">
+        <xs:annotation>
+          <xs:documentation>What the event says besides where.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="version" type="xs:string" use="required" fixed="2.0">
+      <xs:annotation>
+        <xs:documentation>The Cursor-on-Target version, 2.0.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="uid" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The track's identifier: the same vehicle has the same uid in every capture and in the world truth track.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="type" type="CotType" use="required">
+      <xs:annotation>
+        <xs:documentation>The Cursor-on-Target type.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="how" type="xs:string" use="required" fixed="m-g">
+      <xs:annotation>
+        <xs:documentation>How the position was obtained: m-g, machine generated.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="time" type="Instant" use="required">
+      <xs:annotation>
+        <xs:documentation>The capture instant, as captured on the container.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="start" type="Instant" use="required">
+      <xs:annotation>
+        <xs:documentation>The same instant.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="stale" type="Instant" use="required">
+      <xs:annotation>
+        <xs:documentation>When the event goes stale: the capture instant plus 3 seconds by default.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Point">
+    <xs:annotation>
+      <xs:documentation>A position.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="lat" type="Latitude" use="required">
+      <xs:annotation>
+        <xs:documentation>Latitude, WGS84. For a vehicle, the actor's origin.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lon" type="Longitude" use="required">
+      <xs:annotation>
+        <xs:documentation>Longitude, WGS84.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="hae" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Height above the WGS84 ellipsoid, bare-earth convention: the physical height less the height-align offset under the point.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ce" type="xs:decimal" use="required" fixed="0.0">
+      <xs:annotation>
+        <xs:documentation>Circular error. Always 0.0: truth.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="le" type="xs:decimal" use="required" fixed="0.0">
+      <xs:annotation>
+        <xs:documentation>Linear error. Always 0.0: truth.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Detail">
+    <xs:annotation>
+      <xs:documentation>The platform event's detail, or a vehicle event's. They are told apart by their first child: the platform's begins with contact, a vehicle's with track.</xs:documentation>
+    </xs:annotation>
+    <xs:choice>
+      <xs:sequence>
+        <xs:element name="contact" type="Contact">
+          <xs:annotation>
+            <xs:documentation>The camera's callsign.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="track" type="Track">
+          <xs:annotation>
+            <xs:documentation>The camera's movement since the previous capture.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="sensor" type="SensorPointing">
+          <xs:annotation>
+            <xs:documentation>Where the camera pointed and its field of view.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="_carla_intrinsics" type="Intrinsics">
+          <xs:annotation>
+            <xs:documentation>The camera's pinhole intrinsics.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="_carla_exposure" type="Exposure" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>The exposure the camera was given. Absent for a camera that carries none.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+      <xs:sequence>
+        <xs:element name="track" type="Track">
+          <xs:annotation>
+            <xs:documentation>The vehicle's course and speed.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="contact" type="Contact">
+          <xs:annotation>
+            <xs:documentation>The vehicle's callsign: &lt;base_type&gt;-&lt;sumo_id or actor_id&gt;.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="_carla" type="Carla">
+          <xs:annotation>
+            <xs:documentation>The vehicle's truth record.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="_box3d" type="Box3d" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>The vehicle's box as eight geodetic corners. Only for a vehicle in the picture.</xs:documentation>
+            <xs:appinfo>
+              <cap:onlyInPicture>true</cap:onlyInPicture>
+            </xs:appinfo>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="_supervision" type="Supervision" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>What the scenario's author asserts of the SUMO vehicle this body drew. Written for every drawn SUMO vehicle where a supervision plan was in force and read.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+    </xs:choice>
+  </xs:complexType>
+  <xs:complexType name="Contact">
+    <xs:annotation>
+      <xs:documentation>A callsign.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="callsign" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The track's callsign.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Track">
+    <xs:annotation>
+      <xs:documentation>Course and speed over the ground.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="course" type="Bearing" use="required">
+      <xs:annotation>
+        <xs:documentation>Direction of movement, clockwise from true north. Below 0.5 m/s it is the direction the body or the camera points.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="speed" type="NonNegativeDecimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Ground speed.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters per second</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="SensorPointing">
+    <xs:annotation>
+      <xs:documentation>Where the camera pointed.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="azimuth" type="Bearing" use="required">
+      <xs:annotation>
+        <xs:documentation>Boresight azimuth, clockwise from true north.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="elevation" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Boresight elevation: 0 level, -90 straight down.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="roll" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Roll about the boresight.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="fov" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Horizontal field of view.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vfov" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Vertical field of view.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="range" type="xs:decimal" use="required" fixed="0">
+      <xs:annotation>
+        <xs:documentation>Always 0: no range is declared.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="type" type="xs:string" use="required" fixed="EO">
+      <xs:annotation>
+        <xs:documentation>Always EO, electro-optical.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="model" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The camera blueprint, such as sensor.camera.rgb.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Intrinsics">
+    <xs:annotation>
+      <xs:documentation>The camera's pinhole intrinsics: square pixels, the principal point at the picture's center.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="width" type="xs:positiveInteger" use="required">
+      <xs:annotation>
+        <xs:documentation>The picture's width.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="height" type="xs:positiveInteger" use="required">
+      <xs:annotation>
+        <xs:documentation>The picture's height.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="fx" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Focal length across: width / (2 tan(hfov_deg / 2)).</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="fy" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Focal length down, equal to fx.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="cx" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Principal point across: width / 2.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="cy" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Principal point down: height / 2.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="hfov_deg" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Horizontal field of view.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vfov_deg" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Vertical field of view.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="model" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The projection model: pinhole.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="distortion" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>none at CARLA's defaults, otherwise CARLA's own lens parameters.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="align_offset_m" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The height-align offset under the camera: its physical height is the point's hae plus this.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Exposure">
+    <xs:annotation>
+      <xs:documentation>The exposure the camera was given: its post-process profile, and the exposure its attributes set over it.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="post_process_profile" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The post-process profile the camera loaded.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="method" type="ExposureMethod" use="required">
+      <xs:annotation>
+        <xs:documentation>How the exposure was set.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="iso" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The sensor's sensitivity, ISO.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="shutter_s" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The shutter time.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>seconds</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="fstop" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The aperture, as an f-number.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="compensation_ev" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Exposure compensation; above 0 brightens.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>EV</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ev100" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The exposure value at ISO 100 the ISO, shutter and aperture make: log2(fstop^2 / shutter_s) - log2(iso / 100). Under manual only.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>EV</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Carla">
+    <xs:annotation>
+      <xs:documentation>One vehicle's truth record.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="source" type="xs:string" use="required" fixed="truth">
+      <xs:annotation>
+        <xs:documentation>Always truth.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="actor_id" type="xs:unsignedInt" use="required">
+      <xs:annotation>
+        <xs:documentation>The CARLA actor that drew the vehicle on this frame. A body drawn for a SUMO drive draws a succession of vehicles, so follow a vehicle by sumo_id.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="type_id" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The body's CARLA blueprint, such as vehicle.audi.tt.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="base_type" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The vehicle's base type, such as car, van or truck: the vehicle catalogue's for the blueprint, or what the blueprint declares where the catalogue does not list it.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="special_type" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The vehicle's kind from the catalogue or the blueprint; empty where it has none.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="length_m" type="NonNegativeDecimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The body's bounding box, front to back.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="width_m" type="NonNegativeDecimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The body's bounding box, side to side.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="height_m" type="NonNegativeDecimal" use="required">
+      <xs:annotation>
+        <xs:documentation>The body's bounding box, bottom to top.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="color" type="Color" use="required">
+      <xs:annotation>
+        <xs:documentation>The body's color attribute.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="role_name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The actor's role name: sumo for a body a SUMO drive lent.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vx" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Velocity east, in CARLA's world frame (x east, y south, z up).</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters per second</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vy" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Velocity south.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters per second</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vz" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Velocity up.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters per second</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="heading_deg" type="Bearing" use="optional">
+      <xs:annotation>
+        <xs:documentation>The direction the body points, clockwise from true north: its yaw. The track's course is the direction it moves, which differs while it turns or changes lane. Written wherever the body's transform was read.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="pitch_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The body's pitch, positive nose up.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="roll_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The body's roll, positive right side down.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="in_frame" type="InFrame" use="optional">
+      <xs:annotation>
+        <xs:documentation>Where the vehicle's box fell against the picture. Written on every record a recorder wrote.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="occlusion" type="Fraction" use="optional">
+      <xs:annotation>
+        <xs:documentation>The share of the vehicle's silhouette hidden from the camera by anything nearer: 0 wholly visible, 1 wholly hidden. Only where occlusion was measured; never beside occlusion_unmeasured.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="occlusion_level" type="OcclusionLevel" use="optional">
+      <xs:annotation>
+        <xs:documentation>The occlusion fraction as a band. Only where measured.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="occlusion_samples" type="xs:nonNegativeInteger" use="optional">
+      <xs:annotation>
+        <xs:documentation>How many points across the vehicle's outline the fraction was measured over. Few samples mean few possible values. Only where measured.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="apparent_width_px" type="xs:nonNegativeInteger" use="optional">
+      <xs:annotation>
+        <xs:documentation>How wide the box appears, its whole projected footprint, any part outside the picture included. Wherever the box has a footprint: not behind the camera.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="apparent_height_px" type="xs:nonNegativeInteger" use="optional">
+      <xs:annotation>
+        <xs:documentation>How tall the box appears. As apparent_width_px.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="box_px" type="PixelRectangle" use="optional">
+      <xs:annotation>
+        <xs:documentation>The axis-aligned rectangle the box's eight projected corners span: x min, y min, x max, y max. Not clipped to the picture.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="box_oriented_px" type="PixelQuadrilateral" use="optional">
+      <xs:annotation>
+        <xs:documentation>The smallest-area rectangle enclosing the eight projected corners, as four x y corners clockwise from the top-most. Not clipped.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>pixels</cap:unit>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="truncation" type="Fraction" use="optional">
+      <xs:annotation>
+        <xs:documentation>The share of box_px's area outside the picture.</xs:documentation>
+        <xs:appinfo>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lights" type="Lights" use="optional">
+      <xs:annotation>
+        <xs:documentation>The lights commanded on for the vehicle on this frame, in words, or none. Absent where the frame's snapshot did not carry them, and the container then says lights="unknown".</xs:documentation>
+        <xs:appinfo>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="pose_source" type="PoseSource" use="optional">
+      <xs:annotation>
+        <xs:documentation>Where the drawn pose came from on this frame. Only for a SUMO vehicle in the picture; absent where the frame's snapshot did not carry it, and the container then says pose_source="unknown".</xs:documentation>
+        <xs:appinfo>
+          <cap:onlyInPicture>true</cap:onlyInPicture>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="occlusion_unmeasured" type="OcclusionUnmeasured" use="optional">
+      <xs:annotation>
+        <xs:documentation>Why there is no occlusion. Only where occlusion was not measured, so an absent fraction is never read as nothing in the way.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="beyond_draw_distance" type="DrawDistanceReach" use="optional">
+      <xs:annotation>
+        <xs:documentation>Where the capture's draw distance kept the vehicle out of the image, wholly or partly. Only where the draw distance reached it.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="camera_range_m" type="NonNegativeDecimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>Distance from the camera to the center of the vehicle's box. For a vehicle in the picture, and beside beyond_draw_distance.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sumo_id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The SUMO vehicle this body drew on this frame. Only where a SUMO drive lent the body; the key that joins the record to the world truth track and the supervision plan.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vtype_id" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The SUMO vehicle type. With sumo_id.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="admitted_tick" type="xs:nonNegativeInteger" use="optional">
+      <xs:annotation>
+        <xs:documentation>The frame on which this body began drawing this vehicle. With sumo_id.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sumo_angle_deg" type="xs:decimal" use="optional">
+      <xs:annotation>
+        <xs:documentation>The angle SUMO reported for the vehicle at this frame, clockwise from north, for comparison with heading_deg. With sumo_id, where the recorder knows it.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Box3d">
+    <xs:annotation>
+      <xs:documentation>The vehicle's box as eight corners, converted to latitude, longitude and bare-earth height as the event's point is, in a fixed order: front_left_bottom, front_right_bottom, back_right_bottom, back_left_bottom, front_left_top, front_right_top, back_right_top, back_left_top. Corner n + 4 stands above corner n; front is the way heading_deg points; left and right are as seen from the driver's seat.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="corner" type="Corner" minOccurs="8" maxOccurs="8">
+        <xs:annotation>
+          <xs:documentation>One corner of the box.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="frame" type="xs:string" use="required" fixed="geodetic">
+      <xs:annotation>
+        <xs:documentation>Always geodetic.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Corner">
+    <xs:annotation>
+      <xs:documentation>One corner of the box.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="lat" type="Latitude" use="required">
+      <xs:annotation>
+        <xs:documentation>Latitude, WGS84.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lon" type="Longitude" use="required">
+      <xs:annotation>
+        <xs:documentation>Longitude, WGS84.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>degrees</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="hae" type="xs:decimal" use="required">
+      <xs:annotation>
+        <xs:documentation>Height above the WGS84 ellipsoid, bare-earth convention.</xs:documentation>
+        <xs:appinfo>
+          <cap:unit>meters</cap:unit>
+        </xs:appinfo>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Supervision">
+    <xs:annotation>
+      <xs:documentation>What the scenario's author asserts of the vehicle on this frame: always its state, unlabelled included, and one annotation per pattern instance in force for it.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="annotation" type="Annotation" minOccurs="0" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>One pattern instance in force for the vehicle.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="state" type="SupervisionState" use="required">
+      <xs:annotation>
+        <xs:documentation>The vehicle's supervision state.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vocabulary" type="xs:positiveInteger" use="required">
+      <xs:annotation>
+        <xs:documentation>The annotation vocabulary's core version.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vocabulary_digest" type="Sha256" use="required">
+      <xs:annotation>
+        <xs:documentation>The digest of the plan's vocabulary.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="Annotation">
+    <xs:annotation>
+      <xs:documentation>One pattern instance in force for the vehicle.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="instance" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The instance, as the plan names it: &lt;scenario_id&gt;/&lt;name&gt;.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="labels" type="Terms" use="optional">
+      <xs:annotation>
+        <xs:documentation>The terms the instance is labeled with. Absent where it has none.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="phase" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The phase of the instance's interval in force. Absent where none is declared.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="role" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>The role the vehicle plays in the instance, subject for a one-participant instance. Absent where none is declared.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+</xs:schema>

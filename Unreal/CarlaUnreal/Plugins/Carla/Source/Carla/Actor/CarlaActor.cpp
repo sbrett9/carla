@@ -828,6 +828,23 @@ ECarlaServerResponse FVehicleActor::SetActorSimulatePhysics(bool bEnabled)
   return ECarlaServerResponse::Success;
 }
 
+ECarlaServerResponse FVehicleActor::SetActorTargetVelocity(const FVector& Velocity)
+{
+  if (!IsDormant())
+  {
+    auto* CarlaVehicle = Cast<ACarlaWheeledVehicle>(GetActor());
+    // A vehicle with its physics disabled moves only by having its pose applied, so
+    // the velocity of its motion is known only to the caller applying that pose.
+    // Writing it only to the physics body, as the base does, would not reach GetVelocity.
+    if (CarlaVehicle != nullptr && CarlaVehicle->IsKinematic())
+    {
+      CarlaVehicle->SetKinematicVelocity(Velocity);
+      return ECarlaServerResponse::Success;
+    }
+  }
+  return FCarlaActor::SetActorTargetVelocity(Velocity);
+}
+
 ECarlaServerResponse FVehicleActor::ApplyControlToVehicle(
       const FVehicleControl& Control, const EVehicleInputPriority& Priority)
 {

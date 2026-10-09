@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Deliberately no ProjectReference and no PackageReference. This assembly is a TraCI client and
+       nothing else: a TCP socket, a frame codec and the SUMO domains a co-simulation bridge reads.
+       Keeping it free of CarlaNet's other assemblies is what lets it build and be tested on a clean
+       clone with no CARLA server, no SUMO build and no native library anywhere in the process. -->
+
+  <ItemGroup>
+    <!-- The frame reader and writer are internal: they are how the client works, not a surface a
+         consumer should reach into. The tests assert them directly because a wire codec that is
+         only tested through a live simulation is tested only where a live simulation happens to
+         go. -->
+    <InternalsVisibleTo Include="CarlaNet.Sumo.Tests" />
+  </ItemGroup>
+
+</Project>

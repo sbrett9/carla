@@ -1,7 +1,9 @@
 // Copyright (c) 2026 CARLA-Cesium digital-twin project.
 //
 // ACesiumTimeOfDayController advances a CesiumSunSky's solar clock over time so the sun moves as
-// the scene runs. It is spawned and driven by UCesiumHeightSampler::SetTimeAdvance (the
+// the scene runs, carrying whole days onto the sun's calendar date so a run that crosses local
+// midnight renders (and records) the next day rather than returning to 00:00 of the same one. It is
+// spawned and driven by UCesiumHeightSampler::SetTimeAdvance (the
 // set_time_advance RPC); nothing else needs to reference it. Because it ticks with the world, it
 // advances in wall-clock time under asynchronous mode and in simulation time under synchronous
 // ticking (world.tick()).
@@ -22,7 +24,7 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
-	/** When true, the first CesiumSunSky's SolarTime advances each tick. */
+	/** When true, the first CesiumSunSky's SolarTime (and, across midnight, its date) advances each tick. */
 	UPROPERTY()
 	bool bAdvancing = false;
 

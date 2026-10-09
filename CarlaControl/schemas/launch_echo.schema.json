@@ -1,0 +1,697 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:launch-echo:1",
+  "title": "Capture launch echo",
+  "description": "What a carla-capture run is about to do, stated before anything is acquired: the simulated and civil span, the captures, the sun, the world, what is rendered, the disk it will cost, where it writes, the wait for each view, and the warnings. Carried as launch_echo in run.result.json and run.resolution.json. An expect entry names a value here as launch_echo.<path>.",
+  "type": "object",
+  "required": [
+    "launch_echo_version",
+    "session_id",
+    "caller",
+    "scenario",
+    "simulated",
+    "captures",
+    "civil",
+    "sun",
+    "world",
+    "render",
+    "cost",
+    "writes",
+    "pacing",
+    "readiness",
+    "warnings",
+    "not_predicted"
+  ],
+  "properties": {
+    "launch_echo_version": {
+      "const": 1,
+      "description": "The format version of this block."
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The run's identity."
+    },
+    "caller": {
+      "enum": [
+        "attended",
+        "unattended"
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "description": "The scenario and window.",
+      "required": [
+        "scenario_id",
+        "lock",
+        "window",
+        "dry_run"
+      ],
+      "properties": {
+        "scenario_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lock": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scenario as <scenario_id>@<first 12 digits of its lock's SHA-256>."
+        },
+        "window": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The declared window's id, or explicit."
+        },
+        "dry_run": {
+          "type": "object",
+          "description": "What the scenario lock records of the compiler's SUMO-only run.",
+          "required": [
+            "ran",
+            "skipped_accepted",
+            "statement"
+          ],
+          "properties": {
+            "ran": {
+              "type": "boolean",
+              "description": "Whether the compile ran the scenario in SUMO alone."
+            },
+            "skipped_accepted": {
+              "type": "boolean",
+              "description": "Whether a skipped run was accepted for this launch."
+            },
+            "statement": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "simulated": {
+      "type": "object",
+      "description": "The simulated span.",
+      "required": [
+        "begin_s",
+        "end_s",
+        "length_s",
+        "end_source",
+        "prewarm_s",
+        "first_rendered_s"
+      ],
+      "properties": {
+        "begin_s": {
+          "type": "number",
+          "description": "Where the window begins, simulated seconds."
+        },
+        "end_s": {
+          "type": "number",
+          "description": "Where it ends."
+        },
+        "length_s": {
+          "type": "number",
+          "description": "Its length."
+        },
+        "end_source": {
+          "type": "string",
+          "description": "Where the end came from."
+        },
+        "prewarm_s": {
+          "type": "number",
+          "description": "Seconds rendered before the window and not recorded."
+        },
+        "first_rendered_s": {
+          "type": "number",
+          "description": "The first simulated second rendered."
+        }
+      },
+      "additionalProperties": false
+    },
+    "captures": {
+      "type": "object",
+      "description": "The captures the window will make.",
+      "required": [
+        "capture_hz",
+        "channels",
+        "per_channel",
+        "total",
+        "frames_per_hour"
+      ],
+      "properties": {
+        "capture_hz": {
+          "type": "number",
+          "description": "Captures per simulated second on each channel."
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many channels."
+        },
+        "per_channel": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Captures each channel will make."
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Captures over every channel."
+        },
+        "frames_per_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Captures per simulated hour over every channel."
+        }
+      },
+      "additionalProperties": false
+    },
+    "civil": {
+      "type": "object",
+      "description": "The civil span.",
+      "required": [
+        "begin",
+        "end",
+        "first_rendered",
+        "epoch"
+      ],
+      "properties": {
+        "begin": {
+          "type": "string",
+          "description": "The window's begin in civil time, ISO 8601 with offset."
+        },
+        "end": {
+          "type": "string",
+          "description": "Its end."
+        },
+        "first_rendered": {
+          "type": "string",
+          "description": "The first rendered instant."
+        },
+        "epoch": {
+          "type": "string",
+          "description": "The epoch in one line."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sun": {
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "A policy that binds no sun: the world's own is left as it is.",
+          "required": [
+            "policy",
+            "binds",
+            "statement"
+          ],
+          "properties": {
+            "policy": {
+              "enum": [
+                "freeze_at_window_start",
+                "advance",
+                "freeze_at",
+                "ignore"
+              ]
+            },
+            "binds": {
+              "const": false
+            },
+            "statement": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "A policy that binds the sun, and the sun at the window's first and last instant.",
+          "required": [
+            "policy",
+            "binds",
+            "advances",
+            "rate",
+            "elevation_kind",
+            "window_open_s",
+            "at_begin",
+            "at_end"
+          ],
+          "properties": {
+            "policy": {
+              "enum": [
+                "freeze_at_window_start",
+                "advance",
+                "freeze_at",
+                "ignore"
+              ]
+            },
+            "binds": {
+              "const": true
+            },
+            "advances": {
+              "type": "boolean",
+              "description": "Whether the sun moves across the window."
+            },
+            "rate": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sun-clock seconds per simulated second, under advance."
+            },
+            "elevation_kind": {
+              "type": "string",
+              "description": "What the elevations are: refraction-corrected or geometric."
+            },
+            "window_open_s": {
+              "type": "number",
+              "description": "The simulated second the window opens and the sun is bound."
+            },
+            "at_begin": {
+              "$ref": "#/$defs/sun_at"
+            },
+            "at_end": {
+              "$ref": "#/$defs/sun_at"
+            },
+            "held_at": {
+              "type": "string",
+              "description": "The sun's date and clock where it is held."
+            },
+            "held_at_note": {
+              "type": "string",
+              "description": "When the sun is pinned, and what the prewarm is lit by."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "The policy holding the sun, and the sun it binds."
+    },
+    "world": {
+      "type": "object",
+      "description": "The world.",
+      "required": [
+        "map_name",
+        "package",
+        "network_fingerprint",
+        "origin"
+      ],
+      "properties": {
+        "map_name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string",
+          "description": "The world package's file name."
+        },
+        "network_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "origin": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          },
+          "description": "[latitude, longitude] of the map's origin, degrees."
+        }
+      },
+      "additionalProperties": false
+    },
+    "render": {
+      "type": "object",
+      "description": "What is rendered: the render set's fields as resolved.",
+      "required": [
+        "set",
+        "region",
+        "hysteresis_m",
+        "min_pixels",
+        "admit_lead_s",
+        "release_lag_s",
+        "cap",
+        "limited",
+        "vehicles",
+        "left_out",
+        "road_layer_visible",
+        "signal_layer_visible",
+        "draw_distance_m",
+        "draw_distance"
+      ],
+      "properties": {
+        "set": {
+          "enum": [
+            "all",
+            "circle",
+            "cameras"
+          ]
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x_m",
+                "y_m",
+                "radius_m"
+              ],
+              "properties": {
+                "x_m": {
+                  "type": "number"
+                },
+                "y_m": {
+                  "type": "number"
+                },
+                "radius_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hysteresis_m": {
+          "type": "number"
+        },
+        "min_pixels": {
+          "type": "number"
+        },
+        "admit_lead_s": {
+          "type": "number"
+        },
+        "release_lag_s": {
+          "type": "number"
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limited": {
+          "type": "boolean",
+          "description": "Whether an optional limit leaves vehicles without a body."
+        },
+        "vehicles": {
+          "type": "string",
+          "description": "Which vehicles get a body, in words."
+        },
+        "left_out": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What a limit leaves out; null with no limit."
+        },
+        "road_layer_visible": {
+          "type": "boolean"
+        },
+        "signal_layer_visible": {
+          "type": "boolean"
+        },
+        "draw_distance_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "draw_distance": {
+          "type": "string",
+          "description": "The draw distance in words."
+        }
+      },
+      "additionalProperties": false
+    },
+    "cost": {
+      "type": "object",
+      "description": "The disk the window will cost.",
+      "required": [
+        "bytes_per_captured_second",
+        "estimated_bytes",
+        "free_bytes",
+        "headroom_s",
+        "basis"
+      ],
+      "properties": {
+        "bytes_per_captured_second": {
+          "type": "number"
+        },
+        "estimated_bytes": {
+          "type": "number",
+          "description": "The window's estimated size on disk."
+        },
+        "free_bytes": {
+          "type": "number",
+          "description": "Free space where captures are written."
+        },
+        "headroom_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Captured seconds the free space holds."
+        },
+        "basis": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "writes": {
+      "type": "object",
+      "description": "Where the run writes.",
+      "required": [
+        "capture_directory",
+        "result_path"
+      ],
+      "properties": {
+        "capture_directory": {
+          "type": "string"
+        },
+        "result_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "pacing": {
+      "type": "object",
+      "description": "The pacing.",
+      "required": [
+        "mode",
+        "real_time_factor",
+        "min_achieved_factor"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "as_available",
+            "wall_clock"
+          ]
+        },
+        "real_time_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_achieved_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "readiness": {
+      "type": "object",
+      "description": "The wait for every channel's view before the window opens.",
+      "required": [
+        "waits",
+        "rule",
+        "tiles",
+        "picture_settled_wait",
+        "picture",
+        "tiles_ceiling_s",
+        "from_s",
+        "until_s",
+        "traffic_stare_holds_from_s",
+        "not_ready",
+        "per_capture"
+      ],
+      "properties": {
+        "waits": {
+          "const": true
+        },
+        "rule": {
+          "type": "string"
+        },
+        "tiles": {
+          "type": "string",
+          "description": "What a view's tiles being in means."
+        },
+        "picture_settled_wait": {
+          "type": "boolean",
+          "description": "Whether the picture is also waited on."
+        },
+        "picture": {
+          "type": "string",
+          "description": "What the picture's wait compares, or that it is not run."
+        },
+        "vehicles": {
+          "type": "string"
+        },
+        "tiles_ceiling_s": {
+          "type": "number",
+          "description": "Wall-clock seconds a view has for its tiles."
+        },
+        "tiles_hold_s": {
+          "type": "number",
+          "description": "The tiles' lead before the window, simulated seconds."
+        },
+        "picture_ceiling_frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "picture_ceiling_s": {
+          "type": "number"
+        },
+        "picture_tolerance_levels": {
+          "type": "number"
+        },
+        "from_s": {
+          "type": "number",
+          "description": "The simulated second the wait begins."
+        },
+        "until_s": {
+          "type": "number",
+          "description": "The simulated second the window opens."
+        },
+        "traffic_stare_holds_from_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where a stare aimed at the traffic holds its pose; null with no such stare."
+        },
+        "not_ready": {
+          "type": "string"
+        },
+        "per_capture": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "capture_may_outrun_disk",
+          "exposure_follows_the_scene",
+          "lighting_honours_no_epoch",
+          "prewarm_clipped"
+        ]
+      },
+      "description": "The codes of the warnings the offline checks raised."
+    },
+    "not_predicted": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What the echo cannot say before the run."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sun_at": {
+      "type": "object",
+      "description": "The declared sun at one instant.",
+      "required": [
+        "seconds",
+        "sun_date",
+        "sun_clock",
+        "elevation_deg",
+        "geometric_elevation_deg",
+        "azimuth_deg",
+        "band"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "description": "The simulated second."
+        },
+        "sun_date": {
+          "type": "string",
+          "description": "The date the sun is computed for, YYYY-MM-DD."
+        },
+        "sun_clock": {
+          "type": "string",
+          "description": "The clock time the sun is computed for, HH:MM:SS."
+        },
+        "elevation_deg": {
+          "type": "number",
+          "description": "Refraction-corrected elevation, degrees."
+        },
+        "geometric_elevation_deg": {
+          "type": "number",
+          "description": "Geometric elevation, degrees."
+        },
+        "azimuth_deg": {
+          "type": "number",
+          "description": "Azimuth, degrees clockwise from north."
+        },
+        "band": {
+          "enum": [
+            "day",
+            "golden",
+            "civil_twilight",
+            "nautical_twilight",
+            "astronomical_twilight",
+            "night"
+          ],
+          "description": "The illumination band of the elevation."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

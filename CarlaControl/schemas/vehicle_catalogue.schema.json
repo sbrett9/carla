@@ -1,0 +1,1028 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:vehicle-catalogue:1",
+  "title": "Vehicle catalogue (vehicles.catalogue.json)",
+  "description": "Every CARLA vehicle blueprint, measured by spawning it on a running server, and the classes a scenario draws vehicles from. Meters, seconds and degrees throughout.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "catalogue_version",
+    "catalogue_id",
+    "catalogue_digest",
+    "content_build_id",
+    "blueprint_set_digest",
+    "generated_at_utc",
+    "generator",
+    "server_version",
+    "lamp_probe",
+    "vehicles",
+    "classes"
+  ],
+  "properties": {
+    "catalogue_version": {
+      "const": 1,
+      "description": "The format of this file."
+    },
+    "catalogue_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The catalogue's name: carla-<server version>-<os> unless given."
+    },
+    "catalogue_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of this file in its canonical form (sorted keys, two-space indent) with this field empty. Scenarios record it."
+    },
+    "content_build_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Which content build was measured."
+    },
+    "blueprint_set_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 over every vehicle definition and attribute the server declared."
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+      "description": "When the sweep ran, UTC."
+    },
+    "generator": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The tool and its version."
+    },
+    "server_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The CARLA server's version."
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "description": "What made the catalogue. Absent from a catalogue built before it was recorded.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The component that wrote the file, such as carlacontrol.ScenarioCompiler, or the program's name where no component declared itself."
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The release of the package the tool comes from, such as 0.10.0 or 0.10.0+g1a2b3c4d5. Null where it did not say."
+        },
+        "carlanet": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CarlaNet release the process loaded. Null in a Python process that never loaded CarlaNet."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "build",
+                "configuration",
+                "carla_commit",
+                "content_commit",
+                "engine_commit",
+                "commits_from"
+              ],
+              "description": "What the server answered when asked what it was built from. A value the server cannot know is the word unknown.",
+              "properties": {
+                "available": {
+                  "const": true
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release the server was compiled with."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version the server declares, Major.Minor."
+                },
+                "build": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "package for a cooked server, editor for one run from the editor."
+                },
+                "configuration": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The build configuration, such as Development or Shipping."
+                },
+                "carla_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA commit."
+                },
+                "content_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The content commit."
+                },
+                "engine_commit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The Unreal Engine commit."
+                },
+                "commits_from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Where the commits came from: version_file, the package's VERSION file; compiled, the CARLA commit compiled into an editor build; or none."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "available",
+                "release",
+                "world_interface",
+                "reason"
+              ],
+              "description": "A server built before it could answer, or one that could not be asked: what its older calls still say, and why.",
+              "properties": {
+                "available": {
+                  "const": false
+                },
+                "release": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CARLA release, or unknown."
+                },
+                "world_interface": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The world interface version, or unknown."
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Why the identity is not available."
+                }
+              }
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used. Null where none was."
+        },
+        "sumo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran. Null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, UTC to the millisecond. Left out of a file that two runs of one input must write byte for byte."
+        }
+      }
+    },
+    "lamp_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ran"
+      ],
+      "description": "The conditions of the optical lamp pass, and whether it ran.",
+      "properties": {
+        "ran": {
+          "type": "boolean",
+          "description": "Whether the pass ran."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why it did not run, or stopped."
+        },
+        "solar_date": {
+          "type": "string",
+          "description": "The date the sun was set to, YYYY-MM-DD."
+        },
+        "solar_time_hours": {
+          "type": "number",
+          "description": "The solar time the sun was set to, hours."
+        },
+        "sun_elevation_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The sun's elevation the server reported, degrees."
+        },
+        "positive_control_pixels": {
+          "type": "integer",
+          "description": "Pixels that changed when the sun was moved to daylight, which proves the camera sees a change."
+        },
+        "camera_poses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "standoff_m",
+              "height_offset_m",
+              "pitch_deg",
+              "yaw_deg",
+              "fov_deg"
+            ],
+            "properties": {
+              "standoff_m": {
+                "type": "number"
+              },
+              "height_offset_m": {
+                "type": "number"
+              },
+              "pitch_deg": {
+                "type": "number"
+              },
+              "yaw_deg": {
+                "type": "number"
+              },
+              "fov_deg": {
+                "type": "number"
+              }
+            }
+          },
+          "description": "Where the probe camera stood relative to the vehicle, meters and degrees."
+        },
+        "image_size": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number"
+          },
+          "description": "Probe image width and height, pixels."
+        },
+        "luminance_threshold": {
+          "type": "integer",
+          "description": "A pixel counts as gained above this brightness, out of 255."
+        },
+        "region": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "number"
+          },
+          "description": "The part of the image counted, as fractions of its width and height."
+        },
+        "minimum_lit_pixels": {
+          "type": "integer",
+          "description": "A lamp needs more gained pixels than this to be lit."
+        },
+        "drift_margin": {
+          "type": "number",
+          "description": "A lamp also needs more than this many times the largest difference between two images of the same state."
+        },
+        "average_frames": {
+          "type": "integer",
+          "description": "Frames averaged per image."
+        }
+      }
+    },
+    "body_width": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "measured",
+        "source"
+      ],
+      "description": "How the body widths were measured.",
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The method."
+        },
+        "measured": {
+          "type": "string",
+          "minLength": 1,
+          "description": "When, and from what."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The table they were merged from."
+        }
+      }
+    },
+    "vehicles": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "blueprint_id",
+              "uid",
+              "tags",
+              "declared_base_type",
+              "declared_special_type",
+              "number_of_wheels",
+              "generation",
+              "declared_has_lights",
+              "settable_attributes",
+              "colour_settable",
+              "colour_palette",
+              "colour_applied",
+              "lamp_capability",
+              "measurement",
+              "length_m",
+              "width_m",
+              "height_m",
+              "bbox_centre_m"
+            ],
+            "properties": {
+              "blueprint_id": {
+                "type": "string",
+                "pattern": "^vehicle\\.[a-z0-9_.]+$",
+                "description": "The CARLA blueprint id, such as vehicle.lincoln.mkz."
+              },
+              "uid": {
+                "type": "integer",
+                "description": "The blueprint's numeric id on the server that was measured."
+              },
+              "tags": {
+                "type": "string",
+                "description": "The blueprint's tags, comma separated."
+              },
+              "declared_base_type": {
+                "type": "string",
+                "description": "The base_type the content declares for the blueprint. Truth does not use it; it uses the class's cot_base_type."
+              },
+              "declared_special_type": {
+                "type": "string",
+                "description": "The special_type the content declares. Truth does not use it; it uses the class's cot_special_type."
+              },
+              "number_of_wheels": {
+                "type": "integer",
+                "description": "Wheels the blueprint declares; -1 when it declares none."
+              },
+              "generation": {
+                "type": "integer",
+                "description": "The CARLA generation the blueprint declares; -1 when none."
+              },
+              "declared_has_lights": {
+                "type": "boolean",
+                "description": "Whether the blueprint declares it has lights."
+              },
+              "settable_attributes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "type",
+                    "restrict_to_recommended",
+                    "recommended_values"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The attribute's name, such as color or role_name."
+                    },
+                    "type": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "CARLA's attribute type, such as RGBColor, String or Bool."
+                    },
+                    "restrict_to_recommended": {
+                      "type": "boolean",
+                      "description": "True when only the recommended values are accepted."
+                    },
+                    "recommended_values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The values the blueprint recommends."
+                    }
+                  }
+                },
+                "description": "Every attribute a spawn may set, by id."
+              },
+              "colour_settable": {
+                "type": "boolean",
+                "description": "Whether the blueprint has a color attribute."
+              },
+              "colour_palette": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\d{1,3},\\d{1,3},\\d{1,3}$"
+                },
+                "description": "The body colors the blueprint recommends, each \"R,G,B\" from 0 to 255."
+              },
+              "colour_applied": {
+                "enum": [
+                  "false",
+                  "true",
+                  "unknown"
+                ],
+                "description": "Whether a requested color reached the body: true, false, or unknown when the server log could not say."
+              },
+              "lamp_capability": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "position",
+                  "low_beam",
+                  "high_beam",
+                  "brake",
+                  "right_blinker",
+                  "left_blinker",
+                  "reverse",
+                  "fog",
+                  "interior",
+                  "special_1",
+                  "special_2"
+                ],
+                "description": "For each of the eleven lamps CARLA can command, what the optical pass saw: lit, the image changed; unlit, the lamp was commanded and the image did not change; unknown, not measured.",
+                "properties": {
+                  "position": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "low_beam": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "high_beam": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "brake": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "right_blinker": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "left_blinker": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "reverse": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "fog": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "interior": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "special_1": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "special_2": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  }
+                }
+              },
+              "measurement": {
+                "const": "measured"
+              },
+              "length_m": {
+                "type": "number",
+                "exclusiveMinimum": 0.2,
+                "description": "Length of the spawned body's bounding box, meters, front to back."
+              },
+              "width_m": {
+                "type": "number",
+                "exclusiveMinimum": 0.2,
+                "description": "Width of the bounding box, meters, mirrors included."
+              },
+              "height_m": {
+                "type": "number",
+                "exclusiveMinimum": 0.2,
+                "description": "Height of the bounding box, meters."
+              },
+              "bbox_centre_m": {
+                "type": "array",
+                "minItems": 3,
+                "items": {
+                  "type": "number"
+                },
+                "description": "Center of the bounding box in the vehicle's own frame, three numbers in meters: forward, right, up from the actor's origin."
+              },
+              "body_width_m": {
+                "type": "number",
+                "exclusiveMinimum": 0.2,
+                "description": "Width of the body without its mirrors, meters, measured from the mesh in the editor. SUMO is given this width."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "blueprint_id",
+              "uid",
+              "tags",
+              "declared_base_type",
+              "declared_special_type",
+              "number_of_wheels",
+              "generation",
+              "declared_has_lights",
+              "settable_attributes",
+              "colour_settable",
+              "colour_palette",
+              "colour_applied",
+              "lamp_capability",
+              "measurement",
+              "measurement_note"
+            ],
+            "properties": {
+              "blueprint_id": {
+                "type": "string",
+                "pattern": "^vehicle\\.[a-z0-9_.]+$",
+                "description": "The CARLA blueprint id, such as vehicle.lincoln.mkz."
+              },
+              "uid": {
+                "type": "integer",
+                "description": "The blueprint's numeric id on the server that was measured."
+              },
+              "tags": {
+                "type": "string",
+                "description": "The blueprint's tags, comma separated."
+              },
+              "declared_base_type": {
+                "type": "string",
+                "description": "The base_type the content declares for the blueprint. Truth does not use it; it uses the class's cot_base_type."
+              },
+              "declared_special_type": {
+                "type": "string",
+                "description": "The special_type the content declares. Truth does not use it; it uses the class's cot_special_type."
+              },
+              "number_of_wheels": {
+                "type": "integer",
+                "description": "Wheels the blueprint declares; -1 when it declares none."
+              },
+              "generation": {
+                "type": "integer",
+                "description": "The CARLA generation the blueprint declares; -1 when none."
+              },
+              "declared_has_lights": {
+                "type": "boolean",
+                "description": "Whether the blueprint declares it has lights."
+              },
+              "settable_attributes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "type",
+                    "restrict_to_recommended",
+                    "recommended_values"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The attribute's name, such as color or role_name."
+                    },
+                    "type": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "CARLA's attribute type, such as RGBColor, String or Bool."
+                    },
+                    "restrict_to_recommended": {
+                      "type": "boolean",
+                      "description": "True when only the recommended values are accepted."
+                    },
+                    "recommended_values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The values the blueprint recommends."
+                    }
+                  }
+                },
+                "description": "Every attribute a spawn may set, by id."
+              },
+              "colour_settable": {
+                "type": "boolean",
+                "description": "Whether the blueprint has a color attribute."
+              },
+              "colour_palette": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\d{1,3},\\d{1,3},\\d{1,3}$"
+                },
+                "description": "The body colors the blueprint recommends, each \"R,G,B\" from 0 to 255."
+              },
+              "colour_applied": {
+                "enum": [
+                  "false",
+                  "true",
+                  "unknown"
+                ],
+                "description": "Whether a requested color reached the body: true, false, or unknown when the server log could not say."
+              },
+              "lamp_capability": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "position",
+                  "low_beam",
+                  "high_beam",
+                  "brake",
+                  "right_blinker",
+                  "left_blinker",
+                  "reverse",
+                  "fog",
+                  "interior",
+                  "special_1",
+                  "special_2"
+                ],
+                "description": "For each of the eleven lamps CARLA can command, what the optical pass saw: lit, the image changed; unlit, the lamp was commanded and the image did not change; unknown, not measured.",
+                "properties": {
+                  "position": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "low_beam": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "high_beam": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "brake": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "right_blinker": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "left_blinker": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "reverse": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "fog": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "interior": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "special_1": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  },
+                  "special_2": {
+                    "enum": [
+                      "lit",
+                      "unknown",
+                      "unlit"
+                    ]
+                  }
+                }
+              },
+              "measurement": {
+                "const": "failed"
+              },
+              "measurement_note": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why the blueprint could not be measured."
+              }
+            }
+          }
+        ]
+      },
+      "description": "One entry per vehicle blueprint the server offered, in blueprint id order."
+    },
+    "classes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "class_id",
+          "description",
+          "sumo_vclass",
+          "cot_base_type",
+          "members",
+          "accel_mps2",
+          "decel_mps2",
+          "sigma",
+          "speed_factor_mean",
+          "speed_factor_dev",
+          "min_gap_m",
+          "max_speed_mps",
+          "gui_shape",
+          "gui_colour",
+          "render_colour_policy"
+        ],
+        "properties": {
+          "class_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$",
+            "description": "The class's id, which a scenario names and which every vehicle drawn from it carries as carla:class_id."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The class in words."
+          },
+          "sumo_vclass": {
+            "enum": [
+              "aircraft",
+              "army",
+              "authority",
+              "bicycle",
+              "bus",
+              "cable_car",
+              "cityrail",
+              "coach",
+              "container",
+              "custom1",
+              "custom2",
+              "delivery",
+              "drone",
+              "emergency",
+              "evehicle",
+              "hov",
+              "ignoring",
+              "lightrail",
+              "moped",
+              "motorcycle",
+              "passenger",
+              "pedestrian",
+              "private",
+              "public_army",
+              "public_authority",
+              "public_emergency",
+              "public_transport",
+              "rail",
+              "rail_electric",
+              "rail_fast",
+              "rail_slow",
+              "rail_urban",
+              "scooter",
+              "ship",
+              "subway",
+              "taxi",
+              "trailer",
+              "tram",
+              "transport",
+              "truck",
+              "vip",
+              "wheelchair"
+            ],
+            "description": "SUMO's vehicle class: which lanes the vehicle may use and SUMO's defaults for it."
+          },
+          "cot_base_type": {
+            "enum": [
+              "bicycle",
+              "bus",
+              "car",
+              "motorcycle",
+              "truck",
+              "van"
+            ],
+            "description": "The base_type truth records for every member."
+          },
+          "cot_special_type": {
+            "enum": [
+              "",
+              "electric",
+              "emergency",
+              "taxi"
+            ],
+            "description": "The special_type truth records for every member. Absent means empty."
+          },
+          "members": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "blueprint_id",
+                "weight"
+              ],
+              "properties": {
+                "blueprint_id": {
+                  "type": "string",
+                  "pattern": "^vehicle\\.[a-z0-9_.]+$",
+                  "description": "A measured blueprint the class draws."
+                },
+                "weight": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Its relative chance of being drawn."
+                }
+              }
+            },
+            "description": "The blueprints the class draws from."
+          },
+          "accel_mps2": {
+            "type": "number",
+            "description": "SUMO accel: the most the vehicle accelerates, meters per second squared."
+          },
+          "decel_mps2": {
+            "type": "number",
+            "description": "SUMO decel: how hard the vehicle brakes when it wants to, meters per second squared."
+          },
+          "sigma": {
+            "type": "number",
+            "description": "SUMO sigma: the driver's imperfection in the Krauss car-following model, from 0 (perfect) to 1."
+          },
+          "speed_factor_mean": {
+            "type": "number",
+            "description": "SUMO speedFactor: the mean multiple of the speed limit the driver keeps."
+          },
+          "speed_factor_dev": {
+            "type": "number",
+            "description": "SUMO speedDev: the spread of that multiple between drivers."
+          },
+          "min_gap_m": {
+            "type": "number",
+            "description": "SUMO minGap: the gap, meters, the driver leaves to the vehicle ahead when stopped."
+          },
+          "max_speed_mps": {
+            "type": "number",
+            "description": "SUMO maxSpeed: the vehicle's top speed, meters per second."
+          },
+          "gui_shape": {
+            "enum": [
+              "aircraft",
+              "bicycle",
+              "bus",
+              "bus/city",
+              "bus/coach",
+              "bus/flexible",
+              "bus/overland",
+              "bus/trolley",
+              "delivery",
+              "emergency",
+              "evehicle",
+              "firebrigade",
+              "moped",
+              "motorcycle",
+              "passenger",
+              "passenger/hatchback",
+              "passenger/sedan",
+              "passenger/van",
+              "passenger/wagon",
+              "pedestrian",
+              "police",
+              "rickshaw",
+              "scooter",
+              "ship",
+              "taxi",
+              "transport",
+              "transport/semitrailer",
+              "transport/trailer",
+              "truck",
+              "truck/semitrailer",
+              "truck/trailer"
+            ],
+            "description": "SUMO guiShape. Read by sumo-gui only."
+          },
+          "gui_colour": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "The #RRGGBB color sumo-gui draws the class in. It never reaches the rendered vehicle."
+          },
+          "render_colour_policy": {
+            "type": "string",
+            "minLength": 1,
+            "description": "How a rendered body's color is chosen: palette, from the blueprint's colour_palette. Nothing reads it yet."
+          }
+        }
+      },
+      "description": "The authoring classes."
+    }
+  }
+}

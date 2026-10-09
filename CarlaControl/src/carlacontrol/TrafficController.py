@@ -14,6 +14,8 @@ import time
 
 import carlanet as carla
 
+from carlacontrol import DriveLease
+
 
 class TrafficController:
     """Boundary-aware staging traffic as a steppable subsystem.
@@ -1020,11 +1022,22 @@ class TrafficController:
                 except Exception:
                     pass
             except Exception as e:
-                self.logger.warning(f"setup failed for {v.id}: {e!r}")
                 try:
                     v.destroy()
                 except Exception:
                     pass
+                holder = self.locked_out_by(e)
+                if holder is not None:
+                    # A drive took the world's lease after traffic was switched on. Every spawn from
+                    # here would be refused the same way, so traffic goes off, saying who holds it.
+                    self.logger.error(
+                        f"traffic OFF: {holder} holds this world's drive lease, and the server refused "
+                        f"vehicle {v.id}'s autopilot. The server said: {e}"
+                    )
+                    self.want_enabled = False
+                    self.disable()
+                    return False
+                self.logger.warning(f"setup failed for {v.id}: {e!r}")
                 continue
             self.actors[v.id] = {
                 "actor": v,
@@ -1094,9 +1107,40 @@ class TrafficController:
             pass
         self.actors.pop(vid, None)
 
+    def drive_lease_holder(self) -> str | None:
+        """Who holds the world's drive lease, or None while nobody does or the world cannot say.
+
+        A SUMO drive session takes the lease on the server before SUMO starts, and while it holds it
+        the server refuses every autopilot and vehicle-control write of any other client, naming the
+        holder. Asked before traffic is switched on, so the refusal names who to stop before the
+        first vehicle is spawned rather than at its autopilot.
+        """
+        ask = getattr(self.world, "drive_lease_holder", None)
+        if ask is None:
+            return None
+        try:
+            return ask()
+        except Exception as e:
+            self.logger.debug(f"drive lease could not be read: {e!r}")
+            return None
+
+    def locked_out_by(self, failure) -> str | None:
+        """The holder the server names where `failure` is a control write it refused because a
+        drive lease is held; None where it is anything else."""
+        return DriveLease.locked_out_by(failure)
+
     def enable(self) -> bool:
         if not self.available:
             self.logger.warning(f"traffic toggle ignored: {self.reason}")
+            return False
+        holder = self.drive_lease_holder()
+        if holder is not None:
+            self.logger.error(
+                f"traffic refused: {holder} holds this world's drive lease, and the server refuses "
+                "every other traffic system's autopilot and vehicle-control writes while it does. "
+                "Stop that drive, or run against a different world; where the drive is gone and did "
+                "not release the lease, world.break_drive_lease() ends it."
+            )
             return False
         if not self.enabled:
             self.enabled = True

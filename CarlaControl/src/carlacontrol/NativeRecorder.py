@@ -6,8 +6,12 @@ the .NET thread pool without crossing to Python or holding the GIL.
 """
 
 import logging
+import os
+import time
 
 import carlanet as carla
+
+from carlacontrol.CaptureRunReport import CaptureRunReport
 
 
 class NativeRecorder:
@@ -42,18 +46,23 @@ class NativeRecorder:
             world: CARLA world object
             camera: CARLA camera sensor actor to record
             args: Parsed arguments with record_dir, record_hz, affiliation, stale, fov,
-                  platform_type, platform_affiliation, platform_callsign, platform_uid,
-                  occlusion, occlusion_margin, occlusion_samples
+                  platform_type, platform_affiliation, camera_name, platform_uid,
+                  scenario, scenario_id, seed, occlusion_margin, occlusion_samples.
+                  `camera_name` (`--camera-name`) is the name every capture is written under and
+                  the platform track's callsign: the name the camera was spawned under, which the
+                  shim refuses to record under any other; None records under the name the camera
+                  holds on the server -- the one it was spawned under, or the server's Camera_<n>.
             run_id: Identifier grouping every capture of this run
-            depth_camera: Depth camera held at the recorded camera's pose. When given (and
-                  --no-occlusion was not passed) each capture also records how much of each
-                  vehicle the camera cannot see.
+            depth_camera: The depth camera held at the recorded camera's pose, which every
+                  capture's per-vehicle occlusion is measured against. Occlusion is measured
+                  whenever a camera records and nothing turns it off, so a recorder given no depth
+                  camera says so loudly: its captures carry no occlusion.
         """
         self.world = world
         self.camera = camera
         self.args = args
         self.run_id = run_id
-        self.depth_camera = depth_camera if getattr(args, "occlusion", True) else None
+        self.depth_camera = depth_camera
         self.record_dir = args.record_dir
         self.record_hz = args.record_hz
         self.affiliation = args.affiliation
@@ -61,8 +70,9 @@ class NativeRecorder:
         self.fov = args.fov
         self.platform_type = args.platform_type
         self.platform_affiliation = args.platform_affiliation
-        self.platform_callsign = args.platform_callsign
+        self.camera_name = args.camera_name
         self.platform_uid = args.platform_uid
+        self.scenario_id = self.resolve_scenario_id(args)
 
         # Check if CarlaNet.Recording assembly is available
         self.available = bool(getattr(carla, "_CARLANET_RECORDING_AVAILABLE", False))
@@ -70,13 +80,40 @@ class NativeRecorder:
         self.recording = False
         self.want_enabled = False
         self._handle = None  # Type is CarlaNet.Recording.FrameRecorder (C# object)
+        # Where the recording window started, on both clocks. The simulation clock is the one the
+        # captures are stamped against; the wall clock is the one an operator is waiting on.
+        self._started_sim_time = 0.0
+        self._started_wall_time = 0.0
         self.logger = logging.getLogger(__name__)
 
         self.logger.info(
             f"native recorder initialized: dir={self.record_dir}, hz={self.record_hz}, "
             f"available={self.available}, "
-            f"occlusion={'on' if self.depth_camera is not None else 'off'}"
+            f"scenario={self.scenario_id or 'none'}"
         )
+        if self.depth_camera is None:
+            self.logger.warning(
+                "no depth camera was given to the recorder, so its captures carry no occlusion "
+                "measurement; every recording camera is meant to have one attached"
+            )
+
+    @staticmethod
+    def resolve_scenario_id(args) -> str | None:
+        """Which scenario a capture says it belongs to.
+
+        An explicit --scenario-id wins. Failing that, a run driving a storyboard is named after that
+        storyboard file, so the sidecar says which scenario produced a still without the operator
+        having to name it twice. It reaches the sidecar and the run report and never the imagery: a
+        scenario name indexes a whole set of scenes, and an image carrying one is a handle a model
+        can learn instead of learning the scene.
+        """
+        explicit = getattr(args, "scenario_id", None)
+        if explicit:
+            return str(explicit)
+        scenario = getattr(args, "scenario", None)
+        if scenario:
+            return os.path.splitext(os.path.basename(str(scenario)))[0]
+        return None
 
     def apply_want(self) -> None:
         """Apply the want_enabled state (start or stop recording).
@@ -102,9 +139,10 @@ class NativeRecorder:
                 fov=self.fov,
                 platform_type=self.platform_type,
                 platform_affiliation=self.platform_affiliation,
-                platform_callsign=self.platform_callsign,
+                camera_name=self.camera_name,
                 platform_uid=self.platform_uid,
                 run_id=self.run_id,
+                scenario_id=self.scenario_id,
                 seed=self.args.seed,
                 depth_camera=self.depth_camera,
                 occlusion_margin_m=getattr(self.args, "occlusion_margin", 1.0),
@@ -117,39 +155,77 @@ class NativeRecorder:
                 return
 
             self.recording = True
+            self._started_sim_time = self._sim_time()
+            self._started_wall_time = time.monotonic()
             note = (
                 "" if self._handle.HaveTelemetryOrigin else " (PNG only; no georef origin for XML)"
             )
-            self.logger.info(f"recording (native) -> {self.record_dir} @ {self.record_hz} Hz{note}")
+            self.logger.info(f"recording (native) {self._handle.Name} -> {self.record_dir} "
+                             f"@ {self.record_hz} Hz{note}")
 
         elif not self.want_enabled and self.recording:
-            n = self.saved
-            note = self._occlusion_note() + self._pairing_note()
+            # Counted after the stop, not before it: stopping flushes the captures still in the
+            # encoder queue, and reading first would under-report a whole queue's worth of them.
             self.world.stop_recording()
+            report = self.report()
+            note = self._occlusion_note() + self._pairing_note() + self._pose_note()
             self.recording = False
             self._handle = None
-            self.logger.info(f"recording stopped: {n} capture(s) saved{note}")
+            self._log_report(report, note)
 
     def _pairing_note(self) -> str:
-        """How many captures had their truth read from the very frame that produced the pixels."""
+        """Every still written carries the truth of its own frame; this says how many were dropped
+        because the client held no truth of theirs."""
         if self._handle is None:
             return ""
         try:
-            exact = int(self._handle.TelemetryTickExact)
-            offset = int(self._handle.TelemetryTickOffset)
-            worst = int(self._handle.TelemetryTickWorstOffset)
+            written = int(self._handle.Saved)
+            unpaired = int(self._handle.FrameUnpaired)
         except Exception as e:
             self.logger.debug(f"failed to read pairing counters: {e}")
             return ""
-        if not exact and not offset:
+        if not written and not unpaired:
             return ""
-        if not offset:
-            return f"; truth paired to its own frame on all {exact}"
-        # A capture whose own frame was no longer held got the nearest frame still held, and its
-        # sidecar names that frame in telemetry_tick. This is the case to watch: it means images were
-        # arriving further behind the observer than the client keeps history for.
-        return (f"; truth paired to its own frame on {exact}, to a neighbouring frame on {offset} "
-                f"(worst {worst} frame(s) apart, see telemetry_tick in those sidecars)")
+        if not unpaired:
+            return f"; every still carries its own frame's truth ({written})"
+        # A still whose own frame the client did not hold when the image arrived is not written: the
+        # nearest frame's truth is another instant's. This is the case to watch: it means a frame was
+        # never observed, or images were arriving further behind the observer than the client can keep.
+        return (f"; {unpaired} still(s) dropped because the client held no truth of their own frame "
+                "(the run's closeout gates capture.frame_unpaired at zero)")
+
+    @property
+    def frame_unpaired(self) -> int:
+        """Stills dropped because the client held no truth of their own frame when the image arrived.
+
+        A still is written with the truth of its own frame or not at all, so each of these is a
+        missing still AND its missing truth sidecar, never a still beside a neighbouring frame's truth.
+        """
+        return self._counter("FrameUnpaired")
+
+    def _pose_note(self) -> str:
+        """Where the captures' platform poses came from, for the stop message."""
+        if self._handle is None:
+            return ""
+        try:
+            if not self._handle.ChecksSensorPose:
+                return ""
+            from_snapshot = int(self._handle.SensorPoseFromSnapshot)
+            disagreed = int(self._handle.SensorPoseHeaderDisagreed)
+            from_header = int(self._handle.SensorPoseFromHeader)
+        except Exception as e:
+            self.logger.debug(f"failed to read pose counters: {e}")
+            return ""
+        if not from_snapshot and not from_header:
+            return ""
+        note = f"; pose from its own frame's snapshot on {from_snapshot}"
+        # A header that disagreed is a server stamping the image's pose after its frame: the
+        # snapshot's pose was written, but the server needs its fix.
+        if disagreed:
+            note += f", {disagreed} of them with an image header that disagreed"
+        if from_header:
+            note += f", from the image header on {from_header} (frame no longer held)"
+        return note
 
     def _occlusion_note(self) -> str:
         """How many captures got a per-vehicle occlusion measurement, for the stop message."""
@@ -191,7 +267,7 @@ class NativeRecorder:
             self.want_enabled = not self.want_enabled
         else:
             self.want_enabled = enabled
-        
+
     def update(self, now) -> None:
         """Update the recorder (no-op for native recorder)."""
         pass
@@ -203,11 +279,52 @@ class NativeRecorder:
         Returns:
             Frame count, or 0 if not recording or handle unavailable
         """
+        return self._counter("Saved")
+
+    @property
+    def dropped(self) -> int:
+        """Captures the recorder reached for and could not write.
+
+        The encoder queue is bounded and never blocks the stream reader, so when every worker is
+        busy the capture is discarded rather than delaying the frames behind it. That is the right
+        trade for a viewer that has to stay smooth, but it means a recording can be short of
+        captures -- imagery and truth sidecar alike -- with nothing in the output to show it.
+        """
+        return self._counter("Dropped")
+
+    def _counter(self, name: str) -> int:
         try:
-            return int(self._handle.Saved) if self._handle is not None else 0
+            return int(getattr(self._handle, name)) if self._handle is not None else 0
         except Exception as e:
-            self.logger.info(f"exception reading saved frame count: {e}, returning 0")
+            self.logger.info(f"exception reading the {name} capture count: {e}, returning 0")
             return 0
+
+    def _sim_time(self) -> float:
+        """The world's own clock, which is what captures are stamped against."""
+        try:
+            return float(self.world.get_sim_time())
+        except Exception as e:
+            self.logger.debug(f"could not read the simulation clock: {e!r}")
+            return 0.0
+
+    def report(self) -> CaptureRunReport:
+        """What this stretch of recording produced, on both clocks. Call before releasing the handle."""
+        return CaptureRunReport(
+            saved=self.saved,
+            dropped=self.dropped,
+            sim_seconds=max(0.0, self._sim_time() - self._started_sim_time),
+            wall_seconds=max(0.0, time.monotonic() - self._started_wall_time),
+        )
+
+    def _log_report(self, report: CaptureRunReport, note: str = "") -> None:
+        """Say what the run produced and, separately and loudly, what it lost."""
+        self.logger.info(f"recording stopped: {report.describe()}{note}")
+        if report.dropped:
+            self.logger.warning(
+                f"{report.dropped} capture(s) were discarded because every encoder worker was "
+                "busy; each is a missing still AND its missing truth sidecar, so this recording "
+                "has gaps a consumer cannot see from the files alone"
+            )
 
     def stop(self) -> None:
         """Stop recording and clean up.
@@ -219,5 +336,8 @@ class NativeRecorder:
                 self.world.stop_recording()
             except Exception as e:
                 self.logger.info(f"exception during stop_recording: {e}")
+            report = self.report()
+            note = self._occlusion_note() + self._pairing_note()
             self.recording = False
             self._handle = None
+            self._log_report(report, note)

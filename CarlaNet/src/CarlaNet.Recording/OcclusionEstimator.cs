@@ -12,7 +12,7 @@ public readonly record struct VehicleBox(ActorId ActorId, Transform ActorTransfo
 /// <paramref name="Samples"/> is how many points across the vehicle's outline were tested, and
 /// <paramref name="ApparentWidthPx"/> / <paramref name="ApparentHeightPx"/> how large it appears in
 /// the frame. Both matter for reading the fraction: a vehicle a kilometre away covers a few pixels
-/// and yields a handful of samples, so its fraction can only land on a few coarse values, where a
+/// and yields a handful of samples, so its fraction can only take a few coarse values, where a
 /// near one is measured over hundreds.</summary>
 public readonly record struct VehicleOcclusion(
     double Fraction, int Level, int Samples, int ApparentWidthPx, int ApparentHeightPx);
@@ -41,7 +41,12 @@ public readonly record struct VehicleOcclusion(
 /// Depth readings lose accuracy with range — measurably, and predictably enough to correct for — so
 /// the threshold that decides "nearer than the vehicle" widens with range
 /// (<see cref="OcclusionOptions.RangeErrorCoefficient"/>). Beyond the depth capture's far plane every
-/// reading saturates and no comparison is possible at all, and those vehicles go unreported.
+/// reading saturates and no comparison is possible at all, and those vehicles go unmeasured.
+///
+/// The projection of the box into the picture is <see cref="BoxProjector"/>'s, which the recorder
+/// runs for every capture whether or not a depth camera is attached; this class owns only the
+/// sampling of the depth capture over that projection. A vehicle that goes unmeasured says why
+/// (<see cref="OcclusionUnmeasured"/>), so the sidecar never carries a silent absence.
 /// </summary>
 public sealed class OcclusionEstimator : IDisposable
 {
@@ -51,10 +56,11 @@ public sealed class OcclusionEstimator : IDisposable
 
     // Points nearer than this to the camera are treated as being at or behind the lens: their
     // projection is meaningless and dividing by that depth would blow up.
-    private const double NearPlaneMetres = 0.1;
+    private const double NearPlaneMetres = BoxProjector.NearPlaneMetres;
 
     private readonly OcclusionOptions _options;
     private readonly IDisposable _subscription;
+    private readonly SensorPoseCheck? _depthPose;
     private readonly DepthFrame?[] _ring = new DepthFrame?[RingSize];
     private int _next;
     private long _matched, _missedNoCaptures, _missedOutOfStep, _missedPose;
@@ -77,15 +83,35 @@ public sealed class OcclusionEstimator : IDisposable
     /// <summary>Recorded frames left without occlusion, for any reason.</summary>
     public long Missed => MissedNoCaptures + MissedOutOfStep + MissedPose;
 
+    /// <summary>Whether a matched depth capture's pose is read from the snapshot of its own frame and
+    /// its header checked against it.</summary>
+    public bool ChecksDepthPose => _depthPose is not null;
+
+    /// <summary>Matched depth captures whose pose was read from the snapshot of their own frame.</summary>
+    public long DepthPoseFromSnapshot => _depthPose?.FromSnapshot ?? 0;
+
+    /// <summary>Of those, the ones whose header carried a different pose. A server that stamps the
+    /// header at capture keeps this at zero; see <see cref="SensorPoseCheck"/>.</summary>
+    public long DepthPoseHeaderDisagreed => _depthPose?.HeaderDisagreed ?? 0;
+
+    /// <summary>Matched depth captures whose own frame the client no longer held, projected from their
+    /// header's pose.</summary>
+    public long DepthPoseFromHeader => _depthPose?.FromHeader ?? 0;
+
     /// <param name="depthStreamToken">The depth camera actor's 24-byte sensor stream token. The
     /// subscription is this estimator's own, so it neither disturbs nor depends on any other listener
     /// on that camera.</param>
-    public OcclusionEstimator(CarlaClient client, byte[] depthStreamToken, OcclusionOptions? options = null)
+    /// <param name="depthActorId">The depth camera actor. Given, each matched capture is projected
+    /// from the depth camera's pose in the snapshot of that capture's own frame, with its header
+    /// checked against it (<see cref="SensorPoseCheck"/>); null projects from the header alone.</param>
+    public OcclusionEstimator(CarlaClient client, byte[] depthStreamToken, OcclusionOptions? options = null,
+                              ActorId? depthActorId = null)
     {
         if (depthStreamToken is not { Length: 24 })
             throw new ArgumentException("depthStreamToken must be a 24-byte sensor stream token",
                                         nameof(depthStreamToken));
         _options = options ?? OcclusionOptions.Default;
+        _depthPose = depthActorId is { } depth ? new SensorPoseCheck(client.GetSnapshotFrame, depth) : null;
         _subscription = client.SubscribeToStream(depthStreamToken, OnDepthFrame);
     }
 
@@ -107,10 +133,22 @@ public sealed class OcclusionEstimator : IDisposable
     /// measurement is only meaningful while the depth camera is looking from where the recorded
     /// camera is looking, and silently mismeasuring is worse than reporting nothing.
     /// </summary>
+    /// <remarks>The capture returned carries the pose it is projected from, which is the depth camera's
+    /// pose in the snapshot of the capture's own frame wherever the estimator knows the camera and the
+    /// client holds the frame, and its header's otherwise: a header stamped after the capture was read
+    /// back can carry the pose of a later frame (<see cref="SensorPoseCheck"/>), and projecting the
+    /// vehicles of this frame from it would measure them against where the camera went next.</remarks>
     public DepthFrame? MatchTo(ulong frame, double timestamp, Transform cameraTransform)
+        => MatchTo(frame, timestamp, cameraTransform, out _);
+
+    /// <inheritdoc cref="MatchTo(ulong, double, Transform)"/>
+    /// <param name="unpaired">Which way the pairing failed, as the counters record it, so each vehicle
+    /// of the frame can say why it went unmeasured; null on a match.</param>
+    public DepthFrame? MatchTo(ulong frame, double timestamp, Transform cameraTransform,
+                               out OcclusionUnmeasured? unpaired)
     {
         // The two cameras arrive over separate connections, so the depth capture for this instant may
-        // still be in flight when the recorded frame lands. Wait a little for it rather than giving
+        // still be in flight when the recorded frame arrives. Wait a little for it rather than giving
         // up immediately — but only a little, since this runs on the thread reading the recorded
         // stream. If it never turns up, say which way it failed rather than just that it did.
         long deadline = Environment.TickCount64 + Math.Max(0, _options.MatchWaitMilliseconds);
@@ -119,18 +157,31 @@ public sealed class OcclusionEstimator : IDisposable
             var (best, gap, anyAvailable) = FindNearest(frame, timestamp);
             if (best is not null && gap <= _options.FrameToleranceSeconds)
             {
-                if (!IsCoLocated(best, cameraTransform))
+                DepthFrame depth = _depthPose is null
+                    ? best
+                    : best.WithTransform(_depthPose.Resolve(best.Frame, best.Transform));
+                if (!IsCoLocated(depth, cameraTransform))
                 {
                     Interlocked.Increment(ref _missedPose);
+                    unpaired = OcclusionUnmeasured.DepthPoseMismatch;
                     return null;
                 }
                 Interlocked.Increment(ref _matched);
-                return best;
+                unpaired = null;
+                return depth;
             }
             if (Environment.TickCount64 >= deadline)
             {
-                if (anyAvailable) Interlocked.Increment(ref _missedOutOfStep);
-                else Interlocked.Increment(ref _missedNoCaptures);
+                if (anyAvailable)
+                {
+                    Interlocked.Increment(ref _missedOutOfStep);
+                    unpaired = OcclusionUnmeasured.DepthOutOfStep;
+                }
+                else
+                {
+                    Interlocked.Increment(ref _missedNoCaptures);
+                    unpaired = OcclusionUnmeasured.NoDepthCapture;
+                }
                 return null;
             }
             Thread.Sleep(2);
@@ -175,7 +226,8 @@ public sealed class OcclusionEstimator : IDisposable
     /// <summary>
     /// Occlusion for every supplied vehicle that projects into the depth capture. Vehicles wholly
     /// outside the frame, or straddling the camera plane, are absent from the result rather than
-    /// reported as visible — the camera has no view of them to be obstructed.
+    /// reported as visible — the camera has no view of them to be obstructed. <see cref="Sample"/>
+    /// says, per vehicle, why one is absent.
     /// </summary>
     public IReadOnlyDictionary<ActorId, VehicleOcclusion> Estimate(
         DepthFrame depth, IReadOnlyList<VehicleBox> vehicles)
@@ -190,76 +242,54 @@ public sealed class OcclusionEstimator : IDisposable
         var result = new Dictionary<ActorId, VehicleOcclusion>(vehicles.Count);
         if (vehicles.Count == 0) return result;
 
-        var camera = new RotationBasis(depth.Transform.Rotation);
-        double camX = depth.Transform.Location.X;
-        double camY = depth.Transform.Location.Y;
-        double camZ = depth.Transform.Location.Z;
-
-        // Pinhole intrinsics from the frame's own field of view and size: square pixels, principal
-        // point at the centre — the same convention as the recorded sensor pose and the viewer's
-        // pixel-to-world picker, so every projection in this project agrees.
-        double focal = depth.Width / (2.0 * Math.Tan(depth.HFovDeg * Math.PI / 360.0));
-        double centreX = depth.Width / 2.0, centreY = depth.Height / 2.0;
-
+        var camera = CameraOf(depth);
         foreach (var vehicle in vehicles)
         {
-            var measured = Measure(depth, vehicle, options, camera,
-                                   camX, camY, camZ, focal, centreX, centreY);
-            if (measured is { } occlusion) result[vehicle.ActorId] = occlusion;
+            if (Sample(depth, camera, vehicle, options, out _) is { } occlusion)
+                result[vehicle.ActorId] = occlusion;
         }
         return result;
     }
 
-    private static VehicleOcclusion? Measure(DepthFrame depth, VehicleBox vehicle,
-                                             OcclusionOptions options, RotationBasis camera,
-                                             double camX, double camY, double camZ,
-                                             double focal, double centreX, double centreY)
+    /// <summary>
+    /// One vehicle's occlusion against one depth capture, or null and why there is none: the box
+    /// behind the lens or outside the capture, every sampled point of it beyond the capture's range,
+    /// or a box the sampling grid never met.
+    /// </summary>
+    public VehicleOcclusion? Sample(DepthFrame depth, VehicleBox vehicle, out OcclusionUnmeasured? unmeasured)
+        => Sample(depth, CameraOf(depth), vehicle, _options, out unmeasured);
+
+    /// <inheritdoc cref="Sample(DepthFrame, VehicleBox, out OcclusionUnmeasured?)"/>
+    public static VehicleOcclusion? Sample(DepthFrame depth, VehicleBox vehicle, OcclusionOptions options,
+                                           out OcclusionUnmeasured? unmeasured)
+        => Sample(depth, CameraOf(depth), vehicle, options, out unmeasured);
+
+    /// <summary>The depth capture as the pinhole its pixels were rendered through: its own pose, size
+    /// and field of view, so the sampling grid is laid over the picture the depth was written in.</summary>
+    private static PinholeCamera CameraOf(DepthFrame depth)
+        => new(depth.Transform, depth.Width, depth.Height, depth.HFovDeg);
+
+    private static VehicleOcclusion? Sample(DepthFrame depth, in PinholeCamera camera, VehicleBox vehicle,
+                                            OcclusionOptions options, out OcclusionUnmeasured? unmeasured)
     {
-        var extent = vehicle.Box.Extent;
-        if (extent.X <= 0f || extent.Y <= 0f || extent.Z <= 0f) return null;
-
-        // The box's frame is the actor's, offset and rotated by the box's own local placement.
-        var actor = new RotationBasis(vehicle.ActorTransform.Rotation);
-        var local = new RotationBasis(vehicle.Box.Rotation);
-        var offset = actor.Rotate(new Vector3D(vehicle.Box.Location.X, vehicle.Box.Location.Y,
-                                               vehicle.Box.Location.Z));
-        double boxX = vehicle.ActorTransform.Location.X + offset.X;
-        double boxY = vehicle.ActorTransform.Location.Y + offset.Y;
-        double boxZ = vehicle.ActorTransform.Location.Z + offset.Z;
-        var axisX = actor.Rotate(local.Forward);
-        var axisY = actor.Rotate(local.Right);
-        var axisZ = actor.Rotate(local.Up);
-
-        // Footprint of the box in pixels, from its eight corners.
-        double minU = double.PositiveInfinity, maxU = double.NegativeInfinity;
-        double minV = double.PositiveInfinity, maxV = double.NegativeInfinity;
-        for (int corner = 0; corner < 8; corner++)
+        var box = new OrientedBox(vehicle.ActorTransform, vehicle.Box);
+        BoxProjection projection = BoxProjector.Project(camera, box);
+        if (projection.InFrame == InFrame.BehindCamera)
         {
-            double sx = (corner & 1) == 0 ? -extent.X : extent.X;
-            double sy = (corner & 2) == 0 ? -extent.Y : extent.Y;
-            double sz = (corner & 4) == 0 ? -extent.Z : extent.Z;
-            double wx = boxX + axisX.X * sx + axisY.X * sy + axisZ.X * sz - camX;
-            double wy = boxY + axisX.Y * sx + axisY.Y * sy + axisZ.Y * sz - camY;
-            double wz = boxZ + axisX.Z * sx + axisY.Z * sy + axisZ.Z * sz - camZ;
-
-            double forward = wx * camera.Forward.X + wy * camera.Forward.Y + wz * camera.Forward.Z;
-            // A box with a corner at or behind the lens has no well-defined footprint; that is a
-            // vehicle on top of the camera, not a subject, so leave it unmeasured.
-            if (forward <= NearPlaneMetres) return null;
-            double right = wx * camera.Right.X + wy * camera.Right.Y + wz * camera.Right.Z;
-            double up = wx * camera.Up.X + wy * camera.Up.Y + wz * camera.Up.Z;
-
-            double u = centreX + focal * right / forward;
-            double v = centreY - focal * up / forward;
-            if (u < minU) minU = u;
-            if (u > maxU) maxU = u;
-            if (v < minV) minV = v;
-            if (v > maxV) maxV = v;
+            unmeasured = OcclusionUnmeasured.BehindCamera;
+            return null;
+        }
+        if (projection.InFrame == InFrame.None)
+        {
+            unmeasured = OcclusionUnmeasured.OutsideFrame;
+            return null;
         }
 
-        int x0 = Math.Max(0, (int)Math.Floor(minU)), x1 = Math.Min(depth.Width - 1, (int)Math.Ceiling(maxU));
-        int y0 = Math.Max(0, (int)Math.Floor(minV)), y1 = Math.Min(depth.Height - 1, (int)Math.Ceiling(maxV));
-        if (x0 > x1 || y0 > y1) return null;   // projects wholly outside the frame
+        // The footprint clipped to the capture's pixels: never empty for a box in the picture.
+        int x0 = Math.Max(0, (int)Math.Floor(projection.MinU));
+        int x1 = Math.Min(depth.Width - 1, (int)Math.Ceiling(projection.MaxU));
+        int y0 = Math.Max(0, (int)Math.Floor(projection.MinV));
+        int y1 = Math.Min(depth.Height - 1, (int)Math.Ceiling(projection.MaxV));
 
         // Step the grid so the longer side gets about the requested number of samples, whatever the
         // vehicle's apparent size; a vehicle smaller than that is sampled at every pixel.
@@ -269,20 +299,22 @@ public sealed class OcclusionEstimator : IDisposable
 
         // The camera axes in the box's frame, so each sample ray only costs the two scalings that
         // distinguish it from its neighbours.
-        var forwardLocal = ToBox(camera.Forward, axisX, axisY, axisZ);
-        var rightLocal = ToBox(camera.Right, axisX, axisY, axisZ);
-        var upLocal = ToBox(camera.Up, axisX, axisY, axisZ);
-        double originX = (camX - boxX) * axisX.X + (camY - boxY) * axisX.Y + (camZ - boxZ) * axisX.Z;
-        double originY = (camX - boxX) * axisY.X + (camY - boxY) * axisY.Y + (camZ - boxZ) * axisY.Z;
-        double originZ = (camX - boxX) * axisZ.X + (camY - boxY) * axisZ.Y + (camZ - boxZ) * axisZ.Z;
+        RotationBasis axes = camera.Basis;
+        double camX = camera.Pose.Location.X, camY = camera.Pose.Location.Y, camZ = camera.Pose.Location.Z;
+        var forwardLocal = ToBox(axes.Forward, box.AxisX, box.AxisY, box.AxisZ);
+        var rightLocal = ToBox(axes.Right, box.AxisX, box.AxisY, box.AxisZ);
+        var upLocal = ToBox(axes.Up, box.AxisX, box.AxisY, box.AxisZ);
+        double originX = (camX - box.X) * box.AxisX.X + (camY - box.Y) * box.AxisX.Y + (camZ - box.Z) * box.AxisX.Z;
+        double originY = (camX - box.X) * box.AxisY.X + (camY - box.Y) * box.AxisY.Y + (camZ - box.Z) * box.AxisY.Z;
+        double originZ = (camX - box.X) * box.AxisZ.X + (camY - box.Y) * box.AxisZ.Y + (camZ - box.Z) * box.AxisZ.Z;
 
-        int samples = 0, hidden = 0;
+        int samples = 0, hidden = 0, met = 0;
         for (int y = y0; y <= y1; y += step)
         {
-            double screenUp = -(y - centreY) / focal;
+            double screenUp = -(y - camera.CentreY) / camera.Focal;
             for (int x = x0; x <= x1; x += step)
             {
-                double screenRight = (x - centreX) / focal;
+                double screenRight = (x - camera.CentreX) / camera.Focal;
                 // Parameterised so the ray parameter IS the range along the optical axis, matching
                 // what the depth capture reports.
                 double dirX = forwardLocal.X + rightLocal.X * screenRight + upLocal.X * screenUp;
@@ -290,10 +322,11 @@ public sealed class OcclusionEstimator : IDisposable
                 double dirZ = forwardLocal.Z + rightLocal.Z * screenRight + upLocal.Z * screenUp;
 
                 double enter = double.NegativeInfinity, exit = double.PositiveInfinity;
-                if (!Slab(originX, dirX, extent.X, ref enter, ref exit)) continue;
-                if (!Slab(originY, dirY, extent.Y, ref enter, ref exit)) continue;
-                if (!Slab(originZ, dirZ, extent.Z, ref enter, ref exit)) continue;
+                if (!Slab(originX, dirX, box.ExtentX, ref enter, ref exit)) continue;
+                if (!Slab(originY, dirY, box.ExtentY, ref enter, ref exit)) continue;
+                if (!Slab(originZ, dirZ, box.ExtentZ, ref enter, ref exit)) continue;
                 if (exit <= 0.0) continue;                      // the whole vehicle is behind the lens
+                met++;
                 double surface = Math.Max(enter, NearPlaneMetres);
                 // Every reading saturates at the greatest range the camera reports, so out there the
                 // comparison below would call any vehicle hidden whatever is really in front of it.
@@ -316,13 +349,20 @@ public sealed class OcclusionEstimator : IDisposable
             }
         }
 
-        if (samples == 0) return null;
+        if (samples == 0)
+        {
+            // Nothing to compare: either no ray of the grid met the box -- a vehicle narrower than a
+            // pixel, or a box with no extent -- or every point it met lies where the capture saturates.
+            unmeasured = met == 0 ? OcclusionUnmeasured.NoSample : OcclusionUnmeasured.BeyondDepthRange;
+            return null;
+        }
+        unmeasured = null;
         double fraction = (double)hidden / samples;
         // Apparent size is the full projected footprint, not the part clipped to the frame, so it
         // reads as "how big does this vehicle look" rather than "how much of it is on screen".
         return new VehicleOcclusion(
             fraction, LevelFor(fraction), samples,
-            (int)Math.Round(maxU - minU), (int)Math.Round(maxV - minV));
+            projection.ApparentWidthPx, projection.ApparentHeightPx);
     }
 
     /// <summary>

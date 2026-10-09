@@ -58,6 +58,37 @@ public:
 	 */
 	static ACesiumSensorViewPublisher* FindOrSpawn(UWorld* World);
 
+	/** The publisher in this world, or nullptr when none has been spawned. Never spawns one. */
+	static ACesiumSensorViewPublisher* Find(UWorld* World);
+
+	/**
+	 * Whether a scene capture has a frustum the camera manager can select tiles for: a perspective
+	 * projection, a render target of at least one pixel, and a positive field of view. These are the
+	 * tests Cesium applies to the scene captures it finds itself, and every capture this publisher
+	 * tracks passes them.
+	 */
+	static bool IsEligibleCapture(const USceneCaptureComponent2D* Capture);
+
+	/**
+	 * Whether a scene capture owned by Actor was among the views the last tick wrote to the camera
+	 * manager.
+	 *
+	 * This publisher ticks in the actor default, TG_PrePhysics, and every ACesium3DTileset ticks in
+	 * TG_PostUpdateWork, so within one world tick the tilesets select tiles from the views written
+	 * here earlier in that same tick: true means the tilesets' last selection included Actor's view.
+	 * A capture on an ASceneCapture2D actor is gathered by Cesium itself, is never published here,
+	 * and always answers false.
+	 */
+	bool IsPublished(const AActor* Actor) const;
+
+	/**
+	 * Track Actor's eligible scene captures now rather than at the next sweep, so they are published
+	 * on the next tick. The next sweep would track them anyway, so this changes when a new sensor
+	 * starts driving tile selection, never whether it does. Returns how many of Actor's captures are
+	 * tracked after the call.
+	 */
+	int32 TrackCapturesOf(AActor* Actor);
+
 	/**
 	 * Seconds between full sweeps for scene-capture components. Only the sweep is proportional to the
 	 * actor count; the per-tick republish is proportional to the number of cameras. Keeping the sweep
@@ -85,6 +116,14 @@ private:
 	// snapshot of weak references to actors that no longer exist when the level is reopened.
 	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<USceneCaptureComponent2D>> TrackedCaptures;
+
+	/**
+	 * The captures the last PublishViews wrote to the camera manager: the tracked captures that still
+	 * resolved and still had a render target. Rewritten every tick; answers IsPublished. Transient for
+	 * the same reason as TrackedCaptures.
+	 */
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<USceneCaptureComponent2D>> PublishedCaptures;
 
 	/** Seconds accumulated since the last sweep; compared against RescanIntervalSeconds. */
 	double SecondsSinceRescan = 0.0;

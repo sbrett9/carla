@@ -38,7 +38,14 @@ class SensorRig:
 
         Args:
             world: CARLA world object
-            args: Parsed arguments with x, y, z, width, height, fov, ev, asynchronous
+            args: Parsed arguments with x, y, z, width, height, fov, ev, asynchronous, and
+                optionally camera_name: the RGB camera's name, which every capture recorded from
+                it is written under and its platform track is called by. Spawned under it, which
+                the server refuses where a live camera in the world holds it, so the spawn raises
+                here; without one the server names the camera Camera_<n>, and the name is read
+                back from the spawned camera (`self.camera_name`). The depth camera rides the RGB
+                camera's pose and is given no name: the server names it Camera_<n> too, so it never
+                collides with a camera's name.
             client: The client the world came from. Needed to move the rig's cameras as one
                 batch, which is what keeps them at the same pose in the same frame; without it
                 they are moved one call each, and can be captured a frame apart.
@@ -67,8 +74,17 @@ class SensorRig:
         bp.set_attribute("image_size_y", str(args.height))
         if bp.has_attribute("fov"):
             bp.set_attribute("fov", str(args.fov))
-        if args.ev is not None and bp.has_attribute("exposure_compensation"):
-            bp.set_attribute("exposure_compensation", str(args.ev))
+        # --ev is the camera's exposure compensation, EV, added to the exposure it otherwise has: the
+        # blueprint's own, the Default profile's manual ISO 100, 1/320 s and f/4. Every capture
+        # records it, in <_carla_exposure>. A server built before the camera published its exposure
+        # has no such attribute; the rig then says so rather than leave a value unapplied in silence.
+        if args.ev is not None:
+            if bp.has_attribute("exposure_compensation"):
+                bp.set_attribute("exposure_compensation", str(float(args.ev)))
+            elif float(args.ev) != 0.0:
+                self.logger.warning(
+                    "server's camera has no exposure_compensation attribute, so --ev %g is not "
+                    "applied (rebuild the server to apply it)", float(args.ev))
 
         # Configure depth camera blueprint
         dbp = world.get_blueprint_library().find("sensor.camera.depth")
@@ -89,35 +105,39 @@ class SensorRig:
                 "(rebuild the server to raise it)"
             )
 
-        # Spawn cameras
+        # Spawn cameras. The depth camera is attached to the RGB camera, rigidly and at its own pose,
+        # so one move of the RGB camera carries both -- a move from here, or the server's orbit mover
+        # flying the RGB camera -- and the two are never captured a frame apart. The server reports
+        # an attached sensor's world pose on its snapshot and in its image header, which is what the
+        # recorder's depth pose check reads.
         tf = self.initial_pose.to_carla_transform()
-        self.camera = world.spawn_actor(bp, tf)
-        self.depth_cam = world.spawn_actor(dbp, tf)
+        self.camera = world.spawn_camera(bp, tf, name=getattr(args, "camera_name", None))
+        self.camera_name = world.camera_name(self.camera)
+        self.depth_cam = world.spawn_actor(dbp, carla.Transform(), attach_to=self.camera,
+                                           attachment_type=carla.AttachmentType.Rigid)
         self.spectator = world.get_spectator()
         self.spectator.set_transform(tf)
 
-        self.logger.info(f"spawned RGB camera id={self.camera.id}, depth camera id={self.depth_cam.id}")
+        self.logger.info(f"spawned RGB camera {self.camera_name} id={self.camera.id}, "
+                         f"depth camera id={self.depth_cam.id} attached to it")
         if self._client is None:
             self.logger.warning(
-                "no client given: the rig's cameras will be moved one call each, so under a "
-                "free-running world a frame can be captured with them at different poses"
+                "no client given: the rig's camera and the spectator will be moved one call each"
             )
 
         # Set up listeners based on sync mode
         self._setup_listeners_internal()
 
     def set_transform(self, tf: carla.Transform) -> None:
-        """Move every camera in the rig to one pose, together.
+        """Move the rig to one pose: the RGB camera, with its depth camera attached, and the spectator.
 
-        One batch is one game-thread task, so the RGB camera, the depth camera and the spectator
-        all take the new pose before the next frame is rendered. Moving them with a call each is
-        not the same thing: each call is its own round trip, and under a free-running world the
-        simulator renders between them, so a frame can be captured with the RGB camera at the new
-        pose and the depth camera still at the old one. The recorder then refuses to pair those
-        two captures -- correctly, since they were not taken from the same place -- and the
-        capture carries no occlusion. Measured on an orbiting camera over a hundred vehicles:
-        25 of 65 captures lost that way, every one a pose mismatch, none a missing or late depth
-        frame.
+        The depth camera is never moved itself: it is attached to the RGB camera and rides with it,
+        so the two cannot be captured a frame apart. Measured before the attachment, on an orbiting
+        camera moved by a call each over a hundred vehicles, 25 of 65 captures were lost to the
+        recorder's pose check, every one a pose mismatch, none a missing or late depth frame. The
+        RGB camera and the spectator go in one batch, one game-thread task, so both take the new
+        pose before the next frame is rendered. A rig the server is flying round an orbit is not
+        moved from here: `OrbitSensorController` turns the orbit off before any manual move.
 
         Args:
             tf: The pose for the whole rig
@@ -128,13 +148,12 @@ class SensorRig:
         try:
             responses = self._client.apply_batch_sync([
                 carla.command.ApplyTransform(self.camera, tf),
-                carla.command.ApplyTransform(self.depth_cam, tf),
                 carla.command.ApplyTransform(self.spectator, tf),
             ])
         except Exception as e:
             self.logger.warning(f"failed to move the rig: {e}")
             return
-        for which, response in zip(("RGB camera", "depth camera", "spectator"), responses):
+        for which, response in zip(("RGB camera", "spectator"), responses):
             if response.has_error:
                 self.logger.warning(f"failed to move the {which}: {response.error}")
 
@@ -147,11 +166,10 @@ class SensorRig:
         self.set_transform(pose.to_carla_transform())
 
     def _set_transform_separately(self, tf: carla.Transform) -> None:
-        """Move the cameras one call each. Only for a rig built without a client: the calls are
-        separate round trips, so the cameras can end up a frame apart -- see set_transform."""
+        """Move the RGB camera and the spectator one call each. Only for a rig built without a
+        client; the depth camera is attached to the RGB camera and goes with it either way."""
         try:
             self.camera.set_transform(tf)
-            self.depth_cam.set_transform(tf)
             self.spectator.set_transform(tf)
         except Exception as e:
             self.logger.warning(f"failed to set transform: {e}")
@@ -237,10 +255,12 @@ class SensorRig:
             ground_z: Ground elevation in local Z, or None to clear
         """
         self.ground_z = ground_z
+        # Refreshed several times a second while the camera flies, and shown in the heads-up
+        # display as its height above ground, so the log carries it only when asked for.
         if ground_z is not None:
-            self.logger.info(f"ground z set: {ground_z:.2f}m")
+            self.logger.debug(f"ground z set: {ground_z:.2f}m")
         else:
-            self.logger.info("ground z cleared")
+            self.logger.debug("ground z cleared")
 
     def store_depth(self, img, fallback_pose: Pose | None = None) -> None:
         """Process and store the latest depth frame.
@@ -409,13 +429,14 @@ class SensorRig:
         block until the sensor is fully stopped.
         """
         self.logger.info(f"cleaning up sensor rig: RGB camera id={self.camera.id}, depth camera id={self.depth_cam.id}")
-        try:
-            self.camera.stop()
-            self.camera.destroy()
-        except Exception as e:
-            self.logger.warning(f"failed to cleanup RGB camera: {e}")
+        # The depth camera leaves before the camera it is attached to.
         try:
             self.depth_cam.stop()
             self.depth_cam.destroy()
         except Exception as e:
             self.logger.warning(f"failed to cleanup depth camera: {e}")
+        try:
+            self.camera.stop()
+            self.camera.destroy()
+        except Exception as e:
+            self.logger.warning(f"failed to cleanup RGB camera: {e}")

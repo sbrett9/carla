@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:supervision-gaps:1",
+  "title": "Legacy supervision gaps (<name>.supervision.json beside a SUMO bridge run)",
+  "description": "The supervision gaps a legacy scenario's labels file describes -- an absence, such as a guard who never arrives, which no vehicle record can carry -- placed on the clock of the run that wrote them. Written beside the run's XML or CSV, never into it. A compiled scenario's supervision is its compiled supervision plan, a different file with the same suffix.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario",
+    "epoch",
+    "source_labels",
+    "supervision_gaps"
+  ],
+  "properties": {
+    "scenario": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The scenario: the .sumocfg file's name without extension."
+    },
+    "epoch": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+      "description": "The UTC instant simulation time 0 was stamped with."
+    },
+    "source_labels": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The labels file's name, or null when none was named."
+    },
+    "supervision_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "One described gap: the labels file's note with every key the author gave it, and where its window falls on the run's clock.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What kind of gap it is, such as guard_no_show."
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The author's description."
+          },
+          "begin_s": {
+            "type": "number",
+            "description": "Where the window begins, seconds of simulation time."
+          },
+          "end_s": {
+            "type": "number",
+            "description": "Where the window ends, seconds of simulation time."
+          },
+          "begin_utc": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+            "description": "begin_s placed on the run's clock: epoch + begin_s, UTC to the millisecond. Present when the note gives begin_s."
+          },
+          "end_utc": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+            "description": "end_s placed on the run's clock. Present when the note gives end_s."
+          }
+        }
+      },
+      "description": "Every described gap, in the labels file's order."
+    }
+  }
+}

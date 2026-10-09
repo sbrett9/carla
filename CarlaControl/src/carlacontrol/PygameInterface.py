@@ -36,6 +36,7 @@ class PygameInterface:
         recorder=None,
         scenario=None,
         orbit_sensor_controller=None,
+        read_only: bool = False,
     ):
         """Initialize pygame interface.
 
@@ -53,12 +54,21 @@ class PygameInterface:
             recorder: Optional NativeRecorder instance
             scenario: Optional ScenarioController instance
             orbit_sensor_controller: Optional OrbitSensorController instance
+            read_only: Read the world for the HUD and never write it: the keys that toggle a layer,
+                the ground's collision, the road mesh or the sun's advance are not bound. For a
+                viewer beside a process that owns the world, whose layers and clock are its own.
         """
         self.width = args.width
         self.height = args.height
         self.target_fps = (1.0 / args.fixed_delta) if sync else 60.0
         self.world = world
-        self.solar_poll_frame = 0
+        # The sun clock is polled every 30 frames and shown on every frame in between; it starts
+        # due, so the first frame asks rather than waiting half a second to.
+        self.solar_poll_frame = 30
+        self.solar_hud = ""
+        # The georeference origin, read once: it is fixed for as long as the world is loaded, and
+        # the display needs it on every frame.
+        self._origin: tuple[float, float, float] | None = None
         self.sync = sync
         self.time_rate = args.time_rate
 
@@ -69,6 +79,7 @@ class PygameInterface:
         self.recorder = recorder
         self.scenario = scenario
         self.orbit_sensor_controller = orbit_sensor_controller
+        self.read_only = read_only
         self.logger = logging.getLogger(__name__)
 
         # Pygame Setup, and pull in class attributes for quick access
@@ -124,7 +135,7 @@ class PygameInterface:
 
         if hasattr(args, "fov"):
             self.setup_boundary_overlays(fov=args.fov)
-        
+
         self.logger.info(
             f"pygame interface initialized: {self.width}x{self.height}, "
             f"target_fps={self.target_fps:.1f}, sync={self.sync}"
@@ -288,6 +299,8 @@ class PygameInterface:
         """Register built-in hotkeys for standard flags and world controls."""
         self.register_hotkey(pygame.K_b, lambda: self.toggle_flag("show_perimeter"))
         self.register_hotkey(pygame.K_m, lambda: self.toggle_flag("show_margin"))
+        if self.read_only:
+            return
         self.register_hotkey(pygame.K_c, lambda: self._toggle_layer("photoreal"))
         self.register_hotkey(pygame.K_g, lambda: self._toggle_layer("ground"))
         self.register_hotkey(pygame.K_v, self._toggle_collision)
@@ -422,10 +435,7 @@ class PygameInterface:
         # handle pick request
         if events["pick_request"] and self.sensors:
             try:
-                try:
-                    lat0, lon0, origin_h = self.world.get_cesium_origin()
-                except Exception:
-                    lat0 = lon0 = origin_h = None
+                lat0, lon0, origin_h = self._georeference_origin() or (None, None, None)
                 pick_result = self.sensors.pick_world_point(
                     events["pick_request"][0],
                     events["pick_request"][1],
@@ -471,6 +481,15 @@ class PygameInterface:
         return False
 
 
+    def _georeference_origin(self) -> tuple[float, float, float] | None:
+        """The world's origin as (lat, lon, height), asked of the server until it first answers."""
+        if self._origin is None and self.world is not None:
+            try:
+                self._origin = tuple(self.world.get_cesium_origin())
+            except Exception:
+                return None
+        return self._origin
+
     def render(self):
         # blit surface from sensor subsystem
         if self.sensors:
@@ -489,10 +508,8 @@ class PygameInterface:
             self.render_boundary_overlays(cam_xyz, cam_pose.yaw, cam_pose.pitch)
 
             ft_per_m = self.sensors.FT_PER_M
-            try:
-                _, _, origin_h = self.world.get_cesium_origin()
-            except Exception:
-                origin_h = 0.0
+            origin = self._georeference_origin()
+            origin_h = origin[2] if origin else 0.0
             elev_ft = (origin_h + cam_pose.z) * ft_per_m
             gz = self.sensors.ground_z
             agl_ft = (cam_pose.z - gz) * ft_per_m if gz is not None else None
@@ -503,7 +520,6 @@ class PygameInterface:
             agl_str = "   --"
 
         # poll solar for time
-        solar_hud = ""  # "HH:MM" refreshed from get_solar_state at low frequency
         self.solar_poll_frame += 1
         if self.solar_poll_frame >= 30:
             self.solar_poll_frame = 0
@@ -511,10 +527,10 @@ class PygameInterface:
                 _ss = self.world.get_solar_state()
                 if _ss:
                     _h = _ss["solar_time"]
-                    solar_hud = f"{int(_h) % 24:02d}:{int((_h % 1) * 60) % 60:02d}"
+                    self.solar_hud = f"{int(_h) % 24:02d}:{int((_h % 1) * 60) % 60:02d}"
             except Exception:
                 pass
-        time_str = f"{solar_hud or '--:--'}" + (
+        time_str = f"{self.solar_hud or '--:--'}" + (
             f" >{self.time_rate:g}x" if self.get_flag("time_advancing") else ""
         )
 
@@ -535,14 +551,7 @@ class PygameInterface:
         else:
             tel_str = "n/a"
 
-        if self.recorder:
-            rec_str = (
-                f"REC {self.recorder.saved}@{self.recorder.record_hz:g}Hz"
-                if self.recorder.recording
-                else "off"
-            )
-        else:
-            rec_str = "n/a"
+        rec_str = self.recording_status()
 
         if self.scenario:
             if self.scenario.running:
@@ -573,19 +582,55 @@ class PygameInterface:
             speed_val = 0.0
             frames_val = 0
 
+        # Only what this window can act on is shown: a window given no traffic, recorder or orbit
+        # lists none of their keys, and a read-only one none of the world's.
+        def on(flag: str) -> str:
+            return "ON" if self.get_flag(flag) else "OFF"
+
+        settings = [f"speed {speed_val:4.0f}"]
+        if not self.read_only:
+            settings += [f"photoreal(C) {on('photoreal_visible')}", f"ground(G) {on('ground_visible')}",
+                         f"gColl(V) {on('ground_collision')}", f"road(R) {on('road_rendered')}",
+                         f"signals(L) {on('signals_visible')}"]
+        if self.traffic:
+            settings.append(f"diag(]) {on('traffic_diagnostics')}")
+        settings += [f"perim(B) {on('show_perimeter')}", f"margin(M) {on('show_margin')}",
+                     f"time {time_str}" if self.read_only else f"time(K) {time_str}"]
+
+        systems = []
+        if self.traffic:
+            systems.append(f"traffic(T) {traf_str}")
+        if self.scenario:
+            systems.append(f"scenario(X) {scen_str}")
+        if self.telemetry:
+            systems.append(f"telemetry(Y) {tel_str}")
+        if self.recorder:
+            systems.append(f"record(F) {rec_str}")
+        if self.orbit_sensor_controller:
+            systems.append(f"orbit(O) {orbit_str}")
+        systems += [f"fps {self.get_fps():4.0f}", f"frames {frames_val}"]
+
+        movement = ["RMB look", "Ctrl+LMB measure", "WASD/EQ fly", "wheel speed", "Shift fast",
+                    "B/M overlays" if self.read_only else "C/G/V/R/L/B/M layers"]
+        controls = [] if self.read_only else ["K time"]
+        if self.traffic:
+            controls += ["T traffic", "] traffic diag"]
+        if self.scenario:
+            controls.append("X scenario")
+        if self.telemetry:
+            controls.append("Y telemetry")
+        if self.recorder:
+            controls.append("F record")
+        if self.orbit_sensor_controller:
+            controls += ["O orbit", "P pause orbit"]
+        controls += ["Space reset", "Esc quit"]
+
         hud = [
             pose_str,
-            f"speed {speed_val:4.0f}   photoreal(C) {'ON' if self.get_flag('photoreal_visible') else 'OFF'}   "
-            f"ground(G) {'ON' if self.get_flag('ground_visible') else 'OFF'}   gColl(V) {'ON' if self.get_flag('ground_collision') else 'OFF'}   "
-            f"road(R) {'ON' if self.get_flag('road_rendered') else 'OFF'}   signals(L) {'ON' if self.get_flag('signals_visible') else 'OFF'}   "
-            f"diag(]) {'ON' if self.get_flag('traffic_diagnostics') else 'OFF'}   "
-            f"perim(B) {'ON' if self.get_flag('show_perimeter') else 'OFF'}   "
-            f"margin(M) {'ON' if self.get_flag('show_margin') else 'OFF'}   time(K) {time_str}",
-            f"traffic(T) {traf_str}   scenario(X) {scen_str}   telemetry(Y) {tel_str}   record(F) {rec_str}   "
-            f"orbit(O) {orbit_str}   "
-            f"fps {self.get_fps():4.0f}   frames {frames_val}",
-            "RMB look | Ctrl+LMB measure | WASD/EQ fly | wheel speed | Shift fast | C/G/V/R/L/B/M layers | ",
-            "K time | T traffic | ] traffic diag | X scenario | Y telemetry | F record | O orbit | P pause orbit | Space reset | Esc quit",
+            "   ".join(settings),
+            "   ".join(systems),
+            " | ".join(movement) + " | ",
+            " | ".join(controls),
         ]
 
         if orbit_enabled and orbit_info is not None:
@@ -630,6 +675,47 @@ class PygameInterface:
                 self.draw_text(self.note[0], 8, bar_h + 6, (255, 120, 120))
 
         pygame.display.flip()
+
+    def recording_status(self) -> str:
+        """The heads-up display's record(F) field: what the recorder is doing, and what it has kept.
+
+        A recorder that waits for the camera's tiles before it records (`SpanRecorder`) says so and
+        how far they have come; one that pairs each capture with its frame's rendered vehicles adds
+        how many captures did and how many could not. A recorder with neither shows what it always
+        did.
+        """
+        recorder = self.recorder
+        if not recorder:
+            return "n/a"
+        if getattr(recorder, "waiting", False):
+            return f"waiting for tiles, {recorder.tiles or 'asking'} ({recorder.waiting_s:.0f} s)"
+        if not recorder.recording:
+            return "off"
+        # Drops are shown as they happen, not only in the summary at the end: a capture the
+        # encoder queue had no room for takes its truth sidecar with it, and an operator who can
+        # see the count climbing can lower the rate while the run is still worth keeping.
+        dropped = recorder.dropped
+        status = f"REC {recorder.saved}@{recorder.record_hz:g}Hz"
+        if dropped:
+            status += f" -{dropped} dropped"
+        # A still the client held no truth of its own frame for is not written, and is shown as it
+        # happens for the same reason a drop is.
+        unpaired = getattr(recorder, "frame_unpaired", 0)
+        if unpaired:
+            status += f" -{unpaired} unpaired"
+        paired = getattr(recorder, "render_set_paired", None)
+        if paired is not None:
+            status += f"  set {paired} paired"
+            if recorder.render_set_unpaired:
+                status += f" -{recorder.render_set_unpaired} unpaired"
+        # A capture whose own frame's supervision was not to be had carries none: shown as it happens.
+        unknown = getattr(recorder, "supervision_unpaired", None)
+        if unknown:
+            status += f"  supervision -{unknown} unknown"
+        tiles = getattr(recorder, "tiles", None)
+        if tiles:
+            status += f"  tiles {tiles}"
+        return status
 
     def tick(self) -> float:
         """Advance the clock and return delta time in seconds since last tick"""
