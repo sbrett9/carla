@@ -120,8 +120,7 @@ class WorldBuilder:
             if b is None:
                 self.logger.error("no --lat/--lon given and could not read <bounds> from the OSM file")
                 return False
-            args.lat = (b.min_lat + b.max_lat) / 2.0
-            args.lon = (b.min_lon + b.max_lon) / 2.0
+            args.lat, args.lon = b.center()
             self.logger.info(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (derived from OSM bounds center)")
         else:
             self.logger.info(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (explicit)")

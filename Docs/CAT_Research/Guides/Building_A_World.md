@@ -222,7 +222,7 @@ Two more settings decide heights:
 
 | Option | What it does |
 |---|---|
-| `--lat`, `--lon` | The world's origin. The default is the center of the extract's `<bounds>`. |
+| `--lat`, `--lon` | The world's origin. The default is the center of the extract's `<bounds>`, rounded to 7 decimal places. That is the precision OpenStreetMap writes. Every build of one extract then gets the same origin. A rebuild therefore reproduces the same road network. |
 | `--emit-world-package DIR` | Where the package goes. The default is `Build/world-packages` from a source checkout. With the installed commands, it is `world-packages` under the current folder. |
 | `--no-clip-bounds` | Keep roads that run past the extract's `<bounds>`. |
 | `--terrain-margin` | The width, in meters, of the staging ring just inside the map edge (default 30.48). |

@@ -108,10 +108,14 @@ class CarlaControlArgumentParser:
                 help=f"the OpenStreetMap extract to build the world from (default "
                 f"Import/{CHECKOUT_DEFAULT_OSM})")
         build.add_argument(
-            "--lat", type=float, default=None, help="origin lat (default: OSM bounds center)"
+            "--lat", type=float, default=None,
+            help="origin latitude (default: the center of the OSM bounds, rounded to 7 decimal places, "
+                 "the precision OSM uses)"
         )
         build.add_argument(
-            "--lon", type=float, default=None, help="origin lon (default: OSM bounds center)"
+            "--lon", type=float, default=None,
+            help="origin longitude (default: the center of the OSM bounds, rounded to 7 decimal places, "
+                 "the precision OSM uses)"
         )
         build.add_argument(
             "--step", type=float, default=10.0, help="reference-line sample spacing (m)"

@@ -37,6 +37,9 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+# OpenStreetMap writes coordinates to 7 decimal places, about 1 cm. A world's origin is the center of
+# its extract's bounds, rounded to that same precision.
+OSM_COORDINATE_DECIMALS = 7
 
 
 @dataclass
@@ -50,6 +53,18 @@ class BoundingBox:
     def contains(self, lat: float, lon: float) -> bool:
         """Check if a point is inside the bounding box."""
         return self.min_lat <= lat <= self.max_lat and self.min_lon <= lon <= self.max_lon
+
+    def center(self) -> tuple[float, float]:
+        """The (latitude, longitude) center, rounded to OpenStreetMap's own precision.
+
+        The midpoint of two 7-decimal coordinates is exact at 7 decimals, but the floating-point sum
+        can carry noise past the 15th digit: Gardnerville's -119.7742680 and -119.7549250 average to
+        -119.76459650000001. The origin goes into netconvert's projection string, so that noise
+        changes the converted network and its fingerprint. Rounding makes every build of one extract
+        produce the same origin.
+        """
+        return (round((self.min_lat + self.max_lat) / 2.0, OSM_COORDINATE_DECIMALS),
+                round((self.min_lon + self.max_lon) / 2.0, OSM_COORDINATE_DECIMALS))
 
     @classmethod
     def from_tuple(cls, bounds: tuple[float, float, float, float]) -> BoundingBox:

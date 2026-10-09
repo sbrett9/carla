@@ -53,8 +53,8 @@ The current writer writes every field.
 | `FormatVersion` | integer, always 1 | | no | The format of this file. A manifest without it is version 1. |
 | `Producer` | object | | no | What made the package: the tool, the CarlaNet release, the server's build identity and the SUMO release. See "The producer record" below. Absent from packages written before it was recorded. |
 | `MapName` | string | | yes | The world's name. The package file is `<MapName>.cwp`. |
-| `OriginLatitude` | number | degrees | yes | Latitude of CARLA's (0, 0). |
-| `OriginLongitude` | number | degrees | yes | Longitude of CARLA's (0, 0). |
+| `OriginLatitude` | number | degrees | yes | Latitude of CARLA's (0, 0). By default, the center of the extract's `<bounds>`, rounded to 7 decimal places. |
+| `OriginLongitude` | number | degrees | yes | Longitude of CARLA's (0, 0). By default, the center of the extract's `<bounds>`, rounded to 7 decimal places. |
 | `OriginHeightMeters` | number | meters | yes | Ellipsoidal height that CARLA's z = 0 stands for. |
 | `GeoReferenceString` | string | | no | The OpenDRIVE projection, a PROJ string, copied from `map.xodr`. If `map.xodr` has none, it is empty. |
 | `HeightAlignMode` | string | | yes | How roads were aligned with the photoreal imagery: `none`, `area`, `origin` or `drape`. |

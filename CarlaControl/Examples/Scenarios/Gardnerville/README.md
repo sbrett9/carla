@@ -351,15 +351,11 @@ To keep the delivered package, move it out of `world-packages/` first.\
 Then build:
 
 ```
-carla-build-world --osm Scenarios/Gardnerville/Gardnerville_Centerville_Lane.osm --lat 38.91108 --lon -119.7645965 --height-align drape --drape-cache-dir drape-cache
+carla-build-world --osm Scenarios/Gardnerville/Gardnerville_Centerville_Lane.osm --height-align drape --drape-cache-dir drape-cache
 ```
 
-- `--lat` and `--lon` give the world's origin explicitly.\
-  Without them, the origin is the center of the extract's `<bounds>`.\
-  For this extract, that sum carries floating-point noise: -119.76459650000001.\
-  The noise changes the network's fingerprint.\
-  The compiler then refuses the specification (check 1).\
-  The explicit origin builds the network the specification was written against.
+- The build takes the world's origin from the center of the extract's `<bounds>`, rounded to 7 decimal places.\
+  So this build reproduces the network the specification was written against.
 - `--height-align drape` seats the roads on the photoreal imagery point by point.\
   It writes the ground height grids into the package.\
   A drive and a capture refuse a package without them.
