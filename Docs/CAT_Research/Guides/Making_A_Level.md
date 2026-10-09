@@ -611,7 +611,7 @@ Adapted from the script's help text:
 
 | Option | Meaning |
 |---|---|
-| `-Package <world.zip>` | The `.zip` that `PackageWorld.ps1` wrote. Required. |
+| `-Package <world.zip>` | The `.zip` that `PackageWorld.ps1` wrote, or a `.tar.xz` with the same contents. The example level packs in a distribution's `Scenarios\` folder are `.tar.xz` files. Required. |
 | `-Into <package directory>` | The CARLA package to install into. It is a cooked package's root (the directory holding `CarlaUnreal\` and `VERSION`) or a CARLA distribution's root (the one holding `CarlaServer\` and `VERSION`). If you run the script from a distribution's world-tools folder, the default is that distribution. |
 | `-Force` | If the world interface version does not allow the install, this option installs anyway. It is then possible that the world fails to load. The script still refuses a `world.json` of a newer format than it reads. |
 
