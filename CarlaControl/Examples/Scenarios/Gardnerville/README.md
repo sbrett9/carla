@@ -202,7 +202,9 @@ Check 17 warns about each of the three classes that draw one body: the sport uti
 Check 41 warns that the scenario has only one supervision state.
 
 To compile it again, run this command.\
-The new compiled scenario replaces the delivered one.
+The new compiled scenario replaces the delivered one.\
+On Windows, keep the distribution in a folder with a short path.\
+A file path over 260 characters makes the compile refuse with check 59.
 
 ```
 carla-compile-scenario Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --out-dir Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit
@@ -508,11 +510,12 @@ For this world, the steps were:
     Then pack its contents again with LZMA:
 
     ```
-    tar -cJf Gardnerville_Centerville_Lane.tar.xz -C <unpacked folder> world.json Gardnerville_Centerville_Lane
+    tar -cf - -C <unpacked folder> world.json Gardnerville_Centerville_Lane | xz -9 -T0 > Gardnerville_Centerville_Lane.tar.xz
     ```
 
     `<unpacked folder>` is a placeholder for the folder the zip went into.\
-    Any xz at level 9 gives about half the zip's size.\
+    This is the command that made the shipped file, at xz level 9.\
+    It needs `tar` and `xz`, as Git Bash and Linux have them.\
     The contents stay the same: `world.json` beside the `Gardnerville_Centerville_Lane` plugin folder.\
     The repack is only for the examples shipped here.\
     `PackageWorld` writes a zip.

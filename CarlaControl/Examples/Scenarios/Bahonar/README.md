@@ -228,7 +228,9 @@ In the nautical and astronomical twilight bands, every entry is annotated.\
 There the light band alone gives the label away.
 
 To compile it again, run this command.\
-The new compiled scenario replaces the delivered one.
+The new compiled scenario replaces the delivered one.\
+On Windows, keep the distribution in a folder with a short path.\
+A file path over 260 characters makes the compile refuse with check 59.
 
 ```
 carla-compile-scenario Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife.scenario.json --out-dir Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife
@@ -549,11 +551,12 @@ For this world, the steps were:
     Then pack its contents again with LZMA:
 
     ```
-    tar -cJf Shahid_Bahonar_Port.tar.xz -C <unpacked folder> world.json Shahid_Bahonar_Port
+    tar -cf - -C <unpacked folder> world.json Shahid_Bahonar_Port | xz -9 -T0 > Shahid_Bahonar_Port.tar.xz
     ```
 
     `<unpacked folder>` is a placeholder for the folder the zip went into.\
-    Any xz at level 9 gives about half the zip's size.\
+    This is the command that made the shipped file, at xz level 9.\
+    It needs `tar` and `xz`, as Git Bash and Linux have them.\
     The contents stay the same: `world.json` beside the `Shahid_Bahonar_Port` plugin folder.\
     The repack is only for the examples shipped here.\
     `PackageWorld` writes a zip.

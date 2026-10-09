@@ -615,7 +615,7 @@ Adapted from the script's help text:
 | `-Into <package directory>` | The CARLA package to install into. It is a cooked package's root (the directory holding `CarlaUnreal\` and `VERSION`) or a CARLA distribution's root (the one holding `CarlaServer\` and `VERSION`). If you run the script from a distribution's world-tools folder, the default is that distribution. |
 | `-Force` | If the world interface version does not allow the install, this option installs anyway. It is then possible that the world fails to load. The script still refuses a `world.json` of a newer format than it reads. |
 
-`InstallWorld` unpacks the zip, checks the world interface version and copies the world's folder to `CarlaServer\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
+`InstallWorld` unpacks the level pack, checks the world interface version and copies the world's folder to `CarlaServer\CarlaUnreal\Plugins\GeneratedWorlds\<World>\`.\
 A copy of the world that is already installed is deleted first.\
 If a server from that distribution is running with the world loaded, stop it before you install.\
 At the end, `InstallWorld` prints the command that loads the world.
