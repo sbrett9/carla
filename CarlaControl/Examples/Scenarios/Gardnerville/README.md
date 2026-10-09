@@ -88,7 +88,8 @@ A flow's vehicles are named `<flow id>.<n>`, such as `corridor_west_to_east.0`.
 
 ## What you need
 
-- A CARLA distribution: <<FILL: distribution folder name>>.\
+- A CARLA distribution: `Carla-0.10.0-Win64-Development`.\
+  It is CARLA 0.10.0, built from commit `954765e92`, as its `VERSION` file says.\
   The level pack was cooked against it.
 - The distribution set up.\
   Run `setup-venv` once.\
@@ -96,12 +97,21 @@ A flow's vehicles are named `<flow id>.<n>`, such as `corridor_west_to_east.0`.
 - A Cesium ion access token in `CESIUM_ION_TOKEN`.\
   The server streams the photoreal imagery from Cesium ion.\
   Without the token, the level loads with no imagery.
-- The level pack, <<FILL: pack file name>>.
-- The world package the level was made from, `Gardnerville_Centerville_Lane.cwp`, from <<FILL: where the world package is published>>.\
-  A world package is one generated world in one file.\
-  The compiler, `carla-drive` and `carla-capture` read it.
 - This folder.\
   In a distribution, it is `Scenarios/Gardnerville/`.
+
+This folder holds the rest:
+
+| File | What it is |
+|---|---|
+| `Gardnerville_Centerville_Lane.tar.xz` | The level pack, 7.2 MB. It is the world as an Unreal level, cooked for the distribution above. |
+| `Gardnerville_Centerville_Lane.cwp` | The world package the level was made from. A world package is one generated world in one file. The compiler, `carla-drive` and `carla-capture` read it. |
+| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json` | The scenario specification. |
+| `Gardnerville_Centerville_Lane_NeighborhoodOrbit/` | The compiled scenario, ready to run. |
+
+The level pack is a Windows pack, for a Win64 Development distribution.\
+A Linux distribution needs a pack cooked on Linux with `PackageWorld.sh`.\
+[How the level pack was made](#how-the-level-pack-was-made) gives the steps.
 
 On Windows, in PowerShell:
 
@@ -127,37 +137,42 @@ Unless a section says otherwise, run the commands on this page from the distribu
 Install the pack with the distribution's own `InstallWorld`:
 
 ```powershell
-.\world-tools\InstallWorld.ps1 -Package <<FILL: pack file name>>
+.\world-tools\InstallWorld.ps1 -Package Scenarios\Gardnerville\Gardnerville_Centerville_Lane.tar.xz
 ```
 
-On Linux:
-
-```sh
-./world-tools/InstallWorld.sh --package <<FILL: pack file name>>
-```
-
+`InstallWorld` takes this `.tar.xz` in the same way as the `.zip` that `PackageWorld` writes.\
 The script installs into the distribution whose `world-tools` folder holds it.\
+So the command needs no `-Into`.
+
 The world interface version says what a delivered world can rely on.\
 First the script makes sure that the distribution offers the version the pack needs.\
-Then it copies the world into `CarlaServer/CarlaUnreal/Plugins/GeneratedWorlds/`.\
+This pack needs version 1.x, minor 0 or later.\
+The distribution declares 1.0.
+
+Then the script copies the world into `CarlaServer/CarlaUnreal/Plugins/GeneratedWorlds/`.\
+It replaces a copy of the world that is already installed.\
 At the end, it prints the command that loads the world.\
 If a server from this distribution has the world loaded, stop the server before you install.\
 A refusal means the pack was not cooked for this distribution (see [When it refuses](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#when-it-refuses-1)).
 
-Put `Gardnerville_Centerville_Lane.cwp` in the distribution's `world-packages/` folder.\
-The pack does not bring it.
+The pack is for Windows only: its `world.json` names the platform `Win64`.\
+The install scripts do not check the platform.\
+So do not install this pack into a Linux distribution.
+
+The pack does not bring the world package.\
+The commands on this page read `Gardnerville_Centerville_Lane.cwp` from this folder.
 
 Start the server on the world's map, in a terminal of its own.\
 Set `CESIUM_ION_TOKEN` in that terminal first.
 
 ```powershell
-.\run-server.ps1 <<FILL: map path>>
+.\run-server.ps1 /Gardnerville_Centerville_Lane/Maps/Gardnerville_Centerville_Lane
 ```
 
-On Linux:
+On Linux, with a pack cooked on Linux installed:
 
 ```sh
-./run-server.sh <<FILL: map path>>
+./run-server.sh /Gardnerville_Centerville_Lane/Maps/Gardnerville_Centerville_Lane
 ```
 
 The server runs headless, with no window.\
@@ -166,39 +181,47 @@ A packaged server does not find a world installed later by its short name.\
 If the server does not find the map, it loads its default map instead.\
 To make sure that it loaded this world, read the log lines in [Checking it loaded](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#checking-it-loaded).
 
+This pack was installed with the command above and loaded in `Carla-0.10.0-Win64-Development`.\
+The server log showed `[GeneratedWorld] applied: origin ...` with `per-cell surface field`.\
+The origin in that line must be the one in the `.cwp`, 38.91108, -119.7645965.\
+The road network loaded from the level's own asset.
+
 ## Running it
 
 ### Compiling the scenario
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
-You compile it from the specification in this folder.
-
-The specification names its world package as `../../world-packages/Gardnerville_Centerville_Lane.cwp`.\
-It names the vehicle catalog as `../../catalogue/vehicles.catalogue.json`.\
-The compiler reads both paths from the specification's own folder.\
-In a distribution, they lead to `world-packages/` and `catalogue/` in the distribution's folder.\
-So the specification compiles there as it is.\
-From a source checkout, compile the copy in `Import/` instead.\
-Its paths lead to `Build/world-packages/` and `CarlaControl/catalogue/`.
-
-Compile it:
-
-```
-carla-compile-scenario Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --out-dir scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit
-```
-
-The compiler makes sure that the specification fits the world package.\
-It routes every vehicle with SUMO's `duarouter`.\
-It runs the scenario in SUMO alone over the whole 2220 s.\
-Then it writes the compiled scenario into `scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit/`.\
-`carla-capture` finds it there by the scenario id.\
-The exit status is 0 for a compiled scenario and 1 for a refused one.
+This folder holds it, in `Gardnerville_Centerville_Lane_NeighborhoodOrbit/`.\
+It was compiled at commit `a2baed579` from the specification in this folder, against `Gardnerville_Centerville_Lane.cwp`.\
+So a run needs no compile first.
 
 Read `Gardnerville_Centerville_Lane_NeighborhoodOrbit.resolution.md` in that folder.\
 It says what each place and time resolved to.\
 The compile gives four warnings.\
 Check 17 warns about each of the three classes that draw one body: the sport utility, the van and the orbiter.\
-Check 41 warns that the scenario has only one supervision state.\
+Check 41 warns that the scenario has only one supervision state.
+
+To compile it again, run this command.\
+The new compiled scenario replaces the delivered one.
+
+```
+carla-compile-scenario Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --out-dir Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit
+```
+
+The specification names its world package as `Gardnerville_Centerville_Lane.cwp`, the file beside it.\
+It names the vehicle catalog as `../../catalogue/vehicles.catalogue.json`.\
+The compiler reads both paths from the specification's own folder.\
+In a distribution, the catalog path leads to `catalogue/` in the distribution's folder.\
+So the specification compiles there as it is.
+
+From a source checkout, compile the copy in `Import/` instead.\
+Its paths lead to `Build/world-packages/` and `CarlaControl/catalogue/`.
+
+The compiler makes sure that the specification fits the world package.\
+It routes every vehicle with SUMO's `duarouter`.\
+It runs the scenario in SUMO alone over the whole 2220 s.\
+Then it writes the compiled scenario into the folder `--out-dir` names.\
+The exit status is 0 for a compiled scenario and 1 for a refused one.\
 If check 1 refuses, the package's road network differs from the one the specification names.
 
 ### Watching it with carla-drive
@@ -207,7 +230,7 @@ If check 1 refuses, the package's road network differs from the one the specific
 Start it in a terminal of its own:
 
 ```
-carla-drive --scenario scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg --world-package world-packages/Gardnerville_Centerville_Lane.cwp --epoch Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --no-record --real-time-factor 1.0 --steps 0
+carla-drive --scenario Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit/Gardnerville_Centerville_Lane_NeighborhoodOrbit.sumocfg --world-package Scenarios/Gardnerville/Gardnerville_Centerville_Lane.cwp --epoch Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json --no-record --real-time-factor 1.0 --steps 0
 ```
 
 - `--epoch` names the specification.\
@@ -216,6 +239,12 @@ carla-drive --scenario scenarios/Gardnerville_Centerville_Lane_NeighborhoodOrbit
 - `--no-record` spawns no camera and writes no frames.
 - `--real-time-factor 1.0` holds the traffic to the pace of the wall clock.
 - `--steps 0` runs until the scenario ends.
+
+Run `carla-env` in the drive's terminal first.\
+If `SUMO_HOME` names a SUMO of another release than the one that converted the world, the drive refuses to start.\
+`carla-env` sets `SUMO_HOME` to the distribution's own SUMO.\
+In a test, a 30 s drive of 600 SUMO steps ran on the installed pack with that SUMO.\
+It drew 32 vehicles.
 
 Before it starts, the drive makes sure that the package describes the loaded world.\
 The orbiter enters at t = 60 s.
@@ -252,6 +281,13 @@ carla-capture --write-site-profile site.json
 
 Then edit it as [The site profile](../../../../Docs/CAT_Research/Guides/Getting_Started.md#the-site-profile) shows.\
 Set its `sumo.home` to `tools/sumo`.
+
+The capture finds a compiled scenario by its id, as `<id>/<id>.lock.json` under `paths.scenario_root`.\
+It finds the world package by the name the lock records, under `paths.world_package_root`.\
+Here both are in this folder.\
+So the capture commands below set both paths to `Scenarios/Gardnerville` with `--set`.\
+A relative path in `--set` is read from the folder you run the command in.\
+Run them from the distribution's folder.
 
 This run file, `block_orbit.run.json`, flies one camera around the block.\
 It records 240 s from t = 600 s, one lap of the camera.\
@@ -290,7 +326,7 @@ Run the offline checks first.\
 They do not touch the server:
 
 ```
-carla-capture --site-profile site.json --run block_orbit.run.json --validate-only
+carla-capture --site-profile site.json --run block_orbit.run.json --set paths.scenario_root=Scenarios/Gardnerville --set paths.world_package_root=Scenarios/Gardnerville --validate-only
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
@@ -298,7 +334,7 @@ The scenario's sun policy, `freeze_at_window_start`, holds the sun at the civil 
 Then run it for real:
 
 ```
-carla-capture --site-profile site.json --run block_orbit.run.json
+carla-capture --site-profile site.json --run block_orbit.run.json --set paths.scenario_root=Scenarios/Gardnerville --set paths.world_package_root=Scenarios/Gardnerville
 ```
 
 The last line names the run result.\
@@ -346,14 +382,18 @@ On Linux:
 Set `CESIUM_ION_TOKEN` in the build's terminal too.\
 The build streams the imagery and the terrain heights from Cesium ion.
 
-The build writes `world-packages/Gardnerville_Centerville_Lane.cwp`.\
-To keep the delivered package, move it out of `world-packages/` first.\
+The build writes `Scenarios/Gardnerville/Gardnerville_Centerville_Lane.cwp`, beside the specification.\
+It replaces the delivered package.\
+To keep the delivered package, copy it out of this folder first.\
 Then build:
 
 ```
-carla-build-world --osm Scenarios/Gardnerville/Gardnerville_Centerville_Lane.osm --height-align drape --drape-cache-dir drape-cache
+carla-build-world --osm Scenarios/Gardnerville/Gardnerville_Centerville_Lane.osm --height-align drape --drape-cache-dir drape-cache --emit-world-package Scenarios/Gardnerville
 ```
 
+- `--emit-world-package Scenarios/Gardnerville` writes the package into this folder.\
+  The specification finds it there.\
+  Without the option, the package goes to `world-packages/`.
 - The build takes the world's origin from the center of the extract's `<bounds>`, rounded to 7 decimal places.\
   So this build reproduces the network the specification was written against.
 - `--height-align drape` seats the roads on the photoreal imagery point by point.\
@@ -383,7 +423,7 @@ A scenario names its network by its fingerprint, a hash of the network's content
 Read the new package's fingerprint:
 
 ```
-python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('world-packages/Gardnerville_Centerville_Lane.cwp').read('world.json'))['NetworkFingerprint'])"
+python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('Scenarios/Gardnerville/Gardnerville_Centerville_Lane.cwp').read('world.json'))['NetworkFingerprint'])"
 ```
 
 If it differs from `world.network_fingerprint` in the specification, the compiler refuses the scenario (check 1).\
@@ -407,7 +447,8 @@ Run its commands from the top of the CARLA checkout.\
 For this world, the steps were:
 
 1. Set up the engine, Visual Studio 2022 and a CARLA checkout at the distribution's commits.\
-   [Section 1 of Making a level](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#1-what-you-need) lists what each needs.
+   [Section 1 of Making a level](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#1-what-you-need) lists what each needs.\
+   This pack was cooked from a checkout at a later CARLA commit, as step 9 says.
 2. Copy `Gardnerville_Centerville_Lane.cwp` into the checkout's `Build\world-packages\` folder.\
    Do not rename it.\
    The importer names the level and the plugin after the file name.
@@ -422,8 +463,9 @@ For this world, the steps were:
    A token typed there ships inside the level pack.\
    The import writes the level `/Game/Carla/Maps/Generated/Gardnerville_Centerville_Lane`.\
    It also exports the level as a plugin, in `Unreal\CarlaUnreal\Plugins\GeneratedWorlds\Gardnerville_Centerville_Lane\`.
-6. Clean up the level: <<FILL: the clean-up done on this level, or none>>.\
-   Leave the georeference, the road network and the bare-earth data as the import made them.\
+6. Clean up the level: none, for this level.\
+   It ships as the import made it.\
+   In a clean-up of your own, leave the georeference, the road network and the bare-earth data as the import made them.\
    A drive or a capture compares them with the `.cwp` before it starts.
 7. After any edit, export the level again.\
    Save your work first.\
@@ -440,11 +482,37 @@ For this world, the steps were:
    New-Item -ItemType File Unreal\CarlaUnreal\Plugins\GeneratedWorlds\Gardnerville_Centerville_Lane\DeliverSeparately.txt
    ```
 
-9. Cook it as DLC against the distribution:
+9. Cook it as DLC against the distribution.\
+   With the checkout at the distribution's commit, the usual command names the distribution's folder:
 
    ```powershell
-   .\Scripts\Windows\PackageWorld.ps1 -World Gardnerville_Centerville_Lane -Distribution <<FILL: distribution folder>>
+   .\Scripts\Windows\PackageWorld.ps1 -World Gardnerville_Centerville_Lane -Distribution <distribution folder>
    ```
 
+   `<distribution folder>` is a placeholder for the path of `Carla-0.10.0-Win64-Development`.\
+   This pack was not cooked that way.\
+   The checkout was at a later commit than the distribution.\
+   `-Distribution` refuses such a checkout.\
+   So this command made the pack:
+
+   ```powershell
+   .\Scripts\Windows\PackageWorld.ps1 -World Gardnerville_Centerville_Lane -BasedOnRelease 954765e92
+   ```
+
+   `-BasedOnRelease` used the release record of the base cook that produced the distribution.\
+   That record's asset registry is byte for byte the distribution's.\
    `PackageWorld` writes the level pack to `Build\WorldPackages\Gardnerville_Centerville_Lane.zip`.\
    For a Linux distribution, run `PackageWorld.sh` on Linux.
+10. Repack the zip as a `.tar.xz`.\
+    Unpack `Build\WorldPackages\Gardnerville_Centerville_Lane.zip` into a folder.\
+    Then pack its contents again with LZMA:
+
+    ```
+    tar -cJf Gardnerville_Centerville_Lane.tar.xz -C <unpacked folder> world.json Gardnerville_Centerville_Lane
+    ```
+
+    `<unpacked folder>` is a placeholder for the folder the zip went into.\
+    Any xz at level 9 gives about half the zip's size.\
+    The contents stay the same: `world.json` beside the `Gardnerville_Centerville_Lane` plugin folder.\
+    The repack is only for the examples shipped here.\
+    `PackageWorld` writes a zip.
