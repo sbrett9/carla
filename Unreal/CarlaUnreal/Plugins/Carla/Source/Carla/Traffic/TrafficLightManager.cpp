@@ -203,7 +203,11 @@ void ATrafficLightManager::RegisterLightComponentFromOpenDRIVE(UTrafficLightComp
     auto *NewTrafficLightController = NewObject<UTrafficLightController>(TrafficLightGroup);
     NewTrafficLightController->SetControllerId(FString::FromInt(TrafficLightControllerMissingId));
     NewTrafficLightController->SetRedTime(10);
-    TrafficLightGroup->GetControllers().Add(NewTrafficLightController);
+    // AddController, not GetControllers().Add: it also sets the controller's group. A light reads
+    // its group through its controller. Without it, every light here reports no group. A ramp meter
+    // is such a light, because it sits on no junction. The world observer then logs an error for
+    // each of them on every tick.
+    TrafficLightGroup->AddController(NewTrafficLightController);
     TrafficControllers.Add(NewTrafficLightController->GetControllerId(), NewTrafficLightController);
     TrafficLightController = NewTrafficLightController;
 
