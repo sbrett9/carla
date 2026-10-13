@@ -29,14 +29,14 @@ What a run needs on disk:
     The offset is the declaration, daylight saving included -- Pacific time on 21 March is -07:00
     -- and the zone name is carried for a reader and never resolved.
 
-The sun's policy has no default. A frozen run and a run nobody configured write identical records,
-so the session refuses to render a world whose run does not say what its sun is doing.
-`--illumination advance --solar-rate 1.0` is the recommended one: after SUMO is fast-forwarded and
-before the first tick, the sun is set to the civil instant the window opens (`--window-opens-at`, or
-the first rendered frame). From there it follows simulated time. The session writes it for every frame
-and compares each tick's sun with the declared one. `--illumination freeze_at_window_start` sets it the
-same way, reads it back to confirm the world took it and holds it there. The sun the world was found
-with is given back at the end.
+The sun advances unless the run says otherwise. With no `--illumination` and no `illumination` object
+in the `--epoch` file, the session runs under the default, `advance` at a rate of 1.0: after SUMO is
+fast-forwarded and before the first tick, the sun is set to the civil instant the window opens
+(`--window-opens-at`, or the first rendered frame). From there it follows simulated time. The session
+writes it for every frame and compares each tick's sun with the declared one. The run manifest records
+that no policy was declared and that the default was in force. `--illumination freeze_at_window_start`
+sets the sun the same way, reads it back to confirm the world took it and holds it there. The sun the
+world was found with is given back at the end.
 
 Usage (from a checkout, `python CarlaNet/python/run_sumo_drive.py` is the same tool):
 
@@ -414,12 +414,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "one, whose `illumination` object is then read as well")
     parser.add_argument("--illumination",
                         choices=("freeze_at_window_start", "advance", "freeze_at", "ignore"),
-                        help="what the sun does across the window. No default. advance "
-                             "(recommended, with --solar-rate 1.0) sets it to the civil instant the "
-                             "window opens and carries it forward at --solar-rate, the session "
-                             "writing it for every frame. freeze_at_window_start sets it the same "
-                             "way and holds it. freeze_at holds it at --freeze-at. ignore leaves it "
-                             "as the world holds it and records that the lighting honors no epoch")
+                        help="what the sun does across the window. Under advance the session "
+                             "sets it to the civil instant the window opens. It carries the sun "
+                             "forward at --solar-rate and writes it for every frame. Left out, the "
+                             "sun advances at a rate of 1.0 by default. The run manifest says so. "
+                             "Under freeze_at_window_start the session sets the sun the same way "
+                             "and holds it. Under freeze_at it holds the sun at --freeze-at. Under "
+                             "ignore it leaves the sun as the world holds it. The run then records "
+                             "that the lighting honors no epoch")
     parser.add_argument("--solar-rate", type=float,
                         help="with --illumination advance: sun-clock seconds per simulated second; "
                              "1.0 keeps the sun on civil time")
@@ -584,8 +586,8 @@ class SunDeclaration:
         from_command_line = self.from_command_line(args)
         if from_file is not None and from_command_line is not None:
             raise SystemExit(
-                f"{args.epoch} declares the '{from_file.get('policy')}' illumination policy and the "
-                f"command line declares '{from_command_line.get('policy')}'. Declare it in one place.")
+                f"{args.epoch} declares an illumination object and the command line declares "
+                "another. Declare it in one place.")
         self.illumination = from_file if from_file is not None else from_command_line
 
     @staticmethod

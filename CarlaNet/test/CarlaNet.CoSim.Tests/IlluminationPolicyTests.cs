@@ -56,7 +56,12 @@ public sealed class IlluminationPolicyTests
     }
 
     [Theory]
-    [InlineData("""{"illumination_version": 1}""", "policy is required")]
+    [InlineData("""{"illumination_version": 1, "policy": 1}""", "policy must be a string naming one of")]
+    [InlineData("""{"illumination_version": 1, "freeze_at_civil_time": "07:00:00"}""",
+                "not the default policy, advance")]
+    [InlineData("""{"illumination_version": 1, "freeze_date_advances": true}""",
+                "belongs to a freeze, not the default policy, advance")]
+    [InlineData("""{"illumination_version": 1, "rate_sun_s_per_sim_s": 0}""", "must be positive")]
     [InlineData("""{"illumination_version": 1, "policy": "frozen"}""", "policy 'frozen' is not one of")]
     [InlineData("""{"illumination_version": 1, "policy": "advance"}""", "needs rate_sun_s_per_sim_s")]
     [InlineData("""{"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 0}""",
@@ -87,13 +92,56 @@ public sealed class IlluminationPolicyTests
     }
 
     [Fact]
-    public void AMissingPolicyIsNotGivenTheRecommendedOne()
+    public void AMissingPolicyIsAnAdvancingSunAtARateOfOneMarkedAsTheDefault()
+    {
+        IlluminationPolicy policy = IlluminationPolicy.FromJson("""{"illumination_version": 1}""");
+
+        Assert.Equal(IlluminationPolicyKind.Advance, policy.Kind);
+        Assert.Equal(1.0, policy.Rate);
+        Assert.True(policy.Advances);
+        Assert.True(policy.RequireSun);
+        Assert.True(policy.Defaulted);
+        Assert.Equal("advance at 1 sun-s per simulated s (the default: no policy declared)", policy.ToString());
+
+        // The default a session takes when it is handed no policy at all is the same one.
+        Assert.Equal(IlluminationPolicyKind.Advance, IlluminationPolicy.Default.Kind);
+        Assert.Equal(IlluminationPolicy.DefaultRate, IlluminationPolicy.Default.Rate);
+        Assert.True(IlluminationPolicy.Default.Defaulted);
+        Assert.True(IlluminationPolicy.Default.RequireSun);
+    }
+
+    [Fact]
+    public void AMissingPolicyKeepsTheFieldsAnAdvancingSunTakes()
+    {
+        IlluminationPolicy policy = IlluminationPolicy.FromJson(
+            """{"illumination_version": 1, "rate_sun_s_per_sim_s": 2.0, "require_sun": false, "note": "fast"}""");
+
+        Assert.Equal(IlluminationPolicyKind.Advance, policy.Kind);
+        Assert.Equal(2.0, policy.Rate);
+        Assert.False(policy.RequireSun);
+        Assert.Equal("fast", policy.Note);
+        Assert.True(policy.Defaulted);
+    }
+
+    [Fact]
+    public void ADeclaredPolicyIsNotMarkedAsTheDefault()
+    {
+        Assert.False(IlluminationPolicy.FromJson(
+            """{"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0}""").Defaulted);
+        Assert.False(IlluminationPolicy.Advance(1.0).Defaulted);
+        Assert.False(IlluminationPolicy.FreezeAtWindowStart().Defaulted);
+        Assert.False(IlluminationPolicy.FreezeAt(TimeSpan.FromHours(15)).Defaulted);
+        Assert.False(IlluminationPolicy.Ignore().Defaulted);
+        Assert.Equal("advance at 1 sun-s per simulated s", IlluminationPolicy.Advance(1.0).ToString());
+    }
+
+    [Fact]
+    public void AnUnknownPolicyIsRefusedAndTheDefaultIsNamed()
     {
         CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
-            () => IlluminationPolicy.FromJson("""{"illumination_version": 1}"""));
+            () => IlluminationPolicy.FromJson("""{"illumination_version": 1, "policy": "frozen"}"""));
 
-        Assert.Contains("There is no default", refused.Message);
-        Assert.Contains("The recommended one is advance with rate_sun_s_per_sim_s 1.0", refused.Message);
+        Assert.Contains("Leave it out to take the default, advance at rate_sun_s_per_sim_s 1.0", refused.Message);
     }
 
     [Fact]

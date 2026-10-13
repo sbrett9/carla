@@ -256,7 +256,7 @@ public sealed class SumoDriveSession : IDisposable
             DriveLeaseHolder = drive?.Holder,
             DriveLeaseRefused = drive?.Refusal,
             Epoch = options.Epoch,
-            Illumination = options.Illumination,
+            Illumination = IlluminationInForce(options),
             SumoSeed = seed,
             RoadMapping = roads.Mapping,
             DrawDistanceMetres = options.DrawDistanceMetres,
@@ -576,7 +576,7 @@ public sealed class SumoDriveSession : IDisposable
     /// pose is interpolated inside.
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
-    /// The session renders a world and declares no illumination policy, or a policy that binds the
+    /// The session renders a world under a policy, declared or the default, that binds the
     /// sun and no epoch to bind it from; the real-time factor or its window is not a usable number;
     /// the world package does not describe the world the server has loaded; the named SUMO
     /// installation holds no <c>sumo</c>, or no <c>sumo-gui</c> where the GUI was asked for, or the
@@ -675,7 +675,7 @@ public sealed class SumoDriveSession : IDisposable
                                           ref CoSimSessionStage stage,
                                           List<Exception> giveBack)
     {
-        RequireADeclaredIllumination(options);
+        RequireAnEpochForABoundSun(options);
         RequireAUsablePace(options);
         RequireOneWayToAdvanceTheWorld(options);
         RequireAWindowTheSessionRenders(options);
@@ -1225,7 +1225,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </remarks>
     private void BindTheSun()
     {
-        if (_world is not { } world || _options.Illumination is not { } policy)
+        if (_world is not { } world || Report.Illumination is not { } policy)
         {
             return;
         }
@@ -1869,7 +1869,7 @@ public sealed class SumoDriveSession : IDisposable
     private void AuditTheSun(ulong frame)
     {
         _sunReadThisTick = null;
-        if (_world is not { } world || _options.Illumination is not { } policy)
+        if (_world is not { } world || Report.Illumination is not { } policy)
         {
             return;
         }
@@ -2735,45 +2735,48 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// Refuse a session that renders a world and does not say what its sun is doing.
+    /// The illumination policy the session runs under: the one declared, or, for a session that
+    /// renders a world and declares none, <see cref="IlluminationPolicy.Default"/>.
     /// </summary>
     /// <remarks>
-    /// <para>There is no default policy, and that is the point. A frozen run and a run nobody
-    /// configured write byte-identical records, so a default would make an absent declaration
-    /// indistinguishable from a deliberate one -- and the absent one is today's behaviour, under which
-    /// every capture was lit by whatever the world last held. An advancing sun at a rate of 1.0 is
-    /// the recommended policy. It is recommended, not assumed.</para>
+    /// <para>Time always advances. A run that does not say what its sun is doing gets an advancing sun
+    /// at a rate of 1.0. The sun starts at the civil instant the window opens and follows simulated
+    /// time. The session writes it for every frame.</para>
     ///
-    /// <para>Checked before anything is started, because it needs nothing but the options. A session
-    /// with no world renders nothing and has no sun, so it declares nothing.</para>
+    /// <para>The records stay honest about it. The report carries the policy in force, marked
+    /// <see cref="IlluminationPolicy.Defaulted"/>. The run manifest writes it as in force with no
+    /// declared policy beside it. A session with no world renders nothing and has no sun. It takes
+    /// no default.</para>
     /// </remarks>
-    private static void RequireADeclaredIllumination(SumoDriveSessionOptions options)
+    private static IlluminationPolicy? IlluminationInForce(SumoDriveSessionOptions options) =>
+        options.World is null ? options.Illumination : options.Illumination ?? IlluminationPolicy.Default;
+
+    /// <summary>
+    /// When nothing says what civil time it is, refuse a session whose policy binds the sun to it.
+    /// </summary>
+    /// <remarks>
+    /// Checked before anything is started, because it needs nothing but the options. The default
+    /// policy binds the sun too. A session that renders a world with neither a policy nor an epoch is
+    /// refused here. The refusal says the policy is the default. A session with no world renders
+    /// nothing and has no sun to bind.
+    /// </remarks>
+    private static void RequireAnEpochForABoundSun(SumoDriveSessionOptions options)
     {
-        if (options.World is null)
+        if (options.World is null || IlluminationInForce(options) is not { } policy)
         {
             return;
-        }
-
-        if (options.Illumination is not { } policy)
-        {
-            throw new CoSimSessionRefusedException(
-                "The session renders a world and declares no illumination policy. A frozen run and "
-                + "a run nobody configured write identical records, so an absent policy cannot be "
-                + "told from a chosen one. There is no default. Declare one: advance (recommended "
-                + "at a rate of 1.0: the sun starts at the civil instant the window opens, follows "
-                + "simulated time and is written for every frame), freeze_at_window_start (set to "
-                + "the civil instant the window opens and held there for the whole window), "
-                + "freeze_at (held at a declared civil time of day) or ignore (left as the world "
-                + "holds it and recorded as not honoring any epoch).");
         }
 
         if (policy.BindsTheSun && options.Epoch is null)
         {
             throw new CoSimSessionRefusedException(
-                $"The '{policy.Name}' policy binds the sun to the scenario's civil time, and the "
-                + "session declares no epoch to take it from. Declare what simulated second zero "
-                + "means in civil time, or run under 'ignore', which leaves the sun alone and records "
-                + "that the run's lighting honors no epoch.");
+                (policy.Defaulted
+                    ? "The session declares no illumination policy. The sun advances by default. "
+                    : string.Empty)
+                + $"The '{policy.Name}' policy binds the sun to the scenario's civil time. The "
+                + "session declares no epoch to take that time from. Declare what simulated second "
+                + "zero means in civil time. Or run under 'ignore': it leaves the sun alone and "
+                + "records that the run's lighting honors no epoch.");
         }
     }
 

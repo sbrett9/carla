@@ -110,7 +110,7 @@ EPOCH = {
 }
 
 # The sun follows simulated time: it starts at the civil instant a capture window opens and moves on
-# one sun-second per simulated second. An authored default the operator may override at run start.
+# one sun-second per simulated second. An authored default the operator can override at run start.
 ILLUMINATION = {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0}
 
 # Every place the scenario names. I-25 is South Valley Highway; the two carriageways enter and leave

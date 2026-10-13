@@ -29,7 +29,9 @@ one.
 the Arapahoe dwell starts on, chosen so the sun crosses the +6 degree line between the `golden` and
 `day` illumination bands between the two capture windows: the first opens at 07:27:00 under a 5.69
 degree sun, the second at 07:30:00 under a 6.26 degree one. The dwell and the transit's pass lie in the first
-window and the van's stop in the second; the run lasts 360 s.
+window and the van's stop in the second. The run lasts 360 s. The sun is frozen at each window's
+opening (`freeze_at_window_start`). Each window then stays in its one band. The other scenarios
+declare an advancing sun.
 
 **A run configuration is written beside the scenario**, `<scenario>.run.json`: `run_capture` captures
 the first window through one camera, `Check_Overhead_1`, looking down on the curb from 70 m, and writes
@@ -65,7 +67,6 @@ from make_arapahoe_scenario import (  # noqa: E402
     AMBIENT_FLOWS,
     CATALOGUE,
     EPOCH,
-    ILLUMINATION,
     MAP_NAME,
     PLACES,
     STAGED_SUMO,
@@ -88,6 +89,10 @@ CHECK_EPOCH = {
 }
 
 END_S = 360
+
+# The sun is frozen at each window's opening. Each window then stays in its one illumination band, as
+# the **Time** paragraph above describes. Under an advancing sun the first window crosses +6 degrees.
+ILLUMINATION = {"illumination_version": 1, "policy": "freeze_at_window_start"}
 
 # The two candidate windows, each a different illumination band: the dwell lies in the first, the
 # van's stop in the second.

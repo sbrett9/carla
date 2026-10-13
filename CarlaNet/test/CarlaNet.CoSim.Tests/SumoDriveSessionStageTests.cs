@@ -25,7 +25,9 @@ public sealed class SumoDriveSessionStageTests : IDisposable
         using SyntheticWorld world = Fixture();
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Driving(world, carla);
+        // The default policy binds the sun. Nothing says what civil time it is.
         options.Illumination = null;
+        options.Epoch = null;
 
         CoSimSessionRefusedException refused = Refusal(options);
 

@@ -182,10 +182,12 @@ _CHECKS: tuple[ScenarioCheck, ...] = (
     ScenarioCheck(38, "epoch_and_illumination", "Every capture window lies in the span and cuts no "
                   "supervision interval", "the specification and the supervision plan", _R,
                   COMPILER, "A partially observed positive teaching a truncated pattern"),
-    ScenarioCheck(39, "epoch_and_illumination", "The illumination default is accepted by "
-                  "CarlaNet.CoSim.IlluminationPolicy; an advancing sun's arc per window is named",
-                  "the specification", _RW, COMPILER,
-                  "A window authored as a constant that is not one"),
+    ScenarioCheck(39, "epoch_and_illumination", "A declared illumination default is accepted by "
+                  "CarlaNet.CoSim.IlluminationPolicy. Without one the sun advances at a rate of "
+                  "1.0. The resolution report states how the sun moves in each window. That is a "
+                  "fact and never a finding",
+                  "the specification", _R, COMPILER,
+                  "A policy the session refuses, found only at the start of a run"),
     ScenarioCheck(40, "epoch_and_illumination", "The declared offset is within an hour of the zone "
                   "the world's georeference configures", "solar.json engine_time_zone_hours", _W,
                   COMPILER, "A declared offset that is not this place's"),

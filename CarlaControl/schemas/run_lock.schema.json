@@ -568,7 +568,7 @@
               "$ref": "#/$defs/resolved_field_with_default"
             },
             "solar.policy": {
-              "$ref": "#/$defs/resolved_field"
+              "$ref": "#/$defs/resolved_field_with_default"
             },
             "solar.rate_sun_s_per_sim_s": {
               "$ref": "#/$defs/resolved_field_with_default"

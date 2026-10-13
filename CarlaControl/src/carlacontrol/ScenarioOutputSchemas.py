@@ -399,7 +399,9 @@ class ScenarioOutputSchemas:
             "epoch_block_sha256": _d(sha, "SHA-256 of the epoch object, keys sorted, two-space "
                                           "indent."),
             "illumination": _d({"type": "object"}, "The specification's illumination default, "
-                                                   "verbatim."),
+                                                   "verbatim. An empty object where the "
+                                                   "specification declares none: the policy is "
+                                                   "then the default, advance at a rate of 1.0."),
             "capture_windows": {"type": "array", "items": _object({
                 "id": _STRING, "begin_s": _NUMBER, "end_s": _NUMBER, "civil_begin": _STRING,
                 "civil_end": _STRING, "civil_date": _STRING}, "One declared capture window.")},
@@ -432,7 +434,9 @@ class ScenarioOutputSchemas:
             "id": _STRING, "begin": instant, "length_s": _NUMBER, "end_s": _NUMBER,
             "end_civil": _STRING, "civil_date": _STRING,
             "sun_open": _n(window_sun), "sun_close": _n(window_sun),
-            "sun": _d(_STRING, "Where the default policy binds no sun."),
+            "sun": _d(_STRING, "What the sun does during the window, in one plain sentence: "
+                               "it climbs, sinks or holds, with its elevation at the open and "
+                               "the close. Under ignore, that the sun is not set."),
             "sun_lowest": _object({"elevation_deg": _NUMBER, "elevation_kind": _STRING,
                                    "band": {"enum": IlluminationBand.names()},
                                    "band_source": _STRING},
@@ -497,11 +501,15 @@ class ScenarioOutputSchemas:
                              "written_by_the_session": _STRING},
                             "The declared offset against the zone the world's georeference "
                             "configures."),
-            "illumination_default": _object({"declared": {"type": "object"},
-                                             "policy": {"enum": list(ILLUMINATION_POLICIES)},
-                                             "status": _STRING,
-                                             "declared_elevation_kind": _STRING},
-                                            "The specification's illumination default."),
+            "illumination_default": _object({
+                "declared": _d({"type": "object"}, "The specification's illumination object, "
+                                                   "verbatim. Empty where it declares none."),
+                "policy": {"enum": list(ILLUMINATION_POLICIES)},
+                "status": _d(_STRING, "Where the policy came from: the specification, or the "
+                                      "default where the specification names no policy."),
+                "declared_elevation_kind": _STRING},
+                "The specification's illumination default, or the default policy where it "
+                "declares none."),
             "capture_windows": {"type": "array", "items": window},
             "illumination_label_association": _object({
                 "statistic": _STRING, "band_source": _STRING,

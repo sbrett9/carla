@@ -173,10 +173,14 @@ public sealed class CoSimRunReport
     /// </summary>
     public double WindowOpensAtSeconds { get; internal set; }
 
-    /// <summary>What the run declared its sun would do.</summary>
+    /// <summary>
+    /// What the run's sun did: the policy it declared, or the default, an advancing sun at a rate of
+    /// 1.0, where it renders a world and declares none. Null where it renders no world and declares
+    /// none.
+    /// </summary>
     /// <remarks>
-    /// Recorded because a frozen run and a run nobody configured write identical sun blocks: the
-    /// declaration is what tells them apart.
+    /// Recorded because the sun blocks alone do not say which policy wrote them. A defaulted policy
+    /// is marked <see cref="IlluminationPolicy.Defaulted"/>. The report's text says so.
     /// </remarks>
     public IlluminationPolicy? Illumination { get; init; }
 

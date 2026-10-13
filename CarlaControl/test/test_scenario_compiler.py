@@ -641,19 +641,26 @@ def test_no_epoch_is_refused_under_check_33(world, installation, tmp_path):
     assert checks(result) == {33}
 
 
-@pytest.mark.parametrize(("field", "check"), [("epoch", 33), ("illumination", 39)])
-def test_the_schema_requires_what_the_compiler_requires_and_leaves_its_absence_to_its_check(
-        world, field, check):
-    """The published schema says a specification needs an epoch and an illumination default, as
-    the compiler does; the compiler's shape check leaves a missing one to check 33 or 39, which
-    the two tests beside this one hold to the only finding."""
+def test_the_schema_requires_what_the_compiler_requires_and_leaves_its_absence_to_its_check(world):
+    """The published schema says a specification needs an epoch, as the compiler does; the
+    compiler's shape check leaves a missing one to check 33, which the test beside this one holds to
+    the only finding."""
     spec = world.specification()
     assert ScenarioSchema.validate_against(spec, SCHEMA) == []
-    del spec[field]
-    assert ScenarioSchema.validate_against(spec, SCHEMA) == [f"$: '{field}' is required"]
-    assert ScenarioSchema.validate(spec) == [f"$: '{field}' is required"]
+    del spec["epoch"]
+    assert ScenarioSchema.validate_against(spec, SCHEMA) == ["$: 'epoch' is required"]
+    assert ScenarioSchema.validate(spec) == ["$: 'epoch' is required"]
     assert ScenarioSchema.validate(spec, leaving_to_own_checks=True) == []
-    assert OWN_CHECKS[field] == check
+    assert OWN_CHECKS == {"epoch": 33}
+
+
+def test_the_schema_does_not_require_an_illumination_default(world):
+    """Without one the sun advances by default. The schema accepts a specification with none."""
+    spec = world.specification()
+    del spec["illumination"]
+    assert "illumination" not in SCHEMA["required"]
+    assert ScenarioSchema.validate_against(spec, SCHEMA) == []
+    assert ScenarioSchema.validate(spec) == []
 
 
 def test_an_offset_that_is_not_a_quarter_hour_is_refused_under_check_34(world, installation,
@@ -662,16 +669,42 @@ def test_an_offset_that_is_not_a_quarter_hour_is_refused_under_check_34(world, i
     assert 34 in checks(result)
 
 
-def test_a_missing_or_malformed_illumination_default_is_refused_under_check_39(world, installation,
-                                                                              tmp_path):
+def test_a_missing_illumination_default_advances_the_sun_at_a_rate_of_one_recorded_as_the_default(
+        world, installation, tmp_path):
+    """No policy declared: the sun advances at one sun-second per simulated second. The report names
+    the default as the policy's source. The lock carries what the specification declared: nothing.
+    The policy can never be read as an authored one."""
     spec = world.specification()
     del spec["illumination"]
     result = ScenarioCompiler(installation).compile(world.write(spec, "c39.scenario.json"),
                                                     tmp_path / "out")
-    assert checks(result) == {39}
+    assert not result.refused
+    assert 39 not in checks(result) | checks(result, "warn")
+    default = result.report["illumination_default"]
+    assert default["declared"] == {}
+    assert default["policy"] == "advance"
+    assert default["status"].startswith("the default, because the specification declares no policy")
+    assert "The sun follows simulated time" in default["status"]
+    assert result.lock["illumination"] == {}
+    window = result.report["capture_windows"][0]
+    assert window["sun_close"]["elevation_deg"] > window["sun_open"]["elevation_deg"]
+    report = result.files["resolution_md"].read_text(encoding="utf-8")
+    assert "Policy `advance`: the default, because the specification declares no policy." in report
+
+    # An authored default is named as one.
+    declared = compile_spec(world, installation, tmp_path / "declared")
+    assert declared.report["illumination_default"]["status"] == \
+        "an authored default the operator can override"
+    assert declared.lock["illumination"] == world.specification()["illumination"]
+
+
+def test_a_malformed_illumination_default_is_refused_under_check_39(world, installation, tmp_path):
     rate_on_freeze = compile_spec(world, installation, tmp_path / "rate", illumination={
         "illumination_version": 1, "policy": "freeze_at_window_start", "rate_sun_s_per_sim_s": 1.0})
     assert "rate_sun_s_per_sim_s" in messages(rate_on_freeze, 39)
+    unknown = compile_spec(world, installation, tmp_path / "unknown", illumination={
+        "illumination_version": 1, "policy": "frozen"})
+    assert checks(unknown) == {39}
 
 
 def test_a_clock_alone_on_a_multi_day_run_is_refused_under_check_47(world, installation, tmp_path):
@@ -1521,12 +1554,32 @@ def test_a_window_s_lowest_sun_is_stated_under_check_42_and_nothing_is_concluded
         assert word not in report
 
 
-def test_an_advancing_default_names_the_arc_under_check_39(world, installation, tmp_path):
+def test_each_window_states_what_the_sun_does_as_a_fact_and_never_as_a_finding(world, installation,
+                                                                              tmp_path):
+    """Check 39 states the sun's movement over each window in plain words, with no pass mark."""
     result = compile_spec(world, installation, tmp_path, illumination={
         "illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0})
-    assert not result.refused and 39 in checks(result, "warn")
+    assert not result.refused
+    assert 39 not in checks(result) | checks(result, "warn")
     window = result.report["capture_windows"][0]
-    assert window["sun_close"]["elevation_deg"] > window["sun_open"]["elevation_deg"]
+    opens, closes = window["sun_open"]["elevation_deg"], window["sun_close"]["elevation_deg"]
+    assert closes > opens
+    assert window["sun"] == f"The sun climbs from {opens:+.2f}° to {closes:+.2f}° during this window."
+    report = result.files["resolution_md"].read_text(encoding="utf-8")
+    assert f"- morning: {window['sun']}" in report
+
+    frozen = compile_spec(world, installation, tmp_path / "frozen")
+    held = frozen.report["capture_windows"][0]
+    assert held["sun"] == f"The sun holds at {held['sun_open']['elevation_deg']:+.2f}° for the whole window."
+
+    # A falling sun sinks. One that moves less than the hundredth of a degree shown holds.
+    assert ScenarioCompiler._sun_movement(3.29, -2.56) == \
+        "The sun sinks from +3.29° to -2.56° during this window."
+    assert ScenarioCompiler._sun_movement(5.001, 5.004) == "The sun holds at +5.00° for the whole window."
+
+    ignored = compile_spec(world, installation, tmp_path / "ignored", illumination={
+        "illumination_version": 1, "policy": "ignore"})
+    assert ignored.report["capture_windows"][0]["sun"].startswith("The sun is not set during this window.")
 
 
 def test_a_held_calendar_warns_when_a_window_falls_on_another_date_under_check_36(
