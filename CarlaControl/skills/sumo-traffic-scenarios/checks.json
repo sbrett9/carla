@@ -513,14 +513,13 @@
     {
       "id": 39,
       "group": "epoch_and_illumination",
-      "title": "The illumination default is accepted by CarlaNet.CoSim.IlluminationPolicy; an advancing sun's arc per window is named",
+      "title": "A declared illumination default is accepted by CarlaNet.CoSim.IlluminationPolicy. Without one the sun advances at a rate of 1.0. The resolution report states how the sun moves in each window. That is a fact and never a finding",
       "against": "the specification",
       "outcomes": [
-        "refuse",
-        "warn"
+        "refuse"
       ],
       "status": "compiler",
-      "prevents": "A window authored as a constant that is not one"
+      "prevents": "A policy the session refuses, found only at the start of a run"
     },
     {
       "id": 40,

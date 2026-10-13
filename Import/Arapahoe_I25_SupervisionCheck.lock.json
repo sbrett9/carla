@@ -4,18 +4,18 @@
   "scenario_name": "Arapahoe supervision check",
   "spec_version": 1,
   "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-  "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
+  "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g2d8636e9d",
-    "carlanet": "0.10.0+gd593b3311",
+    "tool_version": "0.10.0+g692e09427",
+    "carlanet": "0.10.0+g7715a2677",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-13T00:09:54.621Z"
+    "written_utc": "2026-10-13T18:10:10.898Z"
   },
   "files": {
     "routes": {
@@ -149,8 +149,7 @@
   "epoch_block_sha256": "b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831",
   "illumination": {
     "illumination_version": 1,
-    "policy": "advance",
-    "rate_sun_s_per_sim_s": 1.0
+    "policy": "freeze_at_window_start"
   },
   "capture_windows": [
     {
@@ -172,19 +171,19 @@
   ],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
   "illumination_label_association": {
-    "normalized_mutual_information": 0.21,
+    "normalized_mutual_information": 0.098,
     "bands": {
       "day": {
         "annotated": 0,
-        "nominal": 2,
+        "nominal": 1,
         "unlabelled": 9,
-        "total": 11
+        "total": 10
       },
       "golden": {
         "annotated": 2,
-        "nominal": 0,
+        "nominal": 1,
         "unlabelled": 9,
-        "total": 11
+        "total": 12
       }
     },
     "entries": 22

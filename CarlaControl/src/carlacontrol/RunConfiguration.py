@@ -105,6 +105,10 @@ LAYER_UNSUPPLIED = "unsupplied"
 MODES = ("sumo_driven_playback", "traffic_manager_ambient", "storyboard_execution",
          "recorded_replay")
 ILLUMINATION_POLICIES = ("freeze_at_window_start", "advance", "freeze_at", "ignore")
+# The policy and rate a run takes where nothing declares a policy: the sun advances one sun-second
+# per simulated second. It then follows simulated time. A record names this as the tool default.
+DEFAULT_ILLUMINATION_POLICY = "advance"
+DEFAULT_SUN_RATE = 1.0
 
 # The post-process profiles the content tree ships (Content/Carla/Config/PostProcess/*.json).
 POST_PROCESS_PROFILES = ("Default", "GoPro", "Town10HD_Opt", "Town_C")
@@ -370,11 +374,12 @@ _FIELDS: tuple[RunField, ...] = (
     _F("pacing.window_s", _POSITIVE, 5.0, SESSION_FIXED,
        help="Wall-clock seconds the achieved factor is measured over."),
     # -- the sun: the scenario's illumination object, overridable ---------------------------------
-    _F("solar.policy", {"type": "string", "enum": list(ILLUMINATION_POLICIES)}, NO_DEFAULT,
-       SESSION_FIXED, SUPPLIED_BY_SCENARIO, alias="--solar",
-       help="What the sun does across the window: advance (recommended: the sun follows simulated "
-            "time), freeze_at_window_start, freeze_at or ignore. The scenario's illumination "
-            "default supplies it. An override is recorded against the value it replaced."),
+    _F("solar.policy", {"type": "string", "enum": list(ILLUMINATION_POLICIES)},
+       DEFAULT_ILLUMINATION_POLICY, SESSION_FIXED, SUPPLIED_BY_SCENARIO, alias="--solar",
+       help="What the sun does across the window: advance (the default: the sun follows simulated "
+            "time), freeze_at_window_start, freeze_at or ignore. A policy the scenario's "
+            "illumination default names replaces the default. An override is recorded against the "
+            "value it replaced."),
     _F("solar.rate_sun_s_per_sim_s", _nullable(_POSITIVE), None, BOUND, SUPPLIED_BY_SCENARIO,
        help="Under advance, pinned to 1.0: one sun-second per simulated second is the only rate "
             "under which recorded solar time is the scenario's clock."),

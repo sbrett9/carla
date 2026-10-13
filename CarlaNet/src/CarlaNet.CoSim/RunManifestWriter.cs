@@ -710,7 +710,10 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         SumoDistributionEditCheck edits = report.DistributionEdits;
         CoSimClock clock = report.Clock;
         SolarEpoch? epoch = _options.Epoch;
-        IlluminationPolicy? policy = _options.Illumination;
+        // Declared is what the run named. In force is what the session ran under: the default where
+        // the run named no policy. A defaulted policy is written as in force and never as declared.
+        IlluminationPolicy? declared = _options.Illumination is { Defaulted: false } named ? named : null;
+        IlluminationPolicy? policy = report.Illumination;
         WriteRow(OpenedRow, json =>
         {
             json.WriteNumber("manifest_version", FormatVersion);
@@ -869,7 +872,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
             json.WriteBoolean("epoch_declared", epoch is not null);
             json.WriteString("epoch_block_sha256", epoch?.Digest);
             json.WritePropertyName("illumination_declared");
-            WriteIllumination(json, policy);
+            WriteIllumination(json, declared, asDeclared: true);
             json.WritePropertyName("illumination_in_force");
             WriteIllumination(json, policy);
             json.WriteBoolean("epoch_honoured", epoch is not null && policy is { HonoursTheEpoch: true });
@@ -898,7 +901,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     private void WriteVehicleLights(Utf8JsonWriter json)
     {
         bool driven = _options.VehicleLampsDriven;
-        bool followSun = driven && _options.Illumination is { BindsTheSun: true };
+        bool followSun = driven && _report.Illumination is { BindsTheSun: true };
         json.WriteStartObject("vehicle_lights");
         json.WriteBoolean("driven", driven);
         json.WriteBoolean("headlights_follow_sun", followSun);
@@ -910,7 +913,11 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         json.WriteEndObject();
     }
 
-    private static void WriteIllumination(Utf8JsonWriter json, IlluminationPolicy? policy)
+    /// <summary>
+    /// One illumination policy object. Written as declared, an advance whose rate came from the default
+    /// carries no rate, because none was declared. The policy in force carries the rate it ran at.
+    /// </summary>
+    private static void WriteIllumination(Utf8JsonWriter json, IlluminationPolicy? policy, bool asDeclared = false)
     {
         if (policy is null)
         {
@@ -920,7 +927,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
         json.WriteStartObject();
         json.WriteString("policy", policy.Name);
-        if (policy.Advances)
+        if (policy.Advances && !(asDeclared && policy.RateDefaulted))
         {
             json.WriteNumber("rate_sun_s_per_sim_s", policy.Rate);
         }
@@ -1431,7 +1438,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         SolarAudit? audit = _report.SunAudit;
         SolarLease? lease = _report.Sun;
         SolarEpoch? epoch = _options.Epoch;
-        IlluminationPolicy? policy = _options.Illumination;
+        IlluminationPolicy? policy = _report.Illumination;
         bool noSun = lease is null ? last?.Sun is null : lease.NoSun;
         bool withinTolerance = audit is not null && audit.Failure is null;
         WriteRow(WindowEndRow, json =>

@@ -786,8 +786,8 @@ public sealed class SumoDriveSessionTests
         Assert.Null(session.Report.WorstSolarResidualDegrees);
     }
 
-    [Fact]
-    public void ASessionThatRendersAWorldAndDeclaresNoPolicyIsRefusedBeforeAnythingIsTouched()
+    [RequiresSumoFact]
+    public void ASessionThatRendersAWorldAndDeclaresNoPolicyAdvancesTheSunAtARateOfOneAsTheDefault()
     {
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
@@ -797,12 +797,49 @@ public sealed class SumoDriveSessionTests
         options.World = carla;
         options.Illumination = null;
 
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        for (int step = 0; step < 20 && session.Advance(); step++)
+        {
+        }
+
+        // The default is in force and says it is the default.
+        IlluminationPolicy policy = session.Report.Illumination!;
+        Assert.Same(IlluminationPolicy.Default, policy);
+        Assert.Equal(IlluminationPolicyKind.Advance, policy.Kind);
+        Assert.Equal(1.0, policy.Rate);
+        Assert.True(policy.Defaulted);
+        Assert.Contains("illumination       advance at 1 sun-s per simulated s (the default: no policy declared)",
+                        session.Report.ToString());
+
+        // The sun advances as under a declared advance. The session writes it for every frame,
+        // declares each frame under the policy and audits it against the sun of its own instant.
+        long ticks = session.Report.Ticks;
+        Assert.True(ticks > 0);
+        Assert.Equal(ticks, session.Sun!.FrameWrites);
+        Assert.Equal(ticks, session.SunAudit!.AuditedTicks);
+        Assert.True(session.Illumination.TryGetDeclaration(1, out IlluminationDeclaration declared));
+        Assert.Equal("advance", declared.Policy);
+        Assert.Equal(1.0, declared.Rate);
+        Assert.True(declared.EpochHonoured);
+    }
+
+    [Fact]
+    public void ASessionThatDeclaresNoPolicyAndNoEpochIsRefusedNamingTheDefault()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Illumination = null;
+        options.Epoch = null;
+
         CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
             () => SumoDriveSession.Start(options));
 
-        // The recommendation is named, and not applied.
-        Assert.Contains("declares no illumination policy", refused.Message);
-        Assert.Contains("advance (recommended", refused.Message);
+        Assert.Contains("declares no illumination policy. The sun advances by default.", refused.Message);
+        Assert.Contains("declares no epoch", refused.Message);
         Assert.Empty(carla.SettingsWrites);
         Assert.Empty(carla.LayerWrites);
         Assert.Empty(carla.SolarWrites);

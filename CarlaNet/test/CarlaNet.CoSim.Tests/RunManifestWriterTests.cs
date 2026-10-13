@@ -624,6 +624,82 @@ public sealed class RunManifestWriterTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void ARunThatDeclaresNoPolicyRecordsTheDefaultAsInForceAndNothingAsDeclared()
+    {
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string manifest = Path.Combine(_directory, "manifest.jsonl");
+        var options = new SumoDriveSessionOptions(
+            CoSimFixtures.DwellScenario, world.PackagePath, CoSimFixtures.VehicleCatalogue,
+            "test://" + Guid.NewGuid().ToString("n"))
+        {
+            World = new RecordedWorld { Loaded = world.AsLoaded() },
+            Epoch = SolarLeaseTests.PortEpoch(),
+            Illumination = null,
+            RunManifestPath = manifest,
+        };
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 20 && session.Advance(); step++)
+            {
+            }
+        }
+
+        // Nothing declared, the default in force: the record cannot be read as a chosen policy.
+        JsonElement solar = ReadRows(File.ReadAllText(manifest))[0].GetProperty("solar");
+        Assert.Equal(JsonValueKind.Null, solar.GetProperty("illumination_declared").ValueKind);
+        JsonElement inForce = solar.GetProperty("illumination_in_force");
+        Assert.Equal("advance", inForce.GetProperty("policy").GetString());
+        Assert.Equal(1.0, inForce.GetProperty("rate_sun_s_per_sim_s").GetDouble());
+        Assert.True(inForce.GetProperty("require_sun").GetBoolean());
+        Assert.True(solar.GetProperty("epoch_honoured").GetBoolean());
+
+        // A policy read from an object that names none is the default too. It is written the same way.
+        string named = Path.Combine(_directory, "named.jsonl");
+        options.Illumination = IlluminationPolicy.FromJson("""{"illumination_version": 1}""");
+        options.RunManifestPath = named;
+        options.World = new RecordedWorld { Loaded = world.AsLoaded() };
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.Advance();
+        }
+
+        JsonElement read = ReadRows(File.ReadAllText(named))[0].GetProperty("solar");
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("illumination_declared").ValueKind);
+        Assert.Equal("advance", read.GetProperty("illumination_in_force").GetProperty("policy").GetString());
+
+        // A declared advance is written as declared.
+        string declared = Path.Combine(_directory, "declared.jsonl");
+        options.Illumination = IlluminationPolicy.Advance(1.0);
+        options.RunManifestPath = declared;
+        options.World = new RecordedWorld { Loaded = world.AsLoaded() };
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.Advance();
+        }
+
+        JsonElement chosen = ReadRows(File.ReadAllText(declared))[0].GetProperty("solar");
+        Assert.Equal("advance", chosen.GetProperty("illumination_declared").GetProperty("policy").GetString());
+        Assert.Equal("advance", chosen.GetProperty("illumination_in_force").GetProperty("policy").GetString());
+
+        // A declared advance with no rate is written as declared, with no rate. The rate in force is 1.0.
+        string rateless = Path.Combine(_directory, "rateless.jsonl");
+        options.Illumination = IlluminationPolicy.FromJson("""{"illumination_version": 1, "policy": "advance"}""");
+        options.RunManifestPath = rateless;
+        options.World = new RecordedWorld { Loaded = world.AsLoaded() };
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.Advance();
+        }
+
+        JsonElement ratelessSolar = ReadRows(File.ReadAllText(rateless))[0].GetProperty("solar");
+        JsonElement asDeclared = ratelessSolar.GetProperty("illumination_declared");
+        Assert.Equal("advance", asDeclared.GetProperty("policy").GetString());
+        Assert.False(asDeclared.TryGetProperty("rate_sun_s_per_sim_s", out _));
+        Assert.Equal(1.0, ratelessSolar.GetProperty("illumination_in_force").GetProperty("rate_sun_s_per_sim_s").GetDouble());
+    }
+
+    [RequiresSumoFact]
     public void AStartRefusedAfterTheManifestWasOpenedLeavesNone()
     {
         using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");

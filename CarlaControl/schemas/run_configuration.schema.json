@@ -749,7 +749,8 @@
             "freeze_at",
             "ignore"
           ],
-          "description": "What the sun does across the window: advance (recommended: the sun follows simulated time), freeze_at_window_start, freeze_at or ignore. The scenario's illumination default supplies it. An override is recorded against the value it replaced.",
+          "description": "What the sun does across the window: advance (the default: the sun follows simulated time), freeze_at_window_start, freeze_at or ignore. A policy the scenario's illumination default names replaces the default. An override is recorded against the value it replaced.",
+          "default": "advance",
           "x-mutability": "session_fixed",
           "x-supplied-by": "scenario"
         },

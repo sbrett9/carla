@@ -34,6 +34,7 @@ Two machines with different time zone databases therefore always agree.
 - `carla-drive --epoch FILE` reads an epoch from a file: either the epoch object on its own, or a whole `scenario.json`.\
   From a whole specification, it reads the `epoch`.\
   It also reads the specification's `illumination` as the sun's policy.\
+  Without one, the sun advances at a rate of 1.0 by default.\
   It checks the epoch against this schema before the session sees it.\
   It refuses a file that does not conform.\
   The refusal quotes the schema.

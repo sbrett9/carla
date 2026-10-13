@@ -122,7 +122,15 @@ Run these steps:
 - `run-server`\
   Starts the server with no window.\
   A first argument that does not start with `-` names the map to start in.\
-  The server answers on port 2000.
+  The server answers on port 2000.\
+  It passes any other argument on to the server.\
+  Quote an argument that holds colons or square brackets, such as the Cesium tile cache size.\
+  In PowerShell: `.\run-server.ps1 /Arapahoe_I25/Maps/Arapahoe_I25 '-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=65536'`\
+  In bash: `./run-server.sh /Arapahoe_I25/Maps/Arapahoe_I25 "-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=65536"`\
+  If the argument arrives split, the server ignores the setting.\
+  To make sure that it arrived, find `LogInit: Command Line:` in the server log.\
+  It must show `-ini:Engine:`, with the colon.\
+  [Getting started](docs/Guides/Getting_Started.md#the-cesium-tile-cache) explains more.
 
 A command reads and writes under the folder you run it from: `world-packages/`, `scenarios/`, `captures/` and `runs/`.\
 A site profile or an option can name other folders.\

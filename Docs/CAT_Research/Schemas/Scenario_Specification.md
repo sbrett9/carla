@@ -66,7 +66,7 @@ Never write a SUMO `H:M:S` value: SUMO reads it as an offset from second zero.
 | `world.package` | string | yes | The world package (`.cwp`), relative to this file. |
 | `world.network_fingerprint` | string, 64 hex digits | yes | The fingerprint of the network the scenario was written against. It must equal the package's (check 1). |
 | `epoch` | object | yes | What simulated second zero is in civil time. See [Epoch](Epoch.md). The schema requires it. The compiler refuses a specification without one under check 33, which says why no epoch is assumed. |
-| `illumination` | object | yes | The default for what the sun does across a capture window, which a run can override: `illumination_version` 1, a `policy` (`freeze_at_window_start`, `advance`, `freeze_at` or `ignore`) and that policy's fields. The schema requires it. The compiler refuses a specification without one under check 39. |
+| `illumination` | object | no | The default for what the sun does across a capture window, which a run can override: `illumination_version` 1, a `policy` (`freeze_at_window_start`, `advance`, `freeze_at` or `ignore`) and that policy's fields. Without it, or without a `policy` in it, the sun advances at a rate of 1.0. The resolution report then names that policy as the default. The compiler refuses a malformed one under check 39. |
 | `seeds.sumo` | integer, 0 or more | yes | SUMO's seed. |
 | `simulation.end` | time | yes | When the scenario ends. |
 | `simulation.step_length_s` | number above 0, seconds | yes | SUMO's step. |

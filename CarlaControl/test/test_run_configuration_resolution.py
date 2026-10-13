@@ -27,6 +27,7 @@ from RunCaptureFixture import (  # noqa: E402
     SCENARIO_ID,
     Layout,
     run_document,
+    write_scenario_package,
     write_world_package,
 )
 
@@ -96,6 +97,20 @@ def test_the_scenario_s_illumination_default_is_layer_four(layout):
     assert resolved.value == "freeze_at_window_start"
     assert resolved.layer == "scenario_package"
     assert "illumination.policy" in resolved.provenance
+
+
+def test_a_scenario_that_declares_no_policy_takes_the_tool_default_advance_at_a_rate_of_one(layout):
+    """A lock whose illumination object is empty: the sun advances by default. The record names the
+    tool default as the policy's layer. It never reads as the scenario's choice."""
+    write_scenario_package(layout.scenario_root, illumination={})
+    effective = resolve(layout)
+    policy = effective.resolution("solar.policy")
+    assert (policy.value, policy.layer, policy.tool_default) == ("advance", "tool_default", "advance")
+    assert "illumination" not in policy.provenance
+    rate = effective.resolution("solar.rate_sun_s_per_sim_s")
+    assert (rate.value, rate.layer) == (1.0, "pinned_by_policy")
+    assert effective.illumination_object() == {"illumination_version": 1, "policy": "advance",
+                                               "rate_sun_s_per_sim_s": 1.0}
 
 
 def test_a_scenario_package_implies_its_mode(layout):

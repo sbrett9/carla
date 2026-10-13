@@ -2617,13 +2617,12 @@ class World:
         malformed one is refused, naming every rule it breaks. `illumination` says what the sun does
         across the window -- the `illumination` object, as a dict or JSON, or just a policy name:
         'freeze_at_window_start', 'advance' (with `rate_sun_s_per_sim_s`), 'freeze_at' (with
-        `freeze_at_civil_time`) or 'ignore'. **There is no default**, because a frozen run and an
-        unconfigured one write identical records: a session that renders a world and declares no
-        policy is refused. 'advance' with `rate_sun_s_per_sim_s` 1.0 is the recommended one: the sun
-        is set, after SUMO's fast-forward and before the first tick, to the civil instant the window
-        opens. From there it follows simulated time and is written for every frame.
-        'freeze_at_window_start' sets it the same way, reads it back to confirm the world took it and
-        holds it there. The sun the world was found with is given back when the session ends.
+        `freeze_at_civil_time`) or 'ignore'. Left as None, a session that renders a world runs under
+        the default, 'advance' at a rate of 1.0. The sun is set, after SUMO's fast-forward and before
+        the first tick, to the civil instant the window opens. From there it follows simulated time
+        and is written for every frame. The run manifest records that no policy was declared and that
+        the default was in force. 'freeze_at_window_start' sets the sun the same way, reads it back to
+        confirm the world took it and holds it there. The sun the world was found with is given back when the session ends.
         `session.Sun` says what was bound and what the world reported.
 
         `window_opens_at` is the simulated second the capture window opens -- its first captured

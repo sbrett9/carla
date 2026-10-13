@@ -23,8 +23,10 @@ It holds one line of compact JSON.
 
 ## Who writes it and when
 
-If the run declares an illumination policy, the CarlaNet recorder writes it into a still.\
-A SUMO drive given a policy records a declaration for every frame it renders.\
+If the run has an illumination policy, the CarlaNet recorder writes it into a still.\
+A SUMO drive records a declaration for every frame it renders.\
+A drive that declares no policy runs under the default, `advance` at a rate of 1.0.\
+It records that policy.\
 A run with no policy, such as traffic-manager traffic in `carla-sctmv`, writes none.\
 A still whose frame has no declaration has no chunk.\
 Fields that need an epoch, or an audit of the frame, are left out where there is none.

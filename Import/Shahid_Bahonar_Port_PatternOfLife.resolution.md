@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:13:19.281Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g692e09427, carlanet 0.10.0+g7715a2677, SUMO 1.27.0, at 2026-10-13T18:16:29.087Z
 
 7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.
 
@@ -33,7 +33,7 @@ Declared offset +3.5 h; the world's georeference configures +3.74538 h. set_sola
 
 ## Illumination default
 
-Policy `advance`: an authored default the operator may override.
+Policy `advance`: an authored default the operator can override.
 
 ## Illumination-label association (check 41)
 

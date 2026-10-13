@@ -89,7 +89,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `dry_run` | object | | What a SUMO-only run of the compiled files showed (check 59). See below. |
 | `epoch` | object | | The epoch, keys sorted. See [Epoch](Epoch.md). |
 | `epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the epoch. |
-| `illumination` | object | | The specification's illumination default, as written. |
+| `illumination` | object | | The specification's illumination default, as written. An empty object where the specification declares none. The policy is then the default, `advance` at a rate of 1.0. A capture's resolution report then names the tool default as the policy's layer. |
 | `capture_windows` | array | | Each declared window: `id`, `begin_s`, `end_s` (simulated seconds), `civil_begin`, `civil_end` and `civil_date`. |
 | `ephemeris` | string | | What computes the sun. |
 | `illumination_label_association` | object | | The headline of check 41: `normalized_mutual_information` (or null), `bands` (route entries by illumination band and supervision state, or null) and `entries`. |
@@ -126,11 +126,11 @@ It is still version 1.
   "scenario_name": "Arapahoe supervision check",
   "spec_version": 1,
   "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-  "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
+  "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
   "compiler": {"name": "carlacontrol.ScenarioCompiler", "version": "0.10.0"},
-  "producer": {"tool": "carlacontrol.ScenarioCompiler", "tool_version": "0.10.0+g2d8636e9d",
-               "carlanet": "0.10.0+gd593b3311", "server": null, "sumo": "1.27.0",
-               "written_utc": "2026-10-13T00:09:54.621Z"},
+  "producer": {"tool": "carlacontrol.ScenarioCompiler", "tool_version": "0.10.0+g692e09427",
+               "carlanet": "0.10.0+g7715a2677", "server": null, "sumo": "1.27.0",
+               "written_utc": "2026-10-13T18:10:10.898Z"},
   "files": {
     "routes": {"path": "Arapahoe_I25_SupervisionCheck.rou.xml", "sha256": "016b810a..."},
     "config": {"path": "Arapahoe_I25_SupervisionCheck.sumocfg", "sha256": "79a64f25..."},
@@ -147,7 +147,7 @@ It is still version 1.
               "vehicles": {"loaded": 133, "inserted": 133, "discarded": 0, "waiting_at_end": 0},
               "planned_vehicles": {"total": 3, "inserted": 3}, "collisions": 0},
   "epoch_block_sha256": "b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831",
-  "illumination": {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0},
+  "illumination": {"illumination_version": 1, "policy": "freeze_at_window_start"},
   "capture_windows": [{"id": "dwell_golden", "begin_s": 60.0, "end_s": 240.0,
                        "civil_begin": "2026-09-29T07:27:00-06:00",
                        "civil_end": "2026-09-29T07:30:00-06:00", "civil_date": "2026-09-29"}],

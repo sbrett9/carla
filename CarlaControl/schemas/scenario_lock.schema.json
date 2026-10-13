@@ -665,7 +665,7 @@
     },
     "illumination": {
       "type": "object",
-      "description": "The specification's illumination default, verbatim."
+      "description": "The specification's illumination default, verbatim. An empty object where the specification declares none: the policy is then the default, advance at a rate of 1.0."
     },
     "capture_windows": {
       "type": "array",

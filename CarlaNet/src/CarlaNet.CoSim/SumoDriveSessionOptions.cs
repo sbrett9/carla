@@ -263,6 +263,10 @@ public sealed record SumoDriveSessionOptions(
     /// the first rendered frame's where none is given) -- and reads the
     /// sun back to confirm the world took it. The sun the world was found with is given back when the
     /// session ends, on its failure paths as on its normal one.
+    ///
+    /// Null declares no policy. A session that renders a world then runs under
+    /// <see cref="IlluminationPolicy.Default"/>, an advancing sun at a rate of 1.0. Its run manifest
+    /// records that no policy was declared and that the default was in force.
     /// </remarks>
     public IlluminationPolicy? Illumination { get; set; }
 

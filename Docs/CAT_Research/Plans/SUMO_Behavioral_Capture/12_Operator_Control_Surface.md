@@ -1420,7 +1420,7 @@ The `solar` block is the scenario's `illumination` object, field for field (§4.
 
 | Toggle | Default | Class | Source |
 |---|---|---|---|
-| `solar.policy` | **—** from the tool; the scenario's illumination default (layer 4) | Session-fixed; an override is recorded against the value it replaced | §4.3, §4.4, D12.7 |
+| `solar.policy` | `advance` from the tool (owner ruling, 2026-10-13). A policy the scenario's illumination default (layer 4) names replaces it | Session-fixed; an override is recorded against the value it replaced | §4.3, §4.4, D12.7 |
 | `solar.rate_sun_s_per_sim_s` | `null` | **Bound**: pinned to `1.0` under `advance`; not operator-settable (check 3); another rate refused (check 15) | §4.3, D12.8 |
 | `solar.freeze_at_civil_time` | `null` | Session-fixed; `freeze_at` only | [`04`](04_Contracts.md) C9 §11.5 |
 | `solar.freeze_date_advances` | `null` | Session-fixed; a freeze only | [`04`](04_Contracts.md) C9 §11.5 |

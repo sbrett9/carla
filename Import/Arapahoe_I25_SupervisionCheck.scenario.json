@@ -19,8 +19,7 @@
   },
   "illumination": {
     "illumination_version": 1,
-    "policy": "advance",
-    "rate_sun_s_per_sim_s": 1.0
+    "policy": "freeze_at_window_start"
   },
   "seeds": {
     "sumo": 42

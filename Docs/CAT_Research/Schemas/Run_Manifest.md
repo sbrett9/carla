@@ -192,8 +192,8 @@ A field marked "No" under Required can be absent altogether.
 | `epoch` | object or null | | Yes | The scenario's epoch as declared: the civil time simulated second zero stands for, with its zone. Null where none was declared. |
 | `epoch_declared` | boolean | | Yes | Whether an epoch was declared. |
 | `epoch_block_sha256` | string or null | | Yes | The epoch's digest. Null where none was declared. |
-| `illumination_declared` | object or null | | Yes | The illumination policy the run declared (below). Null for none. |
-| `illumination_in_force` | object or null | | Yes | The illumination policy in force (below). Null for none. |
+| `illumination_declared` | object or null | | Yes | The illumination policy the run declared (below). Null for none. A run that renders a world and declares none runs under the default policy. Its manifest has null here and the default in `illumination_in_force`. |
+| `illumination_in_force` | object or null | | Yes | The illumination policy in force (below): the declared one, or the default, `advance` at a rate of 1.0. Null where the run renders no world and declares none. |
 | `epoch_honoured` | boolean | | Yes | Whether each frame is lit by the sun of its own declared civil time. |
 | `advance_mechanism` | string, always `per_tick_write` | | Yes | How an advancing sun is moved: the session sets it on every tick. |
 
@@ -202,7 +202,7 @@ An illumination policy object:
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `policy` | string | | Yes | `freeze_at_window_start`, `advance`, `freeze_at` or `ignore`. |
-| `rate_sun_s_per_sim_s` | number | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. |
+| `rate_sun_s_per_sim_s` | number | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. When the declaration names no rate, `illumination_declared` leaves it out. The policy in force then carries the default rate, 1.0. |
 | `freeze_at_civil_time` | string | | No | The time of day the sun is held at, `hh:mm:ss`. Under `freeze_at` only. |
 | `freeze_date_advances` | boolean | | Yes | Whether a frozen sun's date follows the calendar. |
 | `require_sun` | boolean | | Yes | Whether the run refuses a world with no sun. |

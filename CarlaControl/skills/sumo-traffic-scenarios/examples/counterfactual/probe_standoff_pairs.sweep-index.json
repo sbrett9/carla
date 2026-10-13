@@ -15,12 +15,6 @@
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
         },
         {
-          "check": 39,
-          "outcome": "warn",
-          "subject": "capture window morning",
-          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
-        },
-        {
           "check": 41,
           "outcome": "warn",
           "subject": "supervision",
@@ -67,12 +61,6 @@
           "outcome": "warn",
           "subject": "vehicle class saloon",
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
-        },
-        {
-          "check": 39,
-          "outcome": "warn",
-          "subject": "capture window morning",
-          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
         },
         {
           "check": 41,
@@ -134,12 +122,6 @@
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
         },
         {
-          "check": 39,
-          "outcome": "warn",
-          "subject": "capture window morning",
-          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
-        },
-        {
           "check": 41,
           "outcome": "warn",
           "subject": "supervision",
@@ -197,12 +179,6 @@
           "outcome": "warn",
           "subject": "vehicle class saloon",
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
-        },
-        {
-          "check": 39,
-          "outcome": "warn",
-          "subject": "capture window morning",
-          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
         },
         {
           "check": 41,

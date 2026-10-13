@@ -12,7 +12,6 @@
     "description",
     "world",
     "epoch",
-    "illumination",
     "seeds",
     "simulation",
     "catalogue",
@@ -60,7 +59,7 @@
     },
     "illumination": {
       "type": "object",
-      "description": "The authored default for what the sun does across a capture window, which the operator may override; read by IlluminationPolicy. Required: a specification without one is refused under check 39"
+      "description": "The authored default for what the sun does across a capture window, read by IlluminationPolicy. The operator can override it. Without one, or without a policy in it, the sun advances at a rate of 1.0. The resolution report then names that policy as the default"
     },
     "seeds": {
       "type": "object",

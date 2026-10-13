@@ -216,7 +216,7 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Shahid_Bahonar_Port_PatternOfLife/`.\
-It was compiled at commit `2d8636e9d` from the specification in this folder, against `Shahid_Bahonar_Port.cwp`.\
+It was compiled at commit `692e09427` from the specification in this folder, against `Shahid_Bahonar_Port.cwp`.\
 So a run needs no compile first.
 
 Read `Shahid_Bahonar_Port_PatternOfLife.resolution.md` in that folder.\

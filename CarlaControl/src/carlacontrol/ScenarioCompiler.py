@@ -14,7 +14,7 @@ measured vehicle catalogue; it emits, beside one another:
 | `<MapName>.net.xml` | the world package's own network, byte for byte -- the network SUMO runs is the world's |
 | `<scenario_id>.supervision.json` | the supervision plan, the sole annotation channel |
 | `<scenario_id>.resolution.json` and `.md` | what everything resolved to, and every warning in full |
-| `<scenario_id>.lock.json` | the scenario id, the four-way digest binding, the world binding, the epoch and illumination default verbatim, the seed, the versions |
+| `<scenario_id>.lock.json` | the scenario id, the four-way digest binding, the world binding, the epoch and illumination default verbatim (an empty illumination object where the specification declares none), the seed, the versions |
 
 A refused compile writes only its resolution report, marked refused, so the refusals can be read; no
 scenario file is written. Checks are identified by the stable ids of `ScenarioCheckCatalogue`.
@@ -24,6 +24,12 @@ of the epoch, the instants, the places and the vehicles; routes; supervision; th
 group; emission and its self-checks; a SUMO-only run of what is about to be written; and the writing.
 Checks inside a stage all run, so one compile reports every failure a stage can see; a stage that
 refused stops the compile, because what follows depends on it.
+
+A specification with no illumination policy gets the default: an advancing sun at one sun-second per
+simulated second. The sun then follows simulated time. The records keep where the policy came from.
+The report's `illumination_default` names the default as its source. The lock carries what the
+specification declared, verbatim. That is an empty object where it declared nothing. A capture's
+resolution report then names the tool default as the policy's layer.
 
 **A scenario whose planned vehicles do not all get in is refused** (check 59). SUMO inserts a vehicle
 only when its entrance has room and discards one that has waited `max-depart-delay`, both
@@ -82,6 +88,7 @@ from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.ResolutionReport import ResolutionReport
 from carlacontrol.RotaExpander import RotaEntry, RotaExpander, RotaSkip
 from carlacontrol.RouteValidator import RouteRequest, RouteValidator
+from carlacontrol.RunConfiguration import DEFAULT_ILLUMINATION_POLICY, DEFAULT_SUN_RATE
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError
 from carlacontrol.ScenarioSchema import SPEC_VERSION, ScenarioSchema
 from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix, VehicleClassSpec, VehicleMixSpec
@@ -187,8 +194,8 @@ class ScenarioCompiler:
         except (UnicodeDecodeError, ValueError) as problem:
             self.findings.refuse(53, self.spec_path.name, f"is not JSON: {problem}")
             return
-        # A missing epoch or illumination default is refused by its own check, 33 or 39, which says
-        # why none is assumed.
+        # A missing epoch is refused by its own check, 33, which says why none is assumed. A missing
+        # illumination default is not refused: the sun advances by default (check 39).
         for problem in ScenarioSchema.validate(self.spec, leaving_to_own_checks=True):
             self.findings.refuse(53, "specification", problem)
         self.scenario_id = str(self.spec.get("scenario_id", ""))
@@ -335,16 +342,23 @@ class ScenarioCompiler:
                 self.findings.refuse(check, "epoch", text)
 
     def _resolve_illumination(self) -> None:
+        """Check 39: the declared illumination default is one the session accepts. A specification
+        that declares no policy takes the default, advance at one sun-second per simulated second. An
+        advance that names no rate takes the default rate. `IlluminationPolicy.FromJson` applies the
+        same two defaults. They are filled in here too, so the compiler reads a declaration the same
+        way whichever CarlaNet build is loaded."""
         declared = self.spec.get("illumination")
+        read = dict(declared or {})
+        self.policy_defaulted = "policy" not in read
+        read.setdefault("policy", DEFAULT_ILLUMINATION_POLICY)
+        self.rate_defaulted = read["policy"] == "advance" and "rate_sun_s_per_sim_s" not in read
+        if self.rate_defaulted:
+            read["rate_sun_s_per_sim_s"] = DEFAULT_SUN_RATE
         if declared is None:
-            self.findings.refuse(39, "illumination", "the specification declares no illumination "
-                                 "default. There is none to assume: a frozen run and an "
-                                 "unconfigured one write identical records. The recommended "
-                                 "value is advance with rate_sun_s_per_sim_s 1.0: the sun then "
-                                 "follows simulated time")
+            self.policy = IlluminationPolicy.Advance(DEFAULT_SUN_RATE)
             return
         try:
-            self.policy = IlluminationPolicy.FromJson(json.dumps(declared))
+            self.policy = IlluminationPolicy.FromJson(json.dumps(read))
         except CoSimSessionRefusedException as refused:
             self.findings.refuse(39, "illumination", str(refused.Message))
 
@@ -829,8 +843,8 @@ class ScenarioCompiler:
                                     for declared in self.spec.get("capture_windows", [])) if w]
         policy_name = str(self.policy.Name)
         self.report.set("illumination_default", {
-            "declared": self.spec.get("illumination"), "policy": policy_name,
-            "status": "an authored default the operator may override",
+            "declared": self.spec.get("illumination") or {}, "policy": policy_name,
+            "status": self._illumination_status(),
             "declared_elevation_kind": WindowSun.ELEVATION_KIND})
         self.report.set("zone", {"declared_offset_hours": self.epoch.utc_offset_hours,
                                  "engine_time_zone_hours": engine_zone,
@@ -843,6 +857,22 @@ class ScenarioCompiler:
         self.association = association.compute(self.windows, self._association_entries())
         self.findings.warn(41, "supervision", association.summary(self.association))
         self.report.set("illumination_label_association", self.association)
+
+    def _illumination_status(self) -> str:
+        """Where the policy came from, in words: the specification, or the default where it names
+        none. A defaulted policy then never reads as an authored one. The same holds for the rate of
+        a declared advance that names none."""
+        if not self.policy_defaulted:
+            authored = "an authored default the operator can override"
+            if self.rate_defaulted:
+                authored += (". It names no rate. The sun advances at the default rate of one "
+                             "sun-second per simulated second")
+            return authored
+        rate = float(self.policy.Rate)
+        moves = ("The sun follows simulated time" if rate == DEFAULT_SUN_RATE
+                 else f"The sun moves {rate:g} sun-seconds for each simulated second")
+        return (f"the default, because the specification declares no policy. The compiler applies "
+                f"{DEFAULT_ILLUMINATION_POLICY}. {moves}. The operator can override it")
 
     def _association_entries(self) -> list[AssociationEntry]:
         """Every route entry with its supervision state and its estimated presence span."""
@@ -899,7 +929,8 @@ class ScenarioCompiler:
                   "sun_open": None if opens is None else opens.to_dict(),
                   "sun_close": None if closes is None else closes.to_dict()}
         if opens is None:
-            record["sun"] = "the default policy binds no sun (ignore)"
+            record["sun"] = ("The sun is not set during this window. Under the ignore policy the "
+                             "world keeps the sun it holds.")
             return record
         if opens.sun_date != record["civil_date"]:
             self.findings.warn(36, where, f"opens on civil date {record['civil_date']} and its sun is "
@@ -914,12 +945,19 @@ class ScenarioCompiler:
                                 "elevation_kind": WindowSun.ELEVATION_KIND,
                                 "band": IlluminationBand.of(lowest),
                                 "band_source": BAND_SOURCE}
-        if bool(self.policy.Advances):
-            self.findings.warn(39, where, f"the default policy advances the sun, from "
-                               f"{opens.elevation_deg:.2f} deg at {begin.civil} to "
-                               f"{closes.elevation_deg:.2f} deg at {record['end_civil']}; the window "
-                               "is not one lighting condition")
+        # Check 39 states the sun's movement over the window the same way: a plain fact a newcomer
+        # can read, with no pass mark. An advancing sun is what time does, not a fault.
+        record["sun"] = self._sun_movement(opens.elevation_deg, closes.elevation_deg)
         return record
+
+    @staticmethod
+    def _sun_movement(opens_deg: float, closes_deg: float) -> str:
+        """What the sun does during a window, in one plain sentence: it climbs, sinks or holds."""
+        start, end = f"{opens_deg:+.2f}", f"{closes_deg:+.2f}"
+        if start == end:
+            return f"The sun holds at {start}° for the whole window."
+        verb = "climbs" if closes_deg > opens_deg else "sinks"
+        return f"The sun {verb} from {start}° to {end}° during this window."
 
     @staticmethod
     def _offset(hours: float) -> str:
@@ -1304,7 +1342,9 @@ class ScenarioCompiler:
             "dry_run": self.dry_run,
             "epoch": self.epoch.declaration,
             "epoch_block_sha256": self.epoch.digest,
-            "illumination": self.spec.get("illumination"),
+            # Verbatim. Empty where the specification declares none: the default is the tool's, not
+            # the scenario's. A capture then names the tool default as the policy's layer.
+            "illumination": self.spec.get("illumination") or {},
             "capture_windows": [{"id": w["id"], "begin_s": w["begin"]["seconds"],
                                  "end_s": w["end_s"], "civil_begin": w["begin"]["civil"],
                                  "civil_end": w["end_civil"], "civil_date": w["civil_date"]}

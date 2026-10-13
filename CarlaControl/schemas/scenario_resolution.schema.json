@@ -327,7 +327,7 @@
     },
     "illumination_default": {
       "type": "object",
-      "description": "The specification's illumination default.",
+      "description": "The specification's illumination default, or the default policy where it declares none.",
       "required": [
         "declared",
         "policy",
@@ -336,7 +336,8 @@
       ],
       "properties": {
         "declared": {
-          "type": "object"
+          "type": "object",
+          "description": "The specification's illumination object, verbatim. Empty where it declares none."
         },
         "policy": {
           "enum": [
@@ -347,7 +348,8 @@
           ]
         },
         "status": {
-          "type": "string"
+          "type": "string",
+          "description": "Where the policy came from: the specification, or the default where the specification names no policy."
         },
         "declared_elevation_kind": {
           "type": "string"
@@ -411,7 +413,7 @@
           },
           "sun": {
             "type": "string",
-            "description": "Where the default policy binds no sun."
+            "description": "What the sun does during the window, in one plain sentence: it climbs, sinks or holds, with its elevation at the open and the close. Under ignore, that the sun is not set."
           },
           "sun_lowest": {
             "type": "object",
@@ -2084,7 +2086,7 @@
         },
         "illumination": {
           "type": "object",
-          "description": "The specification's illumination default, verbatim."
+          "description": "The specification's illumination default, verbatim. An empty object where the specification declares none: the policy is then the default, advance at a rate of 1.0."
         },
         "capture_windows": {
           "type": "array",

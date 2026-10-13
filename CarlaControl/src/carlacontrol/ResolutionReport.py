@@ -131,7 +131,9 @@ class ResolutionReport:
             at_close = format(closes["elevation_deg"], ".2f") if closes else "-"
             lines.append(f"| {w['id']} | {w['begin']['civil']} | {w['end_civil']} | "
                          f"{w['civil_date']} | {sun_date} | {at_open} | {at_close} |")
-        return [*lines, ""]
+        # What the sun does in each window, as the plain sentence the record carries.
+        stated = [f"- {w['id']}: {w['sun']}" for w in windows if w.get("sun")]
+        return [*lines, "", *stated, ""] if stated else [*lines, ""]
 
     @staticmethod
     def _association(association) -> list[str]:
