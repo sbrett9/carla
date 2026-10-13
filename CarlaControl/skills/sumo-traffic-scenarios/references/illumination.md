@@ -13,8 +13,8 @@ Required (check 39), read by the session's own `CarlaNet.CoSim.IlluminationPolic
 
 | `policy` | The sun across a window |
 |---|---|
-| `freeze_at_window_start` | set to the civil instant the window opens and held there. **Recommended**: one lighting condition per window |
-| `advance` | carried forward at `rate_sun_s_per_sim_s`, sun-clock seconds per simulated second; the report names the arc from the open to the close of each window (check 39 warns) |
+| `advance` | carried forward at `rate_sun_s_per_sim_s`, sun-clock seconds per simulated second; the report names the arc from the open to the close of each window (check 39 warns). Recommended at a rate of 1.0: the sun follows simulated time |
+| `freeze_at_window_start` | set to the civil instant the window opens and held there: one lighting condition per window |
 | `freeze_at` | held at `freeze_at_civil_time` |
 | `ignore` | not bound: the world keeps whatever sun it has |
 

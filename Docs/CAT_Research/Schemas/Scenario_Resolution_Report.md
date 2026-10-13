@@ -163,14 +163,14 @@ They are still version 1.
 ```json
 {
   "resolution_version": 1,
-  "producer": {"tool": "carlacontrol.ScenarioCompiler", "tool_version": "0.10.0+g8ef0978cb",
-               "carlanet": "0.10.0+g7d218c48c", "server": null, "sumo": "1.27.0",
-               "written_utc": "2026-10-08T02:15:44.761Z"},
+  "producer": {"tool": "carlacontrol.ScenarioCompiler", "tool_version": "0.10.0+g2d8636e9d",
+               "carlanet": "0.10.0+gd593b3311", "server": null, "sumo": "1.27.0",
+               "written_utc": "2026-10-13T00:09:54.622Z"},
   "outcome": "compiled",
   "scenario": {"scenario_id": "Arapahoe_I25_SupervisionCheck",
                "scenario_name": "Arapahoe supervision check", "description": "...",
                "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-               "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
+               "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
                "spec_version": 1},
   "findings": [{"check": 17, "outcome": "warn", "subject": "vehicle class suv",
                 "message": "draws one body, vehicle.nissan.patrol, so every vehicle of the class looks the same and its appearance can become its label"}],

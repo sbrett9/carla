@@ -72,24 +72,23 @@ It also writes the resolution report, the lock and the effective configuration.\
 The launch echo says what the run will do before it starts:
 
 ```text
-Arapahoe_I25_SupervisionCheck@30706c0d3453  ::  window dwell_golden        caller: attended
+Arapahoe_I25_SupervisionCheck@63b527bcb605  ::  window dwell_golden        caller: attended
   simulated   60 - 240 s      (180 s, 360 captures per channel at 2 Hz x 1)
               end: declared by the scenario as window dwell_golden; prewarm 30 s from t=30
   civil       2026-09-29T07:27:00-06:00  ->  2026-09-29T07:30:00-06:00
-  sun         elevation +5.69 deg -> +5.69 deg (refraction_corrected), golden -> golden    policy: freeze_at_window_start
-              held at 2026-09-29 07:27:00: the session pins the sun at the window's opening, t=60, and the prewarm from t=30 is lit by it
+  sun         elevation +5.69 deg -> +6.26 deg (refraction_corrected), golden -> day    policy: advance, rate 1
   world       Arapahoe_I25 (Arapahoe_I25.cwp)   net ffe490b1ee67   origin 39.59431, -104.88449
   render      every vehicle SUMO has   road hidden, signals hidden
               draw distance none: every body is drawn at any range
-  cost        ~1.9 GB estimated; 52.6 GB free is 1.38 h of capture
+  cost        ~1.9 GB estimated; 51.7 GB free is 1.35 h of capture
   pacing      as_available
   readiness   every view's tiles (ceiling 90 s), from t=30 to t=60; not ready by then refuses at pre-roll
               picture not waited on: capture.picture_settled_wait is false; the tiles' lead is 10 s (capture.tiles_hold_s)
-  writes      <distribution>\captures\cap-20261008-070825-6cdae3
-              result <distribution>\runs\cap-20261008-070825-6cdae3\run.result.json
+  writes      <distribution>\captures\cap-20261013-002043-b81f08
+              result <distribution>\runs\cap-20261013-002043-b81f08\run.result.json
   warnings    0
 
-the offline checks accepted: <distribution>\runs\cap-20261008-070825-6cdae3\run.result.json
+the offline checks accepted: <distribution>\runs\cap-20261013-002043-b81f08\run.result.json
 ```
 
 An accepted `--validate-only` names the result's path but writes no result.\
@@ -494,7 +493,8 @@ Before the window, the run does two things that record nothing:
 2. It renders the prewarm, `capture.prewarm_s` simulated seconds (300 by default), with the cameras in place.\
    This is where every camera's view gets ready.
 
-Under the sun policy `freeze_at_window_start`, which the example scenarios use, the sun is pinned at the window's opening and lights the prewarm too.
+Under the sun policy `advance`, which the example scenarios use, the sun follows simulated time through the prewarm and into the window.\
+Under `freeze_at_window_start`, the sun is pinned at the window's opening and lights the prewarm too.
 
 A prewarm longer than the time before the window is cut to fit, with warning `prewarm_clipped` (run check 8).\
 For example, the default 300 s against a window that opens at t=60 gives: `prewarm 300 s clipped to 60 s: the window begins at t=60`.

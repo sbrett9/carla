@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+gd593b3311.dirty, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-12T23:53:54.840Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:09:50.520Z
 
 One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.
 

@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+gd593b3311.dirty, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-12T23:53:59.927Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:09:54.622Z
 
 Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.
 

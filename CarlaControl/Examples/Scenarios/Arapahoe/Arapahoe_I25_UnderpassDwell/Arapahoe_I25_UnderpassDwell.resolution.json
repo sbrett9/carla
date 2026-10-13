@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+ga2baed579",
-    "carlanet": "0.10.0+g67d967b06.dirty",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-09T00:26:05.178Z"
+    "written_utc": "2026-10-13T00:16:50.893Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -14,7 +14,7 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "description": "One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.",
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "5ba4057cd44801b7cb508582372de51b6d01e3f26755b4dd8c1ca1e19c12dd76",
+    "specification_sha256": "ff3f039bf09dc538469880c3dadff8542b2cf48087b2ea680025742b480ceaa2",
     "spec_version": 1
   },
   "findings": [
@@ -83,9 +83,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -4656,18 +4657,18 @@
     "scenario_name": "Arapahoe I-25 underpass dwell",
     "spec_version": 1,
     "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-    "specification_sha256": "5ba4057cd44801b7cb508582372de51b6d01e3f26755b4dd8c1ca1e19c12dd76",
+    "specification_sha256": "ff3f039bf09dc538469880c3dadff8542b2cf48087b2ea680025742b480ceaa2",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+ga2baed579",
-      "carlanet": "0.10.0+g67d967b06.dirty",
+      "tool_version": "0.10.0+g2d8636e9d",
+      "carlanet": "0.10.0+gd593b3311",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-09T00:26:05.175Z"
+      "written_utc": "2026-10-13T00:16:50.889Z"
     },
     "files": {
       "routes": {
@@ -4800,7 +4801,8 @@
     "epoch_block_sha256": "ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [],
     "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",

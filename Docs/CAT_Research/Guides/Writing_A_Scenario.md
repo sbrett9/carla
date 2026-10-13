@@ -87,7 +87,7 @@ To use the example on your own world, change `world`, the places and the times.
     "time_zone_id": "America/Denver",
     "note": "Simulated second zero is 07:30 Mountain Daylight Time on May 12, 2026."
   },
-  "illumination": {"illumination_version": 1, "policy": "freeze_at_window_start"},
+  "illumination": {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0},
   "seeds": {"sumo": 7},
   "simulation": {"end": "d0 10:30", "step_length_s": 0.05},
   "catalogue": "../CarlaControl/catalogue/vehicles.catalogue.json",
@@ -242,8 +242,8 @@ A run can override it.
 
 | `policy` | The sun during a window |
 |---|---|
-| `freeze_at_window_start` | held at the civil time the window opens. Recommended: one lighting condition per window. |
-| `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. |
+| `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. Recommended, with a rate of 1.0: the sun follows simulated time. |
+| `freeze_at_window_start` | held at the civil time the window opens: one lighting condition per window. |
 | `freeze_at` | held at `freeze_at_civil_time`, written `HH:MM:SS`. |
 | `ignore` | left as the world has it. |
 
@@ -844,7 +844,7 @@ The test suite compiles every one and compares the result with that report.
 | `counterfactual/street_layout_probe.scenario.json` and `probe_standoff_pairs.sweep.json` | every kind of label: an annotated instance, a nominal instance, an unlabeled cohort and a series with a skipped occasion. It also has a sweep that pairs the annotated actor three ways. |
 | `epoch/street_layout_epoch_whole_hour.scenario.json` | Mountain Standard Time, -07:00 |
 | `epoch/street_layout_epoch_daylight_saving.scenario.json` | Mountain Daylight Time, -06:00 with daylight saving |
-| `epoch/street_layout_epoch_half_hour.scenario.json` | Iran's +03:30 on a Colorado world. It compiles as declared. Check 40 warns that the offset is far from the world's. The window's sun is 25.7 degrees below the horizon. |
+| `epoch/street_layout_epoch_half_hour.scenario.json` | Iran's +03:30 on a Colorado world. It compiles as declared. Check 40 warns that the offset is far from the world's. The window opens with the sun 25.7 degrees below the horizon. |
 
 `Import/` holds four scenarios on real worlds, each compiled, with its resolution report beside it.\
 A script in `CarlaControl/scripts/` writes each one and compiles it:

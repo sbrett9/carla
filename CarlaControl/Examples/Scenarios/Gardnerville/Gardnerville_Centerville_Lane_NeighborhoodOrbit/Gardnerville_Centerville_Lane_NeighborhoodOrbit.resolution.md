@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+ga2baed579, carlanet 0.10.0+g67d967b06.dirty, SUMO 1.27.0, at 2026-10-09T00:26:11.674Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:16:58.217Z
 
 One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.
 
@@ -27,7 +27,7 @@ Declared offset -7 h; the world's georeference configures -7.98431 h. set_solar_
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override.
+Policy `advance`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 

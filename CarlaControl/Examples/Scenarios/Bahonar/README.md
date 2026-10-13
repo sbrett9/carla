@@ -216,14 +216,14 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Shahid_Bahonar_Port_PatternOfLife/`.\
-It was compiled at commit `a2baed579` from the specification in this folder, against `Shahid_Bahonar_Port.cwp`.\
+It was compiled at commit `2d8636e9d` from the specification in this folder, against `Shahid_Bahonar_Port.cwp`.\
 So a run needs no compile first.
 
 Read `Shahid_Bahonar_Port_PatternOfLife.resolution.md` in that folder.\
 It says what each place, time and label resolved to.\
 The compile gives ten warnings.\
 Check 17 warns about each of the nine classes that draw one body.\
-Check 41 gives 0.142 for how much the light band tells about the label.\
+Check 41 gives 0.128 for how much the light band tells about the label.\
 In the nautical and astronomical twilight bands, every entry is annotated.\
 There the light band alone gives the label away.
 
@@ -358,11 +358,13 @@ carla-capture --site-profile site.json --run gate_probe.run.json --set paths.sce
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
-The scenario's sun policy, `freeze_at_window_start`, holds the sun at the clock time the window opens.\
-The sun keeps the epoch's date, 29 September, on every day of the week.\
+The scenario's sun policy, `advance`, sets the sun to the clock time the window opens.\
+From there the sun follows simulated time.\
+The calendar moves on at each midnight.\
+The sun's date moves with it.\
 This window opens at 11:04:34 on 1 October.\
-So the echo shows the sun held at 2026-09-29 11:04:34.\
-That way, the sun follows the same path across the sky on each day of the week.\
+So the sun is set for 11:04:34 on 1 October.\
+The echo shows that it climbs from +58.70° to +59.34° over this window.\
 Then run it for real:
 
 ```

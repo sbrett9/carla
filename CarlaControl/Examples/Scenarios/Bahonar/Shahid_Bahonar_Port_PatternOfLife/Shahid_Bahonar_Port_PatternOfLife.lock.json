@@ -4,18 +4,18 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "d4dda20498ccca715721224bbda260ac1d3d0822d25d038100e4d64aece2c015",
+  "specification_sha256": "1c0d0a22b02aa37f99b7aa06fb113c95404275f25a3ecb828984021c2876e264",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+ga2baed579",
-    "carlanet": "0.10.0+g67d967b06.dirty",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-09T00:29:28.115Z"
+    "written_utc": "2026-10-13T00:19:42.175Z"
   },
   "files": {
     "routes": {
@@ -143,24 +143,25 @@
   "epoch_block_sha256": "f1ba0ddab35f800a4b78ebc902fa9a1dd9d47a64fee72eb3cfab687969bbecdf",
   "illumination": {
     "illumination_version": 1,
-    "policy": "freeze_at_window_start"
+    "policy": "advance",
+    "rate_sun_s_per_sim_s": 1.0
   },
   "capture_windows": [],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
   "illumination_label_association": {
-    "normalized_mutual_information": 0.142,
+    "normalized_mutual_information": 0.128,
     "bands": {
       "day": {
         "annotated": 86,
-        "nominal": 244,
+        "nominal": 241,
         "unlabelled": 73,
-        "total": 403
+        "total": 400
       },
       "golden": {
         "annotated": 7,
-        "nominal": 0,
+        "nominal": 3,
         "unlabelled": 21,
-        "total": 28
+        "total": 31
       },
       "nautical_twilight": {
         "annotated": 7,

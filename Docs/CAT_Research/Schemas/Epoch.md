@@ -84,5 +84,5 @@ Arapahoe County, Colorado, on a September morning under Mountain Daylight Time:
 ```
 
 ```
-carla-drive --scenario Arapahoe_I25_SupervisionCheck.sumocfg --world-package Arapahoe_I25.cwp --epoch arapahoe.epoch.json --illumination freeze_at_window_start
+carla-drive --scenario Arapahoe_I25_SupervisionCheck.sumocfg --world-package Arapahoe_I25.cwp --epoch arapahoe.epoch.json --illumination advance --solar-rate 1.0
 ```

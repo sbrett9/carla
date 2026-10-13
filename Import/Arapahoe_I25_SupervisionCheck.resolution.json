@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+gd593b3311.dirty",
+    "tool_version": "0.10.0+g2d8636e9d",
     "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-12T23:53:59.927Z"
+    "written_utc": "2026-10-13T00:09:54.622Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -3124,11 +3124,11 @@
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+gd593b3311.dirty",
+      "tool_version": "0.10.0+g2d8636e9d",
       "carlanet": "0.10.0+gd593b3311",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-12T23:53:59.925Z"
+      "written_utc": "2026-10-13T00:09:54.621Z"
     },
     "files": {
       "routes": {
