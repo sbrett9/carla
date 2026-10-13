@@ -1017,9 +1017,9 @@ disagree with:
 }
 ```
 
-Every field resolves at layer 4 from the scenario's illumination default — the compiler refuses a
-scenario that declares none ([`07`](07_Scenario_Authoring.md) check 39) — and a higher layer may
-override it, the override recorded against the value it replaced (§3.7). One short alias exists,
+Every field resolves at layer 4 from the scenario's illumination default. A scenario that declares
+none resolves to the tool default, `advance` at `rate = 1.0` ([`07`](07_Scenario_Authoring.md) check
+39). A higher layer can override it, with the override recorded against the value it replaced (§3.7). One short alias exists,
 `--solar <policy>`, because the policy is the one field an operator flips run to run — which is the
 requirement [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a item 2 states. An illumination field that belongs
 to the policy an override replaced is dropped and recorded as dropped (`RunConfigurationResolver`),
@@ -1057,15 +1057,15 @@ scenario's `t` counts in.** Any other rate breaks that identity. This is the sta
 [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3a asks for, and it holds only because the clock contract holds;
 §6 check 9 re-checks the ratio at launch for that reason.
 
-### 4.4 No default, and why the policy is always stated
+### 4.4 The default and its record
 
-A frozen run and an unconfigured run are byte-identical ([`06`](06_Truth_And_Annotation.md)), so the
-policy may never be absent: **there is no tool default** ([`00`](00_Overview.md) §6). The scenario
-states one, the compiler refuses a scenario that does not, and a run takes it or overrides it — so
-every run's policy has a provenance, and none is a default nobody chose.
+A frozen run and an unconfigured run were once byte-identical ([`06`](06_Truth_And_Annotation.md)),
+so a missing policy had to be refused. Since 2026-10-13 a missing policy takes the tool default,
+`advance` at `rate = 1.0`, as the owner ruled ([`00`](00_Overview.md) §6). The record names the default
+as the policy's source. So every run's policy still has a provenance. A default is never mistaken
+for a choice.
 
-The reason it must be stated rather than defaulted is the asymmetry between the two ways an unstated
-policy fails:
+The default advances because the two ways a wrong policy fails are not alike:
 
 - A run that wanted constant illumination and got an advancing sun: a 1,800 s window
   ([`10`](10_Scale_And_Performance.md) D10.3) advances the sun by 30 minutes, visibly at dawn or dusk,
@@ -1074,8 +1074,7 @@ policy fails:
   sun — a state that cannot occur — and nothing flags it, because a constant `<_solar>` block is
   exactly what a freeze is supposed to produce.
 
-`freeze_at_window_start` is the recommended value because a window is meant to be one lighting
-condition; it is recommended, not silent.
+When a run needs one lighting condition per window, a declared `freeze_at_window_start` holds it.
 
 **Vehicle lights are driven by one rule, and the rule is recorded, not offered as a field.** The
 session drives every rendered body's lights (`SumoDriveSessionOptions.VehicleLampsDriven`, on by
@@ -2879,7 +2878,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.4** | **A capture window is chosen by name from the scenario's declarations, or given explicitly by the operator, and the manifest records which.** A window may also declare a begin and **no end**, in which case the run continues until the scenario ends or the caller stops it. This closes [`01`](01_Architecture.md) open question 3 and [`02`](02_Use_Cases.md) open question 2 together, in the way both recommended (§3.8, §5.2) |
 | **D12.5** | **Run-configuration validation is a further phase of [`07`](07_Scenario_Authoring.md) §5's compiler, not a second validator.** Same refuse/warn vocabulary, same resolution report, same lock-file shape. Phase 0 — 33 of the 48 checks in force — needs no server, no GPU and no SUMO, preserving [`02`](02_Use_Cases.md) D2.2's property one layer up (§6.1, §6.2) |
 | **D12.6** | **Two mutual-exclusion mechanisms, both required.** A configuration naming a block of a non-selected mode is refused at compile time with no server involved; a world whose population authority is held refuses the session start naming the holder. The first catches a wrong request, the second catches a busy world; neither substitutes for the other (§5.3) |
-| **D12.7** | **The solar policy has no tool default: the scenario states it, and a run takes it or overrides it with the override recorded.** A frozen run and an unconfigured run are byte-identical, so absence is made impossible rather than defaulted ([`00`](00_Overview.md) §6). The failure modes of an unstated policy are asymmetric: a run that wanted constant illumination and got an advancing sun records a small, correct, self-describing variation, while a run that wanted changing light and got a frozen one records a physically impossible constant that nothing flags. `freeze_at_window_start` is the recommended value, not a silent one (§4.3, §4.4) |
+| **D12.7** | **The solar policy's tool default is `advance` at `rate = 1.0`.** The scenario can state a policy. A run takes it or overrides it, with the override recorded. A run whose scenario states none takes the tool default. Its records name the default as the source (owner ruling, 2026-10-13). The failure modes of an unstated policy are asymmetric: a run that wanted constant illumination and got an advancing sun records a small, correct, self-describing variation, while a run that wanted changing light and got a frozen one records a physically impossible constant that nothing flags. A declared freeze still holds the sun still (§4.3, §4.4) |
 | **D12.8** | **Under `advance`, `rate` is pinned to 1.0 and is not operator-settable**, because the session writes each tick's own instant ([`11`](11_Time_And_Illumination.md) D11.19) and [`01`](01_Architecture.md) D1.1/D1.13 make one tick exactly `world_delta_s` of simulated time — so 1.0 is the only value under which one sun-second is one scenario-second. `accelerated` (any other rate) is **refused for a capture run and retained in the interactive path**, where it is useful and harmless (§4.3) |
 | **D12.9** | **The solar epoch is a binding, not a choice.** It comes from the scenario package and an operator override of it is a refusal, for the same reason the world digest is: a scenario asserting 23:00 rendered at 12:00 is a self-contradicting corpus, and the surface must not be able to express the request (§4.3) |
 | **D12.10** | **A field whose correct value depends on a condition has no default under that condition** — the *conditional requirement*. Built: `pacing.min_achieved_factor` has no default under `pacing.mode: wall_clock` and is not a field under `as_available`. `solar.vehicle_lights` was specified as the second case -- default `off`, no default in a window whose sun falls below −6° -- and is not offered: the session drives every body's lights by one rule, on by default, and the manifest's opening row records the rule each run ran under (§4.4, §4.5), so there is no choice left to a field. This is how the surface stays short in the ordinary case without letting an important choice be implicit (§3.5, §4.4) |

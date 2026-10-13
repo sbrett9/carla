@@ -24,6 +24,7 @@ possible. Assumes familiarity with the fork but not with the conversation that p
 | 2026-10-05 | The manifest's `corpus_eligible` is renamed `sun_matched_declaration`, as the owner agreed (§2.6 D11.4, §8.4; [`04`](04_Contracts.md) C9 §11.8): the field says that an epoch was declared, the policy bound the sun, the world held one and the audit stayed within tolerance, and its name now says no more than that. The compiler's check 42 states each window's lowest sun elevation and its band and concludes nothing ([`07`](07_Scenario_Authoring.md) §5.2). |
 | 2026-10-05 | The vehicle lights are driven (§6.2, §6.3, D11.8, D11.9 as built): headlights by `HeadlightRule` from the geometric sun elevation the world reports, on below +3° and off above +6° by default, brake lights and turn signals from SUMO's signals. The rule each run ran under is on the run manifest's opening row as `vehicle_lights`, as the owner ruled; per-vehicle light state in the truth record comes later (§8.2). The catalogue's optical pass is shown to authors: the skill's generated `references/vehicles.md` and the resolution report state per class and body whether headlights, brake lights and turn signals light up, and as measured no shipped body shows any lit. |
 | 2026-10-07 | §5.5, F9: the camera's exposure is published and recorded, as the owner ruled on 2026-10-06 (stage K, [`08`](08_Collection_And_EPoL.md) D8.26-D8.27). The RGB camera takes `exposure_mode`, `exposure_compensation`, `iso`, `shutter_speed` and `fstop`, applied over its post-process profile; a run states them per channel at the `Default` profile's values unless it says otherwise, `histogram` warns, and every capture records the exposure the camera was given in `<_carla_exposure>`. `--ev` sets the compensation. §5.5 corrected: the cameras have run on the `Default` profile's manual exposure, EV100 +12.32, not on uncontrolled auto-exposure. The plugin change awaits a build. |
+| 2026-10-13 | D11.6: `advance` at rate 1.0 is the default policy, as the owner ruled. A declared freeze still holds the sun still. |
 
 Capture windows are placed in simulated time, and the sun must be bound to them. This section owns the
 epoch that maps simulated seconds to civil time, the policy governing whether the sun is frozen or
@@ -57,7 +58,7 @@ vehicle signals to CARLA's lamps.
 |---|---|
 | **What does `t = 0` mean?** | Whatever a new `scenario_epoch` block in `scenario.json` says it means: a civil date, a civil time and a UTC offset. Nothing else may assert it. A corpus-eligible run whose scenario omits the block is **refused**, because today's fallback is the *host system date* (`CarlaControl/src/carlacontrol/WorldBuilder.py:229`) and that is the failure mode this section exists to end (§2) |
 | **How is the sun driven?** | One atomic `set_solar_epoch` call at window open, before the first tick, with the engine's own advance set off. Under a freeze nothing more is written; under `advance` the session writes the sun again for **every frame**, before that frame's tick cue, at the whole second nearest the frame's declared instant and one millisecond past it (§3.4, D11.19). Binding it is **mandatory, not merely correct**: a world keeps the date the previous session left, or `ACesiumSunSky`'s class-default 2019-09-21 (§3.6). The sun is read back when the window opens and compared against the declaration on every tick, and a disagreement stops the run (§8.3) |
-| **Frozen or advancing?** | **Neither is a default: the policy is declared, and a run that renders a world without one is refused.** `freeze_at_window_start` is the recommended value. Measured on the sizing scenario: one default 1,800 s window at `rate = 1.0` moves the sun through **up to 6.7° of elevation**, which is a different illumination at the window's two ends and confounds any sweep run inside it (§4). An advancing window holds under the audit across every minute and across civil midnight, measured at both sites, because the session writes each frame's clock where the engine's clock decomposition cannot drop a minute (§8.3, F1) |
+| **Frozen or advancing?** | Advancing, by default. A run that declares no policy runs `advance` at `rate = 1.0`. So does a declared `advance` that names no rate. The records name the default as the policy's source. A declared `freeze_at_window_start` or `freeze_at` still holds the sun still. Measured on the sizing scenario: one default 1,800 s window at `rate = 1.0` moves the sun through up to 6.7° of elevation. So the light at a window's two ends differs (§4). An advancing window holds under the audit across every minute and across civil midnight, measured at both sites, because the session writes each frame's clock where the engine's clock decomposition cannot drop a minute (§8.3, F1) |
 | **Is night viable?** | **No, not today, and not as a rendering problem that more exposure fixes.** At the 23:00 window [`10`](10_Scale_And_Performance.md) §3.1 already recommends, the sun sits at **−60.95°** — 43° past the end of astronomical twilight. There is no moon light, no artificial light of any kind in a generated world, no reachable exposure control, and the photoreal tiles carry baked daytime radiance. The renderable low-light band at this site is **26–30 minutes per twilight edge** (§5) |
 
 ---
@@ -589,30 +590,27 @@ illumination condition.
 
 ### 4.2 The default
 
-> **D11.6 — the illumination policy is declared, never defaulted, and `freeze_at_window_start` is the
-> recommended value.** A session that renders a world and declares no policy is refused at start,
-> because a frozen run and an unconfigured run write identical records and absence would be
-> indistinguishable from intent ([`00`](00_Overview.md) §6). The four policies are
-> [`04`](04_Contracts.md) `C9` §11.6's. The reasons freezing at the window's opening instant is the one
-> to recommend, in order: (1) the plan's capture unit is a window placed on an authored event
-> ([`10`](10_Scale_And_Performance.md) D10.3), and a window is meant to be one condition; (2) the
-> measured 6.7° of drift across a default window is large enough to confound a sweep and is not
-> something a consumer can undo; (3) frozen is the policy under which two runs of the same scenario
-> differ in nothing but what the scenario changed, which is [`04`](04_Contracts.md) G7's
-> determinism guarantee extended to lighting; (4) an advancing window can always be reproduced as a
-> series of frozen windows, whereas a frozen condition cannot be recovered from an advancing capture.
+> **D11.6: the default illumination policy is `advance` at `rate = 1.0`.** The owner ruled on
+> 2026-10-12 and 2026-10-13 that time always advances. By default, the sun does too. A run that
+> declares no policy runs `advance` at one sun-second per simulated second. So does a declared
+> `advance` that names no rate. The records keep the default apart from a choice. The compiler's
+> resolution report names the default as the policy's source. A capture's resolution report names
+> the tool default as its layer. The run manifest leaves `illumination_declared` empty and carries
+> the policy in `illumination_in_force`. The four policies are [`04`](04_Contracts.md) `C9` §11.6's.
 
-`advance` is a first-class choice, and is the right one for a deliberate dawn/dusk-transition
-product. It is not the recommended one because the recommendation should be the one that does not
-silently invalidate a comparison. It is usable under the full audit: the session writes each frame's
-sun itself, so the engine's clock decomposition never renders an advancing frame a minute early (F1,
-D11.19).
+When declared, `freeze_at_window_start` and `freeze_at` still apply. They suit a run that needs one
+lighting condition per window: the measured 6.7° of drift across a default window changes the light
+between its two ends. A frozen window also lets two runs of one scenario differ only in what the
+scenario changed. That is [`04`](04_Contracts.md) G7's determinism guarantee, extended to lighting. Under `advance` the session writes each frame's sun itself, so the engine's clock
+decomposition never renders an advancing frame a minute early (F1, D11.19). Measured on Arapahoe on
+2026-10-13, that per-frame write costs no measurable pace. Trials alternating the two policies ran at
+0.557x frozen and 0.551x advancing, within the run-to-run noise.
 
 **A note on "frozen" being exactly frozen.** Under `frozen`, `set_time_advance(false, 0.0)` is
 asserted and `ACesiumTimeOfDayController::Tick` early-returns on `!bAdvancing`
 (`CesiumTimeOfDayController.cpp:17-20`). Nothing else writes `SolarTime`. So the sun is bit-identical
 across every frame of the window, and `_solar` is constant — which makes the per-capture residual of
-§8.3 a genuinely free check under the default policy.
+§8.3 a genuinely free check under a frozen policy.
 
 ### 4.3 Policy states
 
@@ -1532,7 +1530,7 @@ exists or would silently corrupt data that is about to.
 | **D11.3** | **Daylight saving is carried by the declared UTC offset, never an engine DST flag.** `set_solar_epoch` turns `UseDaylightSavingTime` off; `dst_in_effect` records whether the offset includes daylight saving. The engine's DST implementation is a single hardcoded date pair with `protected` fields and is unusable (§2.4) |
 | **D11.4** | **A run whose scenario declares no epoch is refused unless the operator opts in to `policy = "ignore"`.** An exploratory run so opted in proceeds with `sun_matched_declaration: false` and `epoch_source: "absent"` in its manifest (the field's name since 2026-10-05). There is no silent default, because today's silent default is the host's wall-clock date (§2.6, F6) |
 | **D11.5** | **Add one atomic `set_solar_epoch(year, month, day, hours, utc_offset_hours)` RPC** that sets `TimeZone`, the date and `SolarTime` and calls `UpdateSun()` exactly once. It closes the time-zone gap — measured at **14.72 min / up to 3.27° of elevation and a standing ~3.7° shadow-direction error** at the sizing site — and removes the two-RPC intermediate state. Chosen over pre-converting civil time to local-mean-solar time in the bridge, **which produces the same sun to 0.004° but records a `solar_time` and `time_zone` that are not the declared ones, and moves the date boundary to civil 23:45:17 — 14 min 43 s from the close of the plan's own 23:00 window**. `set_solar_time` and `set_solar_date` are retained unchanged (§3.2.1, F3, F7) |
-| **D11.6** | **The illumination policy is declared, never defaulted; `freeze_at_window_start` is the recommended value.** A session that renders a world with no declared policy is refused. Measured: one default 1,800 s window at `rate = 1.0` moves the sun up to **6.7° of elevation**, which confounds any comparison run inside it. `advance` is the choice for a deliberate transition product, written by the session for every frame (§4.2, D11.19) |
+| **D11.6** | **The default illumination policy is `advance` at `rate = 1.0`.** A run that declares no policy runs under it. So does a declared `advance` with no rate. Every record names the default as the source, so a default is never mistaken for a choice. When declared, `freeze_at_window_start` and `freeze_at` still apply. Measured: one default 1,800 s window at `rate = 1.0` moves the sun up to **6.7° of elevation**. The session's per-frame sun write costs no measurable pace (2026-10-13, §4.2, D11.19) |
 | **D11.7** | **Night capture is not viable today, and no window whose sun elevation is below −6° may be declared corpus-eligible.** There is no moon light, no artificial light in a generated world, no reachable exposure control, and the photoreal tiles carry baked daytime radiance. The renderable low-light band at the sizing site is **26–30 minutes per twilight edge** (§5) |
 | **D11.8** | **The SUMO-to-CARLA light mapping is pure and total** — a function of the SUMO signal mask and the recorded sun elevation and nothing else. `HighBeam`, `Fog` and `Interior` are never set, because asserting them would fabricate a driver decision the scenario never made (§6.2) |
 | **D11.9** | **Headlights are driven from the recorded sun elevation with hysteresis**, `Position \| LowBeam` on below **+3.0°** and off above **+6.0°** — a band the sun crosses in ~14 minutes at the sizing site, so at most one transition per default window. Computed from `_solar.sun_elevation_deg`, identically for every vehicle (§6.3) |

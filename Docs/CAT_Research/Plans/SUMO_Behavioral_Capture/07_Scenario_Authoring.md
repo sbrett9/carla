@@ -89,6 +89,7 @@ choice. §3.9 draws the boundary.
 | 2026-10-06 | Bahonar's no-show is carried by the vehicle that deviates, as the owner ruled ([`06`](06_Truth_And_Annotation.md) §3.5; §3.4.1). The guard schedule keeps its skip; the guard who should have relieved tower 3 on day 4 at 07:00 is a planted `guard`, `offpost_d4_h7_t3`, that departs the apron with the shift, parks for eight hours at `west_apron_spur`, a dead-end airside road between the air base's western aprons, and returns, labeled `bahonar:posting_not_taken_up` with `expected_tower` and `expected_shift_start` and anchored to its stop. The namespace is at version 2 with nine terms, and `tower_posting` is the new term's matched negative and counterfactual. Recompiled: 366 vehicles, all 366 planned vehicles inserted in the dry run, 27 instances, vocabulary digest `9b05590f…`; five military shift-out flows after the new vehicle take the other of their two routes, the seeded draw of each flow's mix member having moved by one. |
 | 2026-10-06 | The skill teaches the omission pattern, as the owner ruled ([`06`](06_Truth_And_Annotation.md) §3.5; §8.2). A section after the rota's, worked on Bahonar's `offpost_d4_h7_t3` with the JSON its generator writes, says to keep the schedule's skip so no ordinary vehicle fills the occasion; to make the deviating vehicle match the routine ones in type, base, departure time and length of stay, so the behavior is the only signal; to name where and when it was expected in its term's declared `parameters`; to anchor its interval to its own events; to list its term in the routine series' term's `hard_negative_for`; and to ask the author what the vehicle does and what the label is called. The skill no longer offers a note at scenario level, for which the specification has no field; the skip's `because` stays the author's reason for the skip. The Python builders' recipe names the `supervision` block, compiled by `compile_scenario.py`, as the only annotation channel, and the legacy `.labels.json` as read for old datasets only. The skill is at 1.7.0 (§8.2). No scenario is recompiled. |
 | 2026-10-06 | One way to convey a planted omission, as the owner ruled: label the vehicle that deviates. Check 19's refusal and §5.1 no longer offer a note at scenario level ([`06`](06_Truth_And_Annotation.md) §3.5). |
+| 2026-10-13 | `illumination` is optional: without it the sun advances at rate 1.0. Each window states its sun as a fact; check 39 no longer warns. |
 
 ---
 
@@ -1222,26 +1223,29 @@ they are **not** is a run instruction: the operator selects among them, or suppl
 ]
 ```
 
-**`illumination` is an authored default, in the same sense**, and **required**: a frozen run and an
-unconfigured one write identical records, so there is no default to assume (D11.6, check 39). It is the
+**`illumination` is an authored default, in the same sense.** It is optional. A specification without
+it runs `advance` at `rate = 1.0`. The compiler's report names that as the default (D11.6, check 39).
+It is the
 `illumination` object of [`04_Contracts.md`](04_Contracts.md) §11.5, read by the session's own
 `CarlaNet.CoSim.IlluminationPolicy`:
 
 ```jsonc
 "illumination": {
   "illumination_version": 1,
-  "policy": "freeze_at_window_start",   // | "advance" (with rate_sun_s_per_sim_s) | "freeze_at" | "ignore"
+  "policy": "freeze_at_window_start",   // | "advance" (rate_sun_s_per_sim_s, default 1.0) | "freeze_at" | "ignore"
   "note": "a sweep varying dwell duration must hold the sun still"
 }
 ```
 
 `freeze_at_window_start` sets the sun once, at the window's opening instant; `advance` carries it forward
-at a declared number of sun-clock seconds per simulated second, written by the session every tick;
+at a declared number of sun-clock seconds per simulated second (1.0 when none is declared), written by
+the session every tick;
 `freeze_at` holds it at a declared civil time of day; `ignore` writes no sun. The choice belongs to the
 run. The specification declares which one the scenario was *designed* around, the resolution report
-states it as an authored default the operator may override, and the override is recorded in the run
-manifest, not in the scenario. Under `advance`, check 39 warns per window with the elevation at the
-window's open and close, because such a window is not one lighting condition.
+states it as an authored default the operator can override. The override is recorded in the run
+manifest, not in the scenario. For each window, the resolution report states how the sun moves, for
+example "The sun climbs from +2.56° to +3.29° during this window." Check 39 refuses only a malformed
+policy.
 
 **Why the authored default is worth having at all, rather than leaving it wholly to the operator.**
 Because a sweep is compiled here, not run here (§7.2), and a sweep that varies behaviour while the sun

@@ -14,6 +14,7 @@ from inferences, and inferences labelled.
 | 6 · 2026-09-21 | One netconvert flag set, every world regenerated; the annotation vocabulary layered. |
 | 7 · 2026-09-30 | Render cap removed: the cap (128, hard 192) was never measured — M2 never ran — and the scenario is the arbiter of population. Every vehicle SUMO has is drawn; a heavier scenario runs slower, never thinner. §6's cap-versus-export conflict no longer exists. |
 | 8 · 2026-10-05 | The judgement text is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (`_EXECUTION_CHARTER.md` §4b): §3's "labels; never scores" row names what stays — the declared labels, the record of what happened and the measured numbers — and no observability, prevalence or statement of absences. |
+| 9 · 2026-10-13 | The sun advances by default, as the owner ruled. A declared freeze still holds it still. |
 
 **Scope:** Realising, as one system, the supervision model of
 [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and the SUMO
@@ -79,7 +80,7 @@ skew to reconcile.
 | **Actuation** | Not addressed | "SUMO decides, CARLA physics executes"; teleporting regresses capabilities | Pose application, with doc 23's shape retained as a second **actuation strategy behind the same bridge** ([01](01_Architecture.md) D1.15) |
 | **Truth producer** | CARLA's `VehicleTelemetryService` | Notes a teleported body reports zero velocity | Authority settled **field by field**, not producer by producer ([06](06_Truth_And_Annotation.md) D6.9) |
 | **Scale** | Hand-sited scenarios | Ordinary ambient traffic | Windowed capture over a simulation far longer than can be rendered; inside a window every vehicle SUMO has is drawn ([10](10_Scale_And_Performance.md), [03](03_CoSimulation_Runtime.md) §8.3) |
-| **Time of day** | Not addressed | Not addressed | A scenario declares an epoch; the clock owner projects civil time through it; the sun is bound per window and the policy is asserted, never defaulted ([11](11_Time_And_Illumination.md), [04](04_Contracts.md) C9) |
+| **Time of day** | Not addressed | Not addressed | A scenario declares an epoch; the clock owner projects civil time through it; the sun is bound per window and advances by default ([11](11_Time_And_Illumination.md), [04](04_Contracts.md) C9) |
 
 **Doc 23 is not overturned.** Its recommendation was made for believable ambient background at
 ordinary scale, where body dynamics are most of the point. It remains right for that, and for oblique
@@ -98,7 +99,7 @@ a reader must hold in mind.
 | **Kinematic truth comes from SUMO** | `Actor.GetVelocity` reports, for a pose-applied body, the velocity the bridge wrote with its pose — SUMO's own ([03](03_CoSimulation_Runtime.md) D3.5) — so it can only copy the source; SUMO's speed and angle are carried with a provenance field, and are *better* than a velocity-derived course for the stationary vehicles a dwell corpus is made of | [01](01_Architecture.md) D1.4 |
 | **The authored SUMO step is never changed to suit the renderer** | Shrinking it is cheap and changes the behaviour being captured. The bridge buffers one step and interpolates **along lane geometry, never chordally** | [03](03_CoSimulation_Runtime.md) D3.6 |
 | **A vType names exactly one blueprint** | Dimensions copied verbatim from a build-time spawn-and-measure sweep; variety from a per-class distribution drawn by SUMO's own seed. **vType colour never reaches a blueprint** | [04](04_Contracts.md) D4.5, D4.17 |
-| **The illumination policy is asserted, never defaulted** | A frozen run and an unconfigured run are byte-identical today, so absence is indistinguishable from intent. A corpus-eligible run without a declared policy is **refused**; `freeze_at_window_start` is the recommended value, not a silent one (§6) | [11](11_Time_And_Illumination.md), [04](04_Contracts.md) D4.24 |
+| **The sun advances by default** | A run that declares no illumination policy runs `advance` at `rate = 1.0`. Its records name the default as the policy's source, so a default is never mistaken for a choice. A declared freeze still holds the sun still (§6) | [11](11_Time_And_Illumination.md) D11.6, [04](04_Contracts.md) §11.5 |
 | **Annotations are authored intent; area relations and illumination are derived context** | No geometric or photometric predicate ever writes supervision. Enforced by the type graph, not by discipline | [06](06_Truth_And_Annotation.md) §3.6, D6.21 |
 | **Observer-derivability governs the model boundary** | An input may reach the model iff a fielded system with the same sensor, navigation solution, clock and public reference data could compute it **without observing the scene's contents**. Solar state passes; `advancing`, `rate`, policy and residual do not | [08](08_Collection_And_EPoL.md), [04](04_Contracts.md) D4.20 |
 | **The pipeline labels; it never scores** | The external models are trained and validated downstream. What stays is the plain record of *our own* data: what the author declared (the labels and intervals), what happened (positions, render states, admissions and releases, the sun on every frame and its band), and what was measured by a fixed method with no pass mark (occlusion, apparent size, range). No word that depends on a pass mark of ours, no count built from such words, nothing produced by running or fitting a model: observability outcomes, prevalence and the statement of what the collection does not contain are withdrawn (2026-10-05) | [`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b · [04](04_Contracts.md) C8, D4.26 · [02](02_Use_Cases.md) UC-10 |
@@ -161,12 +162,13 @@ shadow-map cache, which keys on light direction with an exact comparison and no 
 [12](12_Operator_Control_Surface.md) recommends **advancing**, because freezing by accident records a
 physically impossible constant sun and nothing flags it.
 
-> **Resolution — there is no default.** [06](06_Truth_And_Annotation.md) measured that a frozen run
-> and an unconfigured run are byte-identical, so the real defect is that the policy can be absent at
-> all. The policy is **asserted into the record**, a corpus-eligible run without one is **refused**,
-> and `freeze_at_window_start` is the recommended value rather than a silent one. That removes the
-> accidental-freeze failure [12](12_Operator_Control_Surface.md) feared and keeps the controlled
-> illumination [08](08_Collection_And_EPoL.md) and [11](11_Time_And_Illumination.md) need.
+> **Resolution: the sun advances by default.** [06](06_Truth_And_Annotation.md) measured that a frozen
+> run and an unconfigured run were byte-identical, so a missing policy once had to be refused. Since
+> 2026-10-13 a missing policy runs `advance` at `rate = 1.0`, as the owner ruled. The records name the
+> default as the source, so a default is never mistaken for a choice. That removes the
+> accidental-freeze failure [12](12_Operator_Control_Surface.md) feared. A declared freeze still gives
+> the controlled illumination [08](08_Collection_And_EPoL.md) and [11](11_Time_And_Illumination.md)
+> describe.
 
 ## 7. What this plan does not cover
 

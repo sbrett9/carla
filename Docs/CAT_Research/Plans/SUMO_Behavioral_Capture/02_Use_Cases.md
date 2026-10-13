@@ -808,8 +808,8 @@ individually attributable to an illumination stratum.
 an epoch**; the toolchain staged with `SUMO_HOME` set; one or more collection cameras configured; a
 capture window and a seed; **an illumination policy for this run** — frozen at the window's start instant
 or advancing with simulated time at a stated rate, plus any explicit override of the derived civil time.
-The policy is supplied by UC-12; there is no default, because a default is how a night window silently
-renders in daylight (brief §3a).
+The policy is supplied by UC-12. Without one, the run takes the default: `advance` at `rate = 1.0`.
+The run's records name it as the default.
 
 **Main flow.**
 1. Operator starts a session naming the mode `SumoDrivenPlayback`, the package, the window, the cameras,
