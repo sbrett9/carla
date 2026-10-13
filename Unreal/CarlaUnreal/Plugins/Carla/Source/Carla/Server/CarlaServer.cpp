@@ -36,6 +36,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Actor.h"
+#include "HAL/IConsoleManager.h"
 
 #include <util/disable-ue4-macros.h>
 #include <carla/Functional.h>
@@ -243,6 +244,70 @@ static const FCarlaActor *FindCameraHoldingName(const FActorRegistry &Registry, 
     }
   }
   return nullptr;
+}
+
+// -- Parked bodies ------------------------------------------------------------
+
+// A co-simulation session parks a body it is not lending: beyond the map and below the ground, out
+// of every camera's sight. Out of sight is not idle. The body's actor tick and its component ticks
+// (vehicle movement, skeletal animation) keep running every frame. Measured on Arapahoe, 170 parked
+// bodies slowed a session by 28%. A session's pool only grows, so a long run grew slower as it went.
+// So the server turns off a parked body's ticks and hides it. Lending the body again turns back on
+// exactly what was turned off. Set to 0 to keep parked bodies ticking, for a comparison.
+static TAutoConsoleVariable<int32> CVarQuietParkedBodies(
+    TEXT("carla.QuietParkedBodies"),
+    1,
+    TEXT("1: a parked co-simulation body has its ticks turned off and is hidden. ")
+    TEXT("0: a parked body ticks as a lent one does."),
+    ECVF_Default);
+
+// Turn off a parked body's ticks and hide it, recording what was on.
+static void QuietParkedBody(FCarlaActor &View)
+{
+  FCarlaActor::FQuietedTicks &Quiet = View.GetQuietedTicks();
+  AActor *Actor = View.GetActor();
+  if (Quiet.bQuieted || Actor == nullptr || CVarQuietParkedBodies.GetValueOnGameThread() == 0)
+  {
+    return;
+  }
+  Quiet.bActorTickWasEnabled = Actor->IsActorTickEnabled();
+  Quiet.bWasHidden = Actor->IsHidden();
+  Quiet.Components.Reset();
+  Actor->SetActorTickEnabled(false);
+  for (UActorComponent *Component : Actor->GetComponents())
+  {
+    if (Component != nullptr && Component->IsComponentTickEnabled())
+    {
+      Component->SetComponentTickEnabled(false);
+      Quiet.Components.Add(Component);
+    }
+  }
+  Actor->SetActorHiddenInGame(true);
+  Quiet.bQuieted = true;
+}
+
+// Turn back on what QuietParkedBody turned off, before the body is lent again.
+static void WakeParkedBody(FCarlaActor &View)
+{
+  FCarlaActor::FQuietedTicks &Quiet = View.GetQuietedTicks();
+  if (!Quiet.bQuieted)
+  {
+    return;
+  }
+  AActor *Actor = View.GetActor();
+  if (Actor != nullptr)
+  {
+    for (const TWeakObjectPtr<UActorComponent> &Component : Quiet.Components)
+    {
+      if (Component.IsValid())
+      {
+        Component->SetComponentTickEnabled(true);
+      }
+    }
+    Actor->SetActorTickEnabled(Quiet.bActorTickWasEnabled);
+    Actor->SetActorHiddenInGame(Quiet.bWasHidden);
+  }
+  Quiet = FCarlaActor::FQuietedTicks();
 }
 
 // =============================================================================
@@ -1783,6 +1848,15 @@ void FCarlaServer::FPimpl::BindActions()
     const uint64_t NextFrame = FCarlaEngine::GetFrameCounter() + 1u;
     uint32_t Found = 0u;
 
+    // Said once, so every run's log records whether its parked bodies were quieted.
+    static bool bQuietReported = false;
+    if (!bQuietReported)
+    {
+      bQuietReported = true;
+      UE_LOG(LogCarla, Log, TEXT("update_render_set: carla.QuietParkedBodies=%d (1: a parked body's ticks are off and it is hidden)"),
+             CVarQuietParkedBodies.GetValueOnGameThread());
+    }
+
     for (const FCarlaActor::IdType Id : parked_ids)
     {
       FCarlaActor* View = Episode->FindCarlaActor(Id);
@@ -1790,6 +1864,7 @@ void FCarlaServer::FPimpl::BindActions()
       {
         continue;
       }
+      QuietParkedBody(*View);
       FRenderSetMembership Parked;
       Parked.State = FRenderSetMembership::EState::Parked;
       View->SetRenderSetMembership(Parked);
@@ -1804,6 +1879,7 @@ void FCarlaServer::FPimpl::BindActions()
       {
         continue;
       }
+      WakeParkedBody(*View);
       const FRenderSetMembership &Held = View->GetRenderSetMembership();
       // A body still lent to the same vehicle keeps the frame that vehicle's span began on.
       const bool bSameVehicle =
