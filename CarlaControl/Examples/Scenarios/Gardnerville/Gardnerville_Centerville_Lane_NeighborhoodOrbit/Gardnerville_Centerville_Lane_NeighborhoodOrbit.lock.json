@@ -11,11 +11,11 @@
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g2d8636e9d",
-    "carlanet": "0.10.0+gd593b3311",
+    "tool_version": "0.10.0+g692e09427",
+    "carlanet": "0.10.0+g7715a2677",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-13T00:16:58.213Z"
+    "written_utc": "2026-10-13T18:34:52.298Z"
   },
   "files": {
     "routes": {

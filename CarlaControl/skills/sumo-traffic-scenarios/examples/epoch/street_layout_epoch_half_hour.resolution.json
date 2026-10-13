@@ -23,12 +23,6 @@
       "message": "declares UTC+03:30 and the world's georeference configures -06:59:36 (longitude / 15): more than an hour apart, so the offset and the map probably describe different places"
     },
     {
-      "check": 39,
-      "outcome": "warn",
-      "subject": "capture window morning",
-      "message": "the default policy advances the sun, from -25.75 deg at 2026-03-21T06:55:00+03:30 to -28.36 deg at 2026-03-21T07:10:00+03:30; the window is not one lighting condition"
-    },
-    {
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
@@ -67,7 +61,7 @@
       "rate_sun_s_per_sim_s": 1.0
     },
     "policy": "advance",
-    "status": "an authored default the operator may override",
+    "status": "an authored default the operator can override",
     "declared_elevation_kind": "refraction_corrected"
   },
   "capture_windows": [
@@ -104,7 +98,8 @@
         "elevation_kind": "refraction_corrected",
         "band": "night",
         "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
-      }
+      },
+      "sun": "The sun sinks from -25.75° to -28.36° during this window."
     }
   ],
   "illumination_label_association": {

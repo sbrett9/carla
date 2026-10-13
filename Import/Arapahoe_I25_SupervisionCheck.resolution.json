@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g2d8636e9d",
-    "carlanet": "0.10.0+gd593b3311",
+    "tool_version": "0.10.0+g692e09427",
+    "carlanet": "0.10.0+g7715a2677",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-13T00:09:54.622Z"
+    "written_utc": "2026-10-13T18:10:10.900Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -14,7 +14,7 @@
     "scenario_name": "Arapahoe supervision check",
     "description": "Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.",
     "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-    "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
+    "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
     "spec_version": 1
   },
   "findings": [
@@ -43,22 +43,10 @@
       "message": "draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label"
     },
     {
-      "check": 39,
-      "outcome": "warn",
-      "subject": "capture window dwell_golden",
-      "message": "the default policy advances the sun, from 5.69 deg at 2026-09-29T07:27:00-06:00 to 6.26 deg at 2026-09-29T07:30:00-06:00; the window is not one lighting condition"
-    },
-    {
-      "check": 39,
-      "outcome": "warn",
-      "subject": "capture window stop_day",
-      "message": "the default policy advances the sun, from 6.26 deg at 2026-09-29T07:30:00-06:00 to 6.63 deg at 2026-09-29T07:32:00-06:00; the window is not one lighting condition"
-    },
-    {
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = 0.210 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = 0.098 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -89,11 +77,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "advance",
-      "rate_sun_s_per_sim_s": 1.0
+      "policy": "freeze_at_window_start"
     },
-    "policy": "advance",
-    "status": "an authored default the operator may override",
+    "policy": "freeze_at_window_start",
+    "status": "an authored default the operator can override",
     "declared_elevation_kind": "refraction_corrected"
   },
   "capture_windows": [
@@ -120,17 +107,18 @@
       "sun_close": {
         "seconds": 240.0,
         "sun_date": "2026-09-29",
-        "sun_clock": "07:30:00",
-        "elevation_deg": 6.2556,
-        "geometric_elevation_deg": 6.1209,
-        "azimuth_deg": 98.3136
+        "sun_clock": "07:27:00",
+        "elevation_deg": 5.694,
+        "geometric_elevation_deg": 5.5491,
+        "azimuth_deg": 97.8266
       },
       "sun_lowest": {
         "elevation_deg": 5.694,
         "elevation_kind": "refraction_corrected",
         "band": "golden",
         "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
-      }
+      },
+      "sun": "The sun holds at +5.69° for the whole window."
     },
     {
       "id": "stop_day",
@@ -155,17 +143,18 @@
       "sun_close": {
         "seconds": 360.0,
         "sun_date": "2026-09-29",
-        "sun_clock": "07:32:00",
-        "elevation_deg": 6.6302,
-        "geometric_elevation_deg": 6.5017,
-        "azimuth_deg": 98.639
+        "sun_clock": "07:30:00",
+        "elevation_deg": 6.2556,
+        "geometric_elevation_deg": 6.1209,
+        "azimuth_deg": 98.3136
       },
       "sun_lowest": {
         "elevation_deg": 6.2556,
         "elevation_kind": "refraction_corrected",
         "band": "day",
         "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
-      }
+      },
+      "sun": "The sun holds at +6.26° for the whole window."
     }
   ],
   "illumination_label_association": {
@@ -204,15 +193,15 @@
       "table": {
         "day": {
           "annotated": 0,
-          "nominal": 2,
+          "nominal": 1,
           "unlabelled": 9,
-          "total": 11
+          "total": 10
         },
         "golden": {
           "annotated": 2,
-          "nominal": 0,
+          "nominal": 1,
           "unlabelled": 9,
-          "total": 11
+          "total": 12
         }
       },
       "state_totals": {
@@ -222,10 +211,10 @@
       },
       "annotated_rate": {
         "day": 0.0,
-        "golden": 0.18181818181818182
+        "golden": 0.16666666666666666
       },
       "base_annotated_rate": 0.09090909090909091,
-      "normalized_mutual_information": 0.21,
+      "normalized_mutual_information": 0.098,
       "degenerate_bands": [
         "day"
       ],
@@ -271,19 +260,19 @@
         "golden"
       ]
     },
-    "normalized_mutual_information": 0.21,
+    "normalized_mutual_information": 0.098,
     "bands": {
       "day": {
         "annotated": 0,
-        "nominal": 2,
+        "nominal": 1,
         "unlabelled": 9,
-        "total": 11
+        "total": 10
       },
       "golden": {
         "annotated": 2,
-        "nominal": 0,
+        "nominal": 1,
         "unlabelled": 9,
-        "total": 11
+        "total": 12
       }
     },
     "entries": 22,
@@ -3117,18 +3106,18 @@
     "scenario_name": "Arapahoe supervision check",
     "spec_version": 1,
     "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-    "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
+    "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+g2d8636e9d",
-      "carlanet": "0.10.0+gd593b3311",
+      "tool_version": "0.10.0+g692e09427",
+      "carlanet": "0.10.0+g7715a2677",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-13T00:09:54.621Z"
+      "written_utc": "2026-10-13T18:10:10.898Z"
     },
     "files": {
       "routes": {
@@ -3262,8 +3251,7 @@
     "epoch_block_sha256": "b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831",
     "illumination": {
       "illumination_version": 1,
-      "policy": "advance",
-      "rate_sun_s_per_sim_s": 1.0
+      "policy": "freeze_at_window_start"
     },
     "capture_windows": [
       {
@@ -3285,19 +3273,19 @@
     ],
     "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
     "illumination_label_association": {
-      "normalized_mutual_information": 0.21,
+      "normalized_mutual_information": 0.098,
       "bands": {
         "day": {
           "annotated": 0,
-          "nominal": 2,
+          "nominal": 1,
           "unlabelled": 9,
-          "total": 11
+          "total": 10
         },
         "golden": {
           "annotated": 2,
-          "nominal": 0,
+          "nominal": 1,
           "unlabelled": 9,
-          "total": 11
+          "total": 12
         }
       },
       "entries": 22
