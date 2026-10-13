@@ -372,9 +372,9 @@ _FIELDS: tuple[RunField, ...] = (
     # -- the sun: the scenario's illumination object, overridable ---------------------------------
     _F("solar.policy", {"type": "string", "enum": list(ILLUMINATION_POLICIES)}, NO_DEFAULT,
        SESSION_FIXED, SUPPLIED_BY_SCENARIO, alias="--solar",
-       help="What the sun does across the window: freeze_at_window_start, advance, freeze_at or "
-            "ignore. The scenario's illumination default supplies it; an override is recorded "
-            "against the value it replaced."),
+       help="What the sun does across the window: advance (recommended: the sun follows simulated "
+            "time), freeze_at_window_start, freeze_at or ignore. The scenario's illumination "
+            "default supplies it. An override is recorded against the value it replaced."),
     _F("solar.rate_sun_s_per_sim_s", _nullable(_POSITIVE), None, BOUND, SUPPLIED_BY_SCENARIO,
        help="Under advance, pinned to 1.0: one sun-second per simulated second is the only rate "
             "under which recorded solar time is the scenario's clock."),

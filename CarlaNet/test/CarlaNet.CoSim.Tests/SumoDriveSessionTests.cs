@@ -802,7 +802,7 @@ public sealed class SumoDriveSessionTests
 
         // The recommendation is named, and not applied.
         Assert.Contains("declares no illumination policy", refused.Message);
-        Assert.Contains("freeze_at_window_start (recommended", refused.Message);
+        Assert.Contains("advance (recommended", refused.Message);
         Assert.Empty(carla.SettingsWrites);
         Assert.Empty(carla.LayerWrites);
         Assert.Empty(carla.SolarWrites);

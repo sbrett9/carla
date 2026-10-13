@@ -339,8 +339,9 @@ class ScenarioCompiler:
         if declared is None:
             self.findings.refuse(39, "illumination", "the specification declares no illumination "
                                  "default. There is none to assume: a frozen run and an "
-                                 "unconfigured one write identical records; "
-                                 "freeze_at_window_start is the recommended value")
+                                 "unconfigured one write identical records. The recommended "
+                                 "value is advance with rate_sun_s_per_sim_s 1.0: the sun then "
+                                 "follows simulated time")
             return
         try:
             self.policy = IlluminationPolicy.FromJson(json.dumps(declared))

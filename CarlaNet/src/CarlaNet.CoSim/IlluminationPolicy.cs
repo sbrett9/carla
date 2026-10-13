@@ -11,9 +11,10 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>Declared, never defaulted.</b> A frozen run and a run nobody configured write
 /// byte-identical records, so a default here would make absence indistinguishable from intent.
-/// <see cref="FreezeAtWindowStart"/> is the recommended value -- a window is meant to be one
-/// lighting condition, and a default 1,800 s window at a real-time rate moves the sun through up to
-/// 6.7 degrees of elevation -- but it is recommended, not silent.</para>
+/// <see cref="Advance"/> at a rate of 1.0 is the recommended value: the sun follows simulated time.
+/// At that rate a default 1,800 s window moves the sun through up to 6.7 degrees of elevation.
+/// <see cref="FreezeAtWindowStart"/> holds the whole window under one lighting condition. The
+/// recommendation is named, never applied.</para>
 ///
 /// <para><b>The sun's date follows one rule.</b> The date the sun is written with advances with the
 /// civil date only when the epoch's calendar advances <i>and</i> the policy lets the date move:
@@ -118,7 +119,8 @@ public sealed class IlluminationPolicy
         Kind is IlluminationPolicyKind.Advance or IlluminationPolicyKind.FreezeAtWindowStart;
 
     /// <summary>
-    /// Freeze the sun at the civil instant the window opens. The recommended policy.
+    /// Freeze the sun at the civil instant the window opens. The whole window is then one lighting
+    /// condition.
     /// </summary>
     public static IlluminationPolicy FreezeAtWindowStart(bool freezeDateAdvances = false,
                                                          bool requireSun = true,
@@ -127,7 +129,7 @@ public sealed class IlluminationPolicy
 
     /// <summary>
     /// Start the sun at the civil instant the window opens and carry it forward, writing it for every
-    /// frame.
+    /// frame. The recommended policy, at a rate of 1.0: the sun follows simulated time.
     /// </summary>
     /// <param name="rate">Sun-clock seconds per simulated second; 1.0 keeps the sun on civil time.</param>
     /// <exception cref="CoSimSessionRefusedException">The rate is not a positive number.</exception>
@@ -277,7 +279,8 @@ public sealed class IlluminationPolicy
         {
             problems.Add((name is null ? "policy is required and must be one of " : $"policy '{name}' is not one of ")
                          + "freeze_at_window_start, advance, freeze_at or ignore. There is no "
-                         + "default; freeze_at_window_start is the recommended one");
+                         + "default. The recommended one is advance with rate_sun_s_per_sim_s 1.0: "
+                         + "the sun then follows simulated time");
         }
 
         double? rate = OptionalNumber(root, "rate_sun_s_per_sim_s", problems);

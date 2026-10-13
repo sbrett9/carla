@@ -93,7 +93,7 @@ public sealed class IlluminationPolicyTests
             () => IlluminationPolicy.FromJson("""{"illumination_version": 1}"""));
 
         Assert.Contains("There is no default", refused.Message);
-        Assert.Contains("freeze_at_window_start is the recommended one", refused.Message);
+        Assert.Contains("The recommended one is advance with rate_sun_s_per_sim_s 1.0", refused.Message);
     }
 
     [Fact]

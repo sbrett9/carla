@@ -2741,8 +2741,8 @@ public sealed class SumoDriveSession : IDisposable
     /// <para>There is no default policy, and that is the point. A frozen run and a run nobody
     /// configured write byte-identical records, so a default would make an absent declaration
     /// indistinguishable from a deliberate one -- and the absent one is today's behaviour, under which
-    /// every capture was lit by whatever the world last held. Freezing at the window's opening
-    /// instant is the recommended policy; it is recommended, not assumed.</para>
+    /// every capture was lit by whatever the world last held. An advancing sun at a rate of 1.0 is
+    /// the recommended policy. It is recommended, not assumed.</para>
     ///
     /// <para>Checked before anything is started, because it needs nothing but the options. A session
     /// with no world renders nothing and has no sun, so it declares nothing.</para>
@@ -2759,12 +2759,12 @@ public sealed class SumoDriveSession : IDisposable
             throw new CoSimSessionRefusedException(
                 "The session renders a world and declares no illumination policy. A frozen run and "
                 + "a run nobody configured write identical records, so an absent policy cannot be "
-                + "told from a chosen one, and there is no default. Declare one: "
-                + "freeze_at_window_start (recommended -- the sun is set to the civil instant the "
-                + "window opens and held there, so the window is one lighting condition), advance "
-                + "(carried forward at a declared rate and written for every frame), freeze_at "
-                + "(held at a declared civil time of day) or ignore (left as the world holds it, and "
-                + "recorded as not honoring any epoch).");
+                + "told from a chosen one. There is no default. Declare one: advance (recommended "
+                + "at a rate of 1.0: the sun starts at the civil instant the window opens, follows "
+                + "simulated time and is written for every frame), freeze_at_window_start (set to "
+                + "the civil instant the window opens and held there for the whole window), "
+                + "freeze_at (held at a declared civil time of day) or ignore (left as the world "
+                + "holds it and recorded as not honoring any epoch).");
         }
 
         if (policy.BindsTheSun && options.Epoch is null)
