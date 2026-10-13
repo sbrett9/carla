@@ -350,8 +350,8 @@ carries none, and the compiler refuses a route file carrying anything but the ve
 ### Light — derived context, never a label
 
 - `illumination` is **required** and is the authored default the operator may override:
-  `freeze_at_window_start` (recommended), `advance` with `rate_sun_s_per_sim_s`, `freeze_at` with
-  `freeze_at_civil_time`, or `ignore`.
+  `advance` with `rate_sun_s_per_sim_s` 1.0 (recommended: the sun follows simulated time),
+  `freeze_at_window_start`, `freeze_at` with `freeze_at_civil_time`, or `ignore`.
 - `capture_windows[]` are **candidates**, not run instructions; a window may not cut a declared
   interval. The report states each window's civil date and the sun it opens under.
 - **Expect the illumination–label association (check 41) to be non-zero, and report it to the author

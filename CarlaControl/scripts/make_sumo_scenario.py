@@ -93,9 +93,9 @@ EPOCH = {
             "summer solstice",
 }
 
-# The sun holds still for each capture window, at the instant it opens: one lighting condition per
-# window. An authored default the operator may override at run start.
-ILLUMINATION = {"illumination_version": 1, "policy": "freeze_at_window_start"}
+# The sun follows simulated time: it starts at the civil instant a capture window opens and moves on
+# one sun-second per simulated second. An authored default the operator may override at run start.
+ILLUMINATION = {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0}
 
 # Edge IDs are OSM way IDs; a leading '-' is the reverse direction of that way. Coordinates below
 # are SUMO metres, so positive y is north.

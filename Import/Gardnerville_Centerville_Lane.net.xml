@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2026-09-28T10:23:38.553310-08:00 by Eclipse SUMO netconvert 1.27.0
+<!-- generated on 2026-10-08T14:54:26.046780-08:00 by Eclipse SUMO netconvert 1.27.0
 <netconvertConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
@@ -8,8 +8,8 @@
     </input>
 
     <output>
-        <output-file value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_e4d520c6eb0740e8bdc530fb5ec0d595.net.xml"/>
-        <opendrive-output value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_38cda3e7f59c49088a42bdbea3045d62.xodr"/>
+        <output-file value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_6330a71c5cd740299683ed40808942da.net.xml"/>
+        <opendrive-output value="C:\Users\sbret\AppData\Local\Temp\carlanet_osm_75f910befe1c4d649887ac3556102750.xodr"/>
         <output.street-names value="true"/>
         <output.original-names value="true"/>
     </output>

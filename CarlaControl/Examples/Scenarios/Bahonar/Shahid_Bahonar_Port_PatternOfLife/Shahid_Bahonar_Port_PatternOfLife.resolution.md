@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+ga2baed579, carlanet 0.10.0+g67d967b06.dirty, SUMO 1.27.0, at 2026-10-09T00:29:28.127Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:19:42.185Z
 
 7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.
 
@@ -19,7 +19,7 @@
 | 17 | warn | vehicle class mil_jeep | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class mil_truck | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class guard | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.142 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.128 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -33,7 +33,7 @@ Declared offset +3.5 h; the world's georeference configures +3.74538 h. set_sola
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override.
+Policy `advance`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
@@ -45,12 +45,12 @@ Not computed: no capture window is declared.
 
 ### Over the span, at each departure
 
-Normalized mutual information: 0.142 over 614 entries.
+Normalized mutual information: 0.128 over 614 entries.
 
 | Band | annotated | nominal | unlabelled | total |
 |---|---|---|---|---|
-| day | 86 | 244 | 73 | 403 |
-| golden | 7 | 0 | 21 | 28 |
+| day | 86 | 241 | 73 | 400 |
+| golden | 7 | 3 | 21 | 31 |
 | nautical_twilight | 7 | 0 | 0 | 7 |
 | astronomical_twilight | 7 | 0 | 0 | 7 |
 | night | 1 | 112 | 56 | 169 |

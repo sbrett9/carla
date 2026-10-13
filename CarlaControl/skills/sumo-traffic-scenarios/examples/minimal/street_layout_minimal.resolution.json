@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, minimal",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_minimal.scenario.json",
-    "specification_sha256": "e11e0440b2765e98e5ed14c6fff9682ffa49de2515635192d9d152c755a9d15c",
+    "specification_sha256": "855ac81473a346f742ff3b89aede3b187f84bf1b5665f339868f3ec076408571",
     "spec_version": 1
   },
   "findings": [
@@ -15,6 +15,12 @@
       "outcome": "warn",
       "subject": "vehicle class saloon",
       "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 39,
+      "outcome": "warn",
+      "subject": "capture window morning",
+      "message": "the default policy advances the sun, from -1.95 deg at 2026-03-21T06:55:00-06:00 to 1.18 deg at 2026-03-21T07:10:00-06:00; the window is not one lighting condition"
     },
     {
       "check": 41,
@@ -50,9 +56,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -80,10 +87,10 @@
       "sun_close": {
         "seconds": 4200.0,
         "sun_date": "2026-03-21",
-        "sun_clock": "06:55:00",
-        "elevation_deg": -1.948,
-        "geometric_elevation_deg": -2.105,
-        "azimuth_deg": 87.9158
+        "sun_clock": "07:10:00",
+        "elevation_deg": 1.1756,
+        "geometric_elevation_deg": 0.7913,
+        "azimuth_deg": 90.2994
       },
       "sun_lowest": {
         "elevation_deg": -1.948,
@@ -465,7 +472,7 @@
     "scenario_name": "Street layout, minimal",
     "spec_version": 1,
     "specification": "street_layout_minimal.scenario.json",
-    "specification_sha256": "e11e0440b2765e98e5ed14c6fff9682ffa49de2515635192d9d152c755a9d15c",
+    "specification_sha256": "855ac81473a346f742ff3b89aede3b187f84bf1b5665f339868f3ec076408571",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
@@ -592,7 +599,8 @@
     "epoch_block_sha256": "687a62e4e5e22e018cc54088d40dac074a122ce6ed7ce85a1123b72141a54442",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [
       {

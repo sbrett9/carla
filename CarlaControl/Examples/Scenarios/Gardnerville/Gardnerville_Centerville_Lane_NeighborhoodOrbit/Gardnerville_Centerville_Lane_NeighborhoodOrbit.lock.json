@@ -4,18 +4,18 @@
   "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
   "spec_version": 1,
   "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-  "specification_sha256": "68a9d7cb9087945e9ac5325e9300986c71af3954d8b0004ffabf22c46acbcf08",
+  "specification_sha256": "44c30b7fba90d7a880cc122a62d3c1cd21909ebc0d867739472a171ec0fa4e96",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+ga2baed579",
-    "carlanet": "0.10.0+g67d967b06.dirty",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-09T00:26:11.671Z"
+    "written_utc": "2026-10-13T00:16:58.213Z"
   },
   "files": {
     "routes": {
@@ -140,7 +140,8 @@
   "epoch_block_sha256": "3cb60fce65c132642954c1b12fc4d7276b18a2476cfe16d795073fdd79a94ac0",
   "illumination": {
     "illumination_version": 1,
-    "policy": "freeze_at_window_start"
+    "policy": "advance",
+    "rate_sun_s_per_sim_s": 1.0
   },
   "capture_windows": [],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",

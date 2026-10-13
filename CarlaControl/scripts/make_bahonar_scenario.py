@@ -123,9 +123,9 @@ EPOCH = {
 # The civil clock simulated second zero falls on, and on which the run ends `days` later.
 RUN_CLOCK = "07:00"
 
-# The sun holds still for each capture window, at the instant it opens: one lighting condition per
-# window. An authored default the operator may override at run start.
-ILLUMINATION = {"illumination_version": 1, "policy": "freeze_at_window_start"}
+# The sun follows simulated time: it starts at the civil instant a capture window opens and moves on
+# one sun-second per simulated second. An authored default the operator may override at run start.
+ILLUMINATION = {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0}
 
 # The class of the catalogue whose members are this scenario's civilian cars.
 CIVILIAN_CAR_CLASS = "civ_car"

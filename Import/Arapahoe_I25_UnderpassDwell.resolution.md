@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8ef0978cb.dirty, carlanet 0.10.0+g7d218c48c, SUMO 1.27.0, at 2026-10-08T02:17:39.038Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:09:50.520Z
 
 One marked vehicle enters northbound on I-25, leaves at the Arapahoe interchange, runs west on Arapahoe Road and north up South Yosemite Street, waits 30 minutes under the Yosemite Street bridge and leaves north on I-25, among heavy freeway traffic with a wide spread of speeds, dense arterial traffic heavy in vans and trucks, residential commuters on the west and south edges, and an incident closing 5 of the 6 northbound lanes for 3 minutes. Written by CarlaControl/scripts/make_arapahoe_scenario.py; edit that, not this.
 
@@ -29,7 +29,7 @@ Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_e
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override.
+Policy `advance`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
@@ -250,7 +250,7 @@ SUMO seed 42, step 0.05 s, end 2700 s. The processing options, each written into
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
+    "sha256": "df268001dce59d11b6affbf484af5d67d2e5a4d5f0e05584561d1e9c1056dae3"
   },
   "additional": {
     "path": "Arapahoe_I25_UnderpassDwell.add.xml",

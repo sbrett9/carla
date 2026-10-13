@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8ef0978cb",
-    "carlanet": "0.10.0+g7d218c48c",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:15:44.763Z"
+    "written_utc": "2026-10-13T00:09:54.622Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -14,7 +14,7 @@
     "scenario_name": "Arapahoe supervision check",
     "description": "Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.",
     "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-    "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
+    "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
     "spec_version": 1
   },
   "findings": [
@@ -43,10 +43,22 @@
       "message": "draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label"
     },
     {
+      "check": 39,
+      "outcome": "warn",
+      "subject": "capture window dwell_golden",
+      "message": "the default policy advances the sun, from 5.69 deg at 2026-09-29T07:27:00-06:00 to 6.26 deg at 2026-09-29T07:30:00-06:00; the window is not one lighting condition"
+    },
+    {
+      "check": 39,
+      "outcome": "warn",
+      "subject": "capture window stop_day",
+      "message": "the default policy advances the sun, from 6.26 deg at 2026-09-29T07:30:00-06:00 to 6.63 deg at 2026-09-29T07:32:00-06:00; the window is not one lighting condition"
+    },
+    {
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = 0.098 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = 0.210 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -77,9 +89,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -107,10 +120,10 @@
       "sun_close": {
         "seconds": 240.0,
         "sun_date": "2026-09-29",
-        "sun_clock": "07:27:00",
-        "elevation_deg": 5.694,
-        "geometric_elevation_deg": 5.5491,
-        "azimuth_deg": 97.8266
+        "sun_clock": "07:30:00",
+        "elevation_deg": 6.2556,
+        "geometric_elevation_deg": 6.1209,
+        "azimuth_deg": 98.3136
       },
       "sun_lowest": {
         "elevation_deg": 5.694,
@@ -142,10 +155,10 @@
       "sun_close": {
         "seconds": 360.0,
         "sun_date": "2026-09-29",
-        "sun_clock": "07:30:00",
-        "elevation_deg": 6.2556,
-        "geometric_elevation_deg": 6.1209,
-        "azimuth_deg": 98.3136
+        "sun_clock": "07:32:00",
+        "elevation_deg": 6.6302,
+        "geometric_elevation_deg": 6.5017,
+        "azimuth_deg": 98.639
       },
       "sun_lowest": {
         "elevation_deg": 6.2556,
@@ -191,15 +204,15 @@
       "table": {
         "day": {
           "annotated": 0,
-          "nominal": 1,
+          "nominal": 2,
           "unlabelled": 9,
-          "total": 10
+          "total": 11
         },
         "golden": {
           "annotated": 2,
-          "nominal": 1,
+          "nominal": 0,
           "unlabelled": 9,
-          "total": 12
+          "total": 11
         }
       },
       "state_totals": {
@@ -209,10 +222,10 @@
       },
       "annotated_rate": {
         "day": 0.0,
-        "golden": 0.16666666666666666
+        "golden": 0.18181818181818182
       },
       "base_annotated_rate": 0.09090909090909091,
-      "normalized_mutual_information": 0.098,
+      "normalized_mutual_information": 0.21,
       "degenerate_bands": [
         "day"
       ],
@@ -258,19 +271,19 @@
         "golden"
       ]
     },
-    "normalized_mutual_information": 0.098,
+    "normalized_mutual_information": 0.21,
     "bands": {
       "day": {
         "annotated": 0,
-        "nominal": 1,
+        "nominal": 2,
         "unlabelled": 9,
-        "total": 10
+        "total": 11
       },
       "golden": {
         "annotated": 2,
-        "nominal": 1,
+        "nominal": 0,
         "unlabelled": 9,
-        "total": 12
+        "total": 11
       }
     },
     "entries": 22,
@@ -3104,18 +3117,18 @@
     "scenario_name": "Arapahoe supervision check",
     "spec_version": 1,
     "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-    "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
+    "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+g8ef0978cb",
-      "carlanet": "0.10.0+g7d218c48c",
+      "tool_version": "0.10.0+g2d8636e9d",
+      "carlanet": "0.10.0+gd593b3311",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-08T02:15:44.761Z"
+      "written_utc": "2026-10-13T00:09:54.621Z"
     },
     "files": {
       "routes": {
@@ -3128,7 +3141,7 @@
       },
       "network": {
         "path": "Arapahoe_I25.net.xml",
-        "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
+        "sha256": "df268001dce59d11b6affbf484af5d67d2e5a4d5f0e05584561d1e9c1056dae3"
       },
       "supervision": {
         "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
@@ -3249,7 +3262,8 @@
     "epoch_block_sha256": "b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [
       {
@@ -3271,19 +3285,19 @@
     ],
     "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
     "illumination_label_association": {
-      "normalized_mutual_information": 0.098,
+      "normalized_mutual_information": 0.21,
       "bands": {
         "day": {
           "annotated": 0,
-          "nominal": 1,
+          "nominal": 2,
           "unlabelled": 9,
-          "total": 10
+          "total": 11
         },
         "golden": {
           "annotated": 2,
-          "nominal": 1,
+          "nominal": 0,
           "unlabelled": 9,
-          "total": 12
+          "total": 11
         }
       },
       "entries": 22

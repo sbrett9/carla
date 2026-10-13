@@ -210,7 +210,7 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Arapahoe_I25_UnderpassDwell/`.\
-It was compiled at commit `a2baed579` from the specification in this folder, against `Arapahoe_I25.cwp`.\
+It was compiled at commit `2d8636e9d` from the specification in this folder, against `Arapahoe_I25.cwp`.\
 So a run needs no compile first.
 
 Read `Arapahoe_I25_UnderpassDwell.resolution.md` in that folder.\
@@ -361,7 +361,9 @@ carla-capture --site-profile site.json --run underpass.run.json --set paths.scen
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
-The scenario's sun policy, `freeze_at_window_start`, holds the sun at the civil time the window opens.\
+The scenario's sun policy, `advance`, sets the sun to the civil time the window opens.\
+From there the sun follows simulated time.\
+The echo shows that it climbs from +2.56° to +3.29° over this window, in the `golden` band.\
 Then run it for real:
 
 ```

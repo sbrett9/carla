@@ -192,7 +192,7 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Gardnerville_Centerville_Lane_NeighborhoodOrbit/`.\
-It was compiled at commit `a2baed579` from the specification in this folder, against `Gardnerville_Centerville_Lane.cwp`.\
+It was compiled at commit `2d8636e9d` from the specification in this folder, against `Gardnerville_Centerville_Lane.cwp`.\
 So a run needs no compile first.
 
 Read `Gardnerville_Centerville_Lane_NeighborhoodOrbit.resolution.md` in that folder.\
@@ -332,7 +332,9 @@ carla-capture --site-profile site.json --run block_orbit.run.json --set paths.sc
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
-The scenario's sun policy, `freeze_at_window_start`, holds the sun at the civil time the window opens.\
+The scenario's sun policy, `advance`, sets the sun to the civil time the window opens.\
+From there the sun follows simulated time.\
+The echo shows that it climbs from +50.76° to +51.52° over this window, in the `day` band.\
 Then run it for real:
 
 ```

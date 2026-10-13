@@ -4,18 +4,18 @@
   "scenario_name": "Arapahoe I-25 underpass dwell",
   "spec_version": 1,
   "specification": "Arapahoe_I25_UnderpassDwell.scenario.json",
-  "specification_sha256": "a1a421af59f55e854f5ccf512c0a6a56a4ee43b3d6ed65f8d57f8ec19d0dc6db",
+  "specification_sha256": "6dfd3036ecf0555b715835c7608af0d90044e3e0fa3597c5f3e1072a3282e1e3",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8ef0978cb.dirty",
-    "carlanet": "0.10.0+g7d218c48c",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:17:39.036Z"
+    "written_utc": "2026-10-13T00:09:50.507Z"
   },
   "files": {
     "routes": {
@@ -28,7 +28,7 @@
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
-      "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
+      "sha256": "df268001dce59d11b6affbf484af5d67d2e5a4d5f0e05584561d1e9c1056dae3"
     },
     "additional": {
       "path": "Arapahoe_I25_UnderpassDwell.add.xml",
@@ -148,7 +148,8 @@
   "epoch_block_sha256": "ef1458adcb1395f9fd2141d237057e311571a7bf1e24a178d8349ba24e691f8f",
   "illumination": {
     "illumination_version": 1,
-    "policy": "freeze_at_window_start"
+    "policy": "advance",
+    "rate_sun_s_per_sim_s": 1.0
   },
   "capture_windows": [],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",

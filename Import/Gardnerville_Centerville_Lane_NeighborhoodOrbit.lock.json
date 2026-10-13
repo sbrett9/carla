@@ -4,18 +4,18 @@
   "scenario_name": "Gardnerville Centerville Lane neighborhood orbit",
   "spec_version": 1,
   "specification": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json",
-  "specification_sha256": "0fa15a284dcc2eefe9b0ae78705333af2b0345b95ec228ca03ee9b4b138df437",
+  "specification_sha256": "cc4b9e524905fae9595ceaba0c293d2b36a81f12b107542b98fc69bdbb7d8464",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8ef0978cb.dirty",
-    "carlanet": "0.10.0+g7d218c48c",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:15:50.530Z"
+    "written_utc": "2026-10-13T00:10:01.306Z"
   },
   "files": {
     "routes": {
@@ -28,7 +28,7 @@
     },
     "network": {
       "path": "Gardnerville_Centerville_Lane.net.xml",
-      "sha256": "20a6877216f222f877ad337f8da13b7fac4430441cafbbd8784f2353890457ef"
+      "sha256": "937b68dce345fbe12cec2dd7c29bf3fe3514469fafd86213322dc03480884d5d"
     },
     "supervision": {
       "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",
@@ -140,7 +140,8 @@
   "epoch_block_sha256": "3cb60fce65c132642954c1b12fc4d7276b18a2476cfe16d795073fdd79a94ac0",
   "illumination": {
     "illumination_version": 1,
-    "policy": "freeze_at_window_start"
+    "policy": "advance",
+    "rate_sun_s_per_sim_s": 1.0
   },
   "capture_windows": [],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",

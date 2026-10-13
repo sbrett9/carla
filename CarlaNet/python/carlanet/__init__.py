@@ -2619,10 +2619,12 @@ class World:
         'freeze_at_window_start', 'advance' (with `rate_sun_s_per_sim_s`), 'freeze_at' (with
         `freeze_at_civil_time`) or 'ignore'. **There is no default**, because a frozen run and an
         unconfigured one write identical records: a session that renders a world and declares no
-        policy is refused. 'freeze_at_window_start' is the recommended one -- the sun is set, after
-        SUMO's fast-forward and before the first tick, to the civil instant the window opens, read
-        back to confirm the world took it, and held there. The sun the world was found with is given
-        back when the session ends. `session.Sun` says what was bound and what the world reported.
+        policy is refused. 'advance' with `rate_sun_s_per_sim_s` 1.0 is the recommended one: the sun
+        is set, after SUMO's fast-forward and before the first tick, to the civil instant the window
+        opens. From there it follows simulated time and is written for every frame.
+        'freeze_at_window_start' sets it the same way, reads it back to confirm the world took it and
+        holds it there. The sun the world was found with is given back when the session ends.
+        `session.Sun` says what was bound and what the world reported.
 
         `window_opens_at` is the simulated second the capture window opens -- its first captured
         frame -- where the session renders a prewarm from `warm_up_to` before it; left as None, the

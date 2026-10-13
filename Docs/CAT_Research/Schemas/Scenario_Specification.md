@@ -204,7 +204,7 @@ The authoring skill's minimal example, `examples/minimal/street_layout_minimal.s
   "epoch": {"epoch_version": 1, "civil_datetime": "2026-03-21T06:00:00-06:00",
             "utc_offset_hours": -6, "utc_datetime": "2026-03-21T12:00:00Z",
             "calendar_advances": true, "dst_in_effect": true, "time_zone_id": "America/Denver"},
-  "illumination": {"illumination_version": 1, "policy": "freeze_at_window_start"},
+  "illumination": {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0},
   "seeds": {"sumo": 42},
   "simulation": {"end": "d0 08:00", "step_length_s": 0.05},
   "catalogue": "../../../../catalogue/vehicles.catalogue.json",

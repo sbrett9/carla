@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8ef0978cb, carlanet 0.10.0+g7d218c48c, SUMO 1.27.0, at 2026-10-08T02:15:44.763Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g2d8636e9d, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-13T00:09:54.622Z
 
 Six minutes on South Yosemite Street just north of East Arapahoe Road: a car waits two minutes at the curb, a second car drives through, and a van stops at the same curb for twenty seconds, among the Arapahoe dwell's own traffic on Arapahoe Road and Yosemite, so every kind of supervision the plan carries for a vehicle can be checked live. Written by CarlaControl/scripts/make_supervision_check_scenario.py; edit that, not this.
 
@@ -14,7 +14,9 @@ Six minutes on South Yosemite Street just north of East Arapahoe Road: a car wai
 | 17 | warn | vehicle class van | draws one body, vehicle.sprinter.mercedes, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class truck | draws one body, vehicle.carlacola.actors, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class semi | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.098 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
+| 39 | warn | capture window dwell_golden | the default policy advances the sun, from 5.69 deg at 2026-09-29T07:27:00-06:00 to 6.26 deg at 2026-09-29T07:30:00-06:00; the window is not one lighting condition |
+| 39 | warn | capture window stop_day | the default policy advances the sun, from 6.26 deg at 2026-09-29T07:30:00-06:00 to 6.63 deg at 2026-09-29T07:32:00-06:00; the window is not one lighting condition |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.210 over 22 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: day. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -28,14 +30,14 @@ Declared offset -6 h; the world's georeference configures -6.9923 h. set_solar_e
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override.
+Policy `advance`: an authored default the operator may override.
 
 ## Capture windows (authored candidates)
 
 | Window | Opens | Closes | Civil date | Sun date | Elevation at open | Elevation at close |
 |---|---|---|---|---|---|---|
-| dwell_golden | 2026-09-29T07:27:00-06:00 | 2026-09-29T07:30:00-06:00 | 2026-09-29 | 2026-09-29 | 5.69 | 5.69 |
-| stop_day | 2026-09-29T07:30:00-06:00 | 2026-09-29T07:32:00-06:00 | 2026-09-29 | 2026-09-29 | 6.26 | 6.26 |
+| dwell_golden | 2026-09-29T07:27:00-06:00 | 2026-09-29T07:30:00-06:00 | 2026-09-29 | 2026-09-29 | 5.69 | 6.26 |
+| stop_day | 2026-09-29T07:30:00-06:00 | 2026-09-29T07:32:00-06:00 | 2026-09-29 | 2026-09-29 | 6.26 | 6.63 |
 
 ## Illumination-label association (check 41)
 
@@ -43,12 +45,12 @@ I(band; supervision) / H(supervision), base 2; bands by the sun's refraction-cor
 
 ### Over the declared windows
 
-Normalized mutual information: 0.098 over 22 entries.
+Normalized mutual information: 0.210 over 22 entries.
 
 | Band | annotated | nominal | unlabelled | total |
 |---|---|---|---|---|
-| day | 0 | 1 | 9 | 10 |
-| golden | 2 | 1 | 9 | 12 |
+| day | 0 | 2 | 9 | 11 |
+| golden | 2 | 0 | 9 | 11 |
 
 Bands where one state alone occurs: day. Bands where both occur: golden.
 
@@ -242,7 +244,7 @@ SUMO seed 42, step 0.05 s, end 360 s. The processing options, each written into 
   },
   "network": {
     "path": "Arapahoe_I25.net.xml",
-    "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
+    "sha256": "df268001dce59d11b6affbf484af5d67d2e5a4d5f0e05584561d1e9c1056dae3"
   },
   "supervision": {
     "path": "Arapahoe_I25_SupervisionCheck.supervision.json",

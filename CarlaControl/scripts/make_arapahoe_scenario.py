@@ -109,9 +109,9 @@ EPOCH = {
             "29 September 2026, in the morning peak",
 }
 
-# The sun holds still for each capture window, at the instant it opens: one lighting condition per
-# window. An authored default the operator may override at run start.
-ILLUMINATION = {"illumination_version": 1, "policy": "freeze_at_window_start"}
+# The sun follows simulated time: it starts at the civil instant a capture window opens and moves on
+# one sun-second per simulated second. An authored default the operator may override at run start.
+ILLUMINATION = {"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0}
 
 # Every place the scenario names. I-25 is South Valley Highway; the two carriageways enter and leave
 # at opposite corners because the freeway runs diagonally across the extract, and each end is the

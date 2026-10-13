@@ -31,10 +31,12 @@ What a run needs on disk:
 
 The sun's policy has no default. A frozen run and a run nobody configured write identical records,
 so the session refuses to render a world whose run does not say what its sun is doing.
-`--illumination freeze_at_window_start` is the recommended one: after SUMO is fast-forwarded and
-before the first tick, the sun is set to the civil instant the window opens -- `--window-opens-at`, or
-the first rendered frame -- read back to confirm the world took it, and held there. The sun the world
-was found with is given back at the end.
+`--illumination advance --solar-rate 1.0` is the recommended one: after SUMO is fast-forwarded and
+before the first tick, the sun is set to the civil instant the window opens (`--window-opens-at`, or
+the first rendered frame). From there it follows simulated time. The session writes it for every frame
+and compares each tick's sun with the declared one. `--illumination freeze_at_window_start` sets it the
+same way, reads it back to confirm the world took it and holds it there. The sun the world was found
+with is given back at the end.
 
 Usage (from a checkout, `python CarlaNet/python/run_sumo_drive.py` is the same tool):
 
@@ -42,7 +44,7 @@ Usage (from a checkout, `python CarlaNet/python/run_sumo_drive.py` is the same t
         --scenario <scenario dir>/<scenario_id>.sumocfg \\
         --world-package <build dir>/Gardnerville_Centerville_Lane.cwp \\
         --catalogue CarlaControl/catalogue/vehicles.catalogue.json \\
-        --epoch gardnerville.epoch.json --illumination freeze_at_window_start \\
+        --epoch gardnerville.epoch.json --illumination advance --solar-rate 1.0 \\
         --record-dir Build/captures/gardnerville
 
 `--catalogue` defaults to the checkout's catalogue, or to the one installed with carlacontrol, and
@@ -57,7 +59,7 @@ machine manages. To watch it at the pace of real traffic from another process th
 hold the ticks to the wall clock and run until the scenario ends:
 
     carla-drive --scenario ... --world-package ... --epoch ... \\
-        --illumination freeze_at_window_start --no-record --real-time-factor 1.0 --steps 0
+        --illumination advance --solar-rate 1.0 --no-record --real-time-factor 1.0 --steps 0
 
 The session measures the pace it actually held and this prints it once per pacing window; nothing
 stops a run that falls behind, and the final report says by how much it did. The session refuses a
@@ -85,7 +87,7 @@ builds and stages it. A CARLA distribution bundles no `sumo-gui`: point `--sumo-
 the world. To watch a drive at the pace of real traffic:
 
     carla-drive --scenario ... --world-package ... --epoch ... \\
-        --illumination freeze_at_window_start --no-record --real-time-factor 1.0 --steps 0 --sumo-gui
+        --illumination advance --solar-rate 1.0 --no-record --real-time-factor 1.0 --steps 0 --sumo-gui
 
 The window is live: pausing it pauses the drive, and a pause longer than `--sumo-answer-timeout`
 stops the run as a SUMO that stopped answering; closing it stops the run as a SUMO that died. On
@@ -153,7 +155,7 @@ makes the drive slower on the wall clock, never thinner; the pacing lines say wh
 view over the whole of Gardnerville at the pace of real traffic:
 
     carla-drive --scenario ... --world-package ... --epoch ... \\
-        --illumination freeze_at_window_start --real-time-factor 1.0 --steps 0 --view free
+        --illumination advance --solar-rate 1.0 --real-time-factor 1.0 --steps 0 --view free
 
 Two optional performance controls trade fidelity for speed, and both are off unless asked for.
 `--render-set` limits which vehicles get a body at all: `circle` only those inside the circle of
@@ -412,12 +414,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "one, whose `illumination` object is then read as well")
     parser.add_argument("--illumination",
                         choices=("freeze_at_window_start", "advance", "freeze_at", "ignore"),
-                        help="what the sun does across the window. No default: "
-                             "freeze_at_window_start (recommended) sets it to the civil instant the "
-                             "window opens and holds it; advance carries it forward at --solar-rate, "
-                             "the session writing it for every frame; freeze_at holds it at "
-                             "--freeze-at; ignore leaves it as "
-                             "the world holds it and records that the lighting honors no epoch")
+                        help="what the sun does across the window. No default. advance "
+                             "(recommended, with --solar-rate 1.0) sets it to the civil instant the "
+                             "window opens and carries it forward at --solar-rate, the session "
+                             "writing it for every frame. freeze_at_window_start sets it the same "
+                             "way and holds it. freeze_at holds it at --freeze-at. ignore leaves it "
+                             "as the world holds it and records that the lighting honors no epoch")
     parser.add_argument("--solar-rate", type=float,
                         help="with --illumination advance: sun-clock seconds per simulated second; "
                              "1.0 keeps the sun on civil time")

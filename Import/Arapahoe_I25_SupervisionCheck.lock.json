@@ -4,18 +4,18 @@
   "scenario_name": "Arapahoe supervision check",
   "spec_version": 1,
   "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-  "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
+  "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8ef0978cb",
-    "carlanet": "0.10.0+g7d218c48c",
+    "tool_version": "0.10.0+g2d8636e9d",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:15:44.761Z"
+    "written_utc": "2026-10-13T00:09:54.621Z"
   },
   "files": {
     "routes": {
@@ -28,7 +28,7 @@
     },
     "network": {
       "path": "Arapahoe_I25.net.xml",
-      "sha256": "78185aa8cd8bf2e4667ee64169a7edcd4ef115a0a14867c2c8547f89b1c509a6"
+      "sha256": "df268001dce59d11b6affbf484af5d67d2e5a4d5f0e05584561d1e9c1056dae3"
     },
     "supervision": {
       "path": "Arapahoe_I25_SupervisionCheck.supervision.json",
@@ -149,7 +149,8 @@
   "epoch_block_sha256": "b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831",
   "illumination": {
     "illumination_version": 1,
-    "policy": "freeze_at_window_start"
+    "policy": "advance",
+    "rate_sun_s_per_sim_s": 1.0
   },
   "capture_windows": [
     {
@@ -171,19 +172,19 @@
   ],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
   "illumination_label_association": {
-    "normalized_mutual_information": 0.098,
+    "normalized_mutual_information": 0.21,
     "bands": {
       "day": {
         "annotated": 0,
-        "nominal": 1,
+        "nominal": 2,
         "unlabelled": 9,
-        "total": 10
+        "total": 11
       },
       "golden": {
         "annotated": 2,
-        "nominal": 1,
+        "nominal": 0,
         "unlabelled": 9,
-        "total": 12
+        "total": 11
       }
     },
     "entries": 22
