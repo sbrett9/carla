@@ -63,7 +63,6 @@ public sealed class IlluminationPolicyTests
                 "belongs to a freeze, not the default policy, advance")]
     [InlineData("""{"illumination_version": 1, "rate_sun_s_per_sim_s": 0}""", "must be positive")]
     [InlineData("""{"illumination_version": 1, "policy": "frozen"}""", "policy 'frozen' is not one of")]
-    [InlineData("""{"illumination_version": 1, "policy": "advance"}""", "needs rate_sun_s_per_sim_s")]
     [InlineData("""{"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 0}""",
                 "must be positive")]
     [InlineData("""{"illumination_version": 1, "policy": "freeze_at_window_start", "rate_sun_s_per_sim_s": 3600}""",
@@ -121,6 +120,26 @@ public sealed class IlluminationPolicyTests
         Assert.False(policy.RequireSun);
         Assert.Equal("fast", policy.Note);
         Assert.True(policy.Defaulted);
+    }
+
+    [Fact]
+    public void ADeclaredAdvanceWithNoRateRunsAtTheDefaultRateAndStaysDeclared()
+    {
+        IlluminationPolicy policy = IlluminationPolicy.FromJson(
+            """{"illumination_version": 1, "policy": "advance"}""");
+
+        Assert.Equal(IlluminationPolicyKind.Advance, policy.Kind);
+        Assert.Equal(IlluminationPolicy.DefaultRate, policy.Rate);
+        Assert.False(policy.Defaulted);
+        Assert.True(policy.RateDefaulted);
+        Assert.Equal("advance at 1 sun-s per simulated s (the default rate: no rate declared)", policy.ToString());
+
+        // A rate that is named is not the default's.
+        IlluminationPolicy named = IlluminationPolicy.FromJson(
+            """{"illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0}""");
+        Assert.False(named.RateDefaulted);
+        Assert.True(IlluminationPolicy.FromJson("""{"illumination_version": 1}""").RateDefaulted);
+        Assert.True(IlluminationPolicy.Default.RateDefaulted);
     }
 
     [Fact]

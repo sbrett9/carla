@@ -698,6 +698,31 @@ def test_a_missing_illumination_default_advances_the_sun_at_a_rate_of_one_record
     assert declared.lock["illumination"] == world.specification()["illumination"]
 
 
+def test_a_declared_advance_with_no_rate_runs_at_the_default_rate_and_stays_declared(
+        world, installation, tmp_path):
+    """The policy is the author's. Only the rate comes from the default. The report says so."""
+    declared = {"illumination_version": 1, "policy": "advance"}
+    result = compile_spec(world, installation, tmp_path, illumination=declared)
+    assert not result.refused
+    assert 39 not in checks(result) | checks(result, "warn")
+    default = result.report["illumination_default"]
+    assert default["declared"] == declared
+    assert default["policy"] == "advance"
+    assert default["status"] == ("an authored default the operator can override. It names no rate. "
+                                 "The sun advances at the default rate of one sun-second per "
+                                 "simulated second")
+    assert result.lock["illumination"] == declared
+    # The sun moves exactly as under a declared rate of 1.0.
+    rated = compile_spec(world, installation, tmp_path / "rated", illumination={
+        "illumination_version": 1, "policy": "advance", "rate_sun_s_per_sim_s": 1.0})
+    window, rated_window = result.report["capture_windows"][0], rated.report["capture_windows"][0]
+    assert window["sun_close"]["elevation_deg"] > window["sun_open"]["elevation_deg"]
+    assert (window["sun_open"], window["sun_close"]) == (rated_window["sun_open"],
+                                                         rated_window["sun_close"])
+    assert rated.report["illumination_default"]["status"] == (
+        "an authored default the operator can override")
+
+
 def test_a_malformed_illumination_default_is_refused_under_check_39(world, installation, tmp_path):
     rate_on_freeze = compile_spec(world, installation, tmp_path / "rate", illumination={
         "illumination_version": 1, "policy": "freeze_at_window_start", "rate_sun_s_per_sim_s": 1.0})

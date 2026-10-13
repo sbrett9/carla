@@ -343,15 +343,22 @@ class ScenarioCompiler:
 
     def _resolve_illumination(self) -> None:
         """Check 39: the declared illumination default is one the session accepts. A specification
-        that declares no policy takes the default, advance at one sun-second per simulated second.
-        `IlluminationPolicy.FromJson` reads an object that names no policy the same way."""
+        that declares no policy takes the default, advance at one sun-second per simulated second. An
+        advance that names no rate takes the default rate. `IlluminationPolicy.FromJson` applies the
+        same two defaults. They are filled in here too, so the compiler reads a declaration the same
+        way whichever CarlaNet build is loaded."""
         declared = self.spec.get("illumination")
-        self.policy_defaulted = declared is None or "policy" not in declared
+        read = dict(declared or {})
+        self.policy_defaulted = "policy" not in read
+        read.setdefault("policy", DEFAULT_ILLUMINATION_POLICY)
+        self.rate_defaulted = read["policy"] == "advance" and "rate_sun_s_per_sim_s" not in read
+        if self.rate_defaulted:
+            read["rate_sun_s_per_sim_s"] = DEFAULT_SUN_RATE
         if declared is None:
             self.policy = IlluminationPolicy.Advance(DEFAULT_SUN_RATE)
             return
         try:
-            self.policy = IlluminationPolicy.FromJson(json.dumps(declared))
+            self.policy = IlluminationPolicy.FromJson(json.dumps(read))
         except CoSimSessionRefusedException as refused:
             self.findings.refuse(39, "illumination", str(refused.Message))
 
@@ -853,9 +860,14 @@ class ScenarioCompiler:
 
     def _illumination_status(self) -> str:
         """Where the policy came from, in words: the specification, or the default where it names
-        none. A defaulted policy then never reads as an authored one."""
+        none. A defaulted policy then never reads as an authored one. The same holds for the rate of
+        a declared advance that names none."""
         if not self.policy_defaulted:
-            return "an authored default the operator can override"
+            authored = "an authored default the operator can override"
+            if self.rate_defaulted:
+                authored += (". It names no rate. The sun advances at the default rate of one "
+                             "sun-second per simulated second")
+            return authored
         rate = float(self.policy.Rate)
         moves = ("The sun follows simulated time" if rate == DEFAULT_SUN_RATE
                  else f"The sun moves {rate:g} sun-seconds for each simulated second")

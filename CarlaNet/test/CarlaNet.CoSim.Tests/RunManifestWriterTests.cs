@@ -681,6 +681,22 @@ public sealed class RunManifestWriterTests : IDisposable
         JsonElement chosen = ReadRows(File.ReadAllText(declared))[0].GetProperty("solar");
         Assert.Equal("advance", chosen.GetProperty("illumination_declared").GetProperty("policy").GetString());
         Assert.Equal("advance", chosen.GetProperty("illumination_in_force").GetProperty("policy").GetString());
+
+        // A declared advance with no rate is written as declared, with no rate. The rate in force is 1.0.
+        string rateless = Path.Combine(_directory, "rateless.jsonl");
+        options.Illumination = IlluminationPolicy.FromJson("""{"illumination_version": 1, "policy": "advance"}""");
+        options.RunManifestPath = rateless;
+        options.World = new RecordedWorld { Loaded = world.AsLoaded() };
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            session.Advance();
+        }
+
+        JsonElement ratelessSolar = ReadRows(File.ReadAllText(rateless))[0].GetProperty("solar");
+        JsonElement asDeclared = ratelessSolar.GetProperty("illumination_declared");
+        Assert.Equal("advance", asDeclared.GetProperty("policy").GetString());
+        Assert.False(asDeclared.TryGetProperty("rate_sun_s_per_sim_s", out _));
+        Assert.Equal(1.0, ratelessSolar.GetProperty("illumination_in_force").GetProperty("rate_sun_s_per_sim_s").GetDouble());
     }
 
     [RequiresSumoFact]

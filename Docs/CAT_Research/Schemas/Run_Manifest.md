@@ -202,7 +202,7 @@ An illumination policy object:
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `policy` | string | | Yes | `freeze_at_window_start`, `advance`, `freeze_at` or `ignore`. |
-| `rate_sun_s_per_sim_s` | number | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. |
+| `rate_sun_s_per_sim_s` | number | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. When the declaration names no rate, `illumination_declared` leaves it out. The policy in force then carries the default rate, 1.0. |
 | `freeze_at_civil_time` | string | | No | The time of day the sun is held at, `hh:mm:ss`. Under `freeze_at` only. |
 | `freeze_date_advances` | boolean | | Yes | Whether a frozen sun's date follows the calendar. |
 | `require_sun` | boolean | | Yes | Whether the run refuses a world with no sun. |

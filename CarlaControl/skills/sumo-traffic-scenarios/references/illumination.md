@@ -16,7 +16,7 @@ The report then names that policy as the default.
 
 | `policy` | The sun across a window |
 |---|---|
-| `advance` | carried forward at `rate_sun_s_per_sim_s`, sun-clock seconds per simulated second. At a rate of 1.0 the sun follows simulated time. The default |
+| `advance` | carried forward at `rate_sun_s_per_sim_s`, sun-clock seconds per simulated second. At a rate of 1.0 the sun follows simulated time. Without a rate, it moves at 1.0. The report names that rate as the default. The default policy |
 | `freeze_at_window_start` | set to the civil instant the window opens and held there: one lighting condition per window |
 | `freeze_at` | held at `freeze_at_civil_time` |
 | `ignore` | not bound: the world keeps whatever sun it has |

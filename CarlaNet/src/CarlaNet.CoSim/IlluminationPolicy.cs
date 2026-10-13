@@ -9,17 +9,19 @@ namespace CarlaNet.CoSim;
 /// carry it forward, freeze it at a declared hour, or leave it alone.
 /// </summary>
 /// <remarks>
-/// <para>Time always advances. The sun does too. A run that declares no policy runs under
+/// <para>Time always advances. By default, the sun does too. A run that declares no policy runs under
 /// <see cref="Default"/>: <see cref="Advance"/> at a rate of 1.0. So does an illumination object with
-/// no <c>policy</c>. The sun then follows simulated time. At that rate a default 1,800 s window moves
-/// the sun through up to 6.7 degrees of elevation. When declared, the other three policies still
-/// apply.</para>
+/// no <c>policy</c>. A declared advance that names no rate also runs at 1.0. The sun then follows
+/// simulated time. At that rate a default 1,800 s window moves the sun through up to 6.7 degrees of
+/// elevation. When declared, the other three policies still apply.</para>
 ///
 /// <para>The records stay honest. A defaulted policy is never written as a declared one.
 /// <see cref="Defaulted"/> marks it. The run manifest writes it as in force with no declared policy
 /// beside it. The compiler's resolution report names the default as its source. A capture's
-/// resolution report names the tool default as its layer. So a reader can always tell a policy
-/// somebody chose from the default.</para>
+/// resolution report names the tool default as its layer. A declared advance with no rate stays
+/// declared. <see cref="RateDefaulted"/> marks its rate. The manifest's declared policy then carries no
+/// rate. The policy in force carries 1.0. So a reader can always tell what somebody chose from what
+/// the default supplied.</para>
 ///
 /// <para><b>The sun's date follows one rule.</b> The date the sun is written with advances with the
 /// civil date only when the epoch's calendar advances <i>and</i> the policy lets the date move:
@@ -57,7 +59,8 @@ public sealed class IlluminationPolicy
                                bool freezeDateAdvances,
                                bool requireSun,
                                string? note,
-                               bool defaulted = false)
+                               bool defaulted = false,
+                               bool rateDefaulted = false)
     {
         Kind = kind;
         Rate = rate;
@@ -66,6 +69,7 @@ public sealed class IlluminationPolicy
         RequireSun = requireSun;
         Note = note;
         Defaulted = defaulted;
+        RateDefaulted = rateDefaulted;
     }
 
     /// <summary>
@@ -73,7 +77,8 @@ public sealed class IlluminationPolicy
     /// <see cref="DefaultRate"/> with a sun required. It is marked <see cref="Defaulted"/>.
     /// </summary>
     public static IlluminationPolicy Default { get; } =
-        new(IlluminationPolicyKind.Advance, DefaultRate, null, false, true, null, defaulted: true);
+        new(IlluminationPolicyKind.Advance, DefaultRate, null, false, true, null, defaulted: true,
+            rateDefaulted: true);
 
     /// <summary>Which of the four policies this is.</summary>
     public IlluminationPolicyKind Kind { get; }
@@ -84,6 +89,13 @@ public sealed class IlluminationPolicy
     /// default, never as a declared one.
     /// </summary>
     public bool Defaulted { get; }
+
+    /// <summary>
+    /// Whether nobody named this policy's rate: it advances at <see cref="DefaultRate"/> because its
+    /// illumination object names no <c>rate_sun_s_per_sim_s</c>. A declared advance with no rate is
+    /// still declared. A record writes its declaration with no rate.
+    /// </summary>
+    public bool RateDefaulted { get; }
 
     /// <summary>
     /// Sun-clock seconds per simulated second under <see cref="IlluminationPolicyKind.Advance"/>, and
@@ -209,9 +221,10 @@ public sealed class IlluminationPolicy
     /// The <c>illumination</c> object of a scenario, as JSON text (<c>04_Contracts.md</c> section 11.5).
     /// </param>
     /// <remarks>
-    /// <para>An object that names no <c>policy</c> is read as <c>advance</c>. Its rate is the
-    /// <c>rate_sun_s_per_sim_s</c> it gives, or <see cref="DefaultRate"/> where it gives none. The
-    /// policy is marked <see cref="Defaulted"/>.</para>
+    /// <para>An object that names no <c>policy</c> is read as <c>advance</c>. The policy is marked
+    /// <see cref="Defaulted"/>. An advance, named or not, takes the <c>rate_sun_s_per_sim_s</c> it
+    /// gives, or <see cref="DefaultRate"/> where it gives none. A rate that comes from the default is
+    /// marked <see cref="RateDefaulted"/>.</para>
     ///
     /// <para>A field belonging to another policy is refused rather than ignored -- a rate given
     /// beside a freeze is an operator asking for a moving sun and getting a still one -- and so is a
@@ -328,16 +341,13 @@ public sealed class IlluminationPolicy
             ? noted.GetString()
             : null;
 
+        // An advance that names no rate, declared or by default, runs at the default rate.
+        bool rateDefaulted = kind == IlluminationPolicyKind.Advance && rate is null;
         if (kind == IlluminationPolicyKind.Advance)
         {
-            if (rate is null && defaulted)
+            if (rate is null)
             {
                 rate = DefaultRate;
-            }
-            else if (rate is null)
-            {
-                problems.Add("an advancing sun needs rate_sun_s_per_sim_s, the sun-clock seconds it "
-                             + "moves per simulated second; 1.0 keeps it on civil time");
             }
             else if (!double.IsFinite(rate.Value) || rate.Value <= 0.0)
             {
@@ -379,9 +389,9 @@ public sealed class IlluminationPolicy
         {
             IlluminationPolicyKind.FreezeAtWindowStart =>
                 FreezeAtWindowStart(freezeDateAdvances ?? false, requireSun, note),
-            IlluminationPolicyKind.Advance when defaulted =>
+            IlluminationPolicyKind.Advance when defaulted || rateDefaulted =>
                 new IlluminationPolicy(IlluminationPolicyKind.Advance, rate!.Value, null, false, requireSun,
-                                       note, defaulted: true),
+                                       note, defaulted, rateDefaulted),
             IlluminationPolicyKind.Advance => Advance(rate!.Value, requireSun, note),
             IlluminationPolicyKind.FreezeAt =>
                 FreezeAt(freezeAt!.Value, freezeDateAdvances ?? false, requireSun, note),
@@ -455,7 +465,8 @@ public sealed class IlluminationPolicy
     {
         IlluminationPolicyKind.Advance =>
             $"{Name} at {Rate.ToString("0.######", CultureInfo.InvariantCulture)} sun-s per simulated s"
-            + (Defaulted ? " (the default: no policy declared)" : string.Empty),
+            + (Defaulted ? " (the default: no policy declared)"
+               : RateDefaulted ? " (the default rate: no rate declared)" : string.Empty),
         IlluminationPolicyKind.FreezeAt =>
             $"{Name} {FreezeAtCivilTimeOfDay!.Value.ToString("hh\\:mm\\:ss", CultureInfo.InvariantCulture)} civil"
             + (FreezeDateAdvances ? ", date follows the calendar" : ", date held"),

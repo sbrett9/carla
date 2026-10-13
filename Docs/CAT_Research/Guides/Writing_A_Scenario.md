@@ -247,7 +247,7 @@ The resolution report then says the policy is the default, not one the specifica
 
 | `policy` | The sun during a window |
 |---|---|
-| `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. With a rate of 1.0, the sun follows simulated time. This is the default. |
+| `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. With a rate of 1.0, the sun follows simulated time. Without a rate, it moves at 1.0. The report then says the rate is the default. This is the default policy. |
 | `freeze_at_window_start` | held at the civil time the window opens: one lighting condition per window. |
 | `freeze_at` | held at `freeze_at_civil_time`, written `HH:MM:SS`. |
 | `ignore` | left as the world has it. |

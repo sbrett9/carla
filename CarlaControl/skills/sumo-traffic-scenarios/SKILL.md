@@ -352,7 +352,9 @@ carries none, and the compiler refuses a route file carrying anything but the ve
 - `illumination` is optional.\
   It is the authored default the operator can override: `advance` with `rate_sun_s_per_sim_s` 1.0 (the sun follows simulated time), `freeze_at_window_start`, `freeze_at` with `freeze_at_civil_time`, or `ignore`.\
   Without one, or without a `policy` in it, the sun advances at a rate of 1.0.\
-  The report names that policy as the default.
+  The report names that policy as the default.\
+  An `advance` that names no rate also runs at 1.0.\
+  The report names that rate as the default.
 - `capture_windows[]` are candidates, not run instructions.\
   A window must not cut a declared interval.\
   The report states each window's civil date and the sun it opens under.\

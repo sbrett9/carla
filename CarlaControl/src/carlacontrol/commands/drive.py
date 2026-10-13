@@ -423,8 +423,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "ignore it leaves the sun as the world holds it. The run then records "
                              "that the lighting honors no epoch")
     parser.add_argument("--solar-rate", type=float,
-                        help="with --illumination advance: sun-clock seconds per simulated second; "
-                             "1.0 keeps the sun on civil time")
+                        help="with --illumination advance: sun-clock seconds per simulated "
+                             "second. 1.0 keeps the sun on civil time. Left out, the rate is 1.0")
     parser.add_argument("--freeze-at",
                         help="with --illumination freeze_at: the civil time of day, HH:MM:SS, the "
                              "sun is held at whatever time the window opens")
