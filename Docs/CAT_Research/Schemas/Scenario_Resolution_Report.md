@@ -57,7 +57,7 @@ When the specification is not JSON, `scenario` is left out too.
 | `findings` | array | Every refusal and warning, in full: `check` (its id in [Scenario compiler checks](Scenario_Checks.md)), `outcome` (`refuse` or `warn`), `subject` (in the specification's own names) and `message`. |
 | `epoch` | object | The epoch as `declared`, its `epoch_block_sha256`, a one-line `statement` and `t0_civil`. It also has the run's `end_s` and `end_civil`, then `time_zone_id`. Its `time_zone_id_resolved` is always false. |
 | `zone` | object | The declared offset against the zone the world's georeference sets: `declared_offset_hours`, `engine_time_zone_hours` (or null), `difference_hours` (or null) and `written_by_the_session`. |
-| `illumination_default` | object | The specification's illumination default: `declared`, its `policy`, its `status` and `declared_elevation_kind`. |
+| `illumination_default` | object | The specification's illumination default: `declared`, its `policy`, its `status` and `declared_elevation_kind`. Where the specification declares no policy, `declared` is what it wrote (an empty object where it wrote nothing) and `policy` is `advance`. Its `status` then says the policy is the default. |
 | `capture_windows` | array | Each capture window, resolved. See below. |
 | `illumination_label_association` | object | How far the illumination band (a named range of sun elevation) predicts the supervision state (check 41). See below. |
 | `world` | object | The world package: `package`, `map_name`, `network_fingerprint`, `netconvert_version`, `origin` (latitude and longitude), `georeference` and `routing_sumo` (`version`, `matched_by`, `release_agreement`, `verdict`). |
@@ -89,7 +89,7 @@ A resolved time (`depart`, `begin`, `end` and the like) is `{authored, form, sec
 | `end_civil` | string | | When it closes, in civil time. |
 | `civil_date` | string | | The civil date it opens on, `YYYY-MM-DD`. |
 | `sun_open`, `sun_close` | object or null | | The sun a run will set at the window's opening and close: `seconds`, `sun_date`, `sun_clock`, `elevation_deg` (refraction-corrected), `geometric_elevation_deg`, `azimuth_deg` (clockwise from north). Null under `ignore`. |
-| `sun` | string | | Present under `ignore`: no sun is set. |
+| `sun` | string | | What the sun does during the window, in one plain sentence. For example: `The sun holds at +5.69° for the whole window.` It climbs, sinks or holds, with its elevation at the open and the close. Under `ignore`, it says that no sun is set. A fact, never a finding. |
 | `sun_lowest` | object | | The lowest the sun reaches over the window: `elevation_deg`, `elevation_kind`, `band` and `band_source`. A fact, never a finding. |
 
 ### The illumination-label association
@@ -163,14 +163,14 @@ They are still version 1.
 ```json
 {
   "resolution_version": 1,
-  "producer": {"tool": "carlacontrol.ScenarioCompiler", "tool_version": "0.10.0+g2d8636e9d",
-               "carlanet": "0.10.0+gd593b3311", "server": null, "sumo": "1.27.0",
-               "written_utc": "2026-10-13T00:09:54.622Z"},
+  "producer": {"tool": "carlacontrol.ScenarioCompiler", "tool_version": "0.10.0+g692e09427",
+               "carlanet": "0.10.0+g7715a2677", "server": null, "sumo": "1.27.0",
+               "written_utc": "2026-10-13T18:10:10.900Z"},
   "outcome": "compiled",
   "scenario": {"scenario_id": "Arapahoe_I25_SupervisionCheck",
                "scenario_name": "Arapahoe supervision check", "description": "...",
                "specification": "Arapahoe_I25_SupervisionCheck.scenario.json",
-               "specification_sha256": "d61842637e0b12478a7cae87aa945aff7da73045285c296a940512e1d19a9b10",
+               "specification_sha256": "8a31c197058ad87c473f7cf502df52883429f42bcbd91feab18693925c4b0a77",
                "spec_version": 1},
   "findings": [{"check": 17, "outcome": "warn", "subject": "vehicle class suv",
                 "message": "draws one body, vehicle.nissan.patrol, so every vehicle of the class looks the same and its appearance can become its label"}],
@@ -185,7 +185,8 @@ They are still version 1.
                        "sun_close": {"...": "..."},
                        "sun_lowest": {"elevation_deg": 5.694, "elevation_kind": "refraction_corrected",
                                       "band": "golden",
-                                      "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, ..."}}],
+                                      "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, ..."},
+                       "sun": "The sun holds at +5.69° for the whole window."}],
   "...": "..."
 }
 ```

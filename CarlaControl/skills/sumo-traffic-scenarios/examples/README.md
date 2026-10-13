@@ -14,7 +14,7 @@ catalogue at the repository's.
 
 | Example | What it shows |
 |---|---|
-| `minimal/street_layout_minimal.scenario.json` | The least a scenario declares: the world and its fingerprint, the epoch, the illumination default, the seed, the run, the catalogue, vehicle classes, and places — two gateways and a surveyed point — used by one flow and by one actor that stops at the point. No label is asserted |
+| `minimal/street_layout_minimal.scenario.json` | The least a scenario declares: the world and its fingerprint, the epoch, the seed, the run, the catalogue, vehicle classes and places. The places are two gateways and a surveyed point, used by one flow and by one actor that stops at the point. It also declares the optional illumination default. No label is asserted |
 | `counterfactual/street_layout_probe.scenario.json`, `probe_standoff_pairs.sweep.json` | Supervision of every kind — an annotated instance, a nominal hard negative, an unlabelled cohort and a rota read as a recurring series, whose one skipped occasion writes no trip and no slot — and a sweep pairing the annotated actor three ways: `nominal` with its stop removed, `absent`, and `displaced` thirty minutes. `probe_standoff_pairs.sweep-index.json` is the recorded index |
 | `epoch/street_layout_epoch_whole_hour.scenario.json` | Mountain Standard Time, −07:00, no daylight saving |
 | `epoch/street_layout_epoch_daylight_saving.scenario.json` | Mountain Daylight Time, −06:00 with `dst_in_effect: true` |

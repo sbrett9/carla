@@ -210,7 +210,7 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Arapahoe_I25_UnderpassDwell/`.\
-It was compiled at commit `2d8636e9d` from the specification in this folder, against `Arapahoe_I25.cwp`.\
+It was compiled at commit `692e09427` from the specification in this folder, against `Arapahoe_I25.cwp`.\
 So a run needs no compile first.
 
 Read `Arapahoe_I25_UnderpassDwell.resolution.md` in that folder.\

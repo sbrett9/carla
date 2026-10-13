@@ -192,7 +192,7 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Gardnerville_Centerville_Lane_NeighborhoodOrbit/`.\
-It was compiled at commit `2d8636e9d` from the specification in this folder, against `Gardnerville_Centerville_Lane.cwp`.\
+It was compiled at commit `692e09427` from the specification in this folder, against `Gardnerville_Centerville_Lane.cwp`.\
 So a run needs no compile first.
 
 Read `Gardnerville_Centerville_Lane_NeighborhoodOrbit.resolution.md` in that folder.\

@@ -349,11 +349,14 @@ carries none, and the compiler refuses a route file carrying anything but the ve
 
 ### Light — derived context, never a label
 
-- `illumination` is **required** and is the authored default the operator may override:
-  `advance` with `rate_sun_s_per_sim_s` 1.0 (recommended: the sun follows simulated time),
-  `freeze_at_window_start`, `freeze_at` with `freeze_at_civil_time`, or `ignore`.
-- `capture_windows[]` are **candidates**, not run instructions; a window may not cut a declared
-  interval. The report states each window's civil date and the sun it opens under.
+- `illumination` is optional.\
+  It is the authored default the operator can override: `advance` with `rate_sun_s_per_sim_s` 1.0 (the sun follows simulated time), `freeze_at_window_start`, `freeze_at` with `freeze_at_civil_time`, or `ignore`.\
+  Without one, or without a `policy` in it, the sun advances at a rate of 1.0.\
+  The report names that policy as the default.
+- `capture_windows[]` are candidates, not run instructions.\
+  A window must not cut a declared interval.\
+  The report states each window's civil date and the sun it opens under.\
+  A plain sentence says whether the sun climbs, sinks or holds during the window.
 - **Expect the illumination–label association (check 41) to be non-zero, and report it to the author
   in words** with the bands where one state alone occurs, the bands where both do, and the remedies. In
   a pattern of life the correlation is structural — the sizing scenario measures 0.600 — and it is a

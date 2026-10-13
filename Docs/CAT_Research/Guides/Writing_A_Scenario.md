@@ -236,19 +236,25 @@ Unless second zero is midnight, that is not 09:00.
 
 ### Illumination
 
-`illumination` is required.\
+`illumination` is optional.\
 It is the default for what the sun does during a capture window.\
 A run can override it.
 
+If you leave it out, the sun advances at a rate of 1.0.\
+It then follows simulated time.\
+An `illumination` object with no `policy` gets the same.\
+The resolution report then says the policy is the default, not one the specification declared.
+
 | `policy` | The sun during a window |
 |---|---|
-| `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. Recommended, with a rate of 1.0: the sun follows simulated time. |
+| `advance` | moves on at `rate_sun_s_per_sim_s` seconds of sun time per simulated second. With a rate of 1.0, the sun follows simulated time. This is the default. |
 | `freeze_at_window_start` | held at the civil time the window opens: one lighting condition per window. |
 | `freeze_at` | held at `freeze_at_civil_time`, written `HH:MM:SS`. |
 | `ignore` | left as the world has it. |
 
 Light is never a label.\
-The report gives the sun's elevation for each capture window.
+The report gives the sun's elevation for each capture window.\
+It also says in one sentence whether the sun climbs, sinks or holds during the window.
 
 ### Vehicle classes and mixes
 
@@ -643,6 +649,7 @@ Check, in order:
   The civil time of second zero and of the end.
 - Capture windows.\
   Each window's civil times and the sun's elevation at its start and end.\
+  A sentence under the table says whether the sun climbs, sinks or holds during each window.\
   The JSON's `capture_windows[].sun_lowest` gives the lowest elevation and its band, such as `day` or `night`.\
   Below -6 degrees, the scene has no light source.
 - Places.\
@@ -853,7 +860,7 @@ A script in `CarlaControl/scripts/` writes each one and compiles it:
 |---|---|---|
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit` | `make_sumo_scenario.py` | one vehicle circling a block 20 times, written as a route in phases |
 | `Arapahoe_I25_UnderpassDwell` | `make_arapahoe_scenario.py` | heavy freeway traffic, a lane closure and a vehicle parked under a bridge for 30 minutes |
-| `Arapahoe_I25_SupervisionCheck` | `make_supervision_check_scenario.py` | six minutes with an anchored dwell, a transit in phases and a nominal stop |
+| `Arapahoe_I25_SupervisionCheck` | `make_supervision_check_scenario.py` | six minutes with an anchored dwell, a transit in phases and a nominal stop. The sun is frozen at each window's opening. Each window then stays in one light band. |
 | `Shahid_Bahonar_Port_PatternOfLife` | `make_bahonar_scenario.py` | a week of port life in civil clocks at +03:30, a guard schedule over 16 towers and six planted anomalies, one of them an omission |
 
 These scenarios name their packages at `../Build/world-packages/<MapName>.cwp`.\

@@ -105,7 +105,7 @@ A field with no default must come from some layer, or the launch is refused (run
 | `pacing.real_time_factor` | number or null | sim s per wall s | `1.0` | | Under `wall_clock`, simulated seconds per wall-clock second. |
 | `pacing.min_achieved_factor` | number or null | sim s per wall s | none | | Under `wall_clock`, required: the achieved factor below which the prewarm refuses the window. |
 | `pacing.window_s` | number | s | `5.0` | | Wall-clock seconds the achieved factor is measured over. |
-| `solar.policy` | one of `freeze_at_window_start`, `advance`, `freeze_at`, `ignore` | | none | scenario | What the sun does across the window. The scenario's illumination default supplies it. |
+| `solar.policy` | one of `freeze_at_window_start`, `advance`, `freeze_at`, `ignore` | | `"advance"` | scenario | What the sun does across the window. A policy the scenario's illumination default names replaces the default. With none, the resolution report names the tool default as the policy's layer. |
 | `solar.rate_sun_s_per_sim_s` | number or null | sun s per sim s | `null` | scenario | Under `advance`, always 1.0. Not settable. |
 | `solar.freeze_at_civil_time` | string `HH:MM:SS` or null | | `null` | scenario | Under `freeze_at`, the civil time of day the sun is held at. |
 | `solar.freeze_date_advances` | boolean or null | | `null` | scenario | Under a freeze, whether the sun's date follows the civil date as the epoch's calendar advances. |

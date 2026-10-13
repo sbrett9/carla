@@ -9,17 +9,24 @@ Design record: `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Auth
 
 ## The illumination default
 
-Required (check 39), read by the session's own `CarlaNet.CoSim.IlluminationPolicy`:
+Optional.\
+The session's own `CarlaNet.CoSim.IlluminationPolicy` reads it and refuses a malformed one (check 39).\
+Without one, or without a `policy` in it, the sun advances at a rate of 1.0.\
+The report then names that policy as the default.
 
 | `policy` | The sun across a window |
 |---|---|
-| `advance` | carried forward at `rate_sun_s_per_sim_s`, sun-clock seconds per simulated second; the report names the arc from the open to the close of each window (check 39 warns). Recommended at a rate of 1.0: the sun follows simulated time |
+| `advance` | carried forward at `rate_sun_s_per_sim_s`, sun-clock seconds per simulated second. At a rate of 1.0 the sun follows simulated time. The default |
 | `freeze_at_window_start` | set to the civil instant the window opens and held there: one lighting condition per window |
 | `freeze_at` | held at `freeze_at_civil_time` |
 | `ignore` | not bound: the world keeps whatever sun it has |
 
-It is an authored default the operator may override at run start; both the default and the value used
-reach the run manifest.
+The report states in one plain sentence what the sun does in each window: it climbs, sinks or holds.\
+For the minimal example's window, it reads: "The sun climbs from -1.95° to +1.18° during this window."\
+That is a fact, never a finding.
+
+It is an authored default the operator can override at run start.\
+Both the default and the value used reach the run manifest.
 
 ## Capture windows are candidates
 

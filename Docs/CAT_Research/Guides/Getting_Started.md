@@ -120,7 +120,8 @@ It runs `CarlaServer` with `-RenderOffScreen -nosound`.\
 So there is no window.\
 A first argument that does not start with `-` is the map to start in.\
 Anything else you add is passed to the server.\
-The server answers on port 2000.
+The server answers on port 2000.\
+An argument with colons or square brackets needs quotes (see [The Cesium tile cache](#the-cesium-tile-cache)).
 
 A capture needs the world loaded on the server.\
 `carla-build-world --osm osm/<extract>.osm` builds a world on the running server, loads it and writes its world package to `world-packages/`.\
@@ -145,6 +146,38 @@ export CESIUM_ION_TOKEN="<your token>"     # Linux, this shell only
 `carla-build-world` and `carla-sctmv` read the variable too.\
 Set it in the terminal that runs them as well.\
 In place of the variable, they also take `--ion-token <token>`.
+
+### The Cesium tile cache
+
+The server keeps what it streams from Cesium in a cache on disk.\
+By default the cache holds 4096 items.\
+A large world can need more than that.\
+Then its tiles stream again on the next run.\
+`MaxCacheItems` sets the size of the cache.\
+Pass it to `run-server` as one argument after the map.
+
+On Windows, from a PowerShell window, put the argument in single quotes:
+
+```powershell
+.\run-server.ps1 /Arapahoe_I25/Maps/Arapahoe_I25 '-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=65536'
+```
+
+On Linux, put it in quotes too, because of the square brackets:
+
+```sh
+./run-server.sh /Arapahoe_I25/Maps/Arapahoe_I25 "-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=65536"
+```
+
+The argument must reach the server in one piece.\
+If it is split, the server ignores the setting and does not say so.\
+In Windows PowerShell 5.1, an argument with no quotes arrives as two: `-ini:` and `Engine:[...]`.\
+Through `powershell -File run-server.ps1 ...`, it arrives as `-ini` and `Engine:[...]`, even with quotes.\
+So start `run-server.ps1` from inside a PowerShell window.
+
+To make sure that it arrived, open the server's log.\
+In a Development distribution, the log is `CarlaServer/CarlaUnreal/Saved/Logs/CarlaUnreal.log`.\
+Find the line that starts with `LogInit: Command Line:`.\
+It must show `-ini:Engine:`, with the colon after `-ini`.
 
 ### Your own SUMO, for `sumo-gui`
 
