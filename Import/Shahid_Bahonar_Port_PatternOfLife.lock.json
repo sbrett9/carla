@@ -4,18 +4,18 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "867ead63fe0fde32499384645c5440998680f92a6aa71288777ad6bb6ca40e58",
+  "specification_sha256": "b33f1b56bbae23005e60c24fb2a9674023a79bcb59fbbec00cf0b46d9355c329",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8ef0978cb.dirty",
-    "carlanet": "0.10.0+g7d218c48c",
+    "tool_version": "0.10.0+gd593b3311.dirty",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:19:46.778Z"
+    "written_utc": "2026-10-13T00:00:59.828Z"
   },
   "files": {
     "routes": {
@@ -28,7 +28,7 @@
     },
     "network": {
       "path": "Shahid_Bahonar_Port.net.xml",
-      "sha256": "0748b0203054841ee2107e7e685e843dcbda920ca1f79358df7bb407689081c0"
+      "sha256": "11002de743af11d85ba089e9e7c5d16aff7fdad5a96df8165415f27de207c354"
     },
     "supervision": {
       "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
@@ -143,24 +143,25 @@
   "epoch_block_sha256": "f1ba0ddab35f800a4b78ebc902fa9a1dd9d47a64fee72eb3cfab687969bbecdf",
   "illumination": {
     "illumination_version": 1,
-    "policy": "freeze_at_window_start"
+    "policy": "advance",
+    "rate_sun_s_per_sim_s": 1.0
   },
   "capture_windows": [],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
   "illumination_label_association": {
-    "normalized_mutual_information": 0.142,
+    "normalized_mutual_information": 0.128,
     "bands": {
       "day": {
         "annotated": 86,
-        "nominal": 244,
+        "nominal": 241,
         "unlabelled": 73,
-        "total": 403
+        "total": 400
       },
       "golden": {
         "annotated": 7,
-        "nominal": 0,
+        "nominal": 3,
         "unlabelled": 21,
-        "total": 28
+        "total": 31
       },
       "nautical_twilight": {
         "annotated": 7,

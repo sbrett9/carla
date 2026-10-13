@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch half hour",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_half_hour.scenario.json",
-    "specification_sha256": "f10375d305058b58d734ef50c3081a417a5ce7324c0a60b4c4c49d7a239a6199",
+    "specification_sha256": "fdde155c340a3514a2782b6e0614d4e4fea5fbfc4cd28f2f35ec58c23748a815",
     "spec_version": 1
   },
   "findings": [
@@ -21,6 +21,12 @@
       "outcome": "warn",
       "subject": "epoch",
       "message": "declares UTC+03:30 and the world's georeference configures -06:59:36 (longitude / 15): more than an hour apart, so the offset and the map probably describe different places"
+    },
+    {
+      "check": 39,
+      "outcome": "warn",
+      "subject": "capture window morning",
+      "message": "the default policy advances the sun, from -25.75 deg at 2026-03-21T06:55:00+03:30 to -28.36 deg at 2026-03-21T07:10:00+03:30; the window is not one lighting condition"
     },
     {
       "check": 41,
@@ -57,9 +63,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -87,13 +94,13 @@
       "sun_close": {
         "seconds": 4200.0,
         "sun_date": "2026-03-21",
-        "sun_clock": "06:55:00",
-        "elevation_deg": -25.7497,
-        "geometric_elevation_deg": -25.7616,
-        "azimuth_deg": 293.8632
+        "sun_clock": "07:10:00",
+        "elevation_deg": -28.3629,
+        "geometric_elevation_deg": -28.3736,
+        "azimuth_deg": 296.8866
       },
       "sun_lowest": {
-        "elevation_deg": -25.7497,
+        "elevation_deg": -28.3629,
         "elevation_kind": "refraction_corrected",
         "band": "night",
         "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
@@ -472,7 +479,7 @@
     "scenario_name": "Street layout, epoch half hour",
     "spec_version": 1,
     "specification": "street_layout_epoch_half_hour.scenario.json",
-    "specification_sha256": "f10375d305058b58d734ef50c3081a417a5ce7324c0a60b4c4c49d7a239a6199",
+    "specification_sha256": "fdde155c340a3514a2782b6e0614d4e4fea5fbfc4cd28f2f35ec58c23748a815",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
@@ -600,7 +607,8 @@
     "epoch_block_sha256": "466550fcd12a5988f2ed15a9fdf5908a2f749d8ceabb70e3911ae023d8deaef7",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [
       {

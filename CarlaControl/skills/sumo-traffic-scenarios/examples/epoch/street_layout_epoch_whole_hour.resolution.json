@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch whole hour",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_whole_hour.scenario.json",
-    "specification_sha256": "c62207a1f451d400de2d929600184be1781de0461f52eb05b5a854564113ae7d",
+    "specification_sha256": "b4dfb73f01d1ee1b2d6677abc239cd0b242cafee142d8cadc67fc2e54b9679cb",
     "spec_version": 1
   },
   "findings": [
@@ -15,6 +15,12 @@
       "outcome": "warn",
       "subject": "vehicle class saloon",
       "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 39,
+      "outcome": "warn",
+      "subject": "capture window morning",
+      "message": "the default policy advances the sun, from -4.83 deg at 2026-01-15T06:55:00-07:00 to -2.12 deg at 2026-01-15T07:10:00-07:00; the window is not one lighting condition"
     },
     {
       "check": 41,
@@ -51,9 +57,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -81,10 +88,10 @@
       "sun_close": {
         "seconds": 4200.0,
         "sun_date": "2026-01-15",
-        "sun_clock": "06:55:00",
-        "elevation_deg": -4.8278,
-        "geometric_elevation_deg": -4.8952,
-        "azimuth_deg": 113.4407
+        "sun_clock": "07:10:00",
+        "elevation_deg": -2.1176,
+        "geometric_elevation_deg": -2.2636,
+        "azimuth_deg": 115.7491
       },
       "sun_lowest": {
         "elevation_deg": -4.8278,
@@ -466,7 +473,7 @@
     "scenario_name": "Street layout, epoch whole hour",
     "spec_version": 1,
     "specification": "street_layout_epoch_whole_hour.scenario.json",
-    "specification_sha256": "c62207a1f451d400de2d929600184be1781de0461f52eb05b5a854564113ae7d",
+    "specification_sha256": "b4dfb73f01d1ee1b2d6677abc239cd0b242cafee142d8cadc67fc2e54b9679cb",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
@@ -594,7 +601,8 @@
     "epoch_block_sha256": "5edcd6d3cbd9154bb73fe1e1c03900a90c11e5e8878398b2246a43ba2abc0f58",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [
       {

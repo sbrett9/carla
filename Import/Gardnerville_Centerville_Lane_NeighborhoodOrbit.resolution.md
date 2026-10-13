@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g8ef0978cb.dirty, carlanet 0.10.0+g7d218c48c, SUMO 1.27.0, at 2026-10-08T02:15:50.531Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+gd593b3311.dirty, carlanet 0.10.0+gd593b3311, SUMO 1.27.0, at 2026-10-12T23:54:07.840Z
 
 One marked vehicle, orbiter, enters on Centerville Lane at the posted limit, drives the Rock Terrace Drive block 20 times held to 11 m/s, and leaves west at 1.25 times the posted limit, among directional corridor traffic and neighborhood through traffic. Written by CarlaControl/scripts/make_sumo_scenario.py; edit that, not this.
 
@@ -27,7 +27,7 @@ Declared offset -7 h; the world's georeference configures -7.98431 h. set_solar_
 
 ## Illumination default
 
-Policy `freeze_at_window_start`: an authored default the operator may override.
+Policy `advance`: an authored default the operator may override.
 
 ## Illumination-label association (check 41)
 
@@ -198,7 +198,7 @@ SUMO seed 42, step 0.05 s, end 2220 s. The processing options, each written into
   },
   "network": {
     "path": "Gardnerville_Centerville_Lane.net.xml",
-    "sha256": "20a6877216f222f877ad337f8da13b7fac4430441cafbbd8784f2353890457ef"
+    "sha256": "937b68dce345fbe12cec2dd7c29bf3fe3514469fafd86213322dc03480884d5d"
   },
   "supervision": {
     "path": "Gardnerville_Centerville_Lane_NeighborhoodOrbit.supervision.json",

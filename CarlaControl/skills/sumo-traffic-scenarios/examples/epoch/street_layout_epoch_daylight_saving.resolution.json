@@ -6,7 +6,7 @@
     "scenario_name": "Street layout, epoch daylight saving",
     "description": "Ambient traffic runs east along West and East Street; one saloon enters from the west, halts five minutes at a surveyed point on East Street and drives on. No label is asserted.",
     "specification": "street_layout_epoch_daylight_saving.scenario.json",
-    "specification_sha256": "7813a0feb4156c79a41af00ac694a29000d8277b36ed6de3594f0d480211c880",
+    "specification_sha256": "83364791ecaf57e0ed0ad20ff71250e8d02d11653b63658d467c33f1a7b151b0",
     "spec_version": 1
   },
   "findings": [
@@ -15,6 +15,12 @@
       "outcome": "warn",
       "subject": "vehicle class saloon",
       "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
+    },
+    {
+      "check": 39,
+      "outcome": "warn",
+      "subject": "capture window morning",
+      "message": "the default policy advances the sun, from -1.95 deg at 2026-03-21T06:55:00-06:00 to 1.18 deg at 2026-03-21T07:10:00-06:00; the window is not one lighting condition"
     },
     {
       "check": 41,
@@ -51,9 +57,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -81,10 +88,10 @@
       "sun_close": {
         "seconds": 4200.0,
         "sun_date": "2026-03-21",
-        "sun_clock": "06:55:00",
-        "elevation_deg": -1.948,
-        "geometric_elevation_deg": -2.105,
-        "azimuth_deg": 87.9158
+        "sun_clock": "07:10:00",
+        "elevation_deg": 1.1756,
+        "geometric_elevation_deg": 0.7913,
+        "azimuth_deg": 90.2994
       },
       "sun_lowest": {
         "elevation_deg": -1.948,
@@ -466,7 +473,7 @@
     "scenario_name": "Street layout, epoch daylight saving",
     "spec_version": 1,
     "specification": "street_layout_epoch_daylight_saving.scenario.json",
-    "specification_sha256": "7813a0feb4156c79a41af00ac694a29000d8277b36ed6de3594f0d480211c880",
+    "specification_sha256": "83364791ecaf57e0ed0ad20ff71250e8d02d11653b63658d467c33f1a7b151b0",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
@@ -594,7 +601,8 @@
     "epoch_block_sha256": "0a788db80f87b96115e5a1d7ec543eb43725dd4c920106b46fd4ad9b2d049e72",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [
       {

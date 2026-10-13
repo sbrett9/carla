@@ -15,6 +15,12 @@
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
         },
         {
+          "check": 39,
+          "outcome": "warn",
+          "subject": "capture window morning",
+          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
+        },
+        {
           "check": 41,
           "outcome": "warn",
           "subject": "supervision",
@@ -24,8 +30,9 @@
       "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
       "illumination": {
         "illumination_version": 1,
-        "policy": "freeze_at_window_start",
-        "note": "one lighting condition per window"
+        "policy": "advance",
+        "rate_sun_s_per_sim_s": 1.0,
+        "note": "the sun follows simulated time"
       },
       "files": {
         "routes": "30d9547e8fe234ac46ff851ef12e1874d371ea26e47efdd1f3b4216e7e9f6c43",
@@ -62,6 +69,12 @@
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
         },
         {
+          "check": 39,
+          "outcome": "warn",
+          "subject": "capture window morning",
+          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
+        },
+        {
           "check": 41,
           "outcome": "warn",
           "subject": "supervision",
@@ -71,8 +84,9 @@
       "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
       "illumination": {
         "illumination_version": 1,
-        "policy": "freeze_at_window_start",
-        "note": "one lighting condition per window"
+        "policy": "advance",
+        "rate_sun_s_per_sim_s": 1.0,
+        "note": "the sun follows simulated time"
       },
       "files": {
         "routes": "2ee89e451c0497a89073d81f879c1a0cea40ba5f3383dbc135d20d427a0208d5",
@@ -120,6 +134,12 @@
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
         },
         {
+          "check": 39,
+          "outcome": "warn",
+          "subject": "capture window morning",
+          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
+        },
+        {
           "check": 41,
           "outcome": "warn",
           "subject": "supervision",
@@ -129,8 +149,9 @@
       "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
       "illumination": {
         "illumination_version": 1,
-        "policy": "freeze_at_window_start",
-        "note": "one lighting condition per window"
+        "policy": "advance",
+        "rate_sun_s_per_sim_s": 1.0,
+        "note": "the sun follows simulated time"
       },
       "files": {
         "routes": "f6ad746bb0c9beb042dff3ce854c7e60da8681ede168d5713d777abd074d86c7",
@@ -178,6 +199,12 @@
           "message": "draws one body, vehicle.lincoln.mkz, so every vehicle of the class looks the same and its appearance can become its label"
         },
         {
+          "check": 39,
+          "outcome": "warn",
+          "subject": "capture window morning",
+          "message": "the default policy advances the sun, from -0.85 deg at 2026-03-21T07:00:00-06:00 to 2.06 deg at 2026-03-21T07:15:00-06:00; the window is not one lighting condition"
+        },
+        {
           "check": 41,
           "outcome": "warn",
           "subject": "supervision",
@@ -187,8 +214,9 @@
       "epoch_block_sha256": "9335fe33ca8330c53de6c5901cabbfaf8583ddd0b52fa5f2c5e076785c615c1b",
       "illumination": {
         "illumination_version": 1,
-        "policy": "freeze_at_window_start",
-        "note": "one lighting condition per window"
+        "policy": "advance",
+        "rate_sun_s_per_sim_s": 1.0,
+        "note": "the sun follows simulated time"
       },
       "files": {
         "routes": "eab77b30210852bc7ef4eba75021fc9d5ae0f787e6b17d94290ceeea6cb48be0",
@@ -265,7 +293,7 @@
   ],
   "findings": [],
   "base": "street_layout_probe.scenario.json",
-  "base_sha256": "b05d4f38c72f0f504422ddbe4f8df0c85855dcf12123074daa94f1089d02acc5",
+  "base_sha256": "8b5350753c7092648d48fb019bcff8e81ce39780a59cde3ab7e81ff11648c4e9",
   "pairing": "cross",
   "illumination": "hold",
   "axes": [],

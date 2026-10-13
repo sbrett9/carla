@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g8ef0978cb.dirty",
-    "carlanet": "0.10.0+g7d218c48c",
+    "tool_version": "0.10.0+gd593b3311.dirty",
+    "carlanet": "0.10.0+gd593b3311",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-08T02:19:46.790Z"
+    "written_utc": "2026-10-13T00:00:59.843Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -14,7 +14,7 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "867ead63fe0fde32499384645c5440998680f92a6aa71288777ad6bb6ca40e58",
+    "specification_sha256": "b33f1b56bbae23005e60c24fb2a9674023a79bcb59fbbec00cf0b46d9355c329",
     "spec_version": 1
   },
   "findings": [
@@ -76,7 +76,7 @@
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = 0.142 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = 0.128 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -107,9 +107,10 @@
   "illumination_default": {
     "declared": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
-    "policy": "freeze_at_window_start",
+    "policy": "advance",
     "status": "an authored default the operator may override",
     "declared_elevation_kind": "refraction_corrected"
   },
@@ -153,15 +154,15 @@
       "table": {
         "day": {
           "annotated": 86,
-          "nominal": 244,
+          "nominal": 241,
           "unlabelled": 73,
-          "total": 403
+          "total": 400
         },
         "golden": {
           "annotated": 7,
-          "nominal": 0,
+          "nominal": 3,
           "unlabelled": 21,
-          "total": 28
+          "total": 31
         },
         "nautical_twilight": {
           "annotated": 7,
@@ -188,14 +189,14 @@
         "unlabelled": 150
       },
       "annotated_rate": {
-        "day": 0.21339950372208435,
-        "golden": 0.25,
+        "day": 0.215,
+        "golden": 0.22580645161290322,
         "nautical_twilight": 1.0,
         "astronomical_twilight": 1.0,
         "night": 0.005917159763313609
       },
       "base_annotated_rate": 0.1758957654723127,
-      "normalized_mutual_information": 0.142,
+      "normalized_mutual_information": 0.128,
       "degenerate_bands": [
         "nautical_twilight",
         "astronomical_twilight"
@@ -206,19 +207,19 @@
         "night"
       ]
     },
-    "normalized_mutual_information": 0.142,
+    "normalized_mutual_information": 0.128,
     "bands": {
       "day": {
         "annotated": 86,
-        "nominal": 244,
+        "nominal": 241,
         "unlabelled": 73,
-        "total": 403
+        "total": 400
       },
       "golden": {
         "annotated": 7,
-        "nominal": 0,
+        "nominal": 3,
         "unlabelled": 21,
-        "total": 28
+        "total": 31
       },
       "nautical_twilight": {
         "annotated": 7,
@@ -35661,18 +35662,18 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "spec_version": 1,
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "867ead63fe0fde32499384645c5440998680f92a6aa71288777ad6bb6ca40e58",
+    "specification_sha256": "b33f1b56bbae23005e60c24fb2a9674023a79bcb59fbbec00cf0b46d9355c329",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+g8ef0978cb.dirty",
-      "carlanet": "0.10.0+g7d218c48c",
+      "tool_version": "0.10.0+gd593b3311.dirty",
+      "carlanet": "0.10.0+gd593b3311",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-08T02:19:46.778Z"
+      "written_utc": "2026-10-13T00:00:59.828Z"
     },
     "files": {
       "routes": {
@@ -35685,7 +35686,7 @@
       },
       "network": {
         "path": "Shahid_Bahonar_Port.net.xml",
-        "sha256": "0748b0203054841ee2107e7e685e843dcbda920ca1f79358df7bb407689081c0"
+        "sha256": "11002de743af11d85ba089e9e7c5d16aff7fdad5a96df8165415f27de207c354"
       },
       "supervision": {
         "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
@@ -35800,24 +35801,25 @@
     "epoch_block_sha256": "f1ba0ddab35f800a4b78ebc902fa9a1dd9d47a64fee72eb3cfab687969bbecdf",
     "illumination": {
       "illumination_version": 1,
-      "policy": "freeze_at_window_start"
+      "policy": "advance",
+      "rate_sun_s_per_sim_s": 1.0
     },
     "capture_windows": [],
     "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
     "illumination_label_association": {
-      "normalized_mutual_information": 0.142,
+      "normalized_mutual_information": 0.128,
       "bands": {
         "day": {
           "annotated": 86,
-          "nominal": 244,
+          "nominal": 241,
           "unlabelled": 73,
-          "total": 403
+          "total": 400
         },
         "golden": {
           "annotated": 7,
-          "nominal": 0,
+          "nominal": 3,
           "unlabelled": 21,
-          "total": 28
+          "total": 31
         },
         "nautical_twilight": {
           "annotated": 7,
