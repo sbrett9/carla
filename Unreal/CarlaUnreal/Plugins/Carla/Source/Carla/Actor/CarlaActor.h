@@ -14,6 +14,8 @@
 #include "Carla/Walker/WalkerController.h"
 #include "Carla/Traffic/TrafficLightState.h"
 #include "Carla/Server/CarlaServerResponse.h"
+#include "Components/ActorComponent.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 #include <util/disable-ue4-macros.h>
 #include "carla/rpc/ActorState.h"
@@ -160,6 +162,21 @@ public:
   void SetRenderSetMembership(const FRenderSetMembership &InMembership)
   {
     RenderSetMembership = InMembership;
+  }
+
+  /// What the server turned off when a session parked this actor, so that lending it again turns
+  /// on exactly that and nothing more. Empty while the actor is not quieted.
+  struct FQuietedTicks
+  {
+    bool bQuieted = false;
+    bool bActorTickWasEnabled = false;
+    bool bWasHidden = false;
+    TArray<TWeakObjectPtr<UActorComponent>> Components;
+  };
+
+  FQuietedTicks &GetQuietedTicks()
+  {
+    return QuietedTicks;
   }
 
   /// What the scenario's author asserts of the vehicle this actor draws, where a co-simulation
@@ -487,6 +504,8 @@ private:
   TArray<IdType> Children;
 
   FRenderSetMembership RenderSetMembership;
+
+  FQuietedTicks QuietedTicks;
 
   FActorSupervision Supervision;
 
