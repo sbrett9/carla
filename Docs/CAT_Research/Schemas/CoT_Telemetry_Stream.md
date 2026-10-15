@@ -1,5 +1,15 @@
 # Cursor-on-Target telemetry stream (UDP)
 
+| | |
+|---|---|
+| File | one UDP datagram of the live feed: one CoT event for one vehicle at one instant |
+| Schema | `CarlaControl/schemas/cot_telemetry.xsd`, with `cot_event_body.xsd` |
+| Schema id | `urn:carla-sumo-capture:schema:cot-telemetry:1` |
+| Format version | 1 |
+| Version field | none: a datagram carries no format version of these tools; `version="2.0"` is the CoT event version |
+
+## Description
+
 The tools can send each vehicle's position as a live Cursor-on-Target (CoT) feed over UDP, for a TAK client or any other CoT receiver.\
 Each UDP datagram holds exactly one CoT `<event>`: one vehicle at one instant.
 
@@ -20,7 +30,7 @@ The event's own parts are in `cot_event_body.xsd`.\
 The schema also includes that file.\
 All three files must sit in one folder.
 
-## Who sends it and who receives it
+## Writers and readers
 
 Two tools send it.\
 Both format events with `carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot`.
@@ -42,7 +52,28 @@ There is no handshake and no acknowledgment.\
 A receiver listens on the port and parses each datagram as one XML document.\
 Datagrams are UTF-8 and carry no XML declaration.
 
-## The event
+## How the stream differs from the truth sidecar
+
+- It never carries what depends on a picture: `in_frame`, the box fields, occlusion, `lights`, `pose_source`, `<_box3d>` or `<_supervision>`.
+- A SUMO bridge datagram leaves out `type_id`, `special_type`, `role_name` and `marked`.\
+  Those fields hold the scenario author's names for its vehicle types and flows.\
+  They also say which vehicles it planted.\
+  The bridge's XML and CSV files keep them.
+- `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed.\
+  This lets an operator see them.\
+  The written files never do.
+- It carries `_capture` and `_solar` inside each event's `<detail>`.\
+  A sidecar holds the solar state once, on its container.\
+  The sidecar's `_solar` also has the latitude, longitude and the illumination band.
+- There is no container.\
+  The stream therefore has no format version and no record of what made it.
+- The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper.\
+  CARLA's is the height of the body's origin with the drape offset removed.\
+  It therefore includes the origin's height above the ground.
+
+## Fields
+
+### The event
 
 ```
 <event version uid type how time start stale>
@@ -120,31 +151,6 @@ Datagrams are UTF-8 and carry no XML declaration.
 
 If reading the server's solar state fails, `_solar` is left out.
 
-## How the stream differs from the truth sidecar
-
-- It never carries what depends on a picture: `in_frame`, the box fields, occlusion, `lights`, `pose_source`, `<_box3d>` or `<_supervision>`.
-- A SUMO bridge datagram leaves out `type_id`, `special_type`, `role_name` and `marked`.\
-  Those fields hold the scenario author's names for its vehicle types and flows.\
-  They also say which vehicles it planted.\
-  The bridge's XML and CSV files keep them.
-- `--marked-affiliation` can give the planted vehicles a different affiliation in the live feed.\
-  This lets an operator see them.\
-  The written files never do.
-- It carries `_capture` and `_solar` inside each event's `<detail>`.\
-  A sidecar holds the solar state once, on its container.\
-  The sidecar's `_solar` also has the latitude, longitude and the illumination band.
-- There is no container.\
-  The stream therefore has no format version and no record of what made it.
-- The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper.\
-  CARLA's is the height of the body's origin with the drape offset removed.\
-  It therefore includes the origin's height above the ground.
-
-## Format version
-
-A datagram carries no format version defined by these tools.\
-`version="2.0"` is the CoT event version.\
-If you write a receiver, make it ignore attributes and elements it does not know, as CoT receivers do.
-
 ## Example
 
 A SUMO bridge datagram:
@@ -172,3 +178,9 @@ A `carla-sctmv` datagram for a body lent to a SUMO vehicle, laid out for reading
   </detail>
 </event>
 ```
+
+## Versions
+
+A datagram carries no format version defined by these tools.\
+`version="2.0"` is the CoT event version.\
+If you write a receiver, make it ignore attributes and elements it does not know, as CoT receivers do.

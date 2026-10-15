@@ -5,9 +5,10 @@
 | File | `<scenario>.display.json`, beside the scenario's `.sumocfg` |
 | Schema | `CarlaControl/schemas/display_convention.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:display-convention:1` |
-| Format version | 1, in `convention_version` |
+| Format version | 1 |
+| Version field | `convention_version` |
 
-## What it is
+## Description
 
 A Cursor-on-Target (CoT) type carries an affiliation: `a-n-G-E-V` is neutral, `a-f-G-E-V` friendly.\
 A TAK client colors each track by it.\
@@ -24,7 +25,7 @@ In a hand-written route file, whose types name no class, it is the vehicle type'
 
 A population the convention does not name takes the run's default, `carla-cot-telemetry --affiliation`.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - A scenario developer writes it, beside the scenario, named for the stem of the scenario's `.sumocfg`: `Shahid_Bahonar_Port_PatternOfLife.display.json` for `Shahid_Bahonar_Port_PatternOfLife.sumocfg`.
 - `carla-cot-telemetry` reads it: the file `--display-convention` names, or any convention file beside `--config`.\
@@ -60,11 +61,6 @@ The affiliation letters, as a CoT type spells them:
 - `o` none specified
 - `x` other
 
-## Versions
-
-This page describes version 1, the only version.\
-A file with no `convention_version`, or any other value, is refused.
-
 ## Example
 
 `Import/Shahid_Bahonar_Port_PatternOfLife.display.json`, shortened:
@@ -83,3 +79,8 @@ A file with no `convention_version`, or any other value, is refused.
   }
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+A file with no `convention_version`, or any other value, is refused.

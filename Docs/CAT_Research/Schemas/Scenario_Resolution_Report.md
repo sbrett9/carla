@@ -5,9 +5,10 @@
 | File | `<scenario_id>.resolution.json`, with `<scenario_id>.resolution.md` beside it |
 | Schema | `CarlaControl/schemas/scenario_resolution.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:scenario-resolution:1` |
-| Format version | 1, in `resolution_version` |
+| Format version | 1 |
+| Version field | `resolution_version` |
 
-## What it is
+## Description
 
 The resolution report states what a scenario compile resolved, so its author can check it against what they meant.\
 It lists:
@@ -31,7 +32,7 @@ The `.md` file is the same report formatted for reading.
 This is not the run resolution report.\
 A capture run writes `run.resolution.json` about one launch (see [Run resolution report](Run_Resolution_Report.md)).
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-compile-scenario` writes it into the output folder on every compile.\
   A refused compile writes only the report, marked `refused`, with every refusal.\
@@ -147,15 +148,6 @@ The lock's record (see [Scenario lock](Scenario_Lock.md)) and, beside it:
 
 When the run was skipped, it is `{"ran": false, "reason": "..."}`.
 
-## Versions
-
-This page describes version 1, the only version.\
-No tool reads the report as input.\
-In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
-
-The skill's recorded examples leave out `producer`, which names the build and the time.\
-They are still version 1.
-
 ## Example
 
 `Arapahoe_I25_SupervisionCheck.resolution.json` is in `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck/` in a distribution.\
@@ -192,3 +184,12 @@ A few sections:
   "...": "..."
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+No tool reads the report as input.\
+In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
+
+The skill's recorded examples leave out `producer`, which names the build and the time.\
+They are still version 1.

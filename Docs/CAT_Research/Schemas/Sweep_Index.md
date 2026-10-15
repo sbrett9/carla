@@ -5,9 +5,10 @@
 | File | `<sweep_id>.sweep-index.json`, in the sweep's output folder |
 | Schema | `CarlaControl/schemas/sweep_index.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:sweep-index:1` |
-| Format version | 1, in `sweep_version` (the version of the sweep compiled) |
+| Format version | 1 |
+| Version field | `sweep_version` (the version of the sweep compiled) |
 
-## What it is
+## Description
 
 The sweep index lists what a sweep compiled.\
 A sweep is many runs of one scenario with parameters varied.\
@@ -21,7 +22,7 @@ For every member it gives:
 It also lists every counterfactual pair (two members that differ in one actor only) and every finding.\
 The index is how you find the member that holds a given combination of values and tell two members apart.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-compile-scenario --sweep FILE --out-dir DIR` writes it into `DIR`, beside the members' folders.\
   Each member is compiled in full into `DIR/<member id>/`, with its own specification, lock, resolution report and supervision plan.
@@ -79,14 +80,6 @@ The index is how you find the member that holds a given combination of values an
 | `trajectories_expected_to_match` | constant `false` | Car-following reacts to what is in front, so later trajectories differ. |
 | `statement` | string | The same, in words. |
 
-## Versions
-
-This page describes version 1, the only version.\
-No tool reads an index as input.\
-In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
-
-The skill's recorded example leaves out `producer` but is still version 1.
-
 ## Example
 
 The authoring skill's `examples/counterfactual/probe_standoff_pairs.sweep-index.json`, shortened:
@@ -123,3 +116,11 @@ The authoring skill's `examples/counterfactual/probe_standoff_pairs.sweep-index.
   "outcome": "compiled"
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+No tool reads an index as input.\
+In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
+
+The skill's recorded example leaves out `producer` but is still version 1.

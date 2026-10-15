@@ -5,9 +5,10 @@
 | File | the `epoch` object of a scenario specification, or a file of its own such as `<site>.epoch.json` |
 | Schema | `CarlaControl/schemas/epoch.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:epoch:1` |
-| Format version | 1, in `epoch_version` |
+| Format version | 1 |
+| Version field | `epoch_version` |
 
-## What it is
+## Description
 
 SUMO counts simulated seconds from zero and knows nothing else about time.\
 The epoch says what simulated second zero is in civil time at the site.\
@@ -27,7 +28,7 @@ Half-hour and quarter-hour offsets are ordinary: Iran is +03:30.
 The time zone name is carried for a reader and never looked up.\
 Two machines with different time zone databases therefore always agree.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - A scenario developer writes it, in the specification's `epoch` block.\
   The scenario compiler checks it (checks 33 and 34) and copies it into the scenario lock.
@@ -62,11 +63,6 @@ No other field is allowed.
 The SHA-256 of the epoch, written with its keys sorted and a two-space indent, is its `epoch_block_sha256`.\
 The scenario lock and every run record name the epoch by it.
 
-## Versions
-
-This page describes version 1, the only version.\
-An epoch with no `epoch_version`, or any value other than 1, is refused: a time declaration is never read in part.
-
 ## Example
 
 Arapahoe County, Colorado, on a September morning under Mountain Daylight Time:
@@ -87,3 +83,8 @@ Arapahoe County, Colorado, on a September morning under Mountain Daylight Time:
 ```
 carla-drive --scenario Arapahoe_I25_SupervisionCheck.sumocfg --world-package Arapahoe_I25.cwp --epoch arapahoe.epoch.json --illumination advance --solar-rate 1.0
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+An epoch with no `epoch_version`, or any value other than 1, is refused: a time declaration is never read in part.

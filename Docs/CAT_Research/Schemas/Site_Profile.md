@@ -5,9 +5,10 @@
 | File | any name, passed to `carla-capture --site-profile` |
 | Schema | `CarlaControl/schemas/site_profile.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:site-profile:1` |
-| Format version | 1, in `site_profile_version` |
+| Format version | 1 |
+| Version field | `site_profile_version` |
 
-## What it is
+## Description
 
 A site profile holds the facts about one machine that a capture run needs:
 
@@ -31,7 +32,7 @@ If no profile names `sumo.home`, the session looks for SUMO in this order:
 - the checkout's staged SUMO
 - a search of `SUMO_HOME` and `PATH`
 
-## Who writes it and who reads it
+## Writers and readers
 
 - You write it, usually once per machine.\
   `carla-capture --write-site-profile PATH` writes this machine's current values as a file to edit.
@@ -65,11 +66,6 @@ The launch then refuses it by name (run check 37).\
 A refusal by name says more than a type error.\
 `sumo.home` empty is refused the same way.
 
-## Versions
-
-This page describes version 1, the only version.\
-A file with no `site_profile_version`, or any value other than 1, is refused.
-
 ## Example
 
 ```json
@@ -88,3 +84,8 @@ A file with no `site_profile_version`, or any value other than 1, is refused.
   }
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+A file with no `site_profile_version`, or any value other than 1, is refused.

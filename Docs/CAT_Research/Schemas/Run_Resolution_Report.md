@@ -5,9 +5,10 @@
 | File | `run.resolution.json`, beside the run result |
 | Schema | `CarlaControl/schemas/run_resolution.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:run-resolution:1` |
-| Format version | 1, in `resolution_version` |
+| Format version | 1 |
+| Version field | `resolution_version` |
 
-## What it is
+## Description
 
 The run resolution report records what one `carla-capture` launch resolved and what its checks found:
 
@@ -24,7 +25,7 @@ The scenario compiler writes `<scenario_id>.resolution.json` about a compile (se
 This one is about a run.\
 It is always named after the run result: `run.resolution.json` by default.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-capture` writes it beside the run result, as `<stem>.resolution.json`.\
   It is written on every path that gets as far as reading the configuration: after a usage error, after the offline checks refuse and after they accept.\
@@ -54,16 +55,6 @@ The report also records a resolved value that a check then refused.\
 So a value here does not always have its field's type.\
 An empty path in the site profile, for example, appears here as `""` and is the reason the launch was refused (run check 37).
 
-## Versions
-
-This page describes version 1, the only version.\
-Because no tool reads the report back, no tool refuses one.\
-Read version 1 and refuse a newer version rather than read it in part.
-
-A file written before October 7, 2026 has no `producer`.\
-It is possible that it names the check catalog differently.\
-It is still version 1.
-
 ## Example
 
 A launch refused by the offline checks, shortened:
@@ -86,3 +77,13 @@ A launch refused by the offline checks, shortened:
   "site_profile": {"source": "site profile /home/me/site.profile.json", "...": "..."}
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+Because no tool reads the report back, no tool refuses one.\
+Read version 1 and refuse a newer version rather than read it in part.
+
+A file written before October 7, 2026 has no `producer`.\
+It is possible that it names the check catalog differently.\
+It is still version 1.

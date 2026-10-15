@@ -1,10 +1,14 @@
 # PNG text chunk `carla:solar`
 
-**Schema:** `CarlaControl/schemas/png_chunk_solar.schema.json` (JSON Schema 2020-12)\
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-solar:1`\
-**Format version described:** 1
+| | |
+|---|---|
+| File | the `carla:solar` text chunk of every still a recorder writes: the sun the world reported on the still's tick |
+| Schema | `CarlaControl/schemas/png_chunk_solar.schema.json` (JSON Schema 2020-12) |
+| Schema id | `urn:carla-sumo-capture:schema:png-chunk-solar:1` |
+| Format version | 1 |
+| Version field | `format_version` |
 
-## What it is
+## Description
 
 `carla:solar` is the sun the world reported on the tick nearest the still's pixels.\
 It also carries the illumination band of that sun.\
@@ -14,7 +18,7 @@ The truth sidecar's `<_solar>` element carries the same values.
 The chunk is a PNG `tEXt` chunk with the keyword `carla:solar`.\
 It holds one line of compact JSON.
 
-## Who writes it and when
+## Writers and readers
 
 The CarlaNet recorder writes it into a still whenever the world reported a sun for that frame.\
 A still whose world reported no sun has no `carla:solar` chunk and no `<_solar>` in its sidecar.\
@@ -53,20 +57,20 @@ Each band includes its upper edge.
 Near the horizon, the two elevations differ by up to a few tenths of a degree.\
 That is a large share of a low sun's elevation.
 
-## Format version
-
-This page describes format version 1.\
-A chunk without `format_version` was written before chunks carried one and is version 1.\
-Readers read a version they know.\
-They refuse a newer one by name rather than reading it in part.\
-They read a chunk with no version as version 1.
-
 ## Example
 
 ```json
 {"format_version":1,"solar_time":7.45,"date":"2026-09-29","time_zone":-6,"lat":39.59431,"lon":-104.88449,"sun_elevation_deg":5.549088,"sun_azimuth_deg":97.826561,"advancing":false,"rate":0,"sun_corrected_elevation_deg":5.694,"illumination_band":"golden","illumination_band_elevation":"refraction_corrected"}
 ```
 
-## Checking a file
+## Checks
 
 `carla-validate <capture folder>` checks this chunk in every still of a capture.
+
+## Versions
+
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+Readers read a version they know.\
+They refuse a newer one by name rather than reading it in part.\
+They read a chunk with no version as version 1.

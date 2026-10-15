@@ -1,5 +1,15 @@
 # Bare-earth grid (`bareearth.bin` in a `.cwp`)
 
+| | |
+|---|---|
+| File | `bareearth.bin` in a `.cwp`: the drape offset and the bare-earth height at each grid point |
+| Schema | none: a binary layout, described on this page |
+| Schema id | none |
+| Format version | 1 |
+| Version field | none: the first four bytes, the magic `CWP1`, carry it |
+
+## Description
+
 `bareearth.bin` holds two height grids over a draped world (drivable surface fitted to the imagery point by point):
 
 - the offset grid: how far the drivable surface was raised or lowered at each grid point to sit on the photoreal imagery
@@ -15,7 +25,7 @@ Tools use the grids to:
 - place SUMO-driven vehicles on the ground
 - give the SUMO bridge's telemetry a ground height
 
-## Who writes it and who reads it
+## Writers and readers
 
 CarlaNet's `WorldPackage.Write` writes it with the rest of the package.\
 When the world is built, the same values are published to the server.\
@@ -32,7 +42,9 @@ These read it:
   It reads the entry from a `.cwp`, or the same bytes from a loose `.bin` file.\
   `carla-cot-telemetry` uses it for ground heights.
 
-## Layout
+## Fields
+
+### Layout
 
 All values are little-endian.\
 There is no padding.\
@@ -60,7 +72,7 @@ The header repeats seven values of `world.json` so the file describes itself.\
 A reader that has both makes sure that they agree.\
 The Unreal importer refuses a file whose columns or rows differ from the manifest's.
 
-## Grid order and position
+### Grid order and position
 
 Both grids are in row-major order.\
 The value for column `c` and row `r` is at index `r × columns + c`.\
@@ -85,7 +97,7 @@ The cell size is `TerrainResolutionMeters`.
 A SUMO position is in the network's own meters, where y points north.\
 To look one up, negate its y: CARLA (x, y) = SUMO (x, −y).
 
-## Values
+### Values
 
 - The ground grid holds absolute WGS84 ellipsoidal heights, not heights relative to the origin.\
   On a world near Denver they are near 1,700 m.\
@@ -105,31 +117,13 @@ Readers sample the grids differently between points:
   It takes the point at the minimum-x, minimum-y corner of the cell the position falls in.\
   Outside the grid it has no answer and reports the configured constant height.
 
-## Digests
+### Digests
 
 `BareEarthOffsetSha1` in `world.json` is the SHA-1 digest of the offset grid's `4 × N` bytes, exactly as stored.\
 `BareEarthDtmSha1` is the same for the ground grid's `4 × N` bytes.\
 Both are in lowercase hexadecimal.\
 A server holding the world returns the same two digests from `get_bare_earth_digest`.\
 So a client can prove that a package's grids are the loaded world's without fetching them.
-
-## Format version
-
-The magic carries the version: it reads `CWP1` as a big-endian word.\
-The trailing `1` is the format version.\
-There is only version 1.\
-Every reader refuses a file whose first four bytes are not the magic:
-
-- CarlaNet refuses it as "not a world-package grid".\
-  It also refuses a grid with fewer than 2 columns or rows.\
-  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
-- The Unreal importer refuses it.\
-  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
-- carlacontrol's `BareEarthGrid` refuses it.\
-  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
-
-If the layout changes, the magic number changes too.\
-So an older reader refuses a new layout instead of reading it wrongly.
 
 ## Example
 
@@ -172,5 +166,24 @@ magic, lat, lon, h0, min_x, min_y, cell, cols, rows = struct.unpack_from("<idddd
 assert magic == 0x43575031 and len(raw) == 60 + 8 * cols * rows
 offset = np.frombuffer(raw, "<f4", cols * rows, 60).reshape(rows, cols)
 ground = np.frombuffer(raw, "<f4", cols * rows, 60 + 4 * cols * rows).reshape(rows, cols)
+
 # ground[r, c] is the bare-earth height at CARLA (min_x + c * cell, min_y + r * cell)
 ```
+
+## Versions
+
+The magic carries the version: it reads `CWP1` as a big-endian word.\
+The trailing `1` is the format version.\
+There is only version 1.\
+Every reader refuses a file whose first four bytes are not the magic:
+
+- CarlaNet refuses it as "not a world-package grid".\
+  It also refuses a grid with fewer than 2 columns or rows.\
+  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
+- The Unreal importer refuses it.\
+  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
+- carlacontrol's `BareEarthGrid` refuses it.\
+  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
+
+If the layout changes, the magic number changes too.\
+So an older reader refuses a new layout instead of reading it wrongly.

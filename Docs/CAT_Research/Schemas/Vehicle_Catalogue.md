@@ -1,5 +1,15 @@
 # Vehicle catalog (`vehicles.catalogue.json`)
 
+| | |
+|---|---|
+| File | `vehicles.catalogue.json`: the measurements of every vehicle body CARLA can draw and the classes a scenario asks for |
+| Schema | `CarlaControl/schemas/vehicle_catalogue.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:vehicle-catalogue:1` |
+| Format version | 1 |
+| Version field | `catalogue_version` |
+
+## Description
+
 The vehicle catalog lists every vehicle body CARLA can draw, with its measurements.\
 It groups the bodies into the classes a scenario asks for.\
 It is the one source of three things:
@@ -20,7 +30,7 @@ The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_B
 - Schema: `CarlaControl/schemas/vehicle_catalogue.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-catalogue:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 `CarlaControl/scripts/make_vehicle_catalogue.py` (`VehicleCatalogueBuilder`) writes it against a running CARLA server.\
 The script does these steps:
@@ -245,31 +255,6 @@ A reader refuses to place a body whose measurement failed.
 | `drift_margin` | number | | no | A lamp also needs more than this many times the largest difference between two images of the same state. |
 | `average_frames` | integer | | no | Frames averaged per image. |
 
-## Format version
-
-`catalogue_version` is 1.\
-There is no other version.\
-Every catalog the builder wrote carries it, so a file without it is not a catalog.
-
-- carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that declares 1.\
-  They refuse any other value, or none.\
-  For a newer version, the message says the file was written by a newer release.
-- `VehicleCatalogue.load` then checks the file against the schema.\
-  It refuses a file that does not match and names each problem.\
-  Every vehicle and class entry must be complete.\
-  A header field that is present must have the right shape.\
-  A header field that is absent reads as empty.
-
-`carlacontrol.WorldFileValidator`, given the catalog's folder, checks:
-
-- the whole catalog against its schema and the builder's rules
-- that its digest matches its content
-- `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives
-- `vehicle_body_widths.json`, where it is present
-
-`carla-validate catalogue` runs it in a distribution.\
-From a checkout, run `carla-validate CarlaControl/catalogue`.
-
 ## Example
 
 Trimmed to one body and one class:
@@ -319,3 +304,28 @@ Trimmed to one body and one class:
   ]
 }
 ```
+
+## Versions
+
+`catalogue_version` is 1.\
+There is no other version.\
+Every catalog the builder wrote carries it, so a file without it is not a catalog.
+
+- carlacontrol's `VehicleCatalogue` and CarlaNet's `VehicleCatalogue` read only a catalog that declares 1.\
+  They refuse any other value, or none.\
+  For a newer version, the message says the file was written by a newer release.
+- `VehicleCatalogue.load` then checks the file against the schema.\
+  It refuses a file that does not match and names each problem.\
+  Every vehicle and class entry must be complete.\
+  A header field that is present must have the right shape.\
+  A header field that is absent reads as empty.
+
+`carlacontrol.WorldFileValidator`, given the catalog's folder, checks:
+
+- the whole catalog against its schema and the builder's rules
+- that its digest matches its content
+- `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives
+- `vehicle_body_widths.json`, where it is present
+
+`carla-validate catalogue` runs it in a distribution.\
+From a checkout, run `carla-validate CarlaControl/catalogue`.

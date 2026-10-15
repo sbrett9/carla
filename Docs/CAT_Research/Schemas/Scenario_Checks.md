@@ -5,9 +5,10 @@
 | File | `checks.json`, beside the authoring skill's `SKILL.md` |
 | Schema | `CarlaControl/schemas/scenario_checks.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:scenario-checks:1` |
-| Format version | 1, in `checks_version` |
+| Format version | 1 |
+| Version field | `checks_version` |
 
-## What it is
+## Description
 
 `checks.json` lists every check the scenario compiler runs, by its stable id, with what it compares and what it can conclude.\
 A finding in a compile's resolution report cites a check by this id.
@@ -19,7 +20,7 @@ The list is in the order the compiler runs the checks, which is why the ids are 
 These are the compiler's checks.\
 A capture run's checks are a separate list with their own numbers, the carla-capture run checks, which a run's findings cite.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-compile-scenario --write-checks PATH` writes it, generated from the compiler's own list.\
   It ships with the authoring skill.\
@@ -43,12 +44,6 @@ A capture run's checks are a separate list with their own numbers, the carla-cap
 | `checks[].status` | `compiler`, `world_build`, `not_built` or `retired` | yes | Where the check is carried out: by the compiler, by the world build, not yet anywhere, or no longer. |
 | `checks[].prevents` | string | yes | The failure it exists to prevent. |
 
-## Versions
-
-This page describes version 1, the only version.\
-No tool reads the file as input.\
-In a reader of your own, read version 1 and refuse a newer version rather than read it in part.
-
 ## Example
 
 ```json
@@ -70,3 +65,9 @@ In a reader of your own, read version 1 and refuse a newer version rather than r
   ]
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+No tool reads the file as input.\
+In a reader of your own, read version 1 and refuse a newer version rather than read it in part.

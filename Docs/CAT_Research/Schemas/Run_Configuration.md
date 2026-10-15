@@ -5,9 +5,10 @@
 | File | `<name>.run.json` and a run's `run.effective.json` |
 | Schema | `CarlaControl/schemas/run_configuration.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:run-configuration:1` |
-| Format version | 1, in `run_configuration_version` |
+| Format version | 1 |
+| Version field | `run_configuration_version` |
 
-## What it is
+## Description
 
 A run configuration describes one capture run: which compiled scenario to bind, which window of simulated time to render, the cameras and how the run is paced, lit and recorded.\
 You pass it to `carla-capture --run`.\
@@ -37,7 +38,7 @@ Passing it back to `carla-capture --run` on any machine reproduces the run.
 Positions are in CARLA's frame: meters, x east, y south.\
 North is -y.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - You write it, by hand or from a script.\
   A scenario developer usually writes one per scenario window.\
@@ -169,15 +170,6 @@ Each object in `capture.channels` takes these fields:
 | `exposure_fstop` | number | f-number | `4.0` | Aperture, 1 to 32. |
 | `exposure_compensation_ev` | number | EV | `0.0` | Exposure compensation, -15 to +15, under either method. |
 
-## Versions
-
-This page describes version 1, the only version.\
-A document without `run_configuration_version` is read as version 1.
-
-A document that declares a newer version is refused.\
-The message says to use the release that wrote it.\
-Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).
-
 ## Example
 
 `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json`: one stare camera over the scenario's `dwell_golden` window.\
@@ -210,3 +202,12 @@ Run it unattended, with the result written to a path you choose:
 ```
 carla-capture --run Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe --caller unattended --result out/check.result.json
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+A document without `run_configuration_version` is read as version 1.
+
+A document that declares a newer version is refused.\
+The message says to use the release that wrote it.\
+Any other value, such as `0` or `"1"`, is refused, because the field accepts only `1` (run check 1).

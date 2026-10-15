@@ -1,5 +1,15 @@
 # SUMO bridge table (`carla-cot-telemetry --csv`) and its summary
 
+| | |
+|---|---|
+| File | the file `carla-cot-telemetry --csv` writes, one row per vehicle per update, with `<name>.summary.json` beside it |
+| Schema | `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json`; the summary's is `sumo_cot_telemetry_summary.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1`; the summary's is `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1` |
+| Format version | 1 |
+| Version field | `format_version`, in the summary beside the CSV |
+
+## Description
+
 Given `--csv <file>`, `carla-cot-telemetry` writes one row per vehicle per update of a SUMO run.\
 The rows hold the same vehicles and instants as its [event file](SUMO_CoT_Event_File.md), as a plain table.
 
@@ -13,7 +23,7 @@ Any CSV reader can therefore read it.
 - Summary schema: `CarlaControl/schemas/sumo_cot_telemetry_summary.schema.json` (JSON Schema)
 - Summary schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 `carlacontrol.SumoCotBridge` writes both.\
 The table schema is generated from the bridge's column list, `SumoCotBridge.CSV_COLUMNS`.\
@@ -23,7 +33,9 @@ The two therefore cannot differ.
 Given a folder holding them, `carla-validate` checks the CSV against the table schema and the summary against its schema.\
 A CSV with no summary beside it is noted as format version 1.
 
-## The CSV
+## Fields
+
+### The CSV
 
 Comma separated, UTF-8, with a header line.\
 A value with a comma in it, such as `color`, is quoted.
@@ -67,7 +79,7 @@ Every column is present in every row.
 
 If a vehicle's id is `--marked-vehicle` (`orbiter` by default) or is among a legacy labels file's `marked_ids`, the vehicle is planted.
 
-## The summary
+### The summary
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -79,15 +91,6 @@ If a vehicle's id is `--marked-vehicle` (`orbiter` by default) or is among a leg
 The summary is named for the CSV's stem: `orbit_cot.csv` gets `orbit_cot.summary.json`.\
 It is written as the CSV is opened.\
 If the run stops early, the summary still exists.
-
-## Format version
-
-The CSV's format version is in its summary: `format_version` 1.\
-A CSV with no summary beside it was written before summaries existed and is version 1.
-
-`carla-validate` reads the version.\
-It refuses a CSV whose summary declares a version newer than it knows.\
-If you write a reader, make it refuse a CSV whose version it does not know.
 
 ## Example
 
@@ -110,3 +113,12 @@ time_utc,sim_time_s,uid,callsign,cot_type,how,lat,lon,hae_m,ce_m,le_m,course_deg
               "edge", "lane", "sumo_x", "sumo_y", "carla_x", "carla_y"]
 }
 ```
+
+## Versions
+
+The CSV's format version is in its summary: `format_version` 1.\
+A CSV with no summary beside it was written before summaries existed and is version 1.
+
+`carla-validate` reads the version.\
+It refuses a CSV whose summary declares a version newer than it knows.\
+If you write a reader, make it refuse a CSV whose version it does not know.

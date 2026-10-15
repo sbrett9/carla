@@ -1,5 +1,15 @@
 # World interface version
 
+| | |
+|---|---|
+| File | a version declared in `Unreal/CarlaUnreal/Config/DefaultWorldInterface.ini`, carried by every cooked package and recorded in every level package's `world.json` |
+| Schema | none: a `Major.Minor` pair, described on this page |
+| Schema id | none |
+| Format version | none |
+| Version field | none: the version is the content, `Major` and `Minor` in the `[WorldInterface]` section |
+
+## Description
+
 A generated world can be delivered on its own, as a level package.\
 It can then be installed into a CARLA package that was built separately.\
 The world interface version says which of those pairings work.
@@ -55,28 +65,6 @@ It is refused by 2.0 or 1.1.
 | 2.0 | 1.0 | no: Major differs |
 | 1.0 | 2.0 | no: Major differs |
 
-## When the version changes
-
-Major goes up for a change that stops a world already delivered from loading:
-
-- content a world refers to is renamed or deleted, the road materials especially
-- a class a world's assets store changes shape: `UGeoreferencedWorldSettings`, `URoadNetworkAsset` or `UBareEarthOffsetField`
-- the engine moves to a version that changes the cooked package format
-
-When Major goes up, Minor goes back to 0.
-
-Minor goes up for added content that a world can refer to.\
-Worlds built before the addition keep working.\
-Worlds built after it need a package that has it.
-
-Neither changes for anything a delivered world cannot observe:
-
-- gameplay code
-- server calls
-- tools
-- how a material looks
-- new maps in the base package
-
 ## For an Unreal tech artist making a level
 
 - A level package records the world interface version of the checkout it was cooked in.\
@@ -112,6 +100,13 @@ Neither changes for anything a delivered world cannot observe:
 If the world then fails to load, that is why.\
 Neither overrides a `world.json` of a newer format.
 
+## Fields
+
+| Part | Type | Meaning |
+|---|---|---|
+| `Major` | integer | Goes up for a change that stops a world already delivered from loading. When it goes up, `Minor` goes back to 0. |
+| `Minor` | integer | Goes up for added content that a world can refer to. Worlds built before the addition keep working. |
+
 ## Example
 
 A world packaged in a checkout that declares 1.3 has `"worldInterfaceMajor": 1` and `"worldInterfaceMinor": 3` in its `world.json`.\
@@ -125,3 +120,25 @@ package : world interface 1.0
 This world was not built for this package:
   - this package is minor 0, the world needs 3 or later
 ```
+
+## Versions
+
+Major goes up for a change that stops a world already delivered from loading:
+
+- content a world refers to is renamed or deleted, the road materials especially
+- a class a world's assets store changes shape: `UGeoreferencedWorldSettings`, `URoadNetworkAsset` or `UBareEarthOffsetField`
+- the engine moves to a version that changes the cooked package format
+
+When Major goes up, Minor goes back to 0.
+
+Minor goes up for added content that a world can refer to.\
+Worlds built before the addition keep working.\
+Worlds built after it need a package that has it.
+
+Neither changes for anything a delivered world cannot observe:
+
+- gameplay code
+- server calls
+- tools
+- how a material looks
+- new maps in the base package

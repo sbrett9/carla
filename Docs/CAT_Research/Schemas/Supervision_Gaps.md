@@ -1,5 +1,15 @@
 # Legacy supervision gaps (`<name>.supervision.json` beside a SUMO bridge run)
 
+| | |
+|---|---|
+| File | `<name>.supervision.json` beside a bridge run: the described gaps of a legacy scenario, placed on the run's clock |
+| Schema | `CarlaControl/schemas/supervision_gaps.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:supervision-gaps:1` |
+| Format version | 1 |
+| Version field | none: the file carries no version, so a reader takes it as version 1 |
+
+## Description
+
 Some of what a scenario asserts is an absence: a guard who never arrives at a tower.\
 No vehicle record can carry it, because there is no vehicle.
 
@@ -14,7 +24,7 @@ It labels the vehicle that deviates rather than describing a gap.
 - Schema: `CarlaControl/schemas/supervision_gaps.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:supervision-gaps:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 If the labels describe at least one gap, `carla-cot-telemetry --labels <file>.labels.json` writes it (`carlacontrol.SupervisionSidecar`).\
 If `--supervision <file>` is given, the file goes there.\
@@ -54,12 +64,6 @@ It also holds the window on the run's clock:
 | `end_utc` | string | | no | `epoch + end_s`. Present for a note that gives `end_s`. |
 | any other key | any | | no | The author's own, such as `tower_index`, `edge` or `edge_pos_m`. |
 
-## Format version
-
-The file carries no version.\
-It is version 1, like any file written before its kind carried a version.\
-It will not change again, because it serves only scenarios made before compiled scenarios.
-
 ## Example
 
 ```json
@@ -82,3 +86,9 @@ It will not change again, because it serves only scenarios made before compiled 
  ]
 }
 ```
+
+## Versions
+
+The file carries no version.\
+It is version 1, like any file written before its kind carried a version.\
+It will not change again, because it serves only scenarios made before compiled scenarios.

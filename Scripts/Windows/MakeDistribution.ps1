@@ -435,6 +435,11 @@ function Copy-UserDocs {
         $src = Join-Path $docsSrc $folder
         if (-not (Test-Path $src)) { throw "user documentation folder not found at $src" }
         Copy-Item -Recurse -Force -Path $src -Destination (Join-Path $docsDest $folder)
+        # The rules for an assistant that edits the pages (AGENTS.md, with the CLAUDE.md that loads
+        # it) belong to the checkout, not to a reader of the bundle.
+        foreach ($name in 'AGENTS.md', 'CLAUDE.md') {
+            Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $docsDest "$folder\$name")
+        }
     }
     Write-Info "[dist] docs: $($userDocFolders -join ', ') ($(@(Get-ChildItem -Recurse -File $docsDest).Count) files)"
     Add-ManifestRow -Component "user documentation ($($userDocFolders -join ', '))" `

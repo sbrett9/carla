@@ -5,9 +5,10 @@
 | File | `<scenario>.scenario.json` |
 | Schema | `skills/sumo-traffic-scenarios/schemas/scenario.schema.json` in a distribution, `CarlaControl/skills/sumo-traffic-scenarios/schemas/scenario.schema.json` in a checkout (`scenario.schema.json`) |
 | Schema id | `urn:carla-sumo-capture:schema:scenario:1` |
-| Format version | 1, in `spec_version` |
+| Format version | 1 |
+| Version field | `spec_version` |
 
-## What it is
+## Description
 
 A scenario specification is a SUMO scenario as its author writes it.\
 It describes:
@@ -30,7 +31,7 @@ Places are written by name.\
 The compiler resolves both.\
 Its resolution report (see [Scenario resolution report](Scenario_Resolution_Report.md)) states what each became.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - A scenario developer writes it, by hand, from a script (the `make_*_scenario.py` examples), or with the authoring skill's help.
 - `carla-compile-scenario` reads it and checks it against this schema first (check 53).\
@@ -184,11 +185,6 @@ Every actor that no instance names is written into the supervision plan as `unla
 So is every flow that no cohort names.\
 See [Supervision plan](Supervision_Plan.md).
 
-## Versions
-
-This page describes version 1, the only version.\
-The compiler refuses a specification with no `spec_version` or any other value (check 53).
-
 ## Example
 
 The authoring skill's minimal example, `examples/minimal/street_layout_minimal.scenario.json`, shortened:
@@ -229,3 +225,8 @@ The authoring skill's minimal example, `examples/minimal/street_layout_minimal.s
 ```
 carla-compile-scenario street_layout_minimal.scenario.json --out-dir Build/scenarios/street_layout_minimal
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+The compiler refuses a specification with no `spec_version` or any other value (check 53).

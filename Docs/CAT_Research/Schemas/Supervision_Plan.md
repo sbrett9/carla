@@ -5,9 +5,10 @@
 | File | `<scenario_id>.supervision.json`, in the compiled scenario's folder |
 | Schema | `CarlaControl/schemas/supervision_plan.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:supervision-plan:1` |
-| Format version | 1, in `supervision_plan_version` |
+| Format version | 1 |
+| Version field | `supervision_plan_version` |
 
-## What it is
+## Description
 
 The supervision plan holds a scenario's labels.\
 No other file carries them.\
@@ -36,7 +37,7 @@ The plan is bound to the compiled files by their digests.\
 It carries no time of writing.\
 Two compiles of one specification therefore write byte-for-byte identical plans.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-compile-scenario` writes it with the scenario's other files.\
   The scenario lock digests it.
@@ -108,12 +109,6 @@ The run manifest records them.
 | `labels`, `parameters`, `hard_negative_for` | as an instance's | |
 | `slots` | array | One per vehicle the schedule sends: `slot_key`, `aoi_ref`, `declared_start_s`, `declared_start_civil`, `declared_end_s`, `declared_end_civil` and `entity_id`. A skipped occasion has no slot. |
 
-## Versions
-
-This page describes version 1, the only version.\
-The co-simulation session reads only version 1.\
-It refuses any other version, including a plan with no version, because a field that moved silently is worse than one that is absent.
-
 ## Example
 
 `Arapahoe_I25_SupervisionCheck.supervision.json` is in `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck/` in a distribution.\
@@ -151,3 +146,9 @@ Shortened:
                 "refs": ["Arapahoe_I25_SupervisionCheck/through_transit"]}]
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+The co-simulation session reads only version 1.\
+It refuses any other version, including a plan with no version, because a field that moved silently is worse than one that is absent.

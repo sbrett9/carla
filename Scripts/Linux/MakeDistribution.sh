@@ -246,6 +246,9 @@ copy_user_docs() {
             exit 1
         fi
         cp -a "$root/Docs/CAT_Research/$folder" "$dist/docs/"
+        # The rules for an assistant that edits the pages (AGENTS.md, with the CLAUDE.md that loads
+        # it) belong to the checkout, not to a reader of the bundle.
+        rm -f "$dist/docs/$folder/AGENTS.md" "$dist/docs/$folder/CLAUDE.md"
     done
     echo "[dist] docs: ${user_doc_folders// /, } ($(find "$dist/docs" -type f | wc -l) files)"
     add_manifest_row "user documentation (${user_doc_folders// /, })" \

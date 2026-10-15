@@ -1,5 +1,15 @@
 # Solar frame (`solar.json` in a `.cwp`)
 
+| | |
+|---|---|
+| File | `solar.json` in a `.cwp`: the facts about the world's sun a start time is checked against |
+| Schema | `CarlaControl/schemas/solar_frame.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:solar-frame:1` |
+| Format version | 1 |
+| Version field | `solar_frame_version` |
+
+## Description
+
 `solar.json` holds the facts about a world's sun that a scenario's start time is checked against without a running server:
 
 - the origin the engine computes the sun's position from
@@ -16,7 +26,7 @@ The file never claims a civil time zone.
 - Schema: `CarlaControl/schemas/solar_frame.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:solar-frame:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 When the authoring reference set is published, carlacontrol's `SolarFrame` writes it from `world.json`'s origin.\
 The scenario compiler reads it through `WorldPackageReader.solar_frame()`.
@@ -43,17 +53,6 @@ The file is JSON, UTF-8, two-space indent, keys sorted.
 | `engine_daylight_saving` | boolean | | yes | Whether the engine applies daylight saving as it configures the world. Always `false`. |
 | `engine_solar_time_at_configure_hours` | number | hours | yes | The solar time the engine sets as it configures the world's georeference. Always 12.0. |
 
-## Format version
-
-`solar_frame_version` is 1.\
-There is no other version.\
-A file without it is version 1.
-
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than read part of it.\
-The refusal names the version and the newest version they read.\
-`WorldPackageReader` then checks the file against the schema.\
-If the file does not match, it refuses the file and names each problem.
-
 ## Example
 
 ```json
@@ -68,3 +67,14 @@ If the file does not match, it refuses the file and names each problem.
   "solar_frame_version": 1
 }
 ```
+
+## Versions
+
+`solar_frame_version` is 1.\
+There is no other version.\
+A file without it is version 1.
+
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than read part of it.\
+The refusal names the version and the newest version they read.\
+`WorldPackageReader` then checks the file against the schema.\
+If the file does not match, it refuses the file and names each problem.

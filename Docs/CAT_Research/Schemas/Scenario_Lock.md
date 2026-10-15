@@ -5,9 +5,10 @@
 | File | `<scenario_id>.lock.json`, in the compiled scenario's folder |
 | Schema | `CarlaControl/schemas/scenario_lock.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:scenario-lock:1` |
-| Format version | 1, in `lock_version` |
+| Format version | 1 |
+| Version field | `lock_version` |
 
-## What it is
+## Description
 
 The scenario lock records what one compiled scenario is bound to.\
 It holds:
@@ -24,7 +25,7 @@ The lock is how a run proves that the files it is about to drive are the ones th
 This is not the run lock.\
 A capture run writes `run.lock.json` about one run of the scenario (see [Run lock](Run_Lock.md)).
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-compile-scenario` writes it with the scenario's other files.\
   It writes it only for a compile that succeeds.
@@ -107,14 +108,6 @@ Every field is always present, except `producer` in a file written before Octobe
 
 If the compile was run with `--skip-dry-run`, it is `{"ran": false, "reason": "..."}` instead.
 
-## Versions
-
-This page describes version 1, the only version.\
-`carla-capture` and the co-simulation session read only version 1 and refuse any other version.\
-They also refuse a lock with no version.\
-A file written before October 7, 2026 has no `producer`.\
-It is still version 1.
-
 ## Example
 
 `Arapahoe_I25_SupervisionCheck.lock.json` is in `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck/` in a distribution.\
@@ -156,3 +149,11 @@ Shortened:
   "...": "..."
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+`carla-capture` and the co-simulation session read only version 1 and refuse any other version.\
+They also refuse a lock with no version.\
+A file written before October 7, 2026 has no `producer`.\
+It is still version 1.
