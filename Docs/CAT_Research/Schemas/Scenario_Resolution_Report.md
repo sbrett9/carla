@@ -158,7 +158,9 @@ They are still version 1.
 
 ## Example
 
-`Import/Arapahoe_I25_SupervisionCheck.resolution.json`, a few sections:
+`Arapahoe_I25_SupervisionCheck.resolution.json` is in `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck/` in a distribution.\
+In a checkout, it is in `Import/`.\
+A few sections:
 
 ```json
 {

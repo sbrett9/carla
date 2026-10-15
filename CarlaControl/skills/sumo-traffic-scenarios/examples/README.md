@@ -23,6 +23,7 @@ catalogue at the repository's.
 **Generated from a program.** `CarlaControl/scripts/make_sumo_scenario.py` writes the Gardnerville orbit as
 a specification — the orbit as three route phases, twenty laps held to 11 m/s — and compiles it into
 `Import/`, where the specification and its resolution report sit beside the compiled package.
+In a distribution, the same script is beside the scenario, `Scenarios/Gardnerville/make_sumo_scenario.py`.
 `CarlaControl/test/test_gardnerville_generator.py` holds both to what the script produces.
 
 After a deliberate change to what an example resolves to, record its report again with

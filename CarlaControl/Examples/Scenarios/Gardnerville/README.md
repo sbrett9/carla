@@ -108,6 +108,7 @@ This folder holds the rest:
 | `Gardnerville_Centerville_Lane.cwp` | The world package the level was made from. A world package is one generated world in one file. The compiler, `carla-drive` and `carla-capture` read it. |
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json` | The scenario specification. |
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit/` | The compiled scenario, ready to run. |
+| `make_sumo_scenario.py` | The script that writes the specification. Change it, not the specification. Run it here to write and compile the scenario again. |
 
 The level pack is a Windows pack, for a Win64 Development distribution.\
 A Linux distribution needs a pack cooked on Linux with `PackageWorld.sh`.\
@@ -360,11 +361,24 @@ This folder holds every input a rebuild needs:
 |---|---|
 | `Gardnerville_Centerville_Lane.osm` | The OpenStreetMap extract the world is built from. The build cuts the roads at its `<bounds>`. |
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json` | The scenario specification: the traffic and the orbiter's route. |
+| `make_sumo_scenario.py` | The script that writes the specification and compiles it. |
 
 The world was built with no areas file and no type map.\
 The vehicle catalog comes with the distribution, in `catalogue/`.\
-In a source checkout, `CarlaControl/scripts/make_sumo_scenario.py` writes the specification.\
-Change the script, not the specification.
+The script that writes the specification, `make_sumo_scenario.py`, is in this folder.\
+In a source checkout, it is `CarlaControl/scripts/make_sumo_scenario.py`.\
+Change the script, not the specification.\
+Then run it from the distribution's folder:
+
+```
+python Scenarios/Gardnerville/make_sumo_scenario.py
+```
+
+It writes the specification beside itself.\
+It reads the world package beside it, the catalog in `catalogue/` and the SUMO in `tools/sumo`.\
+Then it compiles the scenario into `Gardnerville_Centerville_Lane_NeighborhoodOrbit/`.\
+The new compiled scenario replaces the delivered one.\
+Its `--help` lists the settings, such as `--laps`.
 
 ### Building the world
 
@@ -437,7 +451,7 @@ Then compile again, as [Compiling the scenario](#compiling-the-scenario) shows.
 Read the resolution report.\
 This specification names all of its places by edge id.\
 If an edge has a new id, check 7 refuses the place that names it.\
-In a source checkout, run `make_sumo_scenario.py` with `--world-package` instead.\
+Or run `make_sumo_scenario.py` with `--world-package` naming the new package.\
 It writes the specification against that package and compiles it.
 
 [Writing a scenario](../../../../Docs/CAT_Research/Guides/Writing_A_Scenario.md) explains every field of the specification.

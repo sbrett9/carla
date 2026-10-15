@@ -64,8 +64,10 @@ Two optional files sit beside the extract and are found by name:
 ## Build the world
 
 ```
-carla-build-world --osm Import/Gardnerville_Centerville_Lane.osm --height-align drape --drape-cache-dir Build/drape-cache
+carla-build-world --osm osm/Gardnerville_Centerville_Lane.osm --height-align drape --drape-cache-dir drape-cache
 ```
+
+In a checkout, the same command reads `Import/Gardnerville_Centerville_Lane.osm` with `--drape-cache-dir Build/drape-cache`.
 
 **Always give `--height-align drape`.**\
 It seats the roads on the photoreal imagery point by point and writes the ground height grids into the package.\
@@ -115,7 +117,7 @@ Remove them by type with `--netconvert-arg`.\
 The Shahid Bahonar port world was built with these options:
 
 ```
-carla-build-world --osm Import/Shahid_Bahonar_Port.osm --height-align drape --no-road-filter --netconvert-arg "--remove-edges.by-type highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway"
+carla-build-world --osm Scenarios/Bahonar/Shahid_Bahonar_Port.osm --height-align drape --no-road-filter --netconvert-arg "--remove-edges.by-type highway.footway,highway.path,highway.steps,highway.cycleway,highway.pedestrian,highway.bridleway"
 ```
 
 Its type map and areas of interest sit beside the extract, where the build finds them.\
@@ -171,7 +173,8 @@ The build gives netconvert SUMO's own OSM type map first.\
 Then it gives yours.\
 Your file changes only the attributes it states, so a line can change one road type's permissions and leave its lanes and speed alone.
 
-The Shahid Bahonar port's `Import/Shahid_Bahonar_Port.typ.xml` sets one road type.\
+The Shahid Bahonar port's `Shahid_Bahonar_Port.typ.xml` sets one road type.\
+It sits beside the extract, in `Scenarios/Bahonar/` in a distribution or `Import/` in a checkout.\
 Without its comment, it reads:
 
 ```xml
@@ -250,15 +253,19 @@ The drape cache skips the terrain sampling on a rebuild of the same area.
 - The world, loaded on the server.\
   You can drive SUMO traffic in it right away (see [Writing a scenario](Writing_A_Scenario.md#running-and-looking-at-it)).
 
-To check a package, run `carla-validate Build/world-packages/<MapName>.cwp`.\
+To check a package, run `carla-validate world-packages/<MapName>.cwp`.\
 It checks every entry against its schema.\
-It checks the grids and digests against the manifest.
+It checks the grids and digests against the manifest.\
+From a checkout, name the package under `Build/world-packages/`.
 
 To find the network fingerprint a scenario must name, read `NetworkFingerprint` in the package's `world.json`:
 
 ```
-python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('Build/world-packages/Gardnerville_Centerville_Lane.cwp').read('world.json'))['NetworkFingerprint'])"
+python -c "import json, zipfile; print(json.loads(zipfile.ZipFile('world-packages/Gardnerville_Centerville_Lane.cwp').read('world.json'))['NetworkFingerprint'])"
 ```
+
+The command reads a package you built.\
+The shipped copy is `Scenarios/Gardnerville/Gardnerville_Centerville_Lane.cwp`.
 
 ## Building a world again
 
@@ -281,8 +288,10 @@ Also use it for a world built before the reference set existed.\
 An area edit changes no road, so it is no reason to build the world again.
 
 ```
-carla-publish-reference-set --package Build/world-packages/Gardnerville_Centerville_Lane.cwp --aoi Import/Gardnerville_Centerville_Lane.aoi.geojson
+carla-publish-reference-set --package world-packages/Gardnerville_Centerville_Lane.cwp --aoi Gardnerville_Centerville_Lane.aoi.geojson
 ```
+
+The areas file is in the folder the command runs from, or in `Import/` in a checkout.
 
 | Option | What it does |
 |---|---|

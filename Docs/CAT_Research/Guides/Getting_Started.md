@@ -402,9 +402,15 @@ An installed copy uses the current folder.
 | Run results and their records | `runs/` | `Build/runs/` |
 | `carla-sctmv` recordings | `SCTMV_recordings/` | `Build/SCTMV_recordings/` |
 | Inputs, such as OpenStreetMap extracts | the current folder, or named by argument | `Import/` |
-| Vehicle catalog | the copy installed with `carlacontrol` | `CarlaControl/catalogue/` |
+| Example OpenStreetMap extracts | `osm/`. Each example scenario's own extract is under `Scenarios/<Place>/` too. | `Import/` |
+| Example scenarios: the specification, the world package, the compiled scenario and the level pack | `Scenarios/<Place>/` | `CarlaControl/Examples/Scenarios/<Place>/`, with the compiled copies the tests check in `Import/` |
+| The script that writes an example scenario, `make_*_scenario.py` | `Scenarios/<Place>/`, beside the scenario it writes | `CarlaControl/scripts/` |
+| Vehicle catalog | `catalogue/`. A copy is also installed with `carlacontrol`. | `CarlaControl/catalogue/` |
 | Schemas | the copies installed with `carlacontrol` | `CarlaControl/schemas/` |
-| SUMO toolchain | whatever `SUMO_HOME`, `CARLA_NETCONVERT` and `PROJ_LIB` name, which `carla-env` sets | `Build/sumo-install/` |
+| The scenario-authoring skill, with its schemas and examples | `skills/sumo-traffic-scenarios/` | `CarlaControl/skills/sumo-traffic-scenarios/` |
+| These pages | `docs/` | `Docs/CAT_Research/` |
+| `PackageWorld` and `InstallWorld` | `world-tools/` | `Scripts/Windows/` and `Scripts/Linux/` |
+| SUMO toolchain | `tools/sumo/`. `carla-env` names it through `SUMO_HOME`, `CARLA_NETCONVERT` and `PROJ_LIB`. | `Build/sumo-install/` |
 
 So run the commands from one folder, usually the distribution's folder, or give a site profile and explicit paths.\
 A command run from another folder looks for its inputs there.\
@@ -429,5 +435,14 @@ Most are under `CarlaControl/scripts/`, but the names differ from the command na
 | `carla-sctmv` | `python CarlaControl/scripts/run_SCTMV.py` |
 
 These pages use the command names.\
+Where a page names a checkout folder, [Where things are written](#where-things-are-written) gives the folder a distribution uses.
+
+The scripts that write the example scenarios have no command name.\
+In a distribution, each sits beside the scenario it writes, under `Scenarios/<Place>/`.\
+Run it with `python`, for example `python Scenarios/Bahonar/make_bahonar_scenario.py`.\
+In a distribution, the script writes the specification beside itself.\
+It compiles the scenario into the scenario's folder.\
+From a checkout, the same scripts are under `CarlaControl/scripts/` and write to `Import/`.
+
 From a checkout, `carlanet` also needs its .NET assemblies.\
 Build them with `CarlaNet/python/build_wheel.ps1` or `build_wheel.sh`, or set `CARLANET_PUBLISH_DIR` to a folder `CarlaNet.Python` was published to.

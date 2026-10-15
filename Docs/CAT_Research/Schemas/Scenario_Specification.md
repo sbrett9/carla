@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | File | `<scenario>.scenario.json` |
-| Schema | `CarlaControl/skills/sumo-traffic-scenarios/schemas/scenario.schema.json` (`scenario.schema.json`) |
+| Schema | `skills/sumo-traffic-scenarios/schemas/scenario.schema.json` in a distribution, `CarlaControl/skills/sumo-traffic-scenarios/schemas/scenario.schema.json` in a checkout (`scenario.schema.json`) |
 | Schema id | `urn:carla-sumo-capture:schema:scenario:1` |
 | Format version | 1, in `spec_version` |
 

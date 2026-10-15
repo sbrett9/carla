@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | File | `<sweep>.sweep.json` |
-| Schema | `CarlaControl/skills/sumo-traffic-scenarios/schemas/sweep.schema.json` (`sweep.schema.json`) |
+| Schema | `skills/sumo-traffic-scenarios/schemas/sweep.schema.json` in a distribution, `CarlaControl/skills/sumo-traffic-scenarios/schemas/sweep.schema.json` in a checkout (`sweep.schema.json`) |
 | Schema id | `urn:carla-sumo-capture:schema:sweep:1` |
 | Format version | 1, in `sweep_version` |
 

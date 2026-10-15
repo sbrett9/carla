@@ -38,7 +38,9 @@ A first scenario goes in this order.\
 Build a world with `carla-build-world`.\
 Compile the scenario against its world package with `carla-compile-scenario`.\
 Then drive it with `carla-drive` or capture it with `carla-capture`.\
-`Scenarios/` holds ready examples to start from.
+`Scenarios/` holds ready examples to start from.\
+Each example ships with the script that writes it.\
+Change the script, then run it to write and compile the scenario again.
 
 ### The traffic-manager mode
 
@@ -71,7 +73,7 @@ It also checks that the installation is complete.
 | `tools/sumo/` | SUMO DIST_SUMO: `netconvert`, `sumo` and `duarouter`, with the PROJ data. There is no `sumo-gui`. |
 | `catalogue/` | The measured vehicle catalog that a scenario names. |
 | `osm/` | Example OpenStreetMap extracts to build worlds from. |
-| `Scenarios/` | Ready example scenarios. |
+| `Scenarios/` | Ready example scenarios, each with its world package, its level pack and the script that writes it. Some have run files for `carla-capture`. |
 | `docs/` | The user guides and the reference pages. |
 | `skills/` | The scenario-authoring skills. |
 | `world-tools/` | `PackageWorld` and `InstallWorld`, for worlds made elsewhere. |

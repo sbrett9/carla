@@ -282,8 +282,8 @@ The dwell spot is at about (-171.6, -672.0) in CARLA's frame.
 This example orbits a camera over that spot while SUMO drives the traffic.\
 The drive runs headless: with `--no-record` it opens no window and spawns no camera of its own.
 
-The paths are from the repository's root, where the compiled scenario is in `Import/` and the world package in `Build/world-packages/`.\
-With an installed distribution, give the paths to your own copies.
+The paths are a distribution's, where the compiled scenario and the world package are in `Scenarios/Arapahoe/`.\
+In a checkout, the compiled scenario is in `Import/` and the world package in `Build/world-packages/`.
 
 1. Start the server with the Arapahoe world loaded.\
    See [Getting started](Getting_Started.md#set-up).\
@@ -306,9 +306,9 @@ Until a drive ticks the world, frames come at the server's own rate.
 
 ```sh
 carla-drive \
-    --scenario Import/Arapahoe_I25_UnderpassDwell.sumocfg \
-    --world-package Build/world-packages/Arapahoe_I25.cwp \
-    --epoch Import/Arapahoe_I25_UnderpassDwell.scenario.json \
+    --scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg \
+    --world-package Scenarios/Arapahoe/Arapahoe_I25.cwp \
+    --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json \
     --no-record --real-time-factor 1.0 --steps 0
 ```
 
@@ -394,9 +394,9 @@ Unlike `carla-free-camera`, it can record what that camera sees.
 
 ```sh
 carla-drive \
-    --scenario Import/Arapahoe_I25_UnderpassDwell.sumocfg \
-    --world-package Build/world-packages/Arapahoe_I25.cwp \
-    --epoch Import/Arapahoe_I25_UnderpassDwell.scenario.json \
+    --scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg \
+    --world-package Scenarios/Arapahoe/Arapahoe_I25.cwp \
+    --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json \
     --real-time-factor 1.0 --steps 0 \
     --view free --camera-name NapOfEarth_2 --record-dir captures/flown
 ```

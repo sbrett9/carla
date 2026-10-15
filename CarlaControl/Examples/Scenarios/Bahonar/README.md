@@ -132,6 +132,8 @@ This folder holds the rest:
 | `Shahid_Bahonar_Port.cwp` | The world package the level was made from. A world package is one generated world in one file. The compiler, `carla-drive` and `carla-capture` read it. |
 | `Shahid_Bahonar_Port_PatternOfLife.scenario.json` | The scenario specification. |
 | `Shahid_Bahonar_Port_PatternOfLife/` | The compiled scenario, ready to run. It also holds a copy of the display convention for `carla-cot-telemetry`. |
+| `make_bahonar_scenario.py` | The script that writes the specification. Change it, not the specification. Run it here to write and compile the scenario again. |
+| `Shahid_Bahonar_Port_PatternOfLife.<window>.run.json` | Six run files for `carla-capture`, one per planted event. Each names the event's declared window and a camera over its place. |
 
 The level pack is a Windows pack, for a Win64 Development distribution.\
 A Linux distribution needs a pack cooked on Linux with `PackageWorld.sh`.\
@@ -216,18 +218,33 @@ The road network loaded from the level's own asset.
 
 A run needs the compiled scenario: the SUMO files, the supervision plan and a lock that names them all.\
 This folder holds it, in `Shahid_Bahonar_Port_PatternOfLife/`.\
-It was compiled at commit `692e09427` from the specification in this folder, against `Shahid_Bahonar_Port.cwp`.\
+It was compiled at commit `2f5ea7fe9` from the specification in this folder, against `Shahid_Bahonar_Port.cwp`.\
 So a run needs no compile first.
 
 Read `Shahid_Bahonar_Port_PatternOfLife.resolution.md` in that folder.\
 It says what each place, time and label resolved to.\
+It also lists the six capture windows the scenario declares, with their civil times.\
 The compile gives ten warnings.\
 Check 17 warns about each of the nine classes that draw one body.\
-Check 41 gives 0.128 for how much the light band tells about the label.\
-In the nautical and astronomical twilight bands, every entry is annotated.\
+Check 41 measures how much the light band tells about the label.\
+Over the 131 label entries the declared windows capture, that measure is 0.012.\
+In the astronomical twilight band, every labeled entry is nominal.\
+Over the whole week, at each departure, it is 0.128.\
+In the nautical and astronomical twilight bands, every entry is then annotated.\
 There the light band alone gives the label away.
 
-To compile it again, run this command.\
+To change the scenario, change `make_bahonar_scenario.py` in this folder, not the specification.\
+Then run it from the distribution's folder:
+
+```
+python Scenarios/Bahonar/make_bahonar_scenario.py
+```
+
+It writes the specification beside itself, compiles it into `Shahid_Bahonar_Port_PatternOfLife/` and writes the six run files.\
+It reads the world package beside it, the catalog in `catalogue/` and the SUMO in `tools/sumo`.\
+Its `--help` lists the settings, such as `--days`.
+
+To compile the specification as it is, run this command.\
 The new compiled scenario replaces the delivered one.\
 On Windows, keep the distribution in a folder with a short path.\
 A file path over 260 characters makes the compile refuse with check 59.
@@ -299,8 +316,30 @@ To watch SUMO's own window, add `--sumo-gui --sumo-home <your SUMO 1.27.0 folder
 `carla-capture` renders one window of simulated time through the cameras a run file describes.\
 For every capture of every camera, it writes a PNG still and its truth sidecar.
 
-The scenario declares no capture windows.\
-So the run file gives the window in seconds, as `<begin_s>:<end_s>`.
+The scenario declares a capture window for each planted event.\
+A run file names a window by its id.\
+Nobody works out the seconds.\
+Each window has a run file in this folder, `Shahid_Bahonar_Port_PatternOfLife.<window>.run.json`.\
+Its one camera stares at the event's place from 150 m up and 150 m to its south.\
+The script that writes the scenario writes the run files too, with each camera's point read from the road network.
+
+| Window | Opens | Lasts | What the camera sees | Run file |
+|---|---|---|---|---|
+| `ferry_stay_behind_d1` | t = 90000 s, 30 September 08:00:00 | 6 min | `staybehind` arrives at the ferry berth and parks | `Shahid_Bahonar_Port_PatternOfLife.ferry_stay_behind_d1.run.json` |
+| `gate_probe_d2` | t = 187474 s, 1 October 11:04:34 | 15 min | `probe_d2` halts short of the port gate for 300 s and drives on | `Shahid_Bahonar_Port_PatternOfLife.gate_probe_d2.run.json` |
+| `escort_drydock_d3` | t = 271620 s, 2 October 10:27:00 | 6 min | the five escort jeeps arrive at the drydock | `Shahid_Bahonar_Port_PatternOfLife.escort_drydock_d3.run.json` |
+| `posting_not_taken_up_d4` | t = 346740 s, 3 October 07:19:00 | 8 min | `offpost_d4_h7_t3` arrives on the west apron spur and parks | `Shahid_Bahonar_Port_PatternOfLife.posting_not_taken_up_d4.run.json` |
+| `gate_probe_d5` | t = 447085 s, 4 October 11:11:25 | 15 min | `probe_d5`, as on day 2 | `Shahid_Bahonar_Port_PatternOfLife.gate_probe_d5.run.json` |
+| `perimeter_shadow_d6` | t = 510300 s, 5 October 04:45:00 | 6 min | `shadow` crawls past tower 3 | `Shahid_Bahonar_Port_PatternOfLife.perimeter_shadow_d6.run.json` |
+
+A window opens at its planted vehicle's departure.\
+Or it opens a lead time after the departure, measured in a SUMO-only run of the compiled scenario.\
+The escort reaches the drydock 30 min after it departs.\
+The guard reaches the spur 22 min after its shift change.\
+The shadow passes tower 3 at 2 h 18 min into its crawl.\
+A run file names one of these windows by id.\
+If it names none, `carla-capture` refuses and lists them.\
+A window in seconds, as `<begin_s>:<end_s>`, still works.
 
 The capture needs a site profile: a JSON file of the facts about this machine.\
 Write one in the distribution's folder:
@@ -319,27 +358,28 @@ So the capture commands below set both paths to `Scenarios/Bahonar` with `--set`
 A relative path in `--set` is read from the folder you run the command in.\
 Run them from the distribution's folder.
 
-This run file, `gate_probe.run.json`, stares at the port gate on day 2.\
-The window opens at t = 187474 s, as `probe_d2` departs.\
+This run file, `Shahid_Bahonar_Port_PatternOfLife.gate_probe_d2.run.json`, is the gate probe's on day 2.\
+Its window, `gate_probe_d2`, opens at t = 187474 s, as `probe_d2` departs.\
 It lasts 900 s.\
 In the SUMO-only run, the probe's halt and its exit from the map both fall inside the window.\
-Before it, the run fast-forwards SUMO to the start of a 60 s prewarm and draws nothing on the way.\
+Before the window, the run fast-forwards SUMO to the start of a 60 s prewarm and draws nothing on the way.\
 The prewarm is simulated time that gets the view ready and is not recorded.\
-The camera values are a starting point for your own view.
+The camera looks at the point where the probe halts.\
+Its values are a starting point for your own view.
 
 ```json
 {
   "run_configuration_version": 1,
-  "caller_label": "gate probe day 2",
+  "caller_label": "gate probe, day 2: the car halts short of the gate and leaves",
   "scenario_package": "Shahid_Bahonar_Port_PatternOfLife",
   "capture": {
-    "window": "187474:188374",
+    "window": "gate_probe_d2",
     "prewarm_s": 60.0,
     "channels": [
       {
         "sensor_id": "Gate_Stare_1",
-        "stare_look_at_x_m": 1998.4,
-        "stare_look_at_y_m": -1035.0,
+        "stare_look_at_x_m": 1974.4,
+        "stare_look_at_y_m": -1064.2,
         "stare_altitude_m": 150.0,
         "stare_standoff_m": 150.0,
         "stare_bearing_deg": 0.0,
@@ -354,7 +394,7 @@ Run the offline checks first.\
 They do not touch the server:
 
 ```
-carla-capture --site-profile site.json --run gate_probe.run.json --set paths.scenario_root=Scenarios/Bahonar --set paths.world_package_root=Scenarios/Bahonar --validate-only
+carla-capture --site-profile site.json --run Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife.gate_probe_d2.run.json --set paths.scenario_root=Scenarios/Bahonar --set paths.world_package_root=Scenarios/Bahonar --validate-only
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
@@ -368,8 +408,11 @@ The echo shows that it climbs from +58.70° to +59.34° over this window.\
 Then run it for real:
 
 ```
-carla-capture --site-profile site.json --run gate_probe.run.json --set paths.scenario_root=Scenarios/Bahonar --set paths.world_package_root=Scenarios/Bahonar
+carla-capture --site-profile site.json --run Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife.gate_probe_d2.run.json --set paths.scenario_root=Scenarios/Bahonar --set paths.world_package_root=Scenarios/Bahonar
 ```
+
+The other five run files run the same way.\
+Each captures its own window.
 
 The last line names the run result.\
 The result names the capture folder, under `captures/`.\
@@ -393,6 +436,7 @@ This folder holds every input a rebuild needs:
 | `Shahid_Bahonar_Port.aoi.geojson` | The areas of interest, named places a label can point to. They are the 16 guard towers, the port gate, the drydock and the ferry terminal. |
 | `Shahid_Bahonar_Port_PatternOfLife.scenario.json` | The scenario specification: the routine, the planted events and the labels. |
 | `Shahid_Bahonar_Port_PatternOfLife.display.json` | The display convention for `carla-cot-telemetry`. It gives each vehicle class its Cursor-on-Target affiliation: civilian and port traffic neutral, the naval base's traffic friendly. It is a run setting, not part of the scenario. |
+| `make_bahonar_scenario.py` | The script that writes the specification, compiles it and writes the run files. |
 
 The build finds the type map and the areas file beside the extract, by name.\
 `carla-cot-telemetry` finds the display convention beside the compiled `.sumocfg`, by name.\
@@ -401,8 +445,10 @@ A compile into that folder leaves the copy in place.\
 A compile into another folder needs a copy there too.
 
 The vehicle catalog comes with the distribution, in `catalogue/`.\
-In a source checkout, `CarlaControl/scripts/make_bahonar_scenario.py` writes the specification.\
-Change the script, not the specification.
+The script that writes the specification, `make_bahonar_scenario.py`, is in this folder.\
+In a source checkout, it is `CarlaControl/scripts/make_bahonar_scenario.py`.\
+Change the script, not the specification.\
+[Compiling the scenario](#compiling-the-scenario) shows how to run it.
 
 ### Building the world
 
@@ -482,7 +528,7 @@ Then compile again, as [Compiling the scenario](#compiling-the-scenario) shows.
 Read the resolution report.\
 This specification names its places by edge and by lane.\
 If an edge has a new id, check 7 refuses the place that names it.\
-In a source checkout, run `make_bahonar_scenario.py` with `--world-package` instead.\
+Or run `make_bahonar_scenario.py` with `--world-package` naming the new package.\
 It writes the specification against that package and compiles it.
 
 [Writing a scenario](../../../../Docs/CAT_Research/Guides/Writing_A_Scenario.md) explains every field of the specification.

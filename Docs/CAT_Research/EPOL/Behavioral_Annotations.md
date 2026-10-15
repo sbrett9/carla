@@ -17,6 +17,30 @@ A run never adds a label.\
 It only binds the plan's labels to the vehicles as SUMO drives them.\
 It also records the times each one started and ended.
 
+## Where to look first
+
+A capture holds its labels in two files.\
+The world truth track, the CSV, carries none, by design.
+
+1. The run manifest, `truth/manifest.jsonl`.\
+   Its `instance`, `series` and `cohort` rows, right after the first row, hold every label the plan declares.\
+   Its `interval_opened` and `interval_closed` rows say when each labeled stretch began and ended in this run.\
+   Its last row lists the intervals still open and the ones nothing opened.
+2. The truth sidecar beside each still, the XML file with the still's name.\
+   Every vehicle record in it has a `<_supervision>` element with the vehicle's state on that frame: `annotated`, `nominal` or `unlabelled`.\
+   An `annotated` or `nominal` record lists its labels in one `<annotation>` per row in force.
+
+A label holds whether or not the vehicle is in the picture.\
+The record's `in_frame` says whether the still shows it.\
+A capture whose camera never had a labeled vehicle in view still carries every label in its sidecars.\
+Those records have `in_frame` `none` or `behind_camera`.\
+To put a labeled vehicle in the picture, capture a window the scenario declares.\
+Aim a camera at the event's place.\
+The Bahonar README gives a run file for each of its six planted events.\
+The Arapahoe README gives one for the supervision check.
+
+[Where labels appear](#where-labels-appear) describes both files in full.
+
 ## Concepts
 
 ### The vocabulary and its version
@@ -325,7 +349,16 @@ Join them to its rows by `sumo_id`.
 ## Worked example: the Arapahoe supervision check
 
 The scenario `Arapahoe_I25_SupervisionCheck` runs six minutes on South Yosemite Street, just north of East Arapahoe Road.\
-Its files are in `Import/`: the specification `Arapahoe_I25_SupervisionCheck.scenario.json` and the plan `Arapahoe_I25_SupervisionCheck.supervision.json`.\
+It was written to exercise every kind of label a plan can carry on a vehicle.\
+Its six minutes are short enough to check end to end.\
+In a distribution, its files are in `Scenarios/Arapahoe/`.\
+The specification is `Arapahoe_I25_SupervisionCheck.scenario.json`.\
+The compiled scenario, with the plan `Arapahoe_I25_SupervisionCheck.supervision.json`, is in `Arapahoe_I25_SupervisionCheck/`.\
+The script that writes it, `make_supervision_check_scenario.py`, sits beside them.\
+So does the run file of the sample capture below.\
+In a checkout, the specification, the plan and the run file are in `Import/`.\
+The script is in `CarlaControl/scripts/`.\
+The README beside them says what the scenario is for and how to capture it.\
 Among nine flows of background traffic, all `unlabelled` cohorts, it adds three vehicles:
 
 | Vehicle | What it does | Instance | State and label | Interval |
@@ -335,6 +368,9 @@ Among nine flows of background traffic, all `unlabelled` cohorts, it adds three 
 | `brief_stopper` | departs at 200 s, stops 20 s at the same curb | `brief_stop` | `nominal`, `check:brief_kerb_stop`, hard negative for `check:kerbside_dwell` | `stop`, from `stop:0` to `stop_end:0` |
 
 The sample capture, `cap-20261008-041347-270d6d`, covers the window `dwell_golden`: 60 s to 240 s, two stills a second from one camera looking down at the curb.\
+Its manifest ships beside the scenario as `Arapahoe_I25_SupervisionCheck.sample.manifest.jsonl`.\
+A capture of your own, made with the run file beside the scenario, has the same SUMO times and the same interval names.\
+Its frame numbers differ, because they count the server's ticks from its start.\
 Here is what the record shows, on SUMO's clock:
 
 | SUMO time | What happened | Where it is recorded |

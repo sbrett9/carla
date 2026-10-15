@@ -117,7 +117,9 @@ It is still version 1.
 
 ## Example
 
-`Import/Arapahoe_I25_SupervisionCheck.lock.json`, shortened:
+`Arapahoe_I25_SupervisionCheck.lock.json` is in `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck/` in a distribution.\
+In a checkout, it is in `Import/`.\
+Shortened:
 
 ```json
 {
