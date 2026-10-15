@@ -1,10 +1,14 @@
 # Truth sidecar
 
-**Schema:** `CarlaControl/schemas/truth_sidecar.xsd` (XML Schema 1.0)\
-**Identifier:** `urn:carla-sumo-capture:schema:truth-sidecar:1`\
-**Format version described:** 1
+| | |
+|---|---|
+| File | the XML file beside each still, with the still's name: the ground truth of the still's frame |
+| Schema | `CarlaControl/schemas/truth_sidecar.xsd` (XML Schema 1.0) |
+| Schema id | `urn:carla-sumo-capture:schema:truth-sidecar:1` |
+| Format version | 1 |
+| Version field | `format_version`, on `<events>` |
 
-## What the file is
+## Description
 
 The truth sidecar is an XML file written beside every still.\
 It holds the ground truth of the simulation frame the still was rendered on: where the camera was and how it was set up, the sun and every vehicle.\
@@ -22,38 +26,12 @@ So a still is never paired with a neighboring frame's truth.
 Each vehicle is a Cursor-on-Target (CoT) `<event>`, the same kind of event the live telemetry feed sends.\
 These events carry extra detail elements whose names begin with `_`.
 
-## Who writes it and when
+## Writers and readers
 
 The CarlaNet recorder writes one sidecar for every still it saves, in the same moment as the PNG.\
 `carla-capture` runs a recorder for each camera of a capture run.\
 It puts each camera's stills in a folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a checkout).\
 `carla-drive` and `carla-sctmv` write stills and sidecars the same way.
-
-## Structure
-
-Elements appear in this order.\
-Elements marked "optional" can be absent.
-
-```
-<events>                             the capture, one camera, one frame
-  <_producer>                        optional: what made the file
-    <_server/>                       optional: the CARLA server's build
-  </_producer>
-  <_solar/>                          optional: the sun the world reported
-  <_illumination/>                   optional: what the run declared the sun to be
-  <event>                            optional: the camera platform
-    <point/> <detail> <contact/> <track/> <sensor/> <_carla_intrinsics/> <_carla_exposure/> </detail>
-  </event>
-  <event>                            one per vehicle
-    <point/> <detail> <track/> <contact/> <_carla/> <_box3d>8 x <corner/></_box3d> <_supervision>
-      <annotation/> ... </_supervision> </detail>
-  </event>
-</events>
-```
-
-The camera platform's `<detail>` begins with `<contact>`.\
-A vehicle's begins with `<track>`.\
-That is how the two kinds of event are told apart.
 
 ## Conventions
 
@@ -80,7 +58,7 @@ In the tables, the Required column holds one of three values:
 
 The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives every unit in `cap:unit`.
 
-## `<events>`: the capture
+### `<events>`: the capture
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -102,7 +80,7 @@ The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives 
 | `lights` | text, always `unknown` | | No | A vehicle in the picture has no `lights` because the frame's snapshot did not carry them. |
 | `pose_source` | text, always `unknown` | | No | A SUMO vehicle in the picture has no `pose_source` because the frame's snapshot did not carry one. |
 
-## `<_producer>` and `<_server>`: what made the file
+### `<_producer>` and `<_server>`: what made the file
 
 `<_producer>` is the first child of `<events>` in every sidecar written since the producer record was added.\
 A sidecar written before it has none.
@@ -132,7 +110,7 @@ A sidecar written before it has none.
 
 A value the server cannot know is `unknown`.
 
-## `<_solar>`: the sun the world reported
+### `<_solar>`: the sun the world reported
 
 Written for every frame whose world reported a sun.\
 The same values are in the still's `carla:solar` text chunk.
@@ -163,7 +141,7 @@ The same values are in the still's `carla:solar` text chunk.
 
 Each band includes its upper edge.
 
-## `<_illumination>`: what the run declared the sun to be
+### `<_illumination>`: what the run declared the sun to be
 
 Written only in a run that declares its illumination.\
 `<_solar>` is what the world did.\
@@ -193,7 +171,7 @@ The same values are in the still's `carla:illumination` text chunk.
 
 A civil time looks like `2026-09-29T07:27:00-06:00`, with a fraction of a second where there is one.
 
-## The camera platform's event
+### The camera platform's event
 
 Written first, before the vehicles, wherever the recorder was told about the camera platform.\
 The same values are in the still's `carla:sensor` text chunk.
@@ -265,7 +243,7 @@ Absent for a camera that does not publish its exposure.
 | `compensation_ev` | decimal | EV | Yes | Exposure compensation. A value above 0 brightens. |
 | `ev100` | decimal | EV | No | The exposure value at ISO 100 that the ISO, shutter and aperture make: log2(fstop² / shutter_s) minus log2(iso / 100). Under `manual` only. |
 
-## A vehicle's event
+### A vehicle's event
 
 A vehicle's `uid` is `CARLA-TRUTH-SUMO-<sumo_id>` where a SUMO drive lent the body.\
 Otherwise it is `CARLA-TRUTH-<actor_id>`.\
@@ -363,7 +341,7 @@ A vehicle the author says nothing about still gets one, with state `unlabelled`.
 An `annotated` or `nominal` vehicle can carry several annotations, one per instance in force.\
 The run manifest's `instance` and `interval_*` rows give the full plan and each interval's start and end.
 
-## Word lists
+### Word lists
 
 The schema takes each of these lists from the code that writes the words.
 
@@ -425,18 +403,33 @@ Whether a blueprint draws a lamp for each is up to the 3D model.
 - To the run manifest: by `run_id`.\
   The manifest's `instance` and `interval_*` rows explain the `<annotation>`s.
 
-## Format version
+## Fields
 
-This page describes format version 1.\
-A sidecar names its version in `format_version` on `<events>`.\
-A sidecar without one was written before sidecars carried it and is version 1.\
-A sidecar written before the format version and the producer record existed is still valid against this schema.\
-Neither one is required.
+### Structure
 
-A reader reads a version it knows.\
-It refuses a newer version by name and says that a newer release wrote the file.\
-It does not read such a file in part, because a field that silently moved is worse than one that is missing.\
-The CarlaControl readers and `carla-validate` follow this rule.
+Elements appear in this order.\
+Elements marked "optional" can be absent.
+
+```
+<events>                             the capture, one camera, one frame
+  <_producer>                        optional: what made the file
+    <_server/>                       optional: the CARLA server's build
+  </_producer>
+  <_solar/>                          optional: the sun the world reported
+  <_illumination/>                   optional: what the run declared the sun to be
+  <event>                            optional: the camera platform
+    <point/> <detail> <contact/> <track/> <sensor/> <_carla_intrinsics/> <_carla_exposure/> </detail>
+  </event>
+  <event>                            one per vehicle
+    <point/> <detail> <track/> <contact/> <_carla/> <_box3d>8 x <corner/></_box3d> <_supervision>
+      <annotation/> ... </_supervision> </detail>
+  </event>
+</events>
+```
+
+The camera platform's `<detail>` begins with `<contact>`.\
+A vehicle's begins with `<track>`.\
+That is how the two kinds of event are told apart.
 
 ## Example
 
@@ -481,7 +474,7 @@ A sidecar with the camera platform and one vehicle in the picture, shortened fro
 </events>
 ```
 
-## Checking a file
+## Checks
 
 `carla-validate <capture folder>` checks every sidecar of a capture against this schema, with every other file of the capture.\
 It lists each failure with its file and line.\
@@ -489,3 +482,16 @@ Any XML Schema 1.0 validator can check a single sidecar, for example `xmllint --
 The schema cannot check which attributes go together.\
 One such rule: the box is present for an `in_frame` of `wholly` or `partly` and absent for any other value.\
 `carla-audit-sidecars` checks those rules across a capture.
+
+## Versions
+
+This page describes format version 1.\
+A sidecar names its version in `format_version` on `<events>`.\
+A sidecar without one was written before sidecars carried it and is version 1.\
+A sidecar written before the format version and the producer record existed is still valid against this schema.\
+Neither one is required.
+
+A reader reads a version it knows.\
+It refuses a newer version by name and says that a newer release wrote the file.\
+It does not read such a file in part, because a field that silently moved is worse than one that is missing.\
+The CarlaControl readers and `carla-validate` follow this rule.

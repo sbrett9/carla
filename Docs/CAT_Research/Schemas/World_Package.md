@@ -1,5 +1,15 @@
 # World package (`.cwp`)
 
+| | |
+|---|---|
+| File | `<MapName>.cwp`: one generated world in one file, a zip of the entries below |
+| Schema | none of its own: each JSON entry has its schema |
+| Schema id | none |
+| Format version | none |
+| Version field | none: the container has no version of its own; each entry carries one |
+
+## Description
+
 A world package is one generated world in one file.\
 It holds:
 
@@ -16,7 +26,7 @@ To look inside, copy the file.\
 Rename the copy to `.zip`.\
 Open the copy with any zip tool.
 
-## Who writes it and who reads it
+## Writers and readers
 
 The world build writes it, in two steps:
 
@@ -43,7 +53,9 @@ These programs read it:
   It saves them as assets of a new level.
 - `carla-cot-telemetry` reads the ground heights from `bareearth.bin`.
 
-## Entries
+## Fields
+
+### Entries
 
 | Entry | Format | Required | Present when | Described in |
 |---|---|---|---|---|
@@ -77,7 +89,7 @@ Notes on the entries that follow external standards:
   `areas.resolved.json` records its SHA-256 digest.\
   If the two do not match, a reader refuses the table.
 
-## Missing entries
+### Missing entries
 
 An entry that is absent means something different from an entry that is empty:
 
@@ -88,7 +100,23 @@ An entry that is absent means something different from an entry that is empty:
 - No `areas.resolved.json`: the reference set was not published, or its areas were refused.\
   A world with no areas declared has an `areas.resolved.json` with an empty `areas` list.
 
-## Format version
+## Example
+
+The entries of a package built from an OpenStreetMap extract with ramp meters and no areas of interest:
+
+```
+Arapahoe_I25.cwp
+  world.json             2,925 bytes
+  map.xodr           3,035,115 bytes
+  map.net.xml        1,141,667 bytes
+  map.tll.xml            1,201 bytes
+  bareearth.bin      3,713,164 bytes
+  places.json          167,050 bytes
+  solar.json               381 bytes
+  areas.resolved.json      659 bytes
+```
+
+## Versions
 
 The container has no version of its own.\
 Each JSON entry carries one.\
@@ -111,19 +139,3 @@ The refusal names each problem.
 Given a folder, it checks every package in it.\
 To run it on one package, use `carla-validate <name>.cwp`.\
 To run it on a folder of packages, give `carla-validate` the folder.
-
-## Example
-
-The entries of a package built from an OpenStreetMap extract with ramp meters and no areas of interest:
-
-```
-Arapahoe_I25.cwp
-  world.json             2,925 bytes
-  map.xodr           3,035,115 bytes
-  map.net.xml        1,141,667 bytes
-  map.tll.xml            1,201 bytes
-  bareearth.bin      3,713,164 bytes
-  places.json          167,050 bytes
-  solar.json               381 bytes
-  areas.resolved.json      659 bytes
-```

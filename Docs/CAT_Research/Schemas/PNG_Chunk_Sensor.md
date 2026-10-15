@@ -1,10 +1,14 @@
 # PNG text chunk `carla:sensor`
 
-**Schema:** `CarlaControl/schemas/png_chunk_sensor.schema.json` (JSON Schema 2020-12)\
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-sensor:1`\
-**Format version described:** 1
+| | |
+|---|---|
+| File | the `carla:sensor` text chunk of every still a recorder writes: where the camera was and how it saw |
+| Schema | `CarlaControl/schemas/png_chunk_sensor.schema.json` (JSON Schema 2020-12) |
+| Schema id | `urn:carla-sumo-capture:schema:png-chunk-sensor:1` |
+| Format version | 1 |
+| Version field | `format_version` |
 
-## What it is
+## Description
 
 `carla:sensor` is where the camera was and where it pointed at the capture.\
 It also holds the camera's pinhole intrinsics.\
@@ -15,7 +19,7 @@ The camera's exposure is in the sidecar's `<_carla_exposure>` only.
 The chunk is a PNG `tEXt` chunk with the keyword `carla:sensor`.\
 It holds one line of compact JSON.
 
-## Who writes it and when
+## Writers and readers
 
 If the camera is recorded as a platform and the world's georeference is known, the CarlaNet recorder writes it into a still.\
 Every `carla-*` tool starts its recorder through carlanet (`start_recording`).\
@@ -60,20 +64,20 @@ Some names differ from the sidecar's for the same value.\
 `az_deg` and `el_deg` here are `azimuth` and `elevation` on the sidecar's `<sensor>`.\
 `intrinsics.sensor_model` is the `<sensor>`'s `model`.
 
-## Format version
-
-This page describes format version 1.\
-A chunk without `format_version` was written before chunks carried one and is version 1.\
-Readers read a version they know.\
-They refuse a newer one by name rather than reading it in part.\
-They read a chunk with no version as version 1.
-
 ## Example
 
 ```json
 {"format_version":1,"uid":"CARLA-SENSOR-107","type":"a-f-A-M-F-Q","callsign":"Check_Overhead_1","lat":39.5971345,"lon":-104.8891363,"hae":1818.06,"align_offset_m":-0.63,"az_deg":90,"el_deg":-70.346,"roll_deg":0,"course_deg":90,"speed_mps":0.00,"intrinsics":{"width":1920,"height":1080,"fx":2058.73,"fy":2058.73,"cx":960,"cy":540,"hfov_deg":50,"vfov_deg":29.395,"model":"pinhole","distortion":"none","sensor_model":"sensor.camera.rgb"}}
 ```
 
-## Checking a file
+## Checks
 
 `carla-validate <capture folder>` checks this chunk in every still of a capture.
+
+## Versions
+
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+Readers read a version they know.\
+They refuse a newer one by name rather than reading it in part.\
+They read a chunk with no version as version 1.

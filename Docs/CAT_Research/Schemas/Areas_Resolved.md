@@ -1,5 +1,15 @@
 # Resolved areas of interest (`areas.resolved.json` in a `.cwp`)
 
+| | |
+|---|---|
+| File | `areas.resolved.json` in a `.cwp`: the areas of interest placed in CARLA meters and on SUMO lanes |
+| Schema | `CarlaControl/schemas/areas_resolved.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:areas-resolved:1` |
+| Format version | 1 |
+| Version field | `resolved_version` |
+
+## Description
+
 An area of interest is a named place where a scenario can put behavior and that a label can refer to: a guard post, a gate, a parking lot.\
 An author declares areas in a GeoJSON file beside the OpenStreetMap extract, `<extract>.aoi.geojson`, in latitude and longitude.
 
@@ -14,7 +24,7 @@ The package holds a byte-for-byte copy of the areas file as `areas.aoi.geojson`.
 - Schema: `CarlaControl/schemas/areas_resolved.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:areas-resolved:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 When the authoring reference set (the areas, place index and solar frame) is published, carlacontrol's `AreaOfInterestResolver` writes this file.\
 It converts each vertex with SUMO's own projection, run by a SUMO process holding the world's network.\
@@ -123,18 +133,7 @@ A lane near the area:
 The allowed classes are the world network's.\
 A scenario that changes lane permissions checks its own network.
 
-## Format version
-
-`resolved_version` is 1.\
-There is no other version.\
-A file without it is version 1.
-
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
-They name the version and the newest they read, rather than reading part of the file.\
-`WorldPackageReader` then makes sure that the file matches the schema.\
-If it does not match, the reader refuses the file and names each problem.
-
-## Examples
+## Example
 
 A world with no areas declared:
 
@@ -185,3 +184,14 @@ One area of a world with areas, trimmed to two of its lanes:
   "warnings": []
 }
 ```
+
+## Versions
+
+`resolved_version` is 1.\
+There is no other version.\
+A file without it is version 1.
+
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version.\
+They name the version and the newest they read, rather than reading part of the file.\
+`WorldPackageReader` then makes sure that the file matches the schema.\
+If it does not match, the reader refuses the file and names each problem.

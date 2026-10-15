@@ -5,9 +5,10 @@
 | File | `<sweep>.sweep.json` |
 | Schema | `skills/sumo-traffic-scenarios/schemas/sweep.schema.json` in a distribution, `CarlaControl/skills/sumo-traffic-scenarios/schemas/sweep.schema.json` in a checkout (`sweep.schema.json`) |
 | Schema id | `urn:carla-sumo-capture:schema:sweep:1` |
-| Format version | 1, in `sweep_version` |
+| Format version | 1 |
+| Version field | `sweep_version` |
 
-## What it is
+## Description
 
 A sweep is many runs of one scenario with parameters varied.\
 It names a base specification, the axes to vary over it and counterfactual pairs.\
@@ -35,7 +36,7 @@ The mode says how the twin (the member that changes the actor) differs:
 
 Car-following models react to what is in front of them, so a pair is identical inputs except one vehicle, never identical trajectories.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - A scenario developer writes it, beside the base specification.
 - `carla-compile-scenario --sweep FILE --out-dir DIR` reads it, checks it against this schema (check 53), compiles each member into `DIR/<member id>/` and writes the [Sweep index](Sweep_Index.md) into `DIR`.
@@ -64,11 +65,6 @@ The schema ships with the authoring skill.\
 | `counterfactuals[].shift` | number or duration | no | | Under `displaced`: how far to move the actor in time. |
 | `counterfactuals[].places` | object of place name to place name | no | | Under `displaced`: places to substitute in the actor's route and stops. |
 
-## Versions
-
-This page describes version 1, the only version.\
-The compiler refuses a sweep with no `sweep_version` or any other value (check 53).
-
 ## Example
 
 The authoring skill's `examples/counterfactual/probe_standoff_pairs.sweep.json`: three twins of the base, one per mode.
@@ -93,3 +89,8 @@ With axes, every combination is a member:
  "axes": [{"path": "actors.probe.stops[0].duration", "values": ["5m", "10m", "20m"]},
           {"path": "seeds.sumo", "values": [42, 43]}]}
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+The compiler refuses a sweep with no `sweep_version` or any other value (check 53).

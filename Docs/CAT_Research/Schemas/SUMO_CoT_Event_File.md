@@ -1,5 +1,15 @@
 # SUMO bridge event file (`carla-cot-telemetry --xml`)
 
+| | |
+|---|---|
+| File | the file `carla-cot-telemetry --xml` writes: every event of a run, each with its whole record |
+| Schema | `CarlaControl/schemas/sumo_cot_events.xsd`, written by hand |
+| Schema id | `urn:carla-sumo-capture:schema:sumo-cot-events:1` |
+| Format version | 1 |
+| Version field | `format_version` |
+
+## Description
+
 `carla-cot-telemetry` runs a SUMO scenario through TraCI, with no CARLA server.\
 It turns each vehicle's state into a Cursor-on-Target event at a chosen rate.\
 Given `--xml <file>`, it writes every event of the run to one XML file.\
@@ -23,7 +33,7 @@ One schema can describe only one of them.\
 So it holds copies of the sidecar's `<point>`, `<track>`, `<contact>` and `<_server>` types.\
 A test makes sure that each copy matches the sidecar's.
 
-## Who writes it and who reads it
+## Writers and readers
 
 `carlacontrol.SumoCotBridge` writes it as the run goes, in this order:
 
@@ -39,7 +49,9 @@ A run that stops early leaves a file without its closing tag.
 Given a folder that holds it, `carla-validate` makes sure that the file matches this schema.\
 It notes a file without its closing tag as a run that stopped early rather than failing it.
 
-## Structure
+## Fields
+
+### Structure
 
 ```
 <?xml version="1.0" encoding="UTF-8"?>
@@ -115,13 +127,6 @@ Each event is a vehicle event as on [CoT_Telemetry_Stream.md](CoT_Telemetry_Stre
   It is formatted to one decimal.\
   So a heading just under 360 is written `360.0`.
 
-## Format version
-
-`format_version` is 1.\
-`carla-check-label-leaks` reads a file without it as version 1.\
-It refuses a newer one.\
-The message names the file, the version and the newest it reads.
-
 ## Example
 
 ```xml
@@ -132,3 +137,10 @@ The message names the file, the version and the newest it reads.
   <event version="2.0" uid="SUMO-TRUTH-traffic.1" type="a-f-G-E-V" how="m-g" time="2026-03-21T05:00:01.000Z" start="2026-03-21T05:00:01.000Z" stale="2026-03-21T05:00:04.000Z"><point lat="39.5942830" lon="-104.8843156" hae="1747.40" ce="0.0" le="0.0" /><detail><track course="90.0" speed="6.00" /><contact callsign="van-traffic.1" /><_carla source="truth" actor_id="traffic.1" type_id="vehicle.ambulance.ford" base_type="van" special_type="emergency" length_m="4.89" width_m="1.83" height_m="1.52" color="204,204,209" role_name="traffic" marked="0" vx="6.00" vy="-0.00" vz="0.00" /></detail></event>
 </events>
 ```
+
+## Versions
+
+`format_version` is 1.\
+`carla-check-label-leaks` reads a file without it as version 1.\
+It refuses a newer one.\
+The message names the file, the version and the newest it reads.

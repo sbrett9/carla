@@ -1,10 +1,14 @@
 # Run manifest
 
-**Schema:** `CarlaControl/schemas/run_manifest.schema.json` (JSON Schema 2020-12)\
-**Identifier:** `urn:carla-sumo-capture:schema:run-manifest:1`\
-**Format version described:** 1 (`manifest_version`)
+| | |
+|---|---|
+| File | `truth/manifest.jsonl` in a capture folder: the record of a SUMO-driven run as it happened, one row per line |
+| Schema | `CarlaControl/schemas/run_manifest.schema.json` (JSON Schema 2020-12) |
+| Schema id | `urn:carla-sumo-capture:schema:run-manifest:1` |
+| Format version | 1 |
+| Version field | `manifest_version`, on the `manifest_opened` row |
 
-## What the file is
+## Description
 
 The run manifest records one SUMO-driven run as it happened.\
 It is the file `truth/manifest.jsonl` in a capture folder.\
@@ -42,7 +46,7 @@ A release is stamped with the instant of the first frame that no longer draws th
 An admission-to-release span therefore holds exactly the frames that drew the vehicle.\
 A sun row is stamped with the frame whose sun it reads, to the microsecond.
 
-## Who writes it and when
+## Writers and readers
 
 When its caller names a path, the SUMO drive session in CarlaNet writes the manifest.\
 `carla-capture` always names one: `truth/manifest.jsonl` under the capture folder.\
@@ -50,7 +54,7 @@ It hands over a header (`run`) naming the run, its window and its channels.\
 `carla-drive --run-manifest <path>` writes one too.\
 A run writes a manifest of its own and refuses a path that already holds one.
 
-## Rows, in the order a run first writes them
+## Fields
 
 | `row` | When |
 |---|---|
@@ -70,7 +74,7 @@ The tables below give each row's other fields.\
 In them, "null" in the Type column means the value can be JSON `null`.\
 A field marked "No" under Required can be absent altogether.
 
-## `manifest_opened`
+### `manifest_opened`
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -208,7 +212,7 @@ An illumination policy object:
 | `require_sun` | boolean | | Yes | Whether the run refuses a world with no sun. |
 | `note` | string or null | | Yes | Why this policy, in the author's words. Null for none. |
 
-## `instance`
+### `instance`
 
 One pattern instance of the supervision plan, as declared.
 
@@ -237,7 +241,7 @@ An interval as declared:
 | `declared_end_civil` | string or null | | Yes | Its declared end as a civil time. |
 | `declared_duration_s` | number or null | seconds | Yes | Its declared duration. |
 
-## `series`
+### `series`
 
 One recurring series of the supervision plan, as declared, with its slots.
 
@@ -253,7 +257,7 @@ One recurring series of the supervision plan, as declared, with its slots.
 | `hard_negative_for` | array of strings or null | | Yes | The patterns it is a matched negative for. Null for none. |
 | `slots` | array | | Yes | Its slots, each `{"slot_key": string, "aoi_ref": string, "declared_start_s": number, "declared_end_s": number or null, "entity_id": string}`. |
 
-## `cohort`
+### `cohort`
 
 Every vehicle a SUMO flow emits, as declared.
 
@@ -264,7 +268,7 @@ Every vehicle a SUMO flow emits, as declared.
 | `labels` | array of strings | | Yes | The labels its vehicles carry. |
 | `parameters` | object | | Yes | Its parameters, as declared. |
 
-## `sensor_placed`
+### `sensor_placed`
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -273,7 +277,7 @@ Every vehicle a SUMO flow emits, as declared.
 | `after_frame` | integer or null | | Yes | The last frame rendered before the camera was placed. Null before any frame. |
 | `exposure` | object | | No | The exposure the camera was given. It holds the fields of the sidecar's `<_carla_exposure>` (`post_process_profile`, `method`, `iso`, `shutter_s`, `fstop`, `compensation_ev`). It also holds `ev100`: a number under `manual`, null under `histogram`. Absent for a camera that publishes none. |
 
-## `render_admitted` and `render_released`
+### `render_admitted` and `render_released`
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -301,7 +305,7 @@ Release reasons:
 
 At the end of the run, a vehicle still drawn has an admission row and no release row.
 
-## `collision_began` and `collision_ended`
+### `collision_began` and `collision_ended`
 
 When a collision that SUMO reported begins, the run writes `collision_began`.\
 It writes `collision_ended`, as a span, once the two vehicles are apart.
@@ -319,7 +323,7 @@ It writes `collision_ended`, as a span, once the two vehicles are apart.
 | `ended_s` | number | seconds | Ended only | When it ended. |
 | `collider_actor_id`, `victim_actor_id` | integer or null | | Ended only | The bodies that drew the two. Null where none did. |
 
-## `vehicle_not_inserted`, `emergency_stop` and `teleport`
+### `vehicle_not_inserted`, `emergency_stop` and `teleport`
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -327,7 +331,7 @@ It writes `collision_ended`, as a span, once the two vehicles are apart.
 | `sumo_id` | string | | Yes | The SUMO vehicle. |
 | `waiting_at_s` | number | seconds | `vehicle_not_inserted` only | When the vehicle was last seen waiting to be inserted. |
 
-## `solar_window_open` and `solar_window_end`
+### `solar_window_open` and `solar_window_end`
 
 The sun the world reported at the capture window's first capture tick and at its last.\
 The fields named `..._begin...` on the opening row are `..._end...` on the end row.
@@ -371,7 +375,7 @@ The fields named `..._begin...` on the opening row are `..._end...` on the end r
 | `within_tolerance` | boolean | | Yes | Whether the audit stayed within its tolerance. |
 | `audit_skipped` | boolean | | Yes | Whether no audit was made. |
 
-## `interval_opened` and `interval_closed`
+### `interval_opened` and `interval_closed`
 
 One of the plan's intervals as the run opens and closes it.\
 An interval is named by the triple `(instance_id, participant, phase)`.\
@@ -405,14 +409,14 @@ An interval whose participant SUMO never inserted closes without having opened.
 - `capture_window_end`: the window closed while it was open.
 - `scenario_end`: the simulation ended while it was open.
 
-## `supervision_defect`
+### `supervision_defect`
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `found_by_s` | number or null | seconds | Yes | The SUMO frame it was found at or before. Null before any SUMO frame. |
 | `defect` | string | | Yes | What was wrong with how the run carried the plan out, rather than with the scenario, in words that name its own instants. |
 
-## `manifest_closed`
+### `manifest_closed`
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
@@ -452,13 +456,6 @@ A closed manifest names every `(instance_id, participant, phase)` the plan decla
 A run that compared nothing writes zero samples and null for both worst cases.\
 Do not read it as a run that measured zero.
 
-## Format version
-
-This page describes `manifest_version` 1, on the `manifest_opened` row.\
-Every manifest carries it.\
-Manifests written before the producer record was added have no `producer` and are valid against this schema.\
-Readers read a version they know and refuse a newer one by name rather than reading it in part.
-
 ## Example
 
 Rows from a capture of the Arapahoe world.\
@@ -473,9 +470,16 @@ It holds every field in its tables.
 {"row":"manifest_closed","ended":"caller_stopped","stage":null,"cause":null,"caller_reason":"window_end","last_sumo_frame_s":240.05,"last_rendered_s":239.95,"last_rendered_frame":27273,"render_admitted":95,"render_released":33,"still_in_render_set":62,"events":0,"intervals_opened":3,"intervals_closed":2,"supervision_defects":0,"open_intervals":[{"instance_id":"Arapahoe_I25_SupervisionCheck/through_transit","participant":"transit","phase":"transit","opened_s":90.05,"begun_before_window":false}],"open_intervals_close_as":"capture_window_end","never_opened":[{"instance_id":"Arapahoe_I25_SupervisionCheck/brief_stop","participant":"brief_stopper","phase":"stop"}],"bridge_divergence":{"samples":199827,"vehicle_ticks_with_no_read_back":0,"worst_position_m":9.984218289601819e-05,"mean_position_m":1.569918750533907e-05,"worst_yaw_deg":0.00010295372595692243,"worst_pitch_deg":9.996040028828479e-05,"worst_roll_deg":9.980968214806651e-05,"worst_velocity_m_per_s":3.100400437821817e-06,"mean_velocity_m_per_s":2.72097751669939e-07,"mean_commanded_speed_m_per_s":7.678172465720582,"worst_position_on":{"sumo_id":"arapahoe_east_to_yosemite_north.0","sim_time_s":100.95,"tick":2019,"actor_id":110},"worst_velocity_on":{"sumo_id":"clinton_to_arapahoe_west.3","sim_time_s":145.1,"tick":2902,"actor_id":164}},"rows_before":149,"closed_wall_utc":"2026-10-07T17:35:56.881Z"}
 ```
 
-## Checking a file
+## Checks
 
 `carla-validate <capture folder>` makes sure that every row is valid against this schema.\
 It also makes sure that the file opens with `manifest_opened` and that nothing follows `manifest_closed`.\
 It notes a manifest with no closing row as an interrupted run.\
 `carla-diff-manifests` compares the supervision rows of two runs of one scenario.
+
+## Versions
+
+This page describes `manifest_version` 1, on the `manifest_opened` row.\
+Every manifest carries it.\
+Manifests written before the producer record was added have no `producer` and are valid against this schema.\
+Readers read a version they know and refuse a newer one by name rather than reading it in part.

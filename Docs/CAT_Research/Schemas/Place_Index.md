@@ -1,5 +1,15 @@
 # Place index (`places.json` in a `.cwp`)
 
+| | |
+|---|---|
+| File | `places.json` in a `.cwp`: which edges carry which street name and which way each heads |
+| Schema | `CarlaControl/schemas/place_index.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:place-index:1` |
+| Format version | 1 |
+| Version field | `place_index_version` |
+
+## Description
+
 `places.json` lists which edges of a world's SUMO network carry which street name.\
 It also says which way each edge heads.\
 With it, a scenario that names a place as "eastbound on Centerville Lane" can be resolved to edges.\
@@ -8,7 +18,7 @@ The index also says how much of the network its names cover, because on some map
 - Schema: `CarlaControl/schemas/place_index.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:place-index:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 When the world build publishes the authoring reference set, carlacontrol's `PlaceIndex` writes it.\
 It writes the file again each time `carla-publish-reference-set` publishes the set again.\
@@ -90,17 +100,6 @@ Therefore CARLA (x, y) = SUMO (x, −y).\
 A bearing is the net direction of a whole edge.\
 On a curving edge it says little about the heading at any one point.
 
-## Format version
-
-`place_index_version` is 1.\
-There is no other version.\
-A file without it is version 1.
-
-`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than reading part of the file.\
-The refusal names the version and the newest version they read.\
-`WorldPackageReader` then checks the file against the schema.\
-If the file does not match, it refuses the file and names each problem.
-
 ## Example
 
 Trimmed to one street:
@@ -144,3 +143,14 @@ Trimmed to one street:
   ]
 }
 ```
+
+## Versions
+
+`place_index_version` is 1.\
+There is no other version.\
+A file without it is version 1.
+
+`WorldPackageReader` and CarlaNet's `WorldPackage` refuse a file that declares a newer version, rather than reading part of the file.\
+The refusal names the version and the newest version they read.\
+`WorldPackageReader` then checks the file against the schema.\
+If the file does not match, it refuses the file and names each problem.

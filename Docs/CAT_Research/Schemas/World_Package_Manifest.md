@@ -1,5 +1,15 @@
 # World package manifest (`world.json` in a `.cwp`)
 
+| | |
+|---|---|
+| File | `world.json` in a `.cwp`: where the world sits on the Earth and how it was built |
+| Schema | `CarlaControl/schemas/world_package_manifest.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:world-package-manifest:1` |
+| Format version | 1 |
+| Version field | `FormatVersion` |
+
+## Description
+
 `world.json` says what a generated world is:
 
 - where it sits on the Earth
@@ -17,7 +27,7 @@ That one is described in [Level_Package_Manifest.md](Level_Package_Manifest.md).
 - Schema: `CarlaControl/schemas/world_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:world-package-manifest:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 When the world build writes the package, CarlaNet's `WorldPackage.Write` writes this file.\
 The build reads the origin and the staging rectangle (the extent of the area traffic uses) back from the server.\
@@ -128,20 +138,6 @@ A server that answered has `available` `true` and:
 A server that did not answer has `available` `false`, `release`, `world_interface` and `reason`.\
 A value the server cannot know is the word `unknown`.
 
-## Format version
-
-`FormatVersion` is 1.\
-A manifest that has no `FormatVersion` is read as version 1.\
-Packages written before the field existed have that shape.
-
-- CarlaNet's reader and carlacontrol's reader refuse a manifest whose `FormatVersion` is newer than they support, or is not an integer.\
-  The message names the file, the version it declares and the newest the reader supports.\
-  They make sure that the version is acceptable before they look at any other field.
-- The Unreal importer refuses a `FormatVersion` above 1.
-- carlacontrol's reader then makes sure that every field the manifest carries matches the schema.\
-  It refuses a field of the wrong type or a field the schema does not name.\
-  It does not insist on the required fields, because it reads only some of them.
-
 ## Example
 
 A draped world.\
@@ -201,3 +197,17 @@ That tool names itself and carlacontrol's release.
 
 The writer escapes some characters as `\uXXXX` (a `+` is written `\u002B`, `<` is `\u003C`).\
 Any JSON reader decodes them.
+
+## Versions
+
+`FormatVersion` is 1.\
+A manifest that has no `FormatVersion` is read as version 1.\
+Packages written before the field existed have that shape.
+
+- CarlaNet's reader and carlacontrol's reader refuse a manifest whose `FormatVersion` is newer than they support, or is not an integer.\
+  The message names the file, the version it declares and the newest the reader supports.\
+  They make sure that the version is acceptable before they look at any other field.
+- The Unreal importer refuses a `FormatVersion` above 1.
+- carlacontrol's reader then makes sure that every field the manifest carries matches the schema.\
+  It refuses a field of the wrong type or a field the schema does not name.\
+  It does not insist on the required fields, because it reads only some of them.

@@ -5,9 +5,10 @@
 | File | `run.result.json`, or the path given to `--result` |
 | Schema | `CarlaControl/schemas/run_result.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:run-result:1` |
-| Format version | 1, in `result_version` |
+| Format version | 1 |
+| Version field | `result_version` |
 
-## What it is
+## Description
 
 The run result says how one `carla-capture` run ended and where everything it wrote is.\
 It records what was observed: how many captures each camera wrote, how each view became ready, each closing gate's observation against its threshold.
@@ -17,7 +18,7 @@ A reader decides what matters to them from the parts they care about.
 
 Because the process exit status is read from `outcome`, the file and the exit status always agree.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-capture` writes it in every outcome where the tool is not stopped first.\
   That includes a refusal before any server was contacted.\
@@ -173,7 +174,7 @@ Each entry of `produced.gates`:
 | `met` | boolean or null | Whether the observation met the threshold. If the gate was skipped, it is null. |
 | `skip_reason` | string | Why the gate was skipped. Present only on a skipped gate. |
 
-## The producer record
+### The producer record
 
 Every file these tools write carries a `producer` object:
 
@@ -185,14 +186,6 @@ Every file these tools write carries a `producer` object:
 | `server` | object or null | The CARLA server's build identity once the run reached a server. If reading it failed, `available` is false and a `reason` is given. |
 | `sumo` | string or null | The SUMO release, once the session started SUMO. |
 | `written_utc` | string | When the file was written, ISO 8601 in UTC. |
-
-## Versions
-
-This page describes version 1, the only version.\
-`RunResult.read` reads a result with no `result_version` as version 1.\
-It refuses a newer version and says to read it with the release that wrote it.\
-A file written before October 7, 2026 has no `producer`.\
-It is still version 1.
 
 ## Example
 
@@ -239,3 +232,11 @@ A finished run, shortened (`...` marks left-out entries):
   "ended_wall_utc": "2026-10-07T17:35:21.498117Z"
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+`RunResult.read` reads a result with no `result_version` as version 1.\
+It refuses a newer version and says to read it with the release that wrote it.\
+A file written before October 7, 2026 has no `producer`.\
+It is still version 1.

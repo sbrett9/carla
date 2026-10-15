@@ -1,10 +1,14 @@
 # PNG text chunk `carla:illumination`
 
-**Schema:** `CarlaControl/schemas/png_chunk_illumination.schema.json` (JSON Schema 2020-12)\
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-illumination:1`\
-**Format version described:** 1
+| | |
+|---|---|
+| File | the `carla:illumination` text chunk of every still a recorder writes: what the still's sun was declared to be |
+| Schema | `CarlaControl/schemas/png_chunk_illumination.schema.json` (JSON Schema 2020-12) |
+| Schema id | `urn:carla-sumo-capture:schema:png-chunk-illumination:1` |
+| Format version | 1 |
+| Version field | `format_version` |
 
-## What it is
+## Description
 
 `carla:illumination` is what the run declared the sun to be for this still's frame:
 
@@ -21,7 +25,7 @@ The truth sidecar's `<_illumination>` element carries the same values.
 The chunk is a PNG `tEXt` chunk with the keyword `carla:illumination`.\
 It holds one line of compact JSON.
 
-## Who writes it and when
+## Writers and readers
 
 If the run has an illumination policy, the CarlaNet recorder writes it into a still.\
 A SUMO drive records a declaration for every frame it renders.\
@@ -63,20 +67,20 @@ A civil time looks like `2026-09-29T07:27:00-06:00`, with a fraction of a second
 - `freeze_at` holds it at a declared time of day.
 - `ignore` leaves the world's sun alone.
 
-## Format version
-
-This page describes format version 1.\
-A chunk without `format_version` was written before chunks carried one and is version 1.\
-Readers read a version they know.\
-They refuse a newer one by name rather than reading it in part.\
-They read a chunk with no version as version 1.
-
 ## Example
 
 ```json
 {"format_version":1,"policy":"freeze_at_window_start","epoch_honoured":true,"audited":true,"epoch_digest":"b92057175df8fcf7d3f5070d76aac03c301b672e891bd7b044b888efa8a24831","epoch_civil":"2026-09-29T07:26:00-06:00","utc_offset_hours":-6,"declared_civil":"2026-09-29T07:27:00-06:00","declared_utc":"2026-09-29T13:27:00Z","sun_declared":"2026-09-29T07:27:00-06:00","sun_elevation_declared_deg":5.5491,"sun_corrected_elevation_declared_deg":5.694,"declared_elevation":"refraction_corrected","residual_clock_s":0.001,"residual_deg":0,"residual_corrected_deg":0}
 ```
 
-## Checking a file
+## Checks
 
 `carla-validate <capture folder>` checks this chunk in every still of a capture.
+
+## Versions
+
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+Readers read a version they know.\
+They refuse a newer one by name rather than reading it in part.\
+They read a chunk with no version as version 1.

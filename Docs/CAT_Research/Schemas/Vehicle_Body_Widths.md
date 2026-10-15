@@ -1,5 +1,15 @@
 # Vehicle body widths (`vehicle_body_widths.json`)
 
+| | |
+|---|---|
+| File | `vehicle_body_widths.json` in `CarlaControl/catalogue/`: each body's width without its mirrors, measured from the mesh |
+| Schema | `CarlaControl/schemas/vehicle_body_widths.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:vehicle-body-widths:1` |
+| Format version | 1 |
+| Version field | `body_widths_version` |
+
+## Description
+
 A vehicle body's bounding box includes its mirrors.\
 SUMO's width is the body without them.\
 On a bus the difference is large: the Fuso Rosa's box is 3.93 m wide and its body 3.23 m, on 3.35 m lanes.
@@ -12,7 +22,7 @@ The [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 - Schema: `CarlaControl/schemas/vehicle_body_widths.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:vehicle-body-widths:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 `CarlaControl/scripts/measure_vehicle_body_widths.py` writes it from a folder of meshes exported from the editor as ASCII FBX, one `<blueprint id>.fbx` per vehicle.\
 It is kept at `CarlaControl/catalogue/vehicle_body_widths.json`.\
@@ -47,13 +57,6 @@ The table's `method` says the same.
 
 All values are rounded to 0.1 mm.
 
-## Format version
-
-`body_widths_version` is 1.\
-There is no other version.\
-`load_body_widths` refuses any other value, or none.\
-Then it refuses a table that does not match the schema and names each problem.
-
 ## Example
 
 ```json
@@ -66,3 +69,10 @@ Then it refuses a table that does not match the schema and names each problem.
   }
 }
 ```
+
+## Versions
+
+`body_widths_version` is 1.\
+There is no other version.\
+`load_body_widths` refuses any other value, or none.\
+Then it refuses a table that does not match the schema and names each problem.

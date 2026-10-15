@@ -5,9 +5,10 @@
 | File | `run.lock.json`, beside the run result |
 | Schema | `CarlaControl/schemas/run_lock.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:run-lock:1` |
-| Format version | 1, in `lock_version` |
+| Format version | 1 |
+| Version field | `lock_version` |
 
-## What it is
+## Description
 
 The run lock records what one accepted capture run is bound to:
 
@@ -23,7 +24,7 @@ The scenario compiler writes `<scenario_id>.lock.json`, the record of a compiled
 A run lock records one run of that scenario.\
 It is always named after the run result: `run.lock.json` by default.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-capture` writes it beside the run result, as `<stem>.lock.json`.\
   It is written only for a launch that the offline checks accept.\
@@ -104,15 +105,6 @@ The `site_profile` object, which the run resolution report carries too:
 | `values.<field>.provenance` | string | Where it came from. |
 | `values.<field>.environment_variable` | string or null | The environment variable it was read from, or null for none. |
 
-## Versions
-
-This page describes version 1, the only version.\
-A file written before October 7, 2026 has no `producer`.\
-It is still version 1.
-
-Because no tool reads a run lock back, no tool refuses one.\
-Read version 1 and refuse a newer version rather than read it in part.
-
 ## Example
 
 Shortened (`...` marks left-out entries):
@@ -156,3 +148,12 @@ Shortened (`...` marks left-out entries):
                    "host_searched": [], "values": {"...": "..."}}
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+A file written before October 7, 2026 has no `producer`.\
+It is still version 1.
+
+Because no tool reads a run lock back, no tool refuses one.\
+Read version 1 and refuse a newer version rather than read it in part.

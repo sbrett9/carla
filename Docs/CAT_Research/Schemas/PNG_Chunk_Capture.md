@@ -1,10 +1,14 @@
 # PNG text chunk `carla:capture`
 
-**Schema:** `CarlaControl/schemas/png_chunk_capture.schema.json` (JSON Schema 2020-12)\
-**Identifier:** `urn:carla-sumo-capture:schema:png-chunk-capture:1`\
-**Format version described:** 1
+| | |
+|---|---|
+| File | the `carla:capture` text chunk of every still a recorder writes: which capture the still is |
+| Schema | `CarlaControl/schemas/png_chunk_capture.schema.json` (JSON Schema 2020-12) |
+| Schema id | `urn:carla-sumo-capture:schema:png-chunk-capture:1` |
+| Format version | 1 |
+| Version field | `format_version` |
 
-## What it is
+## Description
 
 Every still a recorder writes is a PNG with up to four text chunks.\
 They sit between its header and its pixels.\
@@ -21,7 +25,7 @@ The writer replaces any character outside Latin-1 with `?`.
 Every still carries this chunk.\
 The other three (`carla:solar`, `carla:illumination`, `carla:sensor`) are written only where there is something to say.
 
-## Who writes it and when
+## Writers and readers
 
 The CarlaNet recorder writes it into every still it saves, at the same moment it writes the still's truth sidecar.\
 `carla-capture`, `carla-drive` and `carla-sctmv` all record through it.
@@ -76,15 +80,6 @@ A server built before the call:
 A value a server cannot know is `unknown`.\
 The truth sidecar's `<_producer>` element, the run manifest's opening `producer` and the world truth track summary's `producer` use the same record with the same fields.
 
-## Format version
-
-This page describes format version 1.\
-A chunk without `format_version` was written before chunks carried one and is version 1.\
-It has no `producer` either.\
-Readers read a version they know.\
-They refuse a newer one by name rather than reading it in part.\
-They read a chunk with no version as version 1.
-
 ## Example
 
 As written since the producer record was added:
@@ -99,7 +94,16 @@ As written before it, still valid as version 1:
 {"tick":23804,"sim_time_s":200.679475,"run_id":"cap-20261007-173433-41f49b"}
 ```
 
-## Checking a file
+## Checks
 
 `carla-validate <capture folder>` reads every still's text chunks without reading its pixels and checks each against its schema.\
 To read the chunks yourself, any PNG library that lists `tEXt` chunks works, for example Pillow's `Image.open(path).text`.
+
+## Versions
+
+This page describes format version 1.\
+A chunk without `format_version` was written before chunks carried one and is version 1.\
+It has no `producer` either.\
+Readers read a version they know.\
+They refuse a newer one by name rather than reading it in part.\
+They read a chunk with no version as version 1.

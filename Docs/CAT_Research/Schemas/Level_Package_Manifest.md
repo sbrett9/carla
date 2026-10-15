@@ -1,5 +1,15 @@
 # Level package manifest (`world.json` in a level package)
 
+| | |
+|---|---|
+| File | `world.json` in a `PackageWorld` zip: what a delivered world is and what it needs |
+| Schema | `CarlaControl/schemas/level_package_manifest.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:level-package-manifest:1` |
+| Format version | 1 |
+| Version field | `formatVersion` |
+
+## Description
+
 A level package is one generated world delivered on its own, as add-on content for an existing CARLA package.\
 It is a zip made by `PackageWorld`.
 
@@ -13,7 +23,7 @@ This is a different file from the `world.json` inside a world package (`.cwp`).\
 - Schema: `CarlaControl/schemas/level_package_manifest.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:level-package-manifest:1`
 
-## Who writes it and who reads it
+## Writers and readers
 
 An Unreal tech artist imports a `.cwp` into a level with the World Package Importer.\
 The artist exports the level as a plugin under `Unreal/CarlaUnreal/Plugins/GeneratedWorlds/<World>/`.\
@@ -84,15 +94,6 @@ The three commit hashes identify the build.\
 No tool compares them.\
 The world interface version decides whether a world installs.
 
-## Format version
-
-`formatVersion` is 1.\
-There is no other version.\
-`InstallWorld.ps1` and `InstallWorld.sh` read it before any other field: a manifest without it is format 1.\
-The scripts refuse a manifest that declares a newer format.\
-The refusal names the format the manifest declares and the newest format the script reads.\
-`-Force` and `--force` do not override that refusal, because a newer format can change what a field means.
-
 ## Example
 
 ```json
@@ -112,3 +113,12 @@ The refusal names the format the manifest declares and the newest format the scr
   "packagedAtUtc": "2026-10-07T17:40:12.345Z"
 }
 ```
+
+## Versions
+
+`formatVersion` is 1.\
+There is no other version.\
+`InstallWorld.ps1` and `InstallWorld.sh` read it before any other field: a manifest without it is format 1.\
+The scripts refuse a manifest that declares a newer format.\
+The refusal names the format the manifest declares and the newest format the script reads.\
+`-Force` and `--force` do not override that refusal, because a newer format can change what a field means.

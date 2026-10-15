@@ -18,6 +18,23 @@ The rule for format versions is the same for every file.\
 A file that declares no version is version 1.\
 A reader refuses a version newer than it knows rather than reading it in part.
 
+## How a page is laid out
+
+Every page has the same shape.\
+What you learn on one page, you find in the same place on the next.\
+Under the title, a table gives the file, its schema, the schema id, the format version and the field that carries the version.\
+A kind with no schema of its own, or no version field, says `none` there and why.
+
+Then the sections, in this order: Description, Writers and readers, the page's own topics, Fields, Example, Checks, Versions and Related pages.\
+Description, Fields, Example and Versions are on every page.\
+The others are there when the page has something to put in them.\
+Everything that describes the file's content is under Fields, divided by level-three headings where it needs dividing.\
+Versions holds the page's own history.\
+The rule above is not repeated there.
+
+`Scripts/Docs/check_schema_pages.py` in a checkout holds every page to this shape.\
+A test runs it.
+
 ## What a capture writes
 
 A capture folder holds a PNG and a truth sidecar for every still.\

@@ -1,10 +1,14 @@
 # World truth track
 
-**Schema:** `CarlaControl/schemas/world_truth_track.tableschema.json` (Frictionless Table Schema)\
-**Identifier:** `urn:carla-sumo-capture:schema:world-truth-track:2`\
-**Format version described:** 2 (declared in the summary beside the track)
+| | |
+|---|---|
+| File | `truth/world_truth_track.csv` in a capture folder: every vehicle SUMO had at each sampled frame of the window, drawn or not |
+| Schema | `CarlaControl/schemas/world_truth_track.tableschema.json` (Frictionless Table Schema) |
+| Schema id | `urn:carla-sumo-capture:schema:world-truth-track:2` |
+| Format version | 2 |
+| Version field | none: the CSV carries no version of its own; it is the summary's `world_truth_track_version` |
 
-## What the file is
+## Description
 
 The world truth track is a table.\
 It sits at `truth/world_truth_track.csv` in a capture folder.\
@@ -25,7 +29,7 @@ The file is plain CSV, UTF-8, with a header line and LF line endings.\
 A field holding a comma, such as `color`, is quoted.\
 An empty field is a missing value.
 
-## Who writes it and when
+## Writers and readers
 
 If its caller names a path, the SUMO drive session in CarlaNet writes it.\
 `carla-capture` always does, at `truth/world_truth_track.csv` under the capture folder.\
@@ -40,7 +44,7 @@ A file cut off by a killed run holds the rows already written.\
 After them comes at most one line without its line break.\
 A reader ignores that line.
 
-## Columns
+## Fields
 
 Every row has all 41 columns, in this order.\
 In the Required column, "Yes" means the cell is never empty.
@@ -123,7 +127,21 @@ So the two can differ slightly for the same vehicle.\
 The track's position is also SUMO's, at the front bumper.\
 The sidecar's `<point>` is the CARLA body's origin instead.
 
-## Format version
+## Example
+
+```
+time_utc,sim_time_s,uid,callsign,cot_type,how,lat,lon,hae_m,ce_m,le_m,course_deg,speed_mps,vx,vy,vz,base_type,type_id,special_type,length_m,width_m,height_m,color,role_name,edge,lane,sumo_x,sumo_y,carla_x,carla_y,sumo_id,entity_id,frame,render_state,render_reason,actor_id,in_window,sun_elevation_deg,sun_corrected_elevation_deg,illumination_band,illumination_band_elevation
+2026-09-29T13:27:00.000Z,60,CARLA-TRUTH-SUMO-arapahoe_east_to_west.0,van-arapahoe_east_to_west.0,a-n-G-E-V,m-g,39.5951904,-104.8806465,1748.60,0.0,0.0,320.3,0.00,0.00,0.00,0.00,van,van.vehicle.sprinter.mercedes,,5.92,1.98,2.73,"230,230,230",arapahoe_east_to_west,427819530#0,427819530#0_1,330.23,97.79,330.23,-97.79,arapahoe_east_to_west.0,arapahoe_east_to_west.0,23674,rendered,,109,1,5.549088,5.694,golden,refraction_corrected
+```
+
+## Checks
+
+`carla-validate <capture folder>` checks every row against this schema and the primary key.\
+It also checks that the summary written at the run's end counts the rows the track holds.\
+Frictionless tools can also read the Table Schema directly.\
+The schema adds two annotations, `x-unit` and `x-format-version`, that such tools ignore.
+
+## Versions
 
 The CSV carries no version of its own.\
 This keeps its header to the column names alone.\
@@ -132,17 +150,3 @@ This page describes version 2.
 
 A summary without that field is version 1, an older shape with fewer columns that this schema does not describe.\
 Readers read a version they know and refuse a newer one by name rather than reading it in part.
-
-## Example
-
-```
-time_utc,sim_time_s,uid,callsign,cot_type,how,lat,lon,hae_m,ce_m,le_m,course_deg,speed_mps,vx,vy,vz,base_type,type_id,special_type,length_m,width_m,height_m,color,role_name,edge,lane,sumo_x,sumo_y,carla_x,carla_y,sumo_id,entity_id,frame,render_state,render_reason,actor_id,in_window,sun_elevation_deg,sun_corrected_elevation_deg,illumination_band,illumination_band_elevation
-2026-09-29T13:27:00.000Z,60,CARLA-TRUTH-SUMO-arapahoe_east_to_west.0,van-arapahoe_east_to_west.0,a-n-G-E-V,m-g,39.5951904,-104.8806465,1748.60,0.0,0.0,320.3,0.00,0.00,0.00,0.00,van,van.vehicle.sprinter.mercedes,,5.92,1.98,2.73,"230,230,230",arapahoe_east_to_west,427819530#0,427819530#0_1,330.23,97.79,330.23,-97.79,arapahoe_east_to_west.0,arapahoe_east_to_west.0,23674,rendered,,109,1,5.549088,5.694,golden,refraction_corrected
-```
-
-## Checking a file
-
-`carla-validate <capture folder>` checks every row against this schema and the primary key.\
-It also checks that the summary written at the run's end counts the rows the track holds.\
-Frictionless tools can also read the Table Schema directly.\
-The schema adds two annotations, `x-unit` and `x-format-version`, that such tools ignore.

@@ -1,5 +1,15 @@
 # Legacy scenario labels (`*.labels.json`)
 
+| | |
+|---|---|
+| File | `*.labels.json`: what a scenario generator wrote before scenarios were compiled; nothing writes it anymore |
+| Schema | `CarlaControl/schemas/legacy_labels.schema.json` |
+| Schema id | `urn:carla-sumo-capture:schema:legacy-labels:1` |
+| Format version | 1 |
+| Version field | none: the file carries no version, so a reader takes it as version 1 |
+
+## Description
+
 Before scenarios were compiled, a scenario generator wrote its route file and, beside it, a labels file.\
 The labels file said which vehicles the generator planted, which affiliation to show each vehicle type with and which gaps it described.
 
@@ -10,7 +20,7 @@ The tools still read a labels file to keep runs of the old scenarios repeatable.
 - Schema: `CarlaControl/schemas/legacy_labels.schema.json`
 - Schema id: `urn:carla-sumo-capture:schema:legacy-labels:1`
 
-## Who reads it
+## Writers and readers
 
 - `carla-cot-telemetry --labels <file>` reads all three keys:
   - `marked_ids` lists the vehicles recorded as planted, in the `marked` field of its XML and CSV.
@@ -34,12 +44,6 @@ A reader ignores a key it does not name.
 | `affiliation_by_type` | object | | no | A CoT affiliation letter (`p u a f n s h j k o x`) per SUMO vehicle type id. `u` marks an anomaly type. |
 | `anomaly_notes` | array of objects | | no | The described gaps. Each is an object with the author's own keys. If `begin_s` and `end_s` are given, they are its window in seconds of simulation time. |
 
-## Format version
-
-The file carries no version.\
-It is version 1, like any file written before its kind carried a version.\
-No newer version will be made.
-
 ## Example
 
 ```json
@@ -54,3 +58,9 @@ No newer version will be made.
   ]
 }
 ```
+
+## Versions
+
+The file carries no version.\
+It is version 1, like any file written before its kind carried a version.\
+No newer version will be made.

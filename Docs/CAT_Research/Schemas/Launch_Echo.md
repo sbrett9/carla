@@ -5,9 +5,10 @@
 | File | none of its own: the `launch_echo` object in `run.result.json` and `run.resolution.json` |
 | Schema | `CarlaControl/schemas/launch_echo.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:launch-echo:1` |
-| Format version | 1, in `launch_echo_version` |
+| Format version | 1 |
+| Version field | `launch_echo_version` |
 
-## What it is
+## Description
 
 The launch echo is what a capture run says it is about to do, before it acquires the world or starts SUMO:
 
@@ -26,7 +27,7 @@ Before any time is spent, the echo shows you a run that is not the one you meant
 Every figure comes from the code that will act on it.\
 The echo also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - `carla-capture` computes it once, after the offline checks accept and before anything is acquired.\
   An attended run prints it at the terminal.
@@ -110,13 +111,6 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 
 `band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and `night`.
 
-## Versions
-
-This page describes version 1, the only version.\
-No tool reads the echo back from a file.\
-If you write a reader, have it read version 1.\
-Have it refuse a newer version rather than read it in part.
-
 ## Example
 
 Shortened from a real run:
@@ -148,3 +142,10 @@ Shortened from a real run:
   "not_predicted": ["wall-clock duration: no measured tick rate exists for a configuration before it runs"]
 }
 ```
+
+## Versions
+
+This page describes version 1, the only version.\
+No tool reads the echo back from a file.\
+If you write a reader, have it read version 1.\
+Have it refuse a newer version rather than read it in part.

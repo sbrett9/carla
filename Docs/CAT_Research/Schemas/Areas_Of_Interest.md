@@ -5,9 +5,10 @@
 | File | `<extract>.aoi.geojson`, beside the OpenStreetMap extract |
 | Schema | `CarlaControl/schemas/area_of_interest.schema.json` |
 | Schema id | `urn:carla-sumo-capture:schema:area-of-interest:1` |
-| Format version | 1. The file carries no version field. |
+| Format version | 1 |
+| Version field | none: the file carries no version field, so a reader takes it as version 1 |
 
-## What it is
+## Description
 
 An area of interest is a named place where a scenario can put behavior and that an annotation can refer to.\
 Examples are a guard tower, a gate and a parking lot.\
@@ -22,7 +23,7 @@ The radius is therefore a property these tools define.
 Positions are `[longitude, latitude]` in WGS84 degrees, in that order.\
 If an area falls inside the extract with the two swapped, the reader names the likely mistake, `[latitude, longitude]`.
 
-## Who writes it and who reads it
+## Writers and readers
 
 - A scenario developer writes it, by hand or in a GIS tool.
 - The world build reads it (`carla-build-world`, `carla-sctmv`): the file `--aoi` names, or the one found beside `--osm`.\
@@ -65,12 +66,6 @@ The reader also checks what the schema cannot say:
 - every area reaches into the extract's `<bounds>`
 - every position is inside WGS84's ranges
 
-## Versions
-
-The file is GeoJSON and carries no version of its own.\
-Every file is read as version 1 of the properties these tools define.\
-This page describes that version.
-
 ## Example
 
 A circle and a polygon:
@@ -95,3 +90,9 @@ A circle and a polygon:
   ]
 }
 ```
+
+## Versions
+
+The file is GeoJSON and carries no version of its own.\
+Every file is read as version 1 of the properties these tools define.\
+This page describes that version.
