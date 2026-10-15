@@ -33,50 +33,67 @@ window and the van's stop in the second. The run lasts 360 s. The sun is frozen 
 opening (`freeze_at_window_start`). Each window then stays in its one band. The other scenarios
 declare an advancing sun.
 
-**A run configuration is written beside the scenario**, `<scenario>.run.json`: `run_capture` captures
+**A run configuration is written beside the scenario**, `<scenario>.run.json`: `carla-capture` captures
 the first window through one camera, `Check_Overhead_1`, looking down on the curb from 70 m, and writes
 the capture's sidecars, its manifest with the plan's interval rows and the world truth track.
+
+**Where it runs.** From a checkout, under `CarlaControl/scripts/`, it writes to `Import/` against the
+checkout's world package, catalogue and staged SUMO, and the run configuration names the lock there.
+A distribution ships a copy beside the scenario, in `Scenarios/Arapahoe/` with the Arapahoe dwell's
+generator it draws on; run there, it writes the specification beside itself, compiles into
+`Arapahoe_I25_SupervisionCheck/`, reads the package beside it, the distribution's `catalogue/` and
+its `tools/sumo`, and the run configuration names the scenario by id
+(`carlacontrol.ScenarioGeneratorLayout`).
 
 Usage:
     python make_supervision_check_scenario.py [--out-dir ../../Import]
 Then, from the repository root:
-    python CarlaControl/scripts/run_capture.py --run Import/Arapahoe_I25_SupervisionCheck.run.json
+    carla-capture --run Import/Arapahoe_I25_SupervisionCheck.run.json
 """
 import argparse
 import json
 import logging
-import math
 import os
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
-sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
+# From a checkout, the sources ahead of any installed carlacontrol. Beside a shipped scenario there is
+# no such folder, and the distribution's installed copy is imported.
+if os.path.isdir(os.path.join(_REPO, "CarlaControl", "src")):
+    sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 sys.path.insert(0, _THIS)
-
-from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
-from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
-from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
-from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
+# The dwell's generator is imported from this script's own folder, so no __pycache__ is written
+# beside a shipped scenario.
+sys.dont_write_bytecode = True
 
 # One world, one measured traffic: the places, the vehicle classes, the mixes and the ambient flows are
-# the Arapahoe dwell's own, so the check runs among the traffic that scenario was tuned to.
+# the Arapahoe dwell's own, so the check runs among the traffic that scenario was tuned to. The
+# dwell's generator sits beside this one, in a checkout and in a distribution alike.
 from make_arapahoe_scenario import (  # noqa: E402
     AMBIENT_FLOWS,
-    CATALOGUE,
     EPOCH,
     MAP_NAME,
     PLACES,
-    STAGED_SUMO,
     VEHICLE_CLASSES,
     VEHICLE_MIXES,
-    WORLD_PACKAGE,
     ArapahoeDwellSpecification,
 )
 
+from carlacontrol.LanePoint import LanePoint  # noqa: E402
+from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
+from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
+from carlacontrol.ScenarioGeneratorLayout import ScenarioGeneratorLayout  # noqa: E402
+from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
+from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
+
 SCENARIO_NAME = f"{MAP_NAME}_SupervisionCheck"
+
+# Where this script reads and writes: the checkout's Import/, Build/ and catalogue when it runs from
+# CarlaControl/scripts/; the folder it sits in, the distribution's catalogue and its SUMO when it sits
+# beside the shipped scenario.
+LAYOUT = ScenarioGeneratorLayout.of(__file__, MAP_NAME, SCENARIO_NAME)
 
 # 07:26:00 Mountain Daylight Time: the sun crosses +6 degrees, doc 11's edge between `golden` and
 # `day`, between the two capture windows below.
@@ -258,27 +275,19 @@ class SupervisionCheckSpecification:
 def kerb_point(network_text: str, offset_m: float) -> tuple[float, float]:
     """Where a position along the kerb lane lies in CARLA's frame (x east, y south): SUMO's lane
     position scaled onto the lane's shape, and SUMO (x, y) is CARLA (x, -y)."""
-    lane = ET.fromstring(network_text).find(f"edge[@id='{KERB_EDGE}']/lane[@index='0']")
-    shape = [tuple(float(v) for v in point.split(",")[:2]) for point in lane.get("shape").split()]
-    segments = list(zip(shape, shape[1:], strict=False))
-    lengths = [math.dist(a, b) for a, b in segments]
-    along = offset_m * sum(lengths) / float(lane.get("length"))
-    for (a, b), length in zip(segments, lengths, strict=True):
-        if along <= length or (a, b) == segments[-1]:
-            t = min(1.0, along / length) if length else 0.0
-            return round(a[0] + t * (b[0] - a[0]), 1), round(-(a[1] + t * (b[1] - a[1])), 1)
-        along -= length
-    raise ValueError("the curb lane has no shape")
+    return LanePoint(network_text).along_lane(f"{KERB_EDGE}_0", offset_m)
 
 
 def run_configuration(network_text: str) -> dict:
-    """What `run_capture` reads to capture the dwell's window through the camera over the kerb. It
-    names the scenario by its lock relative to the repository root, where the owner runs it."""
+    """What `carla-capture` reads to capture the dwell's window through the camera over the kerb. It
+    names the scenario as the folder it is written in has it: from a checkout, by its lock relative
+    to the repository root, where the owner runs it; beside the shipped scenario, by its id, which a
+    capture resolves under `paths.scenario_root`."""
     x, y = kerb_point(network_text, CAMERA_OFFSET_M)
     return {
         "run_configuration_version": 1,
         "caller_label": "supervision check",
-        "scenario_package": f"Import/{SCENARIO_NAME}.lock.json",
+        "scenario_package": LAYOUT.run_scenario_package,
         "capture": {
             "window": CAPTURE_WINDOWS[0]["id"],
             "prewarm_s": 30.0,
@@ -290,16 +299,16 @@ def run_configuration(network_text: str) -> dict:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out-dir", default=os.path.join(_REPO, "Import"),
-                        help="where the specification, the compiled scenario and its run "
-                             "configuration go (default: carla/Import)")
-    parser.add_argument("--world-package", default=WORLD_PACKAGE,
+    parser.add_argument("--out-dir", default=str(LAYOUT.out_dir),
+                        help=ScenarioGeneratorLayout.help_out_dir() + "; the run configuration goes "
+                             "beside the specification")
+    parser.add_argument("--world-package", default=str(LAYOUT.world_package),
                         help="the Arapahoe world package, whose map.net.xml this scenario runs")
     parser.add_argument("--step-length", type=float, default=0.05,
                         help="simulation step in seconds, the Arapahoe dwell's (default 0.05)")
     parser.add_argument("--seed", type=int, default=42, help="SUMO seed (default 42)")
-    parser.add_argument("--sumo-home", default=STAGED_SUMO if os.path.exists(STAGED_SUMO) else None,
-                        help="SUMO installation providing duarouter (default: Build/sumo-install)")
+    parser.add_argument("--sumo-home", default=LAYOUT.sumo_home,
+                        help=ScenarioGeneratorLayout.help_sumo_home())
     parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
                         help="compile when that SUMO is not the release that converted the world; "
                              "the lock records the acceptance")
@@ -307,7 +316,7 @@ def parse_args() -> argparse.Namespace:
                         help="skip the SUMO-only run that refuses a planned vehicle SUMO never "
                              "inserts (check 59), for quick iteration; the lock records that it "
                              "was skipped")
-    parser.add_argument("--catalogue", default=CATALOGUE,
+    parser.add_argument("--catalogue", default=str(LAYOUT.catalogue),
                         help="measured vehicle catalogue every vehicle type is sized from")
     return parser.parse_args()
 
@@ -315,6 +324,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.info("defaults from %s", LAYOUT.describe())
     try:
         installation = SumoInstallation.locate(args.sumo_home)
         network_text = WorldPackageReader(args.world_package).network_text()
@@ -331,7 +341,7 @@ def main() -> int:
     logging.info("specification %s (%d flows, %d planned vehicles, ends at %d s)", spec_path,
                  len(specification["flows"]), len(specification["actors"]), END_S)
     result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch,
-                              args.skip_dry_run).compile(spec_path, out_dir)
+                              args.skip_dry_run).compile(spec_path, LAYOUT.compile_dir(out_dir))
     for finding in result.findings.findings:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)
     for role, path in sorted(result.files.items()):

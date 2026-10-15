@@ -67,6 +67,17 @@ Each anomaly's interval is anchored to the event of its vehicle that commits it:
 shadow's transits to their departures, each probe's standoff, the stay-behind's dwell and the guard's
 parked shift to their stop.
 
+**Capture windows.** One per planted event, each opening where the event shows, and a run file for
+each beside the specification, `Shahid_Bahonar_Port_PatternOfLife.<window id>.run.json`, with one
+camera staring at the event's place, so a capture names a window by its id instead of working out
+the seconds.
+
+**Where it runs.** From a checkout, under `CarlaControl/scripts/`, it writes to `Import/` against the
+checkout's world package, catalogue and staged SUMO. A distribution ships a copy beside the scenario,
+in `Scenarios/Bahonar/`; run there, it writes the specification beside itself, compiles into
+`Shahid_Bahonar_Port_PatternOfLife/` and reads the package beside it, the distribution's `catalogue/`
+and its `tools/sumo` (`carlacontrol.ScenarioGeneratorLayout`).
+
 Usage:
     python make_bahonar_scenario.py [--days 7] [--out-dir ../../Import]
 Preview a slice in the GUI before committing to the full week:
@@ -83,10 +94,15 @@ from pathlib import Path
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
-sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
+# From a checkout, the sources ahead of any installed carlacontrol. Beside a shipped scenario there is
+# no such folder, and the distribution's installed copy is imported.
+if os.path.isdir(os.path.join(_REPO, "CarlaControl", "src")):
+    sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 
-from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402  (needs the path above)
+from carlacontrol.LanePoint import LanePoint  # noqa: E402  (needs the path above)
+from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
 from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
+from carlacontrol.ScenarioGeneratorLayout import ScenarioGeneratorLayout  # noqa: E402
 from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
 from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
@@ -94,16 +110,12 @@ from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
 MAP_NAME = "Shahid_Bahonar_Port"
 SCENARIO_NAME = f"{MAP_NAME}_PatternOfLife"
 
-# The SUMO this repository stages and the distribution ships, the release every shipped world was
-# converted by. The compiler refuses a routing SUMO of another release (check 6).
-STAGED_SUMO = os.path.join(_REPO, "Build", "sumo-install")
-
-# The measured vehicle catalogue every vehicle type in this scenario is sized from.
-CATALOGUE = os.path.join(_REPO, "CarlaControl", "catalogue", "vehicles.catalogue.json")
-
-# The world package, which carries the SUMO network this scenario runs, byte for byte, and the areas
-# of interest its supervision is sited at.
-WORLD_PACKAGE = os.path.join(_REPO, "Build", "world-packages", f"{MAP_NAME}.cwp")
+# Where this script reads and writes: the checkout's Import/, Build/ and catalogue when it runs from
+# CarlaControl/scripts/; the folder it sits in, the distribution's catalogue and its SUMO when it sits
+# beside the shipped scenario. The world package carries the SUMO network this scenario runs, byte
+# for byte, and the areas of interest its supervision is sited at. The SUMO is the release every
+# shipped world was converted by; the compiler refuses a routing SUMO of another release (check 6).
+LAYOUT = ScenarioGeneratorLayout.of(__file__, MAP_NAME, SCENARIO_NAME)
 
 # What simulated second zero means in civil time at the site: 07:00 at Bahonar on 29 September 2026.
 # Iran has observed no daylight saving since 2022, so the offset is +03:30 all year. The offset is
@@ -220,6 +232,22 @@ SHADOW_DEPARTS = "d6 02:30"
 STAYBEHIND_DEPARTS = "d1 08:00"
 # The guard who does not take up the skipped posting departs at its shift change and parks here.
 OFF_POST_PLACE = "west_apron_spur"
+
+# The windows worth capturing: one per planted event, opening where the event shows, each also
+# written as a run file beside the specification with one camera staring at the event's place. A
+# window is tied to the departure of its vehicle, so it moves with it. The leads were measured in
+# SUMO alone (release 1.27.0, seed 42): the escorts reach the drydock 1808 s to 1852 s after the
+# first departs, the off-post guard reaches the spur 1297 s after its shift change, and the shadow
+# passes tower 3 2 h 18 min into its crawl.
+ESCORT_ARRIVAL_LEAD = "27m"
+OFF_POST_ARRIVAL_LEAD = "19m"
+SHADOW_TOWER = "tower_03"
+SHADOW_TOWER_LEAD = "2h15m"
+# Each run file's camera: over the event's place from 150 m up and 150 m to its south, a 40 degree
+# field of view, the stare the capture guide describes.
+CAPTURE_CAMERA = {"stare_altitude_m": 150.0, "stare_standoff_m": 150.0, "stare_bearing_deg": 0.0,
+                  "fov": 40.0}
+CAPTURE_PREWARM_S = 60.0
 
 # Each vehicle kind: its catalogue bodies (a list; JEEP_BODIES for the one jeep body; or
 # CIVILIAN_CAR_CLASS for the catalogue's civilian cars), its SUMO vehicle class, its own driving
@@ -398,6 +426,7 @@ class BahonarPatternOfLifeSpecification:
             "rotas": [self.guard_rota()],
             "vocabulary": VOCABULARY,
             "supervision": self.supervision(),
+            "capture_windows": self.capture_windows(),
         }
 
     # -- time ---------------------------------------------------------------------------------------
@@ -713,6 +742,72 @@ class BahonarPatternOfLifeSpecification:
             instance["parameters"] = parameters
         return instance
 
+    # -- capture windows and their run files --------------------------------------------------------
+
+    def planted_windows(self) -> list[dict]:
+        """One window per planted event in the run: its id, when it opens, how long it lasts, the
+        place its camera looks at, the camera's name and the run file's label. The ids are the
+        instances' names without their `pi_` prefix."""
+        windows = []
+        if self.staybehind_in_run():
+            windows.append(self._window(
+                "ferry_stay_behind_d1", {"instant": "staybehind_departs"}, "6m", "ferry_berth",
+                "Berth_Stare_1", "ferry stay-behind, day 1: the car arrives and parks at the berth"))
+        for day in self.probe_days():
+            windows.append(self._window(
+                f"gate_probe_d{day}", self.probe_departure(day), "15m", "port_gate_standoff",
+                "Gate_Stare_1", f"gate probe, day {day}: the car halts short of the gate and leaves"))
+        if self.escort_ids():
+            windows.append(self._window(
+                "escort_drydock_d3", {"instant": "escort_departs", "plus": ESCORT_ARRIVAL_LEAD},
+                "6m", "drydock", "Drydock_Stare_1",
+                "escort, day 3: the five jeeps arrive at the drydock"))
+        if self.no_show_in_run:
+            windows.append(self._window(
+                f"posting_not_taken_up_d{self.no_show_day}",
+                {"at": f"d{self.no_show_day} {self.no_show_clock}", "plus": OFF_POST_ARRIVAL_LEAD},
+                "8m", OFF_POST_PLACE, "Spur_Stare_1",
+                f"posting not taken up, day {self.no_show_day}: the guard parks on the spur"))
+        if self.shadow_in_run():
+            windows.append(self._window(
+                "perimeter_shadow_d6", {"instant": "shadow_departs", "plus": SHADOW_TOWER_LEAD},
+                "6m", SHADOW_TOWER, "Tower_Stare_1",
+                "perimeter shadow, day 6: the car crawls past tower 3"))
+        return windows
+
+    @staticmethod
+    def _window(window_id: str, begin: object, length: str, place: str, sensor_id: str,
+                label: str) -> dict:
+        return {"id": window_id, "begin": begin, "length": length, "place": place,
+                "sensor_id": sensor_id, "label": label}
+
+    def capture_windows(self) -> list[dict]:
+        """The windows as the specification declares them."""
+        return [{"id": window["id"], "begin": window["begin"], "length": window["length"]}
+                for window in self.planted_windows()]
+
+    def run_configurations(self, network_text: str, scenario_package: str) -> dict[str, dict]:
+        """A run file per window, keyed by file name: one camera over the event's place, read from
+        the network the world package carries, at the end of an edge, where a vehicle routed to it
+        arrives."""
+        points = LanePoint(network_text)
+        places = self.places()
+        files = {}
+        for window in self.planted_windows():
+            x, y = points.of_place(places[window["place"]], "end")
+            files[f"{SCENARIO_NAME}.{window['id']}.run.json"] = {
+                "run_configuration_version": 1,
+                "caller_label": window["label"],
+                "scenario_package": scenario_package,
+                "capture": {
+                    "window": window["id"],
+                    "prewarm_s": CAPTURE_PREWARM_S,
+                    "channels": [{"sensor_id": window["sensor_id"], "stare_look_at_x_m": x,
+                                  "stare_look_at_y_m": y, **CAPTURE_CAMERA}],
+                },
+            }
+        return files
+
     @staticmethod
     def _relative(path: Path, base: Path) -> str:
         """`path` as the specification names it: relative to `base`, or whole where the two are on
@@ -726,10 +821,9 @@ class BahonarPatternOfLifeSpecification:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out-dir", default=os.path.join(_REPO, "Import"),
-                        help="where the specification and the compiled scenario go "
-                             "(default: carla/Import)")
-    parser.add_argument("--world-package", default=WORLD_PACKAGE,
+    parser.add_argument("--out-dir", default=str(LAYOUT.out_dir),
+                        help=ScenarioGeneratorLayout.help_out_dir())
+    parser.add_argument("--world-package", default=str(LAYOUT.world_package),
                         help="world package the CARLA map was generated from. Its map.net.xml is "
                              "the network this scenario runs and its areas of interest are where "
                              "the supervision is sited; netconvert is not run here")
@@ -748,8 +842,8 @@ def parse_args() -> argparse.Namespace:
                              "measured at; the co-simulation interpolates between steps along each "
                              "lane (default 1.0)")
     parser.add_argument("--seed", type=int, default=42, help="SUMO seed (default 42)")
-    parser.add_argument("--sumo-home", default=STAGED_SUMO if os.path.exists(STAGED_SUMO) else None,
-                        help="SUMO installation providing duarouter (default: Build/sumo-install)")
+    parser.add_argument("--sumo-home", default=LAYOUT.sumo_home,
+                        help=ScenarioGeneratorLayout.help_sumo_home())
     parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
                         help="compile when that SUMO is not the release that converted the world; "
                              "the lock records the acceptance")
@@ -757,7 +851,7 @@ def parse_args() -> argparse.Namespace:
                         help="skip the SUMO-only run that refuses a planned vehicle SUMO never "
                              "inserts (check 59), for quick iteration; the lock records that it "
                              "was skipped")
-    parser.add_argument("--catalogue", default=CATALOGUE,
+    parser.add_argument("--catalogue", default=str(LAYOUT.catalogue),
                         help="measured vehicle catalogue every vehicle type is sized from. A class "
                              "naming a body this catalogue does not hold is refused")
     return parser.parse_args()
@@ -769,6 +863,7 @@ def main() -> int:
     if args.days < 1:
         logging.error("--days must be at least 1")
         return 1
+    logging.info("defaults from %s", LAYOUT.describe())
     try:
         installation = SumoInstallation.locate(args.sumo_home)
         network_text = WorldPackageReader(args.world_package).network_text()
@@ -782,9 +877,10 @@ def main() -> int:
         return 1
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    specification = BahonarPatternOfLifeSpecification(
+    builder = BahonarPatternOfLifeSpecification(
         catalogue, args.days, args.no_show_day, args.no_show_hour, args.no_show_tower,
-        args.step_length, args.seed).build(
+        args.step_length, args.seed)
+    specification = builder.build(
         Path(args.world_package).resolve(), NetworkFingerprint.of_text(network_text),
         Path(args.catalogue).resolve(), out_dir)
     spec_path = out_dir / f"{SCENARIO_NAME}.scenario.json"
@@ -800,11 +896,17 @@ def main() -> int:
                  catalogue.catalogue_id)
     result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch,
                               args.skip_dry_run).compile(
-        spec_path, out_dir)
+        spec_path, LAYOUT.compile_dir(out_dir))
     for finding in result.findings.findings:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)
     for role, path in sorted(result.files.items()):
         logging.info("%-13s %s", role, path)
+    if not result.refused:
+        runs = builder.run_configurations(network_text, LAYOUT.run_scenario_package)
+        for name, run in runs.items():
+            run_path = out_dir / name
+            run_path.write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8", newline="\n")
+            logging.info("%-13s %s", "run", run_path)
     logging.info("%s", "REFUSED" if result.refused else "compiled")
     return 1 if result.refused else 0
 

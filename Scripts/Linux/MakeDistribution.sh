@@ -11,10 +11,12 @@
 #   catalogue/     the measured vehicle catalogue, which a scenario specification names
 #   osm/           the example OpenStreetMap maps worlds can be built from
 #   Scenarios/     the example scenarios, whole, with the OpenStreetMap extracts they are built on
+#                  and, beside each scenario, the script from CarlaControl/scripts/ that writes it
 #   docs/          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
 #                  Docs/CAT_Research/, with their folder structure kept so their links resolve.
-#                  Links that leave it are pointed at the bundle by
-#                  Scripts/Distribution/rewrite_doc_links.py, which needs python3 (or $PYTHON)
+#                  Links that leave it, and the scenario READMEs' links into it, are pointed at the
+#                  bundle by Scripts/Distribution/rewrite_doc_links.py, which needs python3 (or
+#                  $PYTHON)
 #   tools/sumo/    the SUMO toolchain laid out as a SUMO installation: bin/ with netconvert, sumo and
 #                  duarouter, lib/ with the shared libraries they load, SUMO's typemap/xsd data, its
 #                  traci/sumolib modules, and PROJ data
@@ -245,14 +247,6 @@ copy_user_docs() {
         fi
         cp -a "$root/Docs/CAT_Research/$folder" "$dist/docs/"
     done
-    # A link that leaves the documentation names a file by its place in the repository. The helper
-    # the Windows script runs too points it at the bundle's own copy, or keeps only its text when the
-    # target does not ship. It reads what shipped from the bundle, so it runs after step 3b.
-    if ! command -v "${PYTHON:-python3}" >/dev/null 2>&1; then
-        echo "[dist] ERROR: ${PYTHON:-python3} not found; it is needed to point the documentation's links at the bundle." >&2
-        exit 1
-    fi
-    "${PYTHON:-python3}" "$root/Scripts/Distribution/rewrite_doc_links.py" "$dist/docs"
     echo "[dist] docs: ${user_doc_folders// /, } ($(find "$dist/docs" -type f | wc -l) files)"
     add_manifest_row "user documentation (${user_doc_folders// /, })" \
                      "built from this repository, Docs/CAT_Research/" \
@@ -270,26 +264,58 @@ else
     echo "[dist] WARNING: no .osm files under Import/"
 fi
 
-# 4b. The example scenarios, copied whole to Scenarios/ at the top of the bundle. They include
-#     OpenStreetMap extracts, so their row carries the ODbL notice osm/ does and names the extracts
-#     that shipped. A checkout without the folder still assembles: the bundle goes without it, and
-#     the warning says so.
+# 4b. The example scenarios, copied whole to Scenarios/ at the top of the bundle, each with the script
+#     that writes it beside it. They include OpenStreetMap extracts, so their row carries the ODbL
+#     notice osm/ does and names the extracts that shipped. A checkout without the folder still
+#     assembles: the bundle goes without it, and the warning says so.
+#
+#     The scripts are the checkout's, under CarlaControl/scripts/, copied beside the scenario each
+#     writes (Scenarios/<Place>/), where a recipient can change the script and compile again, as the
+#     READMEs say. Run there, a script finds the world package beside it and the bundle's catalogue
+#     and SUMO by itself (carlacontrol.ScenarioGeneratorLayout). A missing script is a broken
+#     checkout and stops the assembly.
+scenario_generators="Arapahoe:make_arapahoe_scenario.py Arapahoe:make_supervision_check_scenario.py Bahonar:make_bahonar_scenario.py Gardnerville:make_sumo_scenario.py"
 copy_example_scenarios() {
-    local src="$root/CarlaControl/Examples/Scenarios" extracts osm_named=""
+    local src="$root/CarlaControl/Examples/Scenarios" extracts osm_named="" pair place script copied=0
     if [ ! -d "$src" ]; then
         echo "[dist] WARNING: no example scenarios at $src; the bundle will have no Scenarios/ folder."
         return 0
     fi
     cp -a "$src" "$dist/Scenarios"
+    for pair in $scenario_generators; do
+        place="${pair%%:*}"
+        script="${pair#*:}"
+        if [ ! -f "$root/CarlaControl/scripts/$script" ]; then
+            echo "[dist] ERROR: the scenario script $root/CarlaControl/scripts/$script is missing; the example in Scenarios/$place/ ships with the script that writes it." >&2
+            exit 1
+        fi
+        if [ ! -d "$dist/Scenarios/$place" ]; then
+            echo "[dist] WARNING: no example scenario folder Scenarios/$place for $script; the script is not shipped."
+            continue
+        fi
+        cp "$root/CarlaControl/scripts/$script" "$dist/Scenarios/$place/"
+        copied=$((copied + 1))
+    done
     extracts="$(find "$dist/Scenarios" -type f -name '*.osm' -printf '%P\n' | sort | paste -sd ',' - | sed 's/,/, /g')"
     [ -z "$extracts" ] || osm_named=": $extracts"
-    echo "[dist] example scenarios: $(find "$dist/Scenarios" -type f | wc -l) files, $(find "$dist/Scenarios" -type f -name '*.osm' | wc -l) OpenStreetMap extracts"
-    add_manifest_row "example scenarios, with the OpenStreetMap extracts they are built on" \
-                     "built from this repository, CarlaControl/Examples/Scenarios/; OpenStreetMap data by openstreetmap.org contributors$osm_named" \
+    echo "[dist] example scenarios: $(find "$dist/Scenarios" -type f | wc -l) files, $(find "$dist/Scenarios" -type f -name '*.osm' | wc -l) OpenStreetMap extracts, $copied scenario scripts"
+    add_manifest_row "example scenarios, with the OpenStreetMap extracts they are built on and the scripts that write them" \
+                     "built from this repository, CarlaControl/Examples/Scenarios/ and CarlaControl/scripts/; OpenStreetMap data by openstreetmap.org contributors$osm_named" \
                      "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt); the OpenStreetMap extracts and data derived from them ODbL 1.0 (licenses/OpenStreetMap-ODbL-NOTICE.txt)" \
                      "Scenarios/"
 }
 copy_example_scenarios
+
+# 4c. The links in the shipped pages. A link that leaves its page's folder names a file by its place
+#     in the repository: a documentation page's link to the skills, a scenario README's link to the
+#     documentation. The helper the Windows script runs too points each at the bundle's own copy, or
+#     keeps only its text when the target does not ship. It reads what shipped from the bundle, so
+#     it runs after the skills (3b), the documentation (3c) and the example scenarios (4b) are in.
+if ! command -v "${PYTHON:-python3}" >/dev/null 2>&1; then
+    echo "[dist] ERROR: ${PYTHON:-python3} not found; it is needed to point the shipped pages' links at the bundle." >&2
+    exit 1
+fi
+"${PYTHON:-python3}" "$root/Scripts/Distribution/rewrite_doc_links.py" "$dist"
 
 # 5. The SUMO toolchain: the binaries, the shared libraries they actually load, the named data/ and
 #    tools/ subsets, and PROJ data. CarlaNet talks to `sumo` over the TraCI wire protocol from managed

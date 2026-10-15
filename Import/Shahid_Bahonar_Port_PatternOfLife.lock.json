@@ -4,18 +4,18 @@
   "scenario_name": "Shahid Bahonar Port pattern of life",
   "spec_version": 1,
   "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-  "specification_sha256": "b33f1b56bbae23005e60c24fb2a9674023a79bcb59fbbec00cf0b46d9355c329",
+  "specification_sha256": "2b2006376e29ddd03aefd1ef915d24398d613e7d90f7834fcb0d7f58fabaf245",
   "compiler": {
     "name": "carlacontrol.ScenarioCompiler",
     "version": "0.10.0"
   },
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g692e09427",
-    "carlanet": "0.10.0+g7715a2677",
+    "tool_version": "0.10.0+ge878b77da.dirty",
+    "carlanet": "0.10.0+gecb994c6b",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-13T18:16:29.080Z"
+    "written_utc": "2026-10-15T03:57:49.602Z"
   },
   "files": {
     "routes": {
@@ -146,42 +146,73 @@
     "policy": "advance",
     "rate_sun_s_per_sim_s": 1.0
   },
-  "capture_windows": [],
+  "capture_windows": [
+    {
+      "id": "ferry_stay_behind_d1",
+      "begin_s": 90000.0,
+      "end_s": 90360.0,
+      "civil_begin": "2026-09-30T08:00:00+03:30",
+      "civil_end": "2026-09-30T08:06:00+03:30",
+      "civil_date": "2026-09-30"
+    },
+    {
+      "id": "gate_probe_d2",
+      "begin_s": 187474.0,
+      "end_s": 188374.0,
+      "civil_begin": "2026-10-01T11:04:34+03:30",
+      "civil_end": "2026-10-01T11:19:34+03:30",
+      "civil_date": "2026-10-01"
+    },
+    {
+      "id": "gate_probe_d5",
+      "begin_s": 447085.0,
+      "end_s": 447985.0,
+      "civil_begin": "2026-10-04T11:11:25+03:30",
+      "civil_end": "2026-10-04T11:26:25+03:30",
+      "civil_date": "2026-10-04"
+    },
+    {
+      "id": "escort_drydock_d3",
+      "begin_s": 271620.0,
+      "end_s": 271980.0,
+      "civil_begin": "2026-10-02T10:27:00+03:30",
+      "civil_end": "2026-10-02T10:33:00+03:30",
+      "civil_date": "2026-10-02"
+    },
+    {
+      "id": "posting_not_taken_up_d4",
+      "begin_s": 346740.0,
+      "end_s": 347220.0,
+      "civil_begin": "2026-10-03T07:19:00+03:30",
+      "civil_end": "2026-10-03T07:27:00+03:30",
+      "civil_date": "2026-10-03"
+    },
+    {
+      "id": "perimeter_shadow_d6",
+      "begin_s": 510300.0,
+      "end_s": 510660.0,
+      "civil_begin": "2026-10-05T04:45:00+03:30",
+      "civil_end": "2026-10-05T04:51:00+03:30",
+      "civil_date": "2026-10-05"
+    }
+  ],
   "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
   "illumination_label_association": {
-    "normalized_mutual_information": 0.128,
+    "normalized_mutual_information": 0.012,
     "bands": {
       "day": {
-        "annotated": 86,
-        "nominal": 241,
-        "unlabelled": 73,
-        "total": 400
-      },
-      "golden": {
-        "annotated": 7,
-        "nominal": 3,
-        "unlabelled": 21,
-        "total": 31
-      },
-      "nautical_twilight": {
-        "annotated": 7,
-        "nominal": 0,
-        "unlabelled": 0,
-        "total": 7
+        "annotated": 6,
+        "nominal": 89,
+        "unlabelled": 17,
+        "total": 112
       },
       "astronomical_twilight": {
-        "annotated": 7,
-        "nominal": 0,
-        "unlabelled": 0,
-        "total": 7
-      },
-      "night": {
-        "annotated": 1,
-        "nominal": 112,
-        "unlabelled": 56,
-        "total": 169
+        "annotated": 0,
+        "nominal": 16,
+        "unlabelled": 3,
+        "total": 19
       }
     },
-    "entries": 614
+    "entries": 131
   }
 }

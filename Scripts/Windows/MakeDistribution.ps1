@@ -16,6 +16,7 @@
       catalogue\     the measured vehicle catalogue, which a scenario specification names
       osm\           the example OpenStreetMap maps worlds can be built from
       Scenarios\     the example scenarios, whole, with the OpenStreetMap extracts they are built on
+                     and, beside each scenario, the script from CarlaControl\scripts\ that writes it
       docs\          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
                      Docs\CAT_Research\, with their folder structure kept so their links resolve.
                      Links that leave it are pointed at the bundle by
@@ -435,17 +436,6 @@ function Copy-UserDocs {
         if (-not (Test-Path $src)) { throw "user documentation folder not found at $src" }
         Copy-Item -Recurse -Force -Path $src -Destination (Join-Path $docsDest $folder)
     }
-    # A link that leaves the documentation names a file by its place in the repository. The helper
-    # the Linux script runs too points it at the bundle's own copy, or keeps only its text when the
-    # target does not ship. It reads what shipped from the bundle, so it runs after step 3b.
-    $rewriter = Join-Path $CarlaRoot 'Scripts\Distribution\rewrite_doc_links.py'
-    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-        throw "python is not on PATH; it is needed to point the documentation's links at the bundle."
-    }
-    $rewritten = @(& python $rewriter $docsDest)
-    $exitCode = $LASTEXITCODE
-    $rewritten | ForEach-Object { Write-Info "$_" }
-    if ($exitCode -ne 0) { throw "rewriting the documentation's links failed (exit $exitCode)." }
     Write-Info "[dist] docs: $($userDocFolders -join ', ') ($(@(Get-ChildItem -Recurse -File $docsDest).Count) files)"
     Add-ManifestRow -Component "user documentation ($($userDocFolders -join ', '))" `
                     -Provenance 'built from this repository, Docs\CAT_Research\' `
@@ -463,10 +453,22 @@ if ($osm.Count -gt 0) {
                     -License 'ODbL 1.0 (licenses\OpenStreetMap-ODbL-NOTICE.txt)' -Location 'osm\'
 } else { Write-Warning "no .osm files under Import\" }
 
-# 4b. The example scenarios, copied whole to Scenarios\ at the top of the bundle. They include
-#     OpenStreetMap extracts, so their row carries the ODbL notice osm\ does and names the extracts
-#     that shipped. A checkout without the folder still assembles: the bundle goes without it, and
-#     the warning says so.
+# 4b. The example scenarios, copied whole to Scenarios\ at the top of the bundle, each with the script
+#     that writes it beside it. They include OpenStreetMap extracts, so their row carries the ODbL
+#     notice osm\ does and names the extracts that shipped. A checkout without the folder still
+#     assembles: the bundle goes without it, and the warning says so.
+#
+#     The scripts are the checkout's, under CarlaControl\scripts\, copied beside the scenario each
+#     writes (Scenarios\<Place>\), where a recipient can change the script and compile again, as the
+#     READMEs say. Run there, a script finds the world package beside it and the bundle's catalogue
+#     and SUMO by itself (carlacontrol.ScenarioGeneratorLayout). A missing script is a broken
+#     checkout and stops the assembly.
+$scenarioGenerators = @(
+    @{ Place = 'Arapahoe';     Script = 'make_arapahoe_scenario.py' },
+    @{ Place = 'Arapahoe';     Script = 'make_supervision_check_scenario.py' },
+    @{ Place = 'Bahonar';      Script = 'make_bahonar_scenario.py' },
+    @{ Place = 'Gardnerville'; Script = 'make_sumo_scenario.py' }
+)
 function Copy-ExampleScenarios {
     $src  = Join-Path $CarlaRoot 'CarlaControl\Examples\Scenarios'
     $dest = Join-Path $dist 'Scenarios'
@@ -475,17 +477,45 @@ function Copy-ExampleScenarios {
         return
     }
     Copy-Item -Recurse -Force -Path $src -Destination $dest
+    $copied = 0
+    foreach ($generator in $scenarioGenerators) {
+        $script = Join-Path $CarlaRoot "CarlaControl\scripts\$($generator.Script)"
+        if (-not (Test-Path $script)) {
+            throw "the scenario script $script is missing; the example in Scenarios\$($generator.Place)\ ships with the script that writes it."
+        }
+        $place = Join-Path $dest $generator.Place
+        if (-not (Test-Path $place)) {
+            Write-Warning "no example scenario folder Scenarios\$($generator.Place) for $($generator.Script); the script is not shipped."
+            continue
+        }
+        Copy-Item -Force $script $place
+        $copied++
+    }
     $destFull = (Get-Item $dest).FullName
     $extracts = @(Get-ChildItem -Recurse -File $destFull | Where-Object { $_.Extension -eq '.osm' } |
                   ForEach-Object { $_.FullName.Substring($destFull.Length + 1) } | Sort-Object)
     $osmNamed = if ($extracts.Count -gt 0) { ": $($extracts -join ', ')" } else { '' }
-    Write-Info "[dist] example scenarios: $(@(Get-ChildItem -Recurse -File $dest).Count) files, $($extracts.Count) OpenStreetMap extracts"
-    Add-ManifestRow -Component 'example scenarios, with the OpenStreetMap extracts they are built on' `
-                    -Provenance "built from this repository, CarlaControl\Examples\Scenarios\; OpenStreetMap data by openstreetmap.org contributors$osmNamed" `
+    Write-Info "[dist] example scenarios: $(@(Get-ChildItem -Recurse -File $dest).Count) files, $($extracts.Count) OpenStreetMap extracts, $copied scenario scripts"
+    Add-ManifestRow -Component 'example scenarios, with the OpenStreetMap extracts they are built on and the scripts that write them' `
+                    -Provenance "built from this repository, CarlaControl\Examples\Scenarios\ and CarlaControl\scripts\; OpenStreetMap data by openstreetmap.org contributors$osmNamed" `
                     -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt); the OpenStreetMap extracts and data derived from them ODbL 1.0 (licenses\OpenStreetMap-ODbL-NOTICE.txt)' `
                     -Location 'Scenarios\'
 }
 Copy-ExampleScenarios
+
+# 4c. The links in the shipped pages. A link that leaves its page's folder names a file by its place
+#     in the repository: a documentation page's link to the skills, a scenario README's link to the
+#     documentation. The helper the Linux script runs too points each at the bundle's own copy, or
+#     keeps only its text when the target does not ship. It reads what shipped from the bundle, so
+#     it runs after the skills (3b), the documentation (3c) and the example scenarios (4b) are in.
+$rewriter = Join-Path $CarlaRoot 'Scripts\Distribution\rewrite_doc_links.py'
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    throw "python is not on PATH; it is needed to point the shipped pages' links at the bundle."
+}
+$rewritten = @(& python $rewriter $dist)
+$exitCode = $LASTEXITCODE
+$rewritten | ForEach-Object { Write-Info "$_" }
+if ($exitCode -ne 0) { throw "rewriting the shipped pages' links failed (exit $exitCode)." }
 
 # 5. The SUMO toolchain: the binaries, the runtime DLLs they actually import, the named data/ and
 #    tools/ subsets, and PROJ's data. CarlaNet talks to `sumo` over the TraCI wire protocol from
