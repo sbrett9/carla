@@ -180,7 +180,7 @@ Any other value, such as `0` or `"1"`, is refused, because the field accepts onl
 
 ## Example
 
-`Import/Arapahoe_I25_SupervisionCheck.run.json`: one stare camera over the scenario's `dwell_golden` window.\
+`Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json`: one stare camera over the scenario's `dwell_golden` window.\
 The camera is 70 m above a point and 25 m back from it.\
 It looks east.
 
@@ -188,7 +188,7 @@ It looks east.
 {
   "run_configuration_version": 1,
   "caller_label": "supervision check",
-  "scenario_package": "Import/Arapahoe_I25_SupervisionCheck.lock.json",
+  "scenario_package": "Arapahoe_I25_SupervisionCheck",
   "capture": {
     "window": "dwell_golden",
     "prewarm_s": 30.0,
@@ -201,8 +201,12 @@ It looks east.
 }
 ```
 
+`scenario_package` names the scenario by its id.\
+The command resolves it under `paths.scenario_root`.\
+In a checkout, the copy in `Import/` names the lock instead, `Import/Arapahoe_I25_SupervisionCheck.lock.json`, relative to the repository root.
+
 Run it unattended, with the result written to a path you choose:
 
 ```
-carla-capture --run Import/Arapahoe_I25_SupervisionCheck.run.json --caller unattended --result out/check.result.json
+carla-capture --run Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe --caller unattended --result out/check.result.json
 ```

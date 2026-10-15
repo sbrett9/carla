@@ -53,7 +53,9 @@ tooling this skill is mostly about, and it runs on any machine with SUMO — no 
 
 ## Stage 1 — build the world package (what produces the .xodr and bareearth.bin)
 
-Run from a machine with a **headless CARLA server up** and `CESIUM_ION_TOKEN` set:
+Run from a machine with a **headless CARLA server up** and `CESIUM_ION_TOKEN` set.
+In a distribution, the installed command is `carla-sctmv`, with the same arguments.
+From a checkout:
 
 ```bash
 python carla/CarlaControl/scripts/run_SCTMV.py \
@@ -96,6 +98,12 @@ copy those into Stage 2 so the frames align.
 
 A scenario is a **specification**, `<Scenario>.scenario.json`, compiled against the world package by
 one compiler that checks everything it can before a capture is spent:
+
+```bash
+carla-compile-scenario <Scenario>.scenario.json --out-dir <Scenario>
+```
+
+From a checkout:
 
 ```bash
 python carla/CarlaControl/scripts/compile_scenario.py Import/<Scenario>.scenario.json \
@@ -393,12 +401,19 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario (`<scenario>.display.json`, `beside()` names it), never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
 | `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
 
-CLIs in `carla/CarlaControl/scripts/`:
+The command-line scripts.
+In a distribution, each `make_*_scenario.py` sits beside the scenario it writes, under `Scenarios/<Place>/` (Gardnerville, Arapahoe or Bahonar).
+It runs with python from the distribution's folder.
+In a checkout, all of these are in `carla/CarlaControl/scripts/`.
+There the scenario writers write to `Import/`:
 
 - `make_sumo_scenario.py` — Gardnerville orbit (one marked vehicle laps a block N times). Writes a
   specification and compiles it.
 - `make_arapahoe_scenario.py` — Arapahoe I-25 dwell (freeway + underpass, an incident, a long dwell).
   Writes a specification and compiles it; the incident is a lane closure.
+- `make_supervision_check_scenario.py` writes the supervision check: six minutes on the Arapahoe world,
+  with an annotated dwell, an annotated transit and a nominal stop. It compiles the scenario. It also
+  writes the scenario's run file.
 - `make_bahonar_scenario.py` — Shahid Bahonar 7-day pattern of life (the port's guard postings, ferry
   pulses and shift changes, six anomalies). Writes a specification and compiles it against the world
   package; refused by name while the catalogue lacks a body it draws.

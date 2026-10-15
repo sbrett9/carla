@@ -12,7 +12,8 @@
 An area of interest is a named place where a scenario can put behavior and that an annotation can refer to.\
 Examples are a guard tower, a gate and a parking lot.\
 You declare areas in GeoJSON (RFC 7946) beside the OpenStreetMap extract a world is built from.\
-`Import/Arapahoe_I25.osm` has its areas in `Import/Arapahoe_I25.aoi.geojson`.
+`Scenarios/Bahonar/Shahid_Bahonar_Port.osm` has its areas in `Shahid_Bahonar_Port.aoi.geojson` beside it.\
+In a checkout, both are in `Import/`.
 
 An area is one of three shapes: a `Polygon`, a `MultiPolygon` (holes are allowed in either), or a `Point` with a radius (a circle).\
 GeoJSON has no circle.\

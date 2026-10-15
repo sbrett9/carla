@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g692e09427, carlanet 0.10.0+g7715a2677, SUMO 1.27.0, at 2026-10-13T18:34:35.846Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+ge878b77da.dirty, carlanet 0.10.0+gecb994c6b, SUMO 1.27.0, at 2026-10-15T04:00:46.835Z
 
 7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.
 
@@ -19,7 +19,7 @@
 | 17 | warn | vehicle class mil_jeep | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class mil_truck | draws one body, vehicle.carlamotors.european_hgv, so every vehicle of the class looks the same and its appearance can become its label |
 | 17 | warn | vehicle class guard | draws one body, vehicle.jeep.wrangler_rubicon, so every vehicle of the class looks the same and its appearance can become its label |
-| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.128 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
+| 41 | warn | supervision | I(band; supervision) / H(supervision) = 0.012 over 131 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock |
 
 ## Epoch
 
@@ -35,13 +35,38 @@ Declared offset +3.5 h; the world's georeference configures +3.74538 h. set_sola
 
 Policy `advance`: an authored default the operator can override.
 
+## Capture windows (authored candidates)
+
+| Window | Opens | Closes | Civil date | Sun date | Elevation at open | Elevation at close |
+|---|---|---|---|---|---|---|
+| ferry_stay_behind_d1 | 2026-09-30T08:00:00+03:30 | 2026-09-30T08:06:00+03:30 | 2026-09-30 | 2026-09-30 | 30.15 | 31.38 |
+| gate_probe_d2 | 2026-10-01T11:04:34+03:30 | 2026-10-01T11:19:34+03:30 | 2026-10-01 | 2026-10-01 | 58.70 | 59.34 |
+| gate_probe_d5 | 2026-10-04T11:11:25+03:30 | 2026-10-04T11:26:25+03:30 | 2026-10-04 | 2026-10-04 | 57.94 | 58.35 |
+| escort_drydock_d3 | 2026-10-02T10:27:00+03:30 | 2026-10-02T10:33:00+03:30 | 2026-10-02 | 2026-10-02 | 55.14 | 55.79 |
+| posting_not_taken_up_d4 | 2026-10-03T07:19:00+03:30 | 2026-10-03T07:27:00+03:30 | 2026-10-03 | 2026-10-03 | 21.11 | 22.81 |
+| perimeter_shadow_d6 | 2026-10-05T04:45:00+03:30 | 2026-10-05T04:51:00+03:30 | 2026-10-05 | 2026-10-05 | -12.98 | -11.64 |
+
+- ferry_stay_behind_d1: The sun climbs from +30.15° to +31.38° during this window.
+- gate_probe_d2: The sun climbs from +58.70° to +59.34° during this window.
+- gate_probe_d5: The sun climbs from +57.94° to +58.35° during this window.
+- escort_drydock_d3: The sun climbs from +55.14° to +55.79° during this window.
+- posting_not_taken_up_d4: The sun climbs from +21.11° to +22.81° during this window.
+- perimeter_shadow_d6: The sun climbs from -12.98° to -11.64° during this window.
+
 ## Illumination-label association (check 41)
 
 I(band; supervision) / H(supervision), base 2; bands by the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below; elevation refraction_corrected. Presence: a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end.
 
 ### Over the declared windows
 
-Not computed: no capture window is declared.
+Normalized mutual information: 0.012 over 131 entries.
+
+| Band | annotated | nominal | unlabelled | total |
+|---|---|---|---|---|
+| day | 6 | 89 | 17 | 112 |
+| astronomical_twilight | 0 | 16 | 3 | 19 |
+
+Bands where one state alone occurs: astronomical_twilight. Bands where both occur: day.
 
 ### Over the span, at each departure
 

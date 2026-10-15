@@ -1,10 +1,15 @@
-# Arapahoe I-25 underpass dwell
+# Arapahoe I-25: the underpass dwell and the supervision check
 
+This folder holds two scenarios on one world, `Arapahoe_I25`.\
 `Arapahoe_I25_UnderpassDwell` is 45 minutes of morning traffic where Interstate 25 crosses East Arapahoe Road, in Arapahoe County, Colorado.\
 SUMO drives the traffic and CARLA draws every vehicle SUMO moves.\
 Among heavy freeway and arterial traffic, one vehicle leaves I-25 and waits 30 minutes under the Yosemite Street bridge.\
 Then it drives on.\
-The world is `Arapahoe_I25`.
+It labels nothing.\
+`Arapahoe_I25_SupervisionCheck` is six minutes at one curb of South Yosemite Street, with three labeled vehicles.\
+It exists to show every kind of label a scenario can carry, in a run short enough to check end to end.\
+[The supervision check](#the-supervision-check) describes it.\
+The rest of this page is about the dwell, unless it says otherwise.
 
 ## The scenario
 
@@ -97,7 +102,8 @@ A closed lane admits only the `authority` class.
 The scenario labels nothing.\
 Its supervision plan, the file that holds a scenario's labels, is `Arapahoe_I25_UnderpassDwell.supervision.json`.\
 The plan names no instance and no series.\
-Every flow and the `marked` vehicle are `unlabelled`: the plan makes no assertion about them.
+Every flow and the `marked` vehicle are `unlabelled`: the plan makes no assertion about them.\
+The labeled scenario in this folder is [the supervision check](#the-supervision-check).
 
 A capture's truth still names every vehicle.\
 Each vehicle record in a truth sidecar, the XML truth file beside each still, carries the vehicle's SUMO id.\
@@ -124,8 +130,14 @@ This folder holds the rest:
 |---|---|
 | `Arapahoe_I25.tar.xz` | The level pack, 46.9 MB. It is the world as an Unreal level, cooked for the distribution above. |
 | `Arapahoe_I25.cwp` | The world package the level was made from. A world package is one generated world in one file. The compiler, `carla-drive` and `carla-capture` read it. |
-| `Arapahoe_I25_UnderpassDwell.scenario.json` | The scenario specification. |
-| `Arapahoe_I25_UnderpassDwell/` | The compiled scenario, ready to run. |
+| `Arapahoe_I25_UnderpassDwell.scenario.json` | The dwell's scenario specification. |
+| `Arapahoe_I25_UnderpassDwell/` | The compiled dwell, ready to run. |
+| `make_arapahoe_scenario.py` | The script that writes the dwell's specification. Change it, not the specification. Run it here to write and compile the scenario again. |
+| `Arapahoe_I25_SupervisionCheck.scenario.json` | The supervision check's specification. |
+| `Arapahoe_I25_SupervisionCheck/` | The compiled supervision check, ready to run. |
+| `Arapahoe_I25_SupervisionCheck.run.json` | The run file that captures the supervision check's first window. |
+| `Arapahoe_I25_SupervisionCheck.sample.manifest.jsonl` | The run manifest of a sample capture of that window, the one the behavioral annotations page reads. |
+| `make_supervision_check_scenario.py` | The script that writes the supervision check and its run file. It takes its traffic from the dwell's script beside it. |
 
 The level pack is a Windows pack, for a Win64 Development distribution.\
 A Linux distribution needs a pack cooked on Linux with `PackageWorld.sh`.\
@@ -381,6 +393,80 @@ carla-audit-sidecars captures/<session id>
 
 [Running a capture](../../../../Docs/CAT_Research/Guides/Running_A_Capture.md) describes the run file, the timing and the results in full.
 
+## The supervision check
+
+`Arapahoe_I25_SupervisionCheck` is the second scenario in this folder.\
+Its purpose is to show every kind of label a scenario's plan can carry on a vehicle, in one short run.\
+A reader of the truth files learns the record from it.\
+A maintainer checks a capture end to end with it.\
+It is not a pattern of life.\
+Three vehicles do three simple things at one curb of South Yosemite Street, just north of East Arapahoe Road.\
+The dwell's own traffic on Arapahoe Road and Yosemite runs around them.
+
+| Vehicle | What it does | Label | State |
+|---|---|---|---|
+| `dweller`, a car | departs at t = 20 s, waits 120 s at the curb, drives on | `check:kerbside_dwell` | `annotated`, with the interval `dwell` from its stop to its leaving |
+| `transit`, a car | departs at t = 90 s and drives through, past the same curb | `check:through_transit` | `annotated`, with the interval `transit` from its departure and `past_the_kerb` for the stretch past the curb |
+| `brief_stopper`, a van | departs at t = 200 s, stops 20 s at the same curb, drives on | `check:brief_kerb_stop` | `nominal`: a matched negative for the dwell |
+
+The terms are the scenario's own, in namespace `check`.\
+Nine flows of the dwell's traffic run around the three, all `unlabelled`.\
+Simulated second zero is 07:26 Mountain Daylight Time on 29 September 2026.\
+The run lasts 360 s.\
+In a SUMO-only run of the compiled scenario, the car pulls to the curb at 109 s and leaves it at 229 s.\
+The second car passes the waiting one between 144 s and 160 s and leaves the map at 259 s.\
+The van stands at the curb from 254 s to 274 s.
+
+The scenario declares two capture windows.\
+`dwell_golden` opens at t = 60 s and lasts 180 s.\
+It holds the dwell and the transit's pass.\
+`stop_day` opens at t = 240 s and lasts 120 s.\
+It holds the van's stop.\
+The sun is frozen at each window's opening.\
+So each window stays in one light band: `golden`, then `day`.
+
+### Compiling the supervision check
+
+The compiled scenario is in `Arapahoe_I25_SupervisionCheck/`.\
+It was compiled at commit `2f5ea7fe9` from the specification in this folder, against `Arapahoe_I25.cwp`.\
+The compile gives five warnings.\
+Check 17 warns about each of the four classes that draw one body: `suv`, `van`, `truck` and `semi`.\
+Check 41 says how much the light band tells about the label.\
+To change it, change `make_supervision_check_scenario.py`, not the specification.\
+The script takes its places, vehicle classes and traffic from `make_arapahoe_scenario.py` beside it.\
+Then run it from the distribution's folder:
+
+```
+python Scenarios/Arapahoe/make_supervision_check_scenario.py
+```
+
+It writes the specification beside itself, compiles it into `Arapahoe_I25_SupervisionCheck/` and writes `Arapahoe_I25_SupervisionCheck.run.json`.
+
+### Capturing the supervision check
+
+`Arapahoe_I25_SupervisionCheck.run.json` captures the window `dwell_golden` through one camera, `Check_Overhead_1`.\
+The camera looks down on the curb from 70 m up and 25 m back, at the point midway between the two stops.\
+It records 1920 by 1080 stills with a 50 degree field of view.\
+The site profile and the paths are the ones [the dwell's capture](#capturing-a-window-with-carla-capture) uses.\
+Run the offline checks, then the capture:
+
+```
+carla-capture --site-profile site.json --run Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe --validate-only
+carla-capture --site-profile site.json --run Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe
+```
+
+To capture the van's stop instead, copy the run file and set its `window` to `stop_day`.
+
+### What to look for
+
+The capture's truth sidecars carry `dweller` as `annotated` from the frame it stops at the curb to the frame it leaves.\
+They carry `transit` as `annotated` from its departure, with two annotations while it passes the curb.\
+Every other vehicle in that window is `unlabelled`.\
+The run manifest holds the plan's three `instance` rows and nine `cohort` rows.\
+Then it holds an `interval_opened` and an `interval_closed` row for each interval the window reached.\
+`Arapahoe_I25_SupervisionCheck.sample.manifest.jsonl` is the manifest of such a capture, made on 8 October 2026 from a checkout's compile of this specification.\
+[Behavioral annotations](../../../../Docs/CAT_Research/EPOL/Behavioral_Annotations.md) reads that capture row by row in its worked example.
+
 ## Making the scenario from its parts
 
 This folder holds every input a rebuild needs:
@@ -389,11 +475,25 @@ This folder holds every input a rebuild needs:
 |---|---|
 | `Arapahoe_I25.osm` | The OpenStreetMap extract the world is built from. The build cuts the roads at its `<bounds>`. |
 | `Arapahoe_I25_UnderpassDwell.scenario.json` | The scenario specification: the traffic, the marked vehicle and the incident. |
+| `make_arapahoe_scenario.py` | The script that writes the specification and compiles it. |
+| `make_supervision_check_scenario.py` | The script that writes the supervision check, compiles it and writes its run file. |
 
 The world was built with no areas file and no type map.\
 The vehicle catalog comes with the distribution, in `catalogue/`.\
-In a source checkout, `CarlaControl/scripts/make_arapahoe_scenario.py` writes the specification.\
-Change the script, not the specification.
+The script that writes the dwell's specification, `make_arapahoe_scenario.py`, is in this folder.\
+In a source checkout, it is `CarlaControl/scripts/make_arapahoe_scenario.py`.\
+Change the script, not the specification.\
+Then run it from the distribution's folder:
+
+```
+python Scenarios/Arapahoe/make_arapahoe_scenario.py
+```
+
+It writes the specification beside itself.\
+It reads the world package beside it, the catalog in `catalogue/` and the SUMO in `tools/sumo`.\
+Then it compiles the scenario into `Arapahoe_I25_UnderpassDwell/`.\
+The new compiled scenario replaces the delivered one.\
+Its `--help` lists the settings, such as `--dwell-minutes`.
 
 ### Building the world
 
@@ -464,8 +564,10 @@ Then compile again, as [Compiling the scenario](#compiling-the-scenario) shows.
 Read the resolution report.\
 This specification names most of its places by edge id.\
 If an edge has a new id, check 7 refuses the place that names it.\
-In a source checkout, run `make_arapahoe_scenario.py` with `--world-package` instead.\
-It writes the specification against that package and compiles it.
+Or run `make_arapahoe_scenario.py` with `--world-package` naming the new package.\
+It writes the specification against that package and compiles it.\
+The supervision check names the same package.\
+Run `make_supervision_check_scenario.py` the same way.
 
 [Writing a scenario](../../../../Docs/CAT_Research/Guides/Writing_A_Scenario.md) explains every field of the specification.
 

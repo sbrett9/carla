@@ -1,0 +1,20 @@
+{
+  "run_configuration_version": 1,
+  "caller_label": "gate probe, day 5: the car halts short of the gate and leaves",
+  "scenario_package": "Import/Shahid_Bahonar_Port_PatternOfLife.lock.json",
+  "capture": {
+    "window": "gate_probe_d5",
+    "prewarm_s": 60.0,
+    "channels": [
+      {
+        "sensor_id": "Gate_Stare_1",
+        "stare_look_at_x_m": 1974.4,
+        "stare_look_at_y_m": -1064.2,
+        "stare_altitude_m": 150.0,
+        "stare_standoff_m": 150.0,
+        "stare_bearing_deg": 0.0,
+        "fov": 40.0
+      }
+    ]
+  }
+}

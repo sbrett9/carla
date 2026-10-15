@@ -116,7 +116,9 @@ It refuses any other version, including a plan with no version, because a field 
 
 ## Example
 
-`Import/Arapahoe_I25_SupervisionCheck.supervision.json`, shortened:
+`Arapahoe_I25_SupervisionCheck.supervision.json` is in `Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck/` in a distribution.\
+In a checkout, it is in `Import/`.\
+Shortened:
 
 ```json
 {

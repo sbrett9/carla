@@ -11,6 +11,7 @@ It is the one source of three things:
 - How SUMO drives each class.\
   Every class states its acceleration, braking, speed and gap explicitly.
 
+In a distribution it is `catalogue/vehicles.catalogue.json`.\
 It lives at `CarlaControl/catalogue/vehicles.catalogue.json` in a checkout.\
 An installed `carlacontrol` carries a copy.\
 SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](Vehicle_Types.md).\
@@ -266,7 +267,8 @@ Every catalog the builder wrote carries it, so a file without it is not a catalo
 - `vehicles.vtypes.rou.xml` against `vehicle_types.xsd` and against the types the catalog gives
 - `vehicle_body_widths.json`, where it is present
 
-`carla-validate CarlaControl/catalogue` runs it.
+`carla-validate catalogue` runs it in a distribution.\
+From a checkout, run `carla-validate CarlaControl/catalogue`.
 
 ## Example
 

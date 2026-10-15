@@ -853,20 +853,27 @@ The test suite compiles every one and compares the result with that report.
 | `epoch/street_layout_epoch_daylight_saving.scenario.json` | Mountain Daylight Time, -06:00 with daylight saving |
 | `epoch/street_layout_epoch_half_hour.scenario.json` | Iran's +03:30 on a Colorado world. It compiles as declared. Check 40 warns that the offset is far from the world's. The window opens with the sun 25.7 degrees below the horizon. |
 
-`Import/` holds four scenarios on real worlds, each compiled, with its resolution report beside it.\
-A script in `CarlaControl/scripts/` writes each one and compiles it:
+Four scenarios on real worlds ship compiled, each with its resolution report, its world package and the script that writes it.\
+In a distribution, they are under `Scenarios/<Place>/`: two in `Arapahoe/`, one each in `Gardnerville/` and `Bahonar/`.\
+In a checkout, the compiled copies are in `Import/` and the scripts in `CarlaControl/scripts/`.\
+Each folder's README describes the scenario and says how to run it.
 
 | Scenario | Script | What it shows |
 |---|---|---|
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit` | `make_sumo_scenario.py` | one vehicle circling a block 20 times, written as a route in phases |
 | `Arapahoe_I25_UnderpassDwell` | `make_arapahoe_scenario.py` | heavy freeway traffic, a lane closure and a vehicle parked under a bridge for 30 minutes |
-| `Arapahoe_I25_SupervisionCheck` | `make_supervision_check_scenario.py` | six minutes with an anchored dwell, a transit in phases and a nominal stop. The sun is frozen at each window's opening. Each window then stays in one light band. |
-| `Shahid_Bahonar_Port_PatternOfLife` | `make_bahonar_scenario.py` | a week of port life in civil clocks at +03:30, a guard schedule over 16 towers and six planted anomalies, one of them an omission |
+| `Arapahoe_I25_SupervisionCheck` | `make_supervision_check_scenario.py` | six minutes with an anchored dwell, a transit in phases and a nominal stop: every kind of label in one short run. The sun is frozen at each window's opening. Each window then stays in one light band. |
+| `Shahid_Bahonar_Port_PatternOfLife` | `make_bahonar_scenario.py` | a week of port life in civil clocks at +03:30, a guard schedule over 16 towers and six planted anomalies, one of them an omission. Each anomaly has a declared capture window and a run file. |
 
-These scenarios name their packages at `../Build/world-packages/<MapName>.cwp`.\
+In a distribution, each specification names the world package beside it.\
+To change a scenario, change its script.\
+Then run the script from the distribution's folder, for example `python Scenarios/Bahonar/make_bahonar_scenario.py`.\
+It writes the specification beside itself and compiles it into the scenario's folder.
+
+In a checkout, the specifications name their packages at `../Build/world-packages/<MapName>.cwp`.\
 Build each world first (see [Building a world](Building_A_World.md)).\
-When your package's fingerprint differs from the one a scenario names, run its script.\
-The script writes the scenario against the package it is given (`--world-package`) and compiles it.
+When your package's fingerprint differs from the one a scenario names, run its script with `--world-package`.\
+The script writes the scenario against the package it is given and compiles it.
 
 ## Running and looking at it
 

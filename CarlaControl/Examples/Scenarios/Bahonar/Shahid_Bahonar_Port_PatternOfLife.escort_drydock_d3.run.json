@@ -1,0 +1,20 @@
+{
+  "run_configuration_version": 1,
+  "caller_label": "escort, day 3: the five jeeps arrive at the drydock",
+  "scenario_package": "Shahid_Bahonar_Port_PatternOfLife",
+  "capture": {
+    "window": "escort_drydock_d3",
+    "prewarm_s": 60.0,
+    "channels": [
+      {
+        "sensor_id": "Drydock_Stare_1",
+        "stare_look_at_x_m": 2956.4,
+        "stare_look_at_y_m": 369.2,
+        "stare_altitude_m": 150.0,
+        "stare_standoff_m": 150.0,
+        "stare_bearing_deg": 0.0,
+        "fov": 40.0
+      }
+    ]
+  }
+}

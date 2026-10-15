@@ -1,0 +1,20 @@
+{
+  "run_configuration_version": 1,
+  "caller_label": "ferry stay-behind, day 1: the car arrives and parks at the berth",
+  "scenario_package": "Shahid_Bahonar_Port_PatternOfLife",
+  "capture": {
+    "window": "ferry_stay_behind_d1",
+    "prewarm_s": 60.0,
+    "channels": [
+      {
+        "sensor_id": "Berth_Stare_1",
+        "stare_look_at_x_m": 2389.6,
+        "stare_look_at_y_m": -537.5,
+        "stare_altitude_m": 150.0,
+        "stare_standoff_m": 150.0,
+        "stare_bearing_deg": 0.0,
+        "fov": 40.0
+      }
+    ]
+  }
+}

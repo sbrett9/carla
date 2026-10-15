@@ -1,12 +1,14 @@
-"""Point the links in a distribution's copied documentation at what the bundle holds.
+"""Point the links in a distribution's copied pages at what the bundle holds.
 
-The pages are written for the repository, where they live in Docs/CAT_Research/. A link that leaves
-that folder names a file by its place in the repository, and in a bundle that place does not exist:
-docs/ holds the pages, and the other repository folders are shipped under other names or not at all.
-Both distribution scripts (Scripts/Windows/MakeDistribution.ps1, Scripts/Linux/MakeDistribution.sh)
-run this once the pages and the skills are staged, so both bundles get the same bytes.
+The pages are written for the repository. The user documentation lives in Docs/CAT_Research/ and the
+example scenarios' READMEs in CarlaControl/Examples/Scenarios/. A link that leaves its own folder
+names a file by its place in the repository, and in a bundle that place does not exist: the pages
+are shipped as docs/ and Scenarios/, and the other repository folders are shipped under other names
+or not at all. Both distribution scripts (Scripts/Windows/MakeDistribution.ps1,
+Scripts/Linux/MakeDistribution.sh) run this once the pages, the skills and the example scenarios are
+staged, so both bundles get the same bytes.
 
-For every inline link, [text](target) or ![text](target), whose target leaves the documentation:
+For every inline link, [text](target) or ![text](target), whose target leaves the page's own folder:
 
   * a target in a repository folder the bundle ships under another name (SHIPPED_AS below), and
     present in the bundle, gets the bundle-relative path to that copy, its #fragment kept;
@@ -14,23 +16,32 @@ For every inline link, [text](target) or ![text](target), whose target leaves th
     (CarlaControl/skills/third-party/), becomes its link text, with the link dropped;
   * every other link is left as it is.
 
-Whether a target ships is read from the staged bundle, with the exact case of every name, so the
-answer is the same on Windows and Linux and cannot drift from what the scripts copy. Fenced code
-blocks and code spans are never touched. A page is rewritten only where a link changes, byte for byte
-everywhere else, and every change is printed.
+A link that stays inside the page's own folder is left alone: each folder is copied with its
+structure kept, so those links resolve as they did. Whether a target ships is read from the staged
+bundle, with the exact case of every name, so the answer is the same on Windows and Linux and cannot
+drift from what the scripts copy. Fenced code blocks and code spans are never touched. A page is
+rewritten only where a link changes, byte for byte everywhere else, and every change is printed.
 
-Usage: python rewrite_doc_links.py <the bundle's docs folder>
+Usage: python rewrite_doc_links.py <the bundle's folder>
 """
 import os
 import posixpath
 import re
 import sys
 
-# Where the pages live in the repository, relative to its root.
-REPOSITORY_DOCS = "Docs/CAT_Research"
+# The folders of pages the bundle copies, each with where it came from in the repository: (bundle
+# path, repository path). A folder the bundle goes without is skipped.
+PAGE_ROOTS = [
+    ("docs", "Docs/CAT_Research"),
+    ("Scenarios", "CarlaControl/Examples/Scenarios"),
+]
 
 # Repository folders the bundle ships under another name: (repository path, bundle path).
-SHIPPED_AS = [("CarlaControl/skills", "skills")]
+SHIPPED_AS = [
+    ("Docs/CAT_Research", "docs"),
+    ("CarlaControl/Examples/Scenarios", "Scenarios"),
+    ("CarlaControl/skills", "skills"),
+]
 
 FENCE_OPEN = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 LINK = re.compile(r'(!?)\[((?:[^\[\]\n]|\[[^\[\]\n]*\])*)\]\(([^()\s]+)((?:[ \t]+"[^"\n]*")?)\)')
@@ -50,7 +61,12 @@ def exists_exactly(root, relative):
     return True
 
 
-def new_link(match, page_repository_dir, page_bundle_dir, bundle_root):
+def within(path, folder):
+    """True when a repository-relative path is the folder or lies under it."""
+    return path == folder or path.startswith(folder + "/")
+
+
+def new_link(match, page_repository_dir, page_bundle_dir, page_repository_root, bundle_root):
     """The replacement for one link, and a note of the change (None when the link stays)."""
     bang, text, target, title = match.groups()
     if target.startswith(("#", "/")) or SCHEME.match(target):
@@ -62,10 +78,10 @@ def new_link(match, page_repository_dir, page_bundle_dir, bundle_root):
     resolved = posixpath.normpath(posixpath.join(page_repository_dir, path))
     if resolved == ".." or resolved.startswith("../"):
         return match.group(0), None                      # outside the repository
-    if resolved == REPOSITORY_DOCS or resolved.startswith(REPOSITORY_DOCS + "/"):
-        return match.group(0), None                      # stays in the documentation
+    if within(resolved, page_repository_root):
+        return match.group(0), None                      # stays in the page's own folder
     for repository_path, bundle_path in SHIPPED_AS:
-        if resolved == repository_path or resolved.startswith(repository_path + "/"):
+        if within(resolved, repository_path):
             in_bundle = bundle_path + resolved[len(repository_path):]
             if exists_exactly(bundle_root, in_bundle):
                 relative = posixpath.relpath(in_bundle, page_bundle_dir) + suffix
@@ -112,13 +128,21 @@ def rewrite_line(line, rewrite):
     return "".join(out)
 
 
-def rewrite_page(path, relative_page, docs_name, bundle_root):
-    """Rewrite one page in place; returns the notes of what changed."""
+def rewrite_page(path, relative_page, bundle_name, repository_root, bundle_root):
+    """Rewrite one page in place; returns the notes of what changed.
+
+    Args:
+        path: the page's file in the bundle.
+        relative_page: the page's path inside its folder, with forward slashes.
+        bundle_name: the folder's name in the bundle, such as `docs`.
+        repository_root: where the folder came from in the repository, such as `Docs/CAT_Research`.
+        bundle_root: the bundle's folder, where what shipped is read from.
+    """
     with open(path, "rb") as f:
         original = f.read().decode("utf-8")
     page_dir = posixpath.dirname(relative_page)
-    page_repository_dir = posixpath.join(REPOSITORY_DOCS, page_dir)
-    page_bundle_dir = posixpath.join(docs_name, page_dir)
+    page_repository_dir = posixpath.normpath(posixpath.join(repository_root, page_dir))
+    page_bundle_dir = posixpath.normpath(posixpath.join(bundle_name, page_dir))
     notes, lines, fence = [], original.split("\n"), None
     for number, line in enumerate(lines, 1):
         if fence:
@@ -130,10 +154,11 @@ def rewrite_page(path, relative_page, docs_name, bundle_root):
             fence = opened.group(1)
             continue
 
-        def rewrite(match):
-            replacement, note = new_link(match, page_repository_dir, page_bundle_dir, bundle_root)
+        def rewrite(match, number=number):
+            replacement, note = new_link(match, page_repository_dir, page_bundle_dir,
+                                         repository_root, bundle_root)
             if note:
-                notes.append(f"{docs_name}/{relative_page}:{number}: {note}")
+                notes.append(f"{bundle_name}/{relative_page}:{number}: {note}")
             return replacement
 
         lines[number - 1] = rewrite_line(line, rewrite)
@@ -143,23 +168,34 @@ def rewrite_page(path, relative_page, docs_name, bundle_root):
     return notes
 
 
+def rewrite_bundle(bundle_root):
+    """Rewrite every page under the bundle's page folders; returns the notes and the page count."""
+    notes, pages = [], 0
+    for bundle_name, repository_root in PAGE_ROOTS:
+        folder = os.path.join(bundle_root, bundle_name)
+        if not os.path.isdir(folder):
+            continue
+        for here, subfolders, files in os.walk(folder):
+            subfolders.sort()
+            for name in sorted(files):
+                if not name.endswith(".md"):
+                    continue
+                pages += 1
+                relative_page = os.path.relpath(os.path.join(here, name), folder).replace(os.sep, "/")
+                notes += rewrite_page(os.path.join(here, name), relative_page, bundle_name,
+                                      repository_root, bundle_root)
+    return notes, pages
+
+
 def main(argv):
     if len(argv) != 1 or not os.path.isdir(argv[0]):
-        sys.exit("usage: python rewrite_doc_links.py <the bundle's docs folder>")
-    docs = os.path.abspath(argv[0])
-    docs_name, bundle_root = os.path.basename(docs), os.path.dirname(docs)
-    notes, pages = [], 0
-    for folder, subfolders, files in os.walk(docs):
-        subfolders.sort()
-        for name in sorted(files):
-            if not name.endswith(".md"):
-                continue
-            pages += 1
-            relative_page = os.path.relpath(os.path.join(folder, name), docs).replace(os.sep, "/")
-            notes += rewrite_page(os.path.join(folder, name), relative_page, docs_name, bundle_root)
+        sys.exit("usage: python rewrite_doc_links.py <the bundle's folder>")
+    bundle_root = os.path.abspath(argv[0])
+    notes, pages = rewrite_bundle(bundle_root)
     for note in notes:
-        print(f"[dist] docs link {note}")
-    print(f"[dist] docs links: {len(notes)} rewritten in {pages} pages")
+        print(f"[dist] link {note}")
+    folders = ", ".join(name for name, _ in PAGE_ROOTS if os.path.isdir(os.path.join(bundle_root, name)))
+    print(f"[dist] links: {len(notes)} rewritten in {pages} pages ({folders})")
 
 
 if __name__ == "__main__":

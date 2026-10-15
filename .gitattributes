@@ -17,5 +17,6 @@ CarlaControl/Examples/Scenarios/**/*.rou.xml -text
 CarlaControl/Examples/Scenarios/**/*.add.xml -text
 CarlaControl/Examples/Scenarios/**/*.sumocfg -text
 CarlaControl/Examples/Scenarios/**/*.json -text
+CarlaControl/Examples/Scenarios/**/*.jsonl -text
 CarlaControl/Examples/Scenarios/**/*.cwp binary
 CarlaControl/Examples/Scenarios/**/*.tar.xz binary

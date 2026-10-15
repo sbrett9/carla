@@ -4951,5 +4951,54 @@
         ]
       }
     ]
-  }
+  },
+  "capture_windows": [
+    {
+      "id": "ferry_stay_behind_d1",
+      "begin": {
+        "instant": "staybehind_departs"
+      },
+      "length": "6m"
+    },
+    {
+      "id": "gate_probe_d2",
+      "begin": {
+        "at": "d2 11:00",
+        "plus": 274
+      },
+      "length": "15m"
+    },
+    {
+      "id": "gate_probe_d5",
+      "begin": {
+        "at": "d5 11:00",
+        "plus": 685
+      },
+      "length": "15m"
+    },
+    {
+      "id": "escort_drydock_d3",
+      "begin": {
+        "instant": "escort_departs",
+        "plus": "27m"
+      },
+      "length": "6m"
+    },
+    {
+      "id": "posting_not_taken_up_d4",
+      "begin": {
+        "at": "d4 07:00",
+        "plus": "19m"
+      },
+      "length": "8m"
+    },
+    {
+      "id": "perimeter_shadow_d6",
+      "begin": {
+        "instant": "shadow_departs",
+        "plus": "2h15m"
+      },
+      "length": "6m"
+    }
+  ]
 }

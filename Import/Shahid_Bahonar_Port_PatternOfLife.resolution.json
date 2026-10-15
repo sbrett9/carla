@@ -2,11 +2,11 @@
   "resolution_version": 1,
   "producer": {
     "tool": "carlacontrol.ScenarioCompiler",
-    "tool_version": "0.10.0+g692e09427",
-    "carlanet": "0.10.0+g7715a2677",
+    "tool_version": "0.10.0+ge878b77da.dirty",
+    "carlanet": "0.10.0+gecb994c6b",
     "server": null,
     "sumo": "1.27.0",
-    "written_utc": "2026-10-13T18:16:29.087Z"
+    "written_utc": "2026-10-15T03:57:49.608Z"
   },
   "outcome": "compiled",
   "scenario": {
@@ -14,7 +14,7 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "description": "7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.",
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "b33f1b56bbae23005e60c24fb2a9674023a79bcb59fbbec00cf0b46d9355c329",
+    "specification_sha256": "2b2006376e29ddd03aefd1ef915d24398d613e7d90f7834fcb0d7f58fabaf245",
     "spec_version": 1
   },
   "findings": [
@@ -76,7 +76,7 @@
       "check": 41,
       "outcome": "warn",
       "subject": "supervision",
-      "message": "I(band; supervision) / H(supervision) = 0.128 over 614 entries (at their departures; no capture window is declared); bands where one state alone occurs, so the band determines the label: nautical_twilight, astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
+      "message": "I(band; supervision) / H(supervision) = 0.012 over 131 entries (captured by the declared windows); bands where one state alone occurs, so the band determines the label: astronomical_twilight. Expected in a pattern of life and never a refusal; the table, the bands where both states occur and the ways of changing the numbers are in the resolution report, and the statistic is in the lock"
     }
   ],
   "epoch": {
@@ -114,7 +114,241 @@
     "status": "an authored default the operator can override",
     "declared_elevation_kind": "refraction_corrected"
   },
-  "capture_windows": [],
+  "capture_windows": [
+    {
+      "id": "ferry_stay_behind_d1",
+      "begin": {
+        "authored": {
+          "instant": "staybehind_departs"
+        },
+        "form": "day_clock",
+        "seconds": 90000.0,
+        "civil": "2026-09-30T08:00:00+03:30"
+      },
+      "length_s": 360.0,
+      "end_s": 90360.0,
+      "end_civil": "2026-09-30T08:06:00+03:30",
+      "civil_date": "2026-09-30",
+      "sun_open": {
+        "seconds": 90000.0,
+        "sun_date": "2026-09-30",
+        "sun_clock": "08:00:00",
+        "elevation_deg": 30.1452,
+        "geometric_elevation_deg": 30.1175,
+        "azimuth_deg": 111.2297
+      },
+      "sun_close": {
+        "seconds": 90360.0,
+        "sun_date": "2026-09-30",
+        "sun_clock": "08:06:00",
+        "elevation_deg": 31.3833,
+        "geometric_elevation_deg": 31.3569,
+        "azimuth_deg": 112.2097
+      },
+      "sun_lowest": {
+        "elevation_deg": 30.1452,
+        "elevation_kind": "refraction_corrected",
+        "band": "day",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      },
+      "sun": "The sun climbs from +30.15° to +31.38° during this window."
+    },
+    {
+      "id": "gate_probe_d2",
+      "begin": {
+        "authored": {
+          "at": "d2 11:00",
+          "plus": 274
+        },
+        "form": "day_clock_plus",
+        "seconds": 187474.0,
+        "civil": "2026-10-01T11:04:34+03:30"
+      },
+      "length_s": 900.0,
+      "end_s": 188374.0,
+      "end_civil": "2026-10-01T11:19:34+03:30",
+      "civil_date": "2026-10-01",
+      "sun_open": {
+        "seconds": 187474.0,
+        "sun_date": "2026-10-01",
+        "sun_clock": "11:04:34",
+        "elevation_deg": 58.7001,
+        "geometric_elevation_deg": 58.6903,
+        "azimuth_deg": 165.2834
+      },
+      "sun_close": {
+        "seconds": 188374.0,
+        "sun_date": "2026-10-01",
+        "sun_clock": "11:19:34",
+        "elevation_deg": 59.3411,
+        "geometric_elevation_deg": 59.3315,
+        "azimuth_deg": 172.4527
+      },
+      "sun_lowest": {
+        "elevation_deg": 58.7001,
+        "elevation_kind": "refraction_corrected",
+        "band": "day",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      },
+      "sun": "The sun climbs from +58.70° to +59.34° during this window."
+    },
+    {
+      "id": "gate_probe_d5",
+      "begin": {
+        "authored": {
+          "at": "d5 11:00",
+          "plus": 685
+        },
+        "form": "day_clock_plus",
+        "seconds": 447085.0,
+        "civil": "2026-10-04T11:11:25+03:30"
+      },
+      "length_s": 900.0,
+      "end_s": 447985.0,
+      "end_civil": "2026-10-04T11:26:25+03:30",
+      "civil_date": "2026-10-04",
+      "sun_open": {
+        "seconds": 447085.0,
+        "sun_date": "2026-10-04",
+        "sun_clock": "11:11:25",
+        "elevation_deg": 57.942,
+        "geometric_elevation_deg": 57.9319,
+        "azimuth_deg": 169.3496
+      },
+      "sun_close": {
+        "seconds": 447985.0,
+        "sun_date": "2026-10-04",
+        "sun_clock": "11:26:25",
+        "elevation_deg": 58.3526,
+        "geometric_elevation_deg": 58.3426,
+        "azimuth_deg": 176.3939
+      },
+      "sun_lowest": {
+        "elevation_deg": 57.942,
+        "elevation_kind": "refraction_corrected",
+        "band": "day",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      },
+      "sun": "The sun climbs from +57.94° to +58.35° during this window."
+    },
+    {
+      "id": "escort_drydock_d3",
+      "begin": {
+        "authored": {
+          "instant": "escort_departs",
+          "plus": "27m"
+        },
+        "form": "day_clock_plus",
+        "seconds": 271620.0,
+        "civil": "2026-10-02T10:27:00+03:30"
+      },
+      "length_s": 360.0,
+      "end_s": 271980.0,
+      "end_civil": "2026-10-02T10:33:00+03:30",
+      "civil_date": "2026-10-02",
+      "sun_open": {
+        "seconds": 271620.0,
+        "sun_date": "2026-10-02",
+        "sun_clock": "10:27:00",
+        "elevation_deg": 55.1376,
+        "geometric_elevation_deg": 55.1263,
+        "azimuth_deg": 149.4871
+      },
+      "sun_close": {
+        "seconds": 271980.0,
+        "sun_date": "2026-10-02",
+        "sun_clock": "10:33:00",
+        "elevation_deg": 55.7898,
+        "geometric_elevation_deg": 55.7788,
+        "azimuth_deg": 151.8637
+      },
+      "sun_lowest": {
+        "elevation_deg": 55.1376,
+        "elevation_kind": "refraction_corrected",
+        "band": "day",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      },
+      "sun": "The sun climbs from +55.14° to +55.79° during this window."
+    },
+    {
+      "id": "posting_not_taken_up_d4",
+      "begin": {
+        "authored": {
+          "at": "d4 07:00",
+          "plus": "19m"
+        },
+        "form": "day_clock_plus",
+        "seconds": 346740.0,
+        "civil": "2026-10-03T07:19:00+03:30"
+      },
+      "length_s": 480.0,
+      "end_s": 347220.0,
+      "end_civil": "2026-10-03T07:27:00+03:30",
+      "civil_date": "2026-10-03",
+      "sun_open": {
+        "seconds": 346740.0,
+        "sun_date": "2026-10-03",
+        "sun_clock": "07:19:00",
+        "elevation_deg": 21.1084,
+        "geometric_elevation_deg": 21.0668,
+        "azimuth_deg": 106.3554
+      },
+      "sun_close": {
+        "seconds": 347220.0,
+        "sun_date": "2026-10-03",
+        "sun_clock": "07:27:00",
+        "elevation_deg": 22.8069,
+        "geometric_elevation_deg": 22.7687,
+        "azimuth_deg": 107.4787
+      },
+      "sun_lowest": {
+        "elevation_deg": 21.1084,
+        "elevation_kind": "refraction_corrected",
+        "band": "day",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      },
+      "sun": "The sun climbs from +21.11° to +22.81° during this window."
+    },
+    {
+      "id": "perimeter_shadow_d6",
+      "begin": {
+        "authored": {
+          "instant": "shadow_departs",
+          "plus": "2h15m"
+        },
+        "form": "day_clock_plus",
+        "seconds": 510300.0,
+        "civil": "2026-10-05T04:45:00+03:30"
+      },
+      "length_s": 360.0,
+      "end_s": 510660.0,
+      "end_civil": "2026-10-05T04:51:00+03:30",
+      "civil_date": "2026-10-05",
+      "sun_open": {
+        "seconds": 510300.0,
+        "sun_date": "2026-10-05",
+        "sun_clock": "04:45:00",
+        "elevation_deg": -12.9771,
+        "geometric_elevation_deg": -13.0021,
+        "azimuth_deg": 88.6666
+      },
+      "sun_close": {
+        "seconds": 510660.0,
+        "sun_date": "2026-10-05",
+        "sun_clock": "04:51:00",
+        "elevation_deg": -11.6401,
+        "geometric_elevation_deg": -11.668,
+        "azimuth_deg": 89.3578
+      },
+      "sun_lowest": {
+        "elevation_deg": -12.9771,
+        "elevation_kind": "refraction_corrected",
+        "band": "astronomical_twilight",
+        "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below"
+      },
+      "sun": "The sun climbs from -12.98° to -11.64° during this window."
+    }
+  ],
   "illumination_label_association": {
     "statistic": "I(band; supervision) / H(supervision), base 2",
     "band_source": "the sun's refraction-corrected elevation in degrees: day above 6, golden above 0, civil_twilight above -6, nautical_twilight above -12, astronomical_twilight above -18, night at -18 and below",
@@ -147,7 +381,46 @@
     "elevation_kind": "refraction_corrected",
     "presence_estimate": "a vehicle is present from its departure for its free-flow route time plus its stops; a flow from its begin to its end",
     "over_windows": {
-      "not_computed": "no capture window is declared"
+      "entries": 131,
+      "table": {
+        "day": {
+          "annotated": 6,
+          "nominal": 89,
+          "unlabelled": 17,
+          "total": 112
+        },
+        "astronomical_twilight": {
+          "annotated": 0,
+          "nominal": 16,
+          "unlabelled": 3,
+          "total": 19
+        }
+      },
+      "state_totals": {
+        "annotated": 6,
+        "nominal": 105,
+        "unlabelled": 20
+      },
+      "annotated_rate": {
+        "day": 0.05357142857142857,
+        "astronomical_twilight": 0.0
+      },
+      "base_annotated_rate": 0.04580152671755725,
+      "normalized_mutual_information": 0.012,
+      "degenerate_bands": [
+        "astronomical_twilight"
+      ],
+      "mixed_bands": [
+        "day"
+      ],
+      "windows": [
+        "ferry_stay_behind_d1",
+        "gate_probe_d2",
+        "gate_probe_d5",
+        "escort_drydock_d3",
+        "posting_not_taken_up_d4",
+        "perimeter_shadow_d6"
+      ]
     },
     "over_span": {
       "entries": 614,
@@ -207,41 +480,23 @@
         "night"
       ]
     },
-    "normalized_mutual_information": 0.128,
+    "normalized_mutual_information": 0.012,
     "bands": {
       "day": {
-        "annotated": 86,
-        "nominal": 241,
-        "unlabelled": 73,
-        "total": 400
-      },
-      "golden": {
-        "annotated": 7,
-        "nominal": 3,
-        "unlabelled": 21,
-        "total": 31
-      },
-      "nautical_twilight": {
-        "annotated": 7,
-        "nominal": 0,
-        "unlabelled": 0,
-        "total": 7
+        "annotated": 6,
+        "nominal": 89,
+        "unlabelled": 17,
+        "total": 112
       },
       "astronomical_twilight": {
-        "annotated": 7,
-        "nominal": 0,
-        "unlabelled": 0,
-        "total": 7
-      },
-      "night": {
-        "annotated": 1,
-        "nominal": 112,
-        "unlabelled": 56,
-        "total": 169
+        "annotated": 0,
+        "nominal": 16,
+        "unlabelled": 3,
+        "total": 19
       }
     },
-    "entries": 614,
-    "measured_over": "span",
+    "entries": 131,
+    "measured_over": "windows",
     "remedies": [
       "pair an annotated behavior with a displaced-in-time counterfactual, so the same annotation appears in a second band",
       "add a nominal twin inside the annotated band: a hard negative lit identically",
@@ -35662,18 +35917,18 @@
     "scenario_name": "Shahid Bahonar Port pattern of life",
     "spec_version": 1,
     "specification": "Shahid_Bahonar_Port_PatternOfLife.scenario.json",
-    "specification_sha256": "b33f1b56bbae23005e60c24fb2a9674023a79bcb59fbbec00cf0b46d9355c329",
+    "specification_sha256": "2b2006376e29ddd03aefd1ef915d24398d613e7d90f7834fcb0d7f58fabaf245",
     "compiler": {
       "name": "carlacontrol.ScenarioCompiler",
       "version": "0.10.0"
     },
     "producer": {
       "tool": "carlacontrol.ScenarioCompiler",
-      "tool_version": "0.10.0+g692e09427",
-      "carlanet": "0.10.0+g7715a2677",
+      "tool_version": "0.10.0+ge878b77da.dirty",
+      "carlanet": "0.10.0+gecb994c6b",
       "server": null,
       "sumo": "1.27.0",
-      "written_utc": "2026-10-13T18:16:29.080Z"
+      "written_utc": "2026-10-15T03:57:49.602Z"
     },
     "files": {
       "routes": {
@@ -35804,43 +36059,74 @@
       "policy": "advance",
       "rate_sun_s_per_sim_s": 1.0
     },
-    "capture_windows": [],
+    "capture_windows": [
+      {
+        "id": "ferry_stay_behind_d1",
+        "begin_s": 90000.0,
+        "end_s": 90360.0,
+        "civil_begin": "2026-09-30T08:00:00+03:30",
+        "civil_end": "2026-09-30T08:06:00+03:30",
+        "civil_date": "2026-09-30"
+      },
+      {
+        "id": "gate_probe_d2",
+        "begin_s": 187474.0,
+        "end_s": 188374.0,
+        "civil_begin": "2026-10-01T11:04:34+03:30",
+        "civil_end": "2026-10-01T11:19:34+03:30",
+        "civil_date": "2026-10-01"
+      },
+      {
+        "id": "gate_probe_d5",
+        "begin_s": 447085.0,
+        "end_s": 447985.0,
+        "civil_begin": "2026-10-04T11:11:25+03:30",
+        "civil_end": "2026-10-04T11:26:25+03:30",
+        "civil_date": "2026-10-04"
+      },
+      {
+        "id": "escort_drydock_d3",
+        "begin_s": 271620.0,
+        "end_s": 271980.0,
+        "civil_begin": "2026-10-02T10:27:00+03:30",
+        "civil_end": "2026-10-02T10:33:00+03:30",
+        "civil_date": "2026-10-02"
+      },
+      {
+        "id": "posting_not_taken_up_d4",
+        "begin_s": 346740.0,
+        "end_s": 347220.0,
+        "civil_begin": "2026-10-03T07:19:00+03:30",
+        "civil_end": "2026-10-03T07:27:00+03:30",
+        "civil_date": "2026-10-03"
+      },
+      {
+        "id": "perimeter_shadow_d6",
+        "begin_s": 510300.0,
+        "end_s": 510660.0,
+        "civil_begin": "2026-10-05T04:45:00+03:30",
+        "civil_end": "2026-10-05T04:51:00+03:30",
+        "civil_date": "2026-10-05"
+      }
+    ],
     "ephemeris": "CarlaNet.CoSim.DeclaredSun and SolarPositionModel.AtInstant",
     "illumination_label_association": {
-      "normalized_mutual_information": 0.128,
+      "normalized_mutual_information": 0.012,
       "bands": {
         "day": {
-          "annotated": 86,
-          "nominal": 241,
-          "unlabelled": 73,
-          "total": 400
-        },
-        "golden": {
-          "annotated": 7,
-          "nominal": 3,
-          "unlabelled": 21,
-          "total": 31
-        },
-        "nautical_twilight": {
-          "annotated": 7,
-          "nominal": 0,
-          "unlabelled": 0,
-          "total": 7
+          "annotated": 6,
+          "nominal": 89,
+          "unlabelled": 17,
+          "total": 112
         },
         "astronomical_twilight": {
-          "annotated": 7,
-          "nominal": 0,
-          "unlabelled": 0,
-          "total": 7
-        },
-        "night": {
-          "annotated": 1,
-          "nominal": 112,
-          "unlabelled": 56,
-          "total": 169
+          "annotated": 0,
+          "nominal": 16,
+          "unlabelled": 3,
+          "total": 19
         }
       },
-      "entries": 614
+      "entries": 131
     }
   }
 }

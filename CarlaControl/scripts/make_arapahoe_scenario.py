@@ -57,6 +57,12 @@ scenario runs the world's network byte for byte, so the pairs are not applied: t
 parks off the running lane, which is what keeps the underpass open, and under `--stop-in-lane` no
 lane lets a driver cross the center line to pass it.
 
+**Where it runs.** From a checkout, under `CarlaControl/scripts/`, it writes to `Import/` against the
+checkout's world package, catalogue and staged SUMO. A distribution ships a copy beside the scenario,
+in `Scenarios/Arapahoe/`; run there, it writes the specification beside itself, compiles into
+`Arapahoe_I25_UnderpassDwell/` and reads the package beside it, the distribution's `catalogue/` and
+its `tools/sumo` (`carlacontrol.ScenarioGeneratorLayout`).
+
 Usage:
     python make_arapahoe_scenario.py [--dwell-minutes 30] [--out-dir ../../Import]
 Then, from the output directory:
@@ -72,10 +78,14 @@ from pathlib import Path
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
-sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
+# From a checkout, the sources ahead of any installed carlacontrol. Beside a shipped scenario there is
+# no such folder, and the distribution's installed copy is imported.
+if os.path.isdir(os.path.join(_REPO, "CarlaControl", "src")):
+    sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 
 from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402  (needs the path above)
 from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
+from carlacontrol.ScenarioGeneratorLayout import ScenarioGeneratorLayout  # noqa: E402
 from carlacontrol.ScenarioVehicleMix import VehicleClassSpec  # noqa: E402
 from carlacontrol.SumoInstallation import SumoInstallation  # noqa: E402
 from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
@@ -83,15 +93,12 @@ from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
 MAP_NAME = "Arapahoe_I25"
 SCENARIO_NAME = f"{MAP_NAME}_UnderpassDwell"
 
-# The SUMO this repository stages and the distribution ships, the release every shipped world was
-# converted by. The compiler refuses a routing SUMO of another release (check 6).
-STAGED_SUMO = os.path.join(_REPO, "Build", "sumo-install")
-
-# The measured vehicle catalogue every vehicle type in this scenario is sized from.
-CATALOGUE = os.path.join(_REPO, "CarlaControl", "catalogue", "vehicles.catalogue.json")
-
-# The world package, which carries the SUMO network this scenario runs, byte for byte.
-WORLD_PACKAGE = os.path.join(_REPO, "Build", "world-packages", f"{MAP_NAME}.cwp")
+# Where this script reads and writes: the checkout's Import/, Build/ and catalogue when it runs from
+# CarlaControl/scripts/; the folder it sits in, the distribution's catalogue and its SUMO when it sits
+# beside the shipped scenario. The world package carries the SUMO network this scenario runs, byte
+# for byte. The SUMO is the release every shipped world was converted by; the compiler refuses a
+# routing SUMO of another release (check 6).
+LAYOUT = ScenarioGeneratorLayout.of(__file__, MAP_NAME, SCENARIO_NAME)
 
 # What simulated second zero means in civil time at the site: 07:00 Mountain Daylight Time on 29
 # September 2026, the date the Bahonar pattern of life starts on, so the two are comparable. The
@@ -536,10 +543,9 @@ class ArapahoeDwellSpecification:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out-dir", default=os.path.join(_REPO, "Import"),
-                        help="where the specification and the compiled scenario go "
-                             "(default: carla/Import)")
-    parser.add_argument("--world-package", default=WORLD_PACKAGE,
+    parser.add_argument("--out-dir", default=str(LAYOUT.out_dir),
+                        help=ScenarioGeneratorLayout.help_out_dir())
+    parser.add_argument("--world-package", default=str(LAYOUT.world_package),
                         help="world package the CARLA map was generated from. Its map.net.xml is "
                              "the network this scenario runs; netconvert is not run here, because a "
                              "second run would produce a different graph")
@@ -576,8 +582,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42,
                         help="SUMO seed, which fixes where the gaps in the ambient stream fall "
                              "(default 42)")
-    parser.add_argument("--sumo-home", default=STAGED_SUMO if os.path.exists(STAGED_SUMO) else None,
-                        help="SUMO installation providing duarouter (default: Build/sumo-install)")
+    parser.add_argument("--sumo-home", default=LAYOUT.sumo_home,
+                        help=ScenarioGeneratorLayout.help_sumo_home())
     parser.add_argument("--allow-sumo-version-mismatch", action="store_true",
                         help="compile when that SUMO is not the release that converted the world; "
                              "the lock records the acceptance")
@@ -585,7 +591,7 @@ def parse_args() -> argparse.Namespace:
                         help="skip the SUMO-only run that refuses a planned vehicle SUMO never "
                              "inserts (check 59), for quick iteration; the lock records that it "
                              "was skipped")
-    parser.add_argument("--catalogue", default=CATALOGUE,
+    parser.add_argument("--catalogue", default=str(LAYOUT.catalogue),
                         help="measured vehicle catalogue every vehicle type is sized from. A class "
                              "naming a body this catalogue does not hold is refused")
     return parser.parse_args()
@@ -597,6 +603,7 @@ def main() -> int:
     if not 1 <= args.incident_lanes <= 6:
         logging.error("--incident-lanes must be between 1 and the six lanes northbound I-25 has")
         return 1
+    logging.info("defaults from %s", LAYOUT.describe())
     try:
         installation = SumoInstallation.locate(args.sumo_home)
         network_text = WorldPackageReader(args.world_package).network_text()
@@ -629,7 +636,7 @@ def main() -> int:
                  f"{incident['begin']:g} s to {incident['end']:g} s", end_s)
     result = ScenarioCompiler(installation, args.allow_sumo_version_mismatch,
                               args.skip_dry_run).compile(
-        spec_path, out_dir)
+        spec_path, LAYOUT.compile_dir(out_dir))
     for finding in result.findings.findings:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)
     for role, path in sorted(result.files.items()):
