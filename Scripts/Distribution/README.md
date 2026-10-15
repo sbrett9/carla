@@ -73,7 +73,7 @@ It also checks that the installation is complete.
 | `tools/sumo/` | SUMO DIST_SUMO: `netconvert`, `sumo` and `duarouter`, with the PROJ data. There is no `sumo-gui`. |
 | `catalogue/` | The measured vehicle catalog that a scenario names. |
 | `osm/` | Example OpenStreetMap extracts to build worlds from. |
-| `Scenarios/` | Ready example scenarios, each with its world package, its level pack and the script that writes it. Some have run files for `carla-capture`. |
+| `Scenarios/` | Ready example scenarios, each with its world package, its level pack, a run file for `carla-capture` and the script that writes it. |
 | `docs/` | The user guides and the reference pages. |
 | `skills/` | The scenario-authoring skills. |
 | `world-tools/` | `PackageWorld` and `InstallWorld`, for worlds made elsewhere. |

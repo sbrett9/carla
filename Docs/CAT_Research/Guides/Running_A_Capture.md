@@ -344,7 +344,8 @@ How it moves:
 The run result records each orbit's center, `radius_m`, `altitude_m` and `period_s` under `produced.cameras`.
 
 This run file has two channels on the Arapahoe underpass scenario.\
-One is an orbit around the dwell spot under the Yosemite Street bridge.\
+It ships beside that scenario as `Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.run.json`.\
+One channel is an orbit around the dwell spot under the Yosemite Street bridge.\
 The other is a stare at the same spot from 150 m south and 150 m up, with its own exposure.\
 The scenario declares no windows.\
 So the window is given as seconds:
@@ -361,8 +362,8 @@ So the window is given as seconds:
       {
         "sensor_id": "Underpass_Orbit_1",
         "pattern": "orbit",
-        "orbit_centre_x_m": -171.6,
-        "orbit_centre_y_m": -672.0,
+        "orbit_centre_x_m": -171.7,
+        "orbit_centre_y_m": -671.4,
         "orbit_radius_m": 200.0,
         "orbit_altitude_m": 518.2,
         "orbit_period_s": 240.0,
@@ -372,8 +373,8 @@ So the window is given as seconds:
       },
       {
         "sensor_id": "Underpass_Stare_1",
-        "stare_look_at_x_m": -171.6,
-        "stare_look_at_y_m": -672.0,
+        "stare_look_at_x_m": -171.7,
+        "stare_look_at_y_m": -671.4,
         "stare_altitude_m": 150.0,
         "stare_standoff_m": 150.0,
         "stare_bearing_deg": 0.0,

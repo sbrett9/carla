@@ -36,6 +36,10 @@ the compiler turns into one waypoint per held edge. The compiled package is writ
 plan, the lock and the resolution report. The marked vehicle keeps its SUMO id, `orbiter`, which is
 what `sumo_cot_telemetry.py --marked-vehicle` names by default; the specification asserts no label.
 
+**A run file is written beside the specification**, `<scenario>.run.json`, once the scenario compiles:
+`carla-capture` records 240 s from t = 600 s, one lap of a camera orbiting the block while the orbiter
+drives its laps, the orbit's centre read from the network as the middle of the block's corners.
+
 **Where it runs.** From a checkout, under `CarlaControl/scripts/`, it writes to `Import/` against the
 checkout's world package, catalogue and staged SUMO. A distribution ships a copy beside the scenario,
 in `Scenarios/Gardnerville/`; run there, it writes the specification beside itself, compiles into
@@ -61,7 +65,8 @@ _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
 if os.path.isdir(os.path.join(_REPO, "CarlaControl", "src")):
     sys.path.insert(0, os.path.join(_REPO, "CarlaControl", "src"))
 
-from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402  (needs the path above)
+from carlacontrol.LanePoint import LanePoint  # noqa: E402  (needs the path above)
+from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
 from carlacontrol.ScenarioCompiler import ScenarioCompiler  # noqa: E402
 from carlacontrol.ScenarioGeneratorLayout import ScenarioGeneratorLayout  # noqa: E402
 from carlacontrol.ScenarioVehicleMix import VehicleClassSpec  # noqa: E402
@@ -77,6 +82,15 @@ from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
 
 MAP_NAME = "Gardnerville_Centerville_Lane"
 SCENARIO_NAME = f"{MAP_NAME}_NeighborhoodOrbit"
+
+# The run file written beside the specification once the scenario compiles, `<scenario>.run.json`:
+# 240 s from t = 600 s, one lap of a camera orbiting the block while the orbiter drives its laps.
+# The orbit's centre is the middle of the box around the block's corners, read from the network the
+# world package carries, so the camera circles the block the route goes round.
+RUN_WINDOW = "600:840"
+RUN_PREWARM_S = 60.0
+RUN_ORBIT = {"sensor_id": "Block_Orbit_1", "orbit_radius_m": 200.0, "orbit_altitude_m": 518.2,
+             "orbit_period_s": 240.0, "fov": 40.0, "width": 1920, "height": 1080}
 
 # Where this script reads and writes: the checkout's Import/, Build/ and catalogue when it runs from
 # CarlaControl/scripts/; the folder it sits in, the distribution's catalogue and its SUMO when it sits
@@ -349,11 +363,36 @@ class GardnervilleOrbitSpecification:
         return list(dict.fromkeys(named))
 
 
+def block_centre(network_text: str) -> tuple[float, float]:
+    """The middle of the box around the block's corners, in CARLA's frame: the ends of the loop's
+    edges, where each turns into the next."""
+    points = LanePoint(network_text)
+    corners = [points.at_edge(edge, "end") for edge in ORBIT_ROUTE.loop]
+    xs = [x for x, _ in corners]
+    ys = [y for _, y in corners]
+    return round((min(xs) + max(xs)) / 2.0, 1), round((min(ys) + max(ys)) / 2.0, 1)
+
+
+def run_configuration(network_text: str, scenario_package: str) -> dict:
+    """What `carla-capture` reads to capture the orbit through one camera circling the block. It
+    names the scenario as the folder it is written in has it (`ScenarioGeneratorLayout`)."""
+    x, y = block_centre(network_text)
+    orbit = {"sensor_id": RUN_ORBIT["sensor_id"], "pattern": "orbit", "orbit_centre_x_m": x,
+             "orbit_centre_y_m": y, **{k: v for k, v in RUN_ORBIT.items() if k != "sensor_id"}}
+    return {
+        "run_configuration_version": 1,
+        "caller_label": "block orbit",
+        "scenario_package": scenario_package,
+        "capture": {"window": RUN_WINDOW, "prewarm_s": RUN_PREWARM_S, "channels": [orbit]},
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out-dir", default=str(LAYOUT.out_dir),
-                        help=ScenarioGeneratorLayout.help_out_dir())
+                        help=ScenarioGeneratorLayout.help_out_dir() + "; the run file goes beside "
+                             "the specification")
     parser.add_argument("--world-package", default=str(LAYOUT.world_package),
                         help="world package the CARLA map was generated from. Its map.net.xml is "
                              "the network this scenario runs; netconvert is not run here, because a "
@@ -425,6 +464,12 @@ def main() -> int:
         (logging.error if finding.outcome == "refuse" else logging.warning)("%s", finding)
     for role, path in sorted(result.files.items()):
         logging.info("%-13s %s", role, path)
+    if not result.refused:
+        run_path = out_dir / f"{SCENARIO_NAME}.run.json"
+        run_path.write_text(
+            json.dumps(run_configuration(network_text, LAYOUT.run_scenario_package), indent=2) + "\n",
+            encoding="utf-8", newline="\n")
+        logging.info("%-13s %s", "run", run_path)
     logging.info("%s", "REFUSED" if result.refused else "compiled")
     return 1 if result.refused else 0
 
