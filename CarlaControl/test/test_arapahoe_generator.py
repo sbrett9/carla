@@ -16,6 +16,7 @@ scenario changes (07 §3.4.2), not asserted here.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -29,6 +30,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.NetworkFingerprint import NetworkFingerprint  # noqa: E402
+from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
 from carlacontrol.ScenarioVehicleMix import ScenarioVehicleMix  # noqa: E402
 from carlacontrol.VehicleCatalogue import BLUEPRINT_PARAM, VehicleCatalogue  # noqa: E402
 
@@ -39,7 +41,7 @@ CATALOGUE = _REPO / "CarlaControl" / "catalogue" / "vehicles.catalogue.json"
 IMPORT = _REPO / "Import"
 SCENARIO = "Arapahoe_I25_UnderpassDwell"
 BYTE_FOR_BYTE = (f"{SCENARIO}.rou.xml", f"{SCENARIO}.sumocfg", f"{SCENARIO}.add.xml",
-                 f"{SCENARIO}.supervision.json")
+                 f"{SCENARIO}.supervision.json", f"{SCENARIO}.run.json")
 # The network is the world package's, copied beside the scenario, and compared by its canonical
 # fingerprint, as the session compares it: its bytes carry netconvert's build stamp.
 NETWORK = "Arapahoe_I25.net.xml"
@@ -71,6 +73,37 @@ def test_the_shipped_dwell_is_what_its_generator_compiles(tmp_path):
         spec["world"].pop("package")
         spec.pop("catalogue")
     assert specification == shipped_specification
+
+
+def load_generator():
+    spec = importlib.util.spec_from_file_location("make_arapahoe_scenario", GENERATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_run_file_puts_both_cameras_on_the_dwell_spot_the_compiler_placed():
+    """The run file beside the scenario captures the dwell through an orbit and a stare, both on the
+    spot the resolution report says the dwell was placed at, and names the scenario as a checkout's
+    run file does."""
+    if not (IMPORT / f"{SCENARIO}.run.json").exists():
+        pytest.fail(f"Import/ carries no {SCENARIO}.run.json: run make_arapahoe_scenario.py")
+    document = json.loads((IMPORT / f"{SCENARIO}.run.json").read_text(encoding="utf-8"))
+    parsed = RunConfiguration.from_document(document, f"{SCENARIO}.run.json")
+    assert parsed.values["capture.window"] == "600:840"
+    assert parsed.values["scenario_package"] == f"Import/{SCENARIO}.lock.json"
+    orbit, stare = document["capture"]["channels"]
+    assert (orbit["sensor_id"], orbit["pattern"]) == ("Underpass_Orbit_1", "orbit")
+    assert stare["sensor_id"] == "Underpass_Stare_1" and "pattern" not in stare
+    report = json.loads((IMPORT / f"{SCENARIO}.resolution.json").read_text(encoding="utf-8"))
+    place = report["places"]["underpass_dwell"]
+    assert (place["lane"], place["end_pos"]) == ("218965860#0_0", 88.63)
+    network = (IMPORT / NETWORK).read_text(encoding="utf-8")
+    spot = load_generator().dwell_point(network, IMPORT / f"{SCENARIO}.resolution.json")
+    assert (orbit["orbit_centre_x_m"], orbit["orbit_centre_y_m"]) == spot
+    assert (stare["stare_look_at_x_m"], stare["stare_look_at_y_m"]) == spot
+    # The spot is under the Yosemite Street bridge, which the README places at about (-171.6, -672.0).
+    assert spot == pytest.approx((-171.6, -672.0), abs=1.0)
 
 
 def test_every_vehicle_type_the_shipped_dwell_draws_is_a_measured_body():

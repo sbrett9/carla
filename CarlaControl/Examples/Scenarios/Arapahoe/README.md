@@ -132,7 +132,8 @@ This folder holds the rest:
 | `Arapahoe_I25.cwp` | The world package the level was made from. A world package is one generated world in one file. The compiler, `carla-drive` and `carla-capture` read it. |
 | `Arapahoe_I25_UnderpassDwell.scenario.json` | The dwell's scenario specification. |
 | `Arapahoe_I25_UnderpassDwell/` | The compiled dwell, ready to run. |
-| `make_arapahoe_scenario.py` | The script that writes the dwell's specification. Change it, not the specification. Run it here to write and compile the scenario again. |
+| `Arapahoe_I25_UnderpassDwell.run.json` | The run file that captures the dwell: 240 s from t = 600 s through an orbit and a stare on the dwell spot. |
+| `make_arapahoe_scenario.py` | The script that writes the dwell's specification and its run file. Change it, not the specification. Run it here to write and compile the scenario again. |
 | `Arapahoe_I25_SupervisionCheck.scenario.json` | The supervision check's specification. |
 | `Arapahoe_I25_SupervisionCheck/` | The compiled supervision check, ready to run. |
 | `Arapahoe_I25_SupervisionCheck.run.json` | The run file that captures the supervision check's first window. |
@@ -320,7 +321,9 @@ So the capture commands below set both paths to `Scenarios/Arapahoe` with `--set
 A relative path in `--set` is read from the folder you run the command in.\
 Run them from the distribution's folder.
 
-This run file, `underpass.run.json`, is the one [Running a capture](../../../../Docs/CAT_Research/Guides/Running_A_Capture.md#an-orbit-flown-by-the-server) uses for this scenario.\
+This run file, `Arapahoe_I25_UnderpassDwell.run.json`, is in this folder.\
+The script that writes the scenario writes it too, with the dwell spot read from the compiled resolution report.\
+[Running a capture](../../../../Docs/CAT_Research/Guides/Running_A_Capture.md#an-orbit-flown-by-the-server) uses it as its orbit example.\
 It records 240 s from t = 600 s.\
 In the SUMO-only run, the marked vehicle waits at its stop through the whole window.\
 Before that, it renders a 60 s prewarm: simulated time that gets the views ready and is not recorded.\
@@ -339,8 +342,8 @@ The other stares at it from 150 m south and 150 m up, with its own exposure.
       {
         "sensor_id": "Underpass_Orbit_1",
         "pattern": "orbit",
-        "orbit_centre_x_m": -171.6,
-        "orbit_centre_y_m": -672.0,
+        "orbit_centre_x_m": -171.7,
+        "orbit_centre_y_m": -671.4,
         "orbit_radius_m": 200.0,
         "orbit_altitude_m": 518.2,
         "orbit_period_s": 240.0,
@@ -350,8 +353,8 @@ The other stares at it from 150 m south and 150 m up, with its own exposure.
       },
       {
         "sensor_id": "Underpass_Stare_1",
-        "stare_look_at_x_m": -171.6,
-        "stare_look_at_y_m": -672.0,
+        "stare_look_at_x_m": -171.7,
+        "stare_look_at_y_m": -671.4,
         "stare_altitude_m": 150.0,
         "stare_standoff_m": 150.0,
         "stare_bearing_deg": 0.0,
@@ -369,7 +372,7 @@ Run the offline checks first.\
 They do not touch the server:
 
 ```
-carla-capture --site-profile site.json --run underpass.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe --validate-only
+carla-capture --site-profile site.json --run Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe --validate-only
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
@@ -379,7 +382,7 @@ The echo shows that it climbs from +2.56° to +3.29° over this window, in the `
 Then run it for real:
 
 ```
-carla-capture --site-profile site.json --run underpass.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe
+carla-capture --site-profile site.json --run Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.run.json --set paths.scenario_root=Scenarios/Arapahoe --set paths.world_package_root=Scenarios/Arapahoe
 ```
 
 The last line names the run result.\
@@ -491,7 +494,7 @@ python Scenarios/Arapahoe/make_arapahoe_scenario.py
 
 It writes the specification beside itself.\
 It reads the world package beside it, the catalog in `catalogue/` and the SUMO in `tools/sumo`.\
-Then it compiles the scenario into `Arapahoe_I25_UnderpassDwell/`.\
+Then it compiles the scenario into `Arapahoe_I25_UnderpassDwell/` and writes `Arapahoe_I25_UnderpassDwell.run.json`.\
 The new compiled scenario replaces the delivered one.\
 Its `--help` lists the settings, such as `--dwell-minutes`.
 

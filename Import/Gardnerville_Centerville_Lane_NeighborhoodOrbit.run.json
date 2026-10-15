@@ -1,0 +1,23 @@
+{
+  "run_configuration_version": 1,
+  "caller_label": "block orbit",
+  "scenario_package": "Import/Gardnerville_Centerville_Lane_NeighborhoodOrbit.lock.json",
+  "capture": {
+    "window": "600:840",
+    "prewarm_s": 60.0,
+    "channels": [
+      {
+        "sensor_id": "Block_Orbit_1",
+        "pattern": "orbit",
+        "orbit_centre_x_m": 543.5,
+        "orbit_centre_y_m": -144.5,
+        "orbit_radius_m": 200.0,
+        "orbit_altitude_m": 518.2,
+        "orbit_period_s": 240.0,
+        "fov": 40.0,
+        "width": 1920,
+        "height": 1080
+      }
+    ]
+  }
+}

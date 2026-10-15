@@ -108,7 +108,8 @@ This folder holds the rest:
 | `Gardnerville_Centerville_Lane.cwp` | The world package the level was made from. A world package is one generated world in one file. The compiler, `carla-drive` and `carla-capture` read it. |
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit.scenario.json` | The scenario specification. |
 | `Gardnerville_Centerville_Lane_NeighborhoodOrbit/` | The compiled scenario, ready to run. |
-| `make_sumo_scenario.py` | The script that writes the specification. Change it, not the specification. Run it here to write and compile the scenario again. |
+| `Gardnerville_Centerville_Lane_NeighborhoodOrbit.run.json` | The run file that captures the orbit: 240 s from t = 600 s through one camera circling the block. |
+| `make_sumo_scenario.py` | The script that writes the specification and its run file. Change it, not the specification. Run it here to write and compile the scenario again. |
 
 The level pack is a Windows pack, for a Win64 Development distribution.\
 A Linux distribution needs a pack cooked on Linux with `PackageWorld.sh`.\
@@ -255,7 +256,7 @@ The orbiter enters at t = 60 s.
 To see the traffic, place a camera of your own from another terminal:
 
 ```
-carla-camera-follower --sensor-id Block_Orbit_1 --pattern orbit --orbit-centre 543.2 -153.8
+carla-camera-follower --sensor-id Block_Orbit_1 --pattern orbit --orbit-centre 543.5 -144.5
 ```
 
 The center, (543.2, -153.8) in CARLA meters, is the middle of the box around the block's edges in the package's network.\
@@ -292,7 +293,9 @@ So the capture commands below set both paths to `Scenarios/Gardnerville` with `-
 A relative path in `--set` is read from the folder you run the command in.\
 Run them from the distribution's folder.
 
-This run file, `block_orbit.run.json`, flies one camera around the block.\
+This run file, `Gardnerville_Centerville_Lane_NeighborhoodOrbit.run.json`, is in this folder.\
+The script that writes the scenario writes it too, with the orbit centered on the middle of the block's corners, read from the road network.\
+It flies one camera around the block.\
 It records 240 s from t = 600 s, one lap of the camera.\
 In the SUMO-only run, the orbiter drives its laps through the whole window.\
 Before that, it renders a 60 s prewarm: simulated time that gets the view ready and is not recorded.\
@@ -311,8 +314,8 @@ The camera values are a starting point for your own view.
       {
         "sensor_id": "Block_Orbit_1",
         "pattern": "orbit",
-        "orbit_centre_x_m": 543.2,
-        "orbit_centre_y_m": -153.8,
+        "orbit_centre_x_m": 543.5,
+        "orbit_centre_y_m": -144.5,
         "orbit_radius_m": 200.0,
         "orbit_altitude_m": 518.2,
         "orbit_period_s": 240.0,
@@ -329,7 +332,7 @@ Run the offline checks first.\
 They do not touch the server:
 
 ```
-carla-capture --site-profile site.json --run block_orbit.run.json --set paths.scenario_root=Scenarios/Gardnerville --set paths.world_package_root=Scenarios/Gardnerville --validate-only
+carla-capture --site-profile site.json --run Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.run.json --set paths.scenario_root=Scenarios/Gardnerville --set paths.world_package_root=Scenarios/Gardnerville --validate-only
 ```
 
 The launch echo says what the run will do, with the window's civil times and the sun.\
@@ -339,7 +342,7 @@ The echo shows that it climbs from +50.76° to +51.52° over this window, in the
 Then run it for real:
 
 ```
-carla-capture --site-profile site.json --run block_orbit.run.json --set paths.scenario_root=Scenarios/Gardnerville --set paths.world_package_root=Scenarios/Gardnerville
+carla-capture --site-profile site.json --run Scenarios/Gardnerville/Gardnerville_Centerville_Lane_NeighborhoodOrbit.run.json --set paths.scenario_root=Scenarios/Gardnerville --set paths.world_package_root=Scenarios/Gardnerville
 ```
 
 The last line names the run result.\
@@ -376,7 +379,7 @@ python Scenarios/Gardnerville/make_sumo_scenario.py
 
 It writes the specification beside itself.\
 It reads the world package beside it, the catalog in `catalogue/` and the SUMO in `tools/sumo`.\
-Then it compiles the scenario into `Gardnerville_Centerville_Lane_NeighborhoodOrbit/`.\
+Then it compiles the scenario into `Gardnerville_Centerville_Lane_NeighborhoodOrbit/` and writes `Gardnerville_Centerville_Lane_NeighborhoodOrbit.run.json`.\
 The new compiled scenario replaces the delivered one.\
 Its `--help` lists the settings, such as `--laps`.
 
