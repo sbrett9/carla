@@ -72,11 +72,14 @@ world (D1.12):
   rendered vehicle covers -- placed from the session's render set of the frame and the client's
   snapshot of it (`SessionFrameVehicles`). The wait lives inside the prewarm and ticks with it, and
   it begins once every camera holds the pose the window opens on, because the tiles' figures cover
-  every registered view and a moving camera's picture never reads settled. A ceiling reached -- 90 s
-  of wall clock for the tiles; for the picture, where it is waited on,
+  every registered view and a moving camera's picture never reads settled. A view not ready as the
+  window opens refuses the run at pre-roll. So does a picture that has not settled within
   `capture.picture_ceiling_frames` of the camera's own frames from its tiles being in, 60 by
-  default -- or a view not ready as the window opens refuses at pre-roll, naming the channel, the
-  witness and its state; the window's first frame is never moved. A stare aimed at the rendered
+  default, where the picture is waited on. The refusal names the channel, the check and its
+  state. The window's first frame is never moved. The tiles have no wall-clock ceiling. Cesium
+  builds a tile's mesh inside the tileset actor's Tick, so a tile can only finish loading when the
+  world ticks. The window's opening is the tiles' ceiling. An ask the server fails to answer is
+  asked again after the next step. A stare aimed at the rendered
   traffic follows it: after each prewarm step its cameras are moved to the pose around the centre of
   the vehicles that step's last frame rendered, until the tiles' own lead, `capture.tiles_hold_s`
   (10 s by default), before the window opens -- or one SUMO step and the picture's ceiling, where
@@ -158,7 +161,6 @@ from carlacontrol.SessionMonitor import SessionMonitor
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.StareAim import StareAim
 from carlacontrol.ViewReadiness import (
-    TILES_CEILING_S,
     SessionFrameVehicles,
     ViewNotReadyError,
     ViewReadinessGate,
@@ -1007,17 +1009,15 @@ class CaptureSession:
         self.readiness.begin(int(session.Report.Ticks), rendered)
         if not self.readiness.picture_wait:
             self.logger.info("waiting for every channel's view from t=%g to the window's opening at "
-                             "t=%g: its photoreal tiles in (ceiling %.0f s of wall clock); the "
-                             "picture is not waited on (capture.picture_settled_wait is false); a "
-                             "view not ready by then refuses the run", rendered,
-                             self.effective.window.begin_s, TILES_CEILING_S)
+                             "t=%g: its photoreal tiles in by then; the picture is not waited on "
+                             "(capture.picture_settled_wait is false); a view not ready by then "
+                             "refuses the run", rendered, self.effective.window.begin_s)
             return
         self.logger.info("waiting for every channel's view from t=%g to the window's opening at "
-                         "t=%g: its photoreal tiles in (ceiling %.0f s of wall clock), then its "
-                         "picture settled within %g gray levels with its rendered vehicles left out "
-                         "(ceiling %d of the camera's frames since its tiles); a view not ready by "
-                         "then refuses the run", rendered,
-                         self.effective.window.begin_s, TILES_CEILING_S,
+                         "t=%g: its photoreal tiles in by then and its picture settled within %g "
+                         "gray levels with its rendered vehicles left out (ceiling %d of the "
+                         "camera's frames since its tiles); a view not ready by then refuses the "
+                         "run", rendered, self.effective.window.begin_s,
                          self.readiness.tolerance_levels, self.readiness.ceiling_frames)
 
     def _observe_views(self) -> None:

@@ -54,7 +54,7 @@ from carlacontrol.ViewReadiness import (
     PICTURE_BLOCK_PX,
     PICTURE_SPAN_TICKS,
     RULE,
-    TILES_CEILING_S,
+    TILES_CEILING,
     VEHICLES,
     wait_begins_s,
 )
@@ -256,21 +256,21 @@ class LaunchEcho:
                                      f"frame at least {PICTURE_SPAN_TICKS} ticks earlier in its "
                                      f"worst judged {PICTURE_BLOCK_PX}-pixel block",
                           "vehicles": VEHICLES,
-                          "tiles_ceiling_s": TILES_CEILING_S,
+                          "tiles_ceiling": TILES_CEILING,
                           # The camera's own frames from its tiles being in, and the simulated
                           # seconds they are at the capture rate.
                           "picture_ceiling_frames": ceiling_frames,
                           "picture_ceiling_s": round(ceiling_frames * period * delta, 6),
                           "picture_tolerance_levels": tolerance})
         else:
-            block.update({"picture": PICTURE_NOT_WAITED_ON, "tiles_ceiling_s": TILES_CEILING_S,
+            block.update({"picture": PICTURE_NOT_WAITED_ON, "tiles_ceiling": TILES_CEILING,
                           # The tiles' own lead: a stare following the traffic holds this long
                           # before the window, and every camera's prewarm is at least this long.
                           "tiles_hold_s": tiles_hold})
         block.update({"from_s": begins, "until_s": window.begin_s,
                       "traffic_stare_holds_from_s": begins if follows else None,
-                      "not_ready": "refused at pre-roll (check 50); the window's first frame is not "
-                                   "moved",
+                      "not_ready": "a view not ready as the window opens refuses the run at "
+                                   "pre-roll (check 50). The window's first frame is not moved.",
                       "per_capture": PER_CAPTURE})
         return block
 
@@ -341,16 +341,14 @@ class LaunchEcho:
             if pacing["mode"] == "wall_clock" else ""))
         readiness = b["readiness"]
         if readiness.get("picture_settled_wait", True):
-            lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} "
-                         f"s) and picture (ceiling {readiness['picture_ceiling_frames']} of the "
-                         f"camera's frames, {readiness['picture_ceiling_s']:g} s at "
-                         f"{cap['capture_hz']:g} Hz, settled within "
-                         f"{readiness['picture_tolerance_levels']:g} gray levels), from "
-                         f"t={readiness['from_s']:,.0f} to t={readiness['until_s']:,.0f}; not ready "
-                         "by then refuses at pre-roll")
+            lines.append(f"  readiness   every view's tiles and picture (ceiling "
+                         f"{readiness['picture_ceiling_frames']} of the camera's frames, "
+                         f"{readiness['picture_ceiling_s']:g} s at {cap['capture_hz']:g} Hz, "
+                         f"settled within {readiness['picture_tolerance_levels']:g} gray levels), "
+                         f"from t={readiness['from_s']:,.0f} to t={readiness['until_s']:,.0f}; "
+                         "not ready by then refuses at pre-roll")
         else:
-            lines.append(f"  readiness   every view's tiles (ceiling {readiness['tiles_ceiling_s']:g} "
-                         f"s), from t={readiness['from_s']:,.0f} to "
+            lines.append(f"  readiness   every view's tiles, from t={readiness['from_s']:,.0f} to "
                          f"t={readiness['until_s']:,.0f}; not ready by then refuses at pre-roll")
             lines.append(f"              picture not waited on: capture.picture_settled_wait is "
                          f"false; the tiles' lead is {readiness['tiles_hold_s']:g} s "

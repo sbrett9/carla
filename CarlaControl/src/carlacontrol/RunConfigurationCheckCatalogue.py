@@ -213,7 +213,8 @@ _CHECKS: tuple[RunCheck, ...] = (
              "no handover transport exists"),
     RunCheck(50, PRE_ROLL, "Every channel's view is ready as the window opens: its photoreal tiles "
              "in, and where capture.picture_settled_wait is true (off by default) its picture "
-             "settled with the blocks rendered vehicles cover left out, each within its ceiling", _R,
+             "settled with the blocks rendered vehicles cover left out: the tiles by the window's "
+             "opening, the picture within its ceiling of frames", _R,
              RUN_CAPTURE,
              "CaptureSession, ViewReadinessGate: world.get_view_readiness after every prewarm "
              "step, and under capture.picture_settled_wait the camera's own frames"),

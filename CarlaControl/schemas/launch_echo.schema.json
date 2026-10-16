@@ -545,7 +545,7 @@
         "tiles",
         "picture_settled_wait",
         "picture",
-        "tiles_ceiling_s",
+        "tiles_ceiling",
         "from_s",
         "until_s",
         "traffic_stare_holds_from_s",
@@ -574,9 +574,9 @@
         "vehicles": {
           "type": "string"
         },
-        "tiles_ceiling_s": {
-          "type": "number",
-          "description": "Wall-clock seconds a view has for its tiles."
+        "tiles_ceiling": {
+          "type": "string",
+          "description": "What ends a view's wait for its tiles: the window's opening. There is no wall-clock ceiling."
         },
         "tiles_hold_s": {
           "type": "number",
