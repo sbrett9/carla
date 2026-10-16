@@ -507,15 +507,25 @@ For example, the default 300 s against a window that opens at t=60 gives: `prewa
 The world's imagery is photoreal tiles streamed from Cesium.\
 A camera pointed at new ground draws it while the tiles still arrive.\
 So the run waits for them.\
-After every SUMO step of the prewarm, it asks the server whether each camera's tiles are in.\
+After every SUMO step of the prewarm, it asks the server for the load status of the tiles in each camera's view.\
 "In" means every visible tileset is fully loaded with no failed tile in view.
 
 - The wait starts once every camera holds the pose the window opens on.
-- It has a ceiling of 90 s of wall-clock time.
+- Cesium builds a tile's mesh inside the tileset's Tick, so a tile can only finish loading when the world ticks.\
+  The wait therefore has no wall-clock ceiling.\
+  The window's opening is the ceiling.
 - A view that is not ready as the window opens refuses the run before the window (run check 50, exit status 5).\
+  The refusal names the percentage loaded and the number of tiles still queued.\
   The window is never moved.
+- The server answers for every view registered with Cesium at once.\
+  With one channel that is the channel's own view.\
+  With several channels it is the union of their views, so every channel reads the same status.
+- An ask the server fails to answer is asked again after the next step.\
+  Two failed asks in a row refuse the run.
 
-The run result records the time each channel's tiles came in, under `produced.readiness.channels`.
+The run result records the ticks and seconds each channel's tiles took, under `produced.readiness.channels`.\
+Its `tiles_now` field holds the load status at the last ask.\
+Its `last_answer` field holds the counts per tileset behind that status.
 
 ### The hold before the window
 
@@ -527,9 +537,9 @@ It is rounded up to whole SUMO steps.
   It then holds its pose.\
   Its prewarm must be one SUMO step longer.
 
-Tiles usually load in a few seconds of simulated time.\
-Sometimes they take more than 30 seconds.\
-If your views load slowly, lengthen the prewarm.\
+How long the tiles take depends on the machine, the view and whether the server already holds the tiles in memory.\
+The run result records what each channel's tiles took.\
+If a view's tiles come in late, lengthen the prewarm.\
 The prewarm is the time the tiles have.\
 For a stare at the traffic, lengthen `capture.tiles_hold_s` as well.\
 Its view stands still only that long before the window.

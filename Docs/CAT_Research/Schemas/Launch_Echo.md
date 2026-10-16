@@ -100,7 +100,7 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `readiness.tiles` | string | | What it means for a view's tiles to be in. |
 | `readiness.picture_settled_wait` | boolean | | Whether the picture is also waited on. |
 | `readiness.picture` | string | | What the picture's wait compares, or that it is not run. |
-| `readiness.tiles_ceiling_s` | number | s | Wall-clock seconds a view has for its tiles. |
+| `readiness.tiles_ceiling` | string | | What ends a view's wait for its tiles: the window's opening. There is no wall-clock ceiling. |
 | `readiness.tiles_hold_s` | number | s | When the picture is not waited on: the tiles' lead before the window, in simulated seconds. |
 | `readiness.vehicles`, `readiness.picture_ceiling_frames`, `readiness.picture_ceiling_s`, `readiness.picture_tolerance_levels` | | | Only with the picture-settled wait on. The first says how the comparison skips the parts of the picture that drawn vehicles cover. The other three give the wait's ceiling and tolerance. |
 | `readiness.from_s`, `readiness.until_s` | number | s | Where the wait begins and where the window opens. |

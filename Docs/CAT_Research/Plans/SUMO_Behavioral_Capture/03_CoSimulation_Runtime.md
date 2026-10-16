@@ -3491,6 +3491,29 @@ both snapshots were held, and the fault never showed. The owner had also found t
 To run it, set `capture.picture_settled_wait` to `true` in the run configuration or with
 `--set capture.picture_settled_wait=true`; the lock records the value either way.
 
+**The ruling of 2026-10-15: no wall-clock ceiling for the tiles and no player camera as a Cesium
+view on a headless server.** The 90 s wall-clock ceiling refused a view whose tiles were still
+loading. The refusal, on the Arapahoe underpass capture with 332 bodies rendered at a pace of
+0.667×, read 1200 ticks and 90.0 s into the wait at 69%, with 2,414 tiles queued for the worker
+threads, 73 kicked and none failed. The prewarm's 60 s had been spent and the loader had not got
+through the selection. Cesium builds a tile's mesh inside the tileset's Tick, so a tile finishes
+loading only when the world ticks. Wall clock measures the machine's pace. The ceiling is
+removed. The window's opening ends the wait, as check 50 always had it. The wall seconds are
+still recorded. An ask the server fails to answer is asked again after the next step; two failures
+in a row refuse the run. A probe on the same machine, the same scenario and the same two views,
+moving only the player camera between runs, measured 505 ticks with the player camera at the
+world's origin, 14 ticks with it over the stare target, and 470 ticks with it back at the origin.
+The player camera's view from the origin, at ground level and looking at the horizon, was the
+selection the readiness figures waited on. A headless server therefore registers no player camera
+with Cesium (`ACesiumSensorViewPublisher`; `-CesiumPlayerView` restores it). The readiness row
+carries each tileset's loaded bytes. The bridge sets each tileset's tile budget
+(`MaximumCachedBytes`): 1024 MiB for the photoreal layer and 256 MiB for the ground layer, with
+`-CesiumTileCacheMB` and `-CesiumGroundTileCacheMB` as launch overrides. The 1024 MiB is a starting
+value until the tile content a whole world holds loaded has been measured. The run result names the
+figures as the whole selection's (`figures`). `capture.tiles_hold_s` stands at 10 s until it is
+measured again on a server without the player view. The machine was the owner's Windows
+workstation running the distribution of 2026-10-15, with a warm response cache.
+
 **What the server reports.** `get_view_readiness(actor_id)` reads the tilesets' state as of the end of
 the last tick. The camera counts only once `ACesiumSensorViewPublisher` has written its view on that
 tick, because a tileset with no view for the camera selects nothing for it and reads fully loaded. For
