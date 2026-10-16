@@ -43,7 +43,9 @@
       cmake --build Build --target package-development              # cook + stage the server
     then:
       .\Scripts\Windows\MakeDistribution.ps1                       # assemble the bundle
-    or pass -Build to run those steps first:
+    Run the first two in one PowerShell session: the cook then builds the game target with the
+    Visual Studio toolchain BuildCarla.ps1 chose for the editor.
+    Or pass -Build to run those steps first:
       .\Scripts\Windows\MakeDistribution.ps1 -Build -Config Development
 
     The SUMO libraries are an explicit list read from what the binaries import, the Windows peer of
@@ -58,8 +60,15 @@
 
 .PARAMETER Build
     Run BuildCarla.ps1 (editor + carlanet wheel) and the cook/stage (cmake package target) before
-    assembling. BuildCarla.ps1 activates the Visual Studio toolchain in this process, which the cook
-    then inherits. Without -Build, assembles from already-built artifacts.
+    assembling. BuildCarla.ps1 chooses a Visual Studio toolchain (see -Vs) and sets it for the rest
+    of this process, so the cook builds the game target with the same install and MSVC toolset as
+    the editor. Without -Build, assembles from already-built artifacts.
+
+.PARAMETER Vs
+    Under -Build, the Visual Studio toolchain: '2022' or '2026', forwarded to BuildCarla.ps1, which
+    requires that install to have MSVC 14.44. Omit it and BuildCarla.ps1 uses the active developer
+    prompt's install, or else the newest install that has MSVC 14.44. Without -Build nothing is
+    compiled and -Vs has no effect.
 
 .PARAMETER SkipArchive
     Assemble the Build\Dist\<name>\ folder but do NOT create the .zip. The folder is runnable in
@@ -83,6 +92,10 @@
     Build the editor + wheel, cook + stage the server, then assemble.
 
 .EXAMPLE
+    .\MakeDistribution.ps1 -Build -Vs 2022
+    Build, cook and assemble with the VS2022 toolchain, for the editor and the cooked game alike.
+
+.EXAMPLE
     .\MakeDistribution.ps1 -Build -SkipArchive
     Full build + cook + assemble into Build\Dist\<name>\, but skip the slow .zip (run it in place
     for local debugging).
@@ -93,6 +106,7 @@ param(
     [string]$Config = 'Development',
     [switch]$Build,
     [switch]$SkipArchive,
+    [string]$Vs,               # under -Build, forward to BuildCarla.ps1: '2022' or '2026'; omit to let it choose
     [string]$UnrealEngineRoot,
     [int]$MaxParallelActions = -1, # under -Build, forward to BuildCarla.ps1; -1 = use its default
 
@@ -117,6 +131,7 @@ OPTIONS (PowerShell-native | legacy alias):
   -Config <Development|Shipping|Debug>  --config=<...>   Build configuration (default Development).
   -Build                                --build          Build editor + wheel and cook/stage first.
   -SkipArchive                          --skip-archive   Assemble the folder but skip the .zip.
+  -Vs <2022|2026>                       --vs=<2022|2026> Under -Build, the VS toolchain (MSVC 14.44); omit to let BuildCarla.ps1 choose.
   -UnrealEngineRoot <dir>               --unreal-engine-root=<dir>  UE 5.7.4 root (for -Build).
   -MaxParallelActions <n>               --max-parallel-actions=<n>  Under -Build, cap the editor build's parallel actions (0 = uncapped).
   -Help                          / -h   --help           Show this help.
@@ -124,6 +139,7 @@ OPTIONS (PowerShell-native | legacy alias):
 EXAMPLES:
   .\MakeDistribution.ps1 -Build
   .\MakeDistribution.ps1 -Build -SkipArchive
+  .\MakeDistribution.ps1 -Build -Vs 2022
 '@ | Write-Host
 }
 
@@ -141,6 +157,7 @@ if ($Remaining) {
             '^(--build)$'                { $Build = $true }
             '^(--skip-archive)$'         { $SkipArchive = $true }
             '^(--config)$'               { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Config = $next; if ($null -eq $val) { $idx++ } }
+            '^(--vs)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Vs = $next; if ($null -eq $val) { $idx++ } }
             '^(--unreal-engine-root|--ue-root)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
             '^(--max-parallel-actions|--max-parallel)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $MaxParallelActions = [int]$next; if ($null -eq $val) { $idx++ } }
             default { Show-Usage; throw "Unknown argument '$arg'." }
@@ -151,6 +168,12 @@ if ($Remaining) {
 if ($Help) { Show-Usage; return }
 if ($Config -notin @('Development', 'Shipping', 'Debug')) {
     throw "Invalid -Config '$Config'. Expected Development, Shipping, or Debug."
+}
+if ($Vs -and $Vs -notin @('2022', '2026')) {
+    throw "Invalid -Vs value '$Vs'. Expected 2022 or 2026."
+}
+if ($Vs -and -not $Build) {
+    Write-Warning "-Vs chooses the toolchain for -Build; without -Build nothing is compiled, so it has no effect."
 }
 
 # ── Console colour convention (matches BuildCarla.ps1): green = info, red = failure. ─────────
@@ -235,7 +258,8 @@ Write-Info "Config     : $Config  (cmake target: $cmakeTarget)"
 
 # ============================================================================
 #  Optional build + cook (-Build). BuildCarla.ps1 activates the VS toolchain in
-#  THIS process (process-scope env vars), so the subsequent cmake cook inherits it.
+#  THIS process (process-scope env vars) and sets the UnrealBuildTool_* variables
+#  that make the cook's game-target build use the same install and toolset.
 # ============================================================================
 if ($Build) {
     $buildCarla = Join-Path $PSScriptRoot 'BuildCarla.ps1'
@@ -243,10 +267,20 @@ if ($Build) {
 
     Write-Info "`n[dist] building editor + carlanet wheel (BuildCarla.ps1)"
     $bcArgs = @{}
+    if ($Vs) { $bcArgs['Vs'] = $Vs }
     if ($UnrealEngineRoot) { $bcArgs['UnrealEngineRoot'] = $UnrealEngineRoot }
     if ($MaxParallelActions -ge 0) { $bcArgs['MaxParallelActions'] = $MaxParallelActions }
     & $buildCarla @bcArgs
     if ($LASTEXITCODE -ne 0) { throw "BuildCarla.ps1 failed (exit $LASTEXITCODE); aborting distribution." }
+
+    # Without these, the cook's game-target build falls back to UnrealBuildTool's own choice of
+    # Visual Studio, which can differ from the editor's (BuildCarla.ps1 explains why).
+    $cookCompiler = $env:UnrealBuildTool_WindowsPlatform__Compiler
+    $cookToolset  = $env:UnrealBuildTool_WindowsPlatform__CompilerVersion
+    if (-not $cookCompiler -or -not $cookToolset) {
+        throw "BuildCarla.ps1 did not set the Visual Studio toolchain for UnrealBuildTool; the cook would choose its own."
+    }
+    Write-Info "[dist] cook toolchain: $cookCompiler, MSVC $cookToolset (as chosen by BuildCarla.ps1)"
 
     # Skip the cmake package target's own Compress.cmake step (CARLA_UNREAL_PACKAGE_NO_COMPRESSION):
     # it single-threaded-zips the whole package under Build\Package and looks like a hang after
