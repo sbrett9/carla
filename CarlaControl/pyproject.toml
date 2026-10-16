@@ -4,15 +4,33 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carlacontrol"
-version = "0.1.0"
+# The release version is stamped by setup.py from the top-level CMakeLists.txt, and the dependencies
+# are listed there, because one of them is that release: carlacontrol requires the carlanet of its own
+# release (carlanet==0.10.0 for any build of 0.10.0).
+dynamic = ["version", "dependencies"]
 description = "High-level control and automation tools for CARLA simulator"
 requires-python = ">=3.11"
 license = {text = "Proprietary - Sierra Nevada Corporation"}
 authors = [{ name = "SNC Team" }]
-dependencies = [
-    "carlanet>=0.1.0",
-    "numpy>=1.24.0",
-]
+
+# The user tools, one console command each. Every command's code is carlacontrol.commands.<module>;
+# the scripts under CarlaControl/scripts/ and CarlaNet/python/run_sumo_drive.py run the same main()
+# from a checkout.
+[project.scripts]
+carla-sctmv = "carlacontrol.commands.sctmv:main"
+carla-build-world = "carlacontrol.commands.build_world:main"
+carla-compile-scenario = "carlacontrol.commands.compile_scenario:main"
+carla-capture = "carlacontrol.commands.capture:main"
+carla-drive = "carlacontrol.commands.drive:main"
+carla-cot-telemetry = "carlacontrol.commands.cot_telemetry:main"
+carla-free-camera = "carlacontrol.commands.free_camera:main"
+carla-camera-follower = "carlacontrol.commands.camera_follower:main"
+carla-audit-sidecars = "carlacontrol.commands.audit_sidecars:main"
+carla-diff-manifests = "carlacontrol.commands.diff_manifests:main"
+carla-check-label-leaks = "carlacontrol.commands.check_label_leaks:main"
+carla-publish-reference-set = "carlacontrol.commands.publish_reference_set:main"
+carla-check-sumo = "carlacontrol.commands.check_sumo:main"
+carla-validate = "carlacontrol.commands.validate:main"
 
 [project.optional-dependencies]
 dev = [
@@ -20,10 +38,27 @@ dev = [
     "ruff>=0.1.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["carlacontrol*"]
-exclude = ["test*", "docs*"]
+# The packages are listed rather than found, because two of them are data folders mapped in from
+# outside src/: the measured vehicle catalogue and the schemas live at the top of CarlaControl/, where
+# the repository's tools, tests and scenarios name them, and the wheel carries them inside the
+# package as carlacontrol/data/, where an installed tool reads them (carlacontrol.ToolLayout). Add a
+# new subpackage of carlacontrol here.
+[tool.setuptools]
+packages = [
+    "carlacontrol",
+    "carlacontrol.commands",
+    "carlacontrol.data.catalogue",
+    "carlacontrol.data.schemas",
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+"carlacontrol.data.catalogue" = "catalogue"
+"carlacontrol.data.schemas" = "schemas"
+
+[tool.setuptools.package-data]
+"carlacontrol.data.catalogue" = ["vehicles.catalogue.json", "vehicles.vtypes.rou.xml"]
+"carlacontrol.data.schemas" = ["*.schema.json", "*.xsd", "*.tableschema.json"]
 
 
 [tool.ruff]

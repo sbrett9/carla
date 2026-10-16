@@ -7,27 +7,39 @@
 # Unpacks a world into the package's CarlaUnreal/Plugins/GeneratedWorlds. The server discovers it on
 # the next launch and it can be loaded by name.
 #
-# Before unpacking, the world's recorded build is checked against the package's own declaration. A
-# world cooked against one build will not load against another -- cooked files carry package versions
-# and name base content by id -- and the failure that would otherwise reach the user is an unexplained
-# crash at load. Checking here turns that into a sentence.
+# Before unpacking, the world interface version the world was packaged against (world.json in the
+# zip) is checked against the one the package declares, in the [WorldInterface] section of
+# CarlaUnreal/Config/DefaultWorldInterface.ini: the world installs where the package's Major equals
+# the world's and the package's Minor is at least the world's. A world that needs content the package
+# does not have will not load -- cooked files name base content by id -- and the failure that would
+# otherwise reach the user is an unexplained crash at load. Checking here turns that into a sentence.
+# The commits the world and the package record are shown to identify them, and never compared.
+#
+# A world.json without formatVersion is format 1. One that declares a newer format was written by a
+# newer PackageWorld, and is refused whatever --force says.
 
 set -uo pipefail
 
+script_dir="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
 package=""
 into=""
 force=0
 
 usage() {
     cat <<'EOF'
-Usage: InstallWorld.sh --package <world.zip> --into <package directory> [--force]
+Usage: InstallWorld.sh --package <world.zip|world.tar.xz> --into <package directory> [--force]
 
 Install a packaged world into an existing CARLA package.
 
 Options:
-  --package <path>   The .zip written by PackageWorld.sh (required).
-  --into <path>      Root of the CARLA package: the directory holding CarlaUnreal/ (required).
-  --force            Install despite a build mismatch; the world may then fail to load.
+  --package <path>   The .zip written by PackageWorld.sh, or a .tar.xz holding the same contents
+                     (required).
+  --into <path>      The CARLA package: a cooked package's root (the directory holding CarlaUnreal/),
+                     or a CARLA distribution's root (the one holding CarlaServer/ and VERSION). Run
+                     from a distribution's world-tools folder, it defaults to that distribution.
+  --force            Install despite a world interface version that does not allow it; the world
+                     may then fail to load. A world.json of a newer format than this script reads
+                     is refused regardless.
   -h, --help         This text.
 EOF
 }
@@ -46,29 +58,76 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$package" ] || { echo "ERROR: --package is required." >&2; usage; exit 1; }
-[ -n "$into" ]    || { echo "ERROR: --into is required." >&2; usage; exit 1; }
 [ -f "$package" ] || { echo "ERROR: no such package: $package" >&2; exit 1; }
-[ -d "$into" ]    || { echo "ERROR: no such directory: $into" >&2; exit 1; }
+
+# Where the server's CarlaUnreal/ is. A cooked package holds it at its root beside VERSION; a
+# distribution holds it under CarlaServer/, with VERSION at the distribution's root. Run from a
+# distribution's world-tools folder with no --into, the distribution it came with is the one.
+if [ -z "$into" ]; then
+    if [ ! -d "$script_dir/../CarlaServer/CarlaUnreal" ]; then
+        echo "ERROR: --into is required: the CARLA package or distribution to install the world into." >&2
+        usage
+        exit 1
+    fi
+    into="$script_dir/.."
+fi
+[ -d "$into" ] || { echo "ERROR: no such directory: $into" >&2; exit 1; }
+into="$(cd "$into" && pwd)"
+version_file="$into/VERSION"
+if [ -d "$into/CarlaServer/CarlaUnreal" ]; then
+    into="$into/CarlaServer"
+fi
 
 if [ ! -d "$into/CarlaUnreal" ]; then
     echo "ERROR: $into does not look like a CARLA package (no CarlaUnreal/ inside)." >&2
     exit 1
 fi
+# Named the distribution's CarlaServer/ itself: its VERSION is one folder up.
+[ -f "$version_file" ] || version_file="$(dirname "$into")/VERSION"
+# A distribution starts its server with run-server.sh, beside its VERSION.
+run_server="$(dirname "$version_file")/run-server.sh"
 
 plugins_dir="$into/CarlaUnreal/Plugins/GeneratedWorlds"
-version_file="$into/VERSION"
 interface_ini="$into/CarlaUnreal/Config/DefaultWorldInterface.ini"
 
 unpacked="$(mktemp -d)"
 trap 'rm -rf "$unpacked"' EXIT
 
-unzip -q "$package" -d "$unpacked" || { echo "ERROR: could not unpack $package (is 'unzip' installed?)" >&2; exit 1; }
+# A level pack is the .zip that PackageWorld writes. The example packs under a distribution's
+# Scenarios/ hold the same contents as a .tar.xz, about half the size.
+case "$package" in
+    *.zip)
+        unzip -q "$package" -d "$unpacked" || { echo "ERROR: could not unpack $package (is 'unzip' installed?)" >&2; exit 1; } ;;
+    *.tar.xz|*.txz)
+        tar -xJf "$package" -C "$unpacked" || { echo "ERROR: could not unpack $package (are 'tar' and 'xz' installed?)" >&2; exit 1; } ;;
+    *)
+        echo "ERROR: $package is neither a .zip nor a .tar.xz level pack." >&2; exit 1 ;;
+esac
 
 manifest="$unpacked/world.json"
 [ -f "$manifest" ] || { echo "ERROR: $package carries no world.json; it was not written by PackageWorld.sh." >&2; exit 1; }
 
 json_str() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$manifest" | head -1; }
 json_num() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p" "$manifest" | head -1; }
+
+# The manifest's own format, read before anything else in it. One without formatVersion is format 1;
+# a newer one was written by a newer PackageWorld, whose fields this script may read wrongly, so it is
+# refused rather than read in part. --force does not override this.
+supported_format_version=1
+if grep -q '"formatVersion"' "$manifest"; then
+    format_version="$(sed -n 's/.*"formatVersion"[[:space:]]*:[[:space:]]*\([0-9]\+\)[[:space:]]*\(,.*\|}.*\)\{0,1\}$/\1/p' "$manifest" | head -1)"
+    if [ -z "$format_version" ] || [ "$format_version" -lt 1 ]; then
+        echo "ERROR: $package declares a formatVersion in world.json that is not a format version." >&2
+        exit 1
+    fi
+else
+    format_version=1
+fi
+if [ "$format_version" -gt "$supported_format_version" ]; then
+    echo "ERROR: $package declares formatVersion $format_version in world.json, and this InstallWorld reads formatVersion $supported_format_version and earlier." >&2
+    echo "       It was packaged by a newer release; install it with that release's InstallWorld." >&2
+    exit 1
+fi
 
 world="$(json_str world)"
 map_package="$(json_str mapPackage)"
@@ -85,10 +144,21 @@ echo "needs   : world interface ${want_major}.x, minor ${want_minor} or later"
 # What this package promises, read from the package itself rather than from anything derived. A
 # version says what a build supports; a hash could only say whether two builds are identical, which
 # refuses compatible pairs and still cannot confirm an incompatible one.
+#
+# The version is read from the [WorldInterface] section alone, a key of another section never taken
+# for it, and section and key are matched without regard to case, as InstallWorld.ps1 reads them.
+world_interface() {
+    awk -v key="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')" '
+        { line = tolower($0) }
+        line ~ /^[[:space:]]*\[/ { in_section = (line ~ /^[[:space:]]*\[worldinterface\]/); next }
+        in_section && match(line, "^[[:space:]]*" key "[[:space:]]*=[[:space:]]*[0-9]+") {
+            value = substr(line, RSTART, RLENGTH); sub(/^[^=]*=[[:space:]]*/, "", value); print value; exit
+        }' "$1" 2>/dev/null
+}
 problems=()
 if [ -f "$interface_ini" ]; then
-    have_major="$(sed -n 's/^[[:space:]]*Major[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$interface_ini" | head -1)"
-    have_minor="$(sed -n 's/^[[:space:]]*Minor[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$interface_ini" | head -1)"
+    have_major="$(world_interface "$interface_ini" Major)"
+    have_minor="$(world_interface "$interface_ini" Minor)"
 fi
 if [ -z "${have_major:-}" ] || [ -z "${have_minor:-}" ]; then
     problems+=("this package does not declare a world interface version, so what it supports is unknown")
@@ -135,4 +205,8 @@ echo "Installed $world"
 echo "  into  : $target"
 echo ""
 echo "Load it with:"
-echo "  ./Scripts/Linux/RunCarlaServer.sh --map $map_package"
+if [ -f "$run_server" ]; then
+    echo "  $run_server $map_package"
+else
+    echo "  ./Scripts/Linux/RunCarlaServer.sh --map $map_package"
+fi

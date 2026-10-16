@@ -42,6 +42,19 @@ internal static class TMDiagnostics
         System.Console.Error.WriteLine(message);
     }
 
+    /// One-shot warning, deduplicated by <paramref name="key"/>. Unlike <see cref="Log"/> this is
+    /// NOT gated on CARLANET_TM_DEBUG: it is for a failure the stage recovers from silently, where
+    /// the silence is itself the defect - a caught-and-discarded exception that leaves the stage
+    /// working from an empty world view says nothing at all today.
+    public static void WarnOnce(string key, string message)
+    {
+        lock (_gate)
+        {
+            if (!_seen.Add("warn:" + key)) return;
+        }
+        System.Console.Error.WriteLine(message);
+    }
+
     /// First occurrence of each (stage, exception type) is printed with a
     /// stack trace; subsequent identical failures are suppressed so a
     /// per-tick exception doesn't drown the log.

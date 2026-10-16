@@ -1,0 +1,22 @@
+{
+  "run_configuration_version": 1,
+  "caller_label": "supervision check",
+  "scenario_package": "Import/Arapahoe_I25_SupervisionCheck.lock.json",
+  "capture": {
+    "window": "dwell_golden",
+    "prewarm_s": 30.0,
+    "channels": [
+      {
+        "sensor_id": "Check_Overhead_1",
+        "stare_altitude_m": 70.0,
+        "stare_standoff_m": 25.0,
+        "stare_bearing_deg": 90.0,
+        "fov": 50.0,
+        "width": 1920,
+        "height": 1080,
+        "stare_look_at_x_m": -374.2,
+        "stare_look_at_y_m": -313.7
+      }
+    ]
+  }
+}

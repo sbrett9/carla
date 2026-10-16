@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:vehicle-body-widths:1",
+  "title": "Vehicle body widths (vehicle_body_widths.json)",
+  "description": "Each vehicle body's width without its mirrors, measured from the mesh in the Unreal Editor, keyed by CARLA blueprint id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "body_widths_version",
+    "method",
+    "measured",
+    "vehicles"
+  ],
+  "properties": {
+    "body_widths_version": {
+      "const": 1,
+      "description": "The format of this file."
+    },
+    "method": {
+      "type": "string",
+      "minLength": 1,
+      "description": "How the widths were measured."
+    },
+    "measured": {
+      "type": "string",
+      "minLength": 1,
+      "description": "When, and from what."
+    },
+    "vehicles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "length_m",
+          "full_width_m",
+          "body_width_m",
+          "height_m"
+        ],
+        "properties": {
+          "length_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "The mesh's length, meters."
+          },
+          "full_width_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "The mesh's whole width, meters, mirrors included. Must equal the catalogue's width_m to within a millimeter."
+          },
+          "body_width_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "The width without mirrors and other short protrusions, meters."
+          },
+          "height_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "The mesh's height, meters."
+          }
+        }
+      },
+      "description": "One row per blueprint id."
+    }
+  }
+}

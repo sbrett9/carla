@@ -22,8 +22,10 @@ public sealed class DepthFrame
     public ulong Frame { get; }
     public double Timestamp { get; }
 
-    /// <summary>The pose the depth pixels were rendered from — taken from this frame's own sensor
-    /// header, so the geometry always matches the pixels rather than a pose read separately.</summary>
+    /// <summary>The pose the depth pixels are projected from. Decoded off the wire it is the frame's
+    /// sensor-header transform, which a server that stamped the header after the read-back could
+    /// leave a frame ahead of the pixels; <see cref="OcclusionEstimator.MatchTo"/> replaces it with
+    /// the depth camera's pose in the snapshot of this frame where it can (<see cref="SensorPoseCheck"/>).</summary>
     public Transform Transform { get; }
 
     public int Width { get; }
@@ -54,6 +56,10 @@ public sealed class DepthFrame
         _bgra = bgra;
         MaxRangeMetres = maxRangeMetres;
     }
+
+    /// <summary>The same capture projected from another pose: the pixels are shared, not copied.</summary>
+    public DepthFrame WithTransform(Transform transform) =>
+        new(Frame, Timestamp, transform, Width, Height, HFovDeg, _bgra, MaxRangeMetres);
 
     /// <summary>Decode a streamed depth capture, or null if the payload is not a usable image. The
     /// range the camera encodes over travels with its actor description, not with the frame, so it

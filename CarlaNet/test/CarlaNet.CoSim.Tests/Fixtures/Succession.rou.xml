@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Two measured vehicles over the cross, one after the other, so a body is handed on: `first` runs
+     straight through and leaves the network before `second` departs, and `second` borrows the body
+     `first` gave back. Between the two, `unrenderable`, whose type names no measured blueprint, is
+     the only vehicle on the network, so every body there is stands parked while SUMO still has a
+     vehicle. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+    <vType id="unmeasured" vClass="passenger" length="4.60" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0"/>
+
+    <route id="straight" edges="approach ahead"/>
+
+    <vehicle id="first" type="measured_truck" route="straight" depart="0.00" departLane="1"
+             departSpeed="max"/>
+    <vehicle id="unrenderable" type="unmeasured" route="straight" depart="4.00" departLane="1"
+             departSpeed="max"/>
+    <vehicle id="second" type="measured_truck" route="straight" depart="9.00" departLane="1"
+             departSpeed="max"/>
+</routes>

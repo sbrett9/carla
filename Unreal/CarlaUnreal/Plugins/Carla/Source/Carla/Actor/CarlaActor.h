@@ -8,10 +8,14 @@
 
 #include "Carla/Actor/ActorInfo.h"
 #include "Carla/Actor/ActorData.h"
+#include "Carla/Actor/ActorSupervision.h"
+#include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Vehicle/CarlaWheeledVehicle.h"
 #include "Carla/Walker/WalkerController.h"
 #include "Carla/Traffic/TrafficLightState.h"
 #include "Carla/Server/CarlaServerResponse.h"
+#include "Components/ActorComponent.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 #include <util/disable-ue4-macros.h>
 #include "carla/rpc/ActorState.h"
@@ -148,6 +152,46 @@ public:
     return Attachment;
   }
 
+  /// Where a co-simulation session's body pool holds this actor, if a session has named it. Kept
+  /// on this record, whether the actor is awake or dormant, until the actor is destroyed.
+  const FRenderSetMembership &GetRenderSetMembership() const
+  {
+    return RenderSetMembership;
+  }
+
+  void SetRenderSetMembership(const FRenderSetMembership &InMembership)
+  {
+    RenderSetMembership = InMembership;
+  }
+
+  /// What the server turned off when a session parked this actor, so that lending it again turns
+  /// on exactly that and nothing more. Empty while the actor is not quieted.
+  struct FQuietedTicks
+  {
+    bool bQuieted = false;
+    bool bActorTickWasEnabled = false;
+    bool bWasHidden = false;
+    TArray<TWeakObjectPtr<UActorComponent>> Components;
+  };
+
+  FQuietedTicks &GetQuietedTicks()
+  {
+    return QuietedTicks;
+  }
+
+  /// What the scenario's author asserts of the vehicle this actor draws, where a co-simulation
+  /// session has put supervision in force for it while the actor is lent. Kept on this record until
+  /// the actor is destroyed, given back, or lent to another vehicle.
+  const FActorSupervision &GetSupervision() const
+  {
+    return Supervision;
+  }
+
+  void SetSupervision(const FActorSupervision &InSupervision)
+  {
+    Supervision = InSupervision;
+  }
+
   void BuildActorData();
 
   void PutActorToSleep(UCarlaEpisode* CarlaEpisode);
@@ -208,7 +252,7 @@ public:
 
   FVector GetActorAngularVelocity() const;
 
-  ECarlaServerResponse SetActorTargetVelocity(const FVector& Velocity);
+  virtual ECarlaServerResponse SetActorTargetVelocity(const FVector& Velocity);
 
   ECarlaServerResponse SetActorTargetAngularVelocity(const FVector& AngularVelocity);
 
@@ -459,6 +503,12 @@ private:
 
   TArray<IdType> Children;
 
+  FRenderSetMembership RenderSetMembership;
+
+  FQuietedTicks QuietedTicks;
+
+  FActorSupervision Supervision;
+
 protected:
 
   ActorType Type = ActorType::INVALID;
@@ -506,6 +556,8 @@ public:
       const EVehicleWheelLocation& WheelLocation, float& Angle);
 
   virtual ECarlaServerResponse SetActorSimulatePhysics(bool bSimulatePhysics) final;
+
+  virtual ECarlaServerResponse SetActorTargetVelocity(const FVector& Velocity) final;
 
   virtual ECarlaServerResponse ApplyControlToVehicle(
       const FVehicleControl&, const EVehicleInputPriority&) final;

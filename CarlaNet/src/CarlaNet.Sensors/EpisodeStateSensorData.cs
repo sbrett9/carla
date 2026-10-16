@@ -1,15 +1,51 @@
 // §10.14 — FWorldObserver / EpisodeState.
-// After 48-byte header: 124-byte EpisodeState header + N * 119-byte ActorDynamicState.
-// The EpisodeState header is the original 36 bytes plus 11 appended solar doubles (offset 36).
+// After 48-byte header: the EpisodeState header + N * 119-byte ActorDynamicState.
+// The EpisodeState header is the original 36 bytes plus the solar block at offset 36: 11 doubles,
+// or 12 where the server also carries the refraction-corrected elevation (EpisodeStateLayout).
+// A render set block sits between the header and the actors where the server carries one
+// (SimulationState.RenderSetCarried; EpisodeStateLayout.ActorsOffset), and a supervision block inside
+// it, after the render set's entries, where the server carries that (SimulationState.SupervisionCarried),
+// and a pose source block after those where it carries one (SimulationState.PoseSourceCarried).
 // static_assert(sizeof(ActorDynamicState) == 119) — verified in source (§13.6).
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Enums;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Sensors;
 
 [Flags]
 public enum SimulationState : byte
-{ None = 0x0, MapChange = 0x1, PendingLightUpdate = 0x2 }
+{
+    None = 0x0,
+    MapChange = 0x1,
+    PendingLightUpdate = 0x2,
+    /// The header's solar block carries a sun that was actually measured this tick. Its defaults
+    /// are a well-formed reading -- midnight of year 0 at latitude 0, longitude 0 -- so nothing in
+    /// the values themselves says "this world has no sun"; only this flag does.
+    SolarStateValid = 0x4,
+    /// The header's solar block is twelve doubles wide: the refraction-corrected elevation follows
+    /// the rate. Set on every snapshot from a server that carries it, sun or no sun, because it
+    /// describes where the actors start rather than what was measured.
+    SolarCorrectedElevationCarried = 0x8,
+    /// A render set block follows the header, before the first actor: the bodies a co-simulation
+    /// session's pool has lent and parked. Set only on a snapshot that carries one, and, like the
+    /// flag above, it says where the actors start.
+    RenderSetCarried = 0x10,
+    /// A supervision block follows the render set's entries, inside the render set block: the plan a
+    /// co-simulation session has bound, and what the author asserts of the vehicle each lent body
+    /// draws. Set only on a snapshot that carries one, and always with the flag above, whose block
+    /// size counts it.
+    SupervisionCarried = 0x20,
+    /// Every vehicle's state carries the lights commanded on for it on the frame. Set on every snapshot
+    /// from a server that fills the field, because zero there is every light off, and a server built
+    /// before it leaves the same bytes zero.
+    VehicleLightStateCarried = 0x40,
+    /// A pose source block follows the supervision block, or the render set's entries where there is
+    /// none, inside the render set block: the frames a co-simulation session's SUMO steps fall on, and
+    /// every lent body whose pose followed no step. Always with RenderSetCarried, whose block size
+    /// counts it.
+    PoseSourceCarried = 0x80
+}
 
 public sealed class EpisodeStateHeader
 {
@@ -20,9 +56,26 @@ public sealed class EpisodeStateHeader
     public SimulationState SimulationState { get; init; }
 
     /// Solar / time-of-day state in effect this tick (appended to the header, offset 36):
-    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
-    /// All-zero (rate 1.0) when the world has no CesiumSunSky.
+    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+    /// corrected_elevation_deg], the last only where the server carries it.
+    /// Empty when the world has no CesiumSunSky (SimulationState.SolarStateValid clear), so a
+    /// consumer never mistakes the header's defaults for a measured sun.
     public IReadOnlyList<double> Solar { get; init; } = System.Array.Empty<double>();
+
+    /// The render set the snapshot carried: the bodies a co-simulation session's pool had lent, each
+    /// with the vehicle it was drawn for, and those it had parked. ObservedRenderSet.None where the
+    /// snapshot carried none.
+    public ObservedRenderSet RenderSet { get; init; } = ObservedRenderSet.None;
+
+    /// The supervision the snapshot carried: the plan in force, and what the author asserts of the
+    /// vehicle each lent body drew. ObservedSupervision.None where the snapshot carried none, and
+    /// ObservedSupervision.Unreadable where its block could not be read.
+    public ObservedSupervision Supervision { get; init; } = ObservedSupervision.None;
+
+    /// The pose source the snapshot carried: the frames a co-simulation session's SUMO steps fall on,
+    /// and every lent body whose pose followed no step. ObservedPoseSource.None where the snapshot
+    /// carried none, and ObservedPoseSource.Unreadable where its block could not be read.
+    public ObservedPoseSource PoseSource { get; init; } = ObservedPoseSource.None;
 }
 
 public sealed class ActorDynamicState
@@ -52,23 +105,23 @@ public sealed class EpisodeStateSensorData
         int mx = BinaryPrimitives.ReadInt32LittleEndian(payload[20..]);
         int my = BinaryPrimitives.ReadInt32LittleEndian(payload[24..]);
         int mz = BinaryPrimitives.ReadInt32LittleEndian(payload[28..]);
-        var simState         = (SimulationState)payload[32];
-        // 3 bytes padding at [33..35], then 11 solar doubles at offset 36.
-
-        var solar = new double[11];
-        for (int k = 0; k < 11; k++)
-            solar[k] = BitConverter.Int64BitsToDouble(
-                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
+        var simState         = (SimulationState)payload[EpisodeStateLayout.FlagsOffset];
+        // 3 bytes padding at [33..35], then the solar block at offset 36. It is read only when the
+        // header says a sun was measured; otherwise it holds defaults that read as a real sun.
+        var solar = EpisodeStateLayout.ReadSolar(payload);
 
         var header = new EpisodeStateHeader
         {
             EpisodeId = episodeId, PlatformTimestamp = platformTs,
             DeltaSeconds = deltaSeconds, MapOrigin = new Vector3DInt(mx, my, mz),
-            SimulationState = simState, Solar = solar
+            SimulationState = simState, Solar = solar,
+            RenderSet = ReadRenderSet(payload),
+            Supervision = ReadSupervision(payload),
+            PoseSource = ReadPoseSource(payload)
         };
 
-        const int StateHeaderSize = 124;
-        var actorData = payload[StateHeaderSize..];
+        int actorsOffset = EpisodeStateLayout.ActorsOffset(payload);
+        var actorData = payload[actorsOffset..];
         const int ActorSize = 119;
         int count = actorData.Length / ActorSize;
         var actors = new ActorDynamicState[count];
@@ -107,5 +160,47 @@ public sealed class EpisodeStateSensorData
             };
         }
         return new EpisodeStateSensorData(header, actors);
+    }
+
+    // A block that cannot be read is read as no set, and the actors after it are read all the same:
+    // the block states its own size, so they are found either way.
+    private static ObservedRenderSet ReadRenderSet(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return EpisodeStateLayout.ReadRenderSet(payload);
+        }
+        catch (InvalidDataException)
+        {
+            return ObservedRenderSet.None;
+        }
+    }
+
+    // Likewise a supervision block, read as unreadable -- a plan in force, what it asserted unknown --
+    // with the actors and the render set read all the same.
+    private static ObservedSupervision ReadSupervision(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return EpisodeStateLayout.ReadSupervision(payload);
+        }
+        catch (InvalidDataException)
+        {
+            return ObservedSupervision.Unreadable;
+        }
+    }
+
+    // And a pose source block, read as unreadable -- no body given a pose source -- with everything
+    // before it and the actors read all the same.
+    private static ObservedPoseSource ReadPoseSource(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return EpisodeStateLayout.ReadPoseSource(payload);
+        }
+        catch (InvalidDataException)
+        {
+            return ObservedPoseSource.Unreadable;
+        }
     }
 }

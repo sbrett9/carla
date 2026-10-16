@@ -1,0 +1,2997 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:run-manifest:1",
+  "title": "Run manifest row, format version 1",
+  "description": "One row of a run manifest, truth/manifest.jsonl: one JSON object per line, appended as the run goes, its kind in row. The first row is manifest_opened, which carries the manifest's format version in manifest_version; the last row of a run that reached its end is manifest_closed, and a manifest without it is a run that was interrupted. Every sim_time_s is simulated time in seconds: TraCI's clock for the SUMO frame an admission or an event describes, and for a release the instant of the first frame that no longer draws the vehicle. This schema describes manifest_version 1.",
+  "type": "object",
+  "required": [
+    "row"
+  ],
+  "properties": {
+    "row": {
+      "type": "string",
+      "enum": [
+        "manifest_opened",
+        "instance",
+        "series",
+        "cohort",
+        "sensor_placed",
+        "render_admitted",
+        "render_released",
+        "collision_began",
+        "collision_ended",
+        "vehicle_not_inserted",
+        "emergency_stop",
+        "teleport",
+        "solar_window_open",
+        "solar_window_end",
+        "interval_opened",
+        "interval_closed",
+        "supervision_defect",
+        "manifest_closed"
+      ],
+      "description": "The row's kind."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "manifest_opened"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/manifest_opened"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "instance"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/instance"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "series"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/series"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "cohort"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/cohort"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "sensor_placed"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/sensor_placed"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "render_admitted"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/render_admitted"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "render_released"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/render_released"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "collision_began"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/collision_began"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "collision_ended"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/collision_ended"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "vehicle_not_inserted"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/vehicle_not_inserted"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "emergency_stop"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/emergency_stop"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "teleport"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/teleport"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "solar_window_open"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/solar_window_open"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "solar_window_end"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/solar_window_end"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "interval_opened"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/interval_opened"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "interval_closed"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/interval_closed"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "supervision_defect"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/supervision_defect"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "row": {
+            "const": "manifest_closed"
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/manifest_closed"
+      }
+    }
+  ],
+  "$defs": {
+    "manifest_opened": {
+      "type": "object",
+      "description": "The first row, written before anything is rendered: the manifest's format, what made it, the caller's header and what the session established itself.",
+      "properties": {
+        "row": {
+          "const": "manifest_opened",
+          "description": "The row's kind."
+        },
+        "manifest_version": {
+          "const": 1,
+          "description": "The manifest's format version."
+        },
+        "producer": {
+          "$ref": "#/$defs/producer",
+          "description": "What made the manifest. Absent from a manifest written before manifests carried it."
+        },
+        "opened_wall_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the manifest was opened, by the wall clock, in UTC."
+        },
+        "run": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The header the caller handed over, verbatim: the run's and the session's identity and its channels. Its fields are the caller's; null where the caller gave none."
+        },
+        "scenario": {
+          "type": "object",
+          "description": "The scenario's files and digests, from its compile lock.",
+          "properties": {
+            "config_path": {
+              "type": "string",
+              "description": "The SUMO configuration the run started."
+            },
+            "world_package": {
+              "type": "string",
+              "description": "The world package the run drove."
+            },
+            "compiled": {
+              "type": "boolean",
+              "description": "Whether a compile lock was found and checked."
+            },
+            "lock_path": {
+              "type": "string",
+              "description": "Where the compile lock was looked for."
+            },
+            "scenario_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The scenario's id; null with no lock."
+            },
+            "specification_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The scenario specification's SHA-256, as the compile lock records it; null with no lock."
+            },
+            "config_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The SUMO configuration's SHA-256, as the compile lock records it; null with no lock."
+            },
+            "routes_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The routes file's SHA-256, as the compile lock records it; null with no lock."
+            },
+            "network_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The network's SHA-256, as the compile lock records it; null with no lock."
+            },
+            "additional_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The additional file's SHA-256, as the compile lock records it; null where there is none."
+            },
+            "catalogue_digest": {
+              "type": "string",
+              "description": "The vehicle catalogue's digest."
+            },
+            "epoch_digest": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The scenario epoch's digest; null with no lock."
+            },
+            "world_opendrive_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The world's OpenDRIVE SHA-256 the lock records; null where it records none."
+            },
+            "world_network_fingerprint": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The world network's fingerprint the lock records; null where it records none."
+            },
+            "dry_run_ran": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Whether the compiler ran the scenario in SUMO alone before writing it; null where the lock records no such run, or there is no lock."
+            },
+            "skipped_dry_run_accepted": {
+              "type": "boolean",
+              "description": "Whether the run was accepted although the compile skipped that run."
+            }
+          },
+          "required": [
+            "config_path",
+            "world_package",
+            "compiled",
+            "lock_path",
+            "scenario_id",
+            "specification_sha256",
+            "config_sha256",
+            "routes_sha256",
+            "network_sha256",
+            "additional_sha256",
+            "catalogue_digest",
+            "epoch_digest",
+            "world_opendrive_sha256",
+            "world_network_fingerprint",
+            "dry_run_ran",
+            "skipped_dry_run_accepted"
+          ],
+          "additionalProperties": false
+        },
+        "plan": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The supervision plan the compile lock binds; null where there is none.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "The plan file."
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "Its SHA-256."
+            },
+            "plan_id": {
+              "type": "string",
+              "description": "The plan's id."
+            },
+            "spec_version": {
+              "type": "integer",
+              "description": "The specification version it was compiled from."
+            },
+            "scenario_id": {
+              "type": "string",
+              "description": "The scenario it belongs to."
+            },
+            "instances": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many pattern instances it declares."
+            },
+            "series": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many recurring series."
+            },
+            "cohorts": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many cohorts."
+            },
+            "entities": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many entities."
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "plan_id",
+            "spec_version",
+            "scenario_id",
+            "instances",
+            "series",
+            "cohorts",
+            "entities"
+          ],
+          "additionalProperties": false
+        },
+        "vocabulary": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The plan's annotation vocabulary; null where there is no plan.",
+          "properties": {
+            "vocabulary_version": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The core vocabulary's version."
+            },
+            "vocabulary_digest": {
+              "type": "string",
+              "description": "The digest that pins what every label means."
+            },
+            "namespaces": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "One author namespace.",
+                "properties": {
+                  "namespace": {
+                    "type": "string",
+                    "description": "Its name."
+                  },
+                  "version": {
+                    "type": "integer",
+                    "description": "Its version."
+                  }
+                },
+                "required": [
+                  "namespace",
+                  "version"
+                ],
+                "additionalProperties": false
+              },
+              "description": "The author namespaces the plan uses."
+            }
+          },
+          "required": [
+            "vocabulary_version",
+            "vocabulary_digest",
+            "namespaces"
+          ],
+          "additionalProperties": false
+        },
+        "sumo": {
+          "type": "object",
+          "description": "The SUMO settings the session checked and runs under.",
+          "properties": {
+            "release": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The SUMO release, such as 1.27.0; null where it could not be read."
+            },
+            "binary": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The SUMO executable the run launched."
+            },
+            "seed": {
+              "type": "integer",
+              "description": "SUMO's random seed."
+            },
+            "step_s": {
+              "type": "number",
+              "description": "SUMO's step length.",
+              "x-unit": "seconds"
+            },
+            "step_override_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The step length the run imposed over the configuration's; null where it imposed none.",
+              "x-unit": "seconds"
+            },
+            "collision_action": {
+              "type": "string",
+              "description": "What SUMO does on a collision, as in force: SUMO's own word, such as warn, or none where accidents are ignored."
+            },
+            "collision_action_declared": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The collision action the configuration declares; null where it declares none."
+            },
+            "teleport_triggers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "One teleport trigger.",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The SUMO option, such as time-to-teleport.highways."
+                  },
+                  "declared": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "The value the configuration declares; null where none."
+                  },
+                  "seconds": {
+                    "type": "number",
+                    "description": "The value in force.",
+                    "x-unit": "seconds"
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Whether it can teleport a vehicle."
+                  }
+                },
+                "required": [
+                  "name",
+                  "declared",
+                  "seconds",
+                  "enabled"
+                ],
+                "additionalProperties": false
+              },
+              "description": "SUMO's teleport triggers and whether each is enabled."
+            },
+            "teleporting_accepted": {
+              "type": "boolean",
+              "description": "Whether the run accepted teleporting."
+            },
+            "random_depart_offset_declared": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "SUMO's random-depart-offset as declared; null where not."
+            },
+            "random_declared": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "SUMO's random option as declared; null where not."
+            },
+            "scale": {
+              "type": "number",
+              "description": "SUMO's demand scale."
+            },
+            "max_num_vehicles": {
+              "type": "integer",
+              "description": "SUMO's vehicle limit; -1 for none."
+            },
+            "max_depart_delay_s": {
+              "type": "number",
+              "description": "How long SUMO waits to insert a vehicle before giving it up; -1 for no limit.",
+              "x-unit": "seconds"
+            },
+            "lanechange_duration_s": {
+              "type": "number",
+              "description": "How long a lane change takes; 0 for SUMO's instant lane change.",
+              "x-unit": "seconds"
+            }
+          },
+          "required": [
+            "release",
+            "binary",
+            "seed",
+            "step_s",
+            "step_override_s",
+            "collision_action",
+            "collision_action_declared",
+            "teleport_triggers",
+            "teleporting_accepted",
+            "random_depart_offset_declared",
+            "random_declared",
+            "scale",
+            "max_num_vehicles",
+            "max_depart_delay_s",
+            "lanechange_duration_s"
+          ],
+          "additionalProperties": false
+        },
+        "clock": {
+          "type": "object",
+          "description": "How the run's clocks relate.",
+          "properties": {
+            "sumo_step_s": {
+              "type": "number",
+              "description": "SUMO's step length.",
+              "x-unit": "seconds"
+            },
+            "world_delta_s": {
+              "type": "number",
+              "description": "The CARLA world's fixed step.",
+              "x-unit": "seconds"
+            },
+            "capture_hz": {
+              "type": "number",
+              "description": "Captures per simulated second.",
+              "x-unit": "per second"
+            },
+            "world_ticks_per_sumo_step": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "World ticks per SUMO step."
+            },
+            "world_ticks_per_capture": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "World ticks per capture."
+            }
+          },
+          "required": [
+            "sumo_step_s",
+            "world_delta_s",
+            "capture_hz",
+            "world_ticks_per_sumo_step",
+            "world_ticks_per_capture"
+          ],
+          "additionalProperties": false
+        },
+        "window": {
+          "type": "object",
+          "description": "When the run renders and when its capture window opens.",
+          "properties": {
+            "rendered_from_s": {
+              "type": "number",
+              "description": "The simulated second rendering starts at; SUMO runs alone before it.",
+              "x-unit": "seconds"
+            },
+            "opens_at_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The simulated second the capture window opens at; null where it opens with rendering.",
+              "x-unit": "seconds"
+            }
+          },
+          "required": [
+            "rendered_from_s",
+            "opens_at_s"
+          ],
+          "additionalProperties": false
+        },
+        "render_set": {
+          "type": "object",
+          "description": "Which vehicles the run draws.",
+          "properties": {
+            "policy": {
+              "type": "string",
+              "description": "The render-set policy, described in words."
+            },
+            "limits": {
+              "type": "boolean",
+              "description": "Whether an optional limit can leave a vehicle without a body."
+            },
+            "capacity": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "The limit's capacity; null for none."
+            },
+            "draw_distance_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The draw distance bodies are drawn under; null for none.",
+              "x-unit": "meters"
+            }
+          },
+          "required": [
+            "policy",
+            "limits",
+            "capacity",
+            "draw_distance_m"
+          ],
+          "additionalProperties": false
+        },
+        "vehicle_lights": {
+          "type": "object",
+          "description": "The rule the vehicle lights follow for the whole run.",
+          "properties": {
+            "driven": {
+              "type": "boolean",
+              "description": "Whether the session drives the lights at all; where not, every body keeps the lights it was spawned with and the rest is null."
+            },
+            "headlights_follow_sun": {
+              "type": "boolean",
+              "description": "Whether the headlights follow the sun; false under a policy that leaves the sun alone, when every headlight stays off."
+            },
+            "headlights_on_below_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The sun elevation the headlights come on below.",
+              "x-unit": "degrees"
+            },
+            "headlights_off_above_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The sun elevation the headlights go off above.",
+              "x-unit": "degrees"
+            },
+            "headlights_elevation": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "geometric",
+                null
+              ],
+              "description": "Which elevation the headlights read."
+            },
+            "brake_lights": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "sumo_signals",
+                null
+              ],
+              "description": "Where the brake lights come from: SUMO's signals for each vehicle."
+            },
+            "turn_signals": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "sumo_signals",
+                null
+              ],
+              "description": "Where the turn signals come from: SUMO's signals for each vehicle."
+            }
+          },
+          "required": [
+            "driven",
+            "headlights_follow_sun",
+            "headlights_on_below_deg",
+            "headlights_off_above_deg",
+            "headlights_elevation",
+            "brake_lights",
+            "turn_signals"
+          ],
+          "additionalProperties": false
+        },
+        "solar": {
+          "type": "object",
+          "description": "The epoch and the illumination the run declared.",
+          "properties": {
+            "epoch": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "The scenario's epoch object as declared, which a scenario file defines; null where none was."
+            },
+            "epoch_declared": {
+              "type": "boolean",
+              "description": "Whether an epoch was declared."
+            },
+            "epoch_block_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "The epoch's digest; null where none was declared."
+            },
+            "illumination_declared": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/illumination_policy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The illumination policy the run declared; null for none."
+            },
+            "illumination_in_force": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/illumination_policy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The illumination policy in force; null for none."
+            },
+            "epoch_honoured": {
+              "type": "boolean",
+              "description": "Whether each frame is lit by the sun of its own declared civil instant."
+            },
+            "advance_mechanism": {
+              "const": "per_tick_write",
+              "description": "How an advancing sun is moved: the session writes it on every tick."
+            }
+          },
+          "required": [
+            "epoch",
+            "epoch_declared",
+            "epoch_block_sha256",
+            "illumination_declared",
+            "illumination_in_force",
+            "epoch_honoured",
+            "advance_mechanism"
+          ],
+          "additionalProperties": false
+        },
+        "world_truth_track": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Where the world truth track is written; null where none is."
+        }
+      },
+      "required": [
+        "row",
+        "manifest_version",
+        "opened_wall_utc",
+        "run",
+        "scenario",
+        "plan",
+        "vocabulary",
+        "sumo",
+        "clock",
+        "window",
+        "render_set",
+        "vehicle_lights",
+        "solar",
+        "world_truth_track"
+      ],
+      "additionalProperties": false
+    },
+    "instance": {
+      "type": "object",
+      "description": "One pattern instance of the supervision plan, as declared.",
+      "properties": {
+        "row": {
+          "const": "instance",
+          "description": "The row's kind."
+        },
+        "instance_id": {
+          "type": "string",
+          "description": "The instance: <scenario_id>/<name>."
+        },
+        "supervision": {
+          "type": "string",
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ],
+          "description": "What the author asserts: annotated, nominal (an authored negative) or unlabelled (no assertion)."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$",
+            "description": "A term, namespace:name."
+          },
+          "description": "The terms it is labeled with."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Its parameters, as the author declared them."
+        },
+        "hard_negative_for": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$",
+            "description": "A term, namespace:name."
+          },
+          "description": "The patterns it is a matched negative for; null for none."
+        },
+        "aoi_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "An area of interest."
+          },
+          "description": "The areas of interest it names."
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One participant.",
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The plan's entity id."
+              },
+              "sumo_id": {
+                "type": "string",
+                "description": "The SUMO vehicle it is."
+              },
+              "role": {
+                "type": "string",
+                "description": "Its role in the instance."
+              }
+            },
+            "required": [
+              "participant",
+              "sumo_id",
+              "role"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Its participants."
+        },
+        "intervals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One declared interval.",
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The participant it is about."
+              },
+              "phase": {
+                "type": "string",
+                "description": "Its phase."
+              },
+              "anchor_start": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(depart|stop|stop_end|phase)(:[0-9]+)?$",
+                "description": "The event its start is anchored to; null where it is declared by time. An anchor is an event of the vehicle's, a stop or a phase with its index counted from 0: depart, stop:0, stop_end:0, phase:0."
+              },
+              "anchor_end": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^(depart|stop|stop_end|phase)(:[0-9]+)?$",
+                "description": "The event its end is anchored to; null where none is. An anchor is an event of the vehicle's, a stop or a phase with its index counted from 0: depart, stop:0, stop_end:0, phase:0."
+              },
+              "declared_start_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Its declared start.",
+                "x-unit": "seconds"
+              },
+              "declared_start_civil": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Its declared start as a civil time."
+              },
+              "declared_end_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Its declared end.",
+                "x-unit": "seconds"
+              },
+              "declared_end_civil": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Its declared end as a civil time."
+              },
+              "declared_duration_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Its declared duration.",
+                "x-unit": "seconds"
+              }
+            },
+            "required": [
+              "participant",
+              "phase",
+              "anchor_start",
+              "anchor_end",
+              "declared_start_s",
+              "declared_start_civil",
+              "declared_end_s",
+              "declared_end_civil",
+              "declared_duration_s"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The intervals it declares."
+        }
+      },
+      "required": [
+        "row",
+        "instance_id",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "aoi_refs",
+        "participants",
+        "intervals"
+      ],
+      "additionalProperties": false
+    },
+    "series": {
+      "type": "object",
+      "description": "One recurring series of the supervision plan, as declared, with its slots.",
+      "properties": {
+        "row": {
+          "const": "series",
+          "description": "The row's kind."
+        },
+        "series_id": {
+          "type": "string",
+          "description": "The series."
+        },
+        "rota_ref": {
+          "type": "string",
+          "description": "The schedule in the scenario specification it is expanded from."
+        },
+        "cadence": {
+          "type": "string",
+          "enum": [
+            "enumerated",
+            "period_s + offsets_s[] + span"
+          ],
+          "description": "How it lists its occasions."
+        },
+        "member_role": {
+          "type": "string",
+          "description": "The role each slot's vehicle plays."
+        },
+        "supervision": {
+          "type": "string",
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ],
+          "description": "What the author asserts: annotated, nominal (an authored negative) or unlabelled (no assertion)."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$",
+            "description": "A term, namespace:name."
+          },
+          "description": "The terms it is labeled with."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Its parameters, as the author declared them."
+        },
+        "hard_negative_for": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$",
+            "description": "A term, namespace:name."
+          },
+          "description": "The patterns it is a matched negative for; null for none."
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One slot.",
+            "properties": {
+              "slot_key": {
+                "type": "string",
+                "description": "The slot."
+              },
+              "aoi_ref": {
+                "type": "string",
+                "description": "The area of interest it is sited at."
+              },
+              "declared_start_s": {
+                "type": "number",
+                "description": "Its declared start.",
+                "x-unit": "seconds"
+              },
+              "declared_end_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Its declared end.",
+                "x-unit": "seconds"
+              },
+              "entity_id": {
+                "type": "string",
+                "description": "The vehicle that fills it."
+              }
+            },
+            "required": [
+              "slot_key",
+              "aoi_ref",
+              "declared_start_s",
+              "declared_end_s",
+              "entity_id"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Its slots."
+        }
+      },
+      "required": [
+        "row",
+        "series_id",
+        "rota_ref",
+        "cadence",
+        "member_role",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "slots"
+      ],
+      "additionalProperties": false
+    },
+    "cohort": {
+      "type": "object",
+      "description": "One cohort of the supervision plan: every vehicle a flow emits, as declared.",
+      "properties": {
+        "row": {
+          "const": "cohort",
+          "description": "The row's kind."
+        },
+        "flow_id": {
+          "type": "string",
+          "description": "The SUMO flow."
+        },
+        "supervision": {
+          "type": "string",
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ],
+          "description": "What the author asserts: annotated, nominal (an authored negative) or unlabelled (no assertion)."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$",
+            "description": "A term, namespace:name."
+          },
+          "description": "The terms its vehicles are labeled with."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Its parameters, as the author declared them."
+        }
+      },
+      "required": [
+        "row",
+        "flow_id",
+        "supervision",
+        "labels",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "sensor_placed": {
+      "type": "object",
+      "description": "A camera the caller placed and named.",
+      "properties": {
+        "row": {
+          "const": "sensor_placed",
+          "description": "The row's kind."
+        },
+        "sensor_id": {
+          "type": "string",
+          "description": "The camera's name, which its stills and its platform track carry."
+        },
+        "camera_actor_id": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The camera's CARLA actor id."
+        },
+        "after_frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The last frame rendered before the camera was placed; null before any frame."
+        },
+        "exposure": {
+          "$ref": "#/$defs/camera_exposure",
+          "description": "The exposure the camera was given. Absent for a camera that carries none."
+        }
+      },
+      "required": [
+        "row",
+        "sensor_id",
+        "camera_actor_id",
+        "after_frame"
+      ],
+      "additionalProperties": false
+    },
+    "render_admitted": {
+      "type": "object",
+      "description": "A vehicle taking a place in the render set, written once the frame that first drew it has rendered.",
+      "properties": {
+        "row": {
+          "const": "render_admitted",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "When it was admitted.",
+          "x-unit": "seconds"
+        },
+        "sumo_id": {
+          "type": "string",
+          "description": "The SUMO vehicle."
+        },
+        "vtype_id": {
+          "type": "string",
+          "description": "Its SUMO vehicle type; empty where the frame did not carry it."
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "rendering_began",
+            "inserted",
+            "entered_limit"
+          ],
+          "description": "Why: rendering_began, the first frame after the run fast-forwarded SUMO; inserted, SUMO inserted it at this frame; entered_limit, it entered an optional render-set limit."
+        },
+        "frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The frame that first drew it, or the frame stamped with its admission where no body drew it; null where no frame rendered it."
+        },
+        "actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The body that first drew it; null where none did."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "sumo_id",
+        "vtype_id",
+        "reason",
+        "frame",
+        "actor_id"
+      ],
+      "additionalProperties": false
+    },
+    "render_released": {
+      "type": "object",
+      "description": "A vehicle giving up its place in the render set. A vehicle still in the set when the run ends has no release row.",
+      "properties": {
+        "row": {
+          "const": "render_released",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "The end of its interval: the instant of the first frame that no longer draws it.",
+          "x-unit": "seconds"
+        },
+        "sumo_id": {
+          "type": "string",
+          "description": "The SUMO vehicle."
+        },
+        "vtype_id": {
+          "type": "string",
+          "description": "Its SUMO vehicle type, as admitted."
+        },
+        "actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The body that drew it; null where none did."
+        },
+        "admitted_s": {
+          "type": "number",
+          "description": "When it was admitted.",
+          "x-unit": "seconds"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "left_the_simulation",
+            "session_ended",
+            "vanished",
+            "left_the_region",
+            "capacity"
+          ],
+          "description": "Why it was released."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "sumo_id",
+        "vtype_id",
+        "actor_id",
+        "admitted_s",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "collision_began": {
+      "type": "object",
+      "description": "A collision SUMO reported, as it begins.",
+      "properties": {
+        "row": {
+          "const": "collision_began",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "The SUMO frame that first reported it.",
+          "x-unit": "seconds"
+        },
+        "collider": {
+          "type": "string",
+          "description": "The vehicle SUMO holds responsible: the follower of a rear-end collision."
+        },
+        "victim": {
+          "type": "string",
+          "description": "The other vehicle."
+        },
+        "collider_vtype_id": {
+          "type": "string",
+          "description": "The collider's SUMO vehicle type."
+        },
+        "victim_vtype_id": {
+          "type": "string",
+          "description": "The victim's SUMO vehicle type."
+        },
+        "kind": {
+          "type": "string",
+          "description": "SUMO's own word for what happened, such as collision, frontal or junction."
+        },
+        "lane": {
+          "type": "string",
+          "description": "The SUMO lane it was registered on."
+        },
+        "lane_pos_m": {
+          "type": "number",
+          "description": "Where along that lane.",
+          "x-unit": "meters"
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "collider",
+        "victim",
+        "collider_vtype_id",
+        "victim_vtype_id",
+        "kind",
+        "lane",
+        "lane_pos_m"
+      ],
+      "additionalProperties": false
+    },
+    "collision_ended": {
+      "type": "object",
+      "description": "A collision SUMO reported, as a span, once it is over.",
+      "properties": {
+        "row": {
+          "const": "collision_ended",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "When it ended.",
+          "x-unit": "seconds"
+        },
+        "collider": {
+          "type": "string",
+          "description": "The vehicle SUMO holds responsible: the follower of a rear-end collision."
+        },
+        "victim": {
+          "type": "string",
+          "description": "The other vehicle."
+        },
+        "collider_vtype_id": {
+          "type": "string",
+          "description": "The collider's SUMO vehicle type."
+        },
+        "victim_vtype_id": {
+          "type": "string",
+          "description": "The victim's SUMO vehicle type."
+        },
+        "kind": {
+          "type": "string",
+          "description": "SUMO's own word for what happened, such as collision, frontal or junction."
+        },
+        "lane": {
+          "type": "string",
+          "description": "The SUMO lane it was registered on."
+        },
+        "lane_pos_m": {
+          "type": "number",
+          "description": "Where along that lane.",
+          "x-unit": "meters"
+        },
+        "began_s": {
+          "type": "number",
+          "description": "When it began.",
+          "x-unit": "seconds"
+        },
+        "ended_s": {
+          "type": "number",
+          "description": "When it ended: the first frame the two were apart.",
+          "x-unit": "seconds"
+        },
+        "collider_actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The body that drew the collider; null where none did."
+        },
+        "victim_actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The body that drew the victim; null where none did."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "collider",
+        "victim",
+        "collider_vtype_id",
+        "victim_vtype_id",
+        "kind",
+        "lane",
+        "lane_pos_m",
+        "began_s",
+        "ended_s",
+        "collider_actor_id",
+        "victim_actor_id"
+      ],
+      "additionalProperties": false
+    },
+    "vehicle_not_inserted": {
+      "type": "object",
+      "description": "A vehicle SUMO gave up inserting.",
+      "properties": {
+        "row": {
+          "const": "vehicle_not_inserted",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "When SUMO gave it up.",
+          "x-unit": "seconds"
+        },
+        "sumo_id": {
+          "type": "string",
+          "description": "The SUMO vehicle."
+        },
+        "waiting_at_s": {
+          "type": "number",
+          "description": "When it was last seen waiting to be inserted.",
+          "x-unit": "seconds"
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "sumo_id",
+        "waiting_at_s"
+      ],
+      "additionalProperties": false
+    },
+    "emergency_stop": {
+      "type": "object",
+      "description": "A vehicle SUMO reported making an emergency stop.",
+      "properties": {
+        "row": {
+          "const": "emergency_stop",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "The SUMO frame that reported it.",
+          "x-unit": "seconds"
+        },
+        "sumo_id": {
+          "type": "string",
+          "description": "The SUMO vehicle."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "sumo_id"
+      ],
+      "additionalProperties": false
+    },
+    "teleport": {
+      "type": "object",
+      "description": "A vehicle SUMO began moving by teleport.",
+      "properties": {
+        "row": {
+          "const": "teleport",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "The SUMO frame that reported it.",
+          "x-unit": "seconds"
+        },
+        "sumo_id": {
+          "type": "string",
+          "description": "The SUMO vehicle."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "sumo_id"
+      ],
+      "additionalProperties": false
+    },
+    "solar_window_open": {
+      "type": "object",
+      "description": "The sun the world reported at the capture window's first capture tick.",
+      "properties": {
+        "row": {
+          "const": "solar_window_open",
+          "description": "The row's kind."
+        },
+        "window_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The capture window; always 0, a run having one."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "The window's first capture tick, to the microsecond.",
+          "x-unit": "seconds"
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "That tick's frame."
+        },
+        "begin_s": {
+          "type": "number",
+          "description": "The same instant.",
+          "x-unit": "seconds"
+        },
+        "civil_begin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?[+-][0-9]{2}:[0-9]{2}$",
+          "description": "The same instant as a civil time; null where no epoch was declared."
+        },
+        "solar_date_begin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The sun's date; null where the frame carried no sun."
+        },
+        "solar_time_begin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's clock in its own time zone.",
+          "x-unit": "hours"
+        },
+        "sun_elevation_begin_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's geometric elevation.",
+          "x-unit": "degrees"
+        },
+        "sun_corrected_elevation_begin_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's refraction-corrected elevation; null where the world did not report it.",
+          "x-unit": "degrees"
+        },
+        "sun_azimuth_begin_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's azimuth, clockwise from true north.",
+          "x-unit": "degrees"
+        },
+        "illumination_band_begin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "day",
+            "golden",
+            "civil_twilight",
+            "nautical_twilight",
+            "astronomical_twilight",
+            "night",
+            null
+          ],
+          "description": "The sun's illumination band, cut as a capture's is."
+        },
+        "illumination_band_begin_elevation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "geometric",
+            "refraction_corrected",
+            null
+          ],
+          "description": "Which elevation the band was cut from."
+        },
+        "advancing": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Whether the engine itself advanced the sun's clock."
+        },
+        "rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Sun-clock seconds per simulated second while it does.",
+          "x-unit": "seconds per second"
+        },
+        "sun_time_zone_hours": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The time zone the world's sun was configured with before the run bound it.",
+          "x-unit": "hours"
+        },
+        "no_sun": {
+          "type": "boolean",
+          "description": "Whether the world held no sun."
+        },
+        "declared_civil_vs_solar_delta_h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The declared sun's clock minus the civil clock at the window's opening.",
+          "x-unit": "hours"
+        }
+      },
+      "required": [
+        "row",
+        "window_index",
+        "sim_time_s",
+        "frame",
+        "begin_s",
+        "civil_begin",
+        "solar_date_begin",
+        "solar_time_begin",
+        "sun_elevation_begin_deg",
+        "sun_corrected_elevation_begin_deg",
+        "sun_azimuth_begin_deg",
+        "illumination_band_begin",
+        "illumination_band_begin_elevation",
+        "advancing",
+        "rate",
+        "sun_time_zone_hours",
+        "no_sun",
+        "declared_civil_vs_solar_delta_h"
+      ],
+      "additionalProperties": false
+    },
+    "solar_window_end": {
+      "type": "object",
+      "description": "The sun the world reported at the capture window's last capture tick, and the audit over the window.",
+      "properties": {
+        "row": {
+          "const": "solar_window_end",
+          "description": "The row's kind."
+        },
+        "window_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The capture window; always 0, a run having one."
+        },
+        "sim_time_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The window's last capture tick; null where it had none.",
+          "x-unit": "seconds"
+        },
+        "frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "That tick's frame; null where it had none."
+        },
+        "end_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The same instant.",
+          "x-unit": "seconds"
+        },
+        "civil_end": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?[+-][0-9]{2}:[0-9]{2}$",
+          "description": "The same instant as a civil time; null where no epoch was declared."
+        },
+        "solar_date_end": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The sun's date; null where the frame carried no sun."
+        },
+        "solar_time_end": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's clock in its own time zone.",
+          "x-unit": "hours"
+        },
+        "sun_elevation_end_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's geometric elevation.",
+          "x-unit": "degrees"
+        },
+        "sun_corrected_elevation_end_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's refraction-corrected elevation; null where the world did not report it.",
+          "x-unit": "degrees"
+        },
+        "sun_azimuth_end_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The sun's azimuth, clockwise from true north.",
+          "x-unit": "degrees"
+        },
+        "illumination_band_end": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "day",
+            "golden",
+            "civil_twilight",
+            "nautical_twilight",
+            "astronomical_twilight",
+            "night",
+            null
+          ],
+          "description": "The sun's illumination band, cut as a capture's is."
+        },
+        "illumination_band_end_elevation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "geometric",
+            "refraction_corrected",
+            null
+          ],
+          "description": "Which elevation the band was cut from."
+        },
+        "advancing": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Whether the engine itself advanced the sun's clock."
+        },
+        "rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Sun-clock seconds per simulated second while it does.",
+          "x-unit": "seconds per second"
+        },
+        "capture_ticks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many capture ticks the window held."
+        },
+        "solar_residual": {
+          "type": "object",
+          "description": "The audit of the world's sun against the declaration over the window.",
+          "properties": {
+            "max_delta_solar_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The worst clock residual.",
+              "x-unit": "seconds"
+            },
+            "max_delta_elev_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The worst angle between the two suns.",
+              "x-unit": "degrees"
+            },
+            "max_delta_corrected_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The worst refraction-corrected elevation residual.",
+              "x-unit": "degrees"
+            },
+            "max_at_tick": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "The tick of the worst angle."
+            },
+            "max_at_sim_time_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The instant of the worst angle.",
+              "x-unit": "seconds"
+            },
+            "tolerance_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The audit's clock tolerance.",
+              "x-unit": "seconds"
+            },
+            "tolerance_elev_deg": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The audit's angle tolerance.",
+              "x-unit": "degrees"
+            },
+            "audited_ticks": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many ticks were audited."
+            },
+            "capture_ticks": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many capture ticks the window held."
+            },
+            "within_tolerance": {
+              "type": "boolean",
+              "description": "Whether the audit held within its tolerance."
+            },
+            "audit_skipped": {
+              "type": "boolean",
+              "description": "Whether no audit was made."
+            }
+          },
+          "required": [
+            "max_delta_solar_s",
+            "max_delta_elev_deg",
+            "max_delta_corrected_deg",
+            "max_at_tick",
+            "max_at_sim_time_s",
+            "tolerance_s",
+            "tolerance_elev_deg",
+            "audited_ticks",
+            "capture_ticks",
+            "within_tolerance",
+            "audit_skipped"
+          ],
+          "additionalProperties": false
+        },
+        "no_sun": {
+          "type": "boolean",
+          "description": "Whether the world held no sun."
+        },
+        "sun_matched_declaration": {
+          "type": "boolean",
+          "description": "A fact, not a verdict: an epoch was declared, the policy bound the sun, the world held one, and the audit held within its tolerance over the window."
+        }
+      },
+      "required": [
+        "row",
+        "window_index",
+        "sim_time_s",
+        "frame",
+        "end_s",
+        "civil_end",
+        "solar_date_end",
+        "solar_time_end",
+        "sun_elevation_end_deg",
+        "sun_corrected_elevation_end_deg",
+        "sun_azimuth_end_deg",
+        "illumination_band_end",
+        "illumination_band_end_elevation",
+        "advancing",
+        "rate",
+        "capture_ticks",
+        "solar_residual",
+        "no_sun",
+        "sun_matched_declaration"
+      ],
+      "additionalProperties": false
+    },
+    "interval_opened": {
+      "type": "object",
+      "description": "One of the supervision plan's intervals, as the run opens it.",
+      "properties": {
+        "row": {
+          "const": "interval_opened",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The instant it opened: committed by an event, or failing that declared; null where neither is known, as for a phase entered before the window.",
+          "x-unit": "seconds"
+        },
+        "instance_id": {
+          "type": "string",
+          "description": "The pattern instance."
+        },
+        "participant": {
+          "type": "string",
+          "description": "The participant the interval is about."
+        },
+        "phase": {
+          "type": "string",
+          "description": "The interval's phase."
+        },
+        "role": {
+          "type": "string",
+          "description": "The participant's role in the instance."
+        },
+        "declared_start_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The start the author declared; null where none.",
+          "x-unit": "seconds"
+        },
+        "declared_end_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The end the author declared; null where none.",
+          "x-unit": "seconds"
+        },
+        "declared_duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The duration the author declared; null where none.",
+          "x-unit": "seconds"
+        },
+        "committed_start_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "When SUMO committed its start, by TraCI's clock; null where it did not.",
+          "x-unit": "seconds"
+        },
+        "observed_start_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The rendered frame that showed its start; null where none did.",
+          "x-unit": "seconds"
+        },
+        "observed_start_frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "That frame; null where none did."
+        },
+        "begun_before_window": {
+          "type": "boolean",
+          "description": "Whether it began before the capture window opened."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "instance_id",
+        "participant",
+        "phase",
+        "role",
+        "declared_start_s",
+        "declared_end_s",
+        "declared_duration_s",
+        "committed_start_s",
+        "observed_start_s",
+        "observed_start_frame",
+        "begun_before_window"
+      ],
+      "additionalProperties": false
+    },
+    "interval_closed": {
+      "type": "object",
+      "description": "One of the supervision plan's intervals, as the run closes it. An interval whose participant SUMO never inserted closes without having opened.",
+      "properties": {
+        "row": {
+          "const": "interval_closed",
+          "description": "The row's kind."
+        },
+        "sim_time_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The instant it closed.",
+          "x-unit": "seconds"
+        },
+        "instance_id": {
+          "type": "string",
+          "description": "The pattern instance."
+        },
+        "participant": {
+          "type": "string",
+          "description": "The participant the interval is about."
+        },
+        "phase": {
+          "type": "string",
+          "description": "The interval's phase."
+        },
+        "closed_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "trigger",
+            "entity_arrived",
+            "sumo_removed",
+            "never_inserted",
+            "physical_predicate_never_held",
+            "render_released",
+            "capture_window_end",
+            "scenario_end",
+            null
+          ],
+          "description": "Why it closed."
+        },
+        "declared_start_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The start the author declared; null where none.",
+          "x-unit": "seconds"
+        },
+        "declared_end_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The end the author declared; null where none.",
+          "x-unit": "seconds"
+        },
+        "declared_duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The duration the author declared; null where none.",
+          "x-unit": "seconds"
+        },
+        "committed_start_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "When SUMO committed its start, by TraCI's clock; null where it did not.",
+          "x-unit": "seconds"
+        },
+        "observed_start_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The rendered frame that showed its start; null where none did.",
+          "x-unit": "seconds"
+        },
+        "observed_start_frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "That frame; null where none did."
+        },
+        "begun_before_window": {
+          "type": "boolean",
+          "description": "Whether it began before the capture window opened."
+        },
+        "committed_end_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "When SUMO committed its end; null where it did not.",
+          "x-unit": "seconds"
+        },
+        "not_drawn": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "A span the participant was not drawn.",
+            "properties": {
+              "from_s": {
+                "type": "number",
+                "description": "Its start.",
+                "x-unit": "seconds"
+              },
+              "to_s": {
+                "type": "number",
+                "description": "Its end.",
+                "x-unit": "seconds"
+              }
+            },
+            "required": [
+              "from_s",
+              "to_s"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The spans its participant was not drawn while it was open."
+        }
+      },
+      "required": [
+        "row",
+        "sim_time_s",
+        "instance_id",
+        "participant",
+        "phase",
+        "closed_by",
+        "declared_start_s",
+        "declared_end_s",
+        "declared_duration_s",
+        "committed_start_s",
+        "observed_start_s",
+        "observed_start_frame",
+        "begun_before_window",
+        "committed_end_s",
+        "not_drawn"
+      ],
+      "additionalProperties": false
+    },
+    "supervision_defect": {
+      "type": "object",
+      "description": "A defect the supervision binder found in how the run carried the plan out, rather than in the scenario.",
+      "properties": {
+        "row": {
+          "const": "supervision_defect",
+          "description": "The row's kind."
+        },
+        "found_by_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The SUMO frame it was found at or before; null before any SUMO frame.",
+          "x-unit": "seconds"
+        },
+        "defect": {
+          "type": "string",
+          "description": "The defect, in the binder's words; it names its own instants."
+        }
+      },
+      "required": [
+        "row",
+        "found_by_s",
+        "defect"
+      ],
+      "additionalProperties": false
+    },
+    "manifest_closed": {
+      "type": "object",
+      "description": "The last row of a run that reached its end: why it ended, what the manifest holds, and the plan's intervals still open or never opened.",
+      "properties": {
+        "row": {
+          "const": "manifest_closed",
+          "description": "The row's kind."
+        },
+        "ended": {
+          "type": "string",
+          "enum": [
+            "scenario_finished",
+            "caller_stopped",
+            "run_stopped"
+          ],
+          "description": "Why the run ended."
+        },
+        "stage": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Validation",
+            "Launch",
+            "Authority",
+            "PreRoll",
+            "Window",
+            null
+          ],
+          "description": "The stage a stopped run stopped at; null where it was not stopped."
+        },
+        "cause": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "none",
+            "sumo-connection-lost",
+            "world-connection-lost",
+            "world-tick-timeout",
+            "solar-state-disagreement",
+            "missing-blueprint",
+            null
+          ],
+          "description": "Why a stopped run stopped; null where it was not stopped."
+        },
+        "caller_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The caller's own word for why it stopped, such as window_end; null where it gave none."
+        },
+        "last_sumo_frame_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The last SUMO frame read.",
+          "x-unit": "seconds"
+        },
+        "last_rendered_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The last frame rendered.",
+          "x-unit": "seconds"
+        },
+        "last_rendered_frame": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The last frame rendered."
+        },
+        "render_admitted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Admission rows written."
+        },
+        "render_released": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Release rows written."
+        },
+        "still_in_render_set": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Vehicles still in the render set as the run ended."
+        },
+        "events": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Collision, not-inserted, emergency-stop and teleport rows written."
+        },
+        "intervals_opened": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Interval openings written."
+        },
+        "intervals_closed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Interval closings written."
+        },
+        "supervision_defects": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Supervision defects written."
+        },
+        "open_intervals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One open interval.",
+            "properties": {
+              "instance_id": {
+                "type": "string",
+                "description": "The pattern instance."
+              },
+              "participant": {
+                "type": "string",
+                "description": "The participant the interval is about."
+              },
+              "phase": {
+                "type": "string",
+                "description": "The interval's phase."
+              },
+              "opened_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "When it opened.",
+                "x-unit": "seconds"
+              },
+              "begun_before_window": {
+                "type": "boolean",
+                "description": "Whether it began before the window."
+              }
+            },
+            "required": [
+              "instance_id",
+              "participant",
+              "phase",
+              "opened_s",
+              "begun_before_window"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The intervals still open as the run ended, which the run closes after this row."
+        },
+        "open_intervals_close_as": {
+          "type": "string",
+          "enum": [
+            "scenario_end",
+            "capture_window_end"
+          ],
+          "description": "The closed_by word the open intervals are closed with after this row."
+        },
+        "never_opened": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interval_triple"
+          },
+          "description": "The plan's intervals nothing in the run opened or closed."
+        },
+        "bridge_divergence": {
+          "type": "object",
+          "description": "How far the world departed from what the bridge commanded, over the whole run.",
+          "properties": {
+            "samples": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Comparisons taken; 0 where nothing was compared."
+            },
+            "vehicle_ticks_with_no_read_back": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Vehicle-ticks nothing read back."
+            },
+            "worst_position_m": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The worst position difference.",
+              "x-unit": "meters"
+            },
+            "mean_position_m": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The mean position difference.",
+              "x-unit": "meters"
+            },
+            "worst_yaw_deg": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The worst yaw difference.",
+              "x-unit": "degrees"
+            },
+            "worst_pitch_deg": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The worst pitch difference.",
+              "x-unit": "degrees"
+            },
+            "worst_roll_deg": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The worst roll difference.",
+              "x-unit": "degrees"
+            },
+            "worst_velocity_m_per_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The worst velocity difference.",
+              "x-unit": "meters per second"
+            },
+            "mean_velocity_m_per_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The mean velocity difference.",
+              "x-unit": "meters per second"
+            },
+            "mean_commanded_speed_m_per_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "The mean commanded speed the differences are read against.",
+              "x-unit": "meters per second"
+            },
+            "worst_position_on": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/worst_divergence"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the worst position difference was measured; null where nothing was compared."
+            },
+            "worst_velocity_on": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/worst_divergence"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the worst velocity difference was measured; null where nothing was compared."
+            }
+          },
+          "required": [
+            "samples",
+            "vehicle_ticks_with_no_read_back",
+            "worst_position_m",
+            "mean_position_m",
+            "worst_yaw_deg",
+            "worst_pitch_deg",
+            "worst_roll_deg",
+            "worst_velocity_m_per_s",
+            "mean_velocity_m_per_s",
+            "mean_commanded_speed_m_per_s",
+            "worst_position_on",
+            "worst_velocity_on"
+          ],
+          "additionalProperties": false
+        },
+        "rows_before": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many rows precede this one."
+        },
+        "closed_wall_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the manifest was closed, by the wall clock, in UTC."
+        }
+      },
+      "required": [
+        "row",
+        "ended",
+        "stage",
+        "cause",
+        "caller_reason",
+        "last_sumo_frame_s",
+        "last_rendered_s",
+        "last_rendered_frame",
+        "render_admitted",
+        "render_released",
+        "still_in_render_set",
+        "events",
+        "intervals_opened",
+        "intervals_closed",
+        "supervision_defects",
+        "open_intervals",
+        "open_intervals_close_as",
+        "never_opened",
+        "bridge_divergence",
+        "rows_before",
+        "closed_wall_utc"
+      ],
+      "additionalProperties": false
+    },
+    "producer": {
+      "type": "object",
+      "description": "What made the file: the tool and its release, the carlanet release, the CARLA server's build identity where a server was used, the SUMO release where SUMO ran, and when the file was written.",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "The component that wrote the file, such as carlacontrol.CaptureSession, or the program's name where no component declared itself; unknown where neither is known."
+        },
+        "tool_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The release version of the package the tool comes from; null where the tool did not say."
+        },
+        "carlanet": {
+          "type": "string",
+          "description": "The carlanet release that wrote the file: 0.10.0 for a tagged release, 0.10.0+g<commit> for any other build."
+        },
+        "server": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/server"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The CARLA server's build identity, where a server was used; null where none was."
+        },
+        "sumo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The SUMO release, such as 1.27.0, where SUMO ran; null where it did not."
+        },
+        "written_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "description": "When the file was written, in UTC to the millisecond."
+        }
+      },
+      "required": [
+        "tool",
+        "tool_version",
+        "carlanet",
+        "server",
+        "sumo"
+      ],
+      "additionalProperties": false
+    },
+    "server": {
+      "description": "What the CARLA server says it was built from.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "A server that answered the build identity call. Each value is the server's own, unknown where it cannot know it.",
+          "properties": {
+            "available": {
+              "const": true,
+              "description": "The server answered."
+            },
+            "release": {
+              "type": "string",
+              "description": "The CARLA release the server was compiled with, such as 0.10.0."
+            },
+            "world_interface": {
+              "type": "string",
+              "description": "The world interface version the server declares, major.minor, such as 1.0."
+            },
+            "build": {
+              "type": "string",
+              "description": "package for a cooked server, editor for one run from the editor."
+            },
+            "configuration": {
+              "type": "string",
+              "description": "The build configuration, such as Development or Shipping."
+            },
+            "carla_commit": {
+              "type": "string",
+              "description": "The CARLA commit the server was built from."
+            },
+            "content_commit": {
+              "type": "string",
+              "description": "The content commit its package was cooked from."
+            },
+            "engine_commit": {
+              "type": "string",
+              "description": "The Unreal Engine commit its package was built with."
+            },
+            "commits_from": {
+              "type": "string",
+              "description": "Where the commits came from: version_file (the package's VERSION file), compiled (the CARLA commit compiled into the server) or none."
+            }
+          },
+          "required": [
+            "available",
+            "release",
+            "world_interface",
+            "build",
+            "configuration",
+            "carla_commit",
+            "content_commit",
+            "engine_commit",
+            "commits_from"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "A server built before the build identity call, with what its other calls said.",
+          "properties": {
+            "available": {
+              "const": false,
+              "description": "The server did not answer the call."
+            },
+            "release": {
+              "type": "string",
+              "description": "The release its version call reported, or unknown."
+            },
+            "world_interface": {
+              "type": "string",
+              "description": "The world interface version it reported, or unknown."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the identity is not available."
+            }
+          },
+          "required": [
+            "available",
+            "release",
+            "world_interface",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "camera_exposure": {
+      "type": "object",
+      "description": "The exposure a camera was given, under the names its stills' sidecars use.",
+      "properties": {
+        "post_process_profile": {
+          "type": "string",
+          "description": "The post-process profile the camera loaded."
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "histogram"
+          ],
+          "description": "manual or histogram."
+        },
+        "iso": {
+          "type": "number",
+          "description": "The sensor's sensitivity, ISO."
+        },
+        "shutter_s": {
+          "type": "number",
+          "description": "The shutter time.",
+          "x-unit": "seconds"
+        },
+        "fstop": {
+          "type": "number",
+          "description": "The aperture, as an f-number."
+        },
+        "compensation_ev": {
+          "type": "number",
+          "description": "Exposure compensation; above 0 brightens.",
+          "x-unit": "EV"
+        },
+        "ev100": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The exposure value at ISO 100 under manual; null under histogram.",
+          "x-unit": "EV"
+        }
+      },
+      "required": [
+        "post_process_profile",
+        "method",
+        "iso",
+        "shutter_s",
+        "fstop",
+        "compensation_ev",
+        "ev100"
+      ],
+      "additionalProperties": false
+    },
+    "illumination_policy": {
+      "type": "object",
+      "description": "An illumination policy.",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "freeze_at_window_start",
+            "advance",
+            "freeze_at",
+            "ignore"
+          ],
+          "description": "The policy's name."
+        },
+        "rate_sun_s_per_sim_s": {
+          "type": "number",
+          "description": "Sun-clock seconds per simulated second, under advance only.",
+          "x-unit": "seconds per second"
+        },
+        "freeze_at_civil_time": {
+          "type": "string",
+          "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+          "description": "The time of day the sun is held at, under freeze_at only."
+        },
+        "freeze_date_advances": {
+          "type": "boolean",
+          "description": "Whether a frozen sun's date follows the calendar."
+        },
+        "require_sun": {
+          "type": "boolean",
+          "description": "Whether the run refuses a world with no sun."
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why this policy, in the author's words; null for none."
+        }
+      },
+      "required": [
+        "policy",
+        "freeze_date_advances",
+        "require_sun",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "worst_divergence": {
+      "type": "object",
+      "description": "The vehicle and instant one worst figure was measured on.",
+      "properties": {
+        "sumo_id": {
+          "type": "string",
+          "description": "The SUMO vehicle."
+        },
+        "sim_time_s": {
+          "type": "number",
+          "description": "The instant the pose was computed for.",
+          "x-unit": "seconds"
+        },
+        "tick": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The session's tick."
+        },
+        "actor_id": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The body it was written to."
+        }
+      },
+      "required": [
+        "sumo_id",
+        "sim_time_s",
+        "tick",
+        "actor_id"
+      ],
+      "additionalProperties": false
+    },
+    "interval_triple": {
+      "type": "object",
+      "description": "One interval of the plan, named by its instance, participant and phase.",
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "description": "The pattern instance."
+        },
+        "participant": {
+          "type": "string",
+          "description": "The participant the interval is about."
+        },
+        "phase": {
+          "type": "string",
+          "description": "The interval's phase."
+        }
+      },
+      "required": [
+        "instance_id",
+        "participant",
+        "phase"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

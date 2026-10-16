@@ -8,6 +8,7 @@
 
 """Example script to generate traffic in the simulation"""
 
+import sys
 import time
 import math
 
@@ -169,6 +170,18 @@ def main():
 
     try:
         world = client.get_world()
+
+        # A SUMO drive holding the world's drive lease is the one traffic system allowed in it: the
+        # server refuses every other client's autopilot and vehicle-control writes while it does,
+        # naming the holder. Asked before anything is spawned, so the refusal comes before the first
+        # vehicle rather than as an error per vehicle.
+        holder = world.drive_lease_holder()
+        if holder is not None:
+            print(f"refused: {holder} holds this world's drive lease, and the server refuses every "
+                  "other traffic system's autopilot and vehicle-control writes while it does. Stop "
+                  "that drive, or run against a different world; where the drive is gone and did not "
+                  "release the lease, world.break_drive_lease() ends it.", file=sys.stderr)
+            return 1
 
         traffic_manager = client.get_trafficmanager(args.tm_port)
         traffic_manager.set_global_distance_to_leading_vehicle(2.5)
@@ -495,9 +508,11 @@ def main():
 
 if __name__ == '__main__':
 
+    status = 0
     try:
-        main()
+        status = main() or 0
     except KeyboardInterrupt:
         pass
     finally:
         print('\ndone.')
+    sys.exit(status)

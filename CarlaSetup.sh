@@ -238,13 +238,23 @@ else
     exit 1
 fi
 
-# ── BUILD SUMO netconvert (OSM -> OpenDRIVE converter, bundled for CarlaNet) ──
+# ── BUILD THE SUMO TOOLCHAIN (OSM -> OpenDRIVE conversion, microsimulation, ───
+#    route validation and the TraCI client library) ─────────────────────────────
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps
-# to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork. We build ONLY the
-# `netconvert` target from SUMO release v1_27_0; that target's only real
-# dependencies are Xerces-C and PROJ (FOX/GUI and GDAL are NOT needed). The apt
-# prerequisites (cmake g++ libxerces-c-dev libproj-dev; proj.db ships with
-# libproj-dev/proj-data) are installed by Util/SetupUtils/InstallPrerequisites.sh.
+# to OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
+# microsimulation, and `duarouter` validates authored routes. `sumo-gui` is the same
+# microsimulation with SUMO's own view of it, which the co-simulation session can
+# launch in place of `sumo` so a developer watches the simulation the drive is
+# stepping. All four come from SUMO release v1_27_0. Their dependencies are Xerces-C
+# and PROJ, and the FOX GUI toolkit with OpenGL/GLU for `sumo-gui` (GDAL is NOT
+# needed). Once FOX is found SUMO also links it into `sumo` and `duarouter`, for their
+# worker threads, exactly as the Windows build already does. CarlaNet talks to `sumo`
+# over the TraCI wire protocol from managed code, so nothing native is built for it
+# here. The apt prerequisites (cmake g++ libxerces-c-dev libproj-dev libfox-1.6-dev;
+# proj.db ships with libproj-dev/proj-data) are installed by
+# Util/SetupUtils/InstallPrerequisites.sh, and the CI container gets them from
+# Util/Docker/Base.alma8.Dockerfile, which never runs that script -- a prerequisite
+# added to one of those two files and not the other fails in CI.
 sumo_src=$workspace_path/Build/sumo-src
 sumo_build=$workspace_path/Build/sumo-build
 sumo_install=$workspace_path/Build/sumo-install
@@ -258,10 +268,40 @@ if [ "$clean_sumo" -eq 1 ] || [ "$clean_all" -eq 1 ]; then
     fi
 fi
 
-if [ -f "$sumo_install/bin/netconvert" ]; then
-    echo "Found SUMO netconvert at $sumo_install/bin/netconvert. Skipping SUMO build."
+# What a complete staged toolchain holds. The build runs in parallel (-j), so there is no dependable
+# "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a guard keyed on
+# one member reports success for a half toolchain. Check the whole set, and name the members that are
+# missing so the reason is in the log rather than in someone's head.
+sumo_required_binaries="netconvert sumo duarouter sumo-gui"
+# sumo-gui is staged for development: watching a co-simulation drive. MakeDistribution's own list
+# leaves it out, because whether a distribution carries it is an open decision that turns on FOX's
+# LGPL (Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/09_Toolchain_And_Packaging.md section 5.4).
+# A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
+# deliver the 3.2 MB anything here consumes, and tools/contributed alone is 47 MB of third-party
+# contributions that would each need a row in the distribution's licence manifest. Add a directory to
+# these lists when something starts consuming it -- the omission is deliberate, not an oversight.
+sumo_required_data="typemap xsd"      # netconvert's OSM type maps; XSDs for generated files
+# tools/traci carries two obligations: the scenario tooling imports it, and it is SUMO's own
+# reference TraCI client, which CarlaNet.Sumo's managed client is ported from. Staging it at the
+# pinned commit is what makes a SUMO bump a reviewable diff rather than an archaeology exercise.
+sumo_required_tools="traci sumolib"
+
+sumo_missing=""
+for item in $sumo_required_binaries; do
+    [ -e "$sumo_install/bin/$item" ] || sumo_missing="$sumo_missing bin/$item"
+done
+for item in $sumo_required_data; do
+    [ -d "$sumo_install/data/$item" ] || sumo_missing="$sumo_missing data/$item"
+done
+for item in $sumo_required_tools; do
+    [ -d "$sumo_install/tools/$item" ] || sumo_missing="$sumo_missing tools/$item"
+done
+
+if [ -z "$sumo_missing" ]; then
+    echo "Found the whole SUMO toolchain staged under $sumo_install. Skipping SUMO build."
 else
-    echo "Building SUMO netconvert..."
+    echo "SUMO toolchain incomplete under $sumo_install - missing:$sumo_missing"
+    echo "Building the SUMO toolchain..."
     if [ ! -d "$sumo_src" ]; then
         echo "Cloning SUMO v1_27_0..."
         git clone --depth 1 --branch v1_27_0 \
@@ -269,22 +309,54 @@ else
     fi
     # Pin the exact commit (the tag already points here; this is an explicit guard).
     git -C "$sumo_src" checkout e238ea04b7150ba23a348a285d3048919fa4830b
-    # Configure + build ONLY the netconvert target (Release).
+    # Configure + build the required targets (Release). One invocation, four targets: CMake skips
+    # objects it has already built, so this is not a full rebuild in practice. jtrrouter and
+    # polyconvert are deliberately left out -- nothing in this repository invokes either, so building
+    # them by default would lengthen every clean build for no consumer.
     cmake -B "$sumo_build" -S "$sumo_src" -DCMAKE_BUILD_TYPE=Release
-    cmake --build "$sumo_build" --target netconvert -j"$(nproc)"
-    # The SUMO build emits binaries into Build/sumo-src/bin/netconvert.
-    # Stage it (and a note about PROJ data) under Build/sumo-install for CarlaNet.
-    mkdir -p "$sumo_install/bin"
-    cp "$sumo_src/bin/netconvert" "$sumo_install/bin/netconvert"
-    echo "Staged netconvert at $sumo_install/bin/netconvert."
+    # sumo-gui is a target only where SUMO's configure found the FOX toolkit. Without it the build
+    # below stops on an unknown target and says nothing about why, so say it here.
+    if ! grep -q '^#define HAVE_FOX' "$sumo_build/src/config.h"; then
+        echo "ERROR: SUMO's configure found no FOX toolkit, so there is no sumo-gui to build." >&2
+        echo "       Install libfox-1.6-dev (Util/SetupUtils/InstallPrerequisites.sh does) and re-run." >&2
+        echo "       The CI image builds FOX itself: rebuild it from Util/Docker/Base.alma8.Dockerfile." >&2
+        exit 1
+    fi
+    cmake --build "$sumo_build" --target netconvert sumo duarouter sumo-gui -j"$(nproc)"
+    # The SUMO build emits its binaries into Build/sumo-src/bin. Stage them, the named data/ and
+    # tools/ subsets and (below) the PROJ data under Build/sumo-install, so that directory is a
+    # complete SUMO_HOME rather than one netconvert can be run out of.
+    mkdir -p "$sumo_install/bin" "$sumo_install/data" "$sumo_install/tools"
+    for item in $sumo_required_binaries; do
+        cp -a "$sumo_src/bin/$item" "$sumo_install/bin/$item"
+    done
+    for item in $sumo_required_data; do
+        rm -rf "$sumo_install/data/$item"
+        cp -a "$sumo_src/data/$item" "$sumo_install/data/$item"
+    done
+    for item in $sumo_required_tools; do
+        rm -rf "$sumo_install/tools/$item"
+        cp -a "$sumo_src/tools/$item" "$sumo_install/tools/$item"
+    done
+    echo "Staged the SUMO toolchain under $sumo_install."
 fi
-# CarlaNet locates the tool via env vars (see NETCONVERT_INTEGRATION.md):
-#   CARLA_NETCONVERT -> the netconvert binary
+# The toolchain is located through environment variables, read by:
+#   CARLA_NETCONVERT -> the netconvert binary; CarlaNet.Map.OsmConverter runs it
 #   PROJ_LIB (a.k.a. PROJ_DATA) -> the directory containing proj.db (from libproj-dev,
 #     typically /usr/share/proj) so PROJ can resolve the +proj=tmerc projection.
-echo "To use netconvert from CarlaNet, export:"
+#   SUMO_HOME -> this whole installation; carlacontrol.SumoInstallation reads it, and so does
+#     traci itself.
+# These are printed, not persisted: a fresh shell has none of them. The carla-* commands, and the
+# scripts under CarlaControl/scripts/ that run them from this checkout, default all three to this
+# staged install when they are unset (carlacontrol.ToolLayout), and a packaged distribution's
+# carla-env.sh points them at its own bundled tools/sumo.
+# SUMO_HOME is worth setting deliberately rather than leaving to whatever a SUMO installer wrote,
+# because it takes precedence over this repository's own build: an unrelated SUMO left in it is how a
+# world and the scenarios authored against it end up built by two different converter versions.
+echo "To use the SUMO toolchain from CarlaNet, export:"
 echo "  export CARLA_NETCONVERT=$sumo_install/bin/netconvert"
 echo "  export PROJ_LIB=/usr/share/proj   # dir containing proj.db (from libproj-dev)"
+echo "  export SUMO_HOME=$sumo_install"
 
 # ── VibeUE editor MCP plugin (OPTIONAL, private mirror, pinned) ──────────────
 # VibeUE is the in-editor MCP bridge used during digital-twin development. We pull a
@@ -294,7 +366,7 @@ echo "  export PROJ_LIB=/usr/share/proj   # dir containing proj.db (from libproj
 # exact commit; fetched over SSH using a key from --vibeue-ssh-key=<path> or $VIBEUE_SSH_KEY.
 vibeue_dir="$workspace_path/Unreal/CarlaUnreal/Plugins/VibeUE"
 vibeue_repo="git@github.com:sbrett9/VibeUE.git"
-vibeue_pin="379373709e68ce7f2c4e3a26ff931f703d87b817"
+vibeue_pin="ea12a7b02fefa918dcbb086bbc078042009da488"
 vibeue_key="${vibeue_ssh_key:-${VIBEUE_SSH_KEY:-}}"
 if [ -d "$vibeue_dir/.git" ]; then
     # Non-interactive ssh (with the deploy key when present) so a fresh container/batch run never

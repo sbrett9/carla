@@ -24,8 +24,10 @@ namespace data {
 
     friend Serializer;
 
+    /// The actors start after the header, and after the render set block where the snapshot
+    /// carries one.
     explicit RawEpisodeState(RawData &&data)
-      : Super(Serializer::header_offset, std::move(data)) {}
+      : Super(std::move(data), [](const RawData &raw) { return Serializer::ActorsOffset(raw); }) {}
 
   private:
 

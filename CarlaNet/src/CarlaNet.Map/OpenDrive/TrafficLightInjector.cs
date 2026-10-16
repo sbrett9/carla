@@ -459,9 +459,10 @@ public static class TrafficLightInjector
     }
 
     // Parse each <tlLogic> into its distinct green phases (a phase = the set of link indices that
-    // are green together). A "green" character is 'G' or 'g'; duplicate green state strings (the
-    // same movement group recurring in the cycle) are collapsed so we emit one controller per
-    // distinct movement group.
+    // are green together). A "green" character is 'G', 'g' or 's' -- the last a green on which a
+    // vehicle stops before it goes, which is a ramp meter's release (RampMeterProgram); duplicate
+    // green state strings (the same movement group recurring in the cycle) are collapsed so we emit
+    // one controller per distinct movement group.
     private static Dictionary<string, List<List<int>>> ParseGreenPhases(string netXml)
     {
         var result = new Dictionary<string, List<List<int>>>();
@@ -479,14 +480,14 @@ public static class TrafficLightInjector
             foreach (var ph in tl.Elements("phase"))
             {
                 string state = ph.Attribute("state")?.Value ?? "";
-                if (!state.Any(c => c is 'G' or 'g'))
+                if (!state.Any(IsGreen))
                     continue; // yellow/all-red transition phase, not a movement group
                 if (!seenGreenStates.Add(state))
                     continue; // this movement group already recorded
 
                 var greenLinks = new List<int>();
                 for (int k = 0; k < state.Length; k++)
-                    if (state[k] is 'G' or 'g')
+                    if (IsGreen(state[k]))
                         greenLinks.Add(k);
                 phases.Add(greenLinks);
             }
@@ -496,4 +497,6 @@ public static class TrafficLightInjector
         }
         return result;
     }
+
+    private static bool IsGreen(char state) => state is 'G' or 'g' or 's';
 }

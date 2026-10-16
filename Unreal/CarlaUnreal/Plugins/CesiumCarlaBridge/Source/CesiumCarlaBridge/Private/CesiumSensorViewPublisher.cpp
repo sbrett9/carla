@@ -11,6 +11,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h" // TActorIterator
 #include "GameFramework/Actor.h" // TInlineComponentArray
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 ACesiumSensorViewPublisher::ACesiumSensorViewPublisher()
 {
@@ -24,6 +26,21 @@ ACesiumSensorViewPublisher* ACesiumSensorViewPublisher::FindOrSpawn(UWorld* Worl
 	{
 		return nullptr;
 	}
+	if (ACesiumSensorViewPublisher* Existing = Find(World))
+	{
+		return Existing;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	return World->SpawnActor<ACesiumSensorViewPublisher>(Params);
+}
+
+ACesiumSensorViewPublisher* ACesiumSensorViewPublisher::Find(UWorld* World)
+{
+	if (!World)
+	{
+		return nullptr;
+	}
 	for (TActorIterator<ACesiumSensorViewPublisher> It(World); It; ++It)
 	{
 		if (IsValid(*It))
@@ -31,9 +48,65 @@ ACesiumSensorViewPublisher* ACesiumSensorViewPublisher::FindOrSpawn(UWorld* Worl
 			return *It;
 		}
 	}
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	return World->SpawnActor<ACesiumSensorViewPublisher>(Params);
+	return nullptr;
+}
+
+bool ACesiumSensorViewPublisher::IsEligibleCapture(const USceneCaptureComponent2D* Capture)
+{
+	if (!IsValid(Capture))
+	{
+		return false;
+	}
+	// A non-perspective or target-less capture has no frustum worth selecting tiles for, and a
+	// non-positive field of view would be rejected by the camera manager anyway.
+	if (Capture->ProjectionType != ECameraProjectionMode::Type::Perspective)
+	{
+		return false;
+	}
+	const UTextureRenderTarget2D* RenderTarget = Capture->TextureTarget;
+	if (!IsValid(RenderTarget) || RenderTarget->SizeX < 1 || RenderTarget->SizeY < 1)
+	{
+		return false;
+	}
+	return Capture->FOVAngle > 0.0f;
+}
+
+bool ACesiumSensorViewPublisher::IsPublished(const AActor* Actor) const
+{
+	if (!Actor)
+	{
+		return false;
+	}
+	for (const TWeakObjectPtr<USceneCaptureComponent2D>& Published : PublishedCaptures)
+	{
+		const USceneCaptureComponent2D* Capture = Published.Get();
+		if (Capture && Capture->GetOwner() == Actor)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+int32 ACesiumSensorViewPublisher::TrackCapturesOf(AActor* Actor)
+{
+	// Cesium gathers an ASceneCapture2D's view itself; tracking it here would register it twice.
+	if (!IsValid(Actor) || Actor->IsA<ASceneCapture2D>())
+	{
+		return 0;
+	}
+	int32 Tracked = 0;
+	TInlineComponentArray<USceneCaptureComponent2D*> Captures(Actor);
+	for (USceneCaptureComponent2D* Capture : Captures)
+	{
+		if (!IsEligibleCapture(Capture))
+		{
+			continue;
+		}
+		TrackedCaptures.AddUnique(TWeakObjectPtr<USceneCaptureComponent2D>(Capture));
+		++Tracked;
+	}
+	return Tracked;
 }
 
 void ACesiumSensorViewPublisher::RescanCaptures(UWorld* World)
@@ -62,23 +135,8 @@ void ACesiumSensorViewPublisher::RescanCaptures(UWorld* World)
 		TInlineComponentArray<USceneCaptureComponent2D*> Captures(Actor);
 		for (USceneCaptureComponent2D* Capture : Captures)
 		{
-			if (!IsValid(Capture))
-			{
-				continue;
-			}
-			// The same eligibility tests Cesium applies to the scene captures it does find. A
-			// non-perspective or target-less capture has no frustum worth selecting tiles for, and a
-			// non-positive field of view would be rejected by the camera manager anyway.
-			if (Capture->ProjectionType != ECameraProjectionMode::Type::Perspective)
-			{
-				continue;
-			}
-			UTextureRenderTarget2D* RenderTarget = Capture->TextureTarget;
-			if (!IsValid(RenderTarget) || RenderTarget->SizeX < 1 || RenderTarget->SizeY < 1)
-			{
-				continue;
-			}
-			if (Capture->FOVAngle <= 0.0f)
+			// The same eligibility tests Cesium applies to the scene captures it does find.
+			if (!IsEligibleCapture(Capture))
 			{
 				continue;
 			}
@@ -89,11 +147,30 @@ void ACesiumSensorViewPublisher::RescanCaptures(UWorld* World)
 
 void ACesiumSensorViewPublisher::PublishViews(UWorld* World)
 {
+	// Cleared before anything can return early: with no camera manager, nothing was published.
+	PublishedCaptures.Reset();
+
 	ACesiumCameraManager* CameraManager = ACesiumCameraManager::GetDefaultCameraManager(World);
 	if (!CameraManager)
 	{
 		return;
 	}
+
+	// The player camera is a Cesium view only where someone can see its render. A headless server
+	// draws it to an off-screen viewport. A view left at the world's origin selects tiles out to the
+	// horizon, which every readiness figure then waits on (doc 03 §9.5.1 records the measurement).
+	if (!bPlayerCameraDecided)
+	{
+		bPlayerCameraDecided = true;
+		const TCHAR* CommandLine = FCommandLine::Get();
+		bPlayerCameraIsAView = !FParse::Param(CommandLine, TEXT("RenderOffScreen"))
+			|| FParse::Param(CommandLine, TEXT("CesiumPlayerView"));
+		UE_LOG(LogTemp, Display,
+			TEXT("[CesiumCarlaBridge] The player camera %s a Cesium view%s."),
+			bPlayerCameraIsAView ? TEXT("is") : TEXT("is not"),
+			bPlayerCameraIsAView ? TEXT("") : TEXT(": the server is headless (-CesiumPlayerView makes it one)"));
+	}
+	CameraManager->UsePlayerCameras = bPlayerCameraIsAView;
 
 	// The publisher owns this list outright: it is rewritten from the live sensor set every tick, so
 	// a sensor destroyed since the last sweep simply is not re-added and stops holding its tiles
@@ -122,6 +199,7 @@ void ACesiumSensorViewPublisher::PublishViews(UWorld* World)
 			Capture->GetComponentLocation(),
 			Capture->GetComponentRotation(),
 			static_cast<double>(Capture->FOVAngle));
+		PublishedCaptures.Emplace(Capture);
 	}
 
 	const int32 PublishedCount = CameraManager->AdditionalCameras.Num();

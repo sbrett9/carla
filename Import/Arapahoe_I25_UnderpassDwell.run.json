@@ -1,0 +1,35 @@
+{
+  "run_configuration_version": 1,
+  "caller_label": "underpass orbit",
+  "scenario_package": "Import/Arapahoe_I25_UnderpassDwell.lock.json",
+  "capture": {
+    "window": "600:840",
+    "prewarm_s": 60.0,
+    "channels": [
+      {
+        "sensor_id": "Underpass_Orbit_1",
+        "pattern": "orbit",
+        "orbit_centre_x_m": -171.7,
+        "orbit_centre_y_m": -671.4,
+        "orbit_radius_m": 200.0,
+        "orbit_altitude_m": 518.2,
+        "orbit_period_s": 240.0,
+        "fov": 30.0,
+        "width": 1920,
+        "height": 1080
+      },
+      {
+        "sensor_id": "Underpass_Stare_1",
+        "stare_look_at_x_m": -171.7,
+        "stare_look_at_y_m": -671.4,
+        "stare_altitude_m": 150.0,
+        "stare_standoff_m": 150.0,
+        "stare_bearing_deg": 0.0,
+        "fov": 40.0,
+        "exposure_iso": 200.0,
+        "exposure_shutter_s": 0.002,
+        "exposure_fstop": 5.6
+      }
+    ]
+  }
+}

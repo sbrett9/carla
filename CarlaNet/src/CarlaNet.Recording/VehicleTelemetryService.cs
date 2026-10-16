@@ -1,6 +1,7 @@
 using CarlaNet.Transport;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Rpc.Actors;
+using CarlaNet.Types.Streaming;
 
 namespace CarlaNet.Recording;
 
@@ -12,6 +13,20 @@ namespace CarlaNet.Recording;
 /// `hae` is the BARE-EARTH ellipsoidal-WGS84 altitude: the per-vehicle physical altitude with the
 /// photoreal-seating bias removed (a constant offset in 'area'/'origin' modes, or the per-cell drape
 /// offset in 'drape' mode), matching the documented telemetry contract.
+///
+/// During a SUMO drive the world's vehicle actors are a pool of bodies, each lent to a SUMO vehicle
+/// while it is drawn and parked out of sight between loans. The session names each body to the
+/// server as it lends it and gives it back, and every world-observer snapshot carries what it named
+/// (<see cref="ObservedRenderSet"/>), so the truth here -- the live pull of any process as much as a
+/// recorder beside the session -- leaves out a body parked on the frame it describes and names a lent
+/// one by its SUMO vehicle. An actor no session named is reported as it always was.
+///
+/// `base_type` and `special_type` are the vehicle catalogue's for the vehicle's blueprint wherever
+/// this connection adopted a catalogue that curates them (<see cref="CarlaClient.CatalogueBaseTypes"/>,
+/// <see cref="CarlaClient.CatalogueSpecialTypes"/>), which a SUMO drive session does when it starts:
+/// the class's base type, and its kind, an empty one where the class curates none, whatever the
+/// blueprint declares. A blueprint no adopted catalogue curates keeps what it declares itself, with
+/// the base type taken from its wheel count where it declares none (doc 06 D6.18).
 /// </summary>
 public sealed class VehicleTelemetryService
 {
@@ -33,29 +48,62 @@ public sealed class VehicleTelemetryService
     public GeoLocation GetOrigin() => _client.GetCesiumOriginAsync().GetAwaiter().GetResult();
 
     /// <summary>Truth for every vehicle as of the newest world-observer frame.</summary>
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin) => Compute(origin, null, out _);
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin) => Compute(origin, out _);
+
+    /// <summary>
+    /// Truth for every vehicle as of the newest world-observer frame, and the render set that frame
+    /// carried: <see cref="ObservedRenderSet.None"/> where it carried none, so the records are every
+    /// vehicle actor, and otherwise the set they were cut to and named from.
+    /// </summary>
+    /// <remarks>
+    /// Where the newest snapshot carries a render set -- a SUMO drive -- the records are read from that
+    /// newest retained frame rather than the actor cache, so a body's pose and its naming always come
+    /// from one frame: a body is lent or given back between two ticks, and the cache is refreshed in
+    /// place while it is read.
+    /// </remarks>
+    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, out ObservedRenderSet renderSet)
+    {
+        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
+        renderSet = ObservedRenderSet.None;
+        if (!_client.GetCachedRenderSet().IsEmpty)
+            atFrame = _client.GetSnapshotFrame(_client.LatestObservedFrame, out renderSet);
+        return Build(origin, atFrame, renderSet);
+    }
 
     /// <summary>
     /// Truth for every vehicle as of <paramref name="frame"/>, for pairing with something produced at
     /// that frame: a camera image carries its frame in its header, and the snapshot of that frame is
-    /// what its pixels show. Null asks for the newest frame instead. <paramref name="telemetryFrame"/>
-    /// is the frame the records actually describe: the one asked for whenever the client still holds
-    /// it, otherwise the nearest it does hold, so a caller can record what it got rather than assume.
+    /// what its pixels show. Read with the render set and the supervision that same frame's snapshot
+    /// carried, in one read, so a body's naming and its supervision are always the ones it carried for
+    /// the vehicle it drew on that frame. Null, with <paramref name="renderSet"/>
+    /// <see cref="ObservedRenderSet.None"/> and <paramref name="supervision"/>
+    /// <see cref="ObservedSupervision.None"/>, where the client does not hold the frame: the newest
+    /// frame or a neighbouring one would be another instant's truth, and is never served in its place.
     /// </summary>
-    public IReadOnlyList<VehicleTelemetry> Compute(GeoLocation origin, ulong? frame, out ulong telemetryFrame)
+    public IReadOnlyList<VehicleTelemetry>? ComputeAt(GeoLocation origin, ulong frame,
+                                                      out ObservedRenderSet renderSet,
+                                                      out ObservedSupervision supervision)
     {
-        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame = null;
-        telemetryFrame = 0;
-        if (frame.HasValue)
-            atFrame = _client.GetSnapshotFrame(frame.Value, out telemetryFrame);
-        if (atFrame is null)
-            telemetryFrame = _client.LatestObservedFrame;
+        IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame =
+            _client.GetSnapshotFrame(frame, out renderSet, out supervision);
+        return atFrame is null ? null : Build(origin, atFrame, renderSet);
+    }
+
+    /// <summary>
+    /// The records of the actors of <paramref name="atFrame"/>, or of the actor cache where it is null,
+    /// cut to and named from <paramref name="renderSet"/>.
+    /// </summary>
+    private IReadOnlyList<VehicleTelemetry> Build(GeoLocation origin,
+                                                  IReadOnlyDictionary<ActorId, ActorSnapshot>? atFrame,
+                                                  ObservedRenderSet renderSet)
+    {
         IReadOnlyList<ActorId> ids = atFrame is not null ? atFrame.Keys.ToArray() : _client.GetCachedActorIds();
 
         // Refresh descriptions only for actors we have not seen (RPC once per new actor, not per call).
+        // A parked body is never reported, so its description waits until it is lent.
         List<ActorId>? unknown = null;
         foreach (var id in ids)
-            if (!_meta.ContainsKey(id))
+            if (!_meta.ContainsKey(id) && !renderSet.IsParked(id))
                 (unknown ??= new List<ActorId>()).Add(id);
         if (unknown is { Count: > 0 })
         {
@@ -73,9 +121,16 @@ public sealed class VehicleTelemetryService
         if (drape) EnsureDrapeGrids();
         var dtmSamples = _client.LastGroundDtmSamples;
 
+        // Read once, so every record of this frame takes its kinds from the same tables.
+        IReadOnlyDictionary<string, string> curatedBaseTypes = _client.CatalogueBaseTypes;
+        IReadOnlyDictionary<string, string> curatedKinds = _client.CatalogueSpecialTypes;
+
         var outp = new List<VehicleTelemetry>(ids.Count);
         foreach (var id in ids)
         {
+            // A body a SUMO drive's pool had parked on this frame stands out of sight below the
+            // ground, drawn for nobody: not a vehicle in the scene, so not reported.
+            if (renderSet.IsParked(id)) continue;
             if (!_meta.TryGetValue(id, out var meta)) continue;
             string typeId = meta.Description.Id;
             if (!typeId.StartsWith("vehicle.", StringComparison.Ordinal)) continue;
@@ -98,40 +153,61 @@ public sealed class VehicleTelemetryService
             var geo = Geodesy.CarlaLocalToGeodetic(origin, loc.X, loc.Y, loc.Z);
             double physicalHae = geo.Altitude;
 
-            double hae = physicalHae - OffsetAt(loc.X, loc.Y);
+            double offset = OffsetAt(loc.X, loc.Y);
+            double hae = physicalHae - offset;
             double haeDtm = (drape && _dtmGrid is not null)
                 ? Sample(_dtmGrid, loc.X, loc.Y)
                 : NearestDtm(dtmSamples, geo.Latitude, geo.Longitude);
 
             double vx = vel.X, vy = vel.Y, vz = vel.Z;
             double speed = Math.Sqrt(vx * vx + vy * vy);
-            double course;
-            if (speed >= 0.5)
-                course = Mod360(RadToDeg(Math.Atan2(vx, -vy)));        // course over ground, true north
-            else
-            {
-                double yaw = DegToRad(snap.Transform.Rotation.Yaw);    // ~stopped: fall back to heading
-                course = Mod360(RadToDeg(Math.Atan2(Math.Cos(yaw), -Math.Sin(yaw))));
-            }
+            double yaw = DegToRad(snap.Transform.Rotation.Yaw);
+            double heading = Mod360(RadToDeg(Math.Atan2(Math.Cos(yaw), -Math.Sin(yaw))));  // true north
+            double course = speed >= 0.5
+                ? Mod360(RadToDeg(Math.Atan2(vx, -vy)))                // course over ground, true north
+                : heading;                                             // ~stopped: fall back to heading
 
             var attrs = meta.Description.Attributes;
-            string baseType = Attr(attrs, "base_type", "");
-            if (baseType.Length == 0)
-                baseType = Attr(attrs, "number_of_wheels", "4") == "2" ? "motorcycle" : "car";
+            // The base type the catalogue curates for this blueprint, and only for a blueprint it does
+            // not curate the one the blueprint declares, or failing that its wheel count's.
+            if (!curatedBaseTypes.TryGetValue(typeId, out string? baseType))
+            {
+                baseType = Attr(attrs, "base_type", "");
+                if (baseType.Length == 0)
+                    baseType = Attr(attrs, "number_of_wheels", "4") == "2" ? "motorcycle" : "car";
+            }
+            // The kind the catalogue curates for this blueprint, an empty one included, and only for
+            // a blueprint it does not curate the kind the blueprint declares.
+            string specialType = curatedKinds.TryGetValue(typeId, out string? curated)
+                ? curated
+                : Attr(attrs, "special_type", "");
             var ext = meta.BoundingBox.Extent;
 
             outp.Add(new VehicleTelemetry(
-                id, typeId, baseType, Attr(attrs, "special_type", ""),
+                id, typeId, baseType, specialType,
                 Attr(attrs, "color", ""), Attr(attrs, "role_name", ""),
                 geo.Latitude, geo.Longitude, hae, haeDtm,
                 speed, course, vx, vy, vz,
                 2.0 * ext.X, 2.0 * ext.Y, 2.0 * ext.Z)
             {
+                HeadingDeg = heading,
+                // The corners of the vehicle's box take the same offset off, so they and the point agree.
+                HeightAlignOffset = offset,
                 Opacity = _client.GetActorOpacity(id),
                 // Carried alongside the truth so anything measuring against the imagery — occlusion,
                 // a projected bounding box — works from the same pose this record was built from.
                 ActorTransform = snap.Transform,
                 BoundingBox = meta.BoundingBox,
+                // The SUMO vehicle a lent body was drawn for on this frame, so the record names the
+                // vehicle rather than the body, which carries a succession of them over a run.
+                Rendered = renderSet.TryGetLent(id, out var lent)
+                    ? new RenderedVehicle(id, lent.VehicleId, lent.VehicleTypeId, lent.AdmittedFrame)
+                    : null,
+                // From the same snapshot as the pose: the lights the frame's vehicle state carried, and
+                // where the frame's pose came from, resolved with that frame's own number and render set.
+                // Neither is guessed where the snapshot did not carry it.
+                Lights = snap.CommandedLights(),
+                PoseSource = snap.PoseSource,
             });
         }
         // Drop cached descriptions for actors no longer present so this cache tracks the live world too
@@ -203,7 +279,7 @@ public sealed class VehicleTelemetryService
             geo.Latitude, geo.Longitude, hae, offset,
             az, el, roll, course, speed,
             width, height, fx, fy, cx, cy, opt.HFovDeg, vfov,
-            opt.SensorModel, "pinhole", opt.Distortion);
+            opt.SensorModel, "pinhole", opt.Distortion, opt.Exposure);
     }
 
     private static string Attr(IReadOnlyList<ActorAttributeValue> attrs, string id, string dflt)

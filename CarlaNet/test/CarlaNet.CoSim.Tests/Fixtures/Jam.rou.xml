@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Two measured vehicles on the straight route over the cross: `blocker` halts on the single-lane exit
+     for half a minute, and `follower`, close behind it, waits there until SUMO gives up on it and
+     teleports it. With nowhere further along its route to put it, SUMO takes it off the network. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+
+    <route id="straight" edges="approach ahead"/>
+
+    <vehicle id="blocker" type="measured_truck" route="straight" depart="0.00" departLane="0"
+             departSpeed="max">
+        <stop lane="ahead_0" endPos="60.00" duration="30.00"/>
+    </vehicle>
+    <vehicle id="follower" type="measured_truck" route="straight" depart="1.00" departLane="0"
+             departSpeed="max"/>
+</routes>

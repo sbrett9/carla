@@ -1,17 +1,19 @@
 <#
 .SYNOPSIS
-    PowerShell port of CarlaSetup.bat: provisions prerequisites, fetches content,
-    builds the bundled SUMO `netconvert`, fetches the optional VibeUE plugin, then
-    configures and builds CARLA against a source UE 5.7.4.
+    The Windows setup entry point: provisions prerequisites, fetches content, builds
+    the bundled SUMO toolchain, fetches the optional VibeUE plugin, then configures
+    and builds CARLA against a source UE 5.7.4.
 
 .DESCRIPTION
-    This is a faithful but modernized rewrite of CarlaSetup.bat. Notable differences:
+    The Linux peer is CarlaSetup.sh; the two move together. This began as a rewrite of
+    a CarlaSetup.bat that has since been removed, and it carries these behaviours the
+    batch file never had:
 
       * Visual Studio is discovered with vswhere (works for installs in ANY location,
         not just %PROGRAMFILES%\Microsoft Visual Studio\...). VS2022 and VS2026 are
         both supported; MSVC toolset 14.44 is REQUIRED and enforced.
       * Sequential PowerShell control flow eliminates the cmd "caret continuation
-        inside a parenthesized block" footgun that caused the .bat to silently stop
+        inside a parenthesized block" footgun that made the batch file silently stop
         after the SUMO build on a fresh checkout.
       * Adds -Clean / -CleanAll to wipe SUMO build artifacts before rebuilding.
 
@@ -181,10 +183,10 @@ EXAMPLES:
 '@ | Write-Host
 }
 
-# -- Normalize legacy .bat-style "--flag" / "--flag=value" arguments ---------
+# -- Normalize GNU-style "--flag" / "--flag=value" arguments -----------------
 # Tokens that PowerShell couldn't bind natively arrive in $Remaining. Walk them
 # (supporting both "--key=value" and "--key value" forms) and fold them onto the
-# real parameters, so habits from CarlaSetup.bat keep working.
+# real parameters, so the same flags work here and in CarlaSetup.sh.
 if ($Remaining) {
     for ($idx = 0; $idx -lt $Remaining.Count; $idx++) {
         $arg = $Remaining[$idx]
@@ -593,13 +595,19 @@ Set it to the root of your UE 5.7.4 source build, e.g.:
 }
 
 # ---------------------------------------------------------------------------
-# BUILD SUMO netconvert (OSM -> OpenDRIVE converter, bundled for CarlaNet)
+# BUILD THE SUMO TOOLCHAIN (OSM -> OpenDRIVE conversion, microsimulation, route
+# validation and the TraCI client library)
 # ---------------------------------------------------------------------------
 # CarlaNet shells out to stock SUMO `netconvert` at runtime to convert OSM maps to
-# OpenDRIVE, replacing CARLA's old in-tree osm2odr fork. We build ONLY the
-# `netconvert` target from SUMO release v1_27_0 (commit e238ea04). On Windows the
-# build deps (Xerces-C, PROJ, sqlite3, ...) come from the prebuilt DLR-TS
-# SUMOLibraries bundle; the build copies the needed DLLs next to netconvert.exe.
+# OpenDRIVE, replacing CARLA's old in-tree osm2odr fork; `sumo` runs the traffic
+# microsimulation, and `duarouter` validates authored routes. `sumo-gui` is the same
+# microsimulation with SUMO's own view of it, which the co-simulation session can launch
+# in place of `sumo` so a developer watches the simulation the drive is stepping. All
+# four come from SUMO release v1_27_0 (commit e238ea04). CarlaNet talks to `sumo` over
+# the TraCI wire protocol from managed code, so nothing native is built for it here.
+# On Windows the build deps (Xerces-C, PROJ, sqlite3, the FOX GUI toolkit, ...) come from
+# the prebuilt DLR-TS SUMOLibraries bundle; the build copies the needed DLLs next to the
+# binaries.
 
 $sumoSrc     = Join-Path $RepoRoot 'Build\sumo-src'
 $sumoBuild   = Join-Path $RepoRoot 'Build\sumo-build'
@@ -630,10 +638,41 @@ if ($Clean -or $CleanAll) {
 }
 
 $netconvert = Join-Path $sumoInstall 'bin\netconvert.exe'
-if (Test-Path $netconvert) {
-    Write-Host "Found SUMO netconvert at `"$netconvert`". Skipping SUMO build."
+
+# What a complete staged toolchain holds. The build runs in parallel (`-m`), so there is no
+# dependable "newest" output to test -- a partial failure leaves an arbitrary subset staged, and a
+# guard keyed on one member reports success for a half toolchain. Check the whole set, and name the
+# members that are missing so the reason is in the log rather than in someone's head.
+$sumoRequiredBinaries = @('netconvert.exe', 'sumo.exe', 'duarouter.exe', 'sumo-gui.exe')
+# sumo-gui is staged for development: watching a co-simulation drive. MakeDistribution's own list
+# leaves it out, because whether a distribution carries it is an open decision that turns on FOX's
+# LGPL (Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/09_Toolchain_And_Packaging.md section 5.4).
+# A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
+# deliver the 3.2 MB anything here consumes, and tools\contributed alone is 47 MB of third-party
+# contributions that would each need a row in the distribution's licence manifest. Add a directory
+# to these lists when something starts consuming it -- the omission is deliberate, not an oversight.
+$sumoRequiredData  = @('typemap', 'xsd')     # netconvert's OSM type maps; XSDs for generated files
+# tools\traci carries two obligations: the scenario tooling imports it, and it is SUMO's own
+# reference TraCI client, which CarlaNet.Sumo's managed client is ported from. Staging it at the
+# pinned commit is what makes a SUMO bump a reviewable diff rather than an archaeology exercise.
+$sumoRequiredTools = @('traci', 'sumolib')
+
+$sumoMissing = @()
+foreach ($item in $sumoRequiredBinaries) {
+    if (-not (Test-Path (Join-Path $sumoInstall "bin\$item"))) { $sumoMissing += "bin\$item" }
+}
+foreach ($item in $sumoRequiredData) {
+    if (-not (Test-Path (Join-Path $sumoInstall "data\$item"))) { $sumoMissing += "data\$item" }
+}
+foreach ($item in $sumoRequiredTools) {
+    if (-not (Test-Path (Join-Path $sumoInstall "tools\$item"))) { $sumoMissing += "tools\$item" }
+}
+
+if ($sumoMissing.Count -eq 0) {
+    Write-Host "Found the whole SUMO toolchain staged under `"$sumoInstall`". Skipping SUMO build."
 } else {
-    Write-Host 'Building SUMO netconvert...'
+    Write-Host "SUMO toolchain incomplete under `"$sumoInstall`" - missing: $($sumoMissing -join ', ')"
+    Write-Host 'Building the SUMO toolchain...'
 
     if (-not (Test-Path $sumoLibs)) {
         Write-Host "Cloning SUMOLibraries prebuilt Windows deps, pinned $sumoLibsTag (~3 GB, one-time)..."
@@ -667,22 +706,45 @@ if (Test-Path $netconvert) {
         git -C $sumoSrc checkout $sumoSrcPin
     }
 
-    # Configure + build ONLY the netconvert target (Release) with the VS generator.
+    # Configure + build the required targets (Release) with the VS generator. One invocation, four
+    # targets: CMake skips objects it has already built, so this is not a full rebuild in practice.
+    # jtrrouter and polyconvert are deliberately left out -- nothing in this repository invokes
+    # either, so building them by default would lengthen every clean build for no consumer.
     $env:SUMO_LIBRARIES = $sumoLibs
     Invoke-Checked 'cmake configure sumo' {
         cmake -B $sumoBuild -S $sumoSrc -G $cmakeGenerator `
             -T v143,version=14.44 -A x64 -DCHECK_OPTIONAL_LIBS=false
     }
-    Invoke-Checked 'cmake build netconvert' {
-        cmake --build $sumoBuild --target netconvert --config Release -- -m
+    # sumo-gui is a target only where SUMO's configure found the FOX toolkit -- here the pinned
+    # bundle's fox-1.6.59. Without it the build below stops on an unknown target and says nothing
+    # about why, so say it here.
+    if (-not (Select-String -Quiet -Pattern '^#define HAVE_FOX' -Path (Join-Path $sumoBuild 'src\config.h'))) {
+        throw "SUMO's configure found no FOX toolkit under `"$sumoLibs`", so there is no sumo-gui to build. The pinned SUMOLibraries bundle carries fox-1.6.59; re-run with -CleanAll to clone it again."
+    }
+    Invoke-Checked 'cmake build sumo toolchain' {
+        cmake --build $sumoBuild --target netconvert sumo duarouter sumo-gui --config Release -- -m
     }
 
-    # The build emits netconvert.exe + its runtime DLLs into Build\sumo-src\bin.
-    # Stage the binary, its DLLs, and the PROJ data (proj.db) for CarlaNet.
+    # The build emits the binaries + their runtime DLLs into Build\sumo-src\bin.
+    # Stage them, their DLLs, the data/tools subsets and the PROJ data (proj.db) for CarlaNet.
     $installBin = Join-Path $sumoInstall 'bin'
     New-Item -ItemType Directory -Force -Path $installBin | Out-Null
-    Copy-Item -Force (Join-Path $sumoSrc 'bin\netconvert.exe') $installBin
+    foreach ($item in $sumoRequiredBinaries) {
+        Copy-Item -Force (Join-Path $sumoSrc "bin\$item") $installBin
+    }
     Copy-Item -Force (Join-Path $sumoSrc 'bin\*.dll') $installBin
+    # Stage the named data/ and tools/ subsets beside bin/, so Build\sumo-install is a complete
+    # SUMO_HOME rather than a directory that only netconvert can be run out of. Each destination is
+    # removed first: Copy-Item -Recurse into an existing directory nests it inside itself.
+    foreach ($pair in @(@{ Kind = 'data'; Items = $sumoRequiredData },
+                        @{ Kind = 'tools'; Items = $sumoRequiredTools })) {
+        New-Item -ItemType Directory -Force -Path (Join-Path $sumoInstall $pair.Kind) | Out-Null
+        foreach ($item in $pair.Items) {
+            $dst = Join-Path $sumoInstall "$($pair.Kind)\$item"
+            if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
+            Copy-Item -Recurse -Force (Join-Path $sumoSrc "$($pair.Kind)\$item") $dst
+        }
+    }
     # PROJ data (proj.db); glob the version dir so a bundle proj bump doesn't break staging.
     $projDir = Get-ChildItem (Join-Path $sumoLibs 'proj-*') -Directory -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending | Select-Object -First 1
@@ -691,15 +753,25 @@ if (Test-Path $netconvert) {
     $projDst = Join-Path $sumoInstall 'share\proj'
     New-Item -ItemType Directory -Force -Path $projDst | Out-Null
     Copy-Item -Recurse -Force (Join-Path $projSrc '*') $projDst
-    Write-Host "Staged netconvert at `"$netconvert`"."
+    Write-Host "Staged the SUMO toolchain under `"$sumoInstall`"."
 }
 
-# CarlaNet locates the tool via env vars (see NETCONVERT_INTEGRATION.md):
-#   CARLA_NETCONVERT  -> the netconvert binary
-#   PROJ_LIB / PROJ_DATA -> the directory containing proj.db
-Write-Host 'To use netconvert from CarlaNet, set:'
+# The toolchain is located through environment variables, read by:
+#   CARLA_NETCONVERT      -> the netconvert binary; CarlaNet.Map.OsmConverter runs it
+#   PROJ_LIB / PROJ_DATA  -> the directory holding proj.db, so PROJ can resolve the projection
+#   SUMO_HOME             -> this whole installation; carlacontrol.SumoInstallation reads it, and so
+#                            does traci itself
+# These are printed, not persisted: a fresh shell has none of them. The carla-* commands, and the
+# scripts under CarlaControl/scripts/ that run them from this checkout, default all three to this
+# staged install when they are unset (carlacontrol.ToolLayout), and a packaged distribution's
+# carla-env.ps1 points them at its own bundled tools\sumo.
+# SUMO_HOME is worth setting deliberately rather than leaving to whatever a SUMO installer wrote,
+# because it takes precedence over this repository's own build: an unrelated SUMO left in it is how
+# a world and the scenarios authored against it end up built by two different converter versions.
+Write-Host 'To use the SUMO toolchain from CarlaNet, set:'
 Write-Host "  `$env:CARLA_NETCONVERT = '$netconvert'"
 Write-Host "  `$env:PROJ_LIB = '$(Join-Path $sumoInstall 'share\proj')'"
+Write-Host "  `$env:SUMO_HOME = '$sumoInstall'"
 
 # ---------------------------------------------------------------------------
 # VibeUE editor MCP plugin (OPTIONAL, private mirror, pinned)
@@ -712,7 +784,7 @@ Write-Host "  `$env:PROJ_LIB = '$(Join-Path $sumoInstall 'share\proj')'"
 
 $vibeueDir  = Join-Path $RepoRoot 'Unreal\CarlaUnreal\Plugins\VibeUE'
 $vibeueRepo = 'git@github.com:sbrett9/VibeUE.git'
-$vibeuePin  = '379373709e68ce7f2c4e3a26ff931f703d87b817'
+$vibeuePin  = 'ea12a7b02fefa918dcbb086bbc078042009da488'
 # Non-interactive ssh so a fresh/batch run never blocks on the github.com host-key prompt
 # ("Are you sure you want to continue connecting?"). StrictHostKeyChecking=no auto-accepts the key
 # without prompting; UserKnownHostsFile=/dev/null is omitted here because it is not reliable across

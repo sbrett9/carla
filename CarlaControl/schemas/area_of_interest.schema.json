@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:area-of-interest:1",
+  "title": "Areas of interest",
+  "description": "Named places a scenario can site behavior on and an annotation can refer to, declared in GeoJSON (RFC 7946) beside the OpenStreetMap extract as <extract>.aoi.geojson. Read when a world is built (carla-build-world, carla-sctmv) and by carla-publish-reference-set. An area is a Polygon, a MultiPolygon, or a Point with a radius, which is a circle.",
+  "type": "object",
+  "required": [
+    "type",
+    "features"
+  ],
+  "properties": {
+    "type": {
+      "const": "FeatureCollection"
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/feature"
+      }
+    },
+    "crs": {
+      "description": "Removed from GeoJSON by RFC 7946. Positions are read as WGS84 degrees whatever it says, with a warning."
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      },
+      "description": "[longitude, latitude] in WGS84 degrees, in that order. A third number, an altitude, is ignored with a warning."
+    },
+    "ring": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "$ref": "#/$defs/position"
+      },
+      "description": "A closed ring: at least four positions, the last repeating the first, not crossing itself and enclosing at least 1 square meter."
+    },
+    "polygon": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ring"
+      },
+      "description": "The exterior ring, then any holes, each inside the exterior."
+    },
+    "feature": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "geometry",
+            "properties"
+          ],
+          "properties": {
+            "type": {
+              "const": "Feature"
+            },
+            "geometry": {
+              "type": "object",
+              "required": [
+                "type",
+                "coordinates"
+              ],
+              "properties": {
+                "type": {
+                  "const": "Polygon"
+                },
+                "coordinates": {
+                  "$ref": "#/$defs/polygon"
+                }
+              }
+            },
+            "properties": {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "description": "Our properties. Any other is not read and not carried into the world, with a warning.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                  "description": "The area's id: a lower-case letter, then up to 63 lower-case letters, digits and underscores; unique in the file. Annotations name the area by it."
+                },
+                "name": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "The area's name for a person; not empty."
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "What kind of place it is, such as bahonar:guard_post; carried into the world unchanged. Optional."
+                },
+                "radius_m": {
+                  "type": "null",
+                  "description": "Applies to a Point only; refused here."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "geometry",
+            "properties"
+          ],
+          "properties": {
+            "type": {
+              "const": "Feature"
+            },
+            "geometry": {
+              "type": "object",
+              "required": [
+                "type",
+                "coordinates"
+              ],
+              "properties": {
+                "type": {
+                  "const": "MultiPolygon"
+                },
+                "coordinates": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/polygon"
+                  }
+                }
+              }
+            },
+            "properties": {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "description": "Our properties. Any other is not read and not carried into the world, with a warning.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                  "description": "The area's id: a lower-case letter, then up to 63 lower-case letters, digits and underscores; unique in the file. Annotations name the area by it."
+                },
+                "name": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "The area's name for a person; not empty."
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "What kind of place it is, such as bahonar:guard_post; carried into the world unchanged. Optional."
+                },
+                "radius_m": {
+                  "type": "null",
+                  "description": "Applies to a Point only; refused here."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "geometry",
+            "properties"
+          ],
+          "properties": {
+            "type": {
+              "const": "Feature"
+            },
+            "geometry": {
+              "type": "object",
+              "required": [
+                "type",
+                "coordinates"
+              ],
+              "properties": {
+                "type": {
+                  "const": "Point"
+                },
+                "coordinates": {
+                  "$ref": "#/$defs/position"
+                }
+              }
+            },
+            "properties": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "radius_m"
+              ],
+              "description": "Our properties. Any other is not read and not carried into the world, with a warning.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                  "description": "The area's id: a lower-case letter, then up to 63 lower-case letters, digits and underscores; unique in the file. Annotations name the area by it."
+                },
+                "name": {
+                  "type": "string",
+                  "pattern": "\\S",
+                  "description": "The area's name for a person; not empty."
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "What kind of place it is, such as bahonar:guard_post; carried into the world unchanged. Optional."
+                },
+                "radius_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "The circle's radius, meters. Required on a Point."
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

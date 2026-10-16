@@ -3,12 +3,17 @@
 // Default port: 2000.
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Reflection;
 using CarlaNet.Map.WorldPackage;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Transport.Streaming;
 using CarlaNet.Transport.TrafficManager;
+using CarlaNet.Types.Provenance;
+using CarlaNet.Types.Rpc.Orbit;
+using CarlaNet.Types.Rpc.Supervision;
+using CarlaNet.Types.Streaming;
 using Microsoft.Extensions.Logging;
 
 namespace CarlaNet.Transport;
@@ -37,6 +42,35 @@ public sealed class ActorSnapshot
     internal byte[] TypeDependentState { get; init; } = [];
 
     /// <summary>
+    /// Whether the snapshot this came from said every vehicle's state carries its lights
+    /// (<see cref="EpisodeStateLayout.VehicleLightStateCarried"/>). False for one from a server built
+    /// before it, whose bytes there are zero and are no reading.
+    /// </summary>
+    public bool LightStateCarried { get; init; }
+
+    /// <summary>
+    /// Where the pose this actor was drawn at on the snapshot's frame came from, where a co-simulation
+    /// session lent it as a body and the snapshot carried a pose source (<see cref="ObservedPoseSource"/>):
+    /// sumo, interpolated, jump or stale. Null for an actor no session lent, and for
+    /// every actor of a snapshot that carried no pose source.
+    /// </summary>
+    public PoseSource? PoseSource { get; init; }
+
+    /// <summary>
+    /// The lights commanded on for this vehicle on the snapshot's frame, from the <c>light_state</c> of
+    /// its <c>VehicleData</c> at offset 30 of the type-dependent union; null where the snapshot did not
+    /// say it carries them (<see cref="LightStateCarried"/>), so an older server's zero is never read as
+    /// every light off. Only meaningful for a vehicle actor.
+    /// </summary>
+    public VehicleLightStateFlags? CommandedLights()
+    {
+        ReadOnlySpan<byte> s = TypeDependentState;
+        if (!LightStateCarried || s.Length < 34)
+            return null;
+        return (VehicleLightStateFlags)BinaryPrimitives.ReadUInt32LittleEndian(s[30..]);
+    }
+
+    /// <summary>
     /// Decode the <c>VehicleData</c> branch of the type-dependent union
     /// (carla/sensor/data/ActorDynamicState.h, <c>#pragma pack(1)</c>). Only meaningful
     /// when this snapshot is a vehicle actor. Byte offsets within <see cref="TypeDependentState"/>:
@@ -46,6 +80,8 @@ public sealed class ActorSnapshot
     ///   <item><c>speed_limit</c> f32 @ 19</item>
     ///   <item><c>traffic_light_state</c> u8 @ 23</item>
     ///   <item><c>has_traffic_light</c> bool @ 24</item>
+    ///   <item><c>traffic_light_id</c> u32 @ 25, <c>failure_state</c> u8 @ 29</item>
+    ///   <item><c>light_state</c> u32 @ 30 (<see cref="CommandedLights"/>)</item>
     /// </list>
     /// Returns Green / 0 / false when the union is too short (not-yet-populated snapshot).
     /// </summary>
@@ -162,9 +198,10 @@ public sealed class CarlaClient : IAsyncDisposable
     private readonly HashSet<ActorId> _observedIds = new();
     private IDisposable? _worldObserver;
 
-    // The actor snapshots of the last few frames, by frame number, for a consumer that holds something
-    // stamped with a frame (a camera image) and needs the actor state of THAT frame. The cache above is
-    // always the newest frame; SnapshotHistory says why that is not the same thing.
+    // The actor snapshots of recent frames, by frame number, for a consumer that holds something
+    // stamped with a frame (a camera image) and needs the actor state of THAT frame, served for that
+    // frame exactly or not at all. The cache above is always the newest frame; SnapshotHistory says why
+    // that is not the same thing, and how long a frame is kept.
     private readonly SnapshotHistory _history = new();
 
     // Tick handlers that must not run on the observer thread: a Python delegate needs the interpreter
@@ -172,11 +209,39 @@ public sealed class CarlaClient : IAsyncDisposable
     private TickDispatcher? _tickDispatcher;
     private readonly object _tickDispatcherLock = new();
 
+    // The server's build identity, asked once per connection (GetBuildIdentityAsync).
+    private volatile ServerBuildIdentity? _buildIdentity;
+
     // Solar / time-of-day state from the latest world-observer snapshot (§10.14 extended header):
-    // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate].
-    // Updated lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with
-    // no RPC and no polling; empty until the first snapshot arrives.
+    // [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing, rate,
+    // corrected_elevation_deg], the last only from a server whose header carries it. Updated
+    // lock-free each tick in ParseEpisodeState so the recorder pairs frames with the sun with no RPC
+    // and no polling; empty until the first snapshot arrives, and empty again for as long as the
+    // world has no sun to report (see EpisodeStateLayout.ReadSolar).
     private volatile double[] _solar = System.Array.Empty<double>();
+
+    // The render set from the latest world-observer snapshot: the bodies a co-simulation session's
+    // pool had lent, each with the vehicle it was drawn for, and those it had parked. None until a
+    // session names a body, and for as long as no snapshot carries a set. Replaced whole on the
+    // observer thread, and the same instance is kept while the block's bytes do not change.
+    private volatile ObservedRenderSet _renderSet = ObservedRenderSet.None;
+    private long _renderSetBlocksUnreadable;
+
+    // The supervision from the latest world-observer snapshot: the plan a co-simulation session has
+    // bound, and what the author asserts of the vehicle each lent body drew. None until a session
+    // binds a plan, and for as long as no snapshot carries one. Held on the
+    // server, never in this process, so every client of the world reads the same truth for a frame;
+    // replaced whole on the observer thread, the same instance kept while the block's bytes do not
+    // change.
+    private volatile ObservedSupervision _supervision = ObservedSupervision.None;
+    private long _supervisionBlocksUnreadable;
+
+    // The pose source from the latest world-observer snapshot: the frames a co-simulation session's SUMO
+    // steps fall on, and every lent body whose pose followed no step. None until a session declares its
+    // step. Held on the server, so every client reads the same pose source for a frame; replaced whole
+    // on the observer thread, the same instance kept while the block's bytes do not change.
+    private volatile ObservedPoseSource _poseSource = ObservedPoseSource.None;
+    private long _poseSourceBlocksUnreadable;
 
     // ── Staging-fade state (see SetActorFadeAsync / GetActorOpacity / IsActorEstablished) ──
     // set_actor_fade writes straight to render state server-side and has no read-back, so the client
@@ -237,6 +302,21 @@ public sealed class CarlaClient : IAsyncDisposable
     public byte[] LastDrapedOffsetBytes { get; private set; } = [];   // row-major float32 LE, DrapedZ-DTM (m)
     public byte[] LastDrapedDtmBytes { get; private set; } = [];      // row-major float32 LE, bare-earth DTM (ellipsoidal m)
 
+    // The SUMO network the last OSM conversion produced, and the invocation that produced it.
+    //
+    // Held on the client for the same reason the drape grids are: the world package is written by a
+    // separate call, after the world has been generated, and these exist only inside the build that
+    // made them. The network in particular cannot be recovered afterwards -- asking netconvert for
+    // OpenDRIVE output changes the graph it builds, so re-running it with identical flags produces a
+    // different network from the one the rendered world was made from.
+    public string LastSumoNetwork { get; private set; } = string.Empty;
+    public IReadOnlyList<string> LastNetconvertArgv { get; private set; } = [];
+    public string LastNetconvertPath { get; private set; } = string.Empty;
+    public string LastNetconvertVersion { get; private set; } = string.Empty;
+    // The ramp meters' programme file that invocation read, empty when it read none; the package
+    // carries it beside the network.
+    public string LastTrafficLightPrograms { get; private set; } = string.Empty;
+
     // Cached parse of the drape grids for point sampling (re-parsed only when the underlying bytes change).
     private float[]? _drapeDtmGrid, _drapeOffGrid;
     private byte[]? _drapeDtmRef, _drapeOffRef;
@@ -295,8 +375,17 @@ public sealed class CarlaClient : IAsyncDisposable
     {
         _host = host;
         _log = logger;
+        Endpoint = $"{host}:{port}";
         _rpc = new MsgPackRpcClient(host, port, timeout ?? TimeSpan.FromMilliseconds(5000), logger);
     }
+
+    /// <summary>The simulator this client is connected to, as host and port.</summary>
+    /// <remarks>
+    /// For anything that has to name a world rather than only talk to it -- an exclusive claim over
+    /// its population, a run manifest saying which simulator produced a capture. The map name alone
+    /// does not name a world: two servers can have the same map loaded.
+    /// </remarks>
+    public string Endpoint { get; }
 
     /// Update the per-call RPC timeout. Affects subsequent calls only.
     public void SetTimeout(TimeSpan timeout)
@@ -352,6 +441,67 @@ public sealed class CarlaClient : IAsyncDisposable
     /// </summary>
     public Task<string> GetWorldInterfaceVersionAsync()
         => _rpc.CallAsync<string>("get_world_interface_version");
+
+    /// <summary>
+    /// What the server was built from (<c>get_build_identity</c>): its release version, the world
+    /// interface version it declares, whether it runs from a package or the editor, its configuration,
+    /// and the CARLA, content and engine commits, each <c>unknown</c> where the server cannot know it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Never fails for a server built before the call: that one answers it has no such function,
+    /// and its identity comes back not available (<see cref="ServerBuildIdentity.Available"/> false) with
+    /// the reason, and with the release and world interface its older calls still give. A server that
+    /// cannot be reached at all comes back not available too, saying why; the caller records that and
+    /// carries on, since a file's record of what made it is no reason to stop writing the file.</para>
+    ///
+    /// <para>Asked once per connection and kept: a server's build does not change while it runs.</para>
+    /// </remarks>
+    public async Task<ServerBuildIdentity> GetBuildIdentityAsync()
+    {
+        if (_buildIdentity is { } known)
+        {
+            return known;
+        }
+
+        ServerBuildIdentity identity;
+        try
+        {
+            IReadOnlyDictionary<string, string> answer =
+                await _rpc.CallAsync<Dictionary<string, string>>("get_build_identity").ConfigureAwait(false);
+            identity = ServerBuildIdentity.FromAnswer(answer);
+        }
+        catch (CarlaRpcException older) when (older.NamesNoSuchFunction)
+        {
+            identity = ServerBuildIdentity.NotAnswered(
+                "the server answers no get_build_identity: it was built before the call",
+                await AnswerOrNullAsync("version").ConfigureAwait(false),
+                await AnswerOrNullAsync("get_world_interface_version").ConfigureAwait(false));
+        }
+        catch (Exception failed)
+        {
+            // Not kept: a server that could not be reached this time may answer next time.
+            return ServerBuildIdentity.NotAnswered($"get_build_identity failed: {failed.Message}");
+        }
+
+        _buildIdentity = identity;
+        return identity;
+    }
+
+    /// <summary>The server's build identity, waited for (<see cref="GetBuildIdentityAsync"/>).</summary>
+    public ServerBuildIdentity GetBuildIdentity() => GetBuildIdentityAsync().GetAwaiter().GetResult();
+
+    /// <summary>A string call's answer, or null where the server refuses or cannot be asked.</summary>
+    private async Task<string?> AnswerOrNullAsync(string method)
+    {
+        try
+        {
+            return await _rpc.CallAsync<string>(method).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     // ── Delivered worlds ──────────────────────────────────────────────────────
     // A world delivered on its own is a directory copied into the server's package. The engine
@@ -570,7 +720,6 @@ public sealed class CarlaClient : IAsyncDisposable
         double outlierThresholdMeters = 4.0,
         string heightAlign = "none",
         bool groundCollision = true,
-        TimeSpan? cesiumSettle = null,
         double terrainResMeters = 2.0,
         double terrainMarginMeters = 30.48,
         int drapeChunkCells = 64,
@@ -578,10 +727,30 @@ public sealed class CarlaClient : IAsyncDisposable
         string? drapeCacheDir = null,
         CancellationToken ct = default)
     {
-        // 1) OSM -> flat .xodr (offline, native netconvert). Also capture the SUMO network when
-        //    traffic-light generation is on — its <tlLogic> phase programs drive TrafficLightInjector.
-        var (flatXodr, sumoNet) = await new CarlaNet.Map.OsmConverter(osmOptions)
+        // 1) OSM -> flat .xodr AND the SUMO network, from one netconvert run (offline, native
+        //    netconvert). Both are kept: the network's <tlLogic> phase programs drive
+        //    TrafficLightInjector below, and the network itself goes into the world package, because
+        //    it is the road graph a SUMO scenario is authored against and a later netconvert run
+        //    cannot reproduce it.
+        var conversion = await new CarlaNet.Map.OsmConverter(osmOptions)
             .ConvertFileWithNetworkAsync(osmPath, ct).ConfigureAwait(false);
+        var flatXodr = conversion.OpenDrive;
+        var sumoNet = conversion.Network;
+        LastSumoNetwork = conversion.Network;
+        LastNetconvertArgv = conversion.NetconvertArgv;
+        LastNetconvertPath = conversion.NetconvertPath;
+        LastNetconvertVersion = conversion.NetconvertVersion;
+        LastTrafficLightPrograms = conversion.RampMeters?.ProgramFile ?? string.Empty;
+        Console.WriteLine($"[netconvert] {conversion.NetconvertVersion} at {conversion.NetconvertPath}");
+        if (conversion.RampMeters is { } meters)
+        {
+            foreach (var meter in meters.Metered)
+                Console.WriteLine($"[ramp meters] {meter.Id}: {meter.Lanes} lane(s) metered, one vehicle per "
+                    + $"{CarlaNet.Map.RampMeterProgram.GreenSeconds} s green per lane on a "
+                    + $"{meter.CycleSeconds} s cycle");
+            foreach (var (id, reason) in meters.NotMetered)
+                Console.WriteLine($"[ramp meters] {id}: kept netconvert's program -- {reason}");
+        }
 
         // 1a) Join up the junctions that offer no choice of route. netconvert wraps every
         //     surviving OSM node in a junction, so a node that exists only because two ways
@@ -629,9 +798,6 @@ public sealed class CarlaClient : IAsyncDisposable
         string sampleSelector = sampleGround ? "ground" : "";
         if (sampleGround)
             await SetLayerVisibleAsync("ground", true).ConfigureAwait(false);
-
-        if (cesiumSettle is { } settle)
-            await Task.Delay(settle, ct).ConfigureAwait(false);
 
         // 4) Sample heights: origin first (vertical datum), then every road sample.
         var points = new List<GeoLocation>(geo.Count + 1)
@@ -933,10 +1099,9 @@ public sealed class CarlaClient : IAsyncDisposable
         //     netconvert emits the light <signal>s and one all-heads <controller> per junction but
         //     no <junction><controller> link and no phase split, so CARLA orphans every light
         //     (issue #1) and would flash whole junctions green. TrafficLightInjector rebuilds the
-        //     controllers per phase from the SUMO <tlLogic> and adds the links; a no-op when
-        //     traffic-light generation is off (sumoNet null).
-        if (sumoNet != null)
-            elevatedXodr = CarlaNet.Map.OpenDrive.TrafficLightInjector.InjectTrafficLights(elevatedXodr, sumoNet);
+        //     controllers per phase from the SUMO <tlLogic> and adds the links; a no-op when the
+        //     network carries no <tlLogic>, which is what traffic-light generation being off means.
+        elevatedXodr = CarlaNet.Map.OpenDrive.TrafficLightInjector.InjectTrafficLights(elevatedXodr, sumoNet);
 
         // 6) Generate the elevated OpenDRIVE world (builds road mesh + waypoints at correct Z).
         await GenerateOpenDriveWorldAsync(elevatedXodr, parameters).ConfigureAwait(false);
@@ -1075,8 +1240,30 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetSolarDateAsync(long year, long month, long day)
         => _rpc.CallAsync<bool>("set_solar_date", year, month, day);
 
-    /// Current solar clock/date/origin, packed as
-    /// [solar_time, year, month, day, time_zone, lat, lon, advancing, rate]; empty if no sun.
+    /// Bind the whole solar epoch in one call: the civil calendar date, the civil clock
+    /// (<paramref name="hours"/>, wrapped into [0,24)) and the UTC offset in force at that instant
+    /// (<paramref name="utcOffsetHours"/>; half-hour zones such as +03:30 are representable).
+    /// Setting the offset as the sun's time zone is what makes <paramref name="hours"/> a CIVIL
+    /// clock: otherwise the zone stays at map-longitude/15 and the clock is local mean solar time,
+    /// which near sunrise or sunset is the difference between a sun above and below the horizon. It
+    /// also means the solar state reads back the instant that was declared. One lighting refresh for
+    /// the whole epoch, unlike a SetSolarTime + SetSolarDate pair, which leaves the world holding
+    /// the new time on the old date in between. False if the world has no CesiumSunSky or the date
+    /// is not a calendar date.
+    public Task<bool> SetSolarEpochAsync(long year, long month, long day, double hours,
+        double utcOffsetHours)
+        => _rpc.CallAsync<bool>("set_solar_epoch", year, month, day, hours, utcOffsetHours);
+
+    /// Current solar clock/date/origin/angles, packed as
+    /// [solar_time, year, month, day, time_zone, lat, lon, elevation_deg, azimuth_deg, advancing,
+    /// rate, corrected_elevation_deg]; empty if no sun.
+    ///
+    /// elevation_deg is geometric. corrected_elevation_deg has atmospheric refraction applied and is
+    /// what the sun's directional light is actually rotated by; near the horizon the two differ by a
+    /// few tenths of a degree, which is a large fraction of a low sun's elevation. It is appended
+    /// last, so the entries match the per-tick block on the episode-state header in order: all twelve
+    /// from a server whose header carries the corrected elevation, the first eleven from one built
+    /// before it.
     public Task<IReadOnlyList<double>> GetSolarStateAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_solar_state");
 
@@ -1157,6 +1344,14 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<double>> GetBareEarthReferenceAsync()
         => _rpc.CallAsync<IReadOnlyList<double>>("get_bare_earth_reference");
 
+    /// Whether a camera's photoreal tiles have arrived, as of the end of the last tick, packed as
+    /// [frame, published, tileset_count, row_length, then per tileset: ion_asset_id, visible,
+    /// load_progress, worker_queue, main_queue, kicked, failed_in_view, failed_loaded]. Index rows by
+    /// row_length, which may grow as columns are appended. An unknown, dormant or non-camera actor,
+    /// and a world whose tilesets have no sensor-view publisher, are errors, never an empty answer.
+    public Task<IReadOnlyList<double>> GetViewReadinessAsync(ActorId cameraId)
+        => _rpc.CallAsync<IReadOnlyList<double>>("get_view_readiness", cameraId);
+
     /// Per-cell surface shift, row-major metres. Empty unless the world was generated draped.
     public Task<IReadOnlyList<float>> GetBareEarthOffsetGridAsync()
         => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_offset_grid");
@@ -1164,6 +1359,15 @@ public sealed class CarlaClient : IAsyncDisposable
     /// Per-cell bare-earth ground height, row-major ellipsoidal metres. Empty unless draped.
     public Task<IReadOnlyList<float>> GetBareEarthDtmGridAsync()
         => _rpc.CallAsync<IReadOnlyList<float>>("get_bare_earth_dtm_grid");
+
+    /// The SHA-1 of each bare-earth grid, lowercase hexadecimal, as [offsetGrid, groundGrid]: each
+    /// over the grid's float32 values as little-endian bytes, row-major, which is what
+    /// WorldPackage.HashGrid computes and what a package's bareearth.bin holds. The server computes
+    /// them when the record is set, so equal digests prove a package's grids are the record's bit for
+    /// bit without fetching the grids above (7,611,381 floats each on the Bahonar world, whose two
+    /// fetches took 146 s and 153 s). Empty when the loaded world has no record or was not draped.
+    public Task<IReadOnlyList<string>> GetBareEarthDigestAsync()
+        => _rpc.CallAsync<IReadOnlyList<string>>("get_bare_earth_digest");
 
     // Set once a fetch has been tried for the loaded world, so a telemetry loop running at 5 Hz does
     // not re-query a world that genuinely has no record.
@@ -1190,9 +1394,7 @@ public sealed class CarlaClient : IAsyncDisposable
             bool drape = scalars[1] != 0.0;
             if (!drape)
             {
-                LastHeightAlignOffset = scalars[0];
-                LastDrapeActive = false;
-                HasBareEarthReference = true;
+                TakeConstantBareEarthReference(scalars);
                 return true;
             }
 
@@ -1204,16 +1406,7 @@ public sealed class CarlaClient : IAsyncDisposable
             if (offsets is null || ground is null || offsets.Count != need || ground.Count != need)
                 return false;
 
-            LastDrapeMinX = scalars[2];
-            LastDrapeMinY = scalars[3];
-            LastDrapeCellSize = scalars[4];
-            LastDrapeNumCols = numCols;
-            LastDrapeNumRows = numRows;
-            LastDrapedOffsetBytes = ToFloatBytes(offsets);
-            LastDrapedDtmBytes = ToFloatBytes(ground);
-            LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
-            LastDrapeActive = true;
-            HasBareEarthReference = true;
+            TakeDrapedBareEarthReference(scalars, ToFloatBytes(offsets), ToFloatBytes(ground));
             return true;
         }
         catch
@@ -1222,6 +1415,145 @@ public sealed class CarlaClient : IAsyncDisposable
             // which the caller reports as such; it must not degrade into an assumed zero shift.
             return false;
         }
+    }
+
+    /// <summary>
+    /// Take the loaded world's bare-earth reference from a world package rather than from the server,
+    /// where the server's own digests show the package's grids are its record's, bit for bit. The
+    /// state set is what <see cref="EnsureBareEarthReference"/> would have fetched, and afterwards it
+    /// answers from it without asking the server again.
+    /// </summary>
+    /// <remarks>
+    /// <para>What it saves is the grids: the record's scalars and the two digests are three small
+    /// answers, where the grids are the size of the drape -- 7,611,381 floats each on the Bahonar
+    /// world, whose two fetches took 146 s and 153 s. A world whose surface was shifted by a constant
+    /// carries no grids, so its record is taken as the fetch would take it.</para>
+    ///
+    /// <para>Nothing is taken on trust. The grid geometry is the server's, and the grids are the
+    /// package's only where the server's digests (<see cref="GetBareEarthDigestAsync"/>) equal the
+    /// package's (<see cref="WorldPackage.HashGrid"/>) and the package's grid has the record's cell
+    /// count. Where they do not, or the world has no record, or the server publishes no digests -- one
+    /// built before it did answers the call with an error -- nothing is changed and false is returned,
+    /// so <see cref="EnsureBareEarthReference"/> still fetches the record's own grids when truth is
+    /// first asked for. A failure of the connection itself is not caught.</para>
+    /// </remarks>
+    /// <returns>True when the reference is now known, from the package or from the record's scalars.</returns>
+    public bool AdoptBareEarthReference(string packagePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+
+        IReadOnlyList<double> scalars = GetBareEarthReferenceAsync().GetAwaiter().GetResult();
+        if (scalars is null || scalars.Count < 7) return false;   // world has no record
+        if (scalars[1] == 0.0)
+        {
+            TakeConstantBareEarthReference(scalars);
+            return true;
+        }
+
+        IReadOnlyList<string>? digests;
+        try
+        {
+            digests = GetBareEarthDigestAsync().GetAwaiter().GetResult();
+        }
+        catch (CarlaRpcException)
+        {
+            return false;   // a server that publishes no digests
+        }
+        if (digests is null || digests.Count < 2) return false;
+
+        if (!WorldPackage.TryReadGrids(packagePath, out float[] offsets, out float[] ground)) return false;
+        int need = (int)scalars[5] * (int)scalars[6];
+        if (offsets.Length != need
+            || !string.Equals(WorldPackage.HashGrid(offsets), digests[0], StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(WorldPackage.HashGrid(ground), digests[1], StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        TakeDrapedBareEarthReference(scalars, ToFloatBytes(offsets), ToFloatBytes(ground));
+        _bareEarthFetchAttempted = true;
+        return true;
+    }
+
+    /// Hold a record whose surface was shifted by one constant, from its scalars.
+    private void TakeConstantBareEarthReference(IReadOnlyList<double> scalars)
+    {
+        LastHeightAlignOffset = scalars[0];
+        LastDrapeActive = false;
+        HasBareEarthReference = true;
+    }
+
+    /// Hold a draped record: the geometry from its scalars, the grids as row-major float32 LE bytes.
+    private void TakeDrapedBareEarthReference(IReadOnlyList<double> scalars, byte[] offsets, byte[] ground)
+    {
+        LastDrapeMinX = scalars[2];
+        LastDrapeMinY = scalars[3];
+        LastDrapeCellSize = scalars[4];
+        LastDrapeNumCols = (int)scalars[5];
+        LastDrapeNumRows = (int)scalars[6];
+        LastDrapedOffsetBytes = offsets;
+        LastDrapedDtmBytes = ground;
+        LastHeightAlignOffset = 0.0;   // the per-cell field is authoritative when draped
+        LastDrapeActive = true;
+        HasBareEarthReference = true;
+    }
+
+    // The vehicle catalogue's kinds, by blueprint id, as last adopted on this connection. Replaced
+    // whole, never edited, so a truth reader on another thread reads one table or the other.
+    private volatile IReadOnlyDictionary<string, string> _catalogueSpecialTypes =
+        FrozenDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// The truth record's <c>special_type</c> for every blueprint a vehicle catalogue curates one for,
+    /// by blueprint id, as last adopted on this connection (<see cref="AdoptCatalogueSpecialTypes"/>);
+    /// empty where none was. The truth telemetry reports a vehicle of a blueprint held here with this
+    /// kind, an empty one included, and a vehicle of any other blueprint with the kind its own
+    /// blueprint declares.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CatalogueSpecialTypes => _catalogueSpecialTypes;
+
+    /// <summary>
+    /// Adopt a vehicle catalogue's <c>special_type</c> for each blueprint it curates, in place of
+    /// whatever was adopted before. A SUMO drive session adopts its own catalogue's when it starts, so
+    /// the truth this connection reports -- the recorder beside the session and the live pull alike --
+    /// takes each body's kind from the catalogue, as doc 06 D6.18 rules.
+    /// </summary>
+    /// <remarks>
+    /// Client-side only, and held for the life of the connection: a kind belongs to a blueprint, and a
+    /// blueprint to the content build, so loading another world leaves it as true as it was. A copy is
+    /// taken, so the caller's dictionary may change afterwards without changing what is reported.
+    /// </remarks>
+    public void AdoptCatalogueSpecialTypes(IReadOnlyDictionary<string, string> specialTypes)
+    {
+        ArgumentNullException.ThrowIfNull(specialTypes);
+        _catalogueSpecialTypes = specialTypes.ToFrozenDictionary(StringComparer.Ordinal);
+    }
+
+    // The vehicle catalogue's base types, by blueprint id, held as the kinds are.
+    private volatile IReadOnlyDictionary<string, string> _catalogueBaseTypes =
+        FrozenDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// The truth record's <c>base_type</c> for every blueprint a vehicle catalogue curates one for, by
+    /// blueprint id, as last adopted on this connection (<see cref="AdoptCatalogueBaseTypes"/>); empty
+    /// where none was. The truth telemetry reports a vehicle of a blueprint held here with this base
+    /// type, and a vehicle of any other blueprint with the one its own blueprint declares.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CatalogueBaseTypes => _catalogueBaseTypes;
+
+    /// <summary>
+    /// Adopt a vehicle catalogue's <c>base_type</c> for each blueprint it curates, in place of whatever
+    /// was adopted before. A SUMO drive session adopts its own catalogue's when it starts, beside the
+    /// kinds (<see cref="AdoptCatalogueSpecialTypes"/>), so the truth this connection reports -- and the
+    /// callsign built from it -- names each body's base type as the catalogue curates it.
+    /// </summary>
+    /// <remarks>
+    /// Held exactly as the kinds are: client-side only, for the life of the connection, and copied.
+    /// </remarks>
+    public void AdoptCatalogueBaseTypes(IReadOnlyDictionary<string, string> baseTypes)
+    {
+        ArgumentNullException.ThrowIfNull(baseTypes);
+        _catalogueBaseTypes = baseTypes.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -1249,12 +1581,31 @@ public sealed class CarlaClient : IAsyncDisposable
         double terrainMarginMeters,
         IReadOnlyList<string>? netconvertExtraArgs = null)
     {
+        // A package with no network is a package a scenario cannot be built against, and the network
+        // exists only inside the conversion that produced this world -- so refuse here rather than
+        // write a record that looks complete. The caller reports the refusal; the world itself is
+        // already built and is not lost by it.
+        if (LastSumoNetwork.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "no SUMO network was recorded for this world, so the package would carry none. The "
+                + "network comes from the same netconvert run as the OpenDRIVE and cannot be "
+                + "reproduced afterwards; write the package on the client that generated the world, "
+                + "straight after generating it.");
+        }
+
         GeoLocation origin = await GetCesiumOriginAsync().ConfigureAwait(false);
         IReadOnlyList<double> staging = await GetStagingBoundsAsync().ConfigureAwait(false);
         bool haveStaging = staging is { Count: >= 5 };
 
+        // What made the package: the tool, the carlanet release, the server this world was built on, and
+        // the SUMO release whose netconvert converted it.
+        ServerBuildIdentity server = await GetBuildIdentityAsync().ConfigureAwait(false);
+        System.Text.RegularExpressions.Match converted =
+            System.Text.RegularExpressions.Regex.Match(LastNetconvertVersion, @"\d+\.\d+\.\d+");
         var manifest = new WorldPackageManifest
         {
+            Producer = Producer.Now(server, converted.Success ? converted.Value : null),
             MapName = mapName,
             OriginLatitude = origin.Latitude,
             OriginLongitude = origin.Longitude,
@@ -1276,8 +1627,12 @@ public sealed class CarlaClient : IAsyncDisposable
             StagingMaxYMeters = haveStaging ? staging[3] : 0.0,
             StagingMarginMeters = haveStaging ? staging[4] : 0.0,
             SourceOsmFileName = Path.GetFileName(sourceOsmPath) ?? string.Empty,
-            SourceOsmSha256 = WorldPackage.HashFile(sourceOsmPath),
-            OpenDriveSha256 = WorldPackage.HashText(elevatedXodr),
+            SourceOsmSha256 = CarlaNet.Map.OsmFingerprint.ComputeFile(sourceOsmPath),
+            OpenDriveSha256 = WorldPackage.HashOpenDrive(elevatedXodr),
+            NetworkFingerprint = CarlaNet.Map.NetworkFingerprint.Compute(LastSumoNetwork),
+            NetconvertArgv = [.. LastNetconvertArgv],
+            NetconvertPath = LastNetconvertPath,
+            NetconvertVersion = LastNetconvertVersion,
             SampleStepMeters = sampleStepMeters,
             TerrainResolutionMeters = terrainResolutionMeters,
             TerrainMarginMeters = terrainMarginMeters,
@@ -1287,9 +1642,10 @@ public sealed class CarlaClient : IAsyncDisposable
         };
 
         WorldPackage.Write(
-            directory, manifest, elevatedXodr,
+            directory, manifest, elevatedXodr, LastSumoNetwork,
             LastDrapeActive ? ToFloatGrid(LastDrapedOffsetBytes) : [],
-            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : []);
+            LastDrapeActive ? ToFloatGrid(LastDrapedDtmBytes) : [],
+            LastTrafficLightPrograms);
         return WorldPackage.PackagePath(directory, mapName);
     }
 
@@ -1515,6 +1871,339 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> DestroyActorAsync(ActorId id)
         => _rpc.CallAsync<bool>("destroy_actor", id);
 
+    /// <summary>
+    /// Name to the server the bodies a co-simulation session's pool has lent since it last named
+    /// any -- each with the vehicle it is drawn for and that vehicle's declared type -- and the
+    /// bodies it has given back, which stand parked out of sight. The world observer carries every
+    /// named body on each snapshot from the next frame on (<see cref="GetCachedRenderSet"/>), so the
+    /// truth telemetry of every client, in any process, lists the bodies a frame drew, named by their
+    /// vehicles, and leaves the parked ones out. Answers how many of the named actors the server found.
+    /// </summary>
+    /// <remarks>
+    /// <para>Sent only when the lending changes, and before the tick cue of the frame the change is
+    /// drawn in. Only the actors named are affected, and the naming is held on the server's record of
+    /// each actor, so it ends with the actor: nothing outlives the bodies it names.</para>
+    ///
+    /// <para><paramref name="vehicleIds"/> and <paramref name="vehicleTypeIds"/> run beside
+    /// <paramref name="lentIds"/>, one entry per lent body. A body given back and lent again in one
+    /// call ends lent.</para>
+    /// </remarks>
+    public Task<uint> UpdateRenderSetAsync(IReadOnlyList<ActorId> lentIds, IReadOnlyList<string> vehicleIds,
+                                           IReadOnlyList<string> vehicleTypeIds, IReadOnlyList<ActorId> parkedIds)
+    {
+        ArgumentNullException.ThrowIfNull(lentIds);
+        ArgumentNullException.ThrowIfNull(vehicleIds);
+        ArgumentNullException.ThrowIfNull(vehicleTypeIds);
+        ArgumentNullException.ThrowIfNull(parkedIds);
+        if (vehicleIds.Count != lentIds.Count || vehicleTypeIds.Count != lentIds.Count)
+        {
+            throw new ArgumentException(
+                $"Every lent body needs one vehicle id and one vehicle type: {lentIds.Count} bodies, "
+                + $"{vehicleIds.Count} vehicle ids, {vehicleTypeIds.Count} vehicle types.");
+        }
+
+        return _rpc.CallAsync<uint>("update_render_set", lentIds, vehicleIds, vehicleTypeIds, parkedIds);
+    }
+
+    /// <summary>
+    /// Put a change to the supervision a co-simulation session holds on the server: the plan it is bound
+    /// from, and what the author asserts from now on of the vehicle each named body draws. The world
+    /// observer carries what the server holds on each snapshot from the
+    /// next frame on (<see cref="GetCachedSupervision"/>), so every client of the world, in any process,
+    /// reads the same truth for the same frame. Answers how many of the named bodies the server found
+    /// lent and gave their supervision.
+    /// </summary>
+    /// <remarks>
+    /// <para>Sent only when the supervision changes, after the render set and before the tick cue of
+    /// the frame the change is drawn in. A body's supervision is replaced whole; it is held on the
+    /// server's record of the actor only while the render set names it lent, and is lost when the body
+    /// is given back or handed to another vehicle.</para>
+    ///
+    /// <para>A change is bound to one plan: one naming another plan than the server holds is refused
+    /// unless it is <see cref="SupervisionUpdate.Fresh"/>, which drops everything held before it, and
+    /// one naming no plan withdraws all supervision and carries nothing else. A server built before it
+    /// carried supervision refuses the call, with an error naming it.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// The change is one the server refuses: a state other than the vocabulary core's three spellings,
+    /// an unlabelled body with annotations or an annotated one with none, an instance unnamed, or a
+    /// withdrawal carrying rows. It is refused before it is sent.
+    /// </exception>
+    public Task<uint> UpdateSupervisionAsync(SupervisionUpdate update)
+    {
+        ArgumentNullException.ThrowIfNull(update.PlanId);
+        ArgumentNullException.ThrowIfNull(update.VocabularyDigest);
+        ArgumentNullException.ThrowIfNull(update.Actors);
+        if (SupervisionUpdateProblem(update) is { } problem)
+        {
+            throw new ArgumentException(problem, nameof(update));
+        }
+
+        return _rpc.CallAsync<uint>("update_supervision", update);
+    }
+
+    /// <summary>
+    /// Tell the server where the pose each of a co-simulation session's lent bodies is drawn at comes
+    /// from: the SUMO step the session poses them from, declared once, and the bodies whose pose follows
+    /// no step, named as their case begins and ends. The world observer carries both on each snapshot
+    /// from the next frame on (<see cref="GetCachedPoseSource"/>), so every client of the world, in any
+    /// process, reads the same pose source for the same frame, and nothing is sent per tick. Answers how
+    /// many of the named bodies the server found, and lent where they were named sumo, stale or jump.
+    /// </summary>
+    /// <param name="declareStep">
+    /// Declare the step: <paramref name="ticksPerStep"/> world ticks per SUMO step, a step falling on the
+    /// frame the next tick cue produces. With <paramref name="ticksPerStep"/> zero it withdraws the step
+    /// and every body's name, and carries nothing else.
+    /// </param>
+    /// <param name="ticksPerStep">World ticks per SUMO step; read only where the step is declared.</param>
+    /// <param name="sumoIds">Bodies standing where SUMO put them at one of its steps, whichever frame it is.</param>
+    /// <param name="staleIds">Bodies standing where they were last drawn, because the session could not place them.</param>
+    /// <param name="clearedIds">Bodies that follow the step again.</param>
+    /// <param name="jumpIds">
+    /// Bodies shown at SUMO's later position for every frame of a step too far from the last to drive in
+    /// one step.
+    /// </param>
+    /// <remarks>
+    /// <para>Sent before the tick cue of the frame the change is drawn in, after the render set: a body's
+    /// name is held on the server's record of its loan, so a body not lent is not given one, and one given
+    /// back or handed to another vehicle loses it. A server built before it carried a pose source refuses
+    /// the call, with an error naming it.</para>
+    ///
+    /// <para>The jump list is the sixth argument. A server built before the jump state binds the call with
+    /// the first five and refuses six for their count (<see cref="CarlaRpcException.NamesWrongArgumentCount"/>);
+    /// <see cref="UpdatePoseSourceWithoutJumpAsync"/> sends it those five.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">A withdrawal that names bodies. It is refused before it is sent.</exception>
+    public Task<uint> UpdatePoseSourceAsync(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> sumoIds,
+                                            IReadOnlyList<ActorId> staleIds, IReadOnlyList<ActorId> clearedIds,
+                                            IReadOnlyList<ActorId> jumpIds)
+    {
+        ArgumentNullException.ThrowIfNull(jumpIds);
+        RefuseAWithdrawalNamingBodies(declareStep, ticksPerStep, sumoIds, staleIds, clearedIds, jumpIds.Count);
+        return _rpc.CallAsync<uint>("update_pose_source", declareStep, ticksPerStep, sumoIds, staleIds, clearedIds,
+                                    jumpIds);
+    }
+
+    /// <summary>
+    /// <see cref="UpdatePoseSourceAsync"/> in the five arguments a server built before the jump state binds:
+    /// the same change with no jump list. Such a server has no name for a jumping body but sumo, so a caller
+    /// that would name one jump names it in <paramref name="sumoIds"/>.
+    /// </summary>
+    /// <param name="declareStep">As <see cref="UpdatePoseSourceAsync"/>.</param>
+    /// <param name="ticksPerStep">As <see cref="UpdatePoseSourceAsync"/>.</param>
+    /// <param name="sumoIds">Bodies standing where SUMO put them at one of its steps, whichever frame it is.</param>
+    /// <param name="staleIds">Bodies standing where they were last drawn, because the session could not place them.</param>
+    /// <param name="clearedIds">Bodies that follow the step again.</param>
+    /// <exception cref="ArgumentException">A withdrawal that names bodies. It is refused before it is sent.</exception>
+    public Task<uint> UpdatePoseSourceWithoutJumpAsync(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> sumoIds,
+                                                       IReadOnlyList<ActorId> staleIds, IReadOnlyList<ActorId> clearedIds)
+    {
+        RefuseAWithdrawalNamingBodies(declareStep, ticksPerStep, sumoIds, staleIds, clearedIds, 0);
+        return _rpc.CallAsync<uint>("update_pose_source", declareStep, ticksPerStep, sumoIds, staleIds, clearedIds);
+    }
+
+    /// <summary>Refuse, before it is sent, a pose source withdrawal that names any body.</summary>
+    private static void RefuseAWithdrawalNamingBodies(bool declareStep, uint ticksPerStep, IReadOnlyList<ActorId> sumoIds,
+                                                      IReadOnlyList<ActorId> staleIds, IReadOnlyList<ActorId> clearedIds,
+                                                      int jumps)
+    {
+        ArgumentNullException.ThrowIfNull(sumoIds);
+        ArgumentNullException.ThrowIfNull(staleIds);
+        ArgumentNullException.ThrowIfNull(clearedIds);
+        if (declareStep && ticksPerStep == 0 && (sumoIds.Count + staleIds.Count + clearedIds.Count + jumps) > 0)
+        {
+            throw new ArgumentException(
+                "A withdrawal withdraws every body's pose source and names no body: "
+                + $"{sumoIds.Count} sumo, {staleIds.Count} stale, {jumps} jump and {clearedIds.Count} cleared were given.");
+        }
+    }
+
+    /// <summary>Why the server would refuse a supervision change, or null where it would take it.</summary>
+    private static string? SupervisionUpdateProblem(SupervisionUpdate update)
+    {
+        if (update.PlanId.Length == 0)
+        {
+            return update.Actors.Count > 0
+                ? "A change naming no plan withdraws all supervision and carries nothing else."
+                : null;
+        }
+
+        foreach (SupervisionUpdateActor actor in update.Actors)
+        {
+            IReadOnlyList<SupervisionUpdateAnnotation> annotations = actor.Annotations ?? [];
+            switch (actor.State)
+            {
+                case "annotated" when annotations.Count == 0:
+                    return $"Actor {actor.ActorId} is annotated and names no instance it executes.";
+                case "unlabelled" when annotations.Count > 0:
+                    return $"Actor {actor.ActorId} is unlabelled and carries annotations.";
+                case "annotated" or "nominal" or "unlabelled":
+                    break;
+                default:
+                    return $"Actor {actor.ActorId}'s state is '{actor.State}': a vehicle is annotated, nominal "
+                           + "or unlabelled.";
+            }
+
+            if (annotations.Any(annotation => string.IsNullOrEmpty(annotation.InstanceId)))
+            {
+                return $"An annotation of actor {actor.ActorId} names no instance.";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Set how far from a camera the named actors are drawn, in metres: the max draw distance of
+    /// every mesh and lamp of each actor and of whatever is attached to it, so that no camera draws
+    /// any of it from farther away. Zero clears the limit, so they are drawn at any range. Answers
+    /// how many of the named actors the server found.
+    /// </summary>
+    /// <remarks>
+    /// <para>Rendering only. The renderer culls each component per view by its own bounds, so the
+    /// limit applies to every camera at once, and the actor keeps its transform, its collision and
+    /// everything the world observer reports of it: a body beyond the distance is still in the world
+    /// and in the truth, and simply not in that camera's image.</para>
+    ///
+    /// <para>A server built before it carried the call refuses it, with an error naming it.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The distance is negative or not a number.</exception>
+    public Task<uint> SetActorsMaxDrawDistanceAsync(IReadOnlyList<ActorId> actorIds, double maxDrawDistanceMetres)
+    {
+        ArgumentNullException.ThrowIfNull(actorIds);
+        if (!double.IsFinite(maxDrawDistanceMetres) || maxDrawDistanceMetres < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxDrawDistanceMetres), maxDrawDistanceMetres,
+                "A draw distance is zero, for no limit, or a positive number of meters.");
+        }
+
+        return _rpc.CallAsync<uint>("set_actors_max_draw_distance", actorIds, maxDrawDistanceMetres);
+    }
+
+    // ── The orbit mover: the server flies an orbiting actor from parameters sent once ─────────
+
+    /// <summary>
+    /// Fly an actor round a circle on the server (<c>set_orbit</c>): put an orbit mover on it where it
+    /// has none, give it the circle, and -- where <see cref="OrbitParameters.Enabled"/> -- start it
+    /// moving from the start angle at once. From then on the server advances the angle by each tick's
+    /// delta on the simulation clock and sets the actor on the circle with its boresight on the centre,
+    /// before the frame's sensors capture and before the world observer reports the frame; this client
+    /// sends nothing per frame. Whatever is attached to the actor rides with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The pose rule is <see cref="OrbitParameters.PoseAt"/>, so the angle at any simulated instant
+    /// is <see cref="OrbitParameters.AngleAfter"/> of the seconds since the orbit was enabled, and a
+    /// client that wants to show it computes it rather than asking.</para>
+    ///
+    /// <para>While the orbit is enabled the mover owns the actor's transform, paused or not: disable it
+    /// (<see cref="SetOrbitEnabledAsync"/>) before moving the actor by hand. A server built before it
+    /// carried the mover refuses the call with an error naming it
+    /// (<see cref="MsgPackRpc.CarlaRpcException.NamesNoSuchFunction"/>).</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// The circle is one the server refuses: a radius or period that is not positive, or a centre,
+    /// altitude, start angle or pitch override that is not finite. It is refused before it is sent.
+    /// </exception>
+    public Task SetOrbitAsync(ActorId actorId, OrbitParameters parameters)
+    {
+        if (parameters.Problem() is { } problem)
+        {
+            throw new ArgumentException(problem, nameof(parameters));
+        }
+
+        return _rpc.CallVoidAsync("set_orbit", actorId, parameters);
+    }
+
+    /// <summary>
+    /// Start or stop the server flying an actor's orbit. Enabled, the mover places the actor on its circle
+    /// at the angle it holds at once and advances from there each tick; disabled, the actor stays where it
+    /// is and a client may move it. Disabling an actor that carries no orbit is nothing to do and
+    /// succeeds; enabling one is refused, since there is no circle to fly.
+    /// </summary>
+    public Task SetOrbitEnabledAsync(ActorId actorId, bool enabled)
+        => _rpc.CallVoidAsync("set_orbit_enabled", actorId, enabled);
+
+    /// <summary>
+    /// Hold an actor's orbit at its angle, or let it advance again. The actor stays on the circle
+    /// meanwhile; the mover still owns its transform. Refused for an actor that carries no orbit.
+    /// </summary>
+    public Task SetOrbitPausedAsync(ActorId actorId, bool paused)
+        => _rpc.CallVoidAsync("set_orbit_paused", actorId, paused);
+
+    /// <summary>
+    /// Where an actor's orbit stands: the angle the server last placed it at, and whether it is enabled
+    /// and paused. An actor that carries no orbit answers zero, disabled, not paused; an actor the
+    /// server does not have is an error. For a check, not a loop: the angle is predictable from the
+    /// parameters and the simulated clock (<see cref="OrbitParameters.AngleAfter"/>).
+    /// </summary>
+    public Task<OrbitState> GetOrbitStateAsync(ActorId actorId)
+        => _rpc.CallAsync<OrbitState>("get_orbit_state", actorId);
+
+    /// <summary>
+    /// Take the drive lease on the world: the claim to be the one traffic system that drives its
+    /// vehicles. While a holder has it, the server refuses <c>set_actor_autopilot</c> (enabling),
+    /// <c>apply_control_to_vehicle</c>, <c>apply_ackermann_control_to_vehicle</c> and
+    /// <c>apply_physics_control</c>, direct and in a batch, for every actor and every client, naming
+    /// the holder; so a traffic manager started against the server moves nothing, and a second drive
+    /// session is refused here before it starts anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>Held on the server's episode, so a map load ends it, and refused while any holder has it,
+    /// the same name included. The server gives no notice of a client disconnecting, so a holder that
+    /// dies without <see cref="ReleaseDriveLeaseAsync"/> leaves the lease held until the world is
+    /// reloaded or <see cref="BreakDriveLeaseAsync"/> ends it.</para>
+    ///
+    /// <para>A server built before it carried the lease refuses the call with an error naming it
+    /// (<see cref="MsgPackRpc.CarlaRpcException.NamesNoSuchFunction"/>); nothing on such a server
+    /// stops another traffic system driving vehicles.</para>
+    /// </remarks>
+    /// <param name="holder">
+    /// Who is taking it, in words a refusal can print to the client it refuses: a component and
+    /// enough of a process to find and stop it.
+    /// </param>
+    /// <exception cref="MsgPackRpc.CarlaRpcException">Another holder has it, named in the message.</exception>
+    public Task TakeDriveLeaseAsync(string holder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(holder);
+        return _rpc.CallVoidAsync("take_drive_lease", holder);
+    }
+
+    /// <summary>
+    /// Give the drive lease back, as the holder that took it. Only the holder may: a client that did
+    /// not take the lease cannot end another's drive by mistake.
+    /// </summary>
+    /// <exception cref="MsgPackRpc.CarlaRpcException">
+    /// No lease is held, or it is held under another name, which the message gives.
+    /// </exception>
+    public Task ReleaseDriveLeaseAsync(string holder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(holder);
+        return _rpc.CallVoidAsync("release_drive_lease", holder);
+    }
+
+    /// <summary>
+    /// End whatever drive lease is held, from any client: the recovery for a holder that died without
+    /// releasing it. The server logs it as a warning naming the holder whose lease was ended. Answers
+    /// that holder's name, or null where none was held.
+    /// </summary>
+    public async Task<string?> BreakDriveLeaseAsync()
+    {
+        string broken = await _rpc.CallAsync<string>("break_drive_lease").ConfigureAwait(false);
+        return string.IsNullOrEmpty(broken) ? null : broken;
+    }
+
+    /// <summary>
+    /// Who holds the drive lease on the world, or null while nobody does. A traffic tool asks before
+    /// it spawns anything, so it is refused before its first vehicle rather than at its first control
+    /// write.
+    /// </summary>
+    public async Task<string?> GetDriveLeaseHolderAsync()
+    {
+        string holder = await _rpc.CallAsync<string>("get_drive_lease").ConfigureAwait(false);
+        return string.IsNullOrEmpty(holder) ? null : holder;
+    }
+
     // ── §8.8 Actor Transform and Physics ──────────────────────────────────────
 
     public Task SetActorLocationAsync(ActorId id, Location location)
@@ -1654,8 +2343,15 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task CloseVehicleDoorAsync(ActorId id, VehicleDoor door)
         => _rpc.CallVoidAsync("close_vehicle_door", id, door);
 
+    /// Every vehicle's current light state, as (actor, flags) pairs.
+    ///
+    /// The RPC is SINGULAR. The plural spelling is the name of the Python API's World method
+    /// (PythonAPI/carla/src/World.cpp binds get_vehicles_light_states onto the client call), not of
+    /// the server binding, which is get_vehicle_light_states in CarlaServer.cpp - and LibCarla's own
+    /// Client::GetVehiclesLightStates calls the singular name for exactly that reason. The C#
+    /// method keeps the plural to match the Python API surface; only the wire name is singular.
     public Task<IReadOnlyList<(ActorId, VehicleLightStateFlags)>> GetVehiclesLightStatesAsync()
-        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicles_light_states");
+        => _rpc.CallAsync<IReadOnlyList<(ActorId, VehicleLightStateFlags)>>("get_vehicle_light_states");
 
     public Task SetWheelSteerDirectionAsync(ActorId id, VehicleWheelLocation wheel, float angleDeg)
         => _rpc.CallVoidAsync("set_wheel_steer_direction", id, wheel, angleDeg);
@@ -1809,7 +2505,8 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<IReadOnlyList<CommandResponse>> ApplyBatchSyncAsync(
         IReadOnlyList<Command> commands, bool doTickCue)
         // Server returns std::vector<CommandResponse> directly (no Response<T> wrap), so use raw path.
-        => _rpc.CallRawAsync<IReadOnlyList<CommandResponse>>("apply_batch", commands, doTickCue);
+        => _rpc.CallRawAsync<IReadOnlyList<CommandResponse>>(
+               "apply_batch", commands, doTickCue);
 
     // ── §8.17 Raycast and Queries ─────────────────────────────────────────────
 
@@ -1824,8 +2521,23 @@ public sealed class CarlaClient : IAsyncDisposable
     // Subscribes to the episode state stream (FWorldObserver) and caches all
     // actor snapshots.  Call once after construction; required for GetActorTransform etc.
 
+    /// <summary>
+    /// Subscribe to the episode-state stream and cache every actor's snapshot from it. Calling it
+    /// again while the subscription is live does nothing.
+    /// </summary>
+    /// <remarks>
+    /// Idempotent because a second subscription is a second stream reader filling the same cache,
+    /// which costs a thread and a socket and buys nothing. More than one component in a process now
+    /// wants the cache -- the recorder, the truth path and the co-simulation bridge's pose read-back
+    /// -- and each of them is entitled to ask for it without knowing whether another already has.
+    /// </remarks>
     public async Task StartWorldObserverAsync()
     {
+        if (_worldObserver is not null)
+        {
+            return;
+        }
+
         var info = await GetEpisodeInfoAsync().ConfigureAwait(false);
         _worldObserver = SubscribeToStream(info.Token.Data, OnWorldObserverFrame);
     }
@@ -1836,11 +2548,13 @@ public sealed class CarlaClient : IAsyncDisposable
         {
             double platformTs = 0;
             float deltaS = 0;
-            ParseEpisodeState(frame.Payload.Span, out platformTs, out deltaS, out var frameActors);
+            ParseEpisodeState(frame.Payload.Span, frame.Header.Frame, out platformTs, out deltaS, out var frameActors,
+                              out var frameRenderSet, out var frameSupervision);
             // Retained before the gate is pulsed, so a tick-cue waiter woken by this frame can read
-            // the frame's own actors straight away.
+            // the frame's own actors straight away -- and the render set and the supervision the same
+            // snapshot carried beside them, so none is ever read from a different frame.
             if (frameActors is not null)
-                _history.Retain(frame.Header.Frame, frameActors);
+                _history.Retain(frame.Header.Frame, frameActors, frameRenderSet, frameSupervision);
             lock (_frameGate)
             {
                 _latestObservedFrame = frame.Header.Frame;
@@ -1866,29 +2580,83 @@ public sealed class CarlaClient : IAsyncDisposable
         catch (Exception ex) { _log?.LogWarning(ex, "World observer parse error"); }
     }
 
-    private void ParseEpisodeState(ReadOnlySpan<byte> payload, out double platformTimestamp, out float deltaSeconds,
-                                   out Dictionary<ActorId, ActorSnapshot>? frameActors)
+    private void ParseEpisodeState(ReadOnlySpan<byte> payload, ulong frameNumber, out double platformTimestamp,
+                                   out float deltaSeconds,
+                                   out Dictionary<ActorId, ActorSnapshot>? frameActors,
+                                   out ObservedRenderSet frameRenderSet,
+                                   out ObservedSupervision frameSupervision)
     {
         platformTimestamp = 0;
         deltaSeconds = 0;
         frameActors = null;
-        // Header layout (124 bytes): episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1)
-        // pad(3), then 11 appended solar doubles at offset 36 (§10.14 extended header).
-        if (payload.Length < 36) return;
+        frameRenderSet = ObservedRenderSet.None;
+        frameSupervision = ObservedSupervision.None;
+        // Header layout: episode_id(8) platform_ts(8) delta_s(4) map_origin(12) state(1) pad(3),
+        // then the solar block at offset 36 -- eleven doubles, or twelve from a server that carries
+        // the refraction-corrected elevation, which the flags byte says (§10.14 extended header).
+        if (payload.Length < EpisodeStateLayout.SolarOffset) return;
         platformTimestamp = BitConverter.Int64BitsToDouble(
             BinaryPrimitives.ReadInt64LittleEndian(payload[8..]));
         deltaSeconds = BitConverter.Int32BitsToSingle(
             BinaryPrimitives.ReadInt32LittleEndian(payload[16..]));
-        const int HeaderSize = 124;
-        if (payload.Length < HeaderSize) return;   // extended (with-solar) header required
-        // Cache the solar block (11 doubles at offset 36) paired to this tick.
-        var solar = new double[11];
-        for (int k = 0; k < 11; k++)
-            solar[k] = BitConverter.Int64BitsToDouble(
-                BinaryPrimitives.ReadInt64LittleEndian(payload[(36 + k * 8)..]));
-        _solar = solar;
+        int headerSize = EpisodeStateLayout.HeaderSize(payload);
+        if (payload.Length < headerSize) return;   // extended (with-solar) header required
+        // Cache the solar block paired to this tick -- but only when the header says a sun was
+        // measured. The solar fields' defaults are a well-formed reading (midnight of year 0 at
+        // latitude 0, longitude 0), so a world with no CesiumSunSky is distinguishable only by
+        // EpisodeStateSerializer::SolarStateValid. Leaving the cache empty is what stops a recorded
+        // artifact asserting a sun that was never there.
+        _solar = EpisodeStateLayout.ReadSolar(payload);
+        // The render set, where a co-simulation session has named the bodies of its pool. A block
+        // that cannot be read is counted and read as no set, and the frame's actors are read all
+        // the same: the block states its own size, so the actors are found either way, and a frame
+        // that went unparsed would hold every tick cue waiting on it.
+        try
+        {
+            frameRenderSet = EpisodeStateLayout.ReadRenderSet(payload, _renderSet);
+        }
+        catch (InvalidDataException ex)
+        {
+            Interlocked.Increment(ref _renderSetBlocksUnreadable);
+            _log?.LogWarning(ex, "World observer render set unreadable");
+            frameRenderSet = ObservedRenderSet.None;
+        }
+        _renderSet = frameRenderSet;
+        // The supervision, where a co-simulation session has bound a plan: a block that cannot be read
+        // is counted and read as unreadable rather than losing the frame -- never as none, which would
+        // say no plan was in force. It is inside the render set block, whose size the actors are found
+        // by, so they are found either way.
+        try
+        {
+            frameSupervision = EpisodeStateLayout.ReadSupervision(payload, _supervision);
+        }
+        catch (InvalidDataException ex)
+        {
+            Interlocked.Increment(ref _supervisionBlocksUnreadable);
+            _log?.LogWarning(ex, "World observer supervision unreadable");
+            frameSupervision = ObservedSupervision.Unreadable;
+        }
+        _supervision = frameSupervision;
+        // The pose source, where a co-simulation session has declared its SUMO step: a block that cannot
+        // be read is counted and read as unreadable, which gives no body a pose source, and the frame's
+        // actors are read all the same.
+        ObservedPoseSource framePoseSource;
+        try
+        {
+            framePoseSource = EpisodeStateLayout.ReadPoseSource(payload, _poseSource);
+        }
+        catch (InvalidDataException ex)
+        {
+            Interlocked.Increment(ref _poseSourceBlocksUnreadable);
+            _log?.LogWarning(ex, "World observer pose source unreadable");
+            framePoseSource = ObservedPoseSource.Unreadable;
+        }
+        _poseSource = framePoseSource;
+        // Whether every vehicle's state carries its lights: a server built before it leaves the bytes
+        // zero, which would read as every light off.
+        bool lightsCarried = EpisodeStateLayout.CarriesVehicleLightState(payload);
         const int ActorSize  = 119;
-        var actors = payload[HeaderSize..];
+        var actors = payload[EpisodeStateLayout.ActorsOffset(payload)..];
         int count  = actors.Length / ActorSize;
         _observedIds.Clear();
         frameActors = new Dictionary<ActorId, ActorSnapshot>(count);
@@ -1925,7 +2693,11 @@ public sealed class CarlaClient : IAsyncDisposable
                 Velocity        = new Vector3D(vx, vy, vz),
                 AngularVelocity = new Vector3D(avx, avy, avz),
                 Acceleration    = new Vector3D(ax, ay, az),
-                TypeDependentState = a[65..119].ToArray()
+                TypeDependentState = a[65..119].ToArray(),
+                LightStateCarried = lightsCarried,
+                // Resolved here, with the frame's own number and its own render set, so the snapshot
+                // of a frame says where each lent body's pose on that frame came from.
+                PoseSource = framePoseSource.ForLentBody(frameRenderSet, id, frameNumber),
             };
             _actorCache[id] = snapshot;
             frameActors[id] = snapshot;
@@ -1957,15 +2729,44 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// <summary>
     /// Every actor's snapshot as of <paramref name="frame"/>, for pairing with something stamped with
-    /// that frame (a camera image), rather than the newest frame the queries above answer from. When
-    /// that frame is no longer held the nearest one still held is returned and
-    /// <paramref name="servedFrame"/> names it; null when no frame has been observed yet.
+    /// that frame (a camera image), rather than the newest frame the queries above answer from. That
+    /// frame exactly, or null where the client does not hold it: a neighbouring frame is another
+    /// instant's truth, and is never served in its place (<see cref="SnapshotHistory"/>).
     /// </summary>
-    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ulong servedFrame)
-        => _history.Nearest(frame, out servedFrame);
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame)
+        => _history.Of(frame);
 
-    /// <summary>How many recent frames <see cref="GetSnapshotFrame"/> can answer for exactly.</summary>
+    /// <summary>
+    /// Every actor's snapshot as of <paramref name="frame"/>, as <see cref="GetSnapshotFrame(ulong)"/>
+    /// answers, together with the render set the same snapshot carried
+    /// (<see cref="ObservedRenderSet.None"/> where it carried none). Both are read at once, so a body
+    /// lent or given back between two ticks is never paired with the other frame's naming.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ObservedRenderSet renderSet)
+        => _history.Of(frame, out renderSet);
+
+    /// <summary>
+    /// Every actor's snapshot as of <paramref name="frame"/>, together with the render set and the
+    /// supervision the same snapshot carried (<see cref="ObservedSupervision.None"/> where it carried
+    /// none). All three are read at once, which is how a recorder takes a capture's truth: its vehicles,
+    /// the SUMO vehicle each body drew, and what the author asserted of each, from the one frame the
+    /// pixels were rendered on.
+    /// </summary>
+    public IReadOnlyDictionary<ActorId, ActorSnapshot>? GetSnapshotFrame(ulong frame, out ObservedRenderSet renderSet,
+                                                                        out ObservedSupervision supervision)
+        => _history.Of(frame, out renderSet, out supervision);
+
+    /// <summary>How many recent frames <see cref="GetSnapshotFrame(ulong)"/> can answer for.</summary>
     public int RetainedSnapshotFrames => _history.Count;
+
+    /// <summary>
+    /// Keep the frames a reader of <see cref="GetSnapshotFrame(ulong)"/> may still ask for. A recorder
+    /// opens one for as long as it records and releases each frame as it finishes with it
+    /// (<see cref="SnapshotHold.Release"/>), so an image's own frame is held until the image has arrived
+    /// and been paired, however late it arrives, and dropped soon after; with no hold open only the
+    /// newest few frames are kept (<see cref="SnapshotHistory"/>).
+    /// </summary>
+    public SnapshotHold HoldSnapshotFrames() => _history.Hold();
 
     /// <summary>
     /// Per-vehicle traffic-light state, speed limit, and at-traffic-light flag, decoded from the
@@ -2035,9 +2836,89 @@ public sealed class CarlaClient : IAsyncDisposable
 
     /// Solar / time-of-day state from the latest world-observer snapshot, paired to the current tick
     /// (no RPC, no poll): [solar_time, year, month, day, time_zone, lat, lon, elevation_deg,
-    /// azimuth_deg, advancing, rate]. Empty until the first snapshot arrives. Requires the world
-    /// observer to be running (StartWorldObserverAsync).
+    /// azimuth_deg, advancing, rate, corrected_elevation_deg]. Requires the world observer to be
+    /// running (StartWorldObserverAsync).
+    ///
+    /// Empty both before the first snapshot arrives and whenever the world has no CesiumSunSky to
+    /// report. It is never a fabricated sun: the header's solar defaults read as midnight of year 0
+    /// at latitude 0, longitude 0, so a block is cached only when the server says it measured one.
+    /// elevation_deg is geometric. corrected_elevation_deg, the elevation the scene is lit at, is
+    /// present from a server whose header carries it; one built before that publishes the first
+    /// eleven only, and GetSolarStateAsync then remains the way to read it.
     public IReadOnlyList<double> GetCachedSolarState() => _solar;
+
+    /// <summary>
+    /// The render set the latest world-observer snapshot carried: the bodies a co-simulation
+    /// session's pool had lent, each with the vehicle it was drawn for, and those it had parked out
+    /// of sight. <see cref="ObservedRenderSet.None"/> before the first snapshot, and whenever no
+    /// session has named a body -- every run of traffic-manager traffic or scenario entities. Requires
+    /// the world observer to be running (StartWorldObserverAsync).
+    /// </summary>
+    /// <remarks>
+    /// The newest frame's, like the actor cache. A reader that pairs it with actor state should take
+    /// both from one frame -- <see cref="GetSnapshotFrame(ulong, out ObservedRenderSet)"/>
+    /// answers both at once -- because a body is lent or given back between two ticks.
+    /// </remarks>
+    public ObservedRenderSet GetCachedRenderSet() => _renderSet;
+
+    /// <summary>
+    /// The render set the snapshot of <paramref name="frame"/> carried, where the client still holds
+    /// that frame; null where it does not. <see cref="ObservedRenderSet.None"/> for a held frame that
+    /// carried none.
+    /// </summary>
+    public ObservedRenderSet? GetRenderSetFrame(ulong frame) => _history.RenderSetOf(frame);
+
+    /// <summary>
+    /// World-observer snapshots whose render set block could not be read, and were read as carrying
+    /// none. Nonzero only where the server lays the block out differently from this client.
+    /// </summary>
+    public long RenderSetBlocksUnreadable => Interlocked.Read(ref _renderSetBlocksUnreadable);
+
+    /// <summary>
+    /// The supervision the latest world-observer snapshot carried: the plan a co-simulation session has
+    /// bound, and what the scenario's author asserts of the vehicle each lent body drew.
+    /// <see cref="ObservedSupervision.None"/> before the first snapshot, and
+    /// whenever no session has bound a plan. Requires the world observer to be running
+    /// (StartWorldObserverAsync).
+    /// </summary>
+    /// <remarks>
+    /// The newest frame's, like the actor cache and the render set. A reader that pairs it with a
+    /// frame's vehicles takes all of them from that frame --
+    /// <see cref="GetSnapshotFrame(ulong, out ObservedRenderSet, out ObservedSupervision)"/>
+    /// answers them at once -- because supervision names bodies, and a body is lent or given back
+    /// between two ticks.
+    /// </remarks>
+    public ObservedSupervision GetCachedSupervision() => _supervision;
+
+    /// <summary>
+    /// The supervision the snapshot of <paramref name="frame"/> carried, where the client still holds
+    /// that frame; null where it does not. <see cref="ObservedSupervision.None"/> for a held frame that
+    /// carried none.
+    /// </summary>
+    public ObservedSupervision? GetSupervisionFrame(ulong frame) => _history.SupervisionOf(frame);
+
+    /// <summary>
+    /// World-observer snapshots whose supervision block could not be read, each held as
+    /// <see cref="ObservedSupervision.Unreadable"/>. Nonzero only where the server lays the block out
+    /// differently from this client.
+    /// </summary>
+    public long SupervisionBlocksUnreadable => Interlocked.Read(ref _supervisionBlocksUnreadable);
+
+    /// <summary>
+    /// The pose source the latest world-observer snapshot carried: the frames a co-simulation session's
+    /// SUMO steps fall on, and every lent body whose pose followed no step.
+    /// <see cref="ObservedPoseSource.None"/> before the first snapshot, and whenever no session has
+    /// declared its step. Each actor of a frame already carries its own, resolved with that frame's
+    /// number and render set (<see cref="ActorSnapshot.PoseSource"/>), which is how a recorder reads it.
+    /// </summary>
+    public ObservedPoseSource GetCachedPoseSource() => _poseSource;
+
+    /// <summary>
+    /// World-observer snapshots whose pose source block could not be read, each read as
+    /// <see cref="ObservedPoseSource.Unreadable"/>. Nonzero only where the server lays the block out
+    /// differently from this client.
+    /// </summary>
+    public long PoseSourceBlocksUnreadable => Interlocked.Read(ref _poseSourceBlocksUnreadable);
 
     // Decode VehicleControl from the cached TypeDependentState union.
     // VehicleData layout (pack=1): throttle(f) steer(f) brake(f) hand_brake(bool)

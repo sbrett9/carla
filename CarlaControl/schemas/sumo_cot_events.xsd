@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The SUMO bridge's event file, written by carla-cot-telemetry given an XML path: its root is <events>.
+
+  The file holds the run's record of what made it, the display convention, then every event of the
+  run. Each event is the vehicle event of cot_event_body.xsd, carrying every field of the vehicle's
+  record: type_id, special_type, role_name and marked included.
+
+  The vehicle event shares its Point, Track and Contact with a truth sidecar's vehicle event. This
+  schema cannot take them from truth_sidecar.xsd, because both files' roots are <events> with no
+  namespace and one schema can hold only one of them. So it holds copies of truth_sidecar.xsd's Point,
+  Track, Contact, Producer, Server and the simple types under them, which a test holds equal to the
+  sidecar's. The record of what made the file is the sidecar's Producer: carlanet is left out where the
+  bridge ran in a process that never loaded CarlaNet, as carlacontrol.ProducerRecord writes it.
+
+  No element is in a namespace.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation"
+           elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
+  <xs:annotation>
+    <xs:documentation>The file carla-cot-telemetry writes when given an XML path. A file without
+      format_version is version 1, which this schema describes.</xs:documentation>
+    <xs:appinfo>
+      <cap:id>urn:carla-sumo-capture:schema:sumo-cot-events:1</cap:id>
+      <cap:formatVersion>1</cap:formatVersion>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:include schemaLocation="cot_event_body.xsd"/>
+
+  <xs:element name="events" type="SumoEventFile">
+    <xs:annotation>
+      <xs:documentation>One run of the SUMO bridge.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <!-- ===== The file ======================================================================= -->
+
+  <xs:complexType name="SumoEventFile">
+    <xs:sequence>
+      <xs:element name="_producer" type="Producer" minOccurs="0">
+        <xs:annotation><xs:documentation>What made the file. Absent from a file written before it was
+          recorded.</xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="_display_convention" type="DisplayConvention" minOccurs="0"/>
+      <xs:element name="event" type="TelemetryEvent" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="source" type="xs:string" use="required" fixed="sumo"/>
+    <xs:attribute name="format_version" type="xs:positiveInteger" use="optional" fixed="1">
+      <xs:annotation><xs:documentation>The file's format. A file without it is version 1.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="scenario" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>The .sumocfg file's name without extension.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="epoch" type="Instant" use="required">
+      <xs:annotation><xs:documentation>The UTC instant simulation time 0 was stamped with.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Producer">
+    <xs:annotation><xs:documentation>The record of what made the file, as carlacontrol.ProducerRecord
+      writes it in XML: each value an attribute, one not used left out. A copy of truth_sidecar.xsd's
+      Producer.</xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="_server" type="Server" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="tool" type="xs:string" use="required"/>
+    <xs:attribute name="tool_version" type="xs:string" use="optional"/>
+    <xs:attribute name="carlanet" type="xs:string" use="optional"/>
+    <xs:attribute name="sumo" type="xs:string" use="optional"/>
+    <xs:attribute name="written_utc" type="Instant" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="DisplayConvention">
+    <xs:annotation><xs:documentation>The affiliation each vehicle population was drawn with, and the
+      file that said so.</xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="population" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="type" type="xs:string" use="required">
+            <xs:annotation><xs:documentation>A vehicle class id or a SUMO vehicle type id.</xs:documentation></xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="affiliation" type="Affiliation" use="required"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="source" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>The convention file's name. Empty when the run had none.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="default_affiliation" type="Affiliation" use="required">
+      <xs:annotation><xs:documentation>The affiliation of every population the convention does not name.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:simpleType name="Affiliation">
+    <xs:restriction base="xs:string"><xs:pattern value="[puafnshjkox]"/></xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===== Copies of truth_sidecar.xsd's shared parts ====================================== -->
+
+  <xs:simpleType name="Instant">
+    <xs:annotation><xs:documentation>An instant in UTC to the millisecond, with a trailing Z.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="CalendarDate">
+    <xs:annotation><xs:documentation>A date, year-month-day.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:date">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TrueOrFalse">
+    <xs:annotation><xs:documentation>true or false, spelled out.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:boolean">
+      <xs:pattern value="true|false"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Latitude">
+    <xs:annotation><xs:documentation>A WGS84 latitude.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="-90"/>
+      <xs:maxInclusive value="90"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Longitude">
+    <xs:annotation><xs:documentation>A WGS84 longitude.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="-180"/>
+      <xs:maxInclusive value="180"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Bearing">
+    <xs:annotation><xs:documentation>A direction clockwise from true north, 0 to 360 (360 only where
+      rounding reaches it).</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="360"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NonNegativeDecimal">
+    <xs:annotation><xs:documentation>A decimal number, 0 or more.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="CotType">
+    <xs:annotation><xs:documentation>A Cursor-on-Target atom type, such as a-n-G-E-V.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="a-.+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Color">
+    <xs:annotation><xs:documentation>A color as red,green,blue, each 0 to 255, or empty.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="([0-9]{1,3},[0-9]{1,3},[0-9]{1,3})?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="Point">
+    <xs:annotation><xs:documentation>A position. In this file, the center of the vehicle's front
+      bumper, where SUMO reports it.</xs:documentation></xs:annotation>
+    <xs:attribute name="lat" type="Latitude" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>degrees</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="lon" type="Longitude" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>degrees</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="hae" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Height above the WGS84 ellipsoid. In this file, the bare-earth
+        ground height under the bumper, or the configured constant.</xs:documentation>
+        <xs:appinfo><cap:unit>meters</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ce" type="xs:decimal" use="required" fixed="0.0">
+      <xs:annotation><xs:appinfo><cap:unit>meters</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="le" type="xs:decimal" use="required" fixed="0.0">
+      <xs:annotation><xs:appinfo><cap:unit>meters</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Track">
+    <xs:annotation><xs:documentation>Course and speed. In this file the course is SUMO's heading.</xs:documentation></xs:annotation>
+    <xs:attribute name="course" type="Bearing" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>degrees</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="speed" type="NonNegativeDecimal" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>meters per second</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="Contact">
+    <xs:annotation><xs:documentation>A callsign.</xs:documentation></xs:annotation>
+    <xs:attribute name="callsign" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="Server">
+    <xs:annotation><xs:documentation>What a CARLA server says it was built from. The bridge uses no
+      server and writes none; the type is here because the record of what made a file may hold one.</xs:documentation></xs:annotation>
+    <xs:attribute name="available" type="TrueOrFalse" use="required"/>
+    <xs:attribute name="release" type="xs:string" use="required"/>
+    <xs:attribute name="world_interface" type="xs:string" use="required"/>
+    <xs:attribute name="build" type="xs:string" use="optional"/>
+    <xs:attribute name="configuration" type="xs:string" use="optional"/>
+    <xs:attribute name="carla_commit" type="xs:string" use="optional"/>
+    <xs:attribute name="content_commit" type="xs:string" use="optional"/>
+    <xs:attribute name="engine_commit" type="xs:string" use="optional"/>
+    <xs:attribute name="commits_from" type="xs:string" use="optional"/>
+    <xs:attribute name="reason" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+</xs:schema>

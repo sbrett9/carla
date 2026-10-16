@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Input to netconvert for RightAngleTurn.net.xml, kept beside the network so the network can be
+     rebuilt and reviewed rather than trusted. Rebuild it by running netconvert with this file as
+     its node-files option, RightAngleTurn.edg.xml as its edge-files option, RightAngleTurn.net.xml
+     as its output-file option, a default.lanewidth of 3.35, and the no-turnarounds and
+     offset.disable-normalization flags.
+
+     A cross of four 100 m approaches meeting at the origin. The geometry exists for one reason:
+     a vehicle crossing this junction turns through ninety degrees inside a distance a SUMO step at
+     traffic speed jumps clean over, which is the case an interpolation along the straight line
+     between two samples gets wrong by several lane widths. -->
+<nodes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/nodes_file.xsd">
+    <node id="centre" x="0.00" y="0.00" type="priority"/>
+    <node id="south" x="0.00" y="-100.00" type="priority"/>
+    <node id="north" x="0.00" y="100.00" type="priority"/>
+    <node id="east" x="100.00" y="0.00" type="priority"/>
+    <node id="west" x="-100.00" y="0.00" type="priority"/>
+</nodes>

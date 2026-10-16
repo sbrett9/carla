@@ -405,14 +405,14 @@ A value of 1.5 means that we want the sensor to capture data each second and a h
 | ----------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- |
 | `bloom_intensity`    | float    | 0\.675   | Intensity for the bloom post-process effect, `0.0` for disabling it.         |
 | `fov`    | float    | 90\.0    | Horizontal field of view in degrees.   |
-| `fstop`  | float    | 1\.4     | Opening of the camera lens. Aperture is `1/fstop` with typical lens going down to f/1.2 (larger opening). Larger numbers will reduce the Depth of Field effect. |
+| `fstop`  | float    | 4\.0     | Opening of the camera lens, as an f-number; it sets the exposure under `manual` and the depth of field. Aperture is `1/fstop` with typical lens going down to f/1.2 (larger opening). Larger numbers will reduce the Depth of Field effect. Applied over `post_process_profile`. |
 | `image_size_x`       | int      | 800      | Image width in pixels.           |
 | `image_size_y`       | int      | 600      | Image height in pixels.          |
-| `iso`    | float    | 100\.0   | The camera sensor sensitivity.   |
+| `iso`    | float    | 100\.0   | The camera sensor sensitivity. Applied over `post_process_profile`.   |
 | `gamma`  | float    | 2\.2     | Target gamma value of the camera.      |
 | `lens_flare_intensity`           | float    | 0\.1     | Intensity for the lens flare post-process effect, `0.0` for disabling it.    |
 | `sensor_tick`        | float    | 0\.0     | Simulation seconds between sensor captures (ticks).  |
-| `shutter_speed`      | float    | 200\.0   | The camera shutter speed in seconds (1.0/s).       |
+| `shutter_speed`      | float    | 320\.0   | The camera shutter speed, per second: `320.0` is 1/320 s. Applied over `post_process_profile`.       |
 
 
 
@@ -449,8 +449,8 @@ Since these effects are provided by UE, please make sure to check their document
 | ------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
 | `min_fstop`    | float          | 1\.2           | Maximum aperture.    |
 | `blade_count`  | int            | 5  | Number of blades that make up the diaphragm mechanism.     |
-| `exposure_mode`      | str            | `histogram`    | Can be `manual` or `histogram`. More in [UE4 docs](<https://docs.unrealengine.com/en-US/Engine/Rendering/PostProcessEffects/AutomaticExposure/index.html>).  |
-| `exposure_compensation`          | float          | **Linux:** \+0.75<br>**Windows:** 0\.0        | Logarithmic adjustment for the exposure. 0: no adjustment, -1:2x darker, -2:4 darker, 1:2x brighter, 2:4x brighter.   |
+| `exposure_mode`      | str            | `manual`    | Can be `manual` or `histogram`. Applied over `post_process_profile`. More in [UE4 docs](<https://docs.unrealengine.com/en-US/Engine/Rendering/PostProcessEffects/AutomaticExposure/index.html>).  |
+| `exposure_compensation`          | float          | 0\.0        | Logarithmic adjustment for the exposure, under either mode. 0: no adjustment, -1:2x darker, -2:4 darker, 1:2x brighter, 2:4x brighter. Applied over `post_process_profile`.   |
 | `exposure_min_bright`            | float          | 10\.0           | In `exposure_mode: "histogram"`. Minimum brightness for auto exposure. The lowest the eye can adapt within. Must be greater than 0 and less than or equal to `exposure_max_bright`.  |
 | `exposure_max_bright`            | float          | 12\.0           | In \`exposure\_mode: "histogram"\`. Maximum brightness for auto exposure. The highestthe eye can adapt within. Must be greater than 0 and greater than or equal to \`exposure\_min\_bright\`.          |
 | `exposure_speed_up`  | float          | 3\.0           | In `exposure_mode: "histogram"`. Speed at which the adaptation occurs from dark to bright environment.  |

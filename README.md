@@ -128,11 +128,11 @@ sudo -E ./CarlaSetup.sh --content-ssh-key=/path/to/your/content_deploy_key
 
 __Building in Windows__:
 
-To build in Windows, run the batch script:
+To build in Windows, run the PowerShell setup script:
 
-```sh
+```powershell
 cd CarlaUE5
-CarlaSetup.bat
+.\CarlaSetup.ps1
 ```
 
 Unattended mode is currently unavailable in Windows, you will need to enter GitHub credentials or administrator privileges when prompted.

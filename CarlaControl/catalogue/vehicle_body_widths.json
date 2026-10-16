@@ -1,0 +1,121 @@
+{
+  "body_widths_version": 1,
+  "method": "LOD0 vertices of the vehicle's own skeletal mesh (the mesh the blueprint drives), exported from the editor as ASCII FBX; width profile along the vehicle's length in 5 cm bins, each side separately; body half-width per side = the largest width held over at least 0.6 m of length (a morphological opening), which removes mirrors and other short protrusions; body width = left + right body half-widths. Full width = the plain vertex extent, equal to the catalogue's width_m. Computed by CarlaControl/scripts/measure_vehicle_body_widths.py.",
+  "measured": "2026-10-02, UE 5.7.4 editor via VibeUE, the CARLA content as loaded",
+  "vehicles": {
+    "vehicle.ambulance.ford": {
+      "length_m": 6.3569,
+      "full_width_m": 2.3512,
+      "body_width_m": 2.2856,
+      "height_m": 2.431
+    },
+    "vehicle.carlacola.actors": {
+      "length_m": 8.0037,
+      "full_width_m": 2.9118,
+      "body_width_m": 2.787,
+      "height_m": 4.0546
+    },
+    "vehicle.carlamotors.european_hgv": {
+      "length_m": 7.9241,
+      "full_width_m": 2.8647,
+      "body_width_m": 2.787,
+      "height_m": 3.7833
+    },
+    "vehicle.dodge.charger": {
+      "length_m": 5.006,
+      "full_width_m": 1.881,
+      "body_width_m": 1.854,
+      "height_m": 1.5403
+    },
+    "vehicle.dodgecop.charger": {
+      "length_m": 5.2368,
+      "full_width_m": 1.9244,
+      "body_width_m": 1.854,
+      "height_m": 1.644
+    },
+    "vehicle.firetruck.actors": {
+      "length_m": 8.5799,
+      "full_width_m": 2.9013,
+      "body_width_m": 2.8962,
+      "height_m": 3.8268
+    },
+    "vehicle.fuso.mitsubishi": {
+      "length_m": 10.1743,
+      "full_width_m": 3.9277,
+      "body_width_m": 3.2328,
+      "height_m": 4.241
+    },
+    "vehicle.jeep.wrangler_rubicon": {
+      "length_m": 3.8662,
+      "full_width_m": 1.9052,
+      "body_width_m": 1.8553,
+      "height_m": 1.8779
+    },
+    "vehicle.lincoln.mkz": {
+      "length_m": 4.892,
+      "full_width_m": 1.8356,
+      "body_width_m": 1.8335,
+      "height_m": 1.5241
+    },
+    "vehicle.mini.cooper": {
+      "length_m": 4.5526,
+      "full_width_m": 2.0956,
+      "body_width_m": 2.0897,
+      "height_m": 1.7725
+    },
+    "vehicle.nissan.patrol": {
+      "length_m": 5.5912,
+      "full_width_m": 2.1466,
+      "body_width_m": 2.1466,
+      "height_m": 2.059
+    },
+    "vehicle.sprinter.mercedes": {
+      "length_m": 5.9151,
+      "full_width_m": 1.9884,
+      "body_width_m": 1.9817,
+      "height_m": 2.726
+    },
+    "vehicle.taxi.ford": {
+      "length_m": 5.3545,
+      "full_width_m": 1.7891,
+      "body_width_m": 1.7789,
+      "height_m": 1.5752
+    },
+    "vehicle.ue4.audi.tt": {
+      "length_m": 4.1812,
+      "full_width_m": 1.9941,
+      "body_width_m": 1.9667,
+      "height_m": 1.3853
+    },
+    "vehicle.ue4.bmw.grantourer": {
+      "length_m": 4.611,
+      "full_width_m": 2.2417,
+      "body_width_m": 2.144,
+      "height_m": 1.6673
+    },
+    "vehicle.ue4.chevrolet.impala": {
+      "length_m": 5.3575,
+      "full_width_m": 2.0332,
+      "body_width_m": 1.7793,
+      "height_m": 1.4107
+    },
+    "vehicle.ue4.ford.crown": {
+      "length_m": 5.3657,
+      "full_width_m": 1.8007,
+      "body_width_m": 1.7822,
+      "height_m": 1.575
+    },
+    "vehicle.ue4.ford.mustang": {
+      "length_m": 4.7175,
+      "full_width_m": 1.8948,
+      "body_width_m": 1.8354,
+      "height_m": 1.3009
+    },
+    "vehicle.ue4.mercedes.ccc": {
+      "length_m": 4.6736,
+      "full_width_m": 1.8118,
+      "body_width_m": 1.805,
+      "height_m": 1.4419
+    }
+  }
+}

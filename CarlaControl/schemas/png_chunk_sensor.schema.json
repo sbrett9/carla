@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:png-chunk-sensor:1",
+  "title": "PNG text chunk carla:sensor, format version 1",
+  "description": "The camera platform's pose and pinhole intrinsics at the capture, the same values the truth sidecar's platform event carries. A still with no platform pose carries no chunk. This schema describes format version 1; a chunk with no format_version was written before chunks carried one and is version 1.",
+  "type": "object",
+  "properties": {
+    "format_version": {
+      "const": 1,
+      "description": "The chunk's format version. Absent from a chunk written before chunks carried one, which is version 1."
+    },
+    "uid": {
+      "type": "string",
+      "description": "The camera's track identifier, such as CARLA-SENSOR-107."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^a-.+$",
+      "description": "The camera platform's Cursor-on-Target air-track type, such as a-f-A-M-F-Q."
+    },
+    "callsign": {
+      "type": "string",
+      "description": "The camera's name, which every still of the camera is named after."
+    },
+    "lat": {
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90,
+      "description": "The camera's latitude, WGS84.",
+      "x-unit": "degrees"
+    },
+    "lon": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180,
+      "description": "The camera's longitude, WGS84.",
+      "x-unit": "degrees"
+    },
+    "hae": {
+      "type": "number",
+      "description": "The camera's height above the WGS84 ellipsoid in the bare-earth convention every vehicle's height uses: its physical height less align_offset_m.",
+      "x-unit": "meters"
+    },
+    "align_offset_m": {
+      "type": "number",
+      "description": "The height-align offset under the camera, taken off its physical height: physical height = hae + align_offset_m.",
+      "x-unit": "meters"
+    },
+    "az_deg": {
+      "type": "number",
+      "description": "Boresight azimuth, clockwise from true north.",
+      "x-unit": "degrees"
+    },
+    "el_deg": {
+      "type": "number",
+      "description": "Boresight elevation: 0 level, -90 straight down.",
+      "x-unit": "degrees"
+    },
+    "roll_deg": {
+      "type": "number",
+      "description": "Roll about the boresight.",
+      "x-unit": "degrees"
+    },
+    "course_deg": {
+      "type": "number",
+      "description": "Direction of the camera's movement over the ground since the previous capture, clockwise from true north; the boresight azimuth when it moved slower than 0.5 m/s.",
+      "x-unit": "degrees"
+    },
+    "speed_mps": {
+      "type": "number",
+      "minimum": 0,
+      "description": "The camera's ground speed since the previous capture.",
+      "x-unit": "meters per second"
+    },
+    "intrinsics": {
+      "type": "object",
+      "description": "The camera's pinhole intrinsics: square pixels, the principal point at the picture's center.",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The picture's width.",
+          "x-unit": "pixels"
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The picture's height.",
+          "x-unit": "pixels"
+        },
+        "fx": {
+          "type": "number",
+          "description": "Focal length across: width / (2 tan(hfov_deg / 2)).",
+          "x-unit": "pixels"
+        },
+        "fy": {
+          "type": "number",
+          "description": "Focal length down; equal to fx.",
+          "x-unit": "pixels"
+        },
+        "cx": {
+          "type": "number",
+          "description": "Principal point across: width / 2.",
+          "x-unit": "pixels"
+        },
+        "cy": {
+          "type": "number",
+          "description": "Principal point down: height / 2.",
+          "x-unit": "pixels"
+        },
+        "hfov_deg": {
+          "type": "number",
+          "description": "Horizontal field of view.",
+          "x-unit": "degrees"
+        },
+        "vfov_deg": {
+          "type": "number",
+          "description": "Vertical field of view, from the height and the focal length.",
+          "x-unit": "degrees"
+        },
+        "model": {
+          "type": "string",
+          "description": "The projection model: pinhole."
+        },
+        "distortion": {
+          "type": "string",
+          "description": "The lens distortion: none at CARLA's defaults, otherwise CARLA's own lens parameters."
+        },
+        "sensor_model": {
+          "type": "string",
+          "description": "The camera blueprint, such as sensor.camera.rgb."
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "fx",
+        "fy",
+        "cx",
+        "cy",
+        "hfov_deg",
+        "vfov_deg",
+        "model",
+        "distortion",
+        "sensor_model"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "uid",
+    "type",
+    "callsign",
+    "lat",
+    "lon",
+    "hae",
+    "align_offset_m",
+    "az_deg",
+    "el_deg",
+    "roll_deg",
+    "course_deg",
+    "speed_mps",
+    "intrinsics"
+  ],
+  "additionalProperties": false
+}

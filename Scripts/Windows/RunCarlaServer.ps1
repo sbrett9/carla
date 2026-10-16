@@ -59,6 +59,8 @@ param(
     [string]$Level,              # a delivered world by name, e.g. Arapahoe_I25 (expands to its map path)
     [switch]$Version,            # print what this build supports and exit, without starting it
     [int]$CesiumCacheItems = 0,  # >0 overrides Cesium's tile request-cache size (MaxCacheItems) for this run; 0 = engine default (4096)
+    [int]$CesiumTileCacheMB = 0, # >0 sets the photoreal layer's loaded-tile budget in MiB for this run; 0 = the bridge default (1024)
+    [switch]$CesiumPlayerView,   # register the player camera as a Cesium view on a headless server (off by default there)
 
     [Alias('h')]
     [switch]$Help,
@@ -86,6 +88,8 @@ OPTIONS (PowerShell-native | legacy alias):
                                                          client requests while free-running, default 5) and
                                                          -RPCThreads=<n>. Get-Help this script for the full list.
   -CesiumCacheItems <n>      --cesium-cache-items=<n>    Override Cesium tile request-cache size (MaxCacheItems) for this run; 0/omit = engine default (4096).
+  -CesiumTileCacheMB <n>     --cesium-tile-cache-mb=<n>  Set the photoreal layer's loaded-tile budget in MiB for this run; 0/omit = bridge default (1024).
+  -CesiumPlayerView          --cesium-player-view        Register the player camera as a Cesium view on a headless server (off there by default).
   -UnrealEngineRoot <dir>    --unreal-engine-root=<dir>  UE 5.7.4 root (else CARLA_UNREAL_ENGINE_PATH, else <repo-parent>\UE_5_7_4).
   -Level <name>              --level=<name>              Load a delivered world by name (e.g. Arapahoe_I25).
   -Version                   --version                   Print CARLA and world interface versions, then exit.
@@ -113,6 +117,8 @@ if ($Remaining) {
             '^(--rpc-port)$'                     { if ($null -eq $next) { throw "Argument '$key' requires a value." } $RpcPort = [int]$next;     if ($null -eq $val) { $idx++ } }
             '^(--extra-args)$'                   { if ($null -eq $next) { throw "Argument '$key' requires a value." } $ExtraArgs = $next;       if ($null -eq $val) { $idx++ } }
             '^(--cesium-cache-items|--max-cache-items)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $CesiumCacheItems = [int]$next; if ($null -eq $val) { $idx++ } }
+            '^(--cesium-tile-cache-mb)$'         { if ($null -eq $next) { throw "Argument '$key' requires a value." } $CesiumTileCacheMB = [int]$next; if ($null -eq $val) { $idx++ } }
+            '^(--cesium-player-view)$'           { $CesiumPlayerView = $true }
             '^(--unreal-engine-root|--ue-root)$' { if ($null -eq $next) { throw "Argument '$key' requires a value." } $UnrealEngineRoot = $next; if ($null -eq $val) { $idx++ } }
             '^(--level)$'                        { if ($null -eq $next) { throw "Argument '$key' requires a value." } $Level = $next; if ($null -eq $val) { $idx++ } }
             '^(--version)$'                      { $Version = $true }
@@ -212,6 +218,11 @@ $argList = @(
 if ($CesiumCacheItems -gt 0) {
     $argList += "-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=$CesiumCacheItems"
 }
+# The loaded-tile budget of the photoreal layer, in MiB: the bridge reads it when it configures the
+# tileset (CesiumHeightSampler.cpp). 0 = leave the bridge default. -CesiumPlayerView registers the
+# player camera as a Cesium view on a headless server, where the bridge otherwise leaves it out.
+if ($CesiumTileCacheMB -gt 0) { $argList += "-CesiumTileCacheMB=$CesiumTileCacheMB" }
+if ($CesiumPlayerView) { $argList += "-CesiumPlayerView" }
 if ($ExtraArgs) { $argList += $ExtraArgs }
 
 Write-Host "============================================================"
@@ -220,6 +231,7 @@ Write-Host "   map      : $Map"
 Write-Host "   rpc port : $RpcPort"
 Write-Host "   render   : $(if ($WithWindow) {'windowed'} else {'-RenderOffScreen'})"
 Write-Host "   cesium cache : $(if ($CesiumCacheItems -gt 0) {"$CesiumCacheItems items"} else {'engine default (4096)'})"
+Write-Host "   tile budget  : $(if ($CesiumTileCacheMB -gt 0) {"$CesiumTileCacheMB MiB"} else {'bridge default (1024 MiB)'}); player camera as a view: $(if ($CesiumPlayerView) {'yes'} else {'no (headless)'})"
 Write-Host "------------------------------------------------------------"
 Write-Host " Once you see the server is up, in ANOTHER terminal run e.g.:"
 Write-Host "   python carla\CarlaNet\python\test_cesium_heights.py"

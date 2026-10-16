@@ -38,12 +38,12 @@ void AInstanceSegmentationCamera::PostPhysTick(UWorld *World, ELevelTick TickTyp
   TRACE_CPUPROFILER_EVENT_SCOPE(AInstanceSegmentationCamera::PostPhysTick);
   Super::PostPhysTick(World, TickType, DeltaSeconds);
   
-  auto FrameIndex = FCarlaEngine::GetFrameCounter();
-  ImageUtil::ReadSensorImageDataAsyncFColor(*this, [this, FrameIndex](
+  auto CaptureHeader = MakeCaptureHeader();
+  ImageUtil::ReadSensorImageDataAsyncFColor(*this, [this, CaptureHeader](
     TArrayView<const FColor> Pixels,
     FIntPoint Size) -> bool
   {
-    SendDataToClient(*this, Pixels, FrameIndex);
+    SendDataToClient(*this, Pixels, CaptureHeader);
     return true;
   });
 }

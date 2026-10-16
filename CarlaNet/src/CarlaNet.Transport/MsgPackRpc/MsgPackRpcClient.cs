@@ -3,7 +3,7 @@
 // WIRE FORMAT (verified from rpclib source — Build/_deps/rpclib-src/):
 //   rpclib uses raw msgpack streaming with NO length prefix.
 //   Sends/receives raw msgpack bytes via async_write/async_read_some + unpacker.
-//   MessagePackStreamReader handles message boundary detection on the receive side.
+//   MsgPackMessageFramer handles message boundary detection on the receive side.
 //
 // Request:  [0, msg_id, "method_name", [arg0, arg1, ...]]  — raw msgpack array
 // Response: [1, msg_id, error_or_nil, result_or_nil]        — raw msgpack array
@@ -97,7 +97,7 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
         return MessagePackSerializer.Deserialize<T>(ref reader);
     }
 
-    private static byte[] BuildRequest(uint msgId, string method, object?[] args)
+    internal static byte[] BuildRequest(uint msgId, string method, object?[] args)
     {
         // Raw msgpack — no length prefix (rpclib uses streaming unpacker).
         // CARLA wraps every bound function with Metadata as the first param.
@@ -122,11 +122,11 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
             }
             else
             {
-                // Serialize using the runtime type so generic collections
-                // (e.g. IReadOnlyList<uint>) resolve to the correct formatter.
-                // The non-generic Serialize(ref writer, object) overload only
-                // knows `object` and fails on complex types.
-                MessagePackSerializer.Serialize(arg.GetType(), ref writer, arg,
+                // Serialize by a concrete type rather than as `object`: the non-generic
+                // Serialize(ref writer, object) overload only knows `object` and fails on complex
+                // types. A list of any kind is written by its element type (MsgPackWireType), so a
+                // collection expression serializes as an array does.
+                MessagePackSerializer.Serialize(MsgPackWireType.Of(arg), ref writer, arg,
                     MessagePackSerializerOptions.Standard);
             }
         }
@@ -188,31 +188,28 @@ internal sealed class MsgPackRpcClient : IAsyncDisposable
 
     private async Task RunReaderAsync()
     {
-        // MessagePackStreamReader reads from the raw TCP stream and returns
+        // MsgPackMessageFramer reads from the raw TCP stream and returns
         // one complete msgpack message at a time with no framing required.
-        var msgpackReader = new MessagePackStreamReader(_stream);
+        var framer = new MsgPackMessageFramer(_stream);
         try
         {
             while (!_disposed)
             {
-                ReadOnlySequence<byte>? msgSeq = await msgpackReader
+                ReadOnlyMemory<byte>? message = await framer
                     .ReadAsync(CancellationToken.None).ConfigureAwait(false);
 
-                if (msgSeq is null) break; // stream closed
+                if (message is null) break; // stream closed
 
                 // Peek the msg_id without consuming: [type, msg_id, ...]
-                var peekReader = new MessagePackReader(msgSeq.Value);
+                var peekReader = new MessagePackReader(message.Value);
                 peekReader.ReadArrayHeader();
                 peekReader.ReadInt32();          // type
                 uint msgId = peekReader.ReadUInt32();
 
+                // The framer never writes to a message's bytes once it has returned them, so
+                // UnpackResult can read them whenever the pending call resumes.
                 if (_pending.TryRemove(msgId, out var tcs))
-                {
-                    // MessagePackStreamReader reuses internal buffers on the next ReadAsync.
-                    // Copy the sequence to a flat array so UnpackResult can safely read it later.
-                    var snapshot = new ReadOnlySequence<byte>(msgSeq.Value.ToArray());
-                    tcs.SetResult(snapshot);
-                }
+                    tcs.SetResult(new ReadOnlySequence<byte>(message.Value));
             }
         }
         catch (Exception ex) when (!_disposed)

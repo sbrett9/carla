@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Two measured vehicles over the cross, each making one stop, so a run has a stop and a parking stay
+     to report: `dweller` runs straight through and halts on its lane for a declared duration, and
+     `parker` turns right and leaves its lane to park for one. Both declare a duration and neither an
+     `until`, which is how 337 of the Bahonar scenario's 338 stops are written: the declared quantity is a
+     length, anchored wherever SUMO happens to arrive. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+
+    <route id="straight" edges="approach ahead"/>
+    <route id="right" edges="approach turn_east"/>
+
+    <vehicle id="dweller" type="measured_truck" route="straight" depart="0.00" departLane="0"
+             departSpeed="max">
+        <stop lane="ahead_0" endPos="60.00" duration="3.00"/>
+    </vehicle>
+    <vehicle id="parker" type="measured_truck" route="right" depart="1.00" departLane="0"
+             departSpeed="max">
+        <stop lane="turn_east_0" endPos="50.00" duration="4.00" parking="true"/>
+    </vehicle>
+</routes>

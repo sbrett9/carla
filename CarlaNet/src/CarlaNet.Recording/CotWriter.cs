@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Xml;
+using CarlaNet.Types.Illumination;
+using CarlaNet.Types.Provenance;
 
 namespace CarlaNet.Recording;
 
@@ -9,13 +11,73 @@ namespace CarlaNet.Recording;
 /// vehicle (the same UID/type/format as the live cot_telemetry feed), pinned to the capture instant.
 /// Indentation is produced by <see cref="XmlWriter"/> (Indent = true) — human-readable by construction.
 /// </summary>
+/// <remarks>
+/// A record that names the vehicle its body rendered (<see cref="VehicleTelemetry.Rendered"/>) is a
+/// track of that vehicle, not of the body: a pooled body renders a succession of vehicles over a run,
+/// so a uid built on its actor id would jump from one real vehicle to the next. Its uid is
+/// <c>CARLA-TRUTH-SUMO-&lt;sumo_id&gt;</c> and its callsign <c>&lt;base_type&gt;-&lt;sumo_id&gt;</c>, and
+/// the actor id stays in the extras, where it says which body drew the vehicle on this frame. A record
+/// with no vehicle named is written exactly as before.
+///
+/// <para>Every vehicle record a recorder wrote says where the vehicle's box fell against the picture,
+/// <c>in_frame</c> (<see cref="InFrame"/>), and how large it appears there, <c>apparent_width_px</c> and
+/// <c>apparent_height_px</c>, from the box's projection alone. The five occlusion attributes are written
+/// only where occlusion was measured; where it was not, <c>occlusion_unmeasured</c> says why in one word
+/// (<see cref="OcclusionUnmeasured"/>), so a reader never mistakes an absent fraction for an unhidden
+/// vehicle. A record no camera projected -- the live pull's -- carries none of these.</para>
+///
+/// <para>A vehicle whose box fell in the picture, <c>in_frame</c> of <c>wholly</c> or <c>partly</c>, also
+/// carries its box (<see cref="CaptureBox"/>), as the owner ruled on 2026-10-06: <c>pitch_deg</c> and
+/// <c>roll_deg</c> beside its heading, <c>box_px</c>, <c>box_oriented_px</c> and <c>truncation</c> beside
+/// its apparent size, <c>camera_range_m</c>, and a <c>&lt;_box3d frame="geodetic"&gt;</c> beside
+/// <c>_carla</c> holding the box's eight corners. A vehicle outside the picture or behind the lens
+/// carries none of them, the range apart where the draw distance reached it.</para>
+///
+/// <para>A vehicle in the picture also carries, from the world-observer snapshot of the capture's own frame,
+/// as the owner ruled on 2026-10-06: <c>lights</c>, the lights commanded on for it in words
+/// (<see cref="VehicleLights"/>), and, where a SUMO drive lent it a body, <c>pose_source</c> -- <c>sumo</c>,
+/// <c>interpolated</c>, <c>jump</c> or <c>stale</c> (<see cref="PoseSources"/>). Neither is guessed: where the snapshot did not
+/// carry one, every record in the picture goes without it and the container says <c>lights="unknown"</c> or
+/// <c>pose_source="unknown"</c>. A vehicle outside the picture carries neither.</para>
+///
+/// <para>The collection platform's event carries, beside <c>&lt;_carla_intrinsics&gt;</c>, the exposure the
+/// camera was given, <c>&lt;_carla_exposure&gt;</c> (<see cref="CameraExposure"/>), wherever the camera
+/// carries one: a declared camera fact, as the intrinsics are.</para>
+///
+/// <para>A capture whose image was rendered under a draw distance says so on its container
+/// (<c>draw_distance_m</c>), and every vehicle the distance kept out of the image, wholly or in part,
+/// carries <c>beyond_draw_distance</c> and the <c>camera_range_m</c> it rests on in its extras: it is in
+/// the world and in the truth, a vehicle wholly beyond the distance is not in this image at all, and
+/// one partly beyond it may be drawn without the parts beyond (<see cref="DrawDistanceReach"/>). A
+/// capture with no draw distance carries neither.</para>
+///
+/// <para>A capture of a frame a supervision plan was in force on carries that frame's supervision, as
+/// the server held it (<see cref="CaptureSupervision"/>): the plan and the vocabulary's version and
+/// digest on the container, and on every drawn SUMO vehicle a
+/// <c>&lt;_supervision&gt;</c> whose <c>state</c> is always written, <c>unlabelled</c> included, with an
+/// <c>&lt;annotation&gt;</c> per pattern instance in force. One whose frame's supervision is not to be had
+/// says <c>supervision="unknown"</c> on its container and writes none. A capture of a frame no plan was
+/// in force on is written exactly as before.</para>
+///
+/// <para>Every sidecar names its format on its container, <c>format_version</c> (<see cref="FormatVersion"/>);
+/// one written before it did is version 1. And every sidecar a recorder writes says what made it, in a
+/// <c>&lt;_producer&gt;</c> first under the container (<see cref="ProducerRecord"/>): the tool and its
+/// release, the carlanet release, the server's build identity and the SUMO release where SUMO ran, and
+/// when it was written, so a single sidecar can be traced to the release that made it.</para>
+/// </remarks>
 public static class CotWriter
 {
+    /// <summary>The sidecar's format, written on its container as <c>format_version</c>.</summary>
+    public const int FormatVersion = 1;
+
     public static void WriteToFile(string path, DateTime capturedUtc,
         IReadOnlyList<VehicleTelemetry> recs, string affiliation = "n", double staleSeconds = 3.0,
         IReadOnlyList<double>? solar = null, SensorPose? sensor = null,
-        CaptureIdentity? capture = null)
+        CaptureIdentity? capture = null, IlluminationDeclaration? illumination = null,
+        SidecarVehicles vehicles = SidecarVehicles.World, double? drawDistanceMetres = null,
+        CaptureSupervision? supervision = null, ProducerRecord? producer = null)
     {
+        supervision ??= CaptureSupervision.NotInForce;
         var settings = new XmlWriterSettings
         {
             Indent = true,
@@ -29,6 +91,7 @@ public static class CotWriter
 
         w.WriteStartDocument();
         w.WriteStartElement("events");
+        w.WriteAttributeString("format_version", FormatVersion.ToString(CultureInfo.InvariantCulture));
         w.WriteAttributeString("captured", time);
         w.WriteAttributeString("count", recs.Count.ToString(CultureInfo.InvariantCulture));
         w.WriteAttributeString("source", "truth");
@@ -36,23 +99,52 @@ public static class CotWriter
         // Capture identity belongs on this container rather than on the individual events: <events> is
         // this file's own wrapper, whereas each <event> is standard Cursor-on-Target and is also emitted
         // verbatim over the live feed, where a strict client may reject unknown attributes. Every event
-        // in a sidecar shares one tick, so recording it once here loses nothing.
+        // in a sidecar shares one tick, so recording it once here loses nothing; the vehicle records
+        // below are the truth of that tick and no other (FrameRecorder).
         if (capture is not null)
         {
             w.WriteAttributeString("tick", capture.Tick.ToString(CultureInfo.InvariantCulture));
             w.WriteAttributeString("sim_time_s", F(capture.SimTimeSeconds, "0.######"));
-            // The frame the vehicle records describe. Normally the same as tick; when it differs, the
-            // truth beside this still is from a neighbouring frame and this says which.
-            if (capture.TelemetryTick.HasValue)
-                w.WriteAttributeString("telemetry_tick", capture.TelemetryTick.Value.ToString(CultureInfo.InvariantCulture));
             if (!string.IsNullOrEmpty(capture.RunId)) w.WriteAttributeString("run_id", capture.RunId);
             if (!string.IsNullOrEmpty(capture.ScenarioId)) w.WriteAttributeString("scenario_id", capture.ScenarioId);
             if (capture.Seed.HasValue)
                 w.WriteAttributeString("seed", capture.Seed.Value.ToString(CultureInfo.InvariantCulture));
         }
 
+        // Which vehicles the events below are. Absent, they are every vehicle actor the world held,
+        // as they always were. "rendered" is exactly the bodies this frame drew, each named by the
+        // vehicle it drew; "unknown" is a frame whose render set was no longer held, listed empty
+        // rather than guessed, and not to be read as an empty scene.
+        if (VehiclesValue(vehicles) is { } listed) w.WriteAttributeString("vehicles", listed);
+
+        // The draw distance the image was rendered under, where one was in force: every vehicle below
+        // farther than this from the camera is in the world and not in the image, and says so. Absent,
+        // the image drew every vehicle at any range.
+        if (drawDistanceMetres is { } drawDistance)
+            w.WriteAttributeString("draw_distance_m", F(drawDistance, "0.###"));
+
+        // The supervision plan in force on the frame, with the vocabulary version and digest that pin
+        // what its labels mean; or that a plan was in force and this frame's supervision is unknown.
+        // Absent, no plan was in force. Every other supervision fact is a vehicle's, on its event.
+        supervision.WriteContainerAttributes(w);
+
+        // That a vehicle in the picture carries no lights, or a drawn SUMO vehicle in it no pose source,
+        // because the snapshot of this frame did not carry them: a server built before it did, or a
+        // session whose pose source the server refused. Said once here, so a record without them is not
+        // read as one whose lights were off or whose pose came from nowhere. Absent, every vehicle in the
+        // picture carries both that applies to it.
+        if (LightsUnknown(recs))
+            w.WriteAttributeString("lights", "unknown");
+        if (PoseSourceUnknown(recs))
+            w.WriteAttributeString("pose_source", "unknown");
+
+        // What made this sidecar, first under the container, so it is the first thing a reader meets.
+        producer?.WriteXml(w);
+
         // Scene-level solar state (unbreakably tied to the imagery too, via the PNG tEXt chunk). Written
-        // once here, before the per-vehicle events, so it is present even for a vehicle-free frame.
+        // once here, before the per-vehicle events, so it is present even for a vehicle-free frame. A
+        // block too short to hold a sun writes nothing here, which is right for the frame and wrong for
+        // a run, so the recorder counts every such capture (FrameRecorder.SolarBlockMissing).
         if (solar is { Count: >= 11 })
         {
             w.WriteStartElement("_solar");
@@ -63,11 +155,29 @@ public static class CotWriter
             w.WriteAttributeString("lat", F(solar[5], "0.0000000"));
             w.WriteAttributeString("lon", F(solar[6], "0.0000000"));
             w.WriteAttributeString("sun_elevation_deg", F(solar[7], "0.###"));
+            // The elevation the frame was lit at, where the server carries it: the one above is
+            // geometric, and near the horizon the two differ by a large fraction of the elevation.
+            if (solar.Count > 11)
+                w.WriteAttributeString("sun_corrected_elevation_deg", F(solar[11], "0.###"));
             w.WriteAttributeString("sun_azimuth_deg", F(solar[8], "0.###"));
             w.WriteAttributeString("advancing", solar[9] != 0.0 ? "true" : "false");
             w.WriteAttributeString("rate", F(solar[10], "0.####"));
+            // The band of the sun above, derived from it alone and so from the sun the world
+            // achieved, never from the time the run declared; and which of its elevations the band
+            // was cut from, the corrected one wherever the block carries it.
+            if (SolarMetadata.Band(solar) is { } band)
+            {
+                w.WriteAttributeString("illumination_band", IlluminationBands.Name(band.Band));
+                w.WriteAttributeString("illumination_band_elevation", SolarElevationKinds.Name(band.AssignedFrom));
+            }
             w.WriteEndElement(); // _solar
         }
+
+        // What the run declared the sun to be for this frame, and how far the sun above was from it.
+        // Beside _solar rather than inside it: that block is read from the world, this one is the
+        // declaration it is checked against, and a reader should never have to tell the two apart by
+        // attribute name.
+        illumination?.WriteElement(w);
 
         // Collection platform (the airborne EO camera) as a CoT air-track event: standard <sensor> element
         // for boresight/FOV (TAK can render the field-of-view cone) + a <_carla_intrinsics> child for the
@@ -127,15 +237,28 @@ public static class CotWriter
             w.WriteAttributeString("align_offset_m", F(sensor.AlignOffsetM, "0.00"));
             w.WriteEndElement(); // _carla_intrinsics
 
+            // The exposure the camera was given -- its profile, method, ISO, shutter, aperture and
+            // compensation, and the EV100 they make under manual -- read from the camera's own
+            // attributes, so it is a declared camera fact, as the intrinsics are. A camera that carries
+            // none writes none.
+            sensor.Exposure?.WriteElement(w);
+
             w.WriteEndElement(); // detail
             w.WriteEndElement(); // event
         }
 
         foreach (var r in recs)
         {
+            // The track is the vehicle's where the record names one, and the actor's otherwise. The
+            // uid says which, so a SUMO id that happens to be a number is never read as an actor id.
+            string track = r.Rendered is { } vehicle
+                ? vehicle.SumoId
+                : r.Id.ToString(CultureInfo.InvariantCulture);
+            string uid = r.Rendered is null ? $"CARLA-TRUTH-{track}" : $"CARLA-TRUTH-SUMO-{track}";
+
             w.WriteStartElement("event");
             w.WriteAttributeString("version", "2.0");
-            w.WriteAttributeString("uid", $"CARLA-TRUTH-{r.Id}");
+            w.WriteAttributeString("uid", uid);
             w.WriteAttributeString("type", $"a-{affiliation}-G-E-V");
             w.WriteAttributeString("how", "m-g");
             w.WriteAttributeString("time", time);
@@ -158,7 +281,7 @@ public static class CotWriter
             w.WriteEndElement(); // track
 
             w.WriteStartElement("contact");
-            w.WriteAttributeString("callsign", $"{r.BaseType}-{r.Id}");
+            w.WriteAttributeString("callsign", $"{r.BaseType}-{track}");
             w.WriteEndElement(); // contact
 
             w.WriteStartElement("_carla");
@@ -175,27 +298,145 @@ public static class CotWriter
             w.WriteAttributeString("vx", F(r.Vx, "0.00"));
             w.WriteAttributeString("vy", F(r.Vy, "0.00"));
             w.WriteAttributeString("vz", F(r.Vz, "0.00"));
+            // The direction the body points, where the track's course is the direction it moves.
+            if (!double.IsNaN(r.HeadingDeg))
+            {
+                w.WriteAttributeString("heading_deg", F(r.HeadingDeg, "0.0"));
+            }
+            // A vehicle whose box fell in the picture carries its box, and no other vehicle does, as the
+            // owner ruled: the record of a vehicle outside the picture or behind the lens is written as
+            // before, and so is every record no camera projected.
+            bool inPicture = r.InFrame is InFrame.Wholly or InFrame.Partly;
+            CaptureBox? box = inPicture ? r.Box : null;
+            // The body's tilt from its transform, beside the heading it points along.
+            if (box is not null)
+            {
+                w.WriteAttributeString("pitch_deg", F(box.PitchDeg, "0.00"));
+                w.WriteAttributeString("roll_deg", F(box.RollDeg, "0.00"));
+            }
+            // Where this vehicle's box fell against the picture -- wholly in it, partly, outside it, or
+            // with a corner at or behind the lens -- read off the box's projection, which needs no
+            // depth capture. Written for every vehicle a recorder projected, so a record with no
+            // occlusion is never read as a vehicle the image shows unhidden; absent only on a record
+            // no camera projected, which is the live pull's.
+            bool projected = r.InFrame is not null;
+            if (r.InFrame is { } where)
+            {
+                w.WriteAttributeString("in_frame", BoxProjector.SidecarValue(where));
+            }
             // How much of this vehicle the camera cannot see, and that fraction as a coarse band, so
             // a consumer drawing training boxes can drop the hidden ones and label the partials.
             // Written only when it was measured: an absent attribute means unknown, which is not the
-            // same claim as "nothing is in the way".
-            if (!double.IsNaN(r.Occlusion))
+            // same claim as "nothing is in the way", and occlusion_unmeasured below says why.
+            bool measured = !double.IsNaN(r.Occlusion);
+            if (measured)
             {
                 w.WriteAttributeString("occlusion", F(r.Occlusion, "0.000"));
                 w.WriteAttributeString("occlusion_level",
                                        r.OcclusionLevel.ToString(CultureInfo.InvariantCulture));
                 // What the fraction rests on. A vehicle far enough away to cover a few pixels yields
                 // a few samples, and can then only report coarse values however many decimals it is
-                // written to, so a consumer needs these to know how much to trust it — and to drop
-                // boxes too small to be worth drawing at all, occluded or not.
+                // written to, so a consumer needs these to know how much to trust it.
                 w.WriteAttributeString("occlusion_samples",
                                        r.OcclusionSamples.ToString(CultureInfo.InvariantCulture));
+            }
+            // How large the vehicle appears, from the projection alone, so it is written wherever the
+            // box has a footprint -- a vehicle outside the picture included -- and beside a measured
+            // occlusion as it always was.
+            if (measured || (projected && r.InFrame != InFrame.BehindCamera))
+            {
                 w.WriteAttributeString("apparent_width_px",
                                        r.ApparentWidthPx.ToString(CultureInfo.InvariantCulture));
                 w.WriteAttributeString("apparent_height_px",
                                        r.ApparentHeightPx.ToString(CultureInfo.InvariantCulture));
             }
+            // Where the box lies in the picture: the axis-aligned rectangle its eight projected corners
+            // span, as x min, y min, x max, y max; the minimum-area rectangle enclosing them, as four
+            // x y corners clockwise from the top-most; neither clipped to the picture, so the share of
+            // the first outside it is written beside them.
+            if (box is not null)
+            {
+                w.WriteAttributeString("box_px",
+                                       $"{F(box.MinU, "0.00")} {F(box.MinV, "0.00")} {F(box.MaxU, "0.00")} {F(box.MaxV, "0.00")}");
+                w.WriteAttributeString("box_oriented_px",
+                                       string.Join(' ', box.Oriented.Select(c => $"{F(c.U, "0.00")} {F(c.V, "0.00")}")));
+                w.WriteAttributeString("truncation", F(box.Truncation, "0.000"));
+            }
+            // What a vehicle in the picture shows besides its box, as the owner ruled on 2026-10-06, from
+            // the snapshot of the capture's own frame: the lights commanded on for it, in words, and where
+            // its drawn pose came from. Each is left out where that snapshot did not carry it, and the
+            // container says so; neither is written for a vehicle outside the picture.
+            if (inPicture && r.Lights is { } lights)
+            {
+                w.WriteAttributeString("lights", VehicleLights.SidecarValue(lights));
+            }
+            if (inPicture && r.PoseSource is { } poseSource)
+            {
+                w.WriteAttributeString("pose_source", PoseSources.SidecarValue(poseSource));
+            }
+            // Why there is no occlusion, where there is none: the recorder's own state, in one word,
+            // and never written beside a measurement.
+            if (!measured && r.OcclusionUnmeasured is { } unmeasured)
+            {
+                w.WriteAttributeString("occlusion_unmeasured", UnmeasuredOcclusion.SidecarValue(unmeasured));
+            }
+            // Kept out of this image by the draw distance, wholly or in part: in the world and in the
+            // truth, and not a vehicle this image shows. Written only where the distance reached it, so
+            // its absence under a draw distance means the image drew all of it.
+            string? beyond = DrawDistanceCheck.SidecarValue(r.DrawDistance);
+            if (beyond is not null)
+            {
+                w.WriteAttributeString("beyond_draw_distance", beyond);
+            }
+            // How far from the camera the box's center stood: what the draw distance mark rests on, and
+            // a box field of every vehicle in the picture. One range whichever needs it, written once.
+            if (beyond is not null || box is not null)
+            {
+                w.WriteAttributeString("camera_range_m", F(r.CameraRangeMetres, "0.0"));
+            }
+            // Who this body was drawing on this frame, where it was lent one: the SUMO vehicle that
+            // joins the record to the scenario's supervision, its declared type, and the frame its
+            // rendered span began on, so a track that starts mid-scene says so.
+            if (r.Rendered is { } rendered)
+            {
+                w.WriteAttributeString("sumo_id", rendered.SumoId);
+                w.WriteAttributeString("vtype_id", rendered.VehicleTypeId);
+                w.WriteAttributeString("admitted_tick",
+                                       rendered.AdmittedTick.ToString(CultureInfo.InvariantCulture));
+                // The angle SUMO reported for the vehicle at this frame, for audit beside the body's
+                // own heading, which comes from the path it took. Known to a recorder beside the session.
+                if (rendered.SumoAngleDegrees is { } sumoAngle)
+                {
+                    w.WriteAttributeString("sumo_angle_deg", F(sumoAngle, "0.0"));
+                }
+            }
             w.WriteEndElement(); // _carla
+
+            // The box's eight corners in latitude, longitude and bare-earth height, converted as the
+            // point above was, in a fixed order: the bottom face around from the front left, then the
+            // top face the same way (CaptureBoxes.CornerNames).
+            if (box is not null)
+            {
+                w.WriteStartElement("_box3d");
+                w.WriteAttributeString("frame", "geodetic");
+                foreach (GeodeticCorner corner in box.Corners)
+                {
+                    w.WriteStartElement("corner");
+                    w.WriteAttributeString("lat", F(corner.Lat, "0.0000000"));
+                    w.WriteAttributeString("lon", F(corner.Lon, "0.0000000"));
+                    w.WriteAttributeString("hae", F(corner.Hae, "0.00"));
+                    w.WriteEndElement(); // corner
+                }
+
+                w.WriteEndElement(); // _box3d
+            }
+
+            // What the author asserts of the vehicle this body drew on this frame, where it drew one:
+            // asserted, never derived, and written for every drawn vehicle, unlabelled included.
+            if (r.Rendered is not null)
+            {
+                supervision.WriteVehicle(w, r.Id);
+            }
 
             w.WriteEndElement(); // detail
             w.WriteEndElement(); // event
@@ -204,6 +445,32 @@ public static class CotWriter
         w.WriteEndElement(); // events
         w.WriteEndDocument();
     }
+
+    /// <summary>
+    /// The container's <c>vehicles</c> word for which vehicles a sidecar lists: <c>rendered</c> or
+    /// <c>unknown</c>, and null for every vehicle actor the world held, which writes none.
+    /// </summary>
+    public static string? VehiclesValue(SidecarVehicles vehicles) => vehicles switch
+    {
+        SidecarVehicles.Rendered => "rendered",
+        SidecarVehicles.Unknown => "unknown",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Whether a vehicle of the capture in the picture goes without its lights, because the snapshot of the
+    /// capture's frame did not carry them: the capture's container then says <c>lights="unknown"</c>.
+    /// </summary>
+    public static bool LightsUnknown(IReadOnlyList<VehicleTelemetry> recs) =>
+        recs.Any(r => (r.InFrame is InFrame.Wholly or InFrame.Partly) && r.Lights is null);
+
+    /// <summary>
+    /// Whether a drawn SUMO vehicle of the capture in the picture goes without its pose source, because the
+    /// snapshot of the capture's frame did not carry one: the capture's container then says
+    /// <c>pose_source="unknown"</c>.
+    /// </summary>
+    public static bool PoseSourceUnknown(IReadOnlyList<VehicleTelemetry> recs) =>
+        recs.Any(r => (r.InFrame is InFrame.Wholly or InFrame.Partly) && r.Rendered is not null && r.PoseSource is null);
 
     // CoT timestamp: ISO-8601 UTC, millisecond precision, trailing 'Z'.
     private static string Iso(DateTime dt) =>

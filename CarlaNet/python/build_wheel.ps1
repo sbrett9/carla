@@ -56,8 +56,16 @@ if (-not (Test-Path $dllsDir)) {
     New-Item -ItemType Directory -Force -Path $dllsDir | Out-Null
 }
 
+# The distribution's release version, as setup.py stamps it into the wheel: given to the assemblies as
+# well, so the DLLs inside the wheel and the wheel itself carry one string (Directory.Build.props).
+$releaseScript = Join-Path $carlaNetRoot '..\Util\ReleaseVersion.py'
+$releaseVersion = $null
+Invoke-NativeChecked 'reading the release version' { $script:releaseVersion = (python $releaseScript) }
+if (-not $releaseVersion) { throw "[build_wheel] $releaseScript printed no release version" }
+Write-Info "[build_wheel] release    : $releaseVersion"
+
 Write-Info "[build_wheel] running dotnet publish -> $dllsDir"
-Invoke-NativeChecked 'dotnet publish' { dotnet publish $csproj -c Release -o $dllsDir }
+Invoke-NativeChecked 'dotnet publish' { dotnet publish $csproj -c Release -o $dllsDir "-p:CarlaReleaseVersion=$releaseVersion" }
 
 # Shim is python/carlanet/__init__.py (canonical); no stray carlanet.py is published.
 

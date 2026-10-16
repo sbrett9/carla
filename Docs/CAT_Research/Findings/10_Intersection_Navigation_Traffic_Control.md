@@ -24,6 +24,14 @@ are required.
 > ([#5](https://github.com/sbrett9/carla/issues/5)) proved the `FWorldObserver` snapshot-extension
 > pattern that the §7/§8 ALSM un-stub would reuse.
 
+> **Revision (2026-10-02):** Ramp meters are no longer built as junctions. OSM tags a meter
+> `highway=traffic_signals` + `traffic_signals=ramp_meter`, and netconvert reads only the first tag, so
+> `--junctions.join` merged a meter near a merge with the merge and the freeway beside it — on Arapahoe
+> I-25 meter `582785322` became a signal alternating its loop ramp with five lanes of I-25, each held up
+> to 56 s — and gave every meter a junction's 80 s green. The world build now keeps every OSM ramp meter
+> out of junction joining and gives it a metering cycle read in the same netconvert invocation; see
+> *Ramp meters* under the implementation status below.
+
 ---
 
 ## Implementation status (2026-07-14)
@@ -72,6 +80,28 @@ called inside `CarlaClient.GenerateWorldFromOsmWithElevationAsync` after the ele
   rewritten, (b) zeroes netconvert's `zOffset="5"` (poles floated ~5 m), and (c) sets `hOffset=π` to face
   oncoming traffic. Runtime-validated on SF_LaurelHeights: lights spawn, are grouped, cycle, and
   **ambient traffic stops on red**; server log clean (`NO CONTROLLERS!` = 0, no 32-char spam).
+
+**Ramp meters (2026-10-02) — DONE in the world build, measured offline.** Every node tagged
+`highway=traffic_signals` and `traffic_signals=ramp_meter` (`OsmRampMeters`) is passed to netconvert's
+`--junctions.join-exclude`, so a meter is its own junction controlling its ramp alone and the merge
+beyond it stays an unsignalised priority merge: no meter can signal a freeway lane. Each meter whose
+signal controls one approach is given a static programme (`RampMeterProgram`) read in the same
+invocation through `--tllogic-files`: each lane's green 2 s and its red at least 4 s on a 6 s cycle, so
+one vehicle leaves per green and a lane releases at most 600 an hour; red and green only, like
+Colorado's meters; a two-lane meter's lanes released alternately 3 s apart, because every two-lane meter
+on Arapahoe narrows to one lane within 16-168 m of its stop line and a pair released side by side would
+reach that lane drop together; and the green is SUMO's `s`, stop then go, which enforces the
+one-vehicle release and keeps a red with no amber before it from catching a vehicle at speed (with `g`
+greens, 23 emergency stops in a 45-minute Arapahoe run without its incident; with `s`, one, a vehicle
+that had crept a few centimetres). The programme
+names every link of the meter, which only exists once netconvert has built the network, so an extract
+with meters is converted twice and the second run is the one recorded; the two networks differ in the
+meters' programmes alone. `TrafficLightInjector` counts `s` as green, so a meter's heads still get a
+controller. A meter that is also a junction of several roads, or controls a crossing, keeps
+netconvert's programme and the build names it. Measured on Arapahoe in SUMO alone: no signal controls a
+motorway edge, every green released exactly one vehicle, queues at most three vehicles, and the dwell's
+population fell from 461 / 344 / 449 (peak / median / p99) to 435 / 324 / 416
+([07](../Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md) §3.4.2, D7.38).
 
 **Layer C (client API) — deferred.** The traffic-light + speed-limit RPCs remain unbound in the Python
 shim (§4). Not required for ambient traffic to obey controls, so deferred.

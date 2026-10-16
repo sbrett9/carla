@@ -565,7 +565,11 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             // ── 7. Send the per-frame batch to the simulator ─────────
             if (_controlFrame.Count > 0 || _parameters.GetSynchronousMode())
             {
-                try { _client.ApplyBatchSyncAsync(_controlFrame, doTickCue: false).GetAwaiter().GetResult(); }
+                try
+                {
+                    WarnIfLockedOut(_client.ApplyBatchSyncAsync(_controlFrame, doTickCue: false)
+                                           .GetAwaiter().GetResult());
+                }
                 catch (Exception ex)
                 {
                     _logger?.LogDebug(ex, "ApplyBatchSync failed");
@@ -574,6 +578,32 @@ internal sealed class TrafficManagerLocal : ITrafficManagerCallback, IAsyncDispo
             }
 
             _vehicleLightStage.ClearPendingUpdates();
+        }
+    }
+
+    /// <summary>
+    /// The text every refusal the server gives for a control write while a drive lease is held
+    /// carries (CarlaServer.cpp, <c>DriveLeaseRefusal</c>).
+    /// </summary>
+    internal const string DriveLeaseRefusalMark = "holds the drive lease on this world";
+
+    /// <summary>
+    /// Say once, and not only under CARLANET_TM_DEBUG, that the server refused the control frame
+    /// because another client holds the world's drive lease: a SUMO drive owns the world's traffic,
+    /// and every control this traffic manager writes is refused with the holder named. The responses
+    /// are otherwise discarded, and a traffic manager that drives nothing would say nothing.
+    /// </summary>
+    internal static void WarnIfLockedOut(IReadOnlyList<CommandResponse> responses)
+    {
+        foreach (CommandResponse response in responses)
+        {
+            if (response.Error is { } error && error.Contains(DriveLeaseRefusalMark, StringComparison.Ordinal))
+            {
+                TMDiagnostics.WarnOnce("drive-lease",
+                    "[TM] locked out of this world: every vehicle control it writes is refused while a "
+                    + "SUMO drive holds the world's drive lease. The server said: " + error);
+                return;
+            }
         }
     }
 

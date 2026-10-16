@@ -3,7 +3,12 @@
 set ninja_version=1.12.1
 
 set python_path=python
-set python_version_default=3.8.10
+rem The Python installed when none is found. It has to satisfy every Python requirement of the build:
+rem carlacontrol needs 3.11 or newer, and requirements.txt pins numpy below 2.0 (the legacy Boost.Python
+rem module needs it), whose last release publishes wheels up to Python 3.12. 3.12.10 is the last 3.12
+rem release with a Windows installer.
+set python_version_default=3.12.10
+set python_install_folder=Python312
 
 rem https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-community?view=vs-2022&preserve-view=true
 set visual_studio_components=^
@@ -101,7 +106,7 @@ if errorlevel 1 (
     curl -L -O https://www.python.org/ftp/python/%python_version_default%/python-%python_version_default%-amd64.exe || exit /b
     python-%python_version_default%-amd64.exe /passive PrependPath=1  || exit /b
     del python-%python_version_default%-amd64.exe
-    set "PATH=%LocalAppData%\Programs\Python\Python38\Scripts\;%LocalAppData%\Programs\Python\Python38\;%PATH%"
+    set "PATH=%LocalAppData%\Programs\Python\%python_install_folder%\Scripts\;%LocalAppData%\Programs\Python\%python_install_folder%\;%PATH%"
     echo Installed Python %python_version_default%.
 ) else (
     echo Found Python.
