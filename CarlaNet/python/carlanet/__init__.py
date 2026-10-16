@@ -1954,11 +1954,13 @@ class World:
         """Whether a camera's photoreal tiles have arrived, as of the end of the last tick.
 
         Returns {"frame", "published", "tilesets": [{"ion_asset_id", "visible", "load_progress",
-        "loading": {"worker_queue", "main_queue", "kicked"}, "failed_in_view", "failed_loaded"}]},
-        one entry per tileset in the world, hidden ones included and flagged. "published" says the
-        camera's view drove the tilesets' selection on that tick; until it does, a tileset reads fully
-        loaded for a view it never had. A failed tile is drawn empty and counts as loaded, so
-        load_progress 100 with failed_in_view above zero is a frame with a hole.
+        "loading": {"worker_queue", "main_queue", "kicked"}, "failed_in_view", "failed_loaded",
+        "loaded_bytes"}]}, one entry per tileset in the world, hidden ones included and flagged.
+        "published" says the camera's view drove the tilesets' selection on that tick; until it
+        does, a tileset reads fully loaded for a view it never had. A failed tile is drawn empty and
+        counts as loaded, so load_progress 100 with failed_in_view above zero is a frame with a
+        hole. "loaded_bytes" is the tile content the tileset holds loaded, to size its tile cache
+        budget by; a server built before the column was added answers None there.
 
         An unknown, dormant or non-camera actor raises; it is never answered as None, which a caller
         could mistake for ready.
@@ -1970,7 +1972,7 @@ class World:
         count, row_length = int(packed[2]), int(packed[3])
         tilesets = []
         for index in range(count):
-            row = packed[4 + index * row_length: 4 + index * row_length + 8]
+            row = packed[4 + index * row_length: 4 + (index + 1) * row_length]
             tilesets.append({
                 "ion_asset_id": int(row[0]),
                 "visible": row[1] != 0.0,
@@ -1979,6 +1981,7 @@ class World:
                             "kicked": int(row[5])},
                 "failed_in_view": int(row[6]),
                 "failed_loaded": int(row[7]),
+                "loaded_bytes": int(row[8]) if row_length >= 9 else None,
             })
         return {"frame": int(packed[0]), "published": packed[1] != 0.0, "tilesets": tilesets}
 
