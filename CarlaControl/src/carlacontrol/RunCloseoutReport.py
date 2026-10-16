@@ -23,7 +23,7 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 |---|---|---|
 | `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 (10 D10.7) | measured |
 | `capture.frame_unpaired` | stills dropped because the client held no truth of their own frame when the image arrived -- a still is written with its own frame's truth or not at all -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
-| `capture.illumination_unpaired` | captures written without their frame's illumination declaration, threshold 0 | measured |
+| `capture.illumination_unpaired` | captures dropped because the session did not declare their frame -- the declaration carries the still's instant, so no still is written without it -- threshold 0 | measured |
 | `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 (11 §8.4) | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
 | `capture.supervision_unpaired` | captures written with `supervision="unknown"` -- a plan was in force and the supervision of the capture's own frame was not to be had -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
@@ -401,8 +401,8 @@ class RunCloseoutReport:
                 gates.append(self._gate(unpaired_gate, unpaired_name, "truth pairing",
                                         channel["frame_unpaired"], 0, "equals"))
             gates.append(self._gate(f"capture.illumination_unpaired[{channel['sensor_id']}]",
-                                    "captures written without their frame's illumination "
-                                    "declaration", "illumination pairing",
+                                    "captures dropped for want of their frame's illumination "
+                                    "declaration, which carries the still's instant", "illumination pairing",
                                     channel["illumination_unpaired"], 0, "equals"))
             # A capture whose snapshot carried no sun: written with no _solar and no carla:solar, so
             # a still whose illumination, and band, nothing records, which a corpus can neither

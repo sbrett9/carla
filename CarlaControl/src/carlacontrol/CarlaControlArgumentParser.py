@@ -578,7 +578,9 @@ class CarlaControlArgumentParser:
             "each capture writes a lossless PNG of the clean streamed imagery (no HUD) plus "
             "a matching .xml Cursor-on-Target sidecar at that instant — the vehicle tracks "
             "and the collection platform (the camera itself) as an air track — named "
-            "<camera name>_<local capture time to the millisecond> (see --camera-name). "
+            "<camera name>_<yyyyMMdd_HHmmss.fff> (see --camera-name): the wall clock the frame "
+            "arrived at, in this computer's zone, to the millisecond, because an SCTMV capture "
+            "drives no scenario and has no scenario clock. "
             "Captures from before cameras were named are SCTMV_<local capture time>.",
         )
         rec.add_argument(
@@ -613,7 +615,8 @@ class CarlaControlArgumentParser:
             "digit, underscore or hyphen, and not a Windows device name (CON, NUL, COM1, ...), a "
             "stock sensor role name (front, back, left, right, ...), the server's own "
             "Camera_<number> or CARLA-SENSOR-<number>. Every capture is named after it, "
-            "<NAME>_<local capture time>.png and .xml, and it is the callsign of the camera's "
+            "<NAME>_<yyyyMMdd_HHmmss.fff>.png and .xml (the frame's simulated civil time from a "
+            "SUMO drive, the wall clock from an SCTMV capture), and it is the callsign of the camera's "
             "platform track, so cameras sharing a world are told apart in their files and their "
             "telemetry. A name is used as given or refused, never rewritten, and the server refuses "
             "one a live camera in the world holds, in any case, when the camera is spawned. "

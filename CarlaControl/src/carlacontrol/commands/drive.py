@@ -27,7 +27,9 @@ What a run needs on disk:
          "time_zone_id": "America/Los_Angeles"}
 
     The offset is the declaration, daylight saving included -- Pacific time on 21 March is -07:00
-    -- and the zone name is carried for a reader and never resolved.
+    -- and the zone name is carried for a reader and never resolved. The epoch is required for
+    every drive that renders a world, under every sun policy: every still is named and stamped
+    from the scenario's civil time, and the session refuses a drive that declares none.
 
 The sun advances unless the run says otherwise. With no `--illumination` and no `illumination` object
 in the `--epoch` file, the session runs under the default, `advance` at a rate of 1.0: after SUMO is
@@ -194,8 +196,9 @@ row saying why the drive ended. A manifest without that row is one whose drive w
 fixed camera is named on it as it is spawned. Off unless asked for here; `carla-capture` always writes
 one. A path that already holds a manifest is refused before anything starts.
 
-Every still is named after its camera, `<camera name>_<local capture time>.png` and `.xml`, and the
-camera's platform track carries the name as its callsign. `--camera-name` names the camera, fixed or
+Every still is named after its camera and its frame's simulated civil time at the epoch's offset,
+`<camera name>_<yyyyMMdd_HHmmss.fff>.png` and `.xml`, and the camera's platform track carries the
+name as its callsign. `--camera-name` names the camera, fixed or
 free, so that cameras sharing a world -- this drive's and another client's -- are told apart in their
 files and their telemetry; without it the server names the camera `Camera_<n>`, which no other camera
 on the server holds. A name is short and plain -- `Overwatch_1`, `Southeast_1700m_orbit`,
@@ -411,7 +414,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--epoch",
                         help="a JSON file declaring what simulated second zero means in civil time: "
                              "the scenario's `epoch` object on its own, or a scenario.json carrying "
-                             "one, whose `illumination` object is then read as well")
+                             "one, whose `illumination` object is then read as well. Required for a "
+                             "drive that renders a world: every still is named and stamped from the "
+                             "scenario's civil time, and the session refuses a drive without one")
     parser.add_argument("--illumination",
                         choices=("freeze_at_window_start", "advance", "freeze_at", "ignore"),
                         help="what the sun does across the window. Under advance the session "

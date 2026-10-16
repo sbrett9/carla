@@ -64,8 +64,13 @@ public static class CameraName
     /// and readable by every client from the world's actors.</summary>
     public const string RoleNameAttribute = "role_name";
 
-    /// <summary>The capture time in a still's file name: local wall-clock time to the millisecond.</summary>
-    public const string StillTimeFormat = "yyyy.MM.dd_HH.mm.ss.fff";
+    /// <summary>
+    /// The instant in a still's file name, to the millisecond: <c>20260929_072706.500</c>. The clock
+    /// it reads is the scenario's civil time at the epoch's offset for a still a SUMO drive session
+    /// recorded, and the recording computer's local wall clock for one recorded with no session
+    /// (<see cref="StillStem"/>).
+    /// </summary>
+    public const string StillTimeFormat = "yyyyMMdd_HHmmss.fff";
 
     /// <summary>What a camera name may be, as every refusal says it.</summary>
     public const string Allowed =
@@ -204,13 +209,25 @@ public static class CameraName
     }
 
     /// <summary>
-    /// The stem of a still's files: <c>&lt;name&gt;_&lt;local capture time&gt;</c>, the time to the
+    /// The stem of a still's files: <c>&lt;name&gt;_&lt;instant&gt;</c>, the instant's clock to the
     /// millisecond (<see cref="StillTimeFormat"/>). The image is the stem with <c>.png</c>, its truth
-    /// sidecar the stem with <c>.xml</c>. Stills written before cameras were named carry
-    /// <c>SCTMV</c> where the name is.
+    /// sidecar the stem with <c>.xml</c>.
     /// </summary>
-    public static string StillStem(string name, DateTime capturedUtc) =>
-        name + "_" + capturedUtc.ToLocalTime().ToString(StillTimeFormat, CultureInfo.InvariantCulture);
+    /// <remarks>
+    /// <para>The instant is printed at the offset it carries, and the caller chooses the clock. A
+    /// recorder handed a SUMO drive session's declarations passes the frame's simulated civil instant
+    /// at the epoch's offset (<see cref="IlluminationDeclaration.CivilInstant"/>), so the name says
+    /// what time it was in the scene: the clock the sun was computed from, which the sidecar's
+    /// <c>_solar</c> block reads in too. Two runs of one scenario under one epoch name their stills
+    /// alike. A recorder with no session -- an SCTMV capture -- passes the wall clock the frame arrived
+    /// at, in the recording computer's zone, as every still was named before 2026-10-15.</para>
+    ///
+    /// <para>The name is never a join key: the frame number, <c>tick</c>, is. Stills written before
+    /// cameras were named carry <c>SCTMV</c> where the name is, and stills written before 2026-10-15
+    /// read <c>yyyy.MM.dd_HH.mm.ss.fff</c> of the wall clock.</para>
+    /// </remarks>
+    public static string StillStem(string name, DateTimeOffset instant) =>
+        name + "_" + instant.ToString(StillTimeFormat, CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Holds <paramref name="name"/> for one recorder until the returned handle is disposed, so that no

@@ -5,6 +5,7 @@
 // of the rule (carlacontrol.CameraName, which run_capture's offline checks use) is tested against, so
 // the two are held to the same answers. A name is 1 to 63 ASCII letters, digits, underscores and
 // hyphens -- Overwatch_1, Southeast_1700m_orbit -- and every refusal says so.
+using System.Globalization;
 using CarlaNet.Recording;
 
 namespace CarlaNet.Tests.Recording;
@@ -140,14 +141,21 @@ public class CameraNameTests
     }
 
     [Fact]
-    public void A_Still_s_Stem_Is_The_Camera_s_Name_And_The_Local_Capture_Time_To_The_Millisecond()
+    public void A_Still_s_Stem_Is_The_Camera_s_Name_And_Its_Instant_s_Clock_To_The_Millisecond()
     {
-        var captured = new DateTime(2026, 10, 2, 14, 7, 22, 481, DateTimeKind.Utc);
-        string local = captured.ToLocalTime().ToString("yyyy.MM.dd_HH.mm.ss.fff");
+        // The frame's simulated civil instant at the epoch's offset, as a SUMO drive's recorder names
+        // a still: the clock the scene was lit by, not the computer's and not UTC.
+        var civil = new DateTimeOffset(2026, 9, 29, 7, 27, 6, 500, TimeSpan.FromHours(-6));
+        Assert.Equal("DECK-I25_20260929_072706.500", CameraName.StillStem("DECK-I25", civil));
+        Assert.Equal("20260929_072706.500", civil.ToString(CameraName.StillTimeFormat, CultureInfo.InvariantCulture));
 
-        Assert.Equal($"DECK-I25_{local}", CameraName.StillStem("DECK-I25", captured));
-        // The stills written before cameras were named have the same shape, SCTMV where the name is.
-        Assert.Equal($"SCTMV_{local}", CameraName.StillStem("SCTMV", captured));
+        // A recorder with no session names by the wall clock the frame arrived at, in this computer's
+        // zone: the same shape, SCTMV where the name is for the stills written before cameras were named.
+        var captured = new DateTime(2026, 10, 2, 14, 7, 22, 481, DateTimeKind.Utc);
+        DateTimeOffset local = new DateTimeOffset(captured).ToLocalTime();
+        string clock = local.ToString("yyyyMMdd_HHmmss.fff", CultureInfo.InvariantCulture);
+        Assert.Equal($"SCTMV_{clock}", CameraName.StillStem("SCTMV", local));
+        Assert.Equal(local.Offset, TimeZoneInfo.Local.GetUtcOffset(captured));
     }
 
     [Fact]

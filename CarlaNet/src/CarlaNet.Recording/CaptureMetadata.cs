@@ -17,7 +17,10 @@ namespace CarlaNet.Recording;
 /// simulation step is a per-run setting and need not be the same in a later run.
 /// </summary>
 /// <param name="Tick">Simulation frame number, taken from the sensor frame that produced the capture.</param>
-/// <param name="SimTimeSeconds">Elapsed simulation time at that frame.</param>
+/// <param name="SimTimeSeconds">Simulated seconds at that frame. From a SUMO drive session, the frame's
+/// seconds on the scenario's clock, SUMO's, which the epoch counts from and the world truth track writes
+/// (<see cref="IlluminationDeclaration.SimulatedSeconds"/>). With no session, the world's own elapsed
+/// seconds as the sensor frame reports them, whose zero is the server's.</param>
 /// <param name="RunId">Identifier grouping every artifact produced by one execution.</param>
 /// <param name="ScenarioId">The scenario being executed, where one is driving the run.</param>
 /// <param name="Seed">Seed the run was started with, for reproducing it. Numeric because it seeds

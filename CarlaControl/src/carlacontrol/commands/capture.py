@@ -28,8 +28,9 @@ carla-build-world or carla-sctmv). The session takes its clock, hides the genera
 vehicles from SUMO, and gives everything back when the run ends however it ends.
 
 Each channel's camera is named by its `sensor_id` -- or, a single channel given none, by the server,
-`Camera_<n>` -- and every capture in the channel's directory is `<name>_<local capture time>`, with
-the name as its platform track's callsign. The server refuses a name a live camera in the world
+`Camera_<n>` -- and every capture in the channel's directory is `<name>_<yyyyMMdd_HHmmss.fff>`, the
+frame's simulated civil time at the epoch's offset, with the name as its platform track's callsign.
+The server refuses a name a live camera in the world
 already holds, which refuses the run at pre-roll.
 
 Exit status, read from the run result's outcome:

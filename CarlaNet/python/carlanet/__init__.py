@@ -2290,9 +2290,11 @@ class World:
         lossless PNG of the clean frame + a paired CoT-XML telemetry sidecar, encoded on the .NET thread
         pool (no Python/GIL in the hot path). Returns the FrameRecorder, or None if unavailable.
 
-        Every still is named after the camera, `<camera name>_<local capture time>.png` and `.xml`, the
-        time to the millisecond, and the name is the callsign of the camera's platform track, so two
-        cameras never share files or a callsign. The name is the one the camera holds on the server
+        Every still is named after the camera and its instant, `<camera name>_<yyyyMMdd_HHmmss.fff>.png`
+        and `.xml`: from a SUMO drive session (`illumination` below) the frame's simulated civil time at
+        the epoch's offset, and with no session the wall clock the frame arrived at, in this computer's
+        zone. The name is the callsign of the camera's platform track, so two cameras never share files
+        or a callsign. The name is the one the camera holds on the server
         (`camera_name`): the one it was spawned under (`spawn_camera`), the server's Camera_<n> for a
         camera spawned with none, or, from a server built before it named cameras, its default,
         CARLA-SENSOR-<camera id>. `camera_name` given here must be that name, and any other is refused:
@@ -2314,7 +2316,9 @@ class World:
 
         Every capture records the simulation tick that produced it, so a still and its sidecar are bound
         to a simulation instant rather than to wall-clock time, which does not track the simulation
-        clock. `run_id` groups the captures of one execution (generated from the start time when not
+        clock. Its `sim_time_s` is the frame's seconds on SUMO's clock from a session, the number the
+        world truth track writes for the frame, and the world's own elapsed seconds with no session.
+        `run_id` groups the captures of one execution (generated from the start time when not
         given), `scenario_id` names the scenario driving the run, and `seed` records the integer the run
         was started with so it can be reproduced.
 
@@ -2339,8 +2343,11 @@ class World:
         also record what its sun was declared to be: the scenario epoch's digest, the illumination
         policy, the frame's civil instant, the sun declared for it with both its geometric and its
         refraction-corrected elevation, and the audit's residual on the tick that rendered it, as an
-        `<_illumination>` element beside `<_solar>` and a `carla:illumination` PNG chunk. The recorder's
-        `IlluminationUnpaired` counts captures that went without one.
+        `<_illumination>` element beside `<_solar>` and a `carla:illumination` PNG chunk; to name each
+        still by its frame's simulated civil instant and stamp the sidecar's `captured` and every
+        event's `time` with that instant in UTC; and to write the frame's seconds on SUMO's clock as
+        `sim_time_s`. A capture whose frame the session did not declare is not written, and the
+        recorder's `IlluminationUnpaired` counts it.
 
         Every capture's `<_solar>` element and `carla:solar` PNG chunk carry the sun of the snapshot
         nearest its pixels and its `illumination_band` (doc 11 §4.4's six), cut from the

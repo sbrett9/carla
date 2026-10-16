@@ -222,7 +222,7 @@ Convert before you copy a pose into a run file:
 ### The camera's name: `sensor_id`
 
 `sensor_id` names the camera.\
-It names the channel's folder and begins every still's file name (`<sensor_id>_<local capture time>.png` and `.xml`).\
+It names the channel's folder and begins every still's file name (`<sensor_id>_<simulated civil time>.png` and `.xml`, such as `Check_Overhead_1_20260929_072706.500.png`).\
 It is also the callsign of the camera's track in the truth.\
 The rules:
 
@@ -763,8 +763,8 @@ The capture goes under the site profile's `paths.capture_root`, one folder per r
 ```text
 <paths.capture_root>/cap-20261008-041347-270d6d/
     Check_Overhead_1/                                  one folder per channel, named by sensor_id
-        Check_Overhead_1_2026.10.07_21.14.04.926.png   the still
-        Check_Overhead_1_2026.10.07_21.14.04.926.xml   its truth sidecar
+        Check_Overhead_1_20260929_072706.500.png       the still
+        Check_Overhead_1_20260929_072706.500.xml       its truth sidecar
         ...
     truth/
         manifest.jsonl                                 the run manifest
@@ -772,9 +772,11 @@ The capture goes under the site profile's `paths.capture_root`, one folder per r
         world_truth_track.summary.json                 what the track holds, and why the run ended
 ```
 
-The time in a still's name is the wall-clock time on the capturing machine, in its own time zone, to the millisecond.\
-It is not the scenario's simulated or civil time.\
-Those are inside the sidecar.
+The time in a still's name is the scenario's simulated civil time at the still's frame, at the epoch's offset, to the millisecond.\
+It is the clock the sun was computed from, so the name says what time it was in the scene.\
+It is not the time on the capturing machine.\
+That time is `written_utc` inside the sidecar.\
+Stills made before 2026-10-15 were named by the capturing machine's clock in its own time zone, `Check_Overhead_1_2026.10.07_21.14.04.926.png`.
 
 The run's records go beside the result, outside the capture folder, named after the result's file:
 

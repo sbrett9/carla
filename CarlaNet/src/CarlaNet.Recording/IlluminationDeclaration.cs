@@ -46,6 +46,22 @@ public sealed record IlluminationDeclaration(string Policy, bool EpochHonoured, 
     public string? DeclaredUtc { get; init; }
 
     /// <summary>
+    /// This frame's simulated seconds on the scenario's clock: SUMO's, the seconds the epoch counts
+    /// from, which the world truth track writes as <c>sim_time_s</c>. Not the world's own elapsed
+    /// seconds, whose zero is the server's. A recorder handed the session's declarations writes it as
+    /// the still's <c>sim_time_s</c>, so a still and the track agree about when its frame was.
+    /// </summary>
+    public double? SimulatedSeconds { get; init; }
+
+    /// <summary>
+    /// <see cref="DeclaredCivil"/> as an instant: <see cref="SimulatedSeconds"/> placed on the calendar
+    /// by the epoch, at the epoch's offset. A recorder handed the session's declarations names the
+    /// still by it and stamps the sidecar with it. Null where the session declared no epoch, which a
+    /// session that renders a world refuses.
+    /// </summary>
+    public DateTimeOffset? CivilInstant { get; init; }
+
+    /// <summary>
     /// The date and clock the sun was declared to hold for this frame, with its offset. The civil
     /// instant under the policies that honour the epoch; the window's opening instant under a freeze.
     /// </summary>

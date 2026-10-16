@@ -123,7 +123,9 @@ public static class PngChunkSchemas
                 "The simulation frame the image was rendered on. It pairs the still with its truth sidecar and "
                 + "identifies the same instant across runs.", minimum: 0)),
             new JsonField("sim_time_s", SchemaJson.Number(
-                "Simulated time at that frame, seconds.", unit: "seconds")),
+                "Simulated seconds at that frame. From a SUMO drive, SUMO's clock: the seconds the epoch counts from, "
+                + "the same number as the world truth track's sim_time_s for the frame. From an SCTMV capture, the "
+                + "world's own elapsed seconds, whose zero is the server's.", unit: "seconds")),
             new JsonField("run_id", SchemaJson.Text(
                 "The run the still belongs to. A recorder always names one; it is left out only when empty.",
                 "^.+$"), Required: false),

@@ -19,6 +19,15 @@ namespace CarlaNet.Recording;
 /// Construction starts recording; <see cref="Dispose"/> stops it (flushes pending captures).
 /// </summary>
 /// <remarks>
+/// <para><b>A still is named by the scene's clock where there is one.</b> A recorder handed a SUMO drive
+/// session's declarations (<see cref="IIlluminationSource"/>) names each still by its frame's simulated
+/// civil instant at the epoch's offset, stamps the sidecar with the same instant in UTC and writes the
+/// frame's seconds on the scenario's clock as <c>sim_time_s</c>: the clock the world truth track and
+/// the live feed keep, so a name says what time it was in the scene and never when the computer wrote
+/// it. The wall clock survives on the producer record alone. A recorder with no session -- an SCTMV
+/// capture -- names by the wall clock the frame arrived at and writes the world's own elapsed seconds,
+/// as every recorder did before 2026-10-15.</para>
+///
 /// <para><b>A still is written with the truth of its own frame, or not at all.</b> The image of a frame
 /// arrives some ticks after the world observer's snapshot of that frame, so the recorder reads each
 /// capture's vehicles, render set, supervision and camera pose from the client's snapshot of the
@@ -147,8 +156,11 @@ public sealed class FrameRecorder : IDisposable
     public long IlluminationPaired => Interlocked.Read(ref _illuminationPaired);
 
     /// <summary>
-    /// Captures written without one, although an illumination source was given: frames the source
-    /// did not answer for. Every one is a still whose sun cannot be traced to a declaration.
+    /// Captures dropped because an illumination source was given and did not answer for their frame.
+    /// The declaration carries the frame's simulated instant, which names the still and stamps its
+    /// sidecar, so a still without one is not written: it would be named by another clock among stills
+    /// named by the scene's, and its sun could be traced to no declaration. A run's closeout holds this
+    /// at zero.
     /// </summary>
     public long IlluminationUnpaired => Interlocked.Read(ref _illuminationUnpaired);
 
@@ -298,10 +310,16 @@ public sealed class FrameRecorder : IDisposable
     /// at the cost of a second subscription to that camera. Null leaves occlusion unmeasured, and
     /// every vehicle record says so (<c>occlusion_unmeasured="no_depth_camera"</c>).</param>
     /// <param name="occlusion">Tuning for that measurement; defaults when null.</param>
-    /// <param name="illumination">What declared the sun this run is lit by. Supplying it writes, beside
-    /// each capture's sun, the declaration for that capture's frame and the audit's residual on it,
-    /// so the still's illumination is traceable to what the run said it should be. Null writes the
-    /// sun alone.</param>
+    /// <param name="illumination">What declared the sun this run is lit by: a SUMO drive session's
+    /// declarations. Supplying it writes, beside each capture's sun, the declaration for that capture's
+    /// frame and the audit's residual on it, so the still's illumination is traceable to what the run
+    /// said it should be; names each still by its frame's simulated civil instant at the epoch's offset
+    /// and stamps the sidecar's <c>captured</c> and every event's <c>time</c> with that instant in UTC
+    /// (<see cref="IlluminationDeclaration.CivilInstant"/>); writes the frame's seconds on the
+    /// scenario's clock as <c>sim_time_s</c> (<see cref="IlluminationDeclaration.SimulatedSeconds"/>);
+    /// and drops a capture whose frame the source did not declare (<see cref="IlluminationUnpaired"/>).
+    /// Null writes the sun alone, names each still by the wall clock the frame arrived at and writes the
+    /// world's own elapsed seconds.</param>
     /// <param name="renderSet">What lent the vehicle bodies this run renders, where they are lent from
     /// a pool. Supplying it lists, in each capture, only the bodies its frame rendered, each named by
     /// the vehicle it rendered (<c>sumo_id</c>), and leaves out every body parked between loans; a
@@ -662,7 +680,8 @@ public sealed class FrameRecorder : IDisposable
 
         // Tick and simulation time come from the very frame that produced these pixels, so the still,
         // its truth sidecar and the simulation instant are bound together rather than correlated after
-        // the fact by wall clock.
+        // the fact by wall clock. The seconds are the world's own here; a session's declaration, read
+        // as the still is written, replaces them with the frame's seconds on the scenario's clock.
         var capture = new CaptureIdentity(arrival.Frame, arrival.SimTimeSeconds, _runId, _scenarioId, _seed);
         return new Job(arrival.CapturedUtc, arrival.Width, arrival.Height, arrival.Bgra, recs, arrival.Solar,
                        sensor, capture, vehicles, drawDistance, supervision);
@@ -717,7 +736,28 @@ public sealed class FrameRecorder : IDisposable
                 {
                     IlluminationDeclaration? illumination = await DeclarationForAsync(job.Capture.Tick)
                         .ConfigureAwait(false);
-                    string stem = CameraName.StillStem(_name, job.CapturedUtc);
+                    // The instant the still is named by and its sidecar stamped with. From a session,
+                    // the frame's simulated civil instant, at the epoch's offset: what time it was in
+                    // the scene, the clock the truth track and the live feed keep. A frame the session
+                    // did not declare has no such instant, so its still is not written -- never named
+                    // by another clock among stills named by this one -- and DeclarationForAsync has
+                    // counted it. With no session, the wall clock the frame arrived at, in this
+                    // computer's zone, as every still was named before 2026-10-15.
+                    if (_illumination is not null && illumination?.CivilInstant is null)
+                    {
+                        continue;
+                    }
+
+                    DateTimeOffset instant = illumination?.CivilInstant
+                                             ?? new DateTimeOffset(job.CapturedUtc).ToLocalTime();
+                    // And the frame's seconds on the scenario's clock, SUMO's, where a session says
+                    // them: the number the world truth track writes for the frame, so a reader can put
+                    // the still on the track's clock without the frame number. The world's own
+                    // elapsed seconds, taken from the sensor frame, stand where there is no session.
+                    CaptureIdentity capture = illumination?.SimulatedSeconds is { } simulated
+                        ? job.Capture with { SimTimeSeconds = simulated }
+                        : job.Capture;
+                    string stem = CameraName.StillStem(_name, instant);
                     // One record of what made the still, for its image and its sidecar alike.
                     ProducerRecord producer = Producer.Now(_server, _sumo);
                     // The still carries its sun, its declaration, its pose and its identity, with what
@@ -728,10 +768,10 @@ public sealed class FrameRecorder : IDisposable
                                                SolarMetadata.PngTextChunks(job.Solar)
                                                    .Concat(illumination?.PngTextChunks() ?? [])
                                                    .Concat(SensorMetadata.PngTextChunks(job.Sensor))
-                                                   .Concat((job.Capture with { Producer = producer }).PngTextChunks()));
+                                                   .Concat((capture with { Producer = producer }).PngTextChunks()));
                     CotWriter.WriteToFile(Path.Combine(_dir, stem + ".xml"),
-                                          job.CapturedUtc, job.Telemetry, _affiliation, _stale,
-                                          job.Solar, job.Sensor, job.Capture, illumination, job.Vehicles,
+                                          instant.UtcDateTime, job.Telemetry, _affiliation, _stale,
+                                          job.Solar, job.Sensor, capture, illumination, job.Vehicles,
                                           job.DrawDistance, job.Supervision, producer);
                     // Both writers leave the sun out of a capture whose block holds none, which is
                     // right for the frame and wrong for the run: counted, so it is never silent.
@@ -755,7 +795,8 @@ public sealed class FrameRecorder : IDisposable
 
     /// <summary>
     /// The declaration of a capture's own frame, waiting a bounded moment for a source that has not
-    /// reached that frame yet, and counting a capture that goes without.
+    /// reached that frame yet, and counting a capture that goes without -- which is then dropped, as
+    /// the declaration carries the instant the still is named by.
     /// </summary>
     private async Task<IlluminationDeclaration?> DeclarationForAsync(ulong frame)
     {

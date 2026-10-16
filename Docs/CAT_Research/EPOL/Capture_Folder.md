@@ -36,9 +36,13 @@ cap-20261008-041347-270d6d/
 - A folder per camera, named after the camera.\
   Each still is a PNG.\
   Its truth sidecar is an XML file with the same name.\
-  The time in the name is the recording computer's local clock, to the millisecond.\
-  It is not the simulated time.\
-  It is not UTC either: the first still's sidecar says it was captured at `2026-10-08T04:14:04.926Z`.\
+  The time in the name is the scenario's simulated civil time at the still's frame, at the epoch's offset, to the millisecond.\
+  `Check_Overhead_1_20260929_072706.500.png` is the still at 07:27:06.500 on the scenario's clock.\
+  That is the clock the sun was computed from, so the name says what time it was in the scene.\
+  It is not the time the computer wrote the file.\
+  That time is `written_utc` inside the sidecar.\
+  Two runs of one scenario under one epoch name their stills alike.\
+  The sample capture was made before 2026-10-15, when stills were named by the recording computer's clock in its own time zone: `2026.10.07_21.14.04.926` is a Colorado evening, and its sidecar says `2026-10-08T04:14:04.926Z`.\
   Order stills by their frame number, `tick`, not by their names.
 - `truth/` holds the [run manifest](../Schemas/Run_Manifest.md), the [world truth track](../Schemas/World_Truth_Track.md) and the [track's summary](../Schemas/World_Truth_Track_Summary.md).
 
@@ -240,27 +244,32 @@ Each `<annotation>` names a labeled behavior in force for the vehicle.\
 ### The clocks
 
 A capture uses five clocks.\
-Two of them count simulated seconds.\
-Those two do not agree.
+Two of them count simulated seconds, from different zeros.\
+A still made since 2026-10-15 uses SUMO's, the same clock as the track and the manifest.\
+A still made before then, and every `carla-sctmv` still, uses CARLA's own.
 
 | Clock | Where you find it | What it counts |
 |---|---|---|
 | CARLA frame number | Sidecar and `carla:capture`: `tick`. Track: `frame`. Manifest: `frame`, `observed_start_frame`, `after_frame`. Sidecar: `admitted_tick`. | One per world step. |
-| SUMO's simulated time | Manifest: `sim_time_s`, `committed_start_s` and its other instants in seconds. Track: `sim_time_s`. The plan: `declared_start_s` and `declared_end_s`. | Seconds from the scenario's second zero, on SUMO's clock as TraCI reports it. |
-| CARLA's own elapsed time | Sidecar and `carla:capture`: `sim_time_s`. | Seconds since the CARLA server's world started. Its zero is the server's, not the scenario's. |
-| Simulated civil time | Track: `time_utc`. Sidecar `<_illumination>`: `declared_civil` and `declared_utc`. Manifest: `declared_start_civil`, `civil_begin`. | SUMO's simulated time placed on the calendar by the scenario's [epoch](../Schemas/Epoch.md). |
-| Wall clock | Sidecar: `captured` and each event's `time`, `start` and `stale`. File names. `written_utc`. Manifest: `opened_wall_utc` and `closed_wall_utc`. | The recording computer's clock while the run was made. |
+| SUMO's simulated time | Manifest: `sim_time_s`, `committed_start_s` and its other instants in seconds. Track: `sim_time_s`. Sidecar and `carla:capture`: `sim_time_s`, in a capture made since 2026-10-15. The plan: `declared_start_s` and `declared_end_s`. | Seconds from the scenario's second zero, on SUMO's clock as TraCI reports it. |
+| CARLA's own elapsed time | Sidecar and `carla:capture`: `sim_time_s`, in a capture made before 2026-10-15 or by `carla-sctmv`. | Seconds since the CARLA server's world started. Its zero is the server's, not the scenario's. |
+| Simulated civil time | Track: `time_utc`. Sidecar: `captured` and each event's `time`, `start` and `stale`, and the still's file name, in a capture made since 2026-10-15. Sidecar `<_illumination>`: `declared_civil` and `declared_utc`. Manifest: `declared_start_civil`, `civil_begin`. | SUMO's simulated time placed on the calendar by the scenario's [epoch](../Schemas/Epoch.md). |
+| Wall clock | Sidecar: `written_utc`. Manifest: `opened_wall_utc` and `closed_wall_utc`. In a capture made before 2026-10-15 or by `carla-sctmv`: `captured`, each event's `time`, `start` and `stale`, and the file names too. | The recording computer's clock while the run was made. |
 
-**A still's `sim_time_s` is not the manifest's.**\
-The still at frame 151288 says `sim_time_s="344.799094"`.\
+**In the sample, a still's `sim_time_s` is not the manifest's.**\
+The sample was made before 2026-10-15.\
+Its still at frame 151288 says `sim_time_s="344.799094"`, on CARLA's clock.\
 The same frame in the world truth track has `sim_time_s` 109.5, on SUMO's clock.\
 In this capture the difference was 235.299 s for every still.\
 The difference changes from run to run.\
-Never compare a still's `sim_time_s` with a time in the manifest or the track.
+A still made since 2026-10-15 writes 109.5 there, the track's number, and its name reads the same instant on the civil clock: `Check_Overhead_1_20260929_072749.500.png`.\
+For a still made before, never compare its `sim_time_s` with a time in the manifest or the track.
 
 ### Putting a still on SUMO's clock
 
-Use the still's frame number, `tick`:
+A still made since 2026-10-15 is already on it.\
+Its `sim_time_s` is SUMO's time and its `captured` is the track's `time_utc` for its frame.\
+For a still made before, use the still's frame number, `tick`:
 
 1. Find the row of the world truth track whose `frame` is the still's `tick`.\
    Read its `sim_time_s`.\
@@ -396,12 +405,15 @@ The sidecar calls the SUMO vehicle type `vtype_id`.
 
 **`time_utc` and `captured`.**\
 The track's `time_utc` is simulated civil time: the scenario's clock placed on the calendar by its epoch.\
-The sidecar's times (`captured` and each event's `time`, `start` and `stale`) are the real clock of the computer that recorded the still.\
-For the still at frame 151288, the track says `2026-09-29T13:27:49.500Z` and the sidecar says `2026-10-08T04:14:22.253Z`.
+In a capture made since 2026-10-15, the sidecar's times (`captured` and each event's `time`, `start` and `stale`) are the same clock, so `captured` equals the track's `time_utc` for the frame.\
+In the sample, made before, the sidecar's times are the real clock of the computer that recorded the still.\
+For the still at frame 151288, the track says `2026-09-29T13:27:49.500Z` and the sample's sidecar says `2026-10-08T04:14:22.253Z`.\
+The computer's clock is now only `written_utc`.
 
 **`sim_time_s`.**\
 In the manifest and the track it is SUMO's simulated time.\
-In a sidecar and its `carla:capture` chunk it is CARLA's own elapsed time.\
+In a sidecar and its `carla:capture` chunk made since 2026-10-15 it is the same clock.\
+In the sample, made before, and in a `carla-sctmv` capture, it is CARLA's own elapsed time.\
 That clock has another zero.\
 See [The clocks](#the-clocks).
 

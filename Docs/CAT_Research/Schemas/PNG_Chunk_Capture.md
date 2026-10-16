@@ -36,7 +36,7 @@ The CarlaNet recorder writes it into every still it saves, at the same moment it
 |---|---|---|---|---|
 | `format_version` | integer, always 1 | | No | The chunk's format version. A chunk written before chunks carried one has none and is version 1. |
 | `tick` | integer | | Yes | The simulation frame the image was rendered on. The same as the sidecar's `tick`. |
-| `sim_time_s` | number | seconds | Yes | Simulated time at that frame. |
+| `sim_time_s` | number | seconds | Yes | Simulated seconds at that frame, on SUMO's clock: the same number as the world truth track's `sim_time_s` for the frame. From `carla-sctmv`, the world's own elapsed seconds, whose zero is the server's. A still written before 2026-10-15 carries the world's seconds too. |
 | `run_id` | string | | No | The run the still belongs to. Every recorder names one. |
 | `scenario_id` | string | | No | The scenario driving the run, where there is one. |
 | `seed` | integer | | No | The seed the run was started with, where one was given. |

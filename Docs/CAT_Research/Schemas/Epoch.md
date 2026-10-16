@@ -33,6 +33,8 @@ Two machines with different time zone databases therefore always agree.
 - A scenario developer writes it, in the specification's `epoch` block.\
   The scenario compiler checks it (checks 33 and 34) and copies it into the scenario lock.
 - `carla-drive --epoch FILE` reads an epoch from a file: either the epoch object on its own, or a whole `scenario.json`.\
+  Every drive that renders a world must give one, under every sun policy.\
+  Every still is named and stamped from the scenario's civil time, so the session refuses a drive without an epoch.\
   From a whole specification, it reads the `epoch`.\
   It also reads the specification's `illumination` as the sun's policy.\
   Without one, the sun advances at a rate of 1.0 by default.\

@@ -45,6 +45,7 @@ Findings set. Every external claim is cited.
 | 2026-10-06 | §5.7, §6.4: a vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished -- is drawn at its last SUMO position on that step's own frame, `pose_source` `sumo`, and is gone from the next frame, as the owner ruled ([`03`](03_CoSimulation_Runtime.md) D3.45). Until now its body was parked from that step's own frame, so the capture at the step a vehicle was last reported in did not show it; now it shows it where SUMO last had it, and the capture after it does not. Never `stale` for leaving; a stale body is one with no ground under it. The manifest's `render_released` is stamped with the instant of the first frame that no longer draws the vehicle (§5.7). |
 | 2026-10-07 | §2.9, §4.2, §4.8, §4.9, §7.2, §16, D8.26, D8.27, D8.28: exposure is built as planned (stage K), as the owner ruled on 2026-10-06. The RGB camera publishes upstream CARLA 0.9's `exposure_mode` (`manual` or `histogram`), `exposure_compensation` (EV), `iso`, `shutter_speed` (per second) and `fstop`, each recommended at the `Default` profile's value, and the plugin applies them after the profile loads, setting each override flag again, so the numbers set the exposure and the profile the rest of the picture; it now logs a profile that does not load. A run states them per channel -- `exposure_method`, `exposure_iso`, `exposure_shutter_s`, `exposure_fstop`, `exposure_compensation_ev` -- at the `Default` profile's values by default, and sends every one, so every capture's exposure is known from the run; `histogram` warns. Every capture carries the exposure its camera was given, read from the camera's own attributes, as `<_carla_exposure>` beside `<_carla_intrinsics>`, with EV100 under manual, and the run manifest's camera entry carries it as `exposure`. No profile set is made: the numbers are the control (D8.26 and D8.27 amended). The digest of the profile the server loaded stays not built (run check 43). The plugin change awaits a build; `CarlaNet/python/test_camera_exposure.py` is the live check, the owner's to run. |
 | 2026-10-07 | §8.2, §8.5, D8.14: the supervision-transfer rule is published for the teams that receive capture folders, as [`Docs/CAT_Research/Tracking/Matching_Tracks_To_Truth.md`](../../Tracking/Matching_Tracks_To_Truth.md), the hand-over paragraph the owner kept: what a sidecar and the manifest give to match against, the five steps of §8.2 and the rules of §8.5, with no radius or share set by us. This pipeline still performs no association. |
+| 2026-10-15 | §2.4: a still from a SUMO drive is named and stamped from the scenario's clock, as the owner asked. The file stem is the frame's simulated civil instant at the epoch's offset, `<camera name>_<yyyyMMdd_HHmmss.fff>`; the sidecar's `captured` and every event's `time`, `start` and `stale` are that instant in UTC, equal to the world truth track's `time_utc` for the frame; `sim_time_s` on the sidecar and the `carla:capture` chunk is the frame's seconds on SUMO's clock, the track's number, where it was the world's own elapsed seconds. The instant comes from the session's per-frame declaration (`IlluminationDeclaration.CivilInstant`, `SimulatedSeconds`), never from the sensor header's timestamp, which is the world's clock; a frame the session did not declare is not written and is counted (`IlluminationUnpaired`). The wall clock survives only on the producer record and the manifest's `opened_wall_utc`/`closed_wall_utc`. Every session that renders a world now requires an epoch, `ignore` included. An SCTMV capture has no session and keeps the wall clock. Format versions stay at 1: no release has been published. |
 | 2026-10-07 | §10: a capture says which release made it, as the owner decided. Every file a collection writes carries a record of what made it -- the tool and its release, the carlanet release, the server's build identity (its release, world interface, package or editor, and the CARLA, content and engine commits), the SUMO release and the time -- and a format version: each still in its sidecar's `<_producer>` and its PNG's `carla:capture` chunk, the run manifest on its opening row, the world truth track in its summary, the run records beside the result. The server, both wheels and the CarlaNet assemblies carry one release number, `CARLA_VERSION`, with the commit named on any build that is not the tagged release. A reader refuses a format newer than it knows. |
 
 > **The boundary this section is written against.** This pipeline **labels; it never scores.** It does
@@ -324,8 +325,10 @@ fps" (`run_SCTMV.py:215-219`). Two streams is today's rig. Multi-camera multipli
 
 ### 2.4 What a capture already carries
 
-Per capture, two files sharing a filename stem: the camera's name and local wall-clock time to the
-millisecond, `<camera name>_<yyyy.MM.dd_HH.mm.ss.fff>` (`CameraName.StillStem`). The name is the one
+Per capture, two files sharing a filename stem: the camera's name and the frame's simulated civil
+instant at the epoch's offset, to the millisecond, `<camera name>_<yyyyMMdd_HHmmss.fff>`
+(`CameraName.StillStem`, 2026-10-15; before that date the recording computer's local wall clock,
+`yyyy.MM.dd_HH.mm.ss.fff`, which an SCTMV capture, having no epoch, still uses). The name is the one
 the camera holds on the server: the one the client gave it, used as given or refused, or
 `Camera_<n>`, which the server names a camera spawned without one (2026-10-05); the client reads it
 back from the spawned camera. A client-given name is 1 to 63 ASCII letters, digits, underscores and
@@ -360,8 +363,8 @@ which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
 RunId, ScenarioId, Seed)` (`CaptureMetadata.cs`) is taken from the very sensor frame that
 produced the pixels (`FrameRecorder.cs`), and the record's own doc comment explains why wall-clock
-time cannot serve. Filenames are a camera's name and the wall clock, and
-must never be used to pair anything. **The vehicle records beside a still are the truth of the still's
+time cannot serve. Filenames are a camera's name and the frame's simulated civil instant (the wall
+clock before 2026-10-15), and must never be used to pair anything. **The vehicle records beside a still are the truth of the still's
 own tick and no other** (2026-10-05, the owner's ruling): the recorder reads them from the client's
 snapshot of the image's frame, which it holds open while it records, and a still whose frame's truth is
 not to be had is dropped and counted (`FrameRecorder.FrameUnpaired`, gated at zero by the closeout)
@@ -987,8 +990,9 @@ this**, and §15 records the consequence for
 [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md)'s `roots.score` configuration key.
 
 **On-disk layout, as built.** One session directory; one subdirectory per `sensor_id`; the manifest and
-the world truth track under `truth/`, written by one writer each. A filename is the camera's name and a
-local wall-clock stem (`CameraName.StillStem`), so two channels' captures never share a name, and
+the world truth track under `truth/`, written by one writer each. A filename is the camera's name and
+the frame's simulated civil instant (`CameraName.StillStem`; a local wall-clock stem before
+2026-10-15), so two channels' captures never share a name, and
 **nothing pairs across channels by filename** — the join key is the tick, which every capture carries
 (`CotWriter.cs`, `CaptureMetadata.cs`). Captures written before 2026-10-02 are `SCTMV_<stem>`.
 
@@ -2057,7 +2061,7 @@ as a directory**, so the same contract serves both products and a consumer write
 | Guarantee | What backs it |
 |---|---|
 | **Every frame is self-describing.** Pose, intrinsics, radiometry and achieved solar state travel with the pixels, so an image is interpretable without reference to any other file | §2.4 (the pose and solar chunk already do), §4.8 (radiometry is added; the exposure the camera was given is on every sidecar since 2026-10-07), D8.28 |
-| **The tick is the only join key.** Filenames are local wall-clock stems (`FrameRecorder.cs:223-232`) and must never be used to pair anything; `CaptureIdentity` is taken from the sensor frame that produced the pixels (`FrameRecorder.cs:179`) and the record's own doc comment says why wall clock cannot serve (`CaptureMetadata.cs:9-14`) | §2.4, D8.4 |
+| **The tick is the only join key.** Filenames are the frame's simulated civil instant (`CameraName.StillStem`; local wall-clock stems before 2026-10-15) and must never be used to pair anything; `CaptureIdentity` is taken from the sensor frame that produced the pixels (`FrameRecorder.cs:179`) and the record's own doc comment says why wall clock cannot serve (`CaptureMetadata.cs:9-14`) | §2.4, D8.4 |
 | **Channels are frame-coherent.** All channels of a session read one world-observer snapshot per tick, so two channels stamping the same tick cannot disagree about the sun or the supervision state | §3.4, D8.3a |
 | **The radiometry is attested, not asserted.** `profile_digest` is a hash of the JSON the server actually loaded, because a missing profile fails silently and the return value is discarded (`ActorBlueprintFunctionLibrary.cpp:1376-1380`) | §2.9, §4.8, D8.28 |
 | **Nothing in this handover is derived from the scene.** Enforced at the writer and checked mechanically, including inside PNG tEXt chunks | §9.4, D8.17 |

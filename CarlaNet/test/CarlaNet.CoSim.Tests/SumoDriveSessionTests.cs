@@ -782,6 +782,11 @@ public sealed class SumoDriveSessionTests
         Assert.False(declared.Audited);
         Assert.NotNull(declared.DeclaredCivil);
         Assert.Null(declared.ResidualDegrees);
+        // The sun is left alone, and the frame still knows what time it was: the recorder names the
+        // still by this instant and writes these seconds, under every policy.
+        Assert.NotNull(declared.SimulatedSeconds);
+        Assert.Equal(SolarLeaseTests.PortEpoch().CivilInstantAt(declared.SimulatedSeconds!.Value), declared.CivilInstant);
+        Assert.Equal(SolarEpoch.FormatCivil(declared.CivilInstant!.Value), declared.DeclaredCivil);
         Assert.Contains("not bound, so not audited", session.Report.ToString());
         Assert.Null(session.Report.WorstSolarResidualDegrees);
     }
@@ -863,6 +868,30 @@ public sealed class SumoDriveSessionTests
         Assert.Empty(carla.SettingsWrites);
     }
 
+    [Fact]
+    public void ASessionThatRendersAWorldUnderIgnoreStillNeedsAnEpoch()
+    {
+        // The sun is left alone under ignore, and every still is still named and stamped from the
+        // scenario's civil time, so the epoch is needed under every policy.
+        using SyntheticWorld world = SyntheticWorld.Write(
+            _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(world, [], [], tick: null);
+        options.World = carla;
+        options.Epoch = null;
+        options.Illumination = IlluminationPolicy.Ignore();
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => SumoDriveSession.Start(options));
+
+        Assert.Contains("declares no epoch", refused.Message);
+        Assert.Contains("named and stamped from the scenario's civil time", refused.Message);
+        Assert.DoesNotContain("binds the sun", refused.Message);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.SolarWrites);
+    }
+
     [RequiresSumoFact]
     public void TheIgnorePolicyLeavesTheSunAloneAndStillRefusesAWorldWithNone()
     {
@@ -872,7 +901,6 @@ public sealed class SumoDriveSessionTests
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         SumoDriveSessionOptions options = Options(world, [], [], tick: null);
         options.World = carla;
-        options.Epoch = null;
         options.Illumination = IlluminationPolicy.Ignore();
 
         using (SumoDriveSession session = SumoDriveSession.Start(options))

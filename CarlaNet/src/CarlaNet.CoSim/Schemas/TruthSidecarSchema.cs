@@ -78,7 +78,8 @@ public static class TruthSidecarSchema
             new XElement(Xs + "annotation",
                 new XElement(Xs + "documentation",
                     $"The truth sidecar, format version {version}: one XML file beside every still, "
-                    + "<camera>_<local capture time>.xml, holding the truth of the still's own simulation frame. "
+                    + "<camera>_<yyyyMMdd_HHmmss.fff>.xml, named by the still's instant and holding the truth of the "
+                    + "still's own simulation frame. "
                     + "The root <events> carries the capture's identity; under it come what made the file, the sun "
                     + "the world reported, what the run declared the sun to be, the camera platform's event and one "
                     + "Cursor-on-Target event per vehicle. A sidecar with no format_version was written before "
@@ -252,13 +253,21 @@ public static class TruthSidecarSchema
             Attribute("format_version", "FormatVersion", false,
                       $"The sidecar's format version, {CotWriter.FormatVersion}. Absent from a sidecar written before "
                       + "sidecars carried one, which is version 1.", fixedValue: CotWriter.FormatVersion.ToString(CultureInfo.InvariantCulture)),
-            Attribute("captured", "Instant", true, "When the still was captured, by the wall clock, in UTC."),
+            Attribute("captured", "Instant", true,
+                      "The still's instant, in UTC. From a SUMO drive, the simulated civil time of the still's frame, "
+                      + "from the scenario's epoch: the same instant as the world truth track's time_utc for the frame, "
+                      + "and the instant the still is named by, at the epoch's offset. From an SCTMV capture, which has "
+                      + "no epoch, the recording computer's wall clock. Never the wall clock from a SUMO drive: that is "
+                      + "the producer's written_utc."),
             Attribute("count", "xs:nonNegativeInteger", true, "How many vehicle events follow. The platform event is not counted."),
             Attribute("source", "xs:string", true, "Always truth: the records are the simulator's ground truth.", fixedValue: "truth"),
             Attribute("tick", "xs:nonNegativeInteger", false,
                       "The simulation frame the image was rendered on; every record below is that frame's truth. "
                       + "Written by every recorder."),
-            Attribute("sim_time_s", "xs:decimal", false, "Simulated time at that frame.", Seconds),
+            Attribute("sim_time_s", "xs:decimal", false,
+                      "Simulated seconds at that frame. From a SUMO drive, SUMO's clock: the seconds the epoch counts "
+                      + "from, the same number as the world truth track's sim_time_s for the frame. From an SCTMV "
+                      + "capture, the world's own elapsed seconds, whose zero is the server's.", Seconds),
             Attribute("run_id", "xs:string", false, "The run the capture belongs to. A recorder always names one."),
             Attribute("scenario_id", "xs:string", false, "The scenario driving the run, where one is."),
             Attribute("seed", "xs:long", false, "The seed the run was started with, where one was given."),
@@ -376,9 +385,9 @@ public static class TruthSidecarSchema
                       + "truth track."),
             Attribute("type", "CotType", true, "The Cursor-on-Target type."),
             Attribute("how", "xs:string", true, "How the position was obtained: m-g, machine generated.", fixedValue: "m-g"),
-            Attribute("time", "Instant", true, "The capture instant, as captured on the container."),
+            Attribute("time", "Instant", true, "The still's instant, the container's captured."),
             Attribute("start", "Instant", true, "The same instant."),
-            Attribute("stale", "Instant", true, "When the event goes stale: the capture instant plus 3 seconds by default."));
+            Attribute("stale", "Instant", true, "When the event goes stale: the still's instant plus 3 seconds by default."));
 
         yield return Complex("Point", "A position.", null,
             Attribute("lat", "Latitude", true, "Latitude, WGS84. For a vehicle, the actor's origin.", Degrees),

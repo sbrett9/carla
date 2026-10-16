@@ -16,7 +16,7 @@
     },
     "sim_time_s": {
       "type": "number",
-      "description": "Simulated time at that frame, seconds.",
+      "description": "Simulated seconds at that frame. From a SUMO drive, SUMO's clock: the seconds the epoch counts from, the same number as the world truth track's sim_time_s for the frame. From an SCTMV capture, the world's own elapsed seconds, whose zero is the server's.",
       "x-unit": "seconds"
     },
     "run_id": {

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation" elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
   <xs:annotation>
-    <xs:documentation>The truth sidecar, format version 1: one XML file beside every still, &lt;camera&gt;_&lt;local capture time&gt;.xml, holding the truth of the still's own simulation frame. The root &lt;events&gt; carries the capture's identity; under it come what made the file, the sun the world reported, what the run declared the sun to be, the camera platform's event and one Cursor-on-Target event per vehicle. A sidecar with no format_version was written before sidecars carried one and is version 1, which this schema describes. Units are in each attribute's cap:unit annotation; cap:onlyInPicture marks the attributes written only for a vehicle whose box fell in the picture (in_frame of wholly or partly). Positions are WGS84 latitude and longitude, and heights are meters above the WGS84 ellipsoid in the bare-earth convention.</xs:documentation>
+    <xs:documentation>The truth sidecar, format version 1: one XML file beside every still, &lt;camera&gt;_&lt;yyyyMMdd_HHmmss.fff&gt;.xml, named by the still's instant and holding the truth of the still's own simulation frame. The root &lt;events&gt; carries the capture's identity; under it come what made the file, the sun the world reported, what the run declared the sun to be, the camera platform's event and one Cursor-on-Target event per vehicle. A sidecar with no format_version was written before sidecars carried one and is version 1, which this schema describes. Units are in each attribute's cap:unit annotation; cap:onlyInPicture marks the attributes written only for a vehicle whose box fell in the picture (in_frame of wholly or partly). Positions are WGS84 latitude and longitude, and heights are meters above the WGS84 ellipsoid in the bare-earth convention.</xs:documentation>
     <xs:appinfo>
       <cap:id>urn:carla-sumo-capture:schema:truth-sidecar:1</cap:id>
       <cap:formatVersion>1</cap:formatVersion>
@@ -383,7 +383,7 @@
     </xs:attribute>
     <xs:attribute name="captured" type="Instant" use="required">
       <xs:annotation>
-        <xs:documentation>When the still was captured, by the wall clock, in UTC.</xs:documentation>
+        <xs:documentation>The still's instant, in UTC. From a SUMO drive, the simulated civil time of the still's frame, from the scenario's epoch: the same instant as the world truth track's time_utc for the frame, and the instant the still is named by, at the epoch's offset. From an SCTMV capture, which has no epoch, the recording computer's wall clock. Never the wall clock from a SUMO drive: that is the producer's written_utc.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="count" type="xs:nonNegativeInteger" use="required">
@@ -403,7 +403,7 @@
     </xs:attribute>
     <xs:attribute name="sim_time_s" type="xs:decimal" use="optional">
       <xs:annotation>
-        <xs:documentation>Simulated time at that frame.</xs:documentation>
+        <xs:documentation>Simulated seconds at that frame. From a SUMO drive, SUMO's clock: the seconds the epoch counts from, the same number as the world truth track's sim_time_s for the frame. From an SCTMV capture, the world's own elapsed seconds, whose zero is the server's.</xs:documentation>
         <xs:appinfo>
           <cap:unit>seconds</cap:unit>
         </xs:appinfo>
@@ -798,7 +798,7 @@
     </xs:attribute>
     <xs:attribute name="time" type="Instant" use="required">
       <xs:annotation>
-        <xs:documentation>The capture instant, as captured on the container.</xs:documentation>
+        <xs:documentation>The still's instant, the container's captured.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="start" type="Instant" use="required">
@@ -808,7 +808,7 @@
     </xs:attribute>
     <xs:attribute name="stale" type="Instant" use="required">
       <xs:annotation>
-        <xs:documentation>When the event goes stale: the capture instant plus 3 seconds by default.</xs:documentation>
+        <xs:documentation>When the event goes stale: the still's instant plus 3 seconds by default.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
   </xs:complexType>

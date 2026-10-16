@@ -15,9 +15,12 @@ It holds the ground truth of the simulation frame the still was rendered on: whe
 Each vehicle has its position, motion and size.\
 A vehicle in the picture also has its box in pixels and in latitude, longitude and height.
 
-The still and its sidecar share a name: `<camera>/<camera>_<local capture time>.png` and `.xml`, for example `Check_Overhead_1/Check_Overhead_1_2026.10.07_10.34.51.318.xml`.\
-The time in the name is the capture computer's local clock, to the millisecond.\
-The same instant in UTC is the `captured` attribute inside the file.
+The still and its sidecar share a name: `<camera>/<camera>_<simulated civil time>.png` and `.xml`, for example `Check_Overhead_1/Check_Overhead_1_20260929_072706.500.xml`.\
+The time in the name is the scenario's simulated civil time at the still's frame, at the epoch's offset, to the millisecond.\
+That is the clock the sun was computed from, so the name says what time it was in the scene.\
+The same instant in UTC is the `captured` attribute inside the file.\
+It equals the world truth track's `time_utc` for the frame.\
+A sidecar written before 2026-10-15 is named by the capture computer's local clock, `Check_Overhead_1_2026.10.07_10.34.51.318.xml`, and its `captured` is that clock in UTC.
 
 The truth in a sidecar is always the truth of the still's own frame.\
 If the recorder cannot read the truth of a still's frame, it does not write the still at all.\
@@ -31,7 +34,9 @@ These events carry extra detail elements whose names begin with `_`.
 The CarlaNet recorder writes one sidecar for every still it saves, in the same moment as the PNG.\
 `carla-capture` runs a recorder for each camera of a capture run.\
 It puts each camera's stills in a folder named after the camera, inside the capture folder (`Build/captures/<session id>/` from a checkout).\
-`carla-drive` and `carla-sctmv` write stills and sidecars the same way.
+`carla-drive` writes stills and sidecars the same way.\
+`carla-sctmv` writes them too, but it drives no SUMO scenario and has no epoch.\
+Its stills are named by the capture computer's clock, its `captured` is that clock in UTC and its `sim_time_s` is the world's own elapsed seconds.
 
 ## Conventions
 
@@ -63,11 +68,11 @@ The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `format_version` | integer, always 1 | | No | The file's format version. A file written before files carried one has none and is version 1. |
-| `captured` | UTC time | | Yes | When the still was captured, by the recording computer's clock. |
+| `captured` | UTC time | | Yes | The still's instant: the scenario's simulated civil time at the still's frame, from the epoch, in UTC. It equals the world truth track's `time_utc` for the frame. From `carla-sctmv`, which has no epoch, the recording computer's clock. |
 | `count` | integer | | Yes | How many vehicle events follow. The camera platform's event is not counted. |
 | `source` | text, always `truth` | | Yes | The events are the simulator's ground truth. |
 | `tick` | integer | | No | The simulation frame the image was rendered on. Every recorder writes it. |
-| `sim_time_s` | decimal | seconds | No | Simulated time at that frame. Written with `tick`. |
+| `sim_time_s` | decimal | seconds | No | Simulated seconds at that frame, on SUMO's clock: the same number as the world truth track's `sim_time_s` for the frame. From `carla-sctmv`, the world's own elapsed seconds, whose zero is the server's. Written with `tick`. |
 | `run_id` | text | | No | The run the capture belongs to. Every recorder writes one. |
 | `scenario_id` | text | | No | The scenario driving the run, where there is one. |
 | `seed` | integer | | No | The seed the run was started with, where one was given. |
@@ -184,9 +189,9 @@ The same values are in the still's `carla:sensor` text chunk.
 | `uid` | text | | Yes | The track's identifier: the camera's, such as `CARLA-SENSOR-107`, or a vehicle's (see below). |
 | `type` | text | | Yes | The CoT type: an air track such as `a-f-A-M-F-Q` for the camera, `a-<affiliation>-G-E-V` (default `a-n-G-E-V`) for a vehicle. |
 | `how` | text, always `m-g` | | Yes | Machine generated. |
-| `time` | UTC time | | Yes | The capture instant, the same as `captured`. |
+| `time` | UTC time | | Yes | The still's instant, the same as `captured`. |
 | `start` | UTC time | | Yes | The same instant. |
-| `stale` | UTC time | | Yes | When the event goes stale: the capture instant plus 3 seconds by default. |
+| `stale` | UTC time | | Yes | When the event goes stale: the still's instant plus 3 seconds by default. |
 
 `<point>`, for this event and every vehicle event:
 
@@ -433,7 +438,10 @@ That is how the two kinds of event are told apart.
 
 ## Example
 
-A sidecar with the camera platform and one vehicle in the picture, shortened from a capture of the Arapahoe world:
+A sidecar with the camera platform and one vehicle in the picture, shortened from a capture of the Arapahoe world.\
+This capture was made before 2026-10-15.\
+So its `captured` and its events' times are the recording computer's clock, and its `sim_time_s` is the world's own elapsed seconds.\
+A sidecar written since carries the scenario's clock in both, as the `<_illumination>` element's `declared_utc` already does here:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>

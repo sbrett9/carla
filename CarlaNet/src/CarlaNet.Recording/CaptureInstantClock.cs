@@ -5,14 +5,16 @@ namespace CarlaNet.Recording;
 /// from one capture to the next.
 /// </summary>
 /// <remarks>
-/// A capture's files are named by its camera and this instant to the millisecond
-/// (<see cref="CameraName.StillStem"/>), so two captures of one recorder stamped in the same
-/// millisecond would be written to the same two paths by two encoding workers at once, and one of them
-/// would fail with the file in use by the other -- which happens whenever frames arrive in a burst, as
-/// they do after any stall. A capture stamped in a millisecond already used is moved to the next one,
-/// so no two captures of one recorder share a name and the names still sort in capture order. The
-/// instant is the wall clock the capture was taken at and nothing more: the simulation instant a
-/// capture shows is its tick, which it carries separately.
+/// A recorder with no SUMO drive session -- an SCTMV capture -- names its files by its camera and this
+/// instant to the millisecond (<see cref="CameraName.StillStem"/>), so two captures of one recorder
+/// stamped in the same millisecond would be written to the same two paths by two encoding workers at
+/// once, and one of them would fail with the file in use by the other -- which happens whenever frames
+/// arrive in a burst, as they do after any stall. A capture stamped in a millisecond already used is
+/// moved to the next one, so no two captures of one recorder share a name and the names still sort in
+/// capture order. The instant is the wall clock the capture was taken at and nothing more: the
+/// simulation instant a capture shows is its tick, which it carries separately. A recorder handed a
+/// session's declarations names and stamps each still from its frame's simulated instant instead, and
+/// needs no such guard: it never captures one simulated instant twice.
 /// </remarks>
 public sealed class CaptureInstantClock
 {

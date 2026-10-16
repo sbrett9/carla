@@ -144,7 +144,7 @@ Each entry of `produced.channels` (every count is an integer, or null where this
 | `written` | Captures written. |
 | `recorder_dropped` | Captures the recorder's queue had no room for. Any is a loud condition. |
 | `frame_unpaired` | Stills not written because the truth of their own frame was not available at the time the image arrived. |
-| `illumination_paired`, `illumination_unpaired` | Captures written with and without their frame's illumination declaration. |
+| `illumination_paired`, `illumination_unpaired` | Captures written with their frame's illumination declaration, and captures not written because the session did not declare their frame. The declaration carries the still's instant, so no still is written without it. |
 | `solar_block_missing` | Captures written with no recorded sun. They have no illumination band. |
 | `render_set_paired`, `render_set_unpaired` | Captures written with and without their frame's list of drawn vehicles. |
 | `supervision_paired`, `supervision_unpaired` | Captures written with and without their frame's supervision. |

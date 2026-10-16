@@ -675,7 +675,7 @@ public sealed class SumoDriveSession : IDisposable
                                           ref CoSimSessionStage stage,
                                           List<Exception> giveBack)
     {
-        RequireAnEpochForABoundSun(options);
+        RequireAnEpoch(options);
         RequireAUsablePace(options);
         RequireOneWayToAdvanceTheWorld(options);
         RequireAWindowTheSessionRenders(options);
@@ -1913,6 +1913,10 @@ public sealed class SumoDriveSession : IDisposable
             UtcOffsetHours = epoch?.UtcOffsetHours,
             DeclaredCivil = civil is { } local ? SolarEpoch.FormatCivil(local) : null,
             DeclaredUtc = civil is { } instant ? SolarEpoch.FormatUtc(instant) : null,
+            // Typed, for the recorder: the frame's seconds on SUMO's clock and the instant they make,
+            // which name the still and stamp its sidecar.
+            SimulatedSeconds = RenderedTimeSeconds,
+            CivilInstant = civil,
         };
 
         return sample is not { } measured || epoch is null
@@ -2752,32 +2756,37 @@ public sealed class SumoDriveSession : IDisposable
         options.World is null ? options.Illumination : options.Illumination ?? IlluminationPolicy.Default;
 
     /// <summary>
-    /// When nothing says what civil time it is, refuse a session whose policy binds the sun to it.
+    /// When nothing says what civil time it is, refuse a session that renders a world.
     /// </summary>
     /// <remarks>
-    /// Checked before anything is started, because it needs nothing but the options. The default
-    /// policy binds the sun too. A session that renders a world with neither a policy nor an epoch is
-    /// refused here. The refusal says the policy is the default. A session with no world renders
-    /// nothing and has no sun to bind.
+    /// Checked before anything is started, because it needs nothing but the options. Every still a
+    /// recorder writes from a session is named and stamped from the scenario's civil time, and every
+    /// row of the world truth track carries it, so a session that renders a world has to declare an
+    /// epoch whatever its sun policy does: under <c>ignore</c> the sun is left alone and the record
+    /// still says what time the scene was. Where the policy binds the sun as well, the refusal says so,
+    /// and says the policy is the default where it is. A session with no world renders nothing, writes
+    /// no still and binds no sun, so it needs none.
     /// </remarks>
-    private static void RequireAnEpochForABoundSun(SumoDriveSessionOptions options)
+    private static void RequireAnEpoch(SumoDriveSessionOptions options)
     {
-        if (options.World is null || IlluminationInForce(options) is not { } policy)
+        if (options.World is null || options.Epoch is not null)
         {
             return;
         }
 
-        if (policy.BindsTheSun && options.Epoch is null)
-        {
-            throw new CoSimSessionRefusedException(
-                (policy.Defaulted
-                    ? "The session declares no illumination policy. The sun advances by default. "
-                    : string.Empty)
-                + $"The '{policy.Name}' policy binds the sun to the scenario's civil time. The "
-                + "session declares no epoch to take that time from. Declare what simulated second "
-                + "zero means in civil time. Or run under 'ignore': it leaves the sun alone and "
-                + "records that the run's lighting honors no epoch.");
-        }
+        IlluminationPolicy? policy = IlluminationInForce(options);
+        string sun = policy is { BindsTheSun: true }
+            ? (policy.Defaulted
+                   ? "The session declares no illumination policy. The sun advances by default. "
+                   : string.Empty)
+              + $"The '{policy.Name}' policy binds the sun to the scenario's civil time. "
+            : string.Empty;
+        throw new CoSimSessionRefusedException(
+            sun
+            + "The session declares no epoch. Every still a recorder writes is named and stamped from "
+            + "the scenario's civil time, and the world truth track carries it, so a session that "
+            + "renders a world needs one under every sun policy. Declare what simulated second zero "
+            + "means in civil time.");
     }
 
     /// <summary>

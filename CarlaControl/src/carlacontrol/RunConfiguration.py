@@ -467,7 +467,7 @@ _CHANNEL_HELP = {
                  "left, right, ...), the server's own Camera_<number> or CARLA-SENSOR-<number>. "
                  "Required when there is more than one channel, and unique among them, case aside. "
                  "It names the channel's capture directory, begins every still's file name "
-                 "(<sensor_id>_<local capture time>) and is the platform track's callsign; the "
+                 "(<sensor_id>_<simulated civil time>) and is the platform track's callsign; the "
                  "server refuses it at pre-roll where a live camera in the world already holds it. "
                  "A single channel without one takes the name the server gives its camera, "
                  "Camera_<n>.",

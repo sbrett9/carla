@@ -389,7 +389,7 @@ Unlike `carla-free-camera`, it can record what that camera sees.
   That is `--window-opens-at`, or by default the first frame drawn.\
   Pressing F while it waits cancels the span.
 - Each span is written to a folder of its own under `--record-dir`, named by the camera and the span's start, `<camera name>-<UTC>`.\
-  The stills inside are `<camera name>_<local capture time>.png` and `.xml`, with the same truth a fixed camera's stills carry, occlusion included.
+  The stills inside are `<camera name>_<simulated civil time>.png` and `.xml`, such as `NapOfEarth_2_20260929_072706.500.png`, with the same truth a fixed camera's stills carry, occlusion included.
 - Esc, or closing the window, ends the drive.
 
 ```sh

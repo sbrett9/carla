@@ -304,7 +304,8 @@ public sealed class SumoDriveSessionLampTests
         using SyntheticWorld world = Fixture();
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };
         List<CoSimPoseRecord> poses = [];
-        SumoDriveSessionOptions options = Driving(world, carla, null);
+        // An epoch is needed under every policy, for the stills' clock; ignore leaves the sun alone.
+        SumoDriveSessionOptions options = Driving(world, carla, Noon());
         options.Illumination = IlluminationPolicy.Ignore();
         options.OnPose = poses.Add;
 

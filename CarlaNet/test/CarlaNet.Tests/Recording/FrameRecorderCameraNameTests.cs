@@ -42,7 +42,9 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
 
     // Names no other test class records under: a recorder holds its name for the whole process.
     private const string Deck = "DECK-I25_naming";
-    private static readonly Regex StillStem = new(@"^(?<name>.+)_\d{4}\.\d{2}\.\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}$");
+    private const string Clocked = "DECK-I25_clocked";
+    private const string Undeclared = "DECK-I25_undeclared";
+    private static readonly Regex StillStem = new(@"^(?<name>.+)_\d{8}_\d{6}\.\d{3}$");
 
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "carlanet-camera-name-" + Guid.NewGuid().ToString("N"));
@@ -86,6 +88,79 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
             .Single(e => (string?)e.Attribute("uid") == "CARLA-SENSOR-4121");
         Assert.Equal(Deck, (string?)track.Element("detail")!.Element("contact")!.Attribute("callsign"));
         Assert.Contains($"\"callsign\":\"{Deck}\"", PngText(png, "carla:sensor"));
+    }
+
+    [Fact]
+    public async Task A_Still_With_No_Session_Is_Named_By_The_Wall_Clock_It_Arrived_At_And_Stamped_With_It()
+    {
+        var platform = new SensorPlatformOptions(90.0, "a-f-A-M-F-Q", Deck, CameraName.Default(Camera));
+        DateTime before = DateTime.UtcNow;
+
+        (_, string png, string xml) = await RecordOneImage(platform: platform);
+
+        // The name reads the computer's clock in its own zone; the sidecar the same instant in UTC;
+        // and the seconds are the world's own, as the sensor frame reported them.
+        string clock = StillStem.Match(Path.GetFileNameWithoutExtension(png)).Value[(Deck.Length + 1)..];
+        var named = DateTimeOffset.ParseExact(clock, "yyyyMMdd_HHmmss.fff", null,
+                                              System.Globalization.DateTimeStyles.AssumeLocal);
+        XElement events = XDocument.Load(xml).Root!;
+        var captured = DateTimeOffset.Parse((string)events.Attribute("captured")!);
+        Assert.Equal(named.UtcDateTime, captured.UtcDateTime);
+        Assert.InRange(captured.UtcDateTime, before.AddMilliseconds(-1), DateTime.UtcNow.AddSeconds(1));
+        Assert.Equal("5", (string?)events.Attribute("sim_time_s"));
+    }
+
+    [Fact]
+    public async Task A_Still_From_A_Session_Is_Named_By_Its_Frame_s_Simulated_Civil_Instant_And_Stamped_With_It()
+    {
+        // What a SUMO drive session declares for the frame: 66.5 s into a scenario whose second zero is
+        // 07:26:00 at UTC-06:00. The name reads the scene's clock at that offset; the sidecar and every
+        // event carry the same instant in UTC; the seconds are SUMO's, not the sensor frame's 5.0.
+        var civil = new DateTimeOffset(2026, 9, 29, 7, 27, 6, 500, TimeSpan.FromHours(-6));
+        var session = new DeclaredFrames();
+        session.Declare(RenderedFrame, new IlluminationDeclaration("advance", true, true)
+        {
+            DeclaredCivil = "2026-09-29T07:27:06.5-06:00",
+            DeclaredUtc = "2026-09-29T13:27:06.5Z",
+            SimulatedSeconds = 66.5,
+            CivilInstant = civil,
+        });
+        var platform = new SensorPlatformOptions(90.0, "a-f-A-M-F-Q", Clocked, CameraName.Default(Camera));
+
+        (FrameRecorder recorder, string png, string xml) = await RecordOneImage(platform: platform, illumination: session);
+
+        Assert.Equal($"{Clocked}_20260929_072706.500", Path.GetFileNameWithoutExtension(png));
+        Assert.Equal(Path.GetFileNameWithoutExtension(png), Path.GetFileNameWithoutExtension(xml));
+        XElement events = XDocument.Load(xml).Root!;
+        Assert.Equal("2026-09-29T13:27:06.500Z", (string?)events.Attribute("captured"));
+        Assert.Equal("66.5", (string?)events.Attribute("sim_time_s"));
+        Assert.NotEmpty(events.Elements("event"));
+        Assert.All(events.Elements("event"), e =>
+        {
+            Assert.Equal("2026-09-29T13:27:06.500Z", (string?)e.Attribute("time"));
+            Assert.Equal("2026-09-29T13:27:06.500Z", (string?)e.Attribute("start"));
+            Assert.Equal("2026-09-29T13:27:09.500Z", (string?)e.Attribute("stale"));
+        });
+        Assert.Equal("2026-09-29T13:27:06.5Z", (string?)events.Element("_illumination")!.Attribute("declared_utc"));
+        Assert.Contains("\"sim_time_s\":66.5", PngText(png, "carla:capture"));
+        Assert.Equal(1, recorder.IlluminationPaired);
+        Assert.Equal(0, recorder.IlluminationUnpaired);
+    }
+
+    [Fact]
+    public async Task A_Still_Whose_Frame_The_Session_Did_Not_Declare_Is_Not_Written()
+    {
+        // The session is past the frame with no declaration for it, so the recorder has no instant to
+        // name the still by: the still is dropped and counted, never named by another clock.
+        var session = new DeclaredFrames { NewestFrame = RenderedFrame + 1 };
+        var platform = new SensorPlatformOptions(90.0, "a-f-A-M-F-Q", Undeclared, CameraName.Default(Camera));
+
+        FrameRecorder recorder = await RecordOneFrame(platform: platform, illumination: session,
+                                                      until: r => r.IlluminationUnpaired == 1);
+
+        Assert.Equal(0, recorder.Saved);
+        Assert.Equal(0, recorder.IlluminationPaired);
+        Assert.Empty(Directory.GetFiles(_dir));
     }
 
     [Fact]
@@ -175,7 +250,20 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
     /// Observes the camera's frame, records the camera, streams it the image of that frame, and returns
     /// the recorder, flushed, with the still's image and sidecar.
     private async Task<(FrameRecorder Recorder, string Png, string Xml)> RecordOneImage(
-        SensorPlatformOptions? platform = null, ActorId? cameraActorId = null)
+        SensorPlatformOptions? platform = null, ActorId? cameraActorId = null,
+        IIlluminationSource? illumination = null)
+    {
+        FrameRecorder recorder = await RecordOneFrame(platform, cameraActorId, illumination,
+                                                      until: r => r.Saved == 1);
+        return (recorder, Directory.GetFiles(_dir, "*.png").Single(), Directory.GetFiles(_dir, "*.xml").Single());
+    }
+
+    /// Observes the camera's frame, records the camera, streams it the image of that frame, waits until
+    /// the recorder reports <paramref name="until"/>, and returns the recorder, flushed.
+    private async Task<FrameRecorder> RecordOneFrame(SensorPlatformOptions? platform = null,
+                                                     ActorId? cameraActorId = null,
+                                                     IIlluminationSource? illumination = null,
+                                                     Func<FrameRecorder, bool>? until = null)
     {
         CarlaClient client = _client!;
         await client.StartWorldObserverAsync();
@@ -183,18 +271,35 @@ public sealed class FrameRecorderCameraNameTests : IAsyncLifetime
         await Until(() => client.LatestObservedFrame == RenderedFrame, "the observer reaching frame 100");
 
         var recorder = new FrameRecorder(client, _streams.Token(CameraStream), _dir, 2.0, platform: platform,
-                                         cameraActorId: cameraActorId);
+                                         cameraActorId: cameraActorId, illumination: illumination);
         try
         {
             await _streams.SendAsync(CameraStream, RenderedFrame, 5.0, Looking, Image());
-            await Until(() => recorder.Saved == 1, "the capture being written");
+            await Until(() => (until ?? (r => r.Saved == 1))(recorder), "the capture being written or dropped");
         }
         finally
         {
             recorder.Dispose();
         }
 
-        return (recorder, Directory.GetFiles(_dir, "*.png").Single(), Directory.GetFiles(_dir, "*.xml").Single());
+        return recorder;
+    }
+
+    /// A stand-in for a SUMO drive session's declarations: answers the frames it was told about.
+    private sealed class DeclaredFrames : IIlluminationSource
+    {
+        private readonly Dictionary<ulong, IlluminationDeclaration> _byFrame = [];
+
+        public ulong? NewestFrame { get; set; }
+
+        public void Declare(ulong frame, IlluminationDeclaration declaration)
+        {
+            _byFrame[frame] = declaration;
+            NewestFrame = frame;
+        }
+
+        public bool TryGetDeclaration(ulong frame, out IlluminationDeclaration declaration) =>
+            _byFrame.TryGetValue(frame, out declaration!);
     }
 
     /// A world observer's payload holding the camera at <see cref="Looking"/>: the 124-byte header of a

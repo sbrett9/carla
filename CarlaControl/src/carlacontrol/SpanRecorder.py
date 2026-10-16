@@ -32,7 +32,7 @@ class SpanRecorder:
 
     Each span is written to its own folder under the record directory, named by the camera's name
     and the instant the span started (`<camera name>-<UTC>`, see `span_directory`); the stills
-    inside are the recorder's, named after the camera too (`<camera name>_<local capture time>`).
+    inside are the recorder's, named after the camera too (`<camera name>_<simulated civil time>`).
     While a span records, the view's readiness is asked again once per capture period, so the
     heads-up display can say whether the ground in view has finished streaming and the log says when
     it stops and starts being so. That answer is the view as of the last tick, not
