@@ -23,9 +23,10 @@ class SpanRecorder:
     so the recorder first waits for the camera's photoreal tiles, asking the server
     (`world.get_view_readiness`), and starts only when every visible tileset reports its load
     complete with no failed tile in view, on a frame later than the first answer of the wait -- a
-    frame rendered after the key was pressed. The wait has a ceiling of 90 s of wall clock, the one
-    `03_CoSimulation_Runtime.md` section 9.5.1 sets, and a ceiling only fails: past it the span is
-    not started and the operator is told why. Pressing the key during the wait cancels it. A server
+    frame rendered after the key was pressed. The wait has a ceiling of 90 s of wall clock of its
+    own, because an operator is waiting at the key. A ceiling can only refuse the span: past it
+    the span is not started and the operator is told why. Pressing the key during the wait cancels
+    it. A server
     that cannot answer (built before the call existed) is said so, and the span starts without the
     wait, as recording from a flown camera always did: the operator is watching the view it writes.
 

@@ -269,9 +269,10 @@ _FIELDS: tuple[RunField, ...] = (
             "the rendered traffic stops following it and holds the pose the window opens on this "
             "long before the window, rounded up to whole SUMO steps, so its tiles are asked about "
             "after every step of the hold; and every camera's prewarm must be at least this long, "
-            "a stare aimed at the traffic one SUMO step longer to measure it on (check 51). 10 s "
-            "covers every cold tile load measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s; one "
-            "outlier took 712 ticks, 35.6 s. A view whose tiles are not in as the window opens "
+            "a stare aimed at the traffic one SUMO step longer to measure it on (check 51). The "
+            "run result records the ticks and seconds each channel's tiles took, under "
+            "produced.readiness.channels; lengthen this field when a view's tiles come in late on "
+            "your machine. A view whose tiles are not in as the window opens "
             "still refuses the run (check 50). Where capture.picture_settled_wait is true, the "
             "picture's ceiling sets the hold instead."),
     _F("capture.picture_ceiling_frames", _POSITIVE_INTEGER, PICTURE_CEILING_FRAMES, SESSION_FIXED,

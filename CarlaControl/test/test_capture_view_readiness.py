@@ -5,10 +5,13 @@ says the tiles are in -- the camera published on the last tick, every visible ti
 100, no failed tile in view -- and the camera's own frames say the picture has settled: a frame within
 0.5 grey levels of its frame ten or more ticks earlier in its worst judged 80-pixel block, counting
 only frames rendered once the tiles were in, and leaving out every block a rendered vehicle covers in
-either frame. The wait lives in the prewarm and ticks with it; a ceiling -- 90 s of wall clock for the
-tiles; for the picture, `capture.picture_ceiling_frames` of the camera's own frames from its tiles
-being in, 60 by default -- or a view not ready as the window opens refuses at pre-roll, naming the
-channel and the witness, and the window's first frame is not moved. The ceiling and the limit,
+either frame. The wait lives in the prewarm and ticks with it. The tiles have no wall-clock ceiling.
+Cesium builds a tile's mesh inside the tileset actor's Tick, so a tile can only finish loading when
+the world ticks. The window's opening is the tiles' ceiling. An ask the server fails to answer is
+asked again after the next step. A view not ready as the window opens refuses the run at pre-roll.
+So does a picture that has not settled within `capture.picture_ceiling_frames` of the camera's own
+frames from its tiles being in, 60 by default. The refusal names the channel and the check. The
+window's first frame is not moved. The ceiling and the limit,
 `capture.picture_tolerance_levels`, are the run configuration's, so a test that moves either does so
 with an override and not a constant.
 
@@ -70,6 +73,7 @@ from carlacontrol.ViewReadiness import (  # noqa: E402
     Pose,
     VehicleBox,
     blocks_covered,
+    describe_tiles,
     grey_small,
     hold_lead_s,
     rotation_basis,
@@ -315,10 +319,11 @@ def test_the_result_records_how_each_view_became_ready(layout):
     server.tiles_at = in_from(1100)
     _, result = capture(layout, server)
     readiness = result.produced["readiness"]
-    assert (readiness["tiles_ceiling_s"], readiness["picture_span_ticks"],
+    assert (readiness["tiles_ceiling"], readiness["picture_span_ticks"],
             readiness["picture_ceiling_frames"], readiness["picture_tolerance_levels"],
             readiness["picture_min_judged_share"],
-            readiness["vehicle_margin_px"]) == (90.0, 10, 60, 0.5, 0.5, 4)
+            readiness["vehicle_margin_px"]) == ("the window's opening", 10, 60, 0.5, 0.5, 4)
+    assert readiness["figures"].startswith("the load status is each tileset's for every view")
     assert readiness["wait_began"] == {"sim_time_s": FIRST_PREWARM_S, "ticks": 0}
     assert readiness["per_capture"].startswith("not recorded")
     view = the_view(result)
@@ -345,14 +350,14 @@ def test_the_echo_says_the_wait_will_happen(layout):
     assert readiness["waits"] is True
     assert (readiness["from_s"], readiness["until_s"]) == (FIRST_PREWARM_S, BEGIN_S)
     # The ceiling in the camera's frames, and what they come to at the capture rate.
-    assert (readiness["tiles_ceiling_s"], readiness["picture_ceiling_frames"],
+    assert (readiness["tiles_ceiling"], readiness["picture_ceiling_frames"],
             readiness["picture_ceiling_s"], readiness["picture_tolerance_levels"]) == \
-        (90.0, 60, 30.0, 0.5)
+        ("the window's opening", 60, 30.0, 0.5)
     assert "within 0.5 gray levels" in readiness["picture"]
     assert "check 50" in readiness["not_ready"] and "not moved" in readiness["not_ready"]
     assert readiness["vehicles"].startswith("excluded")
-    assert ("readiness   every view's tiles (ceiling 90 s) and picture (ceiling 60 of the camera's "
-            "frames, 30 s at 2 Hz, settled within 0.5 gray levels), from t=24,900 to t=25,200"
+    assert ("readiness   every view's tiles and picture (ceiling 60 of the camera's frames, 30 s "
+            "at 2 Hz, settled within 0.5 gray levels), from t=24,900 to t=25,200"
             in LaunchEcho(result.launch_echo).render())
 
 
@@ -389,17 +394,19 @@ def test_a_failed_tile_in_view_reading_100_is_not_ready(layout):
     assert "100%, 3 failed in view" in result.detail
 
 
-def test_the_tiles_ceiling_refuses_naming_the_tiles_witness(layout):
-    # 1.25 s of wall clock a step, a sum a float holds exactly: the 72nd step reaches the 90 s
-    # ceiling, long before the window opens.
+def test_tiles_still_out_as_the_window_opens_are_refused_naming_the_queue(layout):
+    # 1.25 s of wall clock a step, 375 s over the prewarm: no wall-clock ceiling refuses a view
+    # whose tiles are still loading. The window's opening does, naming the tiles still queued.
     server = FakeServer()
     server.wall_per_tick = 0.0625
     server.tiles_at = lambda _camera, _frame: tiles(progress=87.0)
     _, result = capture(layout, server)
     refused_by_check_50(server, result)
-    assert "photoreal tiles were not in within 90 s of wall clock" in result.detail
-    assert "87%" in result.detail and "ion 2275207: progress 87.0" in result.detail
-    assert server.session.RenderedTimeSeconds == FIRST_PREWARM_S + 72.0
+    assert "its view was not ready when the window opened" in result.detail
+    assert "87%, 4 tiles queued" in result.detail
+    assert "ion 2275207: progress 87.0" in result.detail
+    assert server.session.RenderedTimeSeconds == BEGIN_S
+    assert the_view(result)["tiles_now"] == "87%, 4 tiles queued"
 
 
 def test_the_picture_ceiling_refuses_naming_the_picture_witness(layout):
@@ -540,7 +547,7 @@ def test_a_view_must_still_be_ready_as_the_window_opens(layout):
     view = the_view(result)
     assert view["state"] == "waiting for tiles" and len(view["relapses"]) == 1
     assert view["relapses"][0] == {"frame": LAST_PREWARM_FRAME - TICKS_PER_STEP,
-                                   "was": "ready", "tiles": "62%"}
+                                   "was": "ready", "tiles": "62%, 4 tiles queued"}
 
 
 def test_a_view_whose_tiles_come_back_settles_again_from_their_return(layout):
@@ -560,6 +567,38 @@ def test_a_server_that_cannot_say_is_refused_at_preroll(layout):
     _, result = capture(layout, server)
     refused_by_check_50(server, result)
     assert "could not say whether camera" in result.detail
+    assert "2 asks in a row" in result.detail
+
+
+def test_a_server_that_cannot_say_once_is_asked_again_after_the_next_step(layout):
+    # The first ask, after the first step, fails. The second answers that the tiles are in on
+    # frame 1040. The run goes on. The record counts the failure and keeps its text.
+    server = FakeServer()
+    asks = []
+
+    def tiles_at(_camera, _frame):
+        asks.append(1)
+        if len(asks) == 1:
+            raise RuntimeError("one slow round trip")
+        return tiles()
+
+    server.tiles_at = tiles_at
+    _, result = capture(layout, server, picture_wait=False)
+    assert result.outcome == "run_finished"
+    view = the_view(result)
+    assert view["tiles"]["in_at_frame"] == FIRST_FRAME + 2 * TICKS_PER_STEP
+    assert (view["ask_failures"], view["last_ask_failure"]) == \
+        (1, "RuntimeError('one slow round trip')")
+
+
+def test_the_load_status_names_the_tiles_still_queued():
+    answer = {"published": True, "frame": 7310,
+              "tilesets": [{"ion_asset_id": 2275207, "visible": True, "load_progress": 69.2,
+                            "loading": {"worker_queue": 2414, "main_queue": 2, "kicked": 73},
+                            "failed_in_view": 0, "failed_loaded": 0}]}
+    assert describe_tiles(answer) == "69%, 2,416 tiles queued, 73 kicked"
+    answer["tilesets"][0]["failed_in_view"] = 1
+    assert describe_tiles(answer) == "69%, 2,416 tiles queued, 73 kicked, 1 failed in view"
 
 
 # -- the rendered vehicles are left out ---------------------------------------------------------------
@@ -828,7 +867,7 @@ def test_by_default_a_view_must_still_have_its_tiles_as_the_window_opens(layout)
     view = the_view(result)
     assert view["state"] == "waiting for tiles"
     assert view["relapses"] == [{"frame": LAST_PREWARM_FRAME - TICKS_PER_STEP, "was": "ready",
-                                 "tiles": "62%"}]
+                                 "tiles": "62%, 4 tiles queued"}]
 
 
 def test_by_default_the_result_says_the_picture_wait_was_not_run_and_holds_no_figure_of_it(layout):
@@ -841,8 +880,8 @@ def test_by_default_the_result_says_the_picture_wait_was_not_run_and_holds_no_fi
     assert readiness["picture"].startswith("not run")
     assert "capture.picture_settled_wait" in readiness["picture"]
     assert not set(PICTURE_FIGURES) & set(readiness)
-    assert (readiness["tiles_ceiling_s"], readiness["tiles_hold_s"], readiness["wait_began"]) == \
-        (90.0, 10.0, {"sim_time_s": FIRST_PREWARM_S, "ticks": 0})
+    assert (readiness["tiles_ceiling"], readiness["tiles_hold_s"], readiness["wait_began"]) == \
+        ("the window's opening", 10.0, {"sim_time_s": FIRST_PREWARM_S, "ticks": 0})
     assert the_view(result)["tiles"] == {"in_at_frame": 1020, "ticks": 20, "wall_s": 0.1}
     text = RunCloseoutReport.render(result.produced["session"]["last_snapshot"] | {
         "scenario": "s", "window_name": "w", "sim_time_s": None, "window": {},
@@ -874,11 +913,11 @@ def test_by_default_the_echo_says_the_picture_is_not_waited_on(layout):
     assert "capture.picture_settled_wait" in readiness["picture"]
     assert not {"picture_ceiling_frames", "picture_ceiling_s", "picture_tolerance_levels",
                 "vehicles"} & set(readiness)
-    assert (readiness["tiles_ceiling_s"], readiness["tiles_hold_s"], readiness["from_s"],
-            readiness["until_s"]) == (90.0, 10.0, FIRST_PREWARM_S, BEGIN_S)
+    assert (readiness["tiles_ceiling"], readiness["tiles_hold_s"], readiness["from_s"],
+            readiness["until_s"]) == ("the window's opening", 10.0, FIRST_PREWARM_S, BEGIN_S)
     rendered = LaunchEcho(result.launch_echo).render()
-    assert ("readiness   every view's tiles (ceiling 90 s), from t=24,900 to t=25,200; not ready "
-            "by then refuses at pre-roll" in rendered)
+    assert ("readiness   every view's tiles, from t=24,900 to t=25,200; not ready by then refuses "
+            "at pre-roll" in rendered)
     assert ("picture not waited on: capture.picture_settled_wait is false; the tiles' lead is 10 s "
             "(capture.tiles_hold_s)" in rendered)
 

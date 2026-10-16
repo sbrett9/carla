@@ -1271,7 +1271,7 @@ void FCarlaServer::FPimpl::BindActions()
   // ACesium3DTileset in the world, hidden ones included:
   //   [frame, published, tileset_count, row_length,
   //    then per tileset: ion_asset_id, visible, load_progress, worker_queue, main_queue, kicked,
-  //                      failed_in_view, failed_loaded]
+  //                      failed_in_view, failed_loaded, loaded_bytes]
   // frame is the frame of the tick this state is from: RPCs are served before the frame counter
   // advances, so it is the frame that tick returned. published says the camera's view was written
   // to the Cesium camera manager on that tick, and so was in every tileset's selection. The row
@@ -1309,7 +1309,7 @@ void FCarlaServer::FPimpl::BindActions()
     }
 
     constexpr size_t HeaderLength = 4u;
-    constexpr size_t RowLength = 8u;
+    constexpr size_t RowLength = 9u;
     const size_t TilesetCount = static_cast<size_t>(Readiness.Tilesets.Num());
     std::vector<double> Out;
     Out.reserve(HeaderLength + TilesetCount * RowLength);
@@ -1327,6 +1327,7 @@ void FCarlaServer::FPimpl::BindActions()
       Out.push_back(static_cast<double>(Row.TilesKicked));
       Out.push_back(static_cast<double>(Row.FailedInView));
       Out.push_back(static_cast<double>(Row.FailedLoaded));
+      Out.push_back(static_cast<double>(Row.LoadedBytes));
     }
     return Out;
   };

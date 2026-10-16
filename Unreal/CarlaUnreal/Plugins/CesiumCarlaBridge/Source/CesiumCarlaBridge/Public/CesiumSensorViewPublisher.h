@@ -128,6 +128,15 @@ private:
 	/** Seconds accumulated since the last sweep; compared against RescanIntervalSeconds. */
 	double SecondsSinceRescan = 0.0;
 
+	/**
+	 * Whether the player camera is registered with Cesium as a view. A headless server renders the
+	 * player camera to a viewport nobody sees, yet Cesium selects and loads tiles for that view and
+	 * the readiness figures count them. So under -RenderOffScreen the player camera is no view
+	 * unless -CesiumPlayerView is passed. Decided from the command line on the first publish.
+	 */
+	bool bPlayerCameraIsAView = true;
+	bool bPlayerCameraDecided = false;
+
 	/** Logs the published view set once, and again whenever its shape changes. */
 	int32 LastPublishedCount = -1;
 };

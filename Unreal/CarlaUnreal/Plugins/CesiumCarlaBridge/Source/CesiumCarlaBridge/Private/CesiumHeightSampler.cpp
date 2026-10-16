@@ -17,6 +17,8 @@
 #include "Components/SkyLightComponent.h"
 #include "EngineUtils.h" // TActorIterator
 #include "HAL/PlatformTime.h" // FPlatformTime (sampling cost)
+#include "Misc/CommandLine.h" // FCommandLine (tile cache budgets)
+#include "Misc/Parse.h"
 #include "Misc/DateTime.h" // FDateTime (calendar validation; CoreMinimal.h does not pull this in)
 #include "UObject/UnrealType.h" // FDoubleProperty (reflection read of CesiumSunSky angles)
 
@@ -121,13 +123,29 @@ namespace
 		}
 	}
 
+	// Each tileset keeps the tiles its current views do not select, up to a budget of bytes, and
+	// unloads the oldest beyond it every tick. Cesium's default of 256 MiB unloads a capture view's
+	// tiles as soon as another view is registered. Loading them again costs world ticks. The
+	// photoreal layer gets a larger budget; -CesiumTileCacheMB=<n> sets it for a run and
+	// -CesiumGroundTileCacheMB=<n> the ground layer's, both in MiB.
+	constexpr int64 PhotorealTileCacheMiB = 1024;
+	constexpr int64 GroundTileCacheMiB = 256;
+
+	int64 TileCacheBytes(const TCHAR* Switch, int64 DefaultMiB)
+	{
+		int64 MiB = DefaultMiB;
+		FParse::Value(FCommandLine::Get(), Switch, MiB);
+		return FMath::Max<int64>(0, MiB) * 1024 * 1024;
+	}
+
 	// Find-by-tag-or-spawn a tileset for a named layer (08_Layer_Architecture), then
-	// (re)configure it: georeference, ion token/asset, hidden, collision, tag, refresh.
-	// The "photoreal" layer additionally ADOPTS a pre-placed untagged tileset (preserving
+	// (re)configure it: georeference, ion token/asset, hidden, collision, tile cache budget, tag,
+	// refresh. The "photoreal" layer additionally ADOPTS a pre-placed untagged tileset (preserving
 	// the old "use the first existing tileset" behaviour); "ground" is always its own.
 	ACesium3DTileset* EnsureTileset(
 		UWorld* World, ACesiumGeoreference* Georef, const FString& Tag,
-		int64 AssetId, const FString& Token, bool bHidden, bool bCollision, bool bRefresh)
+		int64 AssetId, const FString& Token, bool bHidden, bool bCollision,
+		int64 MaximumCachedBytes, bool bRefresh)
 	{
 		const FName TagName(*Tag);
 		ACesium3DTileset* Found = nullptr;
@@ -164,6 +182,7 @@ namespace
 		}
 		Tileset->SetActorHiddenInGame(bHidden);
 		Tileset->SetCreatePhysicsMeshes(bCollision);
+		Tileset->MaximumCachedBytes = MaximumCachedBytes;
 		if (bRefresh) Tileset->RefreshTileset();
 		return Tileset;
 	}
@@ -334,16 +353,21 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 	// height-sample source). EnsureTileset find-by-tag-or-spawns and (re)configures each so
 	// this is idempotent across the world reload in generate_opendrive_world.
 	int32 NumTilesets = 0;
+	const int64 PhotorealBudget = TileCacheBytes(TEXT("-CesiumTileCacheMB="), PhotorealTileCacheMiB);
+	const int64 GroundBudget = TileCacheBytes(TEXT("-CesiumGroundTileCacheMB="), GroundTileCacheMiB);
 	if (IonAssetId > 0)
 	{
 		if (EnsureTileset(World, Georeference, TEXT("photoreal"), IonAssetId, IonAccessToken,
-				/*bHidden*/ false, /*bCollision*/ false, bRefreshTileset)) ++NumTilesets;
+				/*bHidden*/ false, /*bCollision*/ false, PhotorealBudget, bRefreshTileset)) ++NumTilesets;
 	}
 	if (GroundIonAssetId > 0)
 	{
 		if (EnsureTileset(World, Georeference, TEXT("ground"), GroundIonAssetId, IonAccessToken,
-				/*bHidden*/ true, /*bCollision*/ true, bRefreshTileset)) ++NumTilesets;
+				/*bHidden*/ true, /*bCollision*/ true, GroundBudget, bRefreshTileset)) ++NumTilesets;
 	}
+	UE_LOG(LogTemp, Display,
+		TEXT("[CesiumCarlaBridge] Tile cache budgets: photoreal %lld MiB, ground %lld MiB (-CesiumTileCacheMB, -CesiumGroundTileCacheMB)."),
+		static_cast<long long>(PhotorealBudget >> 20), static_cast<long long>(GroundBudget >> 20));
 	// Align any other pre-existing tilesets to the same georeference.
 	for (TActorIterator<ACesium3DTileset> It(World); It; ++It)
 	{

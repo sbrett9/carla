@@ -507,7 +507,8 @@ class RunRecordSchemas:
             "picture_settled_wait": _d(_BOOLEAN, "Whether the picture is also waited on."),
             "picture": _d(_STRING, "What the picture's wait compares, or that it is not run."),
             "vehicles": _STRING,
-            "tiles_ceiling_s": _d(_NUMBER, "Wall-clock seconds a view has for its tiles."),
+            "tiles_ceiling": _d(_STRING, "What ends a view's wait for its tiles: the window's "
+                                         "opening. There is no wall-clock ceiling."),
             "tiles_hold_s": _d(_NUMBER, "The tiles' lead before the window, simulated seconds."),
             "picture_ceiling_frames": _COUNT, "picture_ceiling_s": _NUMBER,
             "picture_tolerance_levels": _NUMBER,
@@ -519,7 +520,7 @@ class RunRecordSchemas:
         }
         return _object(properties, "The wait for every channel's view before the window opens.",
                        required=["waits", "rule", "tiles", "picture_settled_wait", "picture",
-                                 "tiles_ceiling_s", "from_s", "until_s",
+                                 "tiles_ceiling", "from_s", "until_s",
                                  "traffic_stare_holds_from_s", "not_ready", "per_capture"])
 
     @staticmethod

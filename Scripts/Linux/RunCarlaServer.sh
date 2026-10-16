@@ -32,6 +32,8 @@ with_window=0
 extra_args=""
 unreal_engine_root="${CARLA_UNREAL_ENGINE_PATH:-}"
 cesium_cache_items=0   # >0 overrides Cesium MaxCacheItems (tile request-cache size) for this run
+cesium_tile_cache_mb=0 # >0 sets the photoreal layer's loaded-tile budget in MiB for this run; 0 = bridge default (1024)
+cesium_player_view=0   # 1 registers the player camera as a Cesium view on a headless server
 ready_timeout=180
 
 usage() {
@@ -71,6 +73,10 @@ Options:
                              requests".
   --cesium-cache-items <n>   Override Cesium tile request-cache size (MaxCacheItems) for this run;
                              0/omit = engine default (4096).
+  --cesium-tile-cache-mb <n> Set the photoreal layer's loaded-tile budget in MiB for this run;
+                             0/omit = bridge default (1024).
+  --cesium-player-view       Register the player camera as a Cesium view on a headless server
+                             (off there by default).
   --unreal-engine-root <path>
                              UE 5.7.4 source-build root.
                              Env: CARLA_UNREAL_ENGINE_PATH. Default: <repo-parent>/UE_5_7_4.
@@ -99,6 +105,9 @@ while [ $# -gt 0 ]; do
         --extra-args=*)         extra_args="${1#*=}" ;;
         --cesium-cache-items|--max-cache-items)   cesium_cache_items="$2"; shift ;;
         --cesium-cache-items=*|--max-cache-items=*) cesium_cache_items="${1#*=}" ;;
+        --cesium-tile-cache-mb)   cesium_tile_cache_mb="$2"; shift ;;
+        --cesium-tile-cache-mb=*) cesium_tile_cache_mb="${1#*=}" ;;
+        --cesium-player-view)     cesium_player_view=1 ;;
         --unreal-engine-root)   unreal_engine_root="$2"; shift ;;
         --unreal-engine-root=*) unreal_engine_root="${1#*=}" ;;
         -h|--help)              usage; exit 0 ;;
@@ -184,6 +193,11 @@ args+=("-carla-rpc-port=$rpc_port" "-nosound" "-unattended" "-nopause")
 # [...] would otherwise be glob-expanded by bash. 0 = leave the engine default.
 [ "$cesium_cache_items" -gt 0 ] 2>/dev/null && \
     args+=("-ini:Engine:[/Script/CesiumRuntime.CesiumRuntimeSettings]:MaxCacheItems=$cesium_cache_items")
+# The loaded-tile budget of the photoreal layer, in MiB: the bridge reads it when it configures the
+# tileset (CesiumHeightSampler.cpp). 0 = leave the bridge default. -CesiumPlayerView registers the
+# player camera as a Cesium view on a headless server, where the bridge otherwise leaves it out.
+[ "$cesium_tile_cache_mb" -gt 0 ] 2>/dev/null && args+=("-CesiumTileCacheMB=$cesium_tile_cache_mb")
+[ "$cesium_player_view" -eq 1 ] && args+=("-CesiumPlayerView")
 [ -n "$extra_args" ] && args+=($extra_args)
 
 render_desc=$([ "$with_window" -eq 1 ] && echo "windowed" || echo "-RenderOffScreen")
@@ -194,6 +208,8 @@ echo "   map      : $map"
 echo "   rpc port : $rpc_port"
 echo "   render   : $render_desc"
 echo "   cesium cache : $cache_desc"
+tile_desc=$([ "$cesium_tile_cache_mb" -gt 0 ] 2>/dev/null && echo "$cesium_tile_cache_mb MiB" || echo "bridge default (1024 MiB)")
+echo "   tile budget  : $tile_desc; player camera as a view: $([ "$cesium_player_view" -eq 1 ] && echo yes || echo 'no (headless)')"
 echo "------------------------------------------------------------"
 echo " Once the server is up, in ANOTHER terminal run e.g.:"
 echo "   python carla/CarlaNet/python/test_cesium_heights.py"

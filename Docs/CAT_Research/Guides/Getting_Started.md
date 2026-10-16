@@ -149,11 +149,15 @@ In place of the variable, they also take `--ion-token <token>`.
 
 ### The Cesium tile cache
 
-The server keeps what it streams from Cesium in a cache on disk.\
-By default the cache holds 4096 items.\
+The server keeps two caches of what it streams from Cesium: a cache of downloaded responses on disk and the tile content each tileset holds loaded in memory.\
+The disk cache saves the download.\
+The memory budget saves the decoding and the upload to the GPU, which happen on world ticks.
+
+The disk cache holds the bytes Cesium downloaded, so a tile the server has streamed once is read from disk the next time.\
+By default it holds 4096 items.\
 A large world can need more than that.\
-Then its tiles stream again on the next run.\
-`MaxCacheItems` sets the size of the cache.\
+Then its tiles download again on the next run.\
+`MaxCacheItems` sets the size of the disk cache.\
 Pass it to `run-server` as one argument after the map.
 
 On Windows, from a PowerShell window, put the argument in single quotes:
@@ -178,6 +182,19 @@ To make sure that it arrived, open the server's log.\
 In a Development distribution, the log is `CarlaServer/CarlaUnreal/Saved/Logs/CarlaUnreal.log`.\
 Find the line that starts with `LogInit: Command Line:`.\
 It must show `-ini:Engine:`, with the colon after `-ini`.
+
+The memory budget is per tileset.\
+A tile that no camera's view needs stays loaded until the tileset's budget is full.\
+Then the tileset unloads the oldest unneeded tiles.\
+The budget is 1024 MiB for the photoreal layer and 256 MiB for the ground layer.\
+`-CesiumTileCacheMB=<n>` sets the photoreal layer's budget in MiB for a run.\
+`-CesiumGroundTileCacheMB=<n>` sets the ground layer's.\
+Pass either to `run-server` after the map, as one argument.\
+The server log reports the budgets in use on a line that starts with `[CesiumCarlaBridge] Tile cache budgets`.
+
+A headless server does not register its player camera with Cesium.\
+Cesium then selects tiles for the published camera sensors only.\
+Pass `-CesiumPlayerView` to register the player camera on a headless server as well.
 
 ### Your own SUMO, for `sumo-gui`
 

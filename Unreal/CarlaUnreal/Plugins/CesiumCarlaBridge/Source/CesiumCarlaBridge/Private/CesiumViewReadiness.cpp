@@ -52,6 +52,7 @@ namespace
 		Row.WorkerThreadLoadQueueLength = Result.workerThreadTileLoadQueueLength;
 		Row.MainThreadLoadQueueLength = Result.mainThreadTileLoadQueueLength;
 		Row.TilesKicked = static_cast<int32>(Result.tilesKicked);
+		Row.LoadedBytes = NativeTileset->getTotalDataBytes();
 
 		// A Failed tile counts as drawable, so the traversal selects it and draws nothing: every one in
 		// the render list is a hole in some registered view.

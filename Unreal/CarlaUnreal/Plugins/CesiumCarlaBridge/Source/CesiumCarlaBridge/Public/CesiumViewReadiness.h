@@ -15,9 +15,10 @@
 // publisher wrote earlier in the same tick.
 //
 // LoadProgress, the load queues and the render list all belong to each tileset's default view
-// group, which holds every registered view at once: the spectator, every published sensor, any
-// other camera. While any of those views is moving the tileset is loading for it, and these figures
-// cannot say which view is still waiting.
+// group, which holds every registered view at once: every published sensor, any other camera, and
+// the player camera where the server is not headless (ACesiumSensorViewPublisher registers no
+// player camera under -RenderOffScreen). While any of those views is moving, the tileset is loading
+// for it. These figures cannot say which view is still waiting.
 //
 // This header carries no Cesium type, so the Carla module can include it without compiling
 // cesium-native.
@@ -72,6 +73,13 @@ struct CESIUMCARLABRIDGE_API FCesiumTilesetReadiness
 	 * a tile the last update refined past.
 	 */
 	int32 FailedLoaded = 0;
+
+	/**
+	 * Bytes of tile content the tileset holds loaded after its last tick, in view or kept for a
+	 * view that may come back (Cesium3DTilesSelection::Tileset::getTotalDataBytes). Against the
+	 * tileset's MaximumCachedBytes this says how much of the budget a run's views use.
+	 */
+	int64 LoadedBytes = 0;
 };
 
 /** Whether one camera's view is published, and every tileset's load state, after the last tick. */

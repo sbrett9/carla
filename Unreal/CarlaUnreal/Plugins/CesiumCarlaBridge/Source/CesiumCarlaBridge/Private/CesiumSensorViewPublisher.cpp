@@ -11,6 +11,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h" // TActorIterator
 #include "GameFramework/Actor.h" // TInlineComponentArray
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 ACesiumSensorViewPublisher::ACesiumSensorViewPublisher()
 {
@@ -153,6 +155,22 @@ void ACesiumSensorViewPublisher::PublishViews(UWorld* World)
 	{
 		return;
 	}
+
+	// The player camera is a Cesium view only where someone can see its render. A headless server
+	// draws it to an off-screen viewport. A view left at the world's origin selects tiles out to the
+	// horizon, which every readiness figure then waits on (doc 03 §9.5.1 records the measurement).
+	if (!bPlayerCameraDecided)
+	{
+		bPlayerCameraDecided = true;
+		const TCHAR* CommandLine = FCommandLine::Get();
+		bPlayerCameraIsAView = !FParse::Param(CommandLine, TEXT("RenderOffScreen"))
+			|| FParse::Param(CommandLine, TEXT("CesiumPlayerView"));
+		UE_LOG(LogTemp, Display,
+			TEXT("[CesiumCarlaBridge] The player camera %s a Cesium view%s."),
+			bPlayerCameraIsAView ? TEXT("is") : TEXT("is not"),
+			bPlayerCameraIsAView ? TEXT("") : TEXT(": the server is headless (-CesiumPlayerView makes it one)"));
+	}
+	CameraManager->UsePlayerCameras = bPlayerCameraIsAView;
 
 	// The publisher owns this list outright: it is rewritten from the live sensor set every tick, so
 	// a sensor destroyed since the last sweep simply is not re-added and stops holding its tiles

@@ -2,15 +2,21 @@
 where the run asks for that.
 
 `03_CoSimulation_Runtime.md` §9.5.1. Cesium selects and refines tiles on the world tick, from the views
-registered for that tick, so this readiness progresses only while the world ticks. It has two
-witnesses, because neither can see what the other sees:
+registered for that tick, so this readiness progresses only while the world ticks. The capture
+checks two things:
 
-* **The tiles** -- only the server can say. `world.get_view_readiness(camera)` answers as of the end
-  of the last tick. The tiles are in when the camera was among the views published on that tick and
-  every visible tileset reads `load_progress` 100 with no failed tile in view. `load_progress` alone
-  is not enough: it reads 100 for a camera not yet published, whose view has selected nothing, and
-  after a failure, because a failed tile is never retried, counts as loaded and is drawn empty.
-* **The picture** -- only the camera can say. With every tile in, the renderer still moves the
+* **The tiles.** The server reports the load status of the tiles in a camera's view:
+  `world.get_view_readiness(camera)` answers as of the end of the last tick. The tiles are in when
+  the camera was among the views published on that tick and every visible tileset reads
+  `load_progress` 100 with no failed tile in view. `load_progress` alone is not enough. It reads
+  100 for a camera not yet published, whose view has selected nothing. It also reads 100 after a
+  failure: Cesium never retries a failed tile, counts it as loaded and draws it empty. The status
+  is each tileset's for every view registered with Cesium at once: the published sensors and the player
+  camera where the server is not headless. Two channels of one run therefore read the same status.
+  A headless server registers no player camera since 2026-10-15; doc 03 §9.5.1 records the
+  measurement behind that change.
+* **The picture.** The capture compares the camera's frames to tell whether the rendered image has
+  stopped changing. With every tile in, the renderer still moves the
   picture for tens of ticks. It has settled when the camera's frame differs from its newest frame at
   least ten ticks earlier by at most 0.5 grey levels in its worst judged 80-pixel block, measured as
   the 27 placements behind the rule measured it: BT.601 grey from the camera's BGRA, the mean of each
@@ -63,11 +69,17 @@ judge is not a judgement of the view, and neither is one whose vehicles could no
 the render set or the snapshot of a frame was no longer held: neither can settle the picture, and a
 view that stays so until the ceiling is refused with that as the reason.
 
-Each witness has a ceiling in the unit it progresses in, and a ceiling only fails: 90 s of wall clock
-for the tiles -- above the 60 s request timeout, so a stalled request shows first as a failed tile --
-and for the picture a number of the camera's frames, counted from the first rendered on or after the
-tick its tiles were answered in for. The tiles' ceiling is not a count a caller supplies. The
-picture's ceiling and its tolerance are session-fixed run-configuration fields,
+Each check has a ceiling in the unit it progresses in. A ceiling can only refuse the run. Cesium
+builds a tile's mesh inside the tileset actor's Tick, so a tile can only finish loading when the
+world ticks; the tiles' ceiling is therefore the window's opening, which the prewarm sets in ticks
+(`TILES_CEILING`). A view whose tiles are not in by then is refused with the load status in
+the message. Until 2026-10-15 the tiles also had a 90 s wall-clock ceiling. At a slow pace that
+ceiling refused a view whose tiles were still loading; doc 03 §9.5.1 records the run. The wall
+seconds are still recorded. The session's tick timeout catches a server that stops ticking. An ask
+the server fails to answer is asked again after the next step (`ASK_FAILURES_TOLERATED`) and the
+record counts it. The picture's ceiling is a number of the camera's frames, counted from the first
+frame rendered on or after the tick the tiles were reported in on. The picture's ceiling and its
+tolerance are session-fixed run-configuration fields,
 `capture.picture_ceiling_frames` and `capture.picture_tolerance_levels`, whose tool defaults are
 `PICTURE_CEILING_FRAMES` and `PICTURE_TOLERANCE_LEVELS` here, so either can be changed for a run
 without a code change and the lock records the value; the ten-tick span is not a field.
@@ -104,14 +116,25 @@ from typing import Any
 
 import numpy as np
 
-TILES_CEILING_S = 90.0
+# The window's opening ends a view's wait for its tiles. Cesium builds a tile's mesh inside the
+# tileset actor's Tick, which the engine calls once per world tick, so a tile can only finish
+# loading when the world ticks. The wait therefore has no wall-clock ceiling. The 90 s wall-clock
+# ceiling that stood until 2026-10-15
+# refused a view whose tiles were still loading whenever the pace was slow; doc 03 §9.5.1 records
+# that run. The session's tick timeout catches a server that stops ticking. The wall seconds are
+# still recorded.
+TILES_CEILING = "the window's opening"
+# The server may fail to answer this many asks in a row before the view is refused. With one, a
+# single failed round trip is asked again after the next step and the run goes on.
+ASK_FAILURES_TOLERATED = 1
 PICTURE_SPAN_TICKS = 10
 # The tool default of capture.picture_settled_wait: whether the picture is waited on once the tiles
 # are in. Off, by the owner's ruling of 2026-10-06.
 PICTURE_SETTLED_WAIT = False
 # The tool default of capture.tiles_hold_s: with the picture's wait off, how long every camera holds
-# the pose the window opens on before it, its tiles asked about after each step of that hold. 10 s
-# covers every cold tile load measured, 30 to 124 ticks at 0.05 s, 1.5 to 6.2 s; one outlier took 712.
+# the pose the window opens on before it, its tiles asked about after each step of that hold. The
+# measurements behind the value are in doc 03 §9.5.1. 10 s stands until the hold is measured again
+# on a headless server that registers no player camera as a Cesium view.
 TILES_HOLD_S = 10.0
 # The tool defaults of capture.picture_ceiling_frames and capture.picture_tolerance_levels: how many
 # of its own frames a camera has, from its tiles being in, to settle its picture (30 s at 2 Hz), and
@@ -150,6 +173,9 @@ PER_CAPTURE = ("not recorded: the server answers for the view as of the last tic
 PICTURE_WAIT_OFF = ("not run: capture.picture_settled_wait is false, its default, so each view "
                     "waited for its tiles only and no camera frame was compared; the wait is kept, "
                     "and runs where capture.picture_settled_wait is true")
+FIGURES = ("the load status is each tileset's for every view registered with Cesium at once: the "
+           "published sensors and the player camera where the server is not headless; two "
+           "channels of one run read the same status")
 VEHICLES = ("excluded: every 80-pixel block covered, in either frame of a comparison, by a rendered "
             "vehicle's box and its ground shadow, projected from the client's snapshot of that frame "
             f"with a {VEHICLE_MARGIN_PX}-pixel margin; a comparison left less than "
@@ -177,7 +203,9 @@ def tiles_in(readiness: dict) -> bool:
 
 
 def describe_tiles(readiness: dict | None) -> str:
-    """Where the tiles stand, in a few words to follow "tiles": in, a percentage, a failure."""
+    """The load status in a few words, to follow "tiles": in, or the percentage loaded with the
+    number of tiles still queued. The percentage falls when the selection refines, so the queue
+    says how much work is left. Kicked tiles and failed tiles follow."""
     if readiness is None:
         return "not asked yet"
     if not readiness.get("published"):
@@ -188,8 +216,15 @@ def describe_tiles(readiness: dict | None) -> str:
     if tiles_in(readiness):
         return "in"
     progress = min(float(tileset["load_progress"]) for tileset in visible)
+    queued = sum(int(tileset["loading"]["worker_queue"]) + int(tileset["loading"]["main_queue"])
+                 for tileset in visible)
+    kicked = sum(int(tileset["loading"]["kicked"]) for tileset in visible)
     failed = sum(int(tileset["failed_in_view"]) for tileset in visible)
     text = f"{progress:.0f}%"
+    if queued:
+        text += f", {queued:,} tiles queued"
+    if kicked:
+        text += f", {kicked:,} kicked"
     if failed:
         text += f", {failed} failed in view"
     return text
@@ -659,6 +694,10 @@ class ChannelReadiness:
         self.comparison_history: list[dict] = []
         self.relapses: list[dict] = []
         self.ready_at_window_open: bool | None = None
+        # Asks the server failed to answer: the total, the current run of failures and the last.
+        self.ask_failures = 0
+        self.consecutive_ask_failures = 0
+        self.last_ask_failure: str | None = None
         self.comparisons = {"made": 0, "judged": 0, TOO_FEW_BLOCKS: 0, VEHICLES_UNKNOWN: 0}
         self.locate_failures = 0
         self.last_locate_failure: str | None = None
@@ -687,17 +726,28 @@ class ChannelReadiness:
         waited on, and say what changed, each with the logging level it is said at.
 
         Raises:
-            ViewNotReadyError: a ceiling was reached, or the server could not be asked.
+            ViewNotReadyError: the picture's ceiling was reached, or the server could not be asked
+                more times in a row than `ASK_FAILURES_TOLERATED`.
         """
         started = time.perf_counter()
         try:
             answer = self._ask()
         except Exception as failure:
-            raise ViewNotReadyError(
-                self.sensor_id, "tiles",
-                f"channel {self.sensor_id}: the server could not say whether camera "
-                f"{self.camera_id}'s photoreal tiles are in ({failure!r}), and a capture is not "
-                "written before they are") from None
+            self.ask_failures += 1
+            self.consecutive_ask_failures += 1
+            self.last_ask_failure = repr(failure)
+            if self.consecutive_ask_failures > ASK_FAILURES_TOLERATED:
+                raise ViewNotReadyError(
+                    self.sensor_id, "tiles",
+                    f"channel {self.sensor_id}: the server could not say whether camera "
+                    f"{self.camera_id}'s photoreal tiles are in on "
+                    f"{self.consecutive_ask_failures} asks in a row ({failure!r}). A capture "
+                    "is not written before they are") from None
+            return [(logging.WARNING,
+                     f"channel {self.sensor_id}: the server could not say whether camera "
+                     f"{self.camera_id}'s photoreal tiles are in ({failure!r}); asked again "
+                     "after the next step")]
+        self.consecutive_ask_failures = 0
         self._asked_ms.append((time.perf_counter() - started) * 1000.0)
         self.last_answer = answer
         frame = int(answer["frame"])
@@ -714,14 +764,6 @@ class ChannelReadiness:
                              + ("its picture starts again once they are back" if self.picture_wait
                                 else "its view is not ready until they are back")))
                 self._wait_for_tiles(now, ticks)
-            waited = now - self._tiles_wait_wall
-            if waited >= TILES_CEILING_S:
-                raise ViewNotReadyError(
-                    self.sensor_id, "tiles",
-                    f"channel {self.sensor_id}: its photoreal tiles were not in within "
-                    f"{TILES_CEILING_S:.0f} s of wall clock: at frame {frame}, "
-                    f"{ticks - self._tiles_wait_ticks} ticks and {waited:.1f} s into the wait, "
-                    f"the tiles were {describe_tiles(answer)}{self._tilesets_text(answer)}")
             return said
         if self.state == WAITING_FOR_TILES and not self.picture_wait:
             self.state = READY
@@ -918,6 +960,8 @@ class ChannelReadiness:
                  f"queued {tileset['loading']['worker_queue']}/{tileset['loading']['main_queue']}, "
                  f"kicked {tileset['loading']['kicked']}, failed in view "
                  f"{tileset['failed_in_view']}, failed loaded {tileset['failed_loaded']}"
+                 + (f", loaded {int(tileset['loaded_bytes']) / 2**20:,.0f} MiB"
+                    if tileset.get("loaded_bytes") is not None else "")
                  for tileset in visible]
         return " (" + "; ".join(parts) + ")"
 
@@ -951,7 +995,9 @@ class ChannelReadiness:
                     "published": bool(self.last_answer.get("published")),
                     "visible_tilesets": visible_tilesets(self.last_answer)},
                 "relapses": list(self.relapses),
-                "readiness_asked": asked, "ready_at_window_open": self.ready_at_window_open}
+                "readiness_asked": asked, "ask_failures": self.ask_failures,
+                "last_ask_failure": self.last_ask_failure,
+                "ready_at_window_open": self.ready_at_window_open}
         if self.picture_wait:
             view.update({"picture": self.picture,
                          "last_comparison": self.last_comparison,
@@ -1047,7 +1093,7 @@ class ViewReadinessGate:
     def to_dict(self) -> dict:
         """The wait as the run result records it: whether the picture was waited on, and with it off
         the statement that it was not run in place of every picture figure."""
-        record: dict = {"rule": RULE, "tiles_ceiling_s": TILES_CEILING_S,
+        record: dict = {"rule": RULE, "tiles_ceiling": TILES_CEILING, "figures": FIGURES,
                         "picture_settled_wait": self.picture_wait}
         if self.picture_wait:
             record.update({"picture_span_ticks": PICTURE_SPAN_TICKS,
