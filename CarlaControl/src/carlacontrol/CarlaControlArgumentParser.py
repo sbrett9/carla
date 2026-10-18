@@ -373,25 +373,6 @@ class CarlaControlArgumentParser:
             help="random seed for repeatable spawns/destinations and (in synchronous mode) "
             "the Traffic Manager (default: nondeterministic)",
         )
-        fade = traf.add_mutually_exclusive_group()
-        fade.add_argument(
-            "--fade",
-            dest="fade",
-            action="store_true",
-            default=False,
-            help="dissolve vehicles in as they cross the staging margin and out as they "
-            "leave, instead of having them appear and vanish at full opacity. OFF by "
-            "default: the opacity is computed client-side and pushed to the server one "
-            "blocking RPC per vehicle per reconcile, which is the heaviest load this "
-            "client puts on the server's per-frame RPC budget.",
-        )
-        fade.add_argument(
-            "--no-fade",
-            dest="fade",
-            action="store_false",
-            help="spawn and despawn vehicles at FULL opacity (the default; accepted so "
-            "existing command lines keep working).",
-        )
         traf.add_argument(
             "--route",
             action="store_true",

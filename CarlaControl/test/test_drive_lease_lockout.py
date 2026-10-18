@@ -173,7 +173,7 @@ class _World:
 
 
 def _controller(world) -> TrafficController:
-    args = SimpleNamespace(max=10, route=False, tm_port=8000, fade=False, speed_spread=0.0,
+    args = SimpleNamespace(max=10, route=False, tm_port=8000, speed_spread=0.0,
                            spawn_at_speed=False, speed_scale=100.0, spawn_interval=1.0)
     return TrafficController(world, tm=None, args=args, staging=None, blueprints=[], ring_sps=[],
                              spawn_pool=[], floor_z=-1000.0)
@@ -242,7 +242,6 @@ def test_a_spawn_whose_autopilot_is_refused_switches_traffic_off_naming_the_hold
     traffic.occupied = lambda _x, _y: False
     traffic.clear_shift = lambda _location, _yaw, _extent: (0.0, 0.0)
     traffic.spawn_bp = lambda: traffic.blueprints[0]
-    traffic.interior_opacity = lambda *_: 1.0
     assert traffic.enable() is True
     traffic.want_enabled = True
 
