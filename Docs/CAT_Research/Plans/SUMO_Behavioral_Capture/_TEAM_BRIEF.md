@@ -3,8 +3,8 @@
 The constraints every section of this plan was written under, kept as provenance rather than as a
 deliverable. [`00_Overview.md`](00_Overview.md) is the entry point; this file records the standing
 rules, the user's fixed decisions, the ground truth the team started from, and the three corrections
-issued along the way (the retired `SCTMV.py` path, the demotion of vehicle fade, and the removal of the
-render cap). Read it if you want to know *why* a section decided something the way it did, or before
+issued along the way (the retired `SCTMV.py` path, the removal of the vehicle fade, and the removal of
+the render cap). Read it if you want to know *why* a section decided something the way it did, or before
 adding a section of your own.
 
 ---
@@ -349,8 +349,8 @@ audited, **not required**. The RPC name mismatch it found stays a recorded defec
 
 - **Never regress an existing capability.** Improving or replacing a capability is welcome; silently
   losing one is not. Where the SUMO-driven mode cannot preserve something the current pipeline does
-  (real velocity, suspension, terrain seating, vehicle fade, staging ring), name the loss explicitly,
-  and either compensate for it or record it as a deliberate, bounded trade confined to this mode.
+  (real velocity, suspension, terrain seating, staging ring), name the loss explicitly, and either
+  compensate for it or record it as a deliberate, bounded trade confined to this mode.
 - **Rebuilds are neutral.** Needing an engine rebuild, a LibCarla rebuild or a CarlaNet rebuild is
   *not* a cost worth avoiding and must not appear in a pros-and-cons list. Choose the right design
   and rebuild whatever it needs. Bolting on a worse design to dodge a rebuild is the actual failure.
@@ -466,44 +466,25 @@ finding that `scenario_id` is accepted by the recorder and never supplied is sti
 passes `run_id` and `seed` and no `scenario_id`
 (`carla/CarlaControl/src/carlacontrol/NativeRecorder.py:96-111`).
 
-### Vehicle fade is demoted and is not a concern for this plan
+### The vehicle fade is removed
 
-**Directive from the user, 2026-09-17.** Per-actor opacity fade on spawn and across the staging
-margin is **no longer the default and is not to be designed around**. Vehicles entering the scene at
-full opacity is acceptable; refinement can come later if it is ever wanted.
+**Correction, 2026-10-18.** The vehicle fade, which dissolved staging traffic in and out at the edge
+of the scene, was removed from the code: the server's `set_actor_fade` RPC, the client's fade record
+and the truth producer's arrival gate built on it, the shim's `set_fade`, and the `--fade` and
+`--no-fade` options. SUMO co-simulation never used it. Under the default render set, a vehicle appears
+where SUMO inserts it, or where SUMO has it when drawing begins, and disappears where SUMO last had it.
+The truth producer reports every vehicle actor except a body the SUMO drive's pool has parked.
 
-The reason is cost, and it is recorded in the code: the opacity is computed client-side and pushed to
-the server as **one blocking RPC per vehicle per reconcile, which is the heaviest load this client
-puts on the server's per-frame RPC budget**
-(`carla/CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:318-328`, where `--fade` now
-carries `default=False`; `--no-fade` is retained at `:329-334` so existing command lines keep working).
-
-Three consequences, all verified:
-
-- **No fade mechanism belongs in the SUMO-driven mode.** A vehicle admitted to the render set appears
-  at full opacity and a released one disappears. Do not design a dissolve, do not give a registry a
-  fade role, and do not publish fade state anywhere.
-- **The arrival gate degrades gracefully to inert, so nothing is lost by switching fade off.**
-  `CarlaClient.IsActorEstablished` returns true for any actor nobody has faded
-  (`CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1571`), and the truth producer's gate is
-  documented as inert in exactly that case
-  (`CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs:66-73`). `GetActorOpacity` returns 1.0
-  for an unfaded actor (`CarlaClient.cs:1562`), so `VehicleTelemetry.Opacity`
-  (`VehicleTelemetryService.cs:112`) is a constant 1.0 under this mode.
-- **The per-frame RPC budget gains rather than loses.** Removing the heaviest existing client load is
-  headroom the pose-application write path can spend instead.
-
-What still has to be recorded is the **render-set admission and release instant** per vehicle, because
-a vehicle appearing or vanishing abruptly is a fact about the capture that the observability
-accounting needs. That replaces the fade-derived notion of a vehicle having "arrived"; it is a
-recorded instant, not a visual transition.
+What has to be recorded is the **render-set admission and release instant** per vehicle, because a
+vehicle appearing or vanishing abruptly is a fact about the capture that the observability accounting
+needs.
 
 ### Known problems carried in from the source documents
 - **Teleported bodies report zero velocity in truth.** `WorldObserver.cpp:373` serialises
   `GetActor()->GetVelocity()`, which a `set_transform` on a non-simulating body does not update. This
   reaches the Cursor-on-Target truth record, the traffic manager's collision stage, and the occlusion
-  and arrival gating of [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). (Read from doc 23
-  §4; verify against the source before relying on it.)
+  gating of [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). (Read from doc 23 §4; verify
+  against the source before relying on it.)
 - **The SUMO network is flat** — zero distinct `z` values in any lane shape (doc 23 §2, measured).
 - **Turn restrictions are discarded before netconvert sees them** — `osm_clip.py` drops all OSM
   relations ([issue #12](https://github.com/sbrett9/carla/issues/12)).

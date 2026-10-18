@@ -31,6 +31,7 @@ checked*).
 
 | Rev | Change |
 |---|---|
+| 49 | 2026-10-18. The vehicle fade and the truth arrival gate were removed from the code; `C2` §4.3, §4.7, `C7` §9.1, §9.2, §9.6, §9.7 and §16 question 6 no longer describe them. |
 | 48 | 2026-10-13. `C9` §11.5, V9.7: `policy` and `rate_sun_s_per_sim_s` are optional, as the owner ruled. A missing policy is `advance`. A missing rate under `advance` is `1.0`. Both are recorded as the default. |
 | 47 | 2026-10-07. Every file our tools write says what made it and names its format, as the owner decided, so a capture or a world package can be traced to the major.minor release of the distribution that made it. One release number: `CARLA_VERSION` in the top-level `CMakeLists.txt`, stamped into both wheels and the CarlaNet assemblies, with the short CARLA commit as a PEP 440 local part on any build that is not the tagged release (`0.10.0+g1a2b3c4d5`). The server answers `get_build_identity`: its release, world interface, `package` or `editor`, configuration, and the CARLA, content and engine commits, `unknown` where it cannot know them; a server built before the call is recorded as not saying. The record, `producer` (`tool`, `tool_version`, `carlanet`, `server`, `sumo`, `written_utc`), is on `C10`'s manifest opening row, the world truth track's summary, `run.result.json`, `run.lock.json`, `run.effective.json` and `run.resolution.json`; on `C3`'s compile lock, resolution report and sweep index; on `C1`'s catalogue; and on the world package's `world.json` as `Producer`, beside a new `FormatVersion` 1. `C8`: the sidecar's `<events>` gains `format_version` 1 and a `<_producer>` first under it; the PNG keeps its four chunks (rev 42), each gaining `format_version` 1, and `carla:capture` carries the record. The compiled supervision plan carries none, since two compiles of one specification write it byte for byte at any commit of a release, and the route file's header names the release alone. Every reader refuses a format version newer than it knows, naming the file, the version and what it supports, and reads a file from before as version 1. The plugin and LibCarla change awaits a build. |
 | 46 | 2026-10-06. `C2`, `C6`, `C10`: a vehicle that leaves SUMO -- arrived at the end of its route or by SUMO removing it, or vanished -- is drawn at its last SUMO position on that step's own frame, `pose_source` `sumo`, and is gone from the next frame, as the owner ruled; it is never `stale` for leaving (§4.3 E1, §8.3c, [`03`](03_CoSimulation_Runtime.md) D3.45). Until now its body was parked from that step's own frame, a frame early. The release instant is stated: the instant of the first frame that no longer draws the vehicle, so a rendered span holds the instants of exactly the frames that drew it, as the session's end already closed spans; the old instant for a vehicle that left SUMO, the pass's, was a step late against the frames, and at twenty ticks per step the new one is a tick after the last step's frame (§4.3). `render_released` for such a vehicle is written once that frame has rendered, or at the manifest's close where the run ended before it (§4.1). `left_the_region` and `capacity` are unchanged: still taken from, and stamped at, their pass. No server change. |
@@ -1480,13 +1481,11 @@ A rendered vehicle is released when any of:
 
 A vehicle still drawn when the run stops is not released; §4.1 says what its rows then show.
 
-**A release is abrupt, and the instant is recorded.** Per-actor opacity fade is demoted and is not to be
-designed around ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md), *Vehicle fade is demoted*): an admitted vehicle
-appears at full opacity and a released one disappears. What replaces the fade-derived notion of a
-vehicle having "arrived" is the **recorded admission and release instant** — `rendered_spans[]` in §4.5
-— which is a fact about the capture rather than a visual transition. The admission instant is the
-frame SUMO first reports the vehicle in, or the first rendered frame for one SUMO already had, and it
-is the first frame the vehicle is drawn on (§4.2): no frame before it shows the vehicle. The release
+**A release is abrupt, and the instant is recorded.** An admitted vehicle appears and a released one
+disappears from one frame to the next, and the **admission and release instants** are recorded in
+`rendered_spans[]` (§4.5). The admission instant is the frame SUMO first reports the vehicle in, or the
+first rendered frame for one SUMO already had, and it is the first frame the vehicle is drawn on
+(§4.2): no frame before it shows the vehicle. The release
 instant is the instant of the first frame that no longer draws the vehicle, so the span holds the
 instants of exactly the frames that drew it: for a vehicle that leaves SUMO (E1), the frame after the one
 of its last SUMO step, which draws it; for one still drawn when the session ends, the frame after the
@@ -1494,15 +1493,9 @@ last rendered. Under an optional limit, a release for `left_the_region` or `capa
 with the pass that made it, as an `entered_limit` admission is, a step after the frames it takes effect
 on; those are unchanged.
 
-Two consequences, both already true in the tree. The arrival gate degrades to inert rather than
-breaking: `CarlaClient.IsActorEstablished` returns true for any actor nobody has faded
-(`CarlaNet.Transport/CarlaClient.cs:1571`), the truth producer's gate is documented as inert in exactly
-that case (`CarlaNet.Recording/VehicleTelemetryService.cs:66-73`), and `GetActorOpacity` returns 1.0 for
-an unfaded actor (`CarlaClient.cs:1562`), so `VehicleTelemetry.Opacity`
-(`VehicleTelemetryService.cs:112`) is a constant 1.0 under this mode. And the release path stays a
-single path: `C2` is the *only* subsystem that destroys a vehicle here, because the .NET traffic manager
-is locked out ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.4) and no storyboard executor is running, so this
-mode does not add a fourth destroyer
+The release path stays a single path: `C2` is the *only* subsystem that destroys a vehicle here,
+because the .NET traffic manager is locked out ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3.4) and no
+storyboard executor is running, so this mode does not add a fourth destroyer
 ([issue #18](https://github.com/sbrett9/carla/issues/18)). Whether the actor is destroyed or returned to
 a pool is [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md)'s; `C2` fixes only that the release
 instant is recorded and that exactly one component decides it.
@@ -1621,8 +1614,8 @@ The input has no version of its own: the windows travel in the lock under its `l
   superficially fine. `D4.6` holds because, by default, nothing chooses. This is why a limit is never a
   default (D4.44): one a run chooses is named in its configuration, said at launch and counted in its
   record, so the run cannot look fine while it left its subject out.
-- **An abrupt appearance becomes unaccounted for.** Vehicles appear and vanish at full opacity by
-  decision, which is acceptable — but only because `rendered_spans[]` records exactly when. Without it,
+- **An abrupt appearance becomes unaccounted for.** Vehicles appear and vanish from one frame to the
+  next, which is acceptable only because `rendered_spans[]` records exactly when. Without it,
   a body that pops into frame is indistinguishable from a detection artifact, and the observability
   accounting has no instant to attribute it to.
 
@@ -2812,7 +2805,6 @@ stop moving.
 | **Vehicle light state** | **owned by the co-simulation bridge**, rewritten whenever it changes, in the same per-tick batch as the pose | §9.4; `SetVehicleLightStateCommand` (`CarlaNet.Types/Rpc/Commands/Command.cs:94`) |
 | Collision response between two SUMO-driven actors | **undefined.** SUMO owns separation | |
 | Wheel rotation, suspension, body roll | **not simulated** | |
-| Vehicle fade | **not used.** Admission and release are abrupt and the instants are recorded | `C2` §4.3; [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md), *Vehicle fade is demoted* |
 
 ### 9.2 The velocity problem, verified
 
@@ -2832,8 +2824,8 @@ source, and it is worse than a reporting gap — the obvious workaround does not
 The truth record reads `snap.Velocity` from the world-observer cache
 (`CarlaNet.Recording/VehicleTelemetryService.cs:77,88`) and derives both `speed` and — above 0.5 m/s —
 `course` from it (`:89-98`). So a teleported body reports zero speed *and* falls back to yaw for
-course, which then also reaches the CoT `track` element (`CotWriter.cs`), the occlusion and arrival
-gating of [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md), and every consumer that reads speed
+course, which then also reaches the CoT `track` element (`CotWriter.cs`), the occlusion gating of
+[doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md), and every consumer that reads speed
 out of the truth record.
 
 > **D4.13 — truth velocity for a SUMO-driven actor is a contract obligation of the producer, not a
@@ -3042,8 +3034,6 @@ explicitly rather than lost silently. In this mode:
 | Terrain-responsive speed | Not provided by SUMO either (doc 23 §7); a separate piece of work |
 | Collision response between rendered vehicles | **None.** SUMO's car-following owns separation. A SUMO collision is reported by SUMO |
 | Terrain seating | **Preserved** — Z from the drape, I4 |
-| Staging fade | **Deliberately not used** ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md), *Vehicle fade is demoted*). What it provided — a recorded notion of a vehicle having arrived — is replaced by `rendered_spans[]` (`C2` §4.5), which is a recorded instant rather than a visual transition. The per-frame RPC budget gains, since the fade was the heaviest existing client load |
-| Truth arrival gate | **Preserved and inert** — `IsActorEstablished` returns true for an unfaded actor (`CarlaClient.cs:1571`), documented at `VehicleTelemetryService.cs:66-73` |
 | The traffic manager's headlight and fog rule | **Compensated, and improved.** `VehicleLightStage` is unreachable because no vehicle is registered (I6), and it read `WeatherParameters.SunAltitudeAngle` (`VehicleLightStage.cs:231-238`), which is inert in a georeferenced world (`CarlaServer.cpp:611-612`). §9.4's replacement reads the sun that is actually lighting the scene. This is a capability that worked on stock content, did not work here, and now does |
 | The traffic manager's brake and indicator inference | **Replaced by a better source.** It inferred them from its own motion plan (`VehicleLightStage.cs`); the bridge reads the signals SUMO computed for the driving it actually simulated (§9.4) |
 
@@ -3051,7 +3041,7 @@ explicitly rather than lost silently. In this mode:
 
 - **Every truth speed is zero and every course is a yaw** — the measured consequence of
   `WorldObserver.cpp:373`. A corpus whose truth says nothing moves is not a corpus, and downstream
-  consumers that gate on speed — occlusion, arrival, and anything downstream reading the truth record —
+  consumers that gate on speed — occlusion and anything downstream reading the truth record —
   all mis-fire.
 - **Vehicles float or sink.** SUMO's network is flat; taking Z from it puts every vehicle at the
   world's Z = 0 plane regardless of terrain.
@@ -5285,7 +5275,7 @@ Each carries the options and a recommendation; none is decided here.
    whose physics is off writes the engine's velocity, so a pose-applied body reports SUMO's own speed to
    every reader of `GetVelocity()`. **Whether a SUMO-driven actor should be given a non-zero physics velocity anyway.** `D4.13` fixes
    the truth record, but other consumers read the engine's velocity directly — the traffic manager's
-   collision stage, and the arrival and occlusion gating of
+   collision stage, and the occlusion gating of
    [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). The traffic manager is locked out, so the
    question reduces to whether anything else in the engine needs it. Options: leave it zero and fix
    each consumer; or re-enable simulation with zero gravity and drive by velocity rather than by

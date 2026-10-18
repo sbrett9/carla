@@ -11,7 +11,7 @@ is not.
 
 **Reads from:** [`Findings/23_SUMO_Traffic_Integration.md`](../../Findings/23_SUMO_Traffic_Integration.md)
 (primary), [`Findings/17_Photoreal_Occlusion_Metric.md`](../../Findings/17_Photoreal_Occlusion_Metric.md)
-§12.2 (the arrival gate), [`Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
+(the occlusion estimate), [`Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
 §5.6 (the vehicle catalogue), [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) (§3a for the time-of-day requirement).
 
 **Depends on decisions owned elsewhere:** [`04_Contracts.md`](04_Contracts.md) (vehicle catalogue,
@@ -76,6 +76,7 @@ advancement policy, the headlight predicate),
 | 2026-10-06 | §8.9, D3.44: the owner ruled the pose source's four words -- `sumo` (the frame falls on a SUMO step), `interpolated` (between steps, filled in along the lane), `jump` (SUMO reported a step too far from the last to drive in one step; the body is shown at SUMO's later position for the frames of that step) and `stale` (the body could not be placed and stands where it was last drawn) -- in place of `simulated`, `interpolated` and `held`, and a jump, written `simulated` until now, is a state of its own end to end: `update_pose_source` takes a sixth argument, the jump list; the snapshot's entry states are `Sumo = 1`, `Stale = 2`, `Jump = 3`; the session names a discontinuous body jump. A server built before it binds five arguments and refuses six for their count; the session learns that from the declaration, sends every change in the five, names a jumping body sumo, and records the server's words and the count on the run report and the closeout. Measured with a stop that ends in SUMO's `jump`: all twenty frames of its step read `jump` at twenty ticks per step. Measured too: a vehicle missing from SUMO's next step leaves the render set as that step begins and is never drawn stale. The plugin and LibCarla change awaits a build. |
 | 2026-10-06 | §6.3, §8.3, §8.4, §8.5, §8.8, §8.9, §9.7, §11.3, D3.6, D3.35, D3.45: the owner ruled that a vehicle that leaves SUMO -- arrived at the end of its route, or vanished -- is drawn at its last SUMO position on that step's own frame, pose source `sumo`, and is gone from the next frame: never `stale` for leaving, nothing invented or held, and a frame that falls on a SUMO step shows every vehicle SUMO had at it within the render set. Until now the pass that read step N+1 and found the vehicle gone parked its body from step N's own frame, so it vanished a frame early, last drawn interpolated most of the way to N; the 2026-10-06 entry above measured that and called it never stale, which it was. Now the session keeps the body lent for step N's frame, posed at fraction zero from the N state with its N signals, lends it to no other vehicle there, and gives it back after that frame: parked at the head of the next batch and named parked by `update_render_set` before the next cue, back to its blueprint's free bodies in the order of the vehicles' ids. Its interval ends at the next frame's instant, the convention every interval keeps -- from the first frame that draws the vehicle to the first that no longer does, as the session's end already closed them -- so the old release instant, the pass's t(N+1), was a step late against frames that stopped at t(N); at one tick per step the new instant is the same number, at twenty it is t(N) plus one tick. The interval is handed out once the frame has rendered, with the next step's record; one whose frame the run never rendered is released by the session's end at that frame's instant with its own reason, and the run manifest writes it at its close either way. The world truth track no longer writes `left_the_simulation` or `vanished`: a vehicle's last SUMO frame is drawn. Releases an optional limit makes (`left_the_region`, `capacity`) are unchanged and still take effect, and are stamped, at their pass. Measured: the body of a vehicle that left SUMO drawn on its last frame 0.000000 m from SUMO's point and within 2e-6 m of what the world applied, at one and twenty ticks per step. No server change. |
 | 2026-10-07 | §9.5.1: the owner's ruling of 2026-10-06 -- the picture's wait is off by default ("It's in a state that is not something I'd like to include at publication"), as the session-fixed field `capture.picture_settled_wait`, `false` unless a run sets it `true`, which runs the wait as it stood, ceiling and tolerance included. Off, the pre-roll waits for the tiles alone: no camera is listened to and no frame compared; the tiles have a lead of their own, the session-fixed field `capture.tiles_hold_s`, 10 s by default, which covers every cold tile load measured (1.5 to 6.2 s; one outlier took 35.6 s), for which a stare aimed at the traffic holds the pose the window opens on, in whole SUMO steps, its tiles asked about after every step; check 51 asks every camera's prewarm for that lead (10 s at a fixed pose, 11 s for a stare aimed at the traffic, which needs a step before the hold to measure the traffic on); and the run result says the wait was not run and holds no picture figure. With the wait on, the picture's ceiling sets the hold and the lead is not read. Recorded and not fixed: the comparison places each frame's vehicles from the client's snapshot of that frame and is asked once per SUMO step, after its last tick, so at Bahonar's twenty ticks a step the older frame's snapshot is gone and all 59 comparisons of the guard run were `vehicles_unknown`, refused at pre-roll; Arapahoe steps every tick and never showed it; and the owner had found the wait too strict. |
+| 2026-10-18 | §3.1, §3.3, §3.5.3, §3.6, §4, §5.2, §8.2, §8.4, §8.5, D3.10, §12 G2 and G4, §13 L5 and L5b: the vehicle fade was removed from the code. `set_actor_fade`, `Actor.set_fade`, `CarlaClient.SetActorFadeAsync`, the arrival latch (`IsActorEstablished`) and `VehicleTelemetry.Opacity` no longer exist. A SUMO drive never called the fade, so nothing a drive draws or records changes. G2 and G4 are closed and L5 and L5b retired. |
 ---
 
 ## 0. What this section does not cover
@@ -145,7 +146,7 @@ flowchart LR
     INT["LaneArcInterpolator<br/>sub-step pose along lane shape"]
     CONV["PoseConverter<br/>frame, yaw, bumper shift, Z, pitch/roll"]
     POOL["VehicleBodyPool<br/>per blueprint, reuse not respawn"]
-    RS["RenderSetManager<br/>admission and release,<br/>instants recorded, no opacity"]
+    RS["RenderSetManager<br/>admission and release,<br/>instants recorded"]
     SOL["SolarLease / SolarAudit<br/>civil time from t_render;<br/>sets the sun, audits it every tick"]
     LIGHT["VehicleLampMapping / HeadlightRule<br/>SUMO signal bits + sun elevation<br/>to VehicleLightStateFlags"]
     WR["TickBatch<br/>one apply_batch per world tick:<br/>poses, velocities,<br/>changed vehicle light states"]
@@ -640,7 +641,6 @@ Everything in this section was read from the source, not assumed.
 | Python shim, single actor | `Actor.set_simulate_physics` | `:790` | present → `SetActorSimulatePhysicsAsync` |
 | Python shim, single actor | `Actor.set_target_velocity` | `:793-801` | present → `SetActorTargetVelocityAsync` |
 | Python shim, single actor | `Actor.set_enable_gravity` | `:817` | present → `SetActorEnableGravityAsync` |
-| Python shim, single actor | `Actor.set_fade` | `:806-813` | present → `SetActorFadeAsync`. **Not used by this bridge** (D3.10); listed so the audit's picture of the surface is complete. |
 | Python shim, batch | `Client.apply_batch` / `apply_batch_sync` | `:2475-2487` | present; `apply_batch_sync` returns `command.Response` per command |
 | Python shim, command types | `command.*` | `:1080-1149` | **8 of 22** — see §12 G1 |
 | Python shim, traffic lights | `class TrafficLight(TrafficSign): pass` | `:1002-1004` | marker class, **no methods**. **Not used by this bridge** (D3.24); listed so the audit's picture of the surface is complete — see §12 G13 |
@@ -651,7 +651,6 @@ Everything in this section was read from the source, not assumed.
 | C# transport | `CarlaClient.SetActorTargetVelocityAsync` | `:1499` | `set_actor_target_velocity` |
 | C# transport | `CarlaClient.SetActorSimulatePhysicsAsync` | `:1529` | `set_actor_simulate_physics` |
 | C# transport | `CarlaClient.SetActorEnableGravityAsync` | `:1538` | `set_actor_enable_gravity` |
-| C# transport | `CarlaClient.SetActorFadeAsync` | `:1545-1556` | `set_actor_fade`; also maintains the client-side opacity/arrival registry |
 | C# transport | `CarlaClient.ApplyBatchAsync` / `ApplyBatchSyncAsync` | `:1779-1785` | `apply_batch`; the sync form uses the raw path because the server returns a bare vector |
 | C# transport | ten traffic-light RPCs | `:1659-1689` | `set_traffic_light_state`, green/yellow/red time, freeze, reset, group, light boxes. **None is called by this bridge** (D3.24) |
 | C# transport | `SetLayerVisibleAsync` | `:1077-1078` | `set_layer_visible`; the `road` and `signals` layers are each written **once at session start** and once more when the session is disposed (§3.4) |
@@ -665,7 +664,6 @@ Everything in this section was read from the source, not assumed.
 | Server RPC | `set_actor_transform` | `CarlaServer.cpp:1589-1605` | `CarlaActor->SetActorGlobalTransform(Transform, ETeleportType::TeleportPhysics)` |
 | Server RPC | `set_actor_target_velocity` | `CarlaServer.cpp:1639-1660` | `CarlaActor->SetActorTargetVelocity(...)` |
 | Server RPC | `set_actor_simulate_physics` | `CarlaServer.cpp:2113-2144` | `CarlaActor->SetActorSimulatePhysics(...)` |
-| Server RPC | `set_actor_fade` | `CarlaServer.cpp:2217-2249` | writes Custom Primitive Data float 8 on **every** `UPrimitiveComponent` of the actor |
 | Server RPC | `set_vehicle_light_state` | `CarlaServer.cpp:1985-2008` | → `FVehicleActor::SetVehicleLightState` (`CarlaActor.cpp:756-776`) → `ACarlaWheeledVehicle::SetVehicleLightState` (`CarlaWheeledVehicle.cpp:684-700`), which **compares field by field and only calls `RefreshLightState` when something changed** |
 | Server RPC | `set_solar_time` / `set_solar_date` / `get_solar_state` / `set_time_advance` / `set_solar_epoch` | `CarlaServer.cpp:614`, `:625`, `:640`, `:661`, `:644` | thin wrappers over `UCesiumHeightSampler`; each returns **false** when the world has no `CesiumSunSky` |
 | Server batch | `apply_batch` | `CarlaServer.cpp:3198-3213` | visits each command, then `tick_cue()` if `do_tick_cue`; the `SetVehicleLightState` arm is `CarlaServer.cpp:3187` |
@@ -728,13 +726,8 @@ scenario's peak of 170 is 170–340 and Arapahoe's peak of 437 is 437–874
 ([`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) §3.1, §3.2). What that costs in wall
 clock is `10`'s.
 
-**The steady-state write is exactly one RPC per tick, with no variable tail.** That is a direct
-consequence of D3.10 (§8.5): with the per-vehicle opacity dissolve removed, nothing in the per-tick
-path is unbatchable. The RPC budget this mode *releases* is not small — the fade was one blocking call
-per vehicle per reconcile against a handler that walks every primitive component of the actor, and
-`--fade`'s own help text calls it *"the heaviest load this client puts on the server's per-frame RPC
-budget"* (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:318-328`). That headroom is
-what the pose batch spends.
+**The steady-state write is exactly one RPC per tick, with no variable tail.** Every per-vehicle write
+in the per-tick path is a batch command, so the number of RPCs does not grow with the render set.
 
 **Adding light state and the sun does not change that sentence, and §3.6 shows the arithmetic rather
 than asserting it.** Light state is a batch command, so it joins the array that already exists; the
@@ -989,9 +982,7 @@ per-vehicle RPC.
 - **A pooled actor carries its predecessor's light state.** `InputControl.LightState` lives on the
   actor (`CarlaWheeledVehicle.cpp:697`), and D3.9 never destroys a pool actor. A check-out therefore
   **must** include a `SetVehicleLightStateCommand` even when the computed flags are `None`, or a
-  vehicle admitted in daylight inherits the night headlights of whoever held that actor last. This is
-  the same class of stale-state hazard as the arrival latch in §12 G4, and unlike that one it is
-  live, because there is no fade to make it inert.
+  vehicle admitted in daylight inherits the night headlights of whoever held that actor last.
 - **A released actor must be darkened.** The check-in batch sets `None` alongside the parking-pose
   transform, so a parked actor below the drape surface is not emitting light.
 - **Light state is not in the world-observer snapshot.** The `Header` at
@@ -999,8 +990,7 @@ per-vehicle RPC.
   the solar block, but no light state; the only reads are the `get_vehicle_light_state` RPC
   (`CarlaClient.cs:1615-1617`) and the whole-world `get_vehicles_light_states`
   (`:1630-1631`, `CarlaServer.cpp:2824`). The bridge is the only holder of what it wrote, so it keeps
-  the value client-side — exactly as `CarlaClient` already does for fade opacity
-  (`CarlaClient.cs:170-175`). If the truth record wants light state, it takes it from the bridge, not
+  the value client-side. If the truth record wants light state, it takes it from the bridge, not
   from the actor. That is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md)'s call; the
   bridge can supply it at no cost.
 
@@ -1065,8 +1055,7 @@ Per world tick, in the steady state, for a render set of `N` vehicles:
 **So the steady-state budget is two RPCs per world tick under a frozen sun and three under an
 advancing one, and the vehicle lamp traffic is carried entirely inside an array that already
 exists.** The one number that grew is the
-batch's command count, by 0.28% amortised and 18% on the worst single tick in a measured hour — against
-a mode that simultaneously deletes the fade's *one blocking RPC per vehicle per reconcile* (§8.5).
+batch's command count, by 0.28% amortised and 18% on the worst single tick in a measured hour.
 This is not an assumption that solar is cheap; it is the arithmetic, and the inputs are cited above.
 
 ---
@@ -1093,7 +1082,6 @@ This is not an assumption that solar is cheap; it is the arithmetic, and the inp
 | **Wheel spin** | no movement component | none today. Note that `ACarlaWheeledVehicle::SetWheelSteerDirection` is **already stubbed out in this port** — the physics-off branch has its only effective line commented out with `// ToDo We need to investigate about this` (`CarlaWheeledVehicle.cpp:717-731`), and `GetWheelSteerAngle` is inside `#if 0 // @CARLAUE5` (`:733-740`). So steering angle is *also* unavailable, for physics-on and physics-off alike. See §12 G8. |
 | **Real velocity in the world-observer snapshot** | §5 | **compensated** by D3.5. |
 | **Terrain seating from collision** | body is kinematic | **compensated**: Z comes analytically from the drape grid the collision heightfield was built from (`CarlaClient.cs:933-938`) where the body's road is at grade and off every road, and from the profile of the road the body is on where that road is a deck or spans the ground beneath one (§7.5). Seating becomes exact rather than settled. |
-| **Vehicle fade / staging ring** | the staging controller owns the registry | **not used** — D3.10. The dissolve costs one blocking RPC per vehicle per reconcile and is already off by default in the working tree (`CarlaControlArgumentParser.py:318-328`); a vehicle appears and disappears where and when SUMO inserts and removes it, timed by the lookahead (§8.4, §8.5). The mechanism is untouched and still available to every other client. |
 
 Pitch/roll and exact seating are arguably *better* than today's settled physics. The suspension and
 wheel-spin losses are real and are the price of this mode.
@@ -1154,12 +1142,12 @@ into the world-observer snapshot, and everything downstream of that snapshot inh
 | **Traffic-manager collision stage** | **yes** | `CarlaNet.TrafficManager/Stages/CollisionStage.cs:105-112`, `:371-377`, `:405` — collision radius and forward extension scale with speed |
 | **Engine recorder** | **yes** | `Recorder/CarlaRecorder.cpp:324-339` `AddActorKinematics` writes `GetActorVelocity()` into the kinematics packet of the `.log` |
 | **Radar sensor** | **yes** | `Sensor/Radar.cpp:219` `HittedActor->GetVelocity()` — the Doppler term of every return off a vehicle |
-| **Occlusion / arrival gating (doc 17)** | **no** | `CarlaNet.Recording/OcclusionEstimator.cs` contains no reference to velocity or speed at all. The arrival gate is `_client.IsActorEstablished(id)` (`VehicleTelemetryService.cs:73`), which is driven by the **fade registry**, not by motion (`CarlaClient.cs:1571`) — and with no fade in this mode (D3.10) it is inert, returning `true` for every actor. |
+| **Occlusion / arrival gating (doc 17)** | **no** | `CarlaNet.Recording/OcclusionEstimator.cs` contains no reference to velocity or speed at all. The truth telemetry has no arrival gate: `VehicleTelemetryService` reports every vehicle actor except a body a SUMO drive's pool has parked. |
 
 > **Correction to carry into [`00_Overview.md`](00_Overview.md):** doc 23 §4's claim that zero velocity
-> reaches "the occlusion/arrival gating of doc 17" is **not supported by the source**. The arrival gate
-> is opacity-based, and in this mode it is inert besides (D3.10). Two of the three named consumers are
-> real; the third is not.
+> reaches "the occlusion/arrival gating of doc 17" is **not supported by the source**: the occlusion
+> estimate reads no velocity, and nothing gates a vehicle on its arrival. Two of the three named
+> consumers are real; the third is not.
 
 One mitigating detail, also verified: **course survives**. Both telemetry paths fall back to the
 transform's yaw when `speed < 0.5 m/s` (`VehicleTelemetryService.cs:89-96`;
@@ -2237,8 +2225,7 @@ clear parking pose, and never spawn again during the run.
   scenario's population needs, and no vehicle goes without a body for want of one.
 - Parking pose: below the drape surface and outside the OSM sandbox, physics and gravity off, **light
   state cleared to `None`**. A parked actor costs one entry in the world-observer snapshot per tick
-  and nothing else. No opacity call is involved: it is out of sight because of where it is, not
-  because of what it looks like. **That entry was not free for the truth, measured:** a parked body
+  and nothing else. **That entry was not free for the truth, measured:** a parked body
   is a vehicle actor like any other, and the capture sidecar listed every vehicle actor — 1,385 of
   2,608 records in a Gardnerville capture of 2026-09-28 stood 300 m below the ground. The recorder
   now lists each frame's render set instead (§8.9).
@@ -2249,16 +2236,7 @@ clear parking pose, and never spawn again during the run.
   otherwise inherit whatever its predecessor was showing — night headlights on a vehicle admitted at
   noon, or a brake light on a vehicle admitted at speed. Measured, 16 of 17 catalogue blueprints change
   no pixel on any light bit, so for them the write is invisible and costs one batch entry.
-- **The pool stands without qualification.** There is a latent defect in the arrival latch that would
-  otherwise interact with actor reuse: `IsActorEstablished` is cleared only when an actor id leaves
-  the world-observer snapshot (`CarlaClient.cs:1901-1908`), and a pooled actor never leaves it, so a
-  recycled actor would inherit its predecessor's arrival state. It is unreachable here, because under
-  D3.10 nothing fades and the latch is **never set in the first place**: `IsActorEstablished` returns
-  `true` for any actor with no fade record (`CarlaClient.cs:1571`), and the truth producer documents
-  its gate as inert in exactly that case (`VehicleTelemetryService.cs:66-73`). So no interaction
-  remains between actor reuse and truth reporting. Recorded as §12 G4 — a note for any client that
-  combines a fade with actor reuse, not a blocker here. **That holds for the latch only.** Actor
-  reuse did interact with truth reporting in two other ways, both measured and both closed in §8.9:
+- **Actor reuse interacted with truth reporting in two ways**, both measured and both closed in §8.9:
   a parked body was reported as a vehicle, and the truth uid was built on an actor id that names each
   vehicle its body carries in turn.
 - **Every body is spawned with `role_name` `sumo`** (built 2026-10-01). `role_name` is provenance —
@@ -2455,41 +2433,24 @@ it is drawn on that frame, where SUMO last had it, and released from the next (D
 vanishing wherever it happened to be when the bridge noticed. The same applies to departures via
 `getDepartedIDList()` (`_simulation.py:314`): a vehicle SUMO inserts is known a whole step before the rendered clock reaches the frame it was inserted at, so
 its body is lent and posed for exactly that frame, where SUMO inserted it and already moving, rather
-than on the step before it (D3.6). Under D3.10 this lookahead is doing the work the
-dissolve used to do, and doing it better: a vehicle appears and disappears exactly where and when the
-scenario inserts and removes it, which is an event the scenario holds and the step record records,
-rather than a smoothed transition the scenario never had.
+than on the step before it (D3.6). With this lookahead a vehicle appears and disappears exactly where
+and when the scenario inserts and removes it (D3.10), an event the scenario holds and the step record
+records.
 
 This directly answers "a vehicle SUMO removes while CARLA still holds it" (§11.3): with the
 lookahead, that situation does not arise on the normal path, and when it does arise it is one of the
 abnormal paths in §10 rather than a race.
 
-### 8.5 Visual entry and exit — full opacity, where SUMO inserts and removes
+### 8.5 Visual entry and exit — where SUMO inserts and removes
 
-> **D3.10 — A vehicle admitted to the render set appears at full opacity and a released one
-> disappears. The bridge issues no per-vehicle opacity RPC and publishes no fade state.**
+> **D3.10 — A vehicle admitted to the render set appears where SUMO inserts it and a released one
+> disappears where SUMO removes it. Its rendered span, from its admission instant to its release
+> instant, records when it is drawn.**
 
-A per-actor dissolve is deliberately not used here. The
-mechanism exists and works — `Actor.set_fade` (`carlanet/__init__.py:806-813`) →
-`CarlaClient.SetActorFadeAsync` (`CarlaClient.cs:1545-1556`) → `set_actor_fade`
-(`CarlaServer.cpp:2217-2249`) — but its cost is wrong for this mode, and the working tree already
-says so. `--fade` carries `default=False`
-(`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:318-328`), and its own help text gives
-the reason:
-
-> *"OFF by default: the opacity is computed client-side and pushed to the server one blocking RPC per
-> vehicle per reconcile, which is the heaviest load this client puts on the server's per-frame RPC
-> budget."*
-
-`--no-fade` is retained at `:329-334` so existing command lines keep working. The bridge does not call
-`set_actor_fade` at all.
-
-**What this means, stated plainly.** A vehicle appearing at full opacity is visible where it appears.
-Every vehicle SUMO has is drawn (§8.3), so a vehicle appears where and when SUMO inserts it — the
-scenario's own insertion — and disappears where and when SUMO removes it. A track that begins or ends
-mid-scene does so because the scenario began or ended it there, and a camera that sees it sees an event
-the scenario holds. A dissolve would change the imagery around that event without recording that it
-did.
+**What this means, stated plainly.** Every vehicle SUMO has is drawn (§8.3), so a vehicle appears where
+and when SUMO inserts it — the scenario's own insertion — and disappears where and when SUMO removes
+it. A track that begins or ends mid-scene does so because the scenario began or ended it there, and a
+camera that sees it sees an event the scenario holds. Nothing in the stack dissolves a vehicle.
 
 **The timing is the lookahead's.** §8.4's one SUMO step of lookahead lets the bridge lend a vehicle SUMO
 inserts its body for exactly the frame SUMO inserted it at, and keep a vehicle that leaves SUMO on the
@@ -2497,32 +2458,10 @@ frame of its last step and give its body back from the next, so neither appears 
 early or late (D3.6, D3.45). Vehicles alive when a window's prewarm begins are drawn from the prewarm, before the window's first frame, so a window opens on traffic already in
 place rather than on vehicles appearing in its first frame.
 
-**The arrival gate needs no replacement, and this is the good news.**
-`CarlaClient.IsActorEstablished` returns `true` for any actor with no fade record —
-`!_fade.TryGetValue(id, out var fade) || fade.Established` (`CarlaClient.cs:1571`), documented as
-*"Actors nobody has faded are established from the moment they are seen."* The truth producer's gate
-is documented as inert in exactly that case: *"Vehicles nobody fades are established from the start,
-so this gate is inert unless staging traffic is running"* (`VehicleTelemetryService.cs:66-73`). With
-no fade, the latch is never set, so there is nothing to reset and nothing to get wrong.
-
-**One truth-record consequence.** `VehicleTelemetry.Opacity` is populated from
-`_client.GetActorOpacity(id)` (`VehicleTelemetryService.cs:112`), which returns `1.0` for an actor
-nobody has faded (`CarlaClient.cs:1562`); the record's own default is also `1.0`
-(`VehicleTelemetry.cs:63`). So **`Opacity` is a constant 1.0 for every vehicle in this mode.** It is
-not wrong, and it should not be quietly dropped — but a consumer that treats it as a signal will find
-none. Note it in [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md).
-
-**What must still exist** is the render-set **admission instant** and **release instant** per vehicle,
-recorded in the step record. Those are what let anyone later reconcile "SUMO simulated 68,880
+**The record of entry and exit** is the render-set **admission instant** and **release instant** per
+vehicle, recorded in the step record. Those are what let anyone later reconcile "SUMO simulated 68,880
 vehicles" against "the collect shows N tracks", and they are the only honest way to explain a track
-that starts or stops mid-scene. They are recorded facts about the run, not visual transitions, and
-they cost nothing to emit because the bridge already computes both.
-
-**Budget consequence, in the bridge's favour.** Removing the fade removes the single heaviest
-per-frame client load this codebase has — a blocking RPC per vehicle per reconcile against a handler
-that walks every primitive component of the actor. That is headroom the per-tick pose batch can spend
-(§3.3), and it is the reason the write path in this mode is one RPC per tick rather than one RPC per
-tick plus a variable tail of opacity calls.
+that starts or stops mid-scene. They cost nothing to emit because the bridge already computes both.
 
 ### 8.6 Reconciling with issue #18
 
@@ -2568,7 +2507,7 @@ stateDiagram-v2
 
     state "CARLA side" as C {
         [*] --> Parked : pool actor spawned once, when a vehicle needs a body<br/>and none of its blueprint is parked; lights None
-        Parked --> Rendered : ADMISSION INSTANT recorded;<br/>teleported to first pose at full opacity;<br/>LIGHT STATE WRITTEN (predecessor's is stale)
+        Parked --> Rendered : ADMISSION INSTANT recorded;<br/>teleported to first pose;<br/>LIGHT STATE WRITTEN (predecessor's is stale)
         Rendered --> Rendered : ApplyTransform + ApplyTargetVelocity each world tick;<br/>SetVehicleLightState only on a change
         Rendered --> Reseated : discontinuity detected
         Reseated --> Rendered : re-teleported; no interpolation across the gap;<br/>light state re-asserted
@@ -3669,7 +3608,7 @@ session.run():
                     batch += ApplyTransformCommand(v.actor, poseAt(P_prev[v]).transform)
                     batch += ApplyTargetVelocityCommand(v.actor, poseAt(P_prev[v]).velocity)
                 batch += changedLightStates(P_next, sun.elevation)   # §3.5, mean 14.44, max 47
-            client.applyBatch(batch, doTickCue = false)   # one RPC; no variable tail, §8.5
+            client.applyBatch(batch, doTickCue = false)   # one RPC; no variable tail, §3.3
             if policy.advances:                           # this frame's sun, D3.19
                 client.setSolarEpoch(declared.writtenAt(t_render), epoch.utc_offset)
             waitUntil(T0 + n·Δw / f) if f > 0             # absolute target, then time the cue, §9.9
@@ -3756,7 +3695,7 @@ sequenceDiagram
     SU-->>RS: lifecycle deltas for the step just simulated
 
     RS->>RS: admit every vehicle newly seen, to be drawn from its first frame, P(k+1) (D3.6),<br/>and release every vehicle SUMO removed, with one step of lookahead
-    RS->>CC: pool check-out for each vehicle first seen in P(k), the frame this step starts from:<br/>SetSimulatePhysics false, SetEnableGravity false,<br/>first pose at full opacity, LIGHT STATE RESET (predecessor's is stale)
+    RS->>CC: pool check-out for each vehicle first seen in P(k), the frame this step starts from:<br/>SetSimulatePhysics false, SetEnableGravity false,<br/>first pose, LIGHT STATE RESET (predecessor's is stale)
     RS->>RS: record admission and release instants
 
     loop R world ticks (R = Δs / Δw)
@@ -4575,7 +4514,7 @@ flowchart TD
   subgraph LANE_RS["RenderSetManager and ActorPool"]
     D1[Apply lifecycle deltas]
     D2{"New vehicle's type<br/>has a measured body?"}
-    D3[Check out actor,<br/>spawned if none parked,<br/>physics off, gravity off,<br/>full opacity]
+    D3[Check out actor,<br/>spawned if none parked,<br/>physics off, gravity off]
     D4[["No body: simulated,<br/>not drawn, truth recorded"]]
     D5[Record admission and<br/>release instants]
   end
@@ -4718,9 +4657,9 @@ solar and light-state paths. They are handed to
 | # | Gap | Evidence | Why it matters here |
 |---|---|---|---|
 | **G1** | The Python shim's `command` namespace exposes **8** of the 22 command types the C# layer and the server both support. Missing: `ApplyVehicleAckermannControl`, `ApplyWalkerControl`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`, **`ApplyTargetVelocity`**, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, **`SetSimulatePhysics`**, **`SetEnableGravity`**, `ShowDebugTelemetry`, `SetTrafficLightState`. | shim `carlanet/__init__.py:1080-1149` vs `LibCarla/source/carla/rpc/Command.h:284-305`, `Command.cs:12-35`, `CommandFormatter.cs:41-72`, `CarlaServer.cpp:3145-3194` | A Python bridge cannot batch a physics toggle, a velocity or a vehicle light state. Does not block the C# bridge; blocks any Python probe of it, and is a surface-parity defect in its own right. The .NET side already exercises the full path (`TrafficManagerLocal.cs:568`, `MotionPlanStage.cs:244`/`:424`), so the gap is purely the shim's. |
-| **G2** *(no longer blocking — recorded for the audit, not for this mode)* | No batch command for `set_actor_fade` anywhere in the stack. | `Command.cs:12-35`; `CarlaServer.cpp:3169-3194`; handler at `CarlaServer.cpp:2217-2249` walks every primitive component | **This bridge does not call `set_actor_fade` (D3.10)**, so it is not on the critical path here. It remains a real asymmetry for any client that *does* fade — and it is a large part of why `--fade` defaults off (`CarlaControlArgumentParser.py:318-328`). If the fade is ever revived, adding the batch variant is the fix that makes it affordable. |
+| **G2** | **Closed.** The server binds no `set_actor_fade` RPC, so there is no fade call to batch. | no `set_actor_fade` in `CarlaServer.cpp` or `CarlaClient.cs` | Every per-vehicle write in the per-tick path is a batch command (§3.3). |
 | **G3** | `set_actor_target_velocity` on a non-simulating vehicle writes a kinematic physics body, which `APawn::GetVelocity()` does not read; for a non-simulating root it returns the pawn movement component's `Velocity`, which nothing on the CARLA vehicle path writes. | chain in §5.1: `CarlaActor.cpp:392-411`, `Pawn.cpp:240-249`, `Pawn.cpp:186-189`, `NavMovementComponent.cpp:132-134`, `MovementComponent.h:473-477`, `PrimitiveComponentPhysics.cpp:159-163` | **The zero-velocity problem.** Closed by D3.5 in the engine (`CarlaActor.cpp:831-846`, `CarlaWheeledVehicle.cpp:798-843`) and by the bridge's writes (§5.4); measured live, the truth sidecars carry SUMO's own speed. |
-| **G4** *(latent — not reached by this design)* | The client-side arrival latch (`IsActorEstablished`) is cleared only when an actor id leaves the world-observer snapshot, and never by fading back out. A pooled actor never leaves the snapshot, so it would inherit its predecessor's arrival state. | `CarlaClient.cs:1545-1556`, `:1571`, `:1901-1908` | **Recorded rather than dropped, because it is real.** It would block the actor pool and a fade together. With D3.10 removing the fade, the latch is never set: `IsActorEstablished` returns `true` for any actor with no fade record (`:1571`) and the truth gate is documented inert in that case (`VehicleTelemetryService.cs:66-73`). **The actor pool (D3.9) is therefore unblocked.** The defect still exists for any client that combines a fade with actor reuse, which is why it stays on the list. |
+| **G4** | **Closed.** The client-side arrival latch (`IsActorEstablished`) no longer exists, so a pooled actor has no arrival state to inherit. | no `IsActorEstablished` in `CarlaClient.cs`; `VehicleTelemetryService.cs` reports every vehicle actor except a parked body | Actor reuse (D3.9) touches truth reporting only in the two ways §8.2 names, both closed in §8.9. |
 | **G5** — **a data defect in delivered artifacts, not a future risk** | `SumoCotBridge._height_at` indexes a **CARLA-frame** bare-earth grid with a **SUMO-frame** `y`. Since CARLA `y = −`SUMO `y` (`Geodesy.cs:104-108`), every lookup reads the row mirrored about the grid's Y origin. | call site `SumoCotBridge.py:311`; reader `SumoCotBridge.py:115-119`; grid frame `DrapeTerrain.cs:19-21` and `:54-68` | **Every `hae_m` in every CoT dataset already produced by this path is wrong** — the UDP feeds, the XML files, the CSV datasets, and the sample shipped inside `BahonarPatternOfLife.zip`. It is invisible in bounds terms, which is why it has survived: measured on Bahonar the grid spans y ∈ [−2108.05, +2107.95] while the road network spans y ∈ [−1914.94, +2107.82], so a mirrored row is always *inside* the grid and always returns a plausible height. Only points on the grid's Y centreline are unaffected. This is independent of the new bridge and needs correcting **and re-issuing affected datasets**, not just patching forward. |
 | **G6** | `apply_batch(do_tick_cue=True)` returns before the frame exists; only `world.tick()` waits. | `CarlaClient.cs:1779-1780` vs `:403-417`; `CarlaServer.cpp:393-399` | A caller that assumes the combined form is synchronous will capture against a frame that has not rendered. Worth a docstring at minimum. |
 | **G7** | `ActorDefinition` carries no bounding box; `BoundingBox` exists only on a spawned `Actor`. | `ActorDefinition.cs:5-9`; `Actor.cs:8-15` | The vType ↔ blueprint dimension map (§7.4, and [`04_Contracts.md`](04_Contracts.md)) needs a spawn-and-measure pass against a running server. |
@@ -4748,8 +4687,8 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | L2 | Terrain seating | **preserved and improved** | analytic Z from the drape grid at grade and off every road, and from the profile of the road the body is on where it is a structure (§7.5) — a deck's own height on a deck, the road's own chord beneath one; exact rather than settled |
 | L3 | Body pitch and roll over undulations | **preserved** | pitch and roll from the drape-grid gradients at grade; pitch from the road profile's slope and no roll on a structure; blended between (§7.5) |
 | L4 | The CARLA-free SUMO→CoT path | **preserved, untouched** | `SumoCotBridge` and `sumo_cot_telemetry.py` stay a supported product; the bridge does not replace them (D3.1) |
-| L5 | Vehicle fade / staging dissolve | **not used in this mode — and it is already off by default in the working tree** | `--fade` carries `default=False` (`CarlaControlArgumentParser.py:318-328`); the mechanism is untouched and still available to any other client. Nothing needs dissolving: every vehicle SUMO has is drawn, so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it, timed by the lookahead, and its admission and release instants are recorded (§8.4, §8.5). |
-| L5b | **Gained:** the per-frame client RPC budget the fade used to consume | **headroom** | Removing one blocking RPC per vehicle per reconcile — *"the heaviest load this client puts on the server's per-frame RPC budget"* (`CarlaControlArgumentParser.py:318-328`) — is what lets the per-tick write be a single `apply_batch` with no variable tail (§3.3). A capability table should record a gain as carefully as a loss. |
+| L5 | Vehicle fade / staging dissolve | **retired 2026-10-18** | No mode dissolves a vehicle. A vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it, and its admission and release instants are recorded (§8.4, §8.5). |
+| L5b | **Gained:** the per-frame client RPC budget the fade used to consume | **retired 2026-10-18** | No client spends RPCs on a fade; the per-tick write is a single `apply_batch` with no variable tail (§3.3). |
 | L6 | The .NET traffic manager and the OpenSCENARIO executor | **preserved outside this mode** | locked out only while the drive lease is held (D3.13); clears on exit, on a world reload and on `break_drive_lease` -- not on disconnect, which the RPC server gives no notice of |
 | L6b | Rendered traffic-light and sign actors | **not rendered in this mode, by decision** | D3.24, and the reason is the imagery: the available meshes are limited and are frequently misaligned against the photoreal, so a rendered signal is an object in frame that does not correspond to the world the photoreal shows (`_TEAM_BRIEF.md` §3e). **The behaviour they govern is not lost** — SUMO's `tlLogic` programs and right-of-way rows still run and its vehicles still obey them, and that behaviour is exactly what the pose stream carries (§3.4). The sensor streams do not change either: generated lights and signs in this fork are **sensor-invisible by design**, returning nothing to semantic lidar or radar, so what is withdrawn is the RGB mesh and the human view of it. The world build is untouched — the actors are hidden, not removed — so any other mode renders them as before. |
 | L7 | Suspension travel | **lost** | none. Bounded, deliberate, confined to this mode. |
@@ -4778,7 +4717,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 | **D3.7** | The reference-point shift uses the **CARLA front overhang** `b.x + e.x`, so the rendered front bumper sits exactly on SUMO's reference point. The catalogue must set each vType's `length`/`width` from the blueprint's bounding box, at **authoring** time. |
 | **D3.8** | **A body is seated on the ground where its road is at grade and on its road where the road is a structure.** The road is found from the vehicle's lane by `RoadSurface` (the edge's `sumoId`, a merge's lane sections, a connector's links) and the s by projecting the origin at the lane's offset across the road. One weight `w`, 1 while the road's profile departs from the ground grid by under 0.5 m **at its reference line at that s** and 0 from 1.5 m, smoothstep between, decides height, pitch and roll alike: at grade (`w` = 1) the seat is the ground grid's exactly (`GroundSurface`, sampled in the **CARLA** frame `(x_s, −y_s)`) — the visible road across its whole width, camber included, where the profile is the reference line's height built flat across; on a structure (`w` = 0) height and pitch are the profile's, the pitch signed for the direction of travel against +s, and the roll is none; between, height and roll are blended by `w`, and pitch and vertical velocity come from the blended seat's own slope. A vehicle on no lane, on a lane with no road, or more than 5 m off its road is seated on the ground grid exactly as before, and the run report counts it by reason (§7.5). `z_seat` per blueprint is **measured**, not computed from the bounding box. |
 | **D3.9** | Actors come from a **per-blueprint pool**, checked out on admission and in on release, and no pooled actor is destroyed during a session. The pool has **no ceiling**: it grows to what the scenario's population needs, spawning a body onto its own clear parking slot only when a vehicle needs one and none of its blueprint is parked, and no vehicle goes without a body for want of one (§8.2). |
-| **D3.10** | **A vehicle admitted to the render set appears at full opacity; a released one disappears.** No dissolve, no per-vehicle opacity RPC, no fade state published. Every vehicle SUMO has is drawn (§8.3) unless an optional limit is chosen, so a vehicle appears where and when SUMO inserts it and disappears where and when SUMO removes it -- and under a limit also where the limit admits and releases it, as abruptly (§8.3.2) — the scenario's own events, timed by §8.4's lookahead — rather than at a transition a fade would paper over. The arrival gate needs no replacement: with no fade record, `IsActorEstablished` is `true` and the truth gate is inert (`CarlaClient.cs:1571`; `VehicleTelemetryService.cs:66-73`). `VehicleTelemetry.Opacity` is a constant 1.0 in this mode. What is still required is the **recorded admission and release instant** per vehicle. |
+| **D3.10** | **A vehicle admitted to the render set appears where SUMO inserts it; a released one disappears where SUMO removes it.** Every vehicle SUMO has is drawn (§8.3) unless an optional limit is chosen, so a vehicle appears and disappears at the scenario's own events, timed by §8.4's lookahead; under a limit it also appears and disappears where the limit admits and releases it (§8.3.2). Nothing in the stack dissolves a vehicle. A vehicle's rendered span, from its **recorded admission instant** to its **recorded release instant**, records when it is drawn. |
 | **D3.11** | In a SUMO-drive session **SUMO is the only removal authority**. The bridge translates removals; it never originates one. This resolves [issue #18](https://github.com/sbrett9/carla/issues/18) for this mode by deleting both of its deciders rather than adding a third. |
 | **D3.12** | `SumoDriveSession` owns the advance of simulated time on both sides. `R = Δs/Δw` must be a positive integer; the session refuses to start otherwise. Neither side can outrun the other, because the loop is serial and the world clock is simulated. |
 | **D3.13** | The lockout is a **server-held, world-wide drive lease** and a process-local lease. Built 2026-10-05: the episode holds `FDriveLease`; `take_drive_lease` / `release_drive_lease` / `break_drive_lease` / `get_drive_lease`; while it is held `set_actor_autopilot` (enabling), `apply_control_to_vehicle`, `apply_ackermann_control_to_vehicle` and `apply_physics_control` are refused for *every* actor and *every* client, direct and in a batch, naming the holder — which stops the .NET TM, which drives via `ApplyControlToVehicle`, and a second process alike. The session takes it before SUMO starts; a lease another client holds refuses the start at `Authority` naming the holder. The first design's per-actor mark is not built, since the world-wide refusal covers it; the solar cover (`set_solar_time` / `set_solar_date` / `set_solar_epoch` / `set_time_advance`, and `set_layer_visible`) is not built, because refusing them to anyone but the holder needs a per-connection identity no handler has. Released by the holder, by a world reload, or by `break_drive_lease`, logged; rpclib gives no disconnect notice. A server without the lease is recorded on the run report as `NOT HELD`. |

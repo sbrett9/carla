@@ -122,6 +122,10 @@ in isolation and its `argparse.ArgumentParser` walked directly. Three read-only 
 | Sub-commands, modes or verbs | **0** |
 | Total help text | **12,009 characters**; median 71, longest 719 (`--road-offset-east`, `:149-164`) |
 
+*2026-10-18:* the vehicle fade was removed from the code, and `--fade` and `--no-fade` with it, so
+the parser now has no mutually exclusive group (measured 2026-10-18). The counts above are of the
+tree of 2026-09-18.
+
 Group by group, with the group titles exactly as the parser declares them:
 
 | Group | Count | Declared at |
@@ -190,6 +194,8 @@ existing command lines keep working. The stated reason is in the help text itsel
 client puts on the server's per-frame RPC budget". Confirmed as read. This is the one place in the
 present surface where a default was changed on measured grounds and the reason was written down where
 the operator will see it — the pattern §3 generalises.
+
+*Both options were removed with the vehicle fade on 2026-10-18 (§1.2).*
 
 **`--time-rate` is silently inert unless `--time-advance` is given.** `WorldBuilder.py:246-247` reads
 `args.time_rate` only inside `if args.time_advance:`. So `--time-rate 3600` alone parses, validates,
@@ -359,7 +365,7 @@ solar policy and the roots; add cross-argument validation in code after `parse_a
 
 | Test | Result |
 |---|---|
-| R1 | **Fails.** The recorded artifact would be the argv, and argv + defaults is not reproducible because defaults change. *Measured:* `--fade`'s default flipped from true to false (`:318-328`), and `--height-align` defaults to `none` (`:120-129`) while every world this plan describes is built with `drape`. An argv recorded before a default change replays differently and nothing says so |
+| R1 | **Fails.** The recorded artifact would be the argv, and argv + defaults is not reproducible because defaults change. *Measured:* `--fade`'s default flipped from true to false (§1.3), and `--height-align` defaults to `none` (`:120-129`) while every world this plan describes is built with `drape`. An argv recorded before a default change replays differently and nothing says so |
 | R2 | Fails unless the tool separately materialises every default into the manifest — at which point the artifact of R1 is that materialisation, not the argv, and this candidate has become the next one |
 | R3 | **Fails today and would get worse.** *Measured:* the zero-argument invocation does not attach and capture; it builds a world from `Import/Lakeview_Carson.osm` (`:87-89`, file present, 730,905 bytes). The default behaviour of the viewer is the most expensive operation it has. Adding twelve axes to 86 arguments does not produce a short line |
 | R4 | **Fails.** There is no schema. `argparse`'s only failure modes are unknown option and type coercion; the 66-of-86 conditional structure of §1.4 means the assistant's likely mistakes are all silent |
@@ -2410,7 +2416,7 @@ executor; §4 forbids losing a capability. This section adds a second front end;
 
 `run_SCTMV.py` and `CarlaControlArgumentParser` remain the interactive path: world building, free
 flight and orbit, ambient staging traffic, storyboard execution, live telemetry, ad-hoc recording, and
-the thirteen hotkeys. Every one of its 87 arguments — the 86 §1 measured and `--aoi` — keeps working. In particular, three capabilities
+the thirteen hotkeys. Every one of its arguments keeps working. In particular, three capabilities
 live **only** there and must not be assumed to migrate:
 
 | Capability | Why it stays interactive |
@@ -2888,7 +2894,7 @@ them by number ([`08`](08_Collection_And_EPoL.md) §15 cites check 17).
 | **D12.14** | **The live monitor displays only fields the manifest also carries, read from the same source.** A monitor that computes its own numbers can disagree with the record, and the operator believes the screen (§7.1) |
 | **D12.15** | **One condition interrupts the operator in every run, and nothing else does:** a non-zero `Dropped` on any channel; a live run adds the achieved real-time factor falling below its floor (§7.4.1). A participant in an open annotated interval is always drawn, because every vehicle SUMO has is drawn, so it is a gate record rather than an interruption (§7.2). Everything else is a column (§7.1) |
 | **D12.16** | **This surface publishes gate records and never an aggregate verdict.** Each record names what the check observed, the threshold it compared against and whether it met it; nothing rolls them into a single field saying the corpus is fit, because fitness is relative to a purpose the caller never told us ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3d). The records are **appended to the manifest as they change**, so a run stopped at minute nine has already published everything it knew at minute nine, and the closeout is a rendering rather than the moment they come into existence. A record that did not meet its threshold deletes nothing and hides nothing (§7.2, §3.10.3) |
-| **D12.17** | **`run_SCTMV.py` and its parser keep every one of their 87 arguments (§1's 86 and `--aoi`) and all thirteen hotkeys.** The new surface is a second front end over shared definitions — `WorldBuildConfiguration`, the channel description, the capture description, and one solar application path — with **defaults defined exactly once in the schema**. *Measured justification:* three `getattr` fallbacks already disagree with the parser and exist precisely to survive a caller that is not this parser (§9.2, §9.3, §1.5) |
+| **D12.17** | **`run_SCTMV.py` and its parser keep every one of their arguments and all thirteen hotkeys.** The new surface is a second front end over shared definitions — `WorldBuildConfiguration`, the channel description, the capture description, and one solar application path — with **defaults defined exactly once in the schema**. *Measured justification:* three `getattr` fallbacks already disagree with the parser and exist precisely to survive a caller that is not this parser (§9.2, §9.3, §1.5) |
 | **D12.18** | **Seven repairs to the interactive surface are owed regardless of whether the new one is built:** refuse or remove `--ev` (*moot 2026-10-07: the camera publishes `exposure_compensation`, so `--ev` works*); reconcile the three divergent defaults; warn on `--time-rate` without `--time-advance`; stop overwriting the sun in attach mode; document the four undocumented hotkeys; make `parse` and `parse_args` behave identically; and fix the post-process profile default, whose name is the lowercase literal `"default"` (`ActorBlueprintFunctionLibrary.cpp:1376`) against a file named `Default.json` — so it resolves on a case-insensitive file system and silently does not on a case-sensitive one, with the failure discarded at `:1377-1380` (§9.4) |
 | **D12.19** | **The launcher ships on both platforms in the same change, its `--help` generated from the schema, with a CI parity check comparing the two option sets.** *Measured:* the existing parity break survived because nothing compared them — `MakeDistribution.ps1:237` copies a file deleted in `d2c666c23` and only warns, `:301` then writes a launcher that runs it, and the Windows script additionally omits the `carlacontrol` wheel that `MakeDistribution.sh:112-113` bundles (§10) |
 | **D12.20** | **Withdrawn 2026-09-30.** There is no render cap or render region to check a population against: every vehicle SUMO has is drawn, and a heavier scenario runs slower, never thinner (§6.2 checks 20 and 21, withdrawn) |
