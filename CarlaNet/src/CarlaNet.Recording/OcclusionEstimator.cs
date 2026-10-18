@@ -34,10 +34,6 @@ public readonly record struct VehicleOcclusion(
 /// ray's entry and exit points. The resulting fraction of hidden samples approximates the area
 /// fraction the amodal-segmentation literature calls the ratio of occluded region.
 ///
-/// A mid-fade vehicle occluding another is measured as whatever the depth capture shows of it, which
-/// depends on how far the dithered dissolve has been resolved; weighting an occluder by its opacity
-/// exactly needs the occluder's identity, which depth alone does not carry.
-///
 /// Depth readings lose accuracy with range — measurably, and predictably enough to correct for — so
 /// the threshold that decides "nearer than the vehicle" widens with range
 /// (<see cref="OcclusionOptions.RangeErrorCoefficient"/>). Beyond the depth capture's far plane every
