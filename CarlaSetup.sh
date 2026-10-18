@@ -137,7 +137,7 @@ fi
 
 # ── CLONE CONTENT ────────────────────────────────────────────────────────────
 # Private mirror of carla-simulator/carla-content (ue5-dev). The default mirror is hosted
-# in the CAT organization on github.sncorp.com and carries vehicle staging-fade asset changes.
+# in the CAT organization on github.sncorp.com and carries this project's own asset changes.
 # Cloned over SSH (same mechanism as the VibeUE plugin): supply a deploy key with
 # --content-ssh-key=<path> or $CARLA_CONTENT_SSH_KEY; without one, the clone uses your default
 # SSH agent/keys for the target host. The content repository URL can be overridden via
