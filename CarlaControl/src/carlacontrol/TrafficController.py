@@ -1,7 +1,7 @@
 """Boundary-aware staging traffic controller for CARLA.
 
-Manages spawning, despawning, and opacity fading of traffic vehicles within
-a defined staging area with margin-based entry/exit zones.
+Manages spawning and despawning of traffic vehicles within a defined staging area with
+margin-based entry/exit zones.
 """
 
 from __future__ import annotations
@@ -14,24 +14,24 @@ import time
 
 import carlanet as carla
 
+from carlacontrol import DriveLease
+
 
 class TrafficController:
     """Boundary-aware staging traffic as a steppable subsystem.
 
     enable()/disable() start and stop the population; update(now) does the per-frame
-    spawn top-up, reconcile, and opacity fade. Stopping despawns every tracked vehicle cleanly.
+    spawn top-up and reconcile. Stopping despawns every tracked vehicle cleanly.
     """
 
     OOB_PAD = 2.0  # metres beyond the red (sandbox) edge before a vehicle is culled as having left
     RED_CLEAR = 3.0  # despawn before an entered vehicle gets this close to the red (map) edge
-    CHECK_S = 0.1  # reconcile/fade cadence
+    CHECK_S = 0.1  # reconcile cadence
     MISS_LIMIT = 5  # consecutive cache-misses before treating a vehicle as gone
     SPAWN_GRACE = 4.0  # a fresh vehicle is exempt from the stuck/out-of-bounds guards this long
     SUMMARY_S = 5.0  # how often to print the alive/despawn-reason summary while enabled
-    # Smallest opacity step worth a round-trip. The fade is a dithered dissolve driven by a single
-    # custom-primitive float, so a change below one 8-bit step cannot be seen; sending it anyway
-    # costs a blocking RPC that the server can only service inside its per-frame budget.
-    FADE_EPSILON = 1.0 / 255.0
+    ENTERED_FRACTION = 0.99  # a vehicle this far into the interior has entered the scene
+    EXITED_FRACTION = 0.02  # an entered vehicle back this far out has left it, and is despawned
 
     _TWO_WHEELED = (
         "harley",
@@ -99,11 +99,12 @@ class TrafficController:
         return math.cos(yaw) * (cx - tf.location.x) + math.sin(yaw) * (cy - tf.location.y) > 0.0
 
     @staticmethod
-    def interior_opacity(cx, cy, yaw_deg, ext_x, ext_y, b):
-        """Opacity [0,1] = the fraction of the vehicle's footprint that lies INSIDE the interior (past
-        the blue line, one margin in from the red edge). 0 = wholly within the margin (transparent); 1 =
-        wholly in the interior (opaque). The change spans the vehicle's own length as it straddles the
-        nearest blue boundary."""
+    def interior_fraction(cx, cy, yaw_deg, ext_x, ext_y, b):
+        """The fraction [0,1] of the vehicle's footprint that lies INSIDE the interior (past the blue
+        line, one margin in from the red edge): 0 = wholly within the margin, 1 = wholly in the
+        interior. It changes over the vehicle's own length as the vehicle straddles the nearest blue
+        boundary. The reconcile marks a vehicle entered at ENTERED_FRACTION and despawns an entered
+        one that falls back to EXITED_FRACTION."""
         s_w = cx - (b["min_x"] + b["margin"])
         s_e = (b["max_x"] - b["margin"]) - cx
         s_s = cy - (b["min_y"] + b["margin"])
@@ -385,17 +386,6 @@ class TrafficController:
         ctl.spawn_weights, ctl.spawn_limits = cls.speed_limit_weights(
             tm, spawn_pool, args, logger
         )
-        # Only a run that asked for the fade needs the server to support it. Traffic itself does
-        # not, so an unavailable set_actor_fade is no longer a reason to refuse to run at all.
-        if args.fade:
-            if not ctl.fade_selftest():
-                ctl.available = False
-                ctl.reason = (
-                    "--fade given but set_actor_fade is not available — rebuild server + wheel "
-                    "(BuildCarla.ps1 -Vs 2026 -InstallWheel), or drop --fade"
-                )
-                return ctl
-            logger.info("fade selftest passed: set_actor_fade available")
 
         sw = staging["max_x"] - staging["min_x"]
         sh = staging["max_y"] - staging["min_y"]
@@ -484,28 +474,6 @@ class TrafficController:
         bp.set_attribute("role_name", "autopilot")
         return bp
 
-    def fade_selftest(self):
-        probe = None
-        for sp in random.sample(self.ring_sps, min(len(self.ring_sps), 8)):
-            try:
-                probe = self.world.spawn_actor(self.spawn_bp(), sp)
-                break
-            except Exception:
-                continue
-        if probe is None:
-            return False
-        ok = True
-        try:
-            probe.set_fade(0.5)
-        except Exception as e:
-            self.logger.debug(f"set_fade test failed: {e}")
-            ok = False
-        try:
-            probe.destroy()
-        except Exception:
-            pass
-        return ok
-
     @staticmethod
     def _place_key(location):
         return (round(location.x, 1), round(location.y, 1))
@@ -581,34 +549,6 @@ class TrafficController:
         Zero means zero. An entry that can only reach its own side spawns nothing.
         """
         return float(getattr(self.args, "same_side_exit_rate", 0.0) or 0.0) > 0.0
-
-    @staticmethod
-    def safe_fade(v, hide) -> bool:
-        """Push an opacity to the server. Returns whether it landed, so a caller tracking the
-        last value it set does not record one the server never received."""
-        try:
-            v.set_fade(hide)
-            return True
-        except Exception:
-            return False
-
-    def apply_fade(self, rec, v, hide: float) -> None:
-        """Set this vehicle's staging opacity, but only when it actually changed.
-
-        Every call is a blocking round-trip whose handler walks each primitive component on the
-        vehicle, and a vehicle anywhere inside the interior sits at exactly 0.0 for its whole
-        life. Re-sending that on every reconcile was the heaviest single load this client put on
-        the server, so a round-trip is spent only on a step the dissolve can actually show --
-        plus the two endpoints, which are always sent exactly rather than approached to within
-        FADE_EPSILON and left there."""
-        last = rec.get("fade")
-        if last is not None:
-            if hide == last:
-                return
-            if hide not in (0.0, 1.0) and abs(hide - last) < self.FADE_EPSILON:
-                return
-        if self.safe_fade(v, hide):
-            rec["fade"] = hide
 
     # Height CARLA raises its own spawn points to above the carriageway
     # (AOpenDriveGenerator::SpawnersHeight, 300 cm). Lane sites are raised to match so a vehicle
@@ -950,13 +890,6 @@ class TrafficController:
                 v = self.world.spawn_actor(bp, sp)
             except Exception:
                 continue
-            # Hide it before it can be drawn. Reading the bounding box, placing the vehicle and
-            # setting its real opacity below each cost a server round-trip, and the world keeps
-            # ticking on the main thread while those are in flight -- so a vehicle left visible
-            # here renders fully opaque for those frames, at the un-nudged spawn point and still
-            # hovering above the carriageway. One round-trip now replaces three of flicker.
-            if self.args.fade:
-                self.safe_fade(v, 1.0)
             try:
                 bb = v.bounding_box
                 ext = (float(bb.extent.x), float(bb.extent.y))
@@ -979,10 +912,6 @@ class TrafficController:
                 except Exception:
                     sx, sy = sp.location.x, sp.location.y
             try:
-                op = self.interior_opacity(sx, sy, syaw, ext[0], ext[1], self.b)
-                spawn_hide = None
-                if self.args.fade and self.safe_fade(v, 1.0 - op):
-                    spawn_hide = 1.0 - op
                 v.set_autopilot(True, self.args.tm_port)
                 difference = 0.0
                 if self.args.speed_spread > 0:
@@ -1020,11 +949,22 @@ class TrafficController:
                 except Exception:
                     pass
             except Exception as e:
-                self.logger.warning(f"setup failed for {v.id}: {e!r}")
                 try:
                     v.destroy()
                 except Exception:
                     pass
+                holder = self.locked_out_by(e)
+                if holder is not None:
+                    # A drive took the world's lease after traffic was switched on. Every spawn from
+                    # here would be refused the same way, so traffic goes off, saying who holds it.
+                    self.logger.error(
+                        f"traffic OFF: {holder} holds this world's drive lease, and the server refused "
+                        f"vehicle {v.id}'s autopilot. The server said: {e}"
+                    )
+                    self.want_enabled = False
+                    self.disable()
+                    return False
+                self.logger.warning(f"setup failed for {v.id}: {e!r}")
                 continue
             self.actors[v.id] = {
                 "actor": v,
@@ -1040,9 +980,6 @@ class TrafficController:
                 "stalled": 0.0,
                 "misses": 0,
                 "speed": 0.0,
-                # Last opacity the server acknowledged, so the reconcile can tell a real change
-                # from the same value being sent again. None until the server has acknowledged one.
-                "fade": spawn_hide,
             }
             overhang, _ = self.red_edge_deficit(sx, sy, syaw, ext, self.b)
             if overhang > self.OVERHANG_TOL:
@@ -1079,11 +1016,6 @@ class TrafficController:
                     self.stuck_registered[0 if self.tm.is_vehicle_registered(vid) else 1] += 1
                 except Exception:
                     pass
-        if self.args.fade:
-            try:
-                actor.set_fade(1.0)
-            except Exception:
-                pass
         try:
             actor.set_autopilot(False, self.args.tm_port)
         except Exception:
@@ -1094,9 +1026,40 @@ class TrafficController:
             pass
         self.actors.pop(vid, None)
 
+    def drive_lease_holder(self) -> str | None:
+        """Who holds the world's drive lease, or None while nobody does or the world cannot say.
+
+        A SUMO drive session takes the lease on the server before SUMO starts, and while it holds it
+        the server refuses every autopilot and vehicle-control write of any other client, naming the
+        holder. Asked before traffic is switched on, so the refusal names who to stop before the
+        first vehicle is spawned rather than at its autopilot.
+        """
+        ask = getattr(self.world, "drive_lease_holder", None)
+        if ask is None:
+            return None
+        try:
+            return ask()
+        except Exception as e:
+            self.logger.debug(f"drive lease could not be read: {e!r}")
+            return None
+
+    def locked_out_by(self, failure) -> str | None:
+        """The holder the server names where `failure` is a control write it refused because a
+        drive lease is held; None where it is anything else."""
+        return DriveLease.locked_out_by(failure)
+
     def enable(self) -> bool:
         if not self.available:
             self.logger.warning(f"traffic toggle ignored: {self.reason}")
+            return False
+        holder = self.drive_lease_holder()
+        if holder is not None:
+            self.logger.error(
+                f"traffic refused: {holder} holds this world's drive lease, and the server refuses "
+                "every other traffic system's autopilot and vehicle-control writes while it does. "
+                "Stop that drive, or run against a different world; where the drive is gone and did "
+                "not release the lease, world.break_drive_lease() ends it."
+            )
             return False
         if not self.enabled:
             self.enabled = True
@@ -1184,9 +1147,7 @@ class TrafficController:
             if elapsed > 1e-6:
                 rec["speed"] = dist / elapsed
 
-            op = self.interior_opacity(loc.x, loc.y, yaw, rec["ext"][0], rec["ext"][1], b)
-            if self.args.fade:
-                self.apply_fade(rec, a, 1.0 - op)
+            inside = self.interior_fraction(loc.x, loc.y, yaw, rec["ext"][0], rec["ext"][1], b)
 
             if (
                 loc.x < mnx - self.OOB_PAD
@@ -1199,9 +1160,9 @@ class TrafficController:
                 continue
 
             if armed:
-                if op >= 0.99:
+                if inside >= self.ENTERED_FRACTION:
                     rec["entered"] = True
-                if rec["entered"] and op <= 0.02:
+                if rec["entered"] and inside <= self.EXITED_FRACTION:
                     self.despawn(vid, a, "exited")
                     continue
                 if rec["entered"] and self.red_clearance(loc.x, loc.y, b) <= self.RED_CLEAR:

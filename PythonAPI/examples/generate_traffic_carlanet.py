@@ -8,6 +8,7 @@
 
 """Example script to generate traffic in the simulation"""
 
+import sys
 import time
 import math
 
@@ -42,19 +43,6 @@ def _is_inward(tf, b):
     cx, cy = _scene_center(b)
     yaw = math.radians(tf.rotation.yaw)
     return math.cos(yaw) * (cx - tf.location.x) + math.sin(yaw) * (cy - tf.location.y) > 0.0
-
-def _fade_hide(x, y, b):
-    """Staging fade amount for a position: 1.0 (fully dissolved) at the sandbox edge, ramping to
-    0.0 (fully solid) at the scene perimeter (one margin inward) and throughout the scene. A point
-    outside the sandbox reads as fully hidden. Fed to actor.set_fade so traffic dissolves in as it
-    enters the ring and out as it leaves."""
-    if not (b["min_x"] <= x <= b["max_x"] and b["min_y"] <= y <= b["max_y"]):
-        return 1.0
-    margin = b["margin"]
-    if margin <= 0.0:
-        return 0.0
-    edge_dist = min(x - b["min_x"], b["max_x"] - x, y - b["min_y"], b["max_y"] - y)
-    return max(0.0, min(1.0, 1.0 - edge_dist / margin))
 
 def _random_scene_navpoint(world, b, tries=40):
     """A random navigation point inside the scene (so a walker heads inward), or any nav point if
@@ -169,6 +157,18 @@ def main():
 
     try:
         world = client.get_world()
+
+        # A SUMO drive holding the world's drive lease is the one traffic system allowed in it: the
+        # server refuses every other client's autopilot and vehicle-control writes while it does,
+        # naming the holder. Asked before anything is spawned, so the refusal comes before the first
+        # vehicle rather than as an error per vehicle.
+        holder = world.drive_lease_holder()
+        if holder is not None:
+            print(f"refused: {holder} holds this world's drive lease, and the server refuses every "
+                  "other traffic system's autopilot and vehicle-control writes while it does. Stop "
+                  "that drive, or run against a different world; where the drive is gone and did not "
+                  "release the lease, world.break_drive_lease() ends it.", file=sys.stderr)
+            return 1
 
         traffic_manager = client.get_trafficmanager(args.tm_port)
         traffic_manager.set_global_distance_to_leading_vehicle(2.5)
@@ -432,12 +432,6 @@ def main():
                 if a is None:
                     continue
                 loc = a.get_location()
-                # Ramp the opacity across the staging ring: invisible at the edge -> solid at the
-                # scene perimeter, so entry/exit is a smooth dissolve rather than a pop.
-                try:
-                    a.set_fade(_fade_hide(loc.x, loc.y, staging))
-                except Exception:
-                    pass
                 if _in_scene(loc.x, loc.y, staging):
                     veh_entered[vid] = True
                 elif veh_entered.get(vid):
@@ -495,9 +489,11 @@ def main():
 
 if __name__ == '__main__':
 
+    status = 0
     try:
-        main()
+        status = main() or 0
     except KeyboardInterrupt:
         pass
     finally:
         print('\ndone.')
+    sys.exit(status)

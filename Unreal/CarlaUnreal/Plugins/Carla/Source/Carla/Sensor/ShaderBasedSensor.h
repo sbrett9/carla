@@ -22,10 +22,12 @@
     if (!AreClientsListening()) // Ideally, check whether there are any clients.
         return;
 
-    auto FrameIndex = FCarlaEngine::GetFrameCounter();
+    // Taken now, in the call that captures the frame: the callback runs
+    // later, on another thread, after the sensor may have moved.
+    auto CaptureHeader = MakeCaptureHeader();
     ImageUtil::ReadImageDataAsync(
         *GetCaptureRenderTarget(),
-        [this](
+        [this, CaptureHeader](
             const void* MappedPtr,
             size_t RowPitch,
             size_t BufferHeight,
@@ -37,7 +39,7 @@
             SendDataToClient(
                 *this,
                 ImageData,
-                FrameIndex);
+                CaptureHeader);
             return true;
         });
 

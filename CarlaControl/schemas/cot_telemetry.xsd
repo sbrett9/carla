@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One datagram of the live Cursor-on-Target feed: its root is <event>.
+
+  Every UDP datagram holds exactly one event, UTF-8, with no XML declaration. carla-sctmv sends CARLA
+  vehicles (TelemetryController). The SUMO bridge, carla-cot-telemetry given a UDP address, sends SUMO
+  vehicles (SumoCotBridge).
+
+  A vehicle event has the shape of a vehicle event in a capture's truth sidecar. The parts the two
+  share (Point, Track, Contact and the simple types under them) are taken from truth_sidecar.xsd, which
+  must sit beside this file; the event's own parts are in cot_event_body.xsd. A datagram differs from a
+  sidecar event: it never carries the picture's fields (in_frame, the box, occlusion, lights, pose
+  source), _box3d or _supervision; a SUMO vehicle's datagram leaves out type_id, special_type,
+  role_name and marked; and carla-sctmv's carries _capture and _solar inside <detail>.
+
+  Including truth_sidecar.xsd also makes its root, <events>, a root of this schema. A datagram is
+  checked as <event>.
+
+  No element is in a namespace.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation"
+           elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
+  <xs:annotation>
+    <xs:documentation>One Cursor-on-Target datagram of the live telemetry feed: one vehicle at one
+      instant. Datagrams carry no format version of ours; version="2.0" is the CoT event version.</xs:documentation>
+    <xs:appinfo>
+      <cap:id>urn:carla-sumo-capture:schema:cot-telemetry:1</cap:id>
+      <cap:formatVersion>1</cap:formatVersion>
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:include schemaLocation="truth_sidecar.xsd"/>
+  <xs:include schemaLocation="cot_event_body.xsd"/>
+
+  <xs:element name="event" type="TelemetryEvent">
+    <xs:annotation>
+      <xs:documentation>One datagram.</xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+</xs:schema>

@@ -13,7 +13,10 @@
 #include "Carla/Settings/EpisodeSettings.h"
 #include "Carla/Util/ActorAttacher.h"
 #include "Carla/Weather/Weather.h"
+#include "Carla/Game/DriveLease.h"
 #include "Carla/Game/FrameData.h"
+#include "Carla/Game/SumoStepPhase.h"
+#include "Carla/Game/WorldSupervisionState.h"
 #include "Carla/Sensor/SensorManager.h"
 
 #include <util/disable-ue4-macros.h>
@@ -329,6 +332,27 @@ public:
 
   FFrameData& GetFrameData() { return FrameData; }
 
+  /// The supervision a co-simulation session holds for this world as a whole -- the plan every
+  /// body's row is bound from, and nothing else -- which the world observer carries on every snapshot
+  /// while a plan is held (update_supervision). Ends with the episode.
+  const FWorldSupervisionState &GetWorldSupervision() const { return WorldSupervision; }
+
+  FWorldSupervisionState &GetWorldSupervision() { return WorldSupervision; }
+
+  /// The frames a co-simulation session's SUMO steps fall on, as the session declared them, which the
+  /// world observer carries on every snapshot while a step is declared (update_pose_source). Ends with
+  /// the episode.
+  const FSumoStepPhase &GetSumoStepPhase() const { return SumoStepPhase; }
+
+  FSumoStepPhase &GetSumoStepPhase() { return SumoStepPhase; }
+
+  /// The drive lease on this world: which client, if any, is the traffic that drives its vehicles
+  /// (take_drive_lease). While it is held every vehicle-control RPC is refused for every actor,
+  /// naming the holder. Ends with the episode.
+  const FDriveLease &GetDriveLease() const { return DriveLease; }
+
+  FDriveLease &GetDriveLease() { return DriveLease; }
+
   FSensorManager& GetSensorManager() { return SensorManager; }
 
   bool bIsPrimaryServer = true;
@@ -406,6 +430,12 @@ private:
   FFrameData FrameData;
 
   FSensorManager SensorManager;
+
+  FWorldSupervisionState WorldSupervision;
+
+  FSumoStepPhase SumoStepPhase;
+
+  FDriveLease DriveLease;
 };
 
 FString CarlaGetRelevantTagAsString(

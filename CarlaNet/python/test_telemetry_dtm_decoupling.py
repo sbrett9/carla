@@ -28,6 +28,13 @@ Vehicles with |pivot| > --glitch-pivot are CARLA physics artifacts (airborne / f
 world) and are excluded (reported, not failed). With --height-align none, offset is 0 and the
 same invariants hold (hae == physical, still pivot above bare-earth ground).
 
+A vehicle on a bridge deck is neither: hae is the deck's own altitude and hae_dtm the ground beneath
+it, so hae - hae_dtm is the deck's height above the ground plus the pivot -- metres, and legitimately
+so. Each vehicle is therefore measured against the road it rests on, read from the OpenDRIVE the
+server serves: where that road stands more than --structure-height above the draped ground, the
+road's own height above the ground is taken off before the pivot is judged, and the vehicle is
+counted as on a structure rather than excluded as airborne.
+
 Prereqs (same as test_digital_twin.py):
   * Headless server running + ticking (RunCarlaServer.ps1).
   * SUMO netconvert staged under Build/sumo-install.
@@ -68,7 +75,6 @@ ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sand
 ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),
                 help="drape: grid sampling cache dir (speeds re-runs)")
 ap.add_argument("--offroad", type=int, default=3, help="drape: also spawn N off-road vehicles to check")
-ap.add_argument("--settle", type=float, default=10.0)
 ap.add_argument("--traffic", type=int, default=8)
 ap.add_argument("--samples", type=int, default=5, help="telemetry polls (1 Hz)")
 ap.add_argument("--tm-port", type=int, default=8000)
@@ -81,6 +87,9 @@ ap.add_argument("--pivot-min", type=float, default=-0.5, help="min plausible hae
 ap.add_argument("--dtm-tol", type=float, default=2.5, help="hae_dtm vs live ground sample tol m")
 ap.add_argument("--glitch-pivot", type=float, default=5.0,
                 help="exclude vehicles with |hae-hae_dtm| beyond this (m) as airborne/fell sim artifacts")
+ap.add_argument("--structure-height", type=float, default=1.5,
+                help="a road standing more than this (m) above the draped ground is a structure (a deck); "
+                     "a vehicle on it is judged by its height above that road, not above the ground")
 args = ap.parse_args()
 
 os.environ.setdefault("CARLA_NETCONVERT", _NETCONVERT)
@@ -104,6 +113,80 @@ def read_osm_bounds(path):
     except OSError:
         return None
     return None
+
+
+class RoadHeights:
+    """The height of the road a position rests on, from the OpenDRIVE the server serves.
+
+    Every road's reference line is sampled every metre through CarlaNet.Map's port of the engine's own
+    evaluation (Map.GetDirectedPointIn, lane offset and elevation included), each sample carrying the
+    paved width either side of it from the road's first lane section. CARLA builds a road flat across
+    its width, so a position across a sample's paved width is at that sample's height. Where several
+    roads lie over one position -- a deck and the road beneath it -- the highest one not above the
+    vehicle is the one it rests on.
+    """
+
+    CELL = 10.0
+
+    def __init__(self, opendrive_text):
+        import xml.etree.ElementTree as ET
+        from CarlaNet.Map.OpenDrive import OpenDriveParser
+        from CarlaNet.Map.Road import Map as RoadMap
+        # netconvert writes a byte-order mark, which neither parser takes as the start of a document.
+        opendrive_text = opendrive_text.lstrip(chr(0xFEFF))
+        widths = {}
+        for road in ET.fromstring(opendrive_text).iter("road"):
+            section = road.find("lanes/laneSection")
+            right = left = 0.0
+            if section is not None:
+                for side, sign in (("right", -1), ("left", 1)):
+                    for lane in section.findall(f"{side}/lane"):
+                        width = lane.find("width")
+                        if width is not None:
+                            value = float(width.get("a", "0"))
+                            if sign < 0:
+                                right += value
+                            else:
+                                left += value
+            widths[int(road.get("id"))] = (right, left)
+        parsed = OpenDriveParser.Load(opendrive_text)
+        self._cells = {}
+        if parsed is None:
+            return
+        for road in parsed.Roads.Values:
+            right, left = widths.get(int(road.Id), (0.0, 0.0))
+            length = float(road.Length)
+            count = max(1, int(math.ceil(length)))
+            for i in range(count + 1):
+                s = min(length, i * length / count)
+                try:
+                    point = RoadMap.GetDirectedPointIn(road, s)
+                except Exception:
+                    break
+                # OpenDRIVE's frame is east/north; CARLA negates the northing and the heading.
+                x, y = float(point.Location.X), -float(point.Location.Y)
+                heading = -float(point.Tangent)
+                key = (int(x // self.CELL), int(y // self.CELL))
+                self._cells.setdefault(key, []).append(
+                    (x, y, float(point.Location.Z), heading, right, left))
+
+    def under(self, x, y, z, slack=0.75):
+        """The local height of the highest road under CARLA (x, y) not above z + slack, or None."""
+        best = None
+        cx, cy = int(x // self.CELL), int(y // self.CELL)
+        for i in (-1, 0, 1):
+            for j in (-1, 0, 1):
+                for sx, sy, sz, heading, right, left in self._cells.get((cx + i, cy + j), ()):
+                    dx, dy = x - sx, y - sy
+                    along = dx * math.cos(heading) + dy * math.sin(heading)
+                    # Positive to the left of the reference line, as OpenDRIVE measures t; CARLA's frame
+                    # is mirrored, so its left is the negated cross product.
+                    across = -(dx * -math.sin(heading) + dy * math.cos(heading))
+                    if abs(along) > 0.75 or across < -right - 0.5 or across > left + 0.5:
+                        continue
+                    if sz <= z + slack and (best is None or sz > best):
+                        best = sz
+        return best
 
 
 def make_options():
@@ -155,7 +238,6 @@ def main() -> int:
         sample_step_meters=args.step,
         height_align=args.height_align,
         ground_collision=True,
-        cesium_settle_seconds=args.settle,
         terrain_res=args.terrain_res,
         terrain_margin=args.terrain_margin,
         drape_cache_dir=args.drape_cache_dir)
@@ -252,11 +334,41 @@ def main() -> int:
     # Telemetry samples the drape grid with the SAME per-cell triangulation Chaos::FHeightField uses
     # (shim _drape_surf), so the lookup matches the physics surface and the pivot is the true vehicle
     # pivot (>= ~0) on- AND off-road, at any resolution. So the bound stays strict.
+    #
+    # A vehicle on a deck is the exception: hae is the deck's altitude and hae_dtm the ground beneath
+    # it, so hae - hae_dtm is the deck's height above the ground plus the pivot. The road it rests on
+    # says how much of that is the deck -- its height above the surface the roads were raised to, which
+    # is the draped ground in 'drape' mode and bare earth plus the one offset otherwise -- and that much
+    # is taken off before the pivot is judged. The vehicle's own position is read for this alone; the
+    # road's height across a few centimetres of motion is the same road's.
+    try:
+        roads = RoadHeights(world.get_map().to_opendrive())
+    except Exception as e:
+        roads = None
+        print(f"WARN: the served OpenDRIVE could not be read ({e}); a vehicle on a deck will be "
+              f"judged against the ground beneath it.", file=sys.stderr)
+    actors = {a.id: a for a in spawned}
+
+    def deck_height(r, hae_dtm):
+        """The deck a vehicle rests on, as its road's height above the raised surface, or 0 at grade."""
+        actor = actors.get(r["id"])
+        if roads is None or actor is None:
+            return 0.0
+        loc = actor.get_location()
+        road = roads.under(float(loc.x), float(loc.y), float(loc.z))
+        if road is None:
+            return 0.0
+        surface = world.drape_ground_elevation(loc.x, loc.y) if drape else None
+        if surface is None:
+            surface = hae_dtm + offset
+        height = (road + float(origin[2])) - surface
+        return height if height > args.structure_height else 0.0
+
     pivot_min_eff = args.pivot_min
     print(f"[3] validating telemetry over {args.samples} poll(s)...  pivot range "
           f"[{pivot_min_eff:.2f}, {args.pivot_max:.2f}] m")
-    fails, checked, glitched = [], 0, 0
-    pivots, dtm_errs = [], []
+    fails, checked, glitched, on_structures = [], 0, 0, 0
+    pivots, dtm_errs, deck_heights = [], [], []
     for _ in range(args.samples):
         recs = world.get_vehicle_telemetry(origin)
         # Batch the live bare-earth sample for all vehicles in ONE call this poll.
@@ -269,6 +381,12 @@ def main() -> int:
         for i, r in enumerate(recs):
             hae_dtm = r.get("hae_dtm")
             pivot = (r["hae"] - hae_dtm) if hae_dtm is not None else None
+            if pivot is not None and pivot > args.pivot_max:
+                deck = deck_height(r, hae_dtm)
+                if deck > 0.0:
+                    on_structures += 1      # on a deck: judged by its height above the deck
+                    deck_heights.append(deck)
+                    pivot -= deck
             if pivot is not None and abs(pivot) > args.glitch_pivot:
                 glitched += 1               # airborne / fell — sim artifact, skip
                 continue
@@ -299,6 +417,8 @@ def main() -> int:
                 if xs else "n/a")
     print(f"\n   checks: {checked}  (excluded {glitched} sim-glitched/airborne)")
     print(f"   pivot = hae - hae_dtm (race-free): {stat(pivots)} m")
+    print(f"   on a deck: {on_structures} record(s), deck {stat(deck_heights)} m above the ground "
+          f"(taken off their pivot)")
     print(f"   hae_dtm vs live_DTM error:         {stat(dtm_errs)} m")
     if args.height_align != "none":
         print(f"   offset removed from each hae: {offset:+.3f} m (the photoreal bias, now "

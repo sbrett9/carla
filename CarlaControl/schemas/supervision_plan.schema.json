@@ -1,0 +1,1014 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:carla-sumo-capture:schema:supervision-plan:1",
+  "title": "Supervision plan",
+  "description": "The scenario's annotation, and the only place annotation travels: every labeled assertion about authored vehicles and flows, fixed at compile time and bound to the compiled traffic files by digest. Written by carla-compile-scenario as <scenario_id>.supervision.json; read by the co-simulation session, whose run manifest and sidecars report each interval as it happens. It carries no time of writing, so two compiles of one specification write it byte for byte.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "supervision_plan_version",
+    "plan_id",
+    "spec_version",
+    "scenario_id",
+    "routes_digest",
+    "network_digest",
+    "config_digest",
+    "additional_digest",
+    "vocabulary_version",
+    "vocabulary_digest",
+    "vocabulary",
+    "instances",
+    "series",
+    "cohorts",
+    "entities"
+  ],
+  "properties": {
+    "supervision_plan_version": {
+      "const": 1,
+      "description": "The format version of this file. The session refuses any other."
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The plan's id: the scenario id."
+    },
+    "spec_version": {
+      "const": 1,
+      "description": "The specification format version compiled."
+    },
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "routes_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the route file the plan was compiled with."
+    },
+    "network_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "The canonical fingerprint of the network, not its file's bytes."
+    },
+    "config_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the .sumocfg."
+    },
+    "additional_digest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "SHA-256 of the lane closures' .add.xml; null where there is none."
+    },
+    "vocabulary_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The core vocabulary's version."
+    },
+    "vocabulary_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the vocabulary block, keys sorted, two-space indent."
+    },
+    "vocabulary": {
+      "type": "object",
+      "description": "The resolved vocabulary every label is a term of.",
+      "required": [
+        "core",
+        "namespaces"
+      ],
+      "properties": {
+        "core": {
+          "type": "object",
+          "description": "The core vocabulary.",
+          "required": [
+            "vocabulary_version",
+            "source",
+            "terms"
+          ],
+          "properties": {
+            "vocabulary_version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "source": {
+              "type": "string"
+            },
+            "terms": {
+              "type": "object",
+              "description": "The closed core: the terms the pipeline's own code branches on, by family.",
+              "required": [
+                "supervision_state",
+                "subject_kind",
+                "interval_onset",
+                "closed_by",
+                "illumination_band",
+                "cadence",
+                "reserved_role",
+                "interval_anchor",
+                "render_state",
+                "render_reason"
+              ],
+              "properties": {
+                "supervision_state": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "annotated",
+                      "nominal",
+                      "unlabelled"
+                    ]
+                  }
+                },
+                "subject_kind": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "entity",
+                      "cohort"
+                    ]
+                  }
+                },
+                "interval_onset": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "declared",
+                      "committed",
+                      "observed"
+                    ]
+                  }
+                },
+                "closed_by": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "trigger",
+                      "entity_arrived",
+                      "sumo_removed",
+                      "never_inserted",
+                      "physical_predicate_never_held",
+                      "render_released",
+                      "capture_window_end",
+                      "scenario_end"
+                    ]
+                  }
+                },
+                "illumination_band": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "day",
+                      "golden",
+                      "civil_twilight",
+                      "nautical_twilight",
+                      "astronomical_twilight",
+                      "night"
+                    ]
+                  }
+                },
+                "cadence": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "enumerated",
+                      "period_s + offsets_s[] + span"
+                    ]
+                  }
+                },
+                "reserved_role": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "subject"
+                    ]
+                  }
+                },
+                "interval_anchor": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "depart",
+                      "stop",
+                      "stop_end",
+                      "phase"
+                    ]
+                  }
+                },
+                "render_state": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "rendered",
+                      "simulated_only"
+                    ]
+                  }
+                },
+                "render_reason": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "no_world",
+                      "left_the_simulation",
+                      "vanished",
+                      "outside_limit",
+                      "no_blueprint",
+                      "unknown_extent",
+                      "no_ground",
+                      "not_drawn"
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namespace"
+          },
+          "description": "Every author namespace, declared or imported, by name."
+        }
+      },
+      "additionalProperties": false
+    },
+    "instances": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/instance"
+      },
+      "description": "Each authored assertion about one or more vehicles."
+    },
+    "series": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/series"
+      },
+      "description": "Each schedule read as a recurring series, one slot per vehicle it sends."
+    },
+    "cohorts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/cohort"
+      },
+      "description": "Every flow, with its whole-life supervision; unlabelled where nothing was declared."
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      },
+      "description": "Every authored vehicle, with its supervision states and the rows that name it; unlabelled where none does."
+    }
+  },
+  "$defs": {
+    "instance": {
+      "type": "object",
+      "description": "One pattern instance.",
+      "required": [
+        "instance_id",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "counterfactual",
+        "aoi_refs",
+        "participants",
+        "intervals"
+      ],
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[^/]+/[a-z0-9_]+$",
+          "description": "<scenario_id>/<authored name>."
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "nominal"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        },
+        "hard_negative_for": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A nominal row's copy of its terms' hard_negative_for; null where unspecified."
+        },
+        "counterfactual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/counterfactual"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aoi_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One participant and its role.",
+            "required": [
+              "entity_id",
+              "role",
+              "sumo_id"
+            ],
+            "properties": {
+              "entity_id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "sumo_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "intervals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One declared interval.",
+            "required": [
+              "entity_id",
+              "phase",
+              "anchor",
+              "declared_start_s",
+              "declared_start_civil",
+              "declared_end_s",
+              "declared_end_civil",
+              "declared_duration_s"
+            ],
+            "properties": {
+              "entity_id": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string",
+                "description": "The phase's name, as authored."
+              },
+              "anchor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "description": "The participant's events that commit the interval.",
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "object",
+                        "description": "One end of an anchor: depart, stop:<i>, stop_end:<i> or phase:<i>.",
+                        "required": [
+                          "event"
+                        ],
+                        "properties": {
+                          "event": {
+                            "type": "string",
+                            "pattern": "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
+                          },
+                          "lane": {
+                            "type": "string",
+                            "description": "The stop's lane."
+                          },
+                          "end_pos_m": {
+                            "type": "number",
+                            "description": "The stop's end position, meters."
+                          },
+                          "route_index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Where in the compiled route the phase is entered."
+                          },
+                          "edge": {
+                            "type": "string",
+                            "description": "The edge it is entered on."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "end": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "description": "One end of an anchor: depart, stop:<i>, stop_end:<i> or phase:<i>.",
+                            "required": [
+                              "event"
+                            ],
+                            "properties": {
+                              "event": {
+                                "type": "string",
+                                "pattern": "^(depart|(stop|stop_end|phase):(0|[1-9][0-9]*))$"
+                              },
+                              "lane": {
+                                "type": "string",
+                                "description": "The stop's lane."
+                              },
+                              "end_pos_m": {
+                                "type": "number",
+                                "description": "The stop's end position, meters."
+                              },
+                              "route_index": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Where in the compiled route the phase is entered."
+                              },
+                              "edge": {
+                                "type": "string",
+                                "description": "The edge it is entered on."
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_start_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_start_civil": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_end_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_end_civil": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_duration_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "series": {
+      "type": "object",
+      "description": "A schedule read as a recurring series.",
+      "required": [
+        "series_id",
+        "rota_ref",
+        "cadence",
+        "member_role",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "slots"
+      ],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "rota_ref": {
+          "type": "string"
+        },
+        "cadence": {
+          "const": "enumerated"
+        },
+        "member_role": {
+          "type": "string"
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        },
+        "hard_negative_for": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One occasion of the schedule.",
+            "required": [
+              "slot_key",
+              "aoi_ref",
+              "declared_start_s",
+              "declared_start_civil",
+              "declared_end_s",
+              "declared_end_civil",
+              "entity_id"
+            ],
+            "properties": {
+              "slot_key": {
+                "type": "string"
+              },
+              "aoi_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_start_s": {
+                "type": "number"
+              },
+              "declared_start_civil": {
+                "type": "string"
+              },
+              "declared_end_s": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_end_civil": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "report_series": {
+      "type": "object",
+      "description": "A series, its slots counted.",
+      "required": [
+        "series_id",
+        "rota_ref",
+        "cadence",
+        "member_role",
+        "supervision",
+        "labels",
+        "parameters",
+        "hard_negative_for",
+        "slots"
+      ],
+      "properties": {
+        "series_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "rota_ref": {
+          "type": "string"
+        },
+        "cadence": {
+          "const": "enumerated"
+        },
+        "member_role": {
+          "type": "string"
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "nominal",
+            "unlabelled"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        },
+        "hard_negative_for": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slots": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many slots the series has."
+        }
+      },
+      "additionalProperties": false
+    },
+    "cohort": {
+      "type": "object",
+      "description": "One flow's whole-life supervision.",
+      "required": [
+        "flow_id",
+        "supervision",
+        "labels",
+        "parameters"
+      ],
+      "properties": {
+        "flow_id": {
+          "type": "string"
+        },
+        "supervision": {
+          "enum": [
+            "annotated",
+            "unlabelled"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "description": "Values for keys the labels' terms declare."
+        }
+      },
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "description": "One authored vehicle's states and the rows naming it.",
+      "required": [
+        "entity_id",
+        "supervision",
+        "refs"
+      ],
+      "properties": {
+        "entity_id": {
+          "type": "string"
+        },
+        "supervision": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "annotated",
+              "nominal",
+              "unlabelled"
+            ]
+          }
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "namespace",
+        "version",
+        "authority",
+        "terms"
+      ],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/term"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "definition"
+            ],
+            "properties": {
+              "role": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              },
+              "definition": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "area_kinds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+              },
+              "definition": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "term",
+        "definition",
+        "applies_to",
+        "since",
+        "status"
+      ],
+      "properties": {
+        "term": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "applies_to": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "entity",
+              "cohort"
+            ]
+          },
+          "description": "The kinds of subject the term may label: one authored vehicle, or every vehicle a flow emits. A label follows a vehicle; nothing labels a place"
+        },
+        "since": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "active",
+            "deprecated"
+          ]
+        },
+        "superseded_by": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+        },
+        "broader": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "definition"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "number",
+                  "integer",
+                  "string",
+                  "boolean"
+                ]
+              },
+              "unit": {
+                "type": "string"
+              },
+              "definition": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "counterfactual": {
+          "$ref": "#/$defs/counterfactual"
+        },
+        "contrast_with": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "hard_negative_for": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+:[a-z0-9_]+$"
+          }
+        },
+        "exemplar_instances": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "counterfactual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "series",
+            "cohort",
+            "instance",
+            "term"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

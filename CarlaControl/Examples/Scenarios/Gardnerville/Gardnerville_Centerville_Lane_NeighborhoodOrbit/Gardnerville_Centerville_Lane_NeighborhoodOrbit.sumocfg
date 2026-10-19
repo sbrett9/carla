@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Compiled by carlacontrol.ScenarioCompiler from the specification of Gardnerville_Centerville_Lane_NeighborhoodOrbit; edit that, not this. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="Gardnerville_Centerville_Lane.net.xml"/>
+        <route-files value="Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml"/>
+    </input>
+    <!-- t = 0 is 2026-06-21T10:00:00-07:00 (2026-06-21T17:00:00Z), UTC-07:00 including daylight saving, calendar held at the epoch's date, America/Los_Angeles. The run ends at 2026-06-21T10:37:00-07:00. begin and end below are simulated seconds from t = 0. -->
+    <time>
+        <begin value="0"/>
+        <end value="2220"/>
+        <step-length value="0.05"/>
+    </time>
+    <random_number>
+        <seed value="42"/>
+    </random_number>
+    <processing>
+        <time-to-teleport value="-1"/>
+        <max-depart-delay value="900"/>
+        <collision.action value="warn"/>
+        <lanechange.duration value="3"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+        <duration-log.statistics value="true"/>
+    </report>
+</configuration>

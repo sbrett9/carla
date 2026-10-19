@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<osm version="0.6" generator="ramp meter fixture">
+  <bounds minlat="39.4965000" minlon="-104.9010000" maxlat="39.5035000" maxlon="-104.8960000"/>
+  <node id="100" lat="39.4970000" lon="-104.9000000" version="1"/>
+  <node id="101" lat="39.5000000" lon="-104.9000000" version="1"/>
+  <node id="102" lat="39.5030000" lon="-104.9000000" version="1"/>
+  <node id="200" lat="39.4975000" lon="-104.8970000" version="1"/>
+  <node id="201" lat="39.4990000" lon="-104.8988000" version="1"/>
+  <node id="202" lat="39.4998800" lon="-104.8999000" version="1">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals" v="ramp_meter"/>
+    <tag k="traffic_signals:direction" v="forward"/>
+  </node>
+  <way id="900" version="1">
+    <nd ref="100"/>
+    <nd ref="101"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="lanes" v="3"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="name" v="Valley Highway"/>
+  </way>
+  <way id="901" version="1">
+    <nd ref="101"/>
+    <nd ref="102"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="lanes" v="4"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="name" v="Valley Highway"/>
+  </way>
+  <way id="910" version="1">
+    <nd ref="200"/>
+    <nd ref="201"/>
+    <nd ref="202"/>
+    <nd ref="101"/>
+    <tag k="highway" v="motorway_link"/>
+    <tag k="lanes" v="2"/>
+    <tag k="oneway" v="yes"/>
+  </way>
+</osm>

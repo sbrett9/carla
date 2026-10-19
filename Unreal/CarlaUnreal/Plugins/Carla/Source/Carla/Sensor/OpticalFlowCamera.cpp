@@ -34,10 +34,10 @@ void AOpticalFlowCamera::PostPhysTick(UWorld *World, ELevelTick TickType, float 
   TRACE_CPUPROFILER_EVENT_SCOPE(AOpticalFlowCamera::PostPhysTick);
   Super::PostPhysTick(World, TickType, DeltaSeconds);
 
-  auto FrameIndex = FCarlaEngine::GetFrameCounter();
+  auto CaptureHeader = MakeCaptureHeader();
   ImageUtil::ReadImageDataAsync(
       *GetCaptureRenderTarget(),
-      [this, FrameIndex](
+      [this, CaptureHeader](
           const void* MappedPtr,
           size_t RowPitch,
           size_t BufferHeight,
@@ -69,7 +69,7 @@ void AOpticalFlowCamera::PostPhysTick(UWorld *World, ELevelTick TickType, float 
         SendDataToClient(
             *this,
             TArrayView<FVector2f>(ImageData),
-            FrameIndex);
+            CaptureHeader);
         return true;
       });
 }

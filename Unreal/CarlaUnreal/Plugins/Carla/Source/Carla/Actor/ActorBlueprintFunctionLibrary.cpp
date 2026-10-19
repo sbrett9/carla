@@ -402,7 +402,44 @@ void UActorBlueprintFunctionLibrary::MakeCameraDefinition(
     post_process_profile.RecommendedValues = {TEXT("default")};
     post_process_profile.bRestrictToRecommended = false;
 
-    Definition.Variations.Append({PostProccess, post_process_profile});
+    // The camera's exposure, under upstream CARLA 0.9's attribute names and units, applied over the
+    // profile's (SetCamera). The recommended values are the Default profile's: manual, ISO 100,
+    // 1/320 s, f/4 and no compensation, EV100 +12.32. A client sends every attribute of a
+    // blueprint, so a camera given none of these renders at those values whatever profile it names.
+    FActorVariation ExposureMode;
+    ExposureMode.Id = TEXT("exposure_mode");
+    ExposureMode.Type = EActorAttributeType::String;
+    ExposureMode.RecommendedValues = {TEXT("manual"), TEXT("histogram")};
+    ExposureMode.bRestrictToRecommended = true;
+
+    // EV, added to the exposure whatever the mode; above 0 brightens.
+    FActorVariation ExposureCompensation;
+    ExposureCompensation.Id = TEXT("exposure_compensation");
+    ExposureCompensation.Type = EActorAttributeType::Float;
+    ExposureCompensation.RecommendedValues = {TEXT("0.0")};
+    ExposureCompensation.bRestrictToRecommended = false;
+
+    FActorVariation CameraISO;
+    CameraISO.Id = TEXT("iso");
+    CameraISO.Type = EActorAttributeType::Float;
+    CameraISO.RecommendedValues = {TEXT("100.0")};
+    CameraISO.bRestrictToRecommended = false;
+
+    // Per second, as UE's CameraShutterSpeed and upstream's attribute are: 320 is 1/320 s.
+    FActorVariation ShutterSpeed;
+    ShutterSpeed.Id = TEXT("shutter_speed");
+    ShutterSpeed.Type = EActorAttributeType::Float;
+    ShutterSpeed.RecommendedValues = {TEXT("320.0")};
+    ShutterSpeed.bRestrictToRecommended = false;
+
+    FActorVariation FStop;
+    FStop.Id = TEXT("fstop");
+    FStop.Type = EActorAttributeType::Float;
+    FStop.RecommendedValues = {TEXT("4.0")};
+    FStop.bRestrictToRecommended = false;
+
+    Definition.Variations.Append({PostProccess, post_process_profile, ExposureMode,
+                                  ExposureCompensation, CameraISO, ShutterSpeed, FStop});
 
   }
 
@@ -1356,6 +1393,72 @@ FVector UActorBlueprintFunctionLibrary::RetrieveActorAttributeToVector(
   IsValid(ActorPtr);
 #endif // WITH_EDITOR
 
+// A camera's exposure, from the attributes MakeCameraDefinition publishes beside the post-process
+// pair, applied over the profile SetCamera has just loaded. The profile's JSON replaces the whole of
+// PostProcessSettings, override flags included, so each value set here sets its override flag again.
+// Physical camera exposure is switched on wherever the ISO, shutter or aperture is given, because
+// that is what makes them set a manual exposure. An attribute the description does not carry leaves
+// the profile's value; every client sends every attribute of a blueprint, so only a client building
+// its own description leaves one out. CarlaNet.Recording.CameraExposure records each capture's
+// exposure from the camera's attributes by this same rule, so the two change together.
+static void ApplyCameraExposureAttributes(
+    const FActorDescription &Description,
+    ASceneCaptureSensor &Camera)
+{
+  const TMap<FString, FActorAttribute> &Attributes = Description.Variations;
+  FPostProcessSettings &Settings = Camera.GetCaptureComponent()->PostProcessSettings;
+
+  if (Attributes.Contains(TEXT("exposure_mode")))
+  {
+    // Upstream's rule, case aside: histogram is histogram, and any other value is manual.
+    const FString Mode = UActorBlueprintFunctionLibrary::ActorAttributeToString(
+        Attributes[TEXT("exposure_mode")], TEXT("manual"));
+    const bool bHistogram = Mode.Equals(TEXT("histogram"), ESearchCase::IgnoreCase);
+    if (!bHistogram && !Mode.Equals(TEXT("manual"), ESearchCase::IgnoreCase))
+    {
+      UE_LOG(LogCarla, Warning,
+             TEXT("camera exposure_mode '%s' is neither 'manual' nor 'histogram'; it is taken as manual"),
+             *Mode);
+    }
+    Settings.bOverride_AutoExposureMethod = true;
+    Camera.SetExposureMethod(bHistogram ? EAutoExposureMethod::AEM_Histogram : EAutoExposureMethod::AEM_Manual);
+  }
+
+  if (Attributes.Contains(TEXT("exposure_compensation")))
+  {
+    Settings.bOverride_AutoExposureBias = true;
+    Camera.SetExposureCompensation(UActorBlueprintFunctionLibrary::ActorAttributeToFloat(
+        Attributes[TEXT("exposure_compensation")], 0.0f));
+  }
+
+  bool bPhysicalCamera = false;
+  if (Attributes.Contains(TEXT("iso")))
+  {
+    Settings.bOverride_CameraISO = true;
+    Camera.SetISO(UActorBlueprintFunctionLibrary::ActorAttributeToFloat(Attributes[TEXT("iso")], 100.0f));
+    bPhysicalCamera = true;
+  }
+  if (Attributes.Contains(TEXT("shutter_speed")))
+  {
+    Settings.bOverride_CameraShutterSpeed = true;
+    Camera.SetShutterSpeed(UActorBlueprintFunctionLibrary::ActorAttributeToFloat(
+        Attributes[TEXT("shutter_speed")], 320.0f));
+    bPhysicalCamera = true;
+  }
+  if (Attributes.Contains(TEXT("fstop")))
+  {
+    // UE's physical exposure reads the aperture from the depth of field's f-stop.
+    Settings.bOverride_DepthOfFieldFstop = true;
+    Camera.SetAperture(UActorBlueprintFunctionLibrary::ActorAttributeToFloat(Attributes[TEXT("fstop")], 4.0f));
+    bPhysicalCamera = true;
+  }
+  if (bPhysicalCamera)
+  {
+    Settings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+    Settings.AutoExposureApplyPhysicalCameraExposure = 1;
+  }
+}
+
 void UActorBlueprintFunctionLibrary::SetCamera(
     const FActorDescription &Description,
     ASceneCaptureSensor *Camera)
@@ -1375,9 +1478,18 @@ void UActorBlueprintFunctionLibrary::SetCamera(
 
     FString PostProcessDefaultName = RetrieveActorAttributeToString("post_process_profile",
         Description.Variations, TEXT("default"));
-    UPostProcessJsonUtils::LoadAllPostProcessFromJsonToSceneCapture(
-        Camera->GetCaptureComponent(),
-        PostProcessDefaultName);
+    if (!UPostProcessJsonUtils::LoadAllPostProcessFromJsonToSceneCapture(
+            Camera->GetCaptureComponent(),
+            PostProcessDefaultName))
+    {
+      UE_LOG(LogCarla, Warning,
+             TEXT("camera post_process_profile '%s' did not load from %s; the camera keeps its built-in post-process settings"),
+             *PostProcessDefaultName,
+             *UPostProcessJsonUtils::GetPostProcessConfigPath(PostProcessDefaultName));
+    }
+
+    // After the profile, so the exposure attributes set the exposure and the profile the rest.
+    ApplyCameraExposureAttributes(Description, *Camera);
   }
 }
 

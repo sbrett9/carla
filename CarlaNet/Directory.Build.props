@@ -1,0 +1,27 @@
+<Project>
+  <!--
+    The release every CarlaNet assembly belongs to: the distribution's one release number, CARLA_VERSION
+    in the top-level CMakeLists.txt, read here as text so a checkout never configured with CMake builds
+    the same assemblies. The carlanet wheel's build passes the exact PEP 440 version it stamps into the
+    wheel (CarlaReleaseVersion, from Util/ReleaseVersion.py), so the assemblies in a wheel and the wheel
+    carry one string. Any other build (dotnet build, dotnet test, a scratch publish) is named by its
+    commit (Directory.Build.targets): 0.10.0+g1a2b3c4d5, or 0.10.0+unknown where git cannot say.
+    CarlaNet.Types.Provenance.Producer.CarlaNetVersion reads the result back.
+  -->
+  <PropertyGroup>
+    <CarlaCMakeLists>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'CMakeLists.txt'))</CarlaCMakeLists>
+  </PropertyGroup>
+  <PropertyGroup Condition="Exists('$(CarlaCMakeLists)')">
+    <_CarlaCMakeText>$([System.IO.File]::ReadAllText('$(CarlaCMakeLists)'))</_CarlaCMakeText>
+    <_CarlaVersionMajor>$([System.Text.RegularExpressions.Regex]::Match('$(_CarlaCMakeText)', 'set\s*\(\s*CARLA_VERSION_MAJOR\s+(\d+)\s*\)').Groups[1].Value)</_CarlaVersionMajor>
+    <_CarlaVersionMinor>$([System.Text.RegularExpressions.Regex]::Match('$(_CarlaCMakeText)', 'set\s*\(\s*CARLA_VERSION_MINOR\s+(\d+)\s*\)').Groups[1].Value)</_CarlaVersionMinor>
+    <_CarlaVersionPatch>$([System.Text.RegularExpressions.Regex]::Match('$(_CarlaCMakeText)', 'set\s*\(\s*CARLA_VERSION_PATCH\s+(\d+)\s*\)').Groups[1].Value)</_CarlaVersionPatch>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(_CarlaVersionMajor)' != '' and '$(_CarlaVersionMinor)' != '' and '$(_CarlaVersionPatch)' != ''">
+    <Version>$(_CarlaVersionMajor).$(_CarlaVersionMinor).$(_CarlaVersionPatch)</Version>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(CarlaReleaseVersion)' != ''">
+    <InformationalVersion>$(CarlaReleaseVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

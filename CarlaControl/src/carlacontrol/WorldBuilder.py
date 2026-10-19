@@ -2,22 +2,45 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import time
-from datetime import datetime
+from pathlib import Path
 
 from CarlaNet.Map import OsmConversionOptions
 from System.Collections.Generic import List
 
+from carlacontrol.AreaOfInterestSource import AreaOfInterestError, AreaOfInterestSource
+from carlacontrol.AuthoringReferenceSet import AuthoringReferenceSet
+from carlacontrol.NetconvertTypeMap import (
+    TYPE_FILES_OPTION,
+    NetconvertTypeMap,
+    NetconvertTypeMapError,
+)
 from carlacontrol.OsmClipper import OsmClipper
+from carlacontrol.SumoInstallation import SumoInstallation
+from carlacontrol.ToolLayout import ToolLayout
 
 
 class WorldBuilder:
-    def __init__(self, repo_root: str, netconvert_path: str, proj_data_path: str):
-        self.repo_root = repo_root
+    def __init__(self, layout: ToolLayout | str | Path, netconvert_path: str,
+                 proj_data_path: str | None):
+        """
+        Args:
+            layout: where intermediate files go (`ToolLayout`), or a source checkout's root.
+            netconvert_path: the netconvert that converts the extract.
+            proj_data_path: PROJ's data folder for netconvert, or None to leave PROJ to find its own.
+        """
+        self.layout = layout if isinstance(layout, ToolLayout) else ToolLayout(layout)
         self.netconvert_path = netconvert_path
         self.proj_data_path = proj_data_path
+        # The world's own edge types, when it declares any (`load_type_map`); passed to netconvert
+        # with SUMO's map first by `make_osm_conversion_options`.
+        self.type_map: NetconvertTypeMap | None = None
+        # The world package's manifest once one is written (`--emit-world-package`); None until then,
+        # and after a write that failed, which the build reports and does not fail on.
+        self.world_package_path: str | None = None
         self.logger = logging.getLogger(__name__)
-        
+
         self.logger.info(f"world builder initialized: netconvert={netconvert_path}")
 
 
@@ -57,11 +80,33 @@ class WorldBuilder:
                 f"{args.road_offset_north:.6f}",
             ]:
                 extra.Add(a)
+        # Anything else the caller needs this world built with. A SUMO scenario validates its own
+        # netconvert flag set against the one the world package records, so a scenario that needs a
+        # flag the build does not offer -- dropping pedestrian ways by type, say -- is served by
+        # passing it here rather than by letting the two sides diverge.
+        # Each occurrence is split as a shell would, so one netconvert option and its value are
+        # quoted together: --netconvert-arg "--remove-edges.by-type highway.footway". Keeping the
+        # pair in one token is what carries a value through the parser, which reads a lone
+        # dash-prefixed token as an option of its own. One token per occurrence also works, via
+        # --netconvert-arg=<token>, and the two forms compose.
+        for a in getattr(args, "netconvert_arg", None) or []:
+            for token in shlex.split(str(a)):
+                extra.Add(token)
+        # The world's own edge types, after SUMO's: which vehicle classes each kind of road admits
+        # is decided in the one netconvert run that writes the world's network and its OpenDRIVE, so
+        # the network every scenario on this world runs already carries it (NetconvertTypeMap).
+        if self.type_map is not None:
+            installation_home = Path(self.netconvert_path).resolve().parent.parent
+            for a in self.type_map.netconvert_arguments(installation_home):
+                extra.Add(a)
         opts.ExtraArgs = extra
         return opts
 
     def build_world(self, client, args) -> bool:
         self.logger.info("== Digital-twin build (headless, no editor) ==")
+        if not args.osm:
+            self.logger.error("no --osm given: name the OpenStreetMap extract to build the world from")
+            return False
         self.logger.info(f"  osm        : {args.osm}")
         if not os.path.exists(args.osm):
             self.logger.error(f"OSM not found: {args.osm}")
@@ -75,8 +120,7 @@ class WorldBuilder:
             if b is None:
                 self.logger.error("no --lat/--lon given and could not read <bounds> from the OSM file")
                 return False
-            args.lat = (b.min_lat + b.max_lat) / 2.0
-            args.lon = (b.min_lon + b.max_lon) / 2.0
+            args.lat, args.lon = b.center()
             self.logger.info(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (derived from OSM bounds center)")
         else:
             self.logger.info(f"  origin     : {args.lat:.7f}, {args.lon:.7f}  (explicit)")
@@ -90,6 +134,11 @@ class WorldBuilder:
                 f"{args.road_offset_north:+.2f} m north "
                 "(moves the drivable surface only; imagery and telemetry stay pinned)"
             )
+        ok, areas = self.load_areas_of_interest(args)
+        if not ok:
+            return False
+        if not self.load_type_map(args):
+            return False
         self.logger.info(
             f"  ion asset  : {args.ion_asset_id} (photoreal)  ground: {args.ground_asset_id}  "
             f"token: {'set' if args.ion_token else 'MISSING'}"
@@ -104,21 +153,24 @@ class WorldBuilder:
                 self.logger.info("  clip       : skipped (no <bounds> in the OSM)")
             else:
                 clipped = os.path.join(
-                    self.repo_root,
-                    "Build",
+                    self.layout.build_directory,
                     "sumo-smoketest",
                     os.path.splitext(os.path.basename(args.osm))[0] + "_clipped.osm",
                 )
                 os.makedirs(os.path.dirname(clipped), exist_ok=True)
-                nways, nbnd = OsmClipper.clip_osm_to_bounds(args.osm, clipped, bb)
+                clip = OsmClipper.clip_osm_to_bounds(args.osm, clipped, bb)
                 osm_for_build = clipped
-                self.logger.info(f"  clip       : roads cut to <bounds> -> {nways} ways (+{nbnd} edge nodes)")
+                self.logger.info(
+                    f"  clip       : roads cut to <bounds> -> {clip.ways} ways "
+                    f"(+{clip.boundary_nodes} edge nodes, {clip.renumbered_runs} split runs "
+                    f"renumbered), carrying {clip.relations} relations, "
+                    f"{clip.standalone_nodes} mapped features and "
+                    f"{clip.relation_nodes} nodes named only by a relation")
         else:
             self.logger.info("  clip       : OFF (--no-clip-bounds)")
 
         save_path = args.save or os.path.join(
-            self.repo_root,
-            "Build",
+            self.layout.build_directory,
             "sumo-smoketest",
             os.path.splitext(os.path.basename(args.osm))[0] + "_elevated.xodr",
         )
@@ -137,7 +189,6 @@ class WorldBuilder:
             origin_height=args.origin_height,
             height_align=args.height_align,
             ground_collision=args.ground_collision,
-            cesium_settle_seconds=args.settle,
             terrain_res=args.terrain_res,
             terrain_margin=args.terrain_margin,
             drape_cache_dir=args.drape_cache_dir,
@@ -153,10 +204,82 @@ class WorldBuilder:
         self.logger.info(f"        wrote elevated .xodr -> {save_path}")
 
         if args.emit_world_package:
-            self._write_world_package(client, args, osm_for_build, elevated)
+            self._write_world_package(client, args, osm_for_build, elevated, areas)
         return True
 
-    def _write_world_package(self, client, args, osm_for_build: str, elevated: str) -> None:
+    def load_areas_of_interest(self, args) -> tuple[bool, AreaOfInterestSource | None]:
+        """Find and validate the world's areas of interest before anything is built.
+
+        `--aoi` names the file; without it, `<extract>.aoi.geojson` beside `--osm` is used when it
+        exists. A file that fails validation refuses the build -- that costs one malformed file
+        rather than minutes of building a world whose areas cannot be published. Returns whether
+        to proceed, and the areas (None when none are declared).
+        """
+        explicit = getattr(args, "aoi", None)
+        path = Path(explicit) if explicit else AreaOfInterestSource.discover(args.osm)
+        if path is None:
+            self.logger.info("  areas      : none declared (no --aoi, and no %s beside the extract)",
+                             AreaOfInterestSource.beside(args.osm).name)
+            return True, None
+        if not path.is_file():
+            self.logger.error(f"areas of interest not found: {path}")
+            return False, None
+        bounds = OsmClipper.read_bounds(args.osm)
+        try:
+            areas = AreaOfInterestSource.load(path, bounds)
+        except AreaOfInterestError as refusal:
+            self.logger.error(f"areas of interest refused, so the world is not built: {path}")
+            for problem in refusal.problems:
+                self.logger.error(f"    {problem}")
+            return False, None
+        self.logger.info(
+            f"  areas      : {len(areas.areas)} from {path}"
+            + ("" if args.emit_world_package else " (validated; published only with "
+                                                  "--emit-world-package)"))
+        return True, areas
+
+    def load_type_map(self, args) -> bool:
+        """Find and validate the world's own edge types before anything is built.
+
+        `--type-map` names the file; without it, `<extract>.typ.xml` beside `--osm` is used when it
+        exists. A malformed file, a map with SUMO's own map missing from the installation beside
+        netconvert, or a `--type-files` also given through `--netconvert-arg` refuses the build:
+        netconvert takes that option once, and a second list would replace the first. Returns
+        whether to proceed; the map is kept on `self.type_map`.
+        """
+        self.type_map = None
+        explicit = getattr(args, "type_map", None)
+        path = Path(explicit) if explicit else NetconvertTypeMap.discover(args.osm)
+        if path is None:
+            self.logger.info("  road types : SUMO's own (no --type-map, and no %s beside the extract)",
+                             NetconvertTypeMap.beside(args.osm).name)
+            return True
+        if not path.is_file():
+            self.logger.error(f"type map not found: {path}")
+            return False
+        passed = [token for a in getattr(args, "netconvert_arg", None) or []
+                  for token in shlex.split(str(a))]
+        if any(token == TYPE_FILES_OPTION or token.startswith(TYPE_FILES_OPTION + "=")
+               for token in passed):
+            self.logger.error(f"a type map ({path}) and {TYPE_FILES_OPTION} through "
+                              "--netconvert-arg were both given; netconvert reads the option once, "
+                              "so name the world's types with --type-map alone")
+            return False
+        try:
+            type_map = NetconvertTypeMap.load(path)
+            type_map.netconvert_arguments(Path(self.netconvert_path).resolve().parent.parent)
+        except (NetconvertTypeMapError, FileNotFoundError) as refusal:
+            self.logger.error(f"type map refused, so the world is not built: {refusal}")
+            return False
+        self.type_map = type_map
+        self.logger.info(f"  road types : SUMO's own, then {len(type_map.types)} from {path} "
+                         f"(sha256 {type_map.sha256[:12]})")
+        for line in type_map.describe():
+            self.logger.info(f"               {line}")
+        return True
+
+    def _write_world_package(self, client, args, osm_for_build: str, elevated: str,
+                             areas: AreaOfInterestSource | None = None) -> None:
         """Record the built world on disk: road network, the grids that recover true ground height
         from driven height, and a manifest of the origin, imagery layers and build settings.
 
@@ -181,7 +304,34 @@ class WorldBuilder:
         except Exception as ex:
             self.logger.warning(f"world package not written: {ex}")
             return
+        self.world_package_path = manifest_path
         self.logger.info(f"        wrote world package -> {manifest_path}")
+        self._publish_reference_set(manifest_path, areas)
+
+    def _publish_reference_set(self, package_path: str,
+                               areas: AreaOfInterestSource | None) -> None:
+        """Publish the areas, the place index and the solar frame into the package just written.
+
+        Reported and swallowed on failure, for the same reason as the package itself: the world is
+        built, and losing part of its record is a lesser harm than discarding it. Areas that fail
+        resolution are refused by name in the log and left out; the rest is still published.
+        """
+        installation = None
+        try:
+            # The installation that converted the world, so the projection that places the areas is
+            # the one that placed the lanes.
+            installation = SumoInstallation.locate(explicit=Path(self.netconvert_path).parent.parent)
+        except FileNotFoundError as ex:
+            self.logger.warning(f"no SUMO installation beside {self.netconvert_path}: {ex}")
+        try:
+            report = AuthoringReferenceSet(package_path, installation, areas).publish()
+        except Exception as ex:
+            self.logger.warning(f"authoring reference set not published: {ex!r}")
+            return
+        if report.refusals:
+            self.logger.error(f"        areas of interest refused ({len(report.refusals)} "
+                              "problem(s) above); the rest of the reference set is published")
+        self.logger.info(f"        published reference set -> {', '.join(report.entries)}")
 
     @staticmethod
     def configure_sync_mode(world, sync: bool, fixed_delta: float = 0.05) -> None:
@@ -211,8 +361,36 @@ class WorldBuilder:
                 logger.debug(f"failed to disable synchronous mode: {e}")
 
     @staticmethod
+    def solar_time_requested(args) -> bool:
+        """Whether the operator asked for the sun to be placed at all.
+
+        `--date`, `--time` and `--time-advance` are the three ways of asking. When none of them was
+        given there is nothing to apply, and the world keeps the sun it already has.
+        """
+        return bool(args.date) or args.time is not None or bool(args.time_advance)
+
+    @staticmethod
+    def parse_solar_hours(value) -> float:
+        """`--time` as decimal hours, written either as HH:MM or as a decimal figure."""
+        text = str(value)
+        if ":" in text:
+            hours, minutes = text.split(":")
+            return int(hours) + int(minutes) / 60.0
+        return float(text)
+
+    @staticmethod
     def setup_solar_time(world, args) -> bool:
-        """Configure solar time/date and time advancement after world build.
+        """Apply the solar date, clock and advancement that were asked for, and only those.
+
+        Each of `--date`, `--time` and `--time-advance` is applied when it was given and left alone
+        when it was not. Nothing is invented for the ones that were not: a stand-in date is the
+        host's calendar and a stand-in hour is noon, so inventing them makes the illumination of
+        every capture a by-product of when the run happened rather than a setting the run declared.
+        Illumination is a controlled variable or it is nothing.
+
+        With none of the three given, the world is not touched at all and the sun it already has is
+        reported instead -- including in attach mode, where nothing was respawned and relighting
+        somebody's world would be a silent change to what their captures show.
 
         Args:
             world: CARLA world object
@@ -222,27 +400,25 @@ class WorldBuilder:
             True if successful (logs warnings on failure)
         """
         logger = logging.getLogger(__name__)
+        if not WorldBuilder.solar_time_requested(args):
+            WorldBuilder._report_solar_state_left_alone(world, logger)
+            return True
         try:
             if args.date:
-                y, mo, d = (int(v) for v in args.date.split("-"))
-            else:
-                now = datetime.now()
-                y, mo, d = now.year, now.month, now.day
-            if args.time is None:
-                hours = 12.0
-            elif ":" in str(args.time):
-                hh, mm = str(args.time).split(":")
-                hours = int(hh) + int(mm) / 60.0
-            else:
-                hours = float(args.time)
-            world.set_solar_date(y, mo, d)
-            if world.set_solar_time(hours):
-                logger.info(
-                    f"solar time set: {int(hours) % 24:02d}:{int(round((hours % 1) * 60)) % 60:02d} "
-                    f"local, date {y:04d}-{mo:02d}-{d:02d}"
-                )
-            else:
-                logger.warning("solar time not set (world has no CesiumSunSky)")
+                year, month, day = (int(v) for v in args.date.split("-"))
+                if world.set_solar_date(year, month, day):
+                    logger.info(f"solar date set: {year:04d}-{month:02d}-{day:02d}")
+                else:
+                    logger.warning("solar date not set (world has no CesiumSunSky)")
+            if args.time is not None:
+                hours = WorldBuilder.parse_solar_hours(args.time)
+                if world.set_solar_time(hours):
+                    logger.info(
+                        "solar time set: "
+                        f"{int(hours) % 24:02d}:{int(round((hours % 1) * 60)) % 60:02d} local"
+                    )
+                else:
+                    logger.warning("solar time not set (world has no CesiumSunSky)")
             if args.time_advance:
                 world.set_time_advance(True, args.time_rate)
                 logger.info(
@@ -253,3 +429,28 @@ class WorldBuilder:
         except Exception as e:
             logger.error(f"solar time-of-day setup failed: {e!r}")
             return False
+
+    @staticmethod
+    def _report_solar_state_left_alone(world, logger: logging.Logger) -> None:
+        """Say which sun the run is using when the run did not choose one.
+
+        Reading it back rather than announcing an intention: the sun a world carries comes from
+        whoever last set it, and a line in the log is the only record of what lit the captures.
+        """
+        state = None
+        try:
+            state = world.get_solar_state()
+        except Exception as e:
+            logger.debug(f"could not read the world's solar state: {e!r}")
+        if not state:
+            logger.info("sun left as the world has it (no --time, --date or --time-advance given); "
+                        "the world reports no sun to read")
+            return
+        hours = state["solar_time"]
+        logger.info(
+            "sun left as the world has it (no --time, --date or --time-advance given): "
+            f"{int(hours) % 24:02d}:{int(round((hours % 1) * 60)) % 60:02d} local on "
+            f"{state['year']:04d}-{state['month']:02d}-{state['day']:02d}, "
+            f"elevation {state['sun_elevation_deg']:.2f} deg"
+            + (f", advancing at {state['rate']:g}x" if state["advancing"] else "")
+        )

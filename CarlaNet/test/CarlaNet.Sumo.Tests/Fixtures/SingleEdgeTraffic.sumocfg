@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The same 200 m edge as SingleEdge.sumocfg with two vehicles on it, so the subscription tests
+     have something to subscribe to. -->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+    <input>
+        <net-file value="SingleEdge.net.xml"/>
+        <route-files value="SingleEdge.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="0.05"/>
+    </time>
+    <processing>
+        <!-- Fixed so the tests see the same vehicle states on every run. -->
+        <seed value="42"/>
+    </processing>
+    <report>
+        <no-step-log value="true"/>
+    </report>
+</configuration>

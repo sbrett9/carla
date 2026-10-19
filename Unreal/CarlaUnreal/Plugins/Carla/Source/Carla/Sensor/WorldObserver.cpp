@@ -8,7 +8,12 @@
 #include "Carla.h"
 #include "Carla/Actor/ActorData.h"
 #include "Carla/Actor/ActorRegistry.h"
+#include "Carla/Actor/ActorSupervision.h"
+#include "Carla/Actor/CarlaActor.h"
+#include "Carla/Actor/RenderSetMembership.h"
 #include "Carla/Game/CarlaEpisode.h"
+#include "Carla/Game/SumoStepPhase.h"
+#include "Carla/Game/WorldSupervisionState.h"
 #include "Carla/Game/CarlaEngine.h"
 #include "Carla/Traffic/TrafficLightBase.h"
 #include "Carla/Traffic/TrafficLightComponent.h"
@@ -21,13 +26,22 @@
 
 #include <util/disable-ue4-macros.h>
 #include <carla/rpc/String.h>
+#include <carla/rpc/VehicleLightState.h>
 #include <carla/sensor/SensorRegistry.h>
 #include <carla/sensor/data/ActorDynamicState.h>
+#include <carla/sensor/s11n/EpisodeStateSerializer.h>
 #include <util/enable-ue4-macros.h>
 
 #include <util/ue-header-guard-begin.h>
 #include "CoreGlobals.h"
 #include <util/ue-header-guard-end.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <string>
+#include <vector>
 
 static auto FWorldObserver_GetActorState(const FCarlaActor &View, const FActorRegistry &Registry)
 {
@@ -69,6 +83,9 @@ static auto FWorldObserver_GetActorState(const FCarlaActor &View, const FActorRe
       // Get the failure state by checking the rollover one as it is the only one currently implemented.
       // This will have to be expanded once more states are added
       state.vehicle_data.failure_state = Vehicle->GetFailureState();
+      // The lights commanded on for this vehicle as this frame is drawn, by whichever client set them.
+      state.vehicle_data.light_state =
+          carla::rpc::VehicleLightState(Vehicle->GetVehicleLightState()).GetLightStateAsValue();
     }
   }
 
@@ -181,6 +198,9 @@ static auto FWorldObserver_GetDormantActorState(const FCarlaActor &View, const F
       state.vehicle_data.traffic_light_state = TLS::Green;
       state.vehicle_data.speed_limit = ActorData->SpeedLimit;
       state.vehicle_data.has_traffic_light = false;
+      // A dormant vehicle keeps the lights last set on it, and is given them again when it wakes.
+      state.vehicle_data.light_state =
+          carla::rpc::VehicleLightState(ActorData->LightState).GetLightStateAsValue();
   }
   else if (AType::Walker == View.GetActorType())
   {
@@ -277,6 +297,87 @@ static carla::geom::Vector3D FWorldObserver_GetAcceleration(
   };
 }
 
+/// The bytes of a name -- in the render set or the supervision block -- that fit its 16-bit length
+/// prefix.
+static uint16_t FWorldObserver_NameSize(const std::string &Name)
+{
+  constexpr size_t MaxSize = (std::numeric_limits<uint16_t>::max)();
+  return static_cast<uint16_t>((std::min)(Name.size(), MaxSize));
+}
+
+/// How many items of a list fit its 16-bit count.
+static uint16_t FWorldObserver_ListCount(size_t Count)
+{
+  constexpr size_t MaxCount = (std::numeric_limits<uint16_t>::max)();
+  return static_cast<uint16_t>((std::min)(Count, MaxCount));
+}
+
+/// A name's size as written: its 16-bit length, then its bytes.
+static size_t FWorldObserver_WrittenNameSize(const std::string &Name)
+{
+  return sizeof(uint16_t) + FWorldObserver_NameSize(Name);
+}
+
+/// A list of names' size as written: its 16-bit count, then each name that count covers.
+static size_t FWorldObserver_WrittenNamesSize(const std::vector<std::string> &Names)
+{
+  size_t Size = sizeof(uint16_t);
+  const uint16_t Count = FWorldObserver_ListCount(Names.size());
+  for (uint16_t Index = 0u; Index < Count; ++Index)
+  {
+    Size += FWorldObserver_WrittenNameSize(Names[Index]);
+  }
+  return Size;
+}
+
+/// One render set entry's size: actor id, state, admitted frame, and the vehicle and its type, each
+/// behind a 16-bit length and written only for a body that is lent
+/// (EpisodeStateSerializer::RenderSetEntryState describes the layout).
+static size_t FWorldObserver_RenderSetEntrySize(const FRenderSetMembership &Membership)
+{
+  const bool bLent = Membership.State == FRenderSetMembership::EState::Lent;
+  return sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint64_t)
+      + sizeof(uint16_t) + (bLent ? FWorldObserver_NameSize(Membership.VehicleId) : 0u)
+      + sizeof(uint16_t) + (bLent ? FWorldObserver_NameSize(Membership.VehicleTypeId) : 0u);
+}
+
+/// One supervision row's size: actor id, state, and each annotation's instance, phase, role and
+/// labels (EpisodeStateSerializer::SupervisionEntryState describes the layout).
+static size_t FWorldObserver_SupervisionRowSize(const FActorSupervision &Supervision)
+{
+  size_t Size = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint16_t);
+  const uint16_t Count = FWorldObserver_ListCount(Supervision.Annotations.size());
+  for (uint16_t Index = 0u; Index < Count; ++Index)
+  {
+    const FSupervisionAnnotation &Annotation = Supervision.Annotations[Index];
+    Size += FWorldObserver_WrittenNameSize(Annotation.InstanceId)
+        + FWorldObserver_WrittenNameSize(Annotation.Phase)
+        + FWorldObserver_WrittenNameSize(Annotation.Role)
+        + FWorldObserver_WrittenNamesSize(Annotation.Labels);
+  }
+  return Size;
+}
+
+/// The state a lent body named as following no step is carried under in the pose source block
+/// (EpisodeStateSerializer::PoseSourceEntryState). A body that follows the step has no entry and is
+/// never asked about.
+static carla::sensor::s11n::EpisodeStateSerializer::PoseSourceEntryState FWorldObserver_PoseSourceEntryState(
+    const FRenderSetMembership::EPoseSource PoseSource)
+{
+  using PoseSourceEntryState = carla::sensor::s11n::EpisodeStateSerializer::PoseSourceEntryState;
+  switch (PoseSource)
+  {
+    case FRenderSetMembership::EPoseSource::Stale:
+      return PoseSourceEntryState::Stale;
+    case FRenderSetMembership::EPoseSource::Jump:
+      return PoseSourceEntryState::Jump;
+    case FRenderSetMembership::EPoseSource::Sumo:
+    case FRenderSetMembership::EPoseSource::FollowsStep:
+      break;
+  }
+  return PoseSourceEntryState::Sumo;
+}
+
 static carla::Buffer FWorldObserver_Serialize(
     carla::Buffer &&buffer,
     const UCarlaEpisode &Episode,
@@ -287,12 +388,87 @@ static carla::Buffer FWorldObserver_Serialize(
   TRACE_CPUPROFILER_EVENT_SCOPE_STR(__FUNCTION__);
   using Serializer = carla::sensor::s11n::EpisodeStateSerializer;
   using SimulationState = carla::sensor::s11n::EpisodeStateSerializer::SimulationState;
+  using RenderSetEntryState = carla::sensor::s11n::EpisodeStateSerializer::RenderSetEntryState;
+  using SupervisionEntryState = carla::sensor::s11n::EpisodeStateSerializer::SupervisionEntryState;
   using ActorDynamicState = carla::sensor::data::ActorDynamicState;
 
 
   const FActorRegistry &Registry = Episode.GetActorRegistry();
 
-  auto total_size = sizeof(Serializer::Header) + sizeof(ActorDynamicState) * Registry.Num();
+  // Every body a co-simulation session has named, the supervision of every lent body whose vehicle
+  // the author asserts something of, and every lent body whose pose follows no SUMO step, gathered
+  // before anything is written: the render set block they make sits between the header and the first
+  // actor, so its size is part of the buffer's. A world in which no session has named a body, bound a
+  // supervision plan or declared its step carries no block and is laid out as it always was.
+  const FWorldSupervisionState &WorldSupervision = Episode.GetWorldSupervision();
+  const bool bSupervisionCarried = WorldSupervision.IsHeld();
+  const FSumoStepPhase &StepPhase = Episode.GetSumoStepPhase();
+  TArray<const FCarlaActor *> RenderSetBodies;
+  TArray<const FCarlaActor *> SupervisedBodies;
+  TArray<const FCarlaActor *> PoseNamedBodies;
+  size_t RenderSetEntriesSize = 0u;
+  size_t SupervisionRowsSize = 0u;
+  for (auto& Named : Registry)
+  {
+    const FCarlaActor* Body = Named.Value.Get();
+    if (Body == nullptr)
+    {
+      continue;
+    }
+    const FRenderSetMembership &Membership = Body->GetRenderSetMembership();
+    if (Membership.State != FRenderSetMembership::EState::None)
+    {
+      RenderSetBodies.Add(Body);
+      RenderSetEntriesSize += FWorldObserver_RenderSetEntrySize(Membership);
+    }
+    // Only a lent body draws a vehicle the author can assert anything of, and one whose vehicle is
+    // unlabelled has no row: the absence of a row is what unlabelled is.
+    if (bSupervisionCarried &&
+        Membership.State == FRenderSetMembership::EState::Lent &&
+        Body->GetSupervision().State != FActorSupervision::EState::Unlabelled)
+    {
+      SupervisedBodies.Add(Body);
+      SupervisionRowsSize += FWorldObserver_SupervisionRowSize(Body->GetSupervision());
+    }
+    // Only a lent body is drawn at a pose a session placed, and one that follows the step has no
+    // entry: the step says where its pose came from.
+    if (Membership.State == FRenderSetMembership::EState::Lent &&
+        Membership.PoseSource != FRenderSetMembership::EPoseSource::FollowsStep)
+    {
+      PoseNamedBodies.Add(Body);
+    }
+  }
+  // The supervision block's own size, the plan, the vocabulary version and digest, then the row count
+  // and rows. Every row is a lent body's: nothing is written for the world apart from the plan.
+  size_t SupervisionBlockSize = 0u;
+  if (bSupervisionCarried)
+  {
+    SupervisionBlockSize = sizeof(uint32_t)
+        + FWorldObserver_WrittenNameSize(WorldSupervision.PlanId)
+        + sizeof(uint32_t)
+        + FWorldObserver_WrittenNameSize(WorldSupervision.VocabularyDigest)
+        + sizeof(uint32_t) + SupervisionRowsSize;
+  }
+  // The pose source block's own size, the declared step and the frame it falls on, then the entry
+  // count and entries: an actor id and a state each. Carried while a step is declared, or while any
+  // lent body is named, which only a session that declared its step names.
+  const bool bPoseSourceCarried = StepPhase.IsHeld() || PoseNamedBodies.Num() > 0;
+  const size_t PoseSourceBlockSize = bPoseSourceCarried
+      ? sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint32_t)
+          + (sizeof(uint32_t) + sizeof(uint8_t)) * PoseNamedBodies.Num()
+      : 0u;
+  // Written whenever any is carried: the supervision and the pose source ride inside the render set
+  // block, whose size counts them, so a reader that knows only the render set skips them unread.
+  const bool bRenderSetCarried = RenderSetBodies.Num() > 0 || bSupervisionCarried || bPoseSourceCarried;
+  // The block's own size and its entry count, then the entries, then the supervision block, then the
+  // pose source block.
+  const size_t RenderSetBlockSize = bRenderSetCarried
+      ? sizeof(uint32_t) + sizeof(uint32_t) + RenderSetEntriesSize + SupervisionBlockSize
+          + PoseSourceBlockSize
+      : 0u;
+
+  auto total_size = sizeof(Serializer::Header) + RenderSetBlockSize +
+      sizeof(ActorDynamicState) * Registry.Num();
   auto current_size = 0;
   // Set up buffer for writing.
   buffer.reset(total_size);
@@ -301,6 +477,25 @@ static carla::Buffer FWorldObserver_Serialize(
     auto begin = buffer.begin() + current_size;
     std::memcpy(begin, &data, sizeof(data));
     current_size += sizeof(data);
+  };
+  auto write_name = [&current_size, &buffer, &write_data](const std::string &Name)
+  {
+    const uint16_t Size = FWorldObserver_NameSize(Name);
+    write_data(Size);
+    if (Size > 0u)
+    {
+      std::memcpy(buffer.begin() + current_size, Name.data(), Size);
+      current_size += Size;
+    }
+  };
+  auto write_names = [&write_data, &write_name](const std::vector<std::string> &Names)
+  {
+    const uint16_t Count = FWorldObserver_ListCount(Names.size());
+    write_data(Count);
+    for (uint16_t Index = 0u; Index < Count; ++Index)
+    {
+      write_name(Names[Index]);
+    }
   };
 
   constexpr float TO_METERS = 1e-2;
@@ -316,16 +511,27 @@ static carla::Buffer FWorldObserver_Serialize(
 
   uint8_t simulation_state = (SimulationState::MapChange * MapChange);
   simulation_state |= (SimulationState::PendingLightUpdate * PendingLightUpdates);
-
-  header.simulation_state = static_cast<SimulationState>(simulation_state);
+  // The layout, not the reading: the solar block is always twelve doubles wide, and a reader needs
+  // to know that to find the actors that follow it.
+  simulation_state |= SimulationState::SolarCorrectedElevationCarried;
+  // Also the layout's: every vehicle's state carries its lights, so a zero there is every light off.
+  simulation_state |= SimulationState::VehicleLightStateCarried;
 
   // Solar / time-of-day state, so each streamed snapshot carries the sun in effect this tick and the
   // recorder can pair frames with it straight from the observer cache (no polling). GetSolarState is
-  // [solar_time, year, month, day, time_zone, lat, lon, elevation, azimuth, advancing, rate], or empty
-  // when the world has no CesiumSunSky (then the header keeps its zero/rate-1.0 defaults).
+  // [solar_time, year, month, day, time_zone, lat, lon, elevation, azimuth, advancing, rate,
+  // corrected_elevation], or empty when the world has no CesiumSunSky.
+  //
+  // A world with no sun is signalled by the SolarStateValid flag, not by the values: the header's
+  // solar defaults are a well-formed reading -- midnight of year 0 at latitude 0, longitude 0 -- and
+  // a reader that only checked "are there eleven numbers?" would write that non-reading into an
+  // artifact as fact. GetSolarState appends the corrected elevation whenever it answers at all, so
+  // a sun is valid only with all twelve: a reading missing its last value is reported as no reading
+  // rather than published with a corrected elevation of zero.
   const TArray<double> Solar = UCesiumHeightSampler::GetSolarState(Episode.GetWorld());
-  if (Solar.Num() >= 11)
+  if (Solar.Num() >= 12)
   {
+    simulation_state |= SimulationState::SolarStateValid;
     header.solar_time      = Solar[0];
     header.solar_year      = Solar[1];
     header.solar_month     = Solar[2];
@@ -337,9 +543,112 @@ static carla::Buffer FWorldObserver_Serialize(
     header.solar_azimuth   = Solar[8];
     header.solar_advancing = Solar[9];
     header.solar_rate      = Solar[10];
+    header.solar_corrected_elevation = Solar[11];
   }
 
+  // Set only when the block is written, because it says where the actors start.
+  if (bRenderSetCarried)
+  {
+    simulation_state |= SimulationState::RenderSetCarried;
+  }
+  // And only with it, because the supervision block lies inside it.
+  if (bSupervisionCarried)
+  {
+    simulation_state |= SimulationState::SupervisionCarried;
+  }
+  // As is the pose source block.
+  if (bPoseSourceCarried)
+  {
+    simulation_state |= SimulationState::PoseSourceCarried;
+  }
+
+  header.simulation_state = static_cast<SimulationState>(simulation_state);
+
   write_data(header);
+
+  // The render set: each named body, lent with the vehicle it is drawn for, or parked. What the
+  // session last named is what this frame drew, because the session names a change before the tick
+  // cue of the frame it is drawn in.
+  if (bRenderSetCarried)
+  {
+    const uint32_t BlockSize = static_cast<uint32_t>(RenderSetBlockSize - sizeof(uint32_t));
+    const uint32_t EntryCount = static_cast<uint32_t>(RenderSetBodies.Num());
+    write_data(BlockSize);
+    write_data(EntryCount);
+    for (const FCarlaActor* Body : RenderSetBodies)
+    {
+      const FRenderSetMembership &Membership = Body->GetRenderSetMembership();
+      const bool bLent = Membership.State == FRenderSetMembership::EState::Lent;
+      const uint32_t EntryActorId = static_cast<uint32_t>(Body->GetActorId());
+      const uint8_t EntryState = static_cast<uint8_t>(
+          bLent ? RenderSetEntryState::Lent : RenderSetEntryState::Parked);
+      const uint64_t EntryAdmittedFrame = bLent ? Membership.AdmittedFrame : 0u;
+      write_data(EntryActorId);
+      write_data(EntryState);
+      write_data(EntryAdmittedFrame);
+      write_name(bLent ? Membership.VehicleId : std::string());
+      write_name(bLent ? Membership.VehicleTypeId : std::string());
+    }
+
+    // The supervision in force: the plan, and each lent body whose vehicle is annotated or nominal
+    // with the instances in force for it. What the session last put in force is what holds on this
+    // frame, because the session names a change before the tick cue of the frame it is drawn in.
+    if (bSupervisionCarried)
+    {
+      const uint32_t SupervisionSize = static_cast<uint32_t>(SupervisionBlockSize - sizeof(uint32_t));
+      write_data(SupervisionSize);
+      write_name(WorldSupervision.PlanId);
+      write_data(WorldSupervision.VocabularyVersion);
+      write_name(WorldSupervision.VocabularyDigest);
+      const uint32_t RowCount = static_cast<uint32_t>(SupervisedBodies.Num());
+      write_data(RowCount);
+      for (const FCarlaActor* Body : SupervisedBodies)
+      {
+        const FActorSupervision &Supervision = Body->GetSupervision();
+        const uint32_t RowActorId = static_cast<uint32_t>(Body->GetActorId());
+        const uint8_t RowState = static_cast<uint8_t>(
+            Supervision.State == FActorSupervision::EState::Annotated
+                ? SupervisionEntryState::Annotated
+                : SupervisionEntryState::Nominal);
+        const uint16_t AnnotationCount = FWorldObserver_ListCount(Supervision.Annotations.size());
+        write_data(RowActorId);
+        write_data(RowState);
+        write_data(AnnotationCount);
+        for (uint16_t Index = 0u; Index < AnnotationCount; ++Index)
+        {
+          const FSupervisionAnnotation &Annotation = Supervision.Annotations[Index];
+          write_name(Annotation.InstanceId);
+          write_name(Annotation.Phase);
+          write_name(Annotation.Role);
+          write_names(Annotation.Labels);
+        }
+      }
+    }
+
+    // Where each lent body's pose on this frame came from: the step the session declared, which every
+    // body follows, and each body it named as following none. What the session last declared and
+    // named is what holds on this frame, because it names a change before the tick cue of the frame
+    // it is drawn in.
+    if (bPoseSourceCarried)
+    {
+      const uint32_t PoseSourceSize = static_cast<uint32_t>(PoseSourceBlockSize - sizeof(uint32_t));
+      const uint32_t TicksPerStep = StepPhase.TicksPerStep;
+      const uint64_t StepFrame = StepPhase.IsHeld() ? StepPhase.StepFrame : 0u;
+      const uint32_t PoseEntryCount = static_cast<uint32_t>(PoseNamedBodies.Num());
+      write_data(PoseSourceSize);
+      write_data(TicksPerStep);
+      write_data(StepFrame);
+      write_data(PoseEntryCount);
+      for (const FCarlaActor* Body : PoseNamedBodies)
+      {
+        const uint32_t PoseActorId = static_cast<uint32_t>(Body->GetActorId());
+        const uint8_t PoseState = static_cast<uint8_t>(
+            FWorldObserver_PoseSourceEntryState(Body->GetRenderSetMembership().PoseSource));
+        write_data(PoseActorId);
+        write_data(PoseState);
+      }
+    }
+  }
 
   // Write every actor.
   for (auto& It : Registry)

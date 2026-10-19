@@ -1,8 +1,11 @@
 # Photoreal Occlusion Metric — per-vehicle % occlusion under unsegmented Cesium geometry
 
-**Date:** 2026-07-10 · **Status:** the depth-based measurement and the arrival gate are BUILT
-(2026-08-17, §12); pixel-exact differencing and the live sweep in §10 are still ahead.
+**Date:** 2026-07-10 · **Status:** the depth-based measurement is BUILT (2026-08-17, §12);
+pixel-exact differencing and the live sweep in §10 are still ahead.
 **Datum:** ellipsoidal WGS84 (HAE), bare-earth referenced — `project_datum_decision`.
+**Revisions:** `2026-10-05` — §12.1: the measurement has no switch. `--no-occlusion` and `run_capture`'s
+`occlusion.enabled` are removed by the owner's ruling; every recording camera carries a depth camera and
+every recorder is started with it.
 **Relates to:** [09_Telemetry_CoT_Contract.md](09_Telemetry_CoT_Contract.md) (the per-vehicle truth block this
 extends), [16_Sensor_Pose_In_Recordings.md](16_Sensor_Pose_In_Recordings.md) (the camera pose/intrinsics an
 occlusion test needs), [08_Layer_Architecture.md](08_Layer_Architecture.md) (the toggleable photoreal layer),
@@ -160,8 +163,8 @@ sanity cross-check, not the primary metric.
   poses, and sensor transform are already frame-coherent in synchronous mode — so the number is
   self-describing and travels in the CoT sidecar. (A purely offline variant is possible if a per-frame depth
   product is recorded alongside the RGB, but recorder-side keeps it coherent and avoids a second depth export.)
-  Occlusion rides the per-vehicle telemetry record, so it is only ever computed for **telemetered (established)
-  vehicles** — see the telemetry gate in §9.
+  Occlusion rides the per-vehicle telemetry record, so it is only ever computed for **telemetered
+  vehicles**; §9 and §12.2 say which vehicles those are.
 - **Consumer.** The post-collect bounding-box drawer reads the occlusion field and applies the label policy
   (§7): drop, tag, or retighten.
 
@@ -189,8 +192,8 @@ Recommended policy for the YOLO prototype:
 
 ## 8. Recommended phasing
 
-*Step 1 below is built, together with the arrival gate §9 requires ahead of it; see §12 for what
-shipped and where it departed from this plan. Steps 2 and 3 are still ahead.*
+*Step 1 below is built; see §12 for what shipped and where it departed from this plan. Steps 2 and 3
+are still ahead.*
 
 1. **Phase 1 — depth-margin point grid in the recorder.** Continuous occlusion fraction + bucket into the
    `_carla` block; gate/tag the drawer. No engine change; reuses the existing depth camera and projection math.
@@ -204,31 +207,15 @@ shipped and where it departed from this plan. Steps 2 and 3 are still ahead.*
 
 ### Resolved (2026-07-10)
 
-- **Telemetry is gated to established vehicles.** Truth telemetry — and therefore any occlusion value — is
-  emitted **only for vehicles that have entered the interior** (SCTMV's latched `entered` flag: the vehicle has
-  crossed the inward staging-ring margin, `SCTMV.py` `_spawn_one` / reconcile). Vehicles still fading in from
-  the staging ring emit **nothing**. *This is a defect to fix, not current behaviour:*
-  [VehicleTelemetryService.Compute](../../../CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs) today
-  emits a record for **every** `vehicle.*` actor with no fade/interior gate. Implementation: the recorder must
-  learn each vehicle's `entered` state — plumbed from SCTMV (the client authority for it) or re-derived from
-  the staging bounds + vehicle position server-side; resolve at build time. **Built** — the defect is
-  fixed and the plumbing turned out to be neither of those options; see §12.2.
-- **Translucency counts as partial occlusion, linear in opacity.** An occluder at opacity α contributes **α**
-  to the target's occlusion (α=0 → none, α=1 → full); fully-opaque occluders (buildings, trees, *established*
-  vehicles) always count fully. In practice a not-yet-entered faded vehicle occluding an established target is
-  expected to be rare and mostly avoided by camera framing — the linear rule is the completeness safeguard for
-  when it is not. It requires **per-vehicle opacity in the recorder**: surface the last `set_actor_fade` value
-  (α = 1 − `hide`) via the world-observer snapshot, the same way vehicle light state is surfaced. The *only*
-  translucent occluders are mid-fade vehicles, so the vehicle-vs-not split needed to apply the weight is exactly
-  the instance-segmentation signal (§5.2) — **not** the building/tree attribution deferred below. The
-  depth-margin method (§5.1) cannot weight by occluder opacity without attribution: it either leans on the
-  dithered dissolve stochastically blocking ≈α of samples (fragile under synchronous ticking, where the
-  dither/TAA is unreliable) or over-counts a faded occluder as fully blocking. Exact linear weighting is
-  therefore delivered by the instance-seg method (§5.2); the depth method documents this as an approximation.
+- **Telemetry covers every vehicle in the scene** (revised 2026-10-18). Truth telemetry, and therefore any
+  occlusion value, is emitted for every `vehicle.*` actor except a body a SUMO drive's pool has parked out of
+  sight between loans; staging traffic is reported from the moment it spawns in the staging ring (§12.2).
+- **Every occluder counts in full** (revised 2026-10-18). No vehicle is drawn at partial opacity, so the
+  depth measurement (§5.1) has no partial occluder to weight: every surface in front of the vehicle
+  (building, tree, terrain or another vehicle) hides the samples it covers.
 - **Occluder attribution is out of scope.** The prototype trains a single **vehicle-identification** class, so
   *what* occludes (building vs tree vs vehicle) is not recorded — only *how much*. Attribution would be
-  revisited with segmentation in a later step (e.g. if occluder class ever matters). The one coarse split that
-  is free and used is vehicle-vs-not (instance seg), solely to apply the opacity weight above.
+  revisited with segmentation in a later step (e.g. if occluder class ever matters).
 
 ### Open (implementation tuning, resolve empirically)
 
@@ -238,8 +225,8 @@ shipped and where it departed from this plan. Steps 2 and 3 are still ahead.*
   samples across and 1 m; still untuned against real captures.
 - **Per-frame photoreal-toggle cost** under synchronous recording (§5.2) — measure before adopting the two-pass
   method.
-- ~~**Exact plumbing** of `entered` and opacity into the recorder~~ — settled by the build: neither client
-  push nor a server snapshot, because the client that issues the fade already holds it (§12.2).
+- ~~**Exact plumbing** of `entered` and opacity into the recorder~~ — no longer needed: the recorder
+  reports every vehicle in the scene and no vehicle has a partial opacity (§12.2).
 - **Physical vs bare-earth altitude** for exact projection — the doc-16 §5 caveat applies (pixel-geometry
   reconstruction is done in physical space).
 
@@ -269,9 +256,8 @@ occluded target.
 
 ## 12. What was built (2026-08-17)
 
-The depth-based measurement (§5.1) and the arrival gate (§9) are implemented and unit-tested; the
-pixel-exact differencing (§5.2) is not. Where the build resolved something this document left open,
-it is recorded here.
+The depth-based measurement (§5.1) is implemented and unit-tested; the pixel-exact differencing (§5.2)
+is not. Where the build resolved something this document left open, it is recorded here.
 
 ### 12.1 The measurement
 
@@ -306,34 +292,26 @@ Occlusion is measured for **telemetered vehicles only**, and only on recorded ca
 property of the (vehicle, camera) pair, and the live UDP feed has no camera.
 
 **Cost.** The measurement takes its own subscription to the depth camera's stream, so recording with
-occlusion doubles that camera's stream traffic. It is off unless a depth camera is handed to the
-recorder, and `--no-occlusion` turns it off for a run that does not want it.
+occlusion doubles that camera's stream traffic. It is made wherever a camera records: every recording
+camera carries a depth camera attached to it -- `run_SCTMV.py`'s rig, every `run_capture` channel and
+`run_sumo_drive.py`'s fixed camera -- and the recorder is started with it. `--no-occlusion`, and the
+`occlusion.enabled` field `run_capture` had, were removed on 2026-10-05 by the owner's ruling; nothing
+turns the measurement off, and a recorder handed no depth camera says so as a warning.
 
-**Translucency remains the documented approximation** (§9). A mid-fade vehicle occluding another is
-counted as whatever the depth capture shows of it, which depends on how far the dithered dissolve has
-resolved. Exact linear weighting needs the occluder's identity, which depth alone does not carry;
-that is §5.2's to deliver. Per-vehicle opacity is now available to the recorder (below) ready for it.
+### 12.2 Which vehicles are reported
 
-### 12.2 The arrival gate and per-vehicle opacity
+[VehicleTelemetryService](../../../CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs) reports
+every `vehicle.*` actor in the world except a body a SUMO drive's pool has parked out of sight below
+the ground between loans. The drive's session names each body to the server as it lends it and gives
+it back, and every world-observer snapshot carries what it named, so the service leaves out a body
+parked on the frame it describes and names a lent one by its SUMO vehicle. Staging traffic is reported from the
+moment it spawns in the staging ring. The shim's own telemetry path, which
+`World.get_vehicle_telemetry` falls back to where the native recorder is unavailable, leaves out
+parked bodies by the same rule, so both agree.
 
-§9 left the plumbing of `entered` and opacity open between "client push" and "server-side snapshot or
-derivation". **Neither: the client already holds the value.** `set_actor_fade` writes straight to
-render state and the server keeps no readable copy, so the client that issued the fade is its only
-holder. [CarlaClient](../../../CarlaNet/src/CarlaNet.Transport/CarlaClient.cs) now records each
-`set_actor_fade` it sends and latches the moment a vehicle first reaches full opacity, exposing
-`GetActorOpacity` and `IsActorEstablished`; the record is dropped when the actor leaves the
-world-observer snapshot, so a recycled actor id never inherits the previous vehicle's arrival state.
-
-This is exact, costs nothing, and needs no engine change — where widening the world-observer packet
-would have added four bytes per actor per tick, forever, to carry a value this very process had just
-sent. Its one assumption is that a single client owns the fades, which is what SCTMV is; a second
-client fading the same vehicles would not be seen.
-
-[VehicleTelemetryService](../../../CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs) then
-skips vehicles that have never been established, closing the defect §9 recorded (a record for every
-`vehicle.*` actor regardless of fade). The gate is inert without staging traffic, since a vehicle
-nobody fades is established from the start. The same gate is applied on the shim's own telemetry path
-so both agree.
+Until 2026-10-18 this section described an arrival gate, which left out a staging vehicle that had
+never been fully opaque, and a per-vehicle opacity read from the client's record of the fade it had
+sent. Both were removed with the vehicle fade on that date.
 
 ### 12.3 What the depth camera actually delivers (measured 2026-08-17)
 
@@ -442,8 +420,7 @@ something stands in front of it.
   it has not been touched. At 20 km the reported range is short by hundreds of metres — no obstacle to
   occlusion, where a vehicle and the building hiding it differ in range by far more than that, but not
   good enough to range with. Deferred until the sidecars show whether anything needs better.
-- **§5.2 differencing**, and with it exact opacity weighting and true visible-region boxes.
-- Whether to also carry per-vehicle **opacity** into the sidecar. It is a "do not train on this"
-  signal of the same kind as occlusion, and the recorder now has it, but it is not part of the
-  contract yet.
+- **§5.2 differencing**, and with it true visible-region boxes.
+- ~~Whether to also carry per-vehicle **opacity** into the sidecar~~: closed 2026-10-18, because no
+  vehicle has a partial opacity to carry (§12.2).
 

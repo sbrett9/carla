@@ -10,18 +10,24 @@ namespace CarlaNet.Recording;
 /// <param name="HFovDeg">Camera horizontal field of view, degrees (from the camera blueprint).</param>
 /// <param name="CotType">Fully-resolved CoT air-track type, e.g. "a-f-A-M-F-Q". Use
 /// <see cref="ResolveCotType"/> to build it from an airframe alias + affiliation.</param>
-/// <param name="Callsign">Platform callsign for the CoT contact.</param>
+/// <param name="Callsign">Platform callsign for the CoT contact: the camera's name
+/// (<see cref="CameraName"/>), which every still of the camera is named after too, so two cameras never
+/// report under one callsign. A recorder refuses a callsign that is not its camera's name.</param>
 /// <param name="Uid">Stable CoT track uid, e.g. "CARLA-SENSOR-&lt;camera id&gt;".</param>
 /// <param name="SensorModel">Sensor/camera model string for the CoT sensor element, e.g. "sensor.camera.rgb".</param>
 /// <param name="Distortion">Lens-distortion descriptor: "none" at CARLA defaults, or the serialized raw
 /// CARLA lens parameters (which are a non-standard model, not Brown-Conrady) when non-default.</param>
+/// <param name="Exposure">The exposure the camera was given (<see cref="CameraExposure.Of"/>), written on
+/// every capture as <c>&lt;_carla_exposure&gt;</c>; null for a camera that carries none, whose captures
+/// carry no element.</param>
 public sealed record SensorPlatformOptions(
     double HFovDeg,
     string CotType,
     string Callsign,
     string Uid,
     string SensorModel = "sensor.camera.rgb",
-    string Distortion = "none")
+    string Distortion = "none",
+    CameraExposure? Exposure = null)
 {
     /// <summary>
     /// Resolve an airframe alias (or a raw CoT type string) plus an affiliation into a CoT air-track type.

@@ -10,4 +10,11 @@
     <ProjectReference Include="..\CarlaNet.Types\CarlaNet.Types.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The netconvert flag set and the canonical row encoding are internal: they are how this
+         assembly works, not a published surface. The tests assert both, because the flag set is
+         half of a contract with the scenario tools and the encoding is half of one with Python. -->
+    <InternalsVisibleTo Include="CarlaNet.Tests" />
+  </ItemGroup>
+
 </Project>

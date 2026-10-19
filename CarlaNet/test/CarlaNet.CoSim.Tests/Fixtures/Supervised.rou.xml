@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Every kind of supervised subject on the cross, for the interval binder: `dweller` halts on the
+     single-lane exit for a declared twenty seconds, `parker` turns right and parks off its lane, `passer`
+     turns left, entering the second part of its route on `turn_west`, and the flow `corridor` emits three
+     members behind them. Measured at a 1 s step on SUMO 1.27.0, by TraCI's clock: `dweller` inserted at 1 s,
+     stopping at 11 s and leaving at 31 s; `passer` inserted at 3 s, on `turn_west` at 10 s and gone at 16 s;
+     `corridor.0` to `corridor.2` inserted at 5, 8 and 11 s. -->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="measured_truck" vClass="truck" length="7.0184" width="2.5074" maxSpeed="30.00"
+           accel="2.60" decel="4.50" sigma="0" tau="1.0">
+        <param key="carla:blueprint" value="vehicle.fuso.mitsubishi"/>
+    </vType>
+
+    <route id="straight" edges="approach ahead"/>
+    <route id="right" edges="approach turn_east"/>
+    <route id="left" edges="approach turn_west"/>
+
+    <vehicle id="dweller" type="measured_truck" route="straight" depart="0.00" departLane="1"
+             departSpeed="max">
+        <stop lane="ahead_0" endPos="60.00" duration="20.00"/>
+    </vehicle>
+    <vehicle id="parker" type="measured_truck" route="right" depart="1.00" departLane="0"
+             departSpeed="max">
+        <stop lane="turn_east_0" endPos="50.00" duration="8.00" parking="true"/>
+    </vehicle>
+    <vehicle id="passer" type="measured_truck" route="left" depart="2.00" departLane="1"
+             departSpeed="max"/>
+    <flow id="corridor" type="measured_truck" route="right" begin="4.00" end="12.00" number="3"
+          departLane="0" departSpeed="max"/>
+</routes>

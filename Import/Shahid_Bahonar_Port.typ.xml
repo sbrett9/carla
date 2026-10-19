@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The road types of the Shahid Bahonar Port world, layered over SUMO's own OSM type map.
+
+     SUMO's map opens highway=service to delivery vans, pedestrians and bicycles and to nothing else.
+     The airfield perimeter where the guard towers stand, the apron and the drydock approach are all
+     mapped as service roads, so under SUMO's map neither the naval traffic (vehicle class army) nor
+     the port's cleared traffic (authority) can drive any of them: the sizing scenario's guard rota is refused on every
+     one of its 335 postings. This admits both classes on the type and states nothing else, so the
+     type's lanes, speed and priority stay SUMO's.
+
+     Read by the world build, which passes SUMO's map first and this second
+     (carlacontrol.NetconvertTypeMap), so the network in the world package carries the permission
+     and every scenario compiled against the world inherits it.
+
+     What a type map cannot say: which roads are private. OSM marks the port's interior
+     access=private, and netconvert reads the access key only as access=no, so a private service road
+     and a public one take the same type and the same permissions here. -->
+<types>
+    <type id="highway.service" allow="delivery pedestrian bicycle army authority"/>
+</types>

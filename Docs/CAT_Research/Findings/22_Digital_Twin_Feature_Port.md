@@ -526,7 +526,10 @@ no SUMO, PROJ or Xerces linkage inside Unreal, and lights up the existing `__has
 | Rendered imagery / video | ODbL **Produced Work** | §4.3 notice only — "© OpenStreetMap contributors" |
 | Internal-only use | — | §4.5 exempts internal use from share-alike |
 | SUMO `netconvert` binary | EPL-2.0 | notice + source offer; separate-process invocation keeps our code outside file-level copyleft |
-| `CarlaControl/` | SNC proprietary | **exclude from any external distribution** |
+| `CarlaControl/` | see `CarlaControl/LICENSE` | notice; **no distribution exclusion** — it ships in the single distribution and is named in the package manifest |
+| SUMO runtime DLLs/`.so`s bundled beside `netconvert` | mixed — **LGPL** (FOX, gettext), OpenSSL, Apache-2.0 (Arrow, Parquet, Thrift, Xerces), PROJ, MS redistributables | notice per component; ship only what the binaries import, not a glob |
+
+**On the `CarlaControl/` row.** Earlier revisions of this table recorded `CarlaControl/` as SNC proprietary and excluded from any external distribution. That label anticipated a productisation plan that did not manifest, and the exclusion was never implemented on either packaging script. There is one distribution, it contains the tools, and `CarlaControl/LICENSE` and `CarlaControl/pyproject.toml` are to be brought into line with that.
 
 **The trap:** a packaged CARLA build ships the map's OpenDRIVE, because the server needs it at runtime for
 the road graph. Shipping the product therefore ships a Derivative Database of OSM, so §4.4/§4.6 apply —

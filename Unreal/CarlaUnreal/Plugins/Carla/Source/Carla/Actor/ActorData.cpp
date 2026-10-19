@@ -121,6 +121,12 @@ void FVehicleData::RestoreActorData(FCarlaActor* CarlaActor, UCarlaEpisode* Carl
   {
     Vehicle->ApplyVehiclePhysicsControl(PhysicsControl);
   }
+  else
+  {
+    // The world observer reported this velocity while the vehicle slept; a kinematic
+    // vehicle keeps reporting it until its velocity is set again.
+    Vehicle->SetKinematicVelocity(Velocity);
+  }
   Vehicle->ApplyAckermannControllerSettings(AckermannControllerSettings);
   if (!bAckermannControlActive)
   {

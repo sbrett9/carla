@@ -11,8 +11,10 @@ libcarla source. Sections match the `§` numbers used in the CarlaNet source com
 **Source:** `rpclib` — `Build/_deps/rpclib-src/`
 
 rpclib uses **raw msgpack streaming with NO length prefix**. There is no framing envelope
-around individual messages. The receiver uses `MessagePackStreamReader` to detect message
-boundaries from the msgpack structure itself.
+around individual messages. The receiver uses `MsgPackMessageFramer` to detect message
+boundaries from the msgpack structure itself. It resumes its token walk where the previous read
+stopped; `MessagePackStreamReader`, which it replaced, re-walks the whole buffered message on
+every read, which made a 38 MB grid reply take ~2 minutes.
 
 ### Request format
 ```

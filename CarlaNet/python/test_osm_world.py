@@ -7,7 +7,7 @@ world origin (0,0) is pinned to a chosen lat/lon (default: Wrigley Field home
 plate) so the result stays georeferenced.
 
 Prereqs:
-  * Build the SUMO netconvert tool once (CarlaSetup.bat SUMO section) so it is
+  * Build the SUMO netconvert tool once (CarlaSetup.ps1 SUMO section) so it is
     staged under Build/sumo-install/. This script auto-discovers it there.
   * Start the CARLA server first (Play-In-Editor, or a packaged server) unless
     using --convert-only.
@@ -84,7 +84,7 @@ def main() -> int:
     if not os.path.exists(args.osm):
         print(f"ERROR: OSM not found: {args.osm}", file=sys.stderr); return 1
     if not os.path.exists(_NETCONVERT):
-        print(f"ERROR: netconvert not staged: {_NETCONVERT}\n  Run CarlaSetup.bat (SUMO section).", file=sys.stderr); return 1
+        print(f"ERROR: netconvert not staged: {_NETCONVERT}\n  Run CarlaSetup.ps1 (SUMO section).", file=sys.stderr); return 1
 
     opts = make_options()
 

@@ -3,9 +3,11 @@
 #include "BareEarthReference.h"
 
 #include "Components/SceneComponent.h"
+#include "Containers/UnrealString.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Misc/SecureHash.h"
 
 namespace
 {
@@ -14,6 +16,22 @@ namespace
 	{
 		static const TArray<float> Empty;
 		return Empty;
+	}
+
+	/**
+	 * SHA-1 of a grid, lowercase hexadecimal, over its float32 values as little-endian bytes in
+	 * row-major order: the bytes a world package's bareearth.bin holds for it, and the bytes .NET's
+	 * WorldPackage.HashGrid digests. The array's own memory is that byte sequence on a little-endian
+	 * host, which every platform this plugin builds for is.
+	 */
+	FString GridSha1(const TArray<float>& Grid)
+	{
+		static_assert(PLATFORM_LITTLE_ENDIAN,
+			"the grid digest is over little-endian float32 bytes, which is the array's memory only on "
+			"a little-endian host");
+		uint8 Digest[FSHA1::DigestSize];
+		FSHA1::HashBuffer(Grid.GetData(), static_cast<uint64>(Grid.Num()) * sizeof(float), Digest);
+		return BytesToHexLower(Digest, FSHA1::DigestSize);
 	}
 }
 
@@ -105,18 +123,26 @@ ABareEarthReferenceActor* UBareEarthReference::Set(
 	{
 		Actor->OffsetMeters = OffsetMeters;
 		Actor->BareEarthDtmMeters = BareEarthDtmMeters;
+		// Computed here, once per record, so that proving a package's grids are this record's costs a
+		// client one small answer rather than the grids themselves.
+		Actor->OffsetSha1 = GridSha1(Actor->OffsetMeters);
+		Actor->BareEarthDtmSha1 = GridSha1(Actor->BareEarthDtmMeters);
 	}
 	else
 	{
 		Actor->OffsetMeters.Empty();
 		Actor->BareEarthDtmMeters.Empty();
+		Actor->OffsetSha1.Empty();
+		Actor->BareEarthDtmSha1.Empty();
 	}
 
 	if (bDrapeActive)
 	{
 		UE_LOG(LogTemp, Display,
-			TEXT("[BareEarthReference] Set: per-cell field %dx%d, cell %.2f m, corner (%.2f, %.2f) m."),
-			NumCols, NumRows, CellSizeMeters, MinXMeters, MinYMeters);
+			TEXT("[BareEarthReference] Set: per-cell field %dx%d, cell %.2f m, corner (%.2f, %.2f) m, "
+			     "offset grid SHA-1 %s, ground grid SHA-1 %s."),
+			NumCols, NumRows, CellSizeMeters, MinXMeters, MinYMeters,
+			*Actor->OffsetSha1, *Actor->BareEarthDtmSha1);
 	}
 	else
 	{
@@ -155,4 +181,28 @@ const TArray<float>& UBareEarthReference::GetBareEarthDtmGrid(UObject* WorldCont
 {
 	const ABareEarthReferenceActor* Actor = Find(WorldContextObject);
 	return Actor ? Actor->BareEarthDtmMeters : EmptyGrid();
+}
+
+bool UBareEarthReference::GetGridDigests(
+	UObject* WorldContextObject, FString& OutOffsetSha1, FString& OutBareEarthDtmSha1)
+{
+	ABareEarthReferenceActor* Actor = Find(WorldContextObject);
+	if (!Actor) { return false; }
+	if (!Actor->bDrapeActive)
+	{
+		OutOffsetSha1.Empty();
+		OutBareEarthDtmSha1.Empty();
+		return true;
+	}
+
+	// A record that did not come through Set -- one a saved level carried -- has its grids and not
+	// yet their digests, which are not serialised.
+	if (Actor->OffsetSha1.IsEmpty() || Actor->BareEarthDtmSha1.IsEmpty())
+	{
+		Actor->OffsetSha1 = GridSha1(Actor->OffsetMeters);
+		Actor->BareEarthDtmSha1 = GridSha1(Actor->BareEarthDtmMeters);
+	}
+	OutOffsetSha1 = Actor->OffsetSha1;
+	OutBareEarthDtmSha1 = Actor->BareEarthDtmSha1;
+	return true;
 }

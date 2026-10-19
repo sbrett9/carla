@@ -23,6 +23,21 @@ field, on the raw grid bytes, and on a sampled ground elevation.
 The grid comparison is by SHA-256 over the raw float32 buffers, so it also exercises the wire
 round-trip: the grids leave as C# float[], cross msgpack, and come back through std::vector<float>.
 
+Then the grid digests (get_bare_earth_digest). The server computes the SHA-1 of each grid when the
+record is set, over its float32 values as little-endian bytes, row-major -- the bytes a world
+package's bareearth.bin holds -- so that a client holding the package can prove the loaded world's
+grids are the package's without fetching them: 7,611,381 floats each on the Bahonar world, whose two
+fetches took 146 s and 153 s. The flow asserts the server's digests are hashlib's SHA-1 of the grids
+the second client fetched the slow way and of the grids the builder sent; writes the world package
+and asserts its bareearth.bin, hashed here with zipfile and hashlib, and its world.json both carry
+the same digests; asserts a third client takes the grids from the package without fetching them;
+and runs the session's loaded-world check against the package and against a copy with one bit of
+one ground cell flipped, which it must refuse naming both digests.
+
+With --package the build is skipped: the world the server already holds -- a delivered world, or a
+level restored by GeoreferencedWorldInitializer -- is checked against that package the same way,
+and --slow also fetches its grids to hash them here.
+
 Prereqs (same as test_telemetry_dtm_decoupling.py):
   * Headless server running + ticking (RunCarlaServer.ps1).
   * SUMO netconvert staged under Build/sumo-install.
@@ -31,13 +46,19 @@ Prereqs (same as test_telemetry_dtm_decoupling.py):
 Usage:
     python test_bare_earth_reference.py [--height-align drape|area|origin|none]
         [--osm <path>] [--ion-token <jwt>] [--host h] [--port p]
+    python test_bare_earth_reference.py --package <world.cwp> [--slow] [--host h] [--port p]
 """
 import argparse
 import hashlib
+import json
 import os
 import re
+import shutil
+import struct
 import sys
+import tempfile
 import time
+import zipfile
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.normpath(os.path.join(_THIS, "..", ".."))
@@ -45,6 +66,30 @@ _INSTALL = os.path.join(_REPO, "Build", "sumo-install")
 _NETCONVERT = os.path.join(_INSTALL, "bin",
                            "netconvert.exe" if os.name == "nt" else "netconvert")
 _PROJ = os.path.join(_INSTALL, "share", "proj")
+
+# A straight two-lane road, 100 m long, and nothing else: a world generated from it was never built
+# from OSM and publishes no bare-earth record.
+ONE_ROAD_XODR = """<?xml version="1.0" standalone="yes"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="4" name="" version="1.00" date="" north="10" south="-10" east="100" west="0"/>
+  <road name="" length="100.0" id="1" junction="-1">
+    <link/>
+    <type s="0" type="town"/>
+    <planView><geometry s="0.0" x="0.0" y="0.0" hdg="0.0" length="100.0"><line/></geometry></planView>
+    <elevationProfile><elevation s="0" a="0" b="0" c="0" d="0"/></elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0.0">
+        <left><lane id="1" type="driving" level="false"><link/><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></left>
+        <center><lane id="0" type="driving" level="false"><link/></lane></center>
+        <right><lane id="-1" type="driving" level="false"><link/><width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane></right>
+      </laneSection>
+    </lanes>
+    <objects/>
+    <signals/>
+  </road>
+</OpenDRIVE>
+"""
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--osm", default=os.path.join(_REPO, "Import", "Gardnerville_Centerville_Lane.osm"))
@@ -61,10 +106,10 @@ ap.add_argument("--terrain-res", type=float, default=8.0, help="drape: heightfie
 ap.add_argument("--terrain-margin", type=float, default=30.48, help="drape: sandbox margin past OSM (m)")
 ap.add_argument("--drape-cache-dir", default=os.path.join(_REPO, "Build", "drape-cache"),
                 help="drape: grid sampling cache dir (speeds re-runs)")
-ap.add_argument("--settle", type=float, default=10.0)
-ap.add_argument("--stock-map", default="Town10HD_Opt",
-                help="a map that was never generated from OSM, loaded first so the 'no record' "
-                     "check does not read a record left by an earlier run on the same server")
+ap.add_argument("--package", default=None,
+                help="skip the build: check the world the server already holds against this .cwp")
+ap.add_argument("--slow", action="store_true",
+                help="with --package: also fetch the grids and hash them here (minutes on a large world)")
 ap.add_argument("--host", default="127.0.0.1")
 ap.add_argument("--port", type=int, default=2000)
 ap.add_argument("--timeout", type=float, default=300.0)
@@ -97,6 +142,52 @@ def read_osm_bounds(path):
     except OSError:
         return None
     return None
+
+
+# bareearth.bin: int32 magic, six doubles (origin lat/lon/height, grid min x/y, cell), int32 columns,
+# int32 rows, then the offset grid and the ground grid, each columns*rows float32 little-endian.
+_GRID_HEADER = struct.Struct("<i6d2i")
+
+
+def package_grid_digests(path):
+    """(world.json as a dict, offset SHA-1, ground SHA-1) of a world package, the digests hashed here
+    from bareearth.bin's bytes with hashlib; both None when the package carries no grid entry."""
+    with zipfile.ZipFile(path) as archive:
+        manifest = json.loads(archive.read("world.json").decode("utf-8"))
+        if "bareearth.bin" not in archive.namelist():
+            return manifest, None, None
+        data = archive.read("bareearth.bin")
+    cols, rows = _GRID_HEADER.unpack_from(data)[7:9]
+    size = cols * rows * 4
+    start = _GRID_HEADER.size
+    return (manifest,
+            hashlib.sha1(data[start:start + size]).hexdigest(),
+            hashlib.sha1(data[start + size:start + 2 * size]).hexdigest())
+
+
+def copy_with_one_ground_bit_flipped(source, target):
+    """Copy a world package with the lowest bit of the middle ground cell flipped, every entry
+    stored as the package writer stores it, and answer that grid's new SHA-1."""
+    with zipfile.ZipFile(source) as src, zipfile.ZipFile(target, "w", zipfile.ZIP_STORED) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename == "bareearth.bin":
+                cols, rows = _GRID_HEADER.unpack_from(data)[7:9]
+                size = cols * rows * 4
+                cell = _GRID_HEADER.size + size + 4 * ((cols * rows) // 2)
+                flipped = bytearray(data)
+                flipped[cell] ^= 1
+                data = bytes(flipped)
+                ground_sha1 = hashlib.sha1(data[_GRID_HEADER.size + size:
+                                                _GRID_HEADER.size + 2 * size]).hexdigest()
+            dst.writestr(info.filename, data)
+    return ground_sha1
+
+
+def server_digests(inner):
+    """The server's [offset SHA-1, ground SHA-1], or [] for a world with no record or no drape."""
+    answered = inner.GetBareEarthDigestAsync().GetAwaiter().GetResult()
+    return [] if answered is None else [str(d) for d in answered]
 
 
 def make_options():
@@ -146,7 +237,108 @@ class BareEarthReferenceTest:
             "dtm_len": len(dtm),
             "off_sha": hashlib.sha256(off).hexdigest()[:16],
             "dtm_sha": hashlib.sha256(dtm).hexdigest()[:16],
+            # The digest the server publishes: SHA-1 over the same little-endian float32 bytes.
+            "off_sha1": hashlib.sha1(off).hexdigest(),
+            "dtm_sha1": hashlib.sha1(dtm).hexdigest(),
         }
+
+    def check_digests_against(self, served, off_sha1, dtm_sha1, whose):
+        """The server's two digests against a pair hashed here, one check per grid."""
+        self.check(f"the server's offset digest is the SHA-1 of {whose}",
+                   len(served) == 2 and served[0] == off_sha1, f"{off_sha1}")
+        self.check(f"the server's ground digest is the SHA-1 of {whose}",
+                   len(served) == 2 and served[1] == dtm_sha1, f"{dtm_sha1}")
+
+    def check_package(self, pkg, served):
+        """A package against the loaded world by digest: its grid entry and manifest, a client taking
+        its grids without fetching them, and the session's loaded-world check, admitting it and
+        refusing a copy with one bit of one ground cell flipped."""
+        manifest, off_sha1, dtm_sha1 = package_grid_digests(pkg)
+        if not manifest.get("DrapeActive"):
+            self.check("a constant-shift package carries no grid and records no digest",
+                       off_sha1 is None and not manifest.get("BareEarthOffsetSha1")
+                       and not manifest.get("BareEarthDtmSha1"))
+            self.check("and its world publishes none", served == [], f"{served}")
+            return
+        self.check_digests_against(served, off_sha1, dtm_sha1, "the package's bareearth.bin")
+        recorded = (manifest.get("BareEarthOffsetSha1", ""), manifest.get("BareEarthDtmSha1", ""))
+        if recorded == ("", ""):
+            print("    (the package records no digests in world.json: written before they were)")
+        else:
+            self.check("world.json records the digests its bareearth.bin hashes to",
+                       recorded == (off_sha1, dtm_sha1), f"{recorded}")
+
+        # A client that did not build the world, holding its package, needs no grid from the server.
+        taker = carla.Client(args.host, args.port)
+        taker.set_timeout(30.0)
+        t0 = time.time()
+        taken = bool(taker._inner.AdoptBareEarthReference(str(pkg)))
+        took = time.time() - t0
+        self.check("a client holding the package takes the grids from it", taken,
+                   f"{took:.2f}s, no grid fetched")
+        got = self.state(taker._inner)
+        self.check("and holds the grids the server digests",
+                   (got["off_sha1"], got["dtm_sha1"]) == (off_sha1, dtm_sha1))
+
+        try:
+            from CarlaNet.CoSim import CarlaClientWorld, LoadedWorldCheck
+        except ImportError:
+            print("    (CarlaNet.CoSim not loaded: the loaded-world check is not run)")
+            return
+        loaded = CarlaClientWorld.Attach(taker._inner, False).DescribeLoadedWorld()
+        found = [str(d) for d in LoadedWorldCheck.Disagreements(str(pkg), loaded)]
+        self.check("the loaded-world check admits the package", found == [], "; ".join(found))
+
+        scratch = tempfile.mkdtemp(prefix="bare-earth-digest-")
+        try:
+            flipped = os.path.join(scratch, os.path.basename(str(pkg)))
+            flipped_sha1 = copy_with_one_ground_bit_flipped(str(pkg), flipped)
+            found = [str(d) for d in LoadedWorldCheck.Disagreements(flipped, loaded)]
+            named = [d for d in found if "bare-earth ground grid has SHA-1" in d]
+            self.check("one bit of one ground cell is refused, naming both digests",
+                       len(named) == 1 and served[1] in named[0] and flipped_sha1 in named[0],
+                       "; ".join(found))
+            # Held in a name: a Client disposes its connection when it is collected, and an inline
+            # temporary is collected while the call it made is still running.
+            doubter = carla.Client(args.host, args.port)
+            self.check("and a client holding that copy does not take its grids",
+                       not bool(doubter._inner.AdoptBareEarthReference(flipped)))
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+    def run_against_package(self) -> int:
+        """--package: the world the server holds against a package, with no build."""
+        print(f"== bare-earth digest check against {args.package} ==")
+        if not os.path.exists(args.package):
+            print(f"ERROR: package not found: {args.package}", file=sys.stderr)
+            return 2
+        client = carla.Client(args.host, args.port)
+        client.set_timeout(args.timeout)
+        print(f"   server: {client.get_server_version()}")
+        inner = client._inner
+
+        t0 = time.time()
+        served = server_digests(inner)
+        print(f"[1] get_bare_earth_digest answered in {time.time() - t0:.3f}s: {served}")
+        if args.slow and served:
+            print("[2] fetching the grids the slow way to hash them here...")
+            t0 = time.time()
+            self.check("EnsureBareEarthReference succeeds", bool(inner.EnsureBareEarthReference()))
+            got = self.state(inner)
+            print(f"    fetched in {time.time() - t0:.1f}s")
+            self.check_digests_against(served, got["off_sha1"], got["dtm_sha1"],
+                                       "the grids the server serves")
+        print("[3] the package against the loaded world")
+        self.check_package(args.package, served)
+        return self.finish("the loaded world's grids are the package's, by digest.")
+
+    def finish(self, success: str) -> int:
+        print()
+        if self.failures:
+            print(f"FAILED ({len(self.failures)}): " + "; ".join(self.failures), file=sys.stderr)
+            return 1
+        print("PASS: " + success)
+        return 0
 
     def run(self) -> int:
         print(f"== bare-earth reference test (height-align={args.height_align}) ==")
@@ -173,18 +365,19 @@ class BareEarthReferenceTest:
         print(f"   server: {client.get_server_version()}")
         builder = client._inner
 
-        print(f"[1] a world that was never built from OSM carries no record ({args.stock_map})")
-        # Load the stock map explicitly rather than trusting whatever the server happens to hold: a
-        # previous generated world would still carry its record, and the check below would read that
-        # as a failure. Loading also exercises the invalidation path, since a new world must clear
-        # any reference cached for the previous one.
+        print("[1] a world generated from OpenDRIVE alone, never from OSM, carries no record")
+        # Load one explicitly rather than trusting whatever the server happens to hold: a previous
+        # generated world would still carry its record, and the check below would read that as a
+        # failure. Loading also exercises the invalidation path, since a new world must clear any
+        # reference cached for the previous one. A world built from OpenDRIVE text alone publishes no
+        # record, so no stock map is needed for this.
         # Hold the generous timeout across the query too: the server is still streaming the level in
         # when load_world returns, and a short timeout here fails on map size rather than on anything
         # this test is about.
         client.set_timeout(args.timeout)
-        client.load_world(args.stock_map)
+        client.generate_opendrive_world(ONE_ROAD_XODR)
         scalars = builder.GetBareEarthReferenceAsync().GetAwaiter().GetResult()
-        self.check("stock map reports no bare-earth record",
+        self.check("a world not built from OSM reports no bare-earth record",
                    scalars is None or scalars.Count == 0,
                    f"count={0 if scalars is None else scalars.Count}")
         self.check("client reports truth as unknown rather than a zero shift",
@@ -193,14 +386,13 @@ class BareEarthReferenceTest:
         print("[2] building elevated world (convert -> sample -> inject -> mesh)...")
         client.set_timeout(args.timeout)
         t0 = time.time()
-        client.generate_world_from_osm_with_elevation(
+        xodr = client.generate_world_from_osm_with_elevation(
             args.osm, args.ion_token, args.ion_asset_id,
             ground_ion_asset_id=args.ground_asset_id,
             osm_options=make_options(),
             sample_step_meters=args.step,
             height_align=args.height_align,
             ground_collision=True,
-            cesium_settle_seconds=args.settle,
             terrain_res=args.terrain_res,
             terrain_margin=args.terrain_margin,
             drape_cache_dir=args.drape_cache_dir)
@@ -242,16 +434,41 @@ class BareEarthReferenceTest:
                        a is not None and b is not None and abs(float(a) - float(b)) < 1e-9,
                        f"builder={a}, fresh={b}")
 
-        print()
-        if self.failures:
-            print(f"FAILED ({len(self.failures)}): " + "; ".join(self.failures), file=sys.stderr)
-            return 1
-        print("PASS: a client that did not build the world reports the same bare-earth truth.")
-        return 0
+        print("[5] the server's grid digests (get_bare_earth_digest)")
+        t0 = time.time()
+        served = server_digests(fresh)
+        print(f"    answered in {time.time() - t0:.3f}s: {served}")
+        if built["drape"]:
+            self.check_digests_against(served, got["off_sha1"], got["dtm_sha1"],
+                                       "the grids the second client fetched")
+            self.check_digests_against(served, built["off_sha1"], built["dtm_sha1"],
+                                       "the grids the builder sent")
+        else:
+            self.check("a constant-shift world publishes no digest", served == [], f"{served}")
+
+        print("[6] the world package written from the build, against the loaded world")
+        scratch = tempfile.mkdtemp(prefix="bare-earth-package-")
+        try:
+            try:
+                pkg = client.write_world_package(
+                    scratch, "BareEarthDigestTest", xodr, args.height_align, args.osm,
+                    args.ion_asset_id, args.ground_asset_id, args.step, args.terrain_res,
+                    args.terrain_margin)
+            except Exception as failure:  # noqa: BLE001 -- the reason is the finding
+                self.check("the world package is written", False, str(failure))
+            else:
+                self.check("the world package is written", os.path.exists(pkg), pkg)
+                self.check_package(pkg, served)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+        return self.finish("a client that did not build the world reports the same bare-earth "
+                           "truth, and the loaded world's grids are proved the package's by digest.")
 
 
 def main() -> int:
-    return BareEarthReferenceTest().run()
+    test = BareEarthReferenceTest()
+    return test.run_against_package() if args.package else test.run()
 
 
 if __name__ == "__main__":

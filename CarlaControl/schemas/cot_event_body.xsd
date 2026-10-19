@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Cursor-on-Target vehicle event the telemetry tools send and write: its own parts.
+
+  This file is not a schema on its own. It is included by the two schemas that use it:
+
+    cot_telemetry.xsd    one datagram of the live feed, root <event>;
+    sumo_cot_events.xsd  the SUMO bridge's XML file, root <events>.
+
+  It names, and does not define, the parts a vehicle event shares with a truth sidecar's vehicle
+  event: Point, Track, Contact, Instant, CotType, Color, TrueOrFalse, NonNegativeDecimal, Bearing and
+  CalendarDate. cot_telemetry.xsd takes them from truth_sidecar.xsd itself. sumo_cot_events.xsd
+  cannot, because its root and the sidecar's are both <events> with no namespace, so it holds copies
+  of them that a test holds equal to truth_sidecar.xsd's.
+
+  Every vehicle event is formatted by carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation"
+           elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
+
+  <xs:simpleType name="GroundVehicleCotType">
+    <xs:annotation>
+      <xs:documentation>a-&lt;affiliation&gt;-G-E-V: a ground vehicle. The affiliation letter is one of
+        p, u, a, f, n, s, h, j, k, o and x.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="CotType">
+      <xs:pattern value="a-[puafnshjkox]-G-E-V"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ZeroOrOne">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="0"/>
+      <xs:enumeration value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="TelemetryEvent">
+    <xs:annotation>
+      <xs:documentation>One vehicle at one instant.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="point" type="Point"/>
+      <xs:element name="detail" type="TelemetryDetail"/>
+    </xs:sequence>
+    <xs:attribute name="version" type="xs:string" use="required" fixed="2.0">
+      <xs:annotation><xs:documentation>The CoT event version.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="uid" use="required">
+      <xs:annotation>
+        <xs:documentation>The track id. A CARLA vehicle is &lt;prefix&gt;-&lt;actor id&gt;; a vehicle a
+          SUMO drive lent a CARLA body is &lt;prefix&gt;-SUMO-&lt;SUMO id&gt;; the SUMO bridge's is
+          &lt;prefix&gt;-&lt;SUMO id&gt;. The prefix is CARLA-TRUTH from carla-sctmv and SUMO-TRUTH
+          from the bridge unless --uid-prefix sets it.</xs:documentation>
+      </xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:minLength value="1"/></xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="type" type="GroundVehicleCotType" use="required"/>
+    <xs:attribute name="how" type="xs:string" use="required" fixed="m-g">
+      <xs:annotation><xs:documentation>Machine-generated truth.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="time" type="Instant" use="required">
+      <xs:annotation><xs:documentation>When the vehicle was at the point.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="start" type="Instant" use="required">
+      <xs:annotation><xs:documentation>The same instant as time.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="stale" type="Instant" use="required">
+      <xs:annotation><xs:documentation>time plus the staleness, 3 seconds unless --stale sets it.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="TelemetryDetail">
+    <xs:sequence>
+      <xs:element name="track" type="Track"/>
+      <xs:element name="contact" type="Contact"/>
+      <xs:element name="_carla" type="TelemetryCarla"/>
+      <xs:element name="_capture" type="TelemetryCapture" minOccurs="0"/>
+      <xs:element name="_solar" type="TelemetrySolar" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TelemetryCarla">
+    <xs:annotation>
+      <xs:documentation>The vehicle's truth beyond CoT's own fields. Each attribute means what it
+        means in the truth sidecar's _carla; this element holds fewer of them.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="source" type="xs:string" use="required" fixed="truth"/>
+    <xs:attribute name="actor_id" use="required">
+      <xs:annotation><xs:documentation>The CARLA actor id of the body that drew the vehicle. The SUMO
+        bridge, which has no CARLA actor, writes the SUMO vehicle id.</xs:documentation></xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:minLength value="1"/></xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="type_id" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>The CARLA blueprint id, or the SUMO vehicle type id in the
+        bridge's file. Left out of a SUMO vehicle's datagram.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="base_type" type="xs:string" use="required">
+      <xs:annotation><xs:documentation>car, van, truck, bus, motorcycle or bicycle, from the vehicle
+        catalogue.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="special_type" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>emergency, taxi, electric, or empty. Left out of a SUMO vehicle's
+        datagram.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="length_m" type="NonNegativeDecimal" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>meters</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="width_m" type="NonNegativeDecimal" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>meters</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="height_m" type="NonNegativeDecimal" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>meters</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="color" type="Color" use="required">
+      <xs:annotation><xs:documentation>CARLA's body color, or the SUMO type's sumo-gui color from the
+        bridge.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="role_name" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>The CARLA role name, or the SUMO flow in the bridge's file. Left
+        out of a SUMO vehicle's datagram.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="marked" type="ZeroOrOne" use="optional">
+      <xs:annotation><xs:documentation>1 when the scenario planted the vehicle. Only in the SUMO
+        bridge's file.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vx" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Velocity east.</xs:documentation><xs:appinfo><cap:unit>meters per second</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vy" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Velocity south (CARLA's y).</xs:documentation><xs:appinfo><cap:unit>meters per second</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vz" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>Velocity up.</xs:documentation><xs:appinfo><cap:unit>meters per second</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="heading_deg" type="Bearing" use="optional">
+      <xs:annotation><xs:documentation>The direction the body points. CARLA vehicles only.</xs:documentation><xs:appinfo><cap:unit>degrees</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sumo_id" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>The SUMO vehicle a SUMO drive lent this body to.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="vtype_id" type="xs:string" use="optional">
+      <xs:annotation><xs:documentation>That vehicle's SUMO type.</xs:documentation></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="admitted_tick" type="xs:nonNegativeInteger" use="optional">
+      <xs:annotation><xs:documentation>The frame on which the body began drawing that vehicle.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="TelemetryCapture">
+    <xs:annotation><xs:documentation>Which simulation frame the event was taken on. carla-sctmv only.</xs:documentation></xs:annotation>
+    <xs:attribute name="tick" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="TelemetrySolar">
+    <xs:annotation><xs:documentation>The sun when the event was taken, as the server reported it.
+      carla-sctmv only. A truth sidecar holds the sun once, on its container, with more fields.</xs:documentation></xs:annotation>
+    <xs:attribute name="solar_time" type="xs:decimal" use="required">
+      <xs:annotation><xs:appinfo><cap:unit>hours</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="date" type="CalendarDate" use="required"/>
+    <xs:attribute name="time_zone" type="xs:decimal" use="required">
+      <xs:annotation><xs:documentation>The engine's time zone, east of UTC.</xs:documentation><xs:appinfo><cap:unit>hours</cap:unit></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="sun_elevation_deg" type="xs:decimal" use="required"/>
+    <xs:attribute name="sun_azimuth_deg" type="xs:decimal" use="required"/>
+    <xs:attribute name="advancing" type="TrueOrFalse" use="required"/>
+    <xs:attribute name="rate" type="xs:double" use="required">
+      <xs:annotation><xs:documentation>Solar seconds per simulation second, in Python's general number
+        format, so a large rate may be written with an exponent.</xs:documentation></xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+
+</xs:schema>

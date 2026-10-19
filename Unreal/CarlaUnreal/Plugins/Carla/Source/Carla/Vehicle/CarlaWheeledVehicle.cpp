@@ -18,8 +18,11 @@
 
 #include <util/ue-header-guard-begin.h>
 #include "Components/BoxComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "GameFramework/PawnMovementComponent.h"
 #include "MovementComponents/DefaultMovementComponent.h"
+#include "PhysicsEngine/BodyInstance.h"
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "VehicleAnimationInstance.h"
 #include "UObject/UObjectGlobals.h"
@@ -785,7 +788,57 @@ void ACarlaWheeledVehicle::SetSimulatePhysics(bool enabled) {
       }
     bPhysicsEnabled = enabled;
 
+    // A velocity set while kinematic described motion that ends with this change of state.
+    WriteKinematicVelocity(FVector::ZeroVector);
+
     ResetConstraints();
+  }
+}
+
+bool ACarlaWheeledVehicle::IsKinematic() const
+{
+  // bPhysicsEnabled is cleared only by SetSimulatePhysics, which acts only under the
+  // default movement component; CarSim and Chrono report their own velocity.
+  if (bPhysicsEnabled || !GetCarlaMovementComponent<UDefaultMovementComponent>())
+  {
+    return false;
+  }
+  const UPrimitiveComponent* RootPrimitive = Cast<UPrimitiveComponent>(GetRootComponent());
+  return RootPrimitive != nullptr && !RootPrimitive->IsSimulatingPhysics();
+}
+
+void ACarlaWheeledVehicle::SetKinematicVelocity(const FVector &Velocity)
+{
+  if (!IsKinematic())
+  {
+    return;
+  }
+  WriteKinematicVelocity(Velocity);
+
+  // The kinematic body is written too, through the body instance as
+  // SetPhysicsLinearVelocity writes it but without the warning the component raises
+  // for a body that does not simulate, so the call does to the body what it always
+  // did and changes only what is reported.
+  UPrimitiveComponent* RootPrimitive = Cast<UPrimitiveComponent>(GetRootComponent());
+  if (FBodyInstance* Body = RootPrimitive->GetBodyInstance())
+  {
+    Body->SetLinearVelocity(Velocity, false);
+  }
+}
+
+void ACarlaWheeledVehicle::WriteKinematicVelocity(const FVector &Velocity)
+{
+  // With the root body not simulating, APawn::GetVelocity returns the pawn movement
+  // component's Velocity and UPrimitiveComponent::GetComponentVelocity returns the
+  // root's ComponentVelocity. The Chaos vehicle movement writes neither, so both stay
+  // zero unless they are written here.
+  if (UPawnMovementComponent* Movement = GetMovementComponent())
+  {
+    Movement->Velocity = Velocity;
+  }
+  if (USceneComponent* Root = GetRootComponent())
+  {
+    Root->ComponentVelocity = Velocity;
   }
 }
 

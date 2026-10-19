@@ -155,7 +155,9 @@ Attachment / spawn delivery: `ASceneCaptureSensor` is the base; FOV → `Capture
 (`ImageSerializer`: 12-byte sub-header `width,height,fov` + `W·H·4` BGRA, A=255), which
 **`CarlaNet.Sensors.ImageSensorData`** (`carla\CarlaNet\src\CarlaNet.Sensors\ImageSensorData.cs`)
 deserializes. The 48-byte sensor header carries the camera **world transform** at capture time
-(SensorHeader §10.1) — important for truth (see C).
+(SensorHeader §10.1) — important for truth (see C). For the cameras that holds only on a server that
+stamps the header at capture (2026-09-30); before, it was written up to a tick after the capture
+([16 §3](16_Sensor_Pose_In_Recordings.md)).
 
 ### B.2 Feasibility of high-altitude views
 

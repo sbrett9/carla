@@ -201,6 +201,18 @@ public:
   UFUNCTION(Category = "CARLA Wheeled Vehicle", BlueprintCallable)
   void SetSimulatePhysics(bool enabled);
 
+  /// Whether this vehicle is kinematic: its physics has been disabled with
+  /// SetSimulatePhysics, so nothing simulates it and it moves only by having its
+  /// pose applied.
+  bool IsKinematic() const;
+
+  /// Set the velocity, in cm/s, that a kinematic vehicle reports through
+  /// GetVelocity. Nothing simulates a kinematic body, so only whoever applies its
+  /// pose knows how it is moving. The value is held until it is set again, and is
+  /// cleared whenever physics is enabled or disabled. Does nothing unless
+  /// IsKinematic().
+  void SetKinematicVelocity(const FVector &Velocity);
+
   void SetVehicleLightState(const FVehicleLightState &LightState);
 
   void SetFailureState(const carla::rpc::VehicleFailureState &FailureState);
@@ -436,6 +448,9 @@ private:
 
   UPROPERTY(Category="CARLA Wheeled Vehicle", VisibleAnywhere)
   bool bPhysicsEnabled = true;
+
+  /// Write the velocity this vehicle reports while its root body does not simulate.
+  void WriteKinematicVelocity(const FVector &Velocity);
 
   // Small workarround to allow optional CarSim plugin usage
   UPROPERTY(Category="CARLA Wheeled Vehicle", VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))

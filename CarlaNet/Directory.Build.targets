@@ -1,0 +1,29 @@
+<Project>
+  <!--
+    Names a build that was not given its release version (Directory.Build.props) by its commit, in the
+    form Util/ReleaseVersion.py writes: the SDK appends the commit git names (SourceRevisionId), and
+    it is shortened here to g and nine characters, so 0.10.0+g1a2b3c4d5. Whether the tree had changes
+    on top is not looked at; the wheel's build, which passes the exact version, says so.
+  -->
+  <Target Name="CarlaShortenSourceRevision"
+          AfterTargets="InitializeSourceControlInformation"
+          Condition="'$(CarlaReleaseVersion)' == ''">
+    <PropertyGroup Condition="'$(SourceRevisionId)' != '' and !$(SourceRevisionId.StartsWith('g'))">
+      <SourceRevisionId Condition="$(SourceRevisionId.Length) &gt; 9">g$(SourceRevisionId.Substring(0, 9))</SourceRevisionId>
+      <SourceRevisionId Condition="$(SourceRevisionId.Length) &lt;= 9">g$(SourceRevisionId)</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
+
+  <!-- A build whose commit git could not name is not the release, and says so rather than look like it. -->
+  <Target Name="CarlaMarkUnknownRevision"
+          AfterTargets="AddSourceRevisionToInformationalVersion"
+          BeforeTargets="GetAssemblyAttributes"
+          Condition="'$(CarlaReleaseVersion)' == ''">
+    <PropertyGroup Condition="'$(InformationalVersion)' == ''">
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+    <PropertyGroup Condition="!$(InformationalVersion.Contains('+'))">
+      <InformationalVersion>$(InformationalVersion)+unknown</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

@@ -39,6 +39,8 @@
 .PARAMETER Vs
     Force a Visual Studio toolchain: '2022' or '2026'. If omitted, uses the
     newest installed VS that has MSVC 14.44 (or current VS dev prompt if active).
+    The chosen install and toolset are also set for every later UnrealBuildTool
+    run in this PowerShell session, such as a cook started afterwards.
 .PARAMETER UnrealEngineRoot
     UE 5.7.4 source-build root. Env: CARLA_UNREAL_ENGINE_PATH.
     Default: <repo-parent>\UE_5_7_4.
@@ -322,6 +324,16 @@ if (-not $SkipUnreal) {
     $vsInfo = Initialize-VisualStudio -Wanted $Vs
     $script:VsYear = $vsInfo.Year
     $script:VsToolset = $vsInfo.Toolset
+    # UnrealBuildTool finds Visual Studio installs by itself and ignores the vcvars environment
+    # activated above, so a UBT run without the -20xx and -CompilerVersion flags the editor build
+    # below passes falls back to UBT's own choice, which tries VS2022 first. That run is typically
+    # the cook's game-target build (cmake --build Build --target package-*, which
+    # MakeDistribution.ps1 -Build runs). UBT reads each UnrealBuildTool_<Category>__<Field> variable
+    # as a BuildConfiguration.xml entry that takes precedence over every BuildConfiguration.xml file
+    # and the project's ini, so these pin every later UBT run in this process to the same install
+    # and toolset. A command-line flag still takes precedence over them.
+    $env:UnrealBuildTool_WindowsPlatform__Compiler        = "VisualStudio$($vsInfo.Year)"
+    $env:UnrealBuildTool_WindowsPlatform__CompilerVersion = $vsInfo.Toolset
     Write-Info "Ready: VS$($vsInfo.Year), MSVC $($vsInfo.Toolset)`n"
 }
 

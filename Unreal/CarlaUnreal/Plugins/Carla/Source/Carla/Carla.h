@@ -52,6 +52,26 @@ DECLARE_CYCLE_STAT(TEXT("Stream Send"), STAT_CarlaSensorStreamSend, STATGROUP_Ca
 CARLA_API FString GetCarlaWorldInterfaceVersion();
 
 /**
+ * What this build is made from, for the `get_build_identity` RPC, as a map of names to values:
+ *
+ *   world_interface  the world interface version (GetCarlaWorldInterfaceVersion)
+ *   build            "package" for a cooked server, "editor" for one run from the editor, -game included
+ *   configuration    the build configuration: Development, Shipping, ...
+ *   carla_commit     the CARLA commit
+ *   content_commit   the content commit
+ *   engine_commit    the Unreal Engine commit
+ *   commits_from     "version_file", "compiled" or "none": where the three commits were read
+ *
+ * A package reads the commits from the VERSION file it carries beside its platform folder
+ * (Unreal/Package/CreateCarlaVersionFile.cmake): Build/Package/Carla-<ver>-<platform>-<config>/VERSION
+ * above <platform>/, and a distribution's VERSION above CarlaServer/. An editor run has no such file;
+ * it reports the CARLA commit compiled into it (carla/BuildCommit.h, written when LibCarla is built)
+ * and the other two as "unknown". Every value it cannot know is "unknown", never a guess. The release
+ * version is added by the RPC, which has carla::version().
+ */
+CARLA_API TMap<FString, FString> GetCarlaBuildIdentity();
+
+/**
  * Names of the exported worlds this build can see, whether or not they are currently mounted.
  *
  * A world is an ExplicitlyLoaded content plugin the exporter marked "Generated Worlds"; the engine

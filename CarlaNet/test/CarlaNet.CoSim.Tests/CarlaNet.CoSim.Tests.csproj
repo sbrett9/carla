@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- A hand-written SUMO network small enough to read, and the scenario that runs it. -->
+    <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The shipped vehicle catalogue itself, linked rather than copied. A second copy of a
+         measured artifact drifts from the first, and the drift is invisible: both parse, both
+         resolve, and the extents they answer with are different. -->
+    <None Include="..\..\..\CarlaControl\catalogue\vehicles.catalogue.json"
+          Link="Fixtures\vehicles.catalogue.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CarlaNet.CoSim\CarlaNet.CoSim.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -232,6 +232,23 @@ if (BUILD_CARLA_SERVER)
     add_dependencies (carla-server carla-ros2-native)
   endif ()
 
+  # The CARLA commit this build is made from, beside Version.h as carla/BuildCommit.h, for the
+  # server's get_build_identity when it runs from the editor and has no package VERSION file to read.
+  # A custom target always runs, so every LibCarla build -- and the editor and package builds, which
+  # depend on carla-server -- records the commit it is built from; the script rewrites the header
+  # only when the commit has changed.
+  carla_add_custom_target (
+    carla-build-commit
+    "Record the CARLA commit this build is made from in carla/BuildCommit.h."
+    COMMAND
+      ${CMAKE_COMMAND}
+      -DCARLA_WORKSPACE_PATH=${CARLA_WORKSPACE_PATH}
+      -DBUILD_COMMIT_HEADER=${LIBCARLA_SOURCE_PATH}/carla/BuildCommit.h
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/WriteBuildCommit.cmake
+    VERBATIM
+  )
+  add_dependencies (carla-server carla-build-commit)
+
 endif ()
 
 

@@ -2,7 +2,7 @@
 //
 // WIRE FORMAT (verified — see CarlaNetSupplementary.md §1):
 //   rpclib uses raw msgpack streaming with NO length prefix.
-//   MessagePackStreamReader handles message boundary detection on the receive side.
+//   MsgPackMessageFramer handles message boundary detection on the receive side.
 //
 // Request:  [0, msg_id, "method_name", [[false], arg0, arg1, ...]]
 //             (the outer [false] is the Metadata::MakeSync wrapper — every
@@ -85,6 +85,23 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
     /// </summary>
     public void RegisterHandler<TArg1, TArg2, TArg3, TResult>(string method, Func<TArg1, TArg2, TArg3, TResult> handler)
         => _handlers[method] = new ThreeArgHandler<TArg1, TArg2, TArg3, TResult>(handler);
+
+    /// <summary>
+    /// Register a handler with four arguments and a return value.
+    /// </summary>
+    public void RegisterHandler<TArg1, TArg2, TArg3, TArg4, TResult>(
+        string method, Func<TArg1, TArg2, TArg3, TArg4, TResult> handler)
+        => _handlers[method] = new FourArgHandler<TArg1, TArg2, TArg3, TArg4, TResult>(handler);
+
+    /// <summary>Register a handler with five arguments and a return value.</summary>
+    public void RegisterHandler<TArg1, TArg2, TArg3, TArg4, TArg5, TResult>(
+        string method, Func<TArg1, TArg2, TArg3, TArg4, TArg5, TResult> handler)
+        => _handlers[method] = new FiveArgHandler<TArg1, TArg2, TArg3, TArg4, TArg5, TResult>(handler);
+
+    /// <summary>Register a handler with six arguments and a return value.</summary>
+    public void RegisterHandler<TArg1, TArg2, TArg3, TArg4, TArg5, TArg6, TResult>(
+        string method, Func<TArg1, TArg2, TArg3, TArg4, TArg5, TArg6, TResult> handler)
+        => _handlers[method] = new SixArgHandler<TArg1, TArg2, TArg3, TArg4, TArg5, TArg6, TResult>(handler);
 
     /// <summary>Register a void handler with no arguments.</summary>
     public void RegisterVoidHandler(string method, Action handler)
@@ -181,24 +198,25 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
         {
             var stream = client.GetStream();
             var writeLock = new SemaphoreSlim(1, 1);
-            var reader = new MessagePackStreamReader(stream);
+            var framer = new MsgPackMessageFramer(stream);
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    ReadOnlySequence<byte>? msgSeq;
+                    ReadOnlyMemory<byte>? message;
                     try
                     {
-                        msgSeq = await reader.ReadAsync(ct).ConfigureAwait(false);
+                        message = await framer.ReadAsync(ct).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { break; }
                     catch (IOException) { break; }
 
-                    if (msgSeq is null) break; // peer closed
+                    if (message is null) break; // peer closed
 
-                    // MessagePackStreamReader reuses internal buffers — snapshot before async dispatch.
-                    var snapshot = new ReadOnlySequence<byte>(msgSeq.Value.ToArray());
-                    _ = Task.Run(() => DispatchAsync(snapshot, stream, writeLock, ct), ct);
+                    // The framer never writes to a message's bytes once returned, so async dispatch
+                    // can read them after the next read.
+                    var request = new ReadOnlySequence<byte>(message.Value);
+                    _ = Task.Run(() => DispatchAsync(request, stream, writeLock, ct), ct);
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -321,7 +339,7 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
         if (!hasReturn || result is null)
             w.WriteNil();
         else
-            MessagePackSerializer.Serialize(result.GetType(), ref w, result);
+            MessagePackSerializer.Serialize(MsgPackWireType.Of(result), ref w, result);
         w.Flush();
         await WriteLockedAsync(stream, writeLock, buffer.WrittenMemory).ConfigureAwait(false);
     }
@@ -410,6 +428,54 @@ public sealed class MsgPackRpcServer : IAsyncDisposable
             var b = MessagePackSerializer.Deserialize<TArg2>(ref rdr);
             var c = MessagePackSerializer.Deserialize<TArg3>(ref rdr);
             return fn(a, b, c);
+        }
+    }
+
+    private sealed class FourArgHandler<TArg1, TArg2, TArg3, TArg4, TResult>(
+        Func<TArg1, TArg2, TArg3, TArg4, TResult> fn) : IRpcHandler
+    {
+        public int ArgCount => 4;
+        public bool HasReturn => true;
+        public object? Invoke(ref MessagePackReader rdr)
+        {
+            var a = MessagePackSerializer.Deserialize<TArg1>(ref rdr);
+            var b = MessagePackSerializer.Deserialize<TArg2>(ref rdr);
+            var c = MessagePackSerializer.Deserialize<TArg3>(ref rdr);
+            var d = MessagePackSerializer.Deserialize<TArg4>(ref rdr);
+            return fn(a, b, c, d);
+        }
+    }
+
+    private sealed class FiveArgHandler<TArg1, TArg2, TArg3, TArg4, TArg5, TResult>(
+        Func<TArg1, TArg2, TArg3, TArg4, TArg5, TResult> fn) : IRpcHandler
+    {
+        public int ArgCount => 5;
+        public bool HasReturn => true;
+        public object? Invoke(ref MessagePackReader rdr)
+        {
+            var a = MessagePackSerializer.Deserialize<TArg1>(ref rdr);
+            var b = MessagePackSerializer.Deserialize<TArg2>(ref rdr);
+            var c = MessagePackSerializer.Deserialize<TArg3>(ref rdr);
+            var d = MessagePackSerializer.Deserialize<TArg4>(ref rdr);
+            var e = MessagePackSerializer.Deserialize<TArg5>(ref rdr);
+            return fn(a, b, c, d, e);
+        }
+    }
+
+    private sealed class SixArgHandler<TArg1, TArg2, TArg3, TArg4, TArg5, TArg6, TResult>(
+        Func<TArg1, TArg2, TArg3, TArg4, TArg5, TArg6, TResult> fn) : IRpcHandler
+    {
+        public int ArgCount => 6;
+        public bool HasReturn => true;
+        public object? Invoke(ref MessagePackReader rdr)
+        {
+            var a = MessagePackSerializer.Deserialize<TArg1>(ref rdr);
+            var b = MessagePackSerializer.Deserialize<TArg2>(ref rdr);
+            var c = MessagePackSerializer.Deserialize<TArg3>(ref rdr);
+            var d = MessagePackSerializer.Deserialize<TArg4>(ref rdr);
+            var e = MessagePackSerializer.Deserialize<TArg5>(ref rdr);
+            var f = MessagePackSerializer.Deserialize<TArg6>(ref rdr);
+            return fn(a, b, c, d, e, f);
         }
     }
 
