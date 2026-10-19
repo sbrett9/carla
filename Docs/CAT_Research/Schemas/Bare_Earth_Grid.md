@@ -175,15 +175,11 @@ ground = np.frombuffer(raw, "<f4", cols * rows, 60 + 4 * cols * rows).reshape(ro
 The magic carries the version: it reads `CWP1` as a big-endian word.\
 The trailing `1` is the format version.\
 There is only version 1.\
-Every reader refuses a file whose first four bytes are not the magic:
-
-- CarlaNet refuses it as "not a world-package grid".\
-  It also refuses a grid with fewer than 2 columns or rows.\
-  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
-- The Unreal importer refuses it.\
-  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
-- carlacontrol's `BareEarthGrid` refuses it.\
-  It also refuses a file whose length is not exactly `60 + 8 × N` bytes.
+CarlaNet, the Unreal importer and carlacontrol's `BareEarthGrid` read the file.\
+Each of them refuses a file whose first four bytes are not the magic.\
+Each of them also refuses a file whose length is not exactly `60 + 8 × N` bytes.\
+CarlaNet reports a wrong magic as "not a world-package grid".\
+CarlaNet also refuses a grid with fewer than 2 columns or rows.
 
 If the layout changes, the magic number changes too.\
 So an older reader refuses a new layout instead of reading it wrongly.
