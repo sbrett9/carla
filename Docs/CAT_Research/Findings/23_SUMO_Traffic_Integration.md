@@ -35,6 +35,7 @@ through the exact flag set `OsmConverter.BuildArguments` emits, 2026-08-21.
 |---|---|
 | 2026-08-21 | Initial scouting: toolchain, discarded network, recommended shape, hurdles, plan. |
 | 2026-09-21 | §6.3: the TraCI client is a C# socket client; SWIG binding costs measured (§6.3). |
+| 2026-10-18 | The vehicle fade was removed from the code: §4 no longer lists it, or doc 17's occlusion/arrival gating, among what teleporting would cost, and §6.8 and Phase 3 name the staging controller's spawn and despawn in its place. |
 
 ---
 
@@ -225,10 +226,9 @@ already built and validated:
 
 | Capability | What teleporting does to it |
 |---|---|
-| **Truth telemetry velocity** | `WorldObserver.cpp:373` serializes `View->GetActor()->GetVelocity()`. For a non-simulating body a teleport does not update component velocity, so **every ambient vehicle reports speed 0** — into CoT truth telemetry, the TM collision stage, and the occlusion/arrival gating of [doc 17](17_Photoreal_Occlusion_Metric.md) |
+| **Truth telemetry velocity** | `WorldObserver.cpp:373` serializes `View->GetActor()->GetVelocity()`. For a non-simulating body a teleport does not update component velocity, so **every ambient vehicle reports speed 0** — into CoT truth telemetry and the TM collision stage |
 | **Seating on the draped terrain** | The SUMO network is flat (§2); poses would arrive with no usable Z, discarding the whole drape/DTM decoupling result |
 | **Suspension, pitch, wheel rotation** | Gone — and pitch over undulations is exactly the EO cue §3.3 is trying to add |
-| **Vehicle fade / staging ring** | Built around a client-side registry keyed to vehicles the staging controller owns |
 
 That collides with the standing rule that an existing capability is never lost. Teleporting is still
 worth *having* as a comparison mode (§8, Phase 4) — it is the reference implementation and the honest
@@ -364,10 +364,10 @@ the heading. Upstream's `BridgeHelper` is the reference for all three.
 ### 6.8 Lifecycle ownership — *medium*
 [Issue #18](https://github.com/sbrett9/carla/issues/18) already records two subsystems independently
 destroying a vehicle with different signals. SUMO's arrival/teleport/collision-removal makes a third.
-One owner must be named before this ships, and the staging controller's fade-in/fade-out and
-`RED_CLEAR` despawn have to be reconciled with SUMO's fringe insertion and arrival — otherwise we
-re-create the clipped-edge spawn bug in a new place. Also needed: a **blueprint ↔ vType map** with
-matching dimensions (upstream ships `vtypes.json`; our blueprint set differs, so ours is new work) —
+One owner must be named before this ships, and the staging controller's spawning in its staging ring
+and its `RED_CLEAR` despawn have to be reconciled with SUMO's fringe insertion and arrival —
+otherwise we re-create the clipped-edge spawn bug in a new place. Also needed: a **blueprint ↔ vType
+map** with matching dimensions (upstream ships `vtypes.json`; our blueprint set differs, so ours is new work) —
 if a vType's length disagrees with the blueprint's bounding box, SUMO's gaps and our rendering
 disagree by that difference everywhere.
 
@@ -451,8 +451,9 @@ vehicles within a stated tolerance for a full staging run, and its logged decisi
 
 **Phase 3 — close the loop.**
 Apply SUMO's target speed/lane through the existing PID and motion-plan stages; hand insertion and
-removal to SUMO with the staging fade reconciled (§6.8). *Done when* `test_left_turn_yield.py` passes
-(the left-turner waits outside and goes after the through-vehicle clears), the freeway populates, and
+removal to SUMO with the staging controller's spawn and despawn reconciled (§6.8). *Done when*
+`test_left_turn_yield.py` passes (the left-turner waits outside and goes after the through-vehicle
+clears), the freeway populates, and
 a stock-content regression run is unaffected — Town10HD has no `.net.xml`, so the bridge must no-op
 cleanly there, and a co-simulable Town network can be produced with
 `netconvert --opendrive-files` (confirmed available) when we want one.

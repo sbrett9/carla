@@ -415,43 +415,28 @@ not have. What a run may set is how the measurement is made -- `occlusion.margin
 camera's image size, field of view and `sensor_tick` and that one range. A recorder handed no depth
 camera says so as a warning, since its captures then carry no occlusion.
 
-### 2.6 The arrival gate is built, and is inert by default
+### 2.6 Truth telemetry reports every vehicle except a parked body
 
-Doc 17 §12.2's arrival gate is client-side: `CarlaClient` records each `set_actor_fade` it sends and
-latches full opacity, and `VehicleTelemetryService` skips vehicles that were never established
-(`VehicleTelemetryService.cs:66-73`).
+`VehicleTelemetryService` reports every vehicle actor on the frame it describes except a body a SUMO
+drive's pool has parked on that frame, which stands out of sight below the ground
+(`CarlaNet/src/CarlaNet.Recording/VehicleTelemetryService.cs:131-133`). It reads which bodies are
+parked from the render set the server carries on every world-observer snapshot, so a recorder, the live
+pull and the CoT feed in any process report the same vehicles (§3.4). A vehicle admitted to the render
+set is drawn at full visibility from its first tick.
 
-**Under the user's directive of 2026-09-17 the fade is demoted and this section does not design around
-it.** Verified against the tree:
+So there is **no period during which a drawn vehicle is deliberately unreported**, and nothing in this
+section may assume one. Every vehicle is telemetered and labelled from the first tick it is drawn, and a
+vehicle that appears inside a frame is in the imagery from that tick, which is §5.7's subject.
 
-- `--fade` carries `default=False`, and the help text names the reason: the opacity is computed
-  client-side and pushed "one blocking RPC per vehicle per reconcile, which is the heaviest load this
-  client puts on the server's per-frame RPC budget"
-  (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`).
-- With nothing fading, the gate suppresses nothing. `IsActorEstablished` returns true for any actor with
-  no fade record — `!_fade.TryGetValue(id, out var fade) || fade.Established`
-  (`CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1571`) — and `GetActorOpacity` returns `1.0` on the
-  same condition (`:1562`). The truth producer's own comment says so: "Vehicles nobody fades are
-  established from the start, so this gate is inert unless staging traffic is running"
-  (`VehicleTelemetryService.cs:71-72`).
-
-So there is **no dissolve-in period during which a vehicle is deliberately unreported**, and nothing in
-this section may assume one. Every vehicle is telemetered, labelled and counted in coverage from the
-tick it exists. Three consequences run through the rest of this document: §5.1's `opacity` carries no
-information and is retained only so that a later fade mode is not a schema change; §5.3's arrival gate is
-a no-op; and the artefact a fade would have hidden is now in the imagery and is §5.7's subject.
-
-**The budget released is real and is spent here.** Removing the heaviest per-frame client load is
-headroom for the capture and per-image labelling of §5, for the N-channel subscription cost of §3.4, and
-for the per-tick light-state batch of §4.5 — which matters because §2.3's contention measurement was
-taken on a client that was doing that work.
+The vehicle fade, which drew staging traffic part-transparent at the edge of the scene, was removed
+from the code on 2026-10-18, together with doc 17 §12.2's arrival gate, which kept such a vehicle out
+of truth until it was fully drawn.
 
 ### 2.7 The recorder already computes the 3D box and throws it away
 
 `VehicleTelemetry` carries `ActorTransform` and `BoundingBox`, with the doc comment "Geometry rather
 than telemetry: it is not part of the CoT contract and is not serialized to the sidecar"
-(`CarlaNet/src/CarlaNet.Recording/VehicleTelemetry.cs:65-74`). It also carries `Opacity`
-(`:59-63`), likewise unserialised — doc 17 §12.5 lists that as open.
+(`CarlaNet/src/CarlaNet.Recording/VehicleTelemetry.cs:65-74`).
 
 So the oriented 3D box for every telemetered vehicle, frame-coherent with the pixels, already exists in
 memory at write time. **Per-image labelling is a serialisation change plus a projection, not a new
@@ -718,9 +703,9 @@ Cesium photoreal tiles are not CARLA actors and every building, tree and terrain
 "Unlabeled". That reasoning is sound and unchanged. It does **not** apply to the use wanted here:
 vehicles *are* CARLA actors, so an instance-segmentation camera gives an exact per-vehicle visible mask
 against an unlabelled background, which is precisely the modal mask doc 17 §5.2 wants and the
-`occlusion_src` attribution doc 17 §6 defers. Its other advertised benefit — weighting a translucent
-occluder by its opacity (doc 17 §9) — no longer applies, because the only translucent occluders doc 17
-named were mid-fade vehicles and nothing fades (§2.6). **It has a second use**: at low sun and at night
+`occlusion_src` attribution doc 17 §6 defers. Its other advertised benefit, weighting a translucent
+occluder by its opacity (doc 17 §9), has no subject, because every vehicle is drawn at full visibility
+(§2.6). **It has a second use**: at low sun and at night
 the amodal box and the visible extent diverge by the whole vehicle (§5.8), and the instance mask is the
 only thing in the rig that measures the divergence rather than assuming it. Adopting it is optional and
 additive; nothing depends on it.
@@ -796,11 +781,8 @@ Reasons, in order of weight:
    places the consumer outside the simulator process by construction, and the truth writer — which must
    keep recording supervision and coverage while that happens — has to run somewhere. Under (b) it must
    be in the co-simulation process.
-3. **Doc 17 §12.2's client-held arrival gate is not a reason, because the fade is demoted (§2.6).** With
-   nothing fading, the gate is inert in every process and there is no cross-process defect left for
-   publication to fix. Reasons 1, 2, 4, 5 and 6 carry the decision on their own and none of them
-   mentions fade. If a server-side fade is ever reinstated, this becomes a reason at no cost, because
-   arrival and opacity would then ride a channel that already exists.
+3. *Withdrawn 2026-10-18:* this reason concerned doc 17 §12.2's client-held arrival gate, which was
+   removed from the code with the vehicle fade (§2.6). Reasons 1, 2, 4, 5 and 6 carry the decision.
 4. **The mechanism already exists and has exactly the three properties doc 20 §7.3 asked for.** Solar
    state rides the world-observer datagram into a `volatile double[]` that is swapped wholesale per
    frame (`CarlaClient.cs:169`, `:1855`) and read lock-free with no RPC and no poll
@@ -809,11 +791,9 @@ Reasons, in order of weight:
    already implemented for a different payload. **And the payload in question is precisely the
    illumination state that §4 makes first-class**, so the mechanism is not merely analogous to what is
    needed: it is already carrying half of it.
-5. **The objection doc 17 §12.2 raised against widening the observer packet does not apply here.**
-   There, four bytes per actor per tick were rejected because "this very process had just sent" the
-   value. Here no client holds it, the payload is sparse (doc 20 decision 2 makes `unlabelled` the
-   default, so only annotated and nominal actors need an entry), and the alternative is an RPC in the
-   capture path.
+5. **Widening the observer packet costs little here.** No client holds the annotation state, the
+   payload is sparse (doc 20 decision 2 makes `unlabelled` the default, so only annotated and nominal
+   actors need an entry), and the alternative is an RPC in the capture path.
 6. Rebuilds are neutral (team brief §4). "It is more work" is not a reason and does not appear in this
    comparison.
 
@@ -1614,7 +1594,6 @@ depends on a pass mark. Fields, with provenance; the written names and their exa
 | `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured, written only where measured (`CotWriter.cs`) |
 | `occlusion_unmeasured` | why the three above are absent, in one word | **written since 2026-10-05** wherever they are absent, never beside them (§2.4) |
 | `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | from the projection, written wherever the box has a footprint (`CotWriter.cs`) |
-| `opacity` | **constant 1.0 under the default**, since nothing fades (§2.6). Retained so a later fade mode is not a schema change | computed, unserialised (`VehicleTelemetry.cs:59-63`) |
 | `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | **written since 2026-10-06** on every vehicle in the picture as `camera_range_m`, the name it already had under a draw distance: one range, one method (`OrientedBox.RangeFrom`), written once whichever needs it |
 | `truncation` | fraction of the amodal box outside the frame | **written since 2026-10-06** as `truncation`, the share of `box_px`'s area outside the picture |
 | `pose_source` | `sumo` / `interpolated` / `jump` / `stale`, the owner's words — see §6.4 | **written since 2026-10-06** on every SUMO vehicle in the picture, from the snapshot of the capture's own frame: the SUMO step the session declared to the server and the bodies it named a jump or stale, resolved with the frame's number (`ObservedPoseSource`, `ActorSnapshot.PoseSource`), so a recorder in any process writes the same word. Left out, with `pose_source="unknown"` on the container, where the snapshot carried no pose source (§6.4). The plugin change awaits a build |
@@ -1673,9 +1652,8 @@ attached, and applies no gate.** Consumers gate. The reasons are specific:
 The gates a consumer will want, all computable from the record: **apparent size** (below a chosen pixel
 length, a vehicle is a poor example whether or not anything is in front of it — doc 17 §12.4),
 **occlusion** (the doc 17 §7 cutoff), **truncation**, and, where the lamp state is recorded and the sun
-is low, the **light state** itself. **Arrival** (`opacity < 1`) exists in the schema and is a no-op under
-the default (§2.6). Every one of these is the consumer's to choose and the pipeline's to leave unchosen
-([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b).
+is low, the **light state** itself. Every one of these is the consumer's to choose and the pipeline's
+to leave unchosen ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b).
 
 ### 5.4 Where the occlusion measurement is used here, precisely
 
@@ -1691,9 +1669,6 @@ mistake:
    "a 'missed' detection … vs a legitimately occluded target", and the *fact* it rests on is ours to
    publish: a hidden vehicle is present in truth and absent from the imagery, and the corpus says so on
    the row. **Without it, a consumer cannot tell a hidden vehicle from a labelling error.**
-
-Doc 17 §12.2's fourth use — the telemetry gate that suppressed an unarrived vehicle from truth — is
-inert under the demoted fade (§2.6) and is not relied on anywhere here.
 
 Note that an absent `occlusion` attribute means "this camera cannot say", not "not occluded" (doc 09
 §5.1); since 2026-10-05 the record says *why* it is absent, in one word (`occlusion_unmeasured`:
@@ -1758,11 +1733,10 @@ signal, so a leak there is not a bias — it is the entire feature. The compile-
 lights together**: no annotated entity may draw a paint colour, a vehicle class, or a lamp
 configuration that the nominal population cannot also draw.
 
-### 5.7 Vehicles now appear from nothing, and that is an imagery artefact
+### 5.7 Vehicles appear from nothing, and that is an imagery artefact
 
-With the fade demoted (§2.6), a vehicle admitted to the render set **pops into existence at full
-opacity**. Every vehicle SUMO has in a capture window is drawn ([`03`](03_CoSimulation_Runtime.md)
-§8.3; a type with no measured body is the one exception, and is never drawn at all, §10.2), and the
+A vehicle admitted to the render set **pops into existence at full visibility** (§2.6). Every vehicle
+SUMO has in a capture window is drawn ([`03`](03_CoSimulation_Runtime.md) §8.3; a type with no measured body is the one exception, and is never drawn at all, §10.2), and the
 window's prewarm gives every body its place before the first captured frame (§4.7), so a body appears
 inside a frame only where SUMO inserts the vehicle and disappears only where SUMO removes it — at the
 start and at the end of its route. A vehicle SUMO inserts inside a camera's view appears there, on the
@@ -2374,7 +2348,6 @@ to catch a leak after the fact. Four rows come from §4 and §5; three more from
 | `sumo_id`, `vtype_id`, `admitted_tick`, and a uid built on `sumo_id` | the SUMO vehicle's identity and type, and when the render set took it up: the authoring surface's names and a render-set fact ([06](06_Truth_And_Annotation.md) §8.2) |
 | `occlusion`, `occlusion_level`, `occlusion_samples` | computed from the simulator's depth buffer against the true 3D box (doc 17 §12.1) |
 | `apparent_width_px` / `apparent_height_px` | computed from the true 3D box |
-| `opacity`, arrival state | render state the simulator owns. Constant under the default (§2.6), so it carries nothing today — but it stays on the truth list, because a field that becomes informative later must not have to be re-classified then |
 | `hae_dtm`, `align_offset_m` on a *vehicle* | bare-earth height *at the vehicle* — a truth-conditioned sample of an otherwise legitimate surface |
 | the depth capture | §7.4 |
 | the per-image label record | it is the projected true box |
@@ -2432,7 +2405,7 @@ circumvent by accident:
 3. **A mechanical validator over the observation root**, run in CI and before any release. It walks
    every file in the root and fails on: the literal `CARLA-TRUTH-`; an attribute `source="truth"`; the
    element names `_supervision`, `_aoi`, `_carla`; the field names `actor_id`, `entity_id`,
-   `instance_id`, `sumo_id`, `vtype_id`, `admitted_tick`, `occlusion`, `opacity`, `hae_dtm`, `light_state`,
+   `instance_id`, `sumo_id`, `vtype_id`, `admitted_tick`, `occlusion`, `hae_dtm`, `light_state`,
    `solar_policy`, `advancing`, `rate`, `scenario_id`, `seed`; and any file extension on a truth list.
    Every name it checks for is a name a writer produces or is specified to; it names no withdrawn
    field ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4a). This is a few dozen lines, it is exact, and it fails loudly. **It is the
@@ -3012,8 +2985,7 @@ policy** (§11.0, §11.1, §11.3), so they know what rate they must meet and wha
 `ACarlaWheeledVehicle::SetVehicleLightState` compares eleven booleans and calls the blueprint **only on
 change** (`CarlaWheeledVehicle.cpp:684-700`), so a steady-state vehicle costs a command only when a
 signal actually changes. The pattern to copy is `VehicleLightStage`'s, which emits a pending update only
-on difference (`VehicleLightStage.cs:288-295`). This is the budget released by the fade's demotion
-(§2.6) being spent on something cheaper than what it replaced.
+on difference (`VehicleLightStage.cs:288-295`).
 
 ### 11.3 When the external chain cannot keep up — the ruling
 
@@ -3579,14 +3551,12 @@ with this one:**
 
 2. **Whether an instance-segmentation channel is worth its stream.** It delivers exact modal
    (visible-region) vehicle masks, at the cost of a third stream per channel against a connection
-   already measured as contended (`run_SCTMV.py:215-219`). Its *second* benefit has evaporated: doc 17
-   §9 wanted instance segmentation to weight a translucent occluder by its opacity, and with the fade
-   demoted (§2.6) the only translucent occluders it named — mid-fade vehicles — do not occur, so the
-   depth method's documented approximation is exact for every occluder in the scene. **It has a third
-   benefit**: at low sun and below the horizon the amodal box and the visible extent diverge by the
-   whole vehicle, and the instance mask is the only instrument in the rig
-   that *measures* the divergence rather than inferring it from `visible_signature`. **Recommendation:**
-   optional per channel, off by default, and measured once against the throughput budget that
+   already measured as contended (`run_SCTMV.py:215-219`). Its *second* benefit has no subject: doc 17
+   §9 wanted instance segmentation to weight a translucent occluder by its opacity, and every vehicle
+   is drawn at full visibility (§2.6). **It has a third benefit**: at low sun and below the horizon the
+   amodal box and the visible extent diverge by the whole vehicle, and the instance mask is the only
+   instrument in the rig that *measures* the divergence rather than inferring it from
+   `visible_signature`. **Recommendation:** optional per channel, off by default, and measured once against the throughput budget that
    [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) owns — but reconsider it as mandatory if
    §12.2's B-dark point is pursued at all, because a lamp corpus with no measured visible extent is a
    corpus whose boxes nobody can check.

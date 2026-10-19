@@ -135,14 +135,6 @@ public sealed class VehicleTelemetryService
             string typeId = meta.Description.Id;
             if (!typeId.StartsWith("vehicle.", StringComparison.Ordinal)) continue;
 
-            // Truth telemetry describes vehicles that are actually in the scene. Boundary-aware
-            // staging traffic spawns a vehicle transparent out in the entry ring and dissolves it in
-            // as it crosses into the interior, so one that has never been fully opaque has not
-            // arrived yet and is deliberately not reported — a half-dissolved car is not something a
-            // sensor should be told is there. Vehicles nobody fades are established from the start,
-            // so this gate is inert unless staging traffic is running.
-            if (!_client.IsActorEstablished(id)) continue;
-
             ActorSnapshot? snap = atFrame is not null
                 ? (atFrame.TryGetValue(id, out var held) ? held : null)
                 : _client.GetActorSnapshot(id);
@@ -193,7 +185,6 @@ public sealed class VehicleTelemetryService
                 HeadingDeg = heading,
                 // The corners of the vehicle's box take the same offset off, so they and the point agree.
                 HeightAlignOffset = offset,
-                Opacity = _client.GetActorOpacity(id),
                 // Carried alongside the truth so anything measuring against the imagery — occlusion,
                 // a projected bounding box — works from the same pose this record was built from.
                 ActorTransform = snap.Transform,

@@ -250,13 +250,12 @@ Measurement and tuning:
 
 ### 5.2 Which vehicles are reported
 
-Truth is emitted only for vehicles that have **arrived in the scene**. Boundary-aware staging traffic
-spawns a vehicle transparent out in the entry ring and dissolves it in as it crosses into the
-interior; one that has never been fully opaque has not arrived and is left out, because a
-half-dissolved car is not something a sensor should be told is there. A vehicle that has arrived stays
-reported while it dissolves back out on its way off the map. Vehicles nothing fades — a hero vehicle,
-scenario traffic, anything spawned by hand — are reported from the moment they spawn, so this makes no
-difference to a run without staging traffic.
+Truth is emitted for every vehicle actor in the world from the moment it spawns: a hero vehicle,
+scenario traffic, boundary-aware staging traffic, anything spawned by hand. Staging traffic spawns in
+the staging ring at the map's edge and is drawn at full visibility there, so a staging vehicle is
+reported in the ring as well as in the interior. The vehicle fade was removed from the code on
+2026-10-18; a sidecar recorded between 2026-08-17 and that date with the fade on leaves out a staging
+vehicle that had not yet been fully opaque.
 
 **A SUMO drive reports its render set.** Its vehicles are drawn by a pool of bodies, each lent to a
 SUMO vehicle while it is rendered and parked out of sight, about 300 m below the ground, in between

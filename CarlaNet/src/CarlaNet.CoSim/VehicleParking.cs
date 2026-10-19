@@ -19,7 +19,7 @@ namespace CarlaNet.CoSim;
 /// <para><b>Out of sight by where it is, not by what it looks like.</b> A parked body is below the
 /// ground surface and beyond the sandbox the network was clipped to, so no camera pointed at the
 /// scene can see it and nothing on the road can hit it. It costs one row in the world-observer
-/// snapshot per tick and nothing else. No opacity is written and none is needed.</para>
+/// snapshot per tick and nothing else.</para>
 /// </remarks>
 public readonly record struct VehicleParking(
     double OriginX,

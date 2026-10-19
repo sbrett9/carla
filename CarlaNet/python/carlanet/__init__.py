@@ -970,15 +970,6 @@ class Actor:
         v = velocity._to_cs() if hasattr(velocity, "_to_cs") else velocity
         _sync(self._client.SetActorTargetVelocityAsync(self._actor.Id, v))
 
-    def set_fade(self, hide: float):
-        """Set the staging fade for this actor: 0.0 = fully visible, 1.0 = fully dissolved away.
-
-        Drives a dithered opacity dissolve so boundary-aware traffic can fade in as it enters the
-        scene and out as it leaves (see generate_traffic_carlanet staging). Applies to the whole
-        vehicle (body, glass, lights, wheels) via Custom Primitive Data index 8.
-        """
-        _sync(self._client.SetActorFadeAsync(self._actor.Id, float(max(0.0, min(1.0, hide)))))
-
     def set_collisions(self, enabled: bool):
         """Toggle the actor's collision response. Used by
         WalkerAIController.start() to free the walker pose for Detour to drive
@@ -2150,11 +2141,6 @@ class World:
         roughly the pivot. No live Cesium sampling happens here (it has multi-tick latency) — all data
         is read from grids cached at world-build time. `lat`/`lon` are always exact and untouched.
 
-        Boundary-aware staging traffic spawns a vehicle transparent out in the entry ring and
-        dissolves it in as it crosses into the scene interior; a vehicle that has never been fully
-        opaque has not arrived yet and is left out. Vehicles nobody fades are reported from the moment
-        they spawn, so this makes no difference to a run without staging traffic.
-
         During a SUMO drive the vehicles are a pool of bodies, each lent to a SUMO vehicle while it
         is drawn and parked out of sight 300 m below the ground between loans. The session names each
         body to the server as it lends it and gives it back, and every world-observer snapshot carries
@@ -2201,8 +2187,6 @@ class World:
             render_set = None                              # a client built before the render set
         out = []
         for v in self.get_actors().filter("vehicle.*"):
-            if not self._client.IsActorEstablished(v.id):
-                continue                                   # still fading in from the staging ring
             if render_set is not None and render_set.IsParked(v.id):
                 continue                                   # parked out of sight between loans
             tf = v.get_transform()

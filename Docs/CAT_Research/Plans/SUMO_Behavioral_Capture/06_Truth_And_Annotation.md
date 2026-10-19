@@ -587,15 +587,9 @@ lines up with doc 20's exactly.
    [01 D1.13](01_Architecture.md) it should be small and nearly constant. That makes it a free health
    check: a gap that drifts, or a committed stop with no observed standstill, is a bridge defect.
 
-   **Vehicle fade being off makes this check sharper than it would otherwise have been.** The user has
-   demoted fade — it is computed client-side and pushed one blocking RPC per vehicle per reconcile,
-   which the argument parser's own help text calls "the heaviest load this client puts on the server's
-   per-frame RPC budget", and `--fade` now carries `default=False`
-   (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`). Vehicles appear fully
-   opaque. So the observed onset is an **exact instant with no ramp**: the tick the vehicle was
-   admitted to the render set. Had a dissolve been running, the committed-to-observed gap would have
-   carried a fade duration inside it and a drift in the seam would have been indistinguishable from a
-   change in the fade profile. With no ramp, any drift is the seam.
+   **The observed onset is an exact instant with no ramp**: the tick the vehicle was admitted to the
+   render set, from which it is drawn at full visibility (§4.4). No appearance time is mixed into the
+   committed-to-observed gap, so any drift in that gap is the seam.
 
    **It is also the only one of the three that can fail to exist** — if the participant was never
    rendered there is no observed onset at all, which is §5's subject.
@@ -1279,7 +1273,7 @@ different place.
 | | **CARLA producer** — `VehicleTelemetryService` | **SUMO producer** — the bridge, modelled on `SumoCotBridge` |
 |---|---|---|
 | Source | world-observer snapshot cache, `VehicleTelemetryService.cs:37,75-79` | TraCI, `SumoCotBridge.py:296-334` |
-| Covers | **only actors that exist.** The `IsActorEstablished` gate at `:73` is a second condition only while something is fading, and nothing is: it returns true for any actor with no fade record (`CarlaNet.Transport/CarlaClient.cs:1571`) and the gate's own comment says it is inert in that case (`:66-73`). Under this mode, existing and being reported are the same thing | **every** SUMO vehicle, rendered or not |
+| Covers | **only actors that exist.** Under this mode, existing and being reported are the same thing | **every** SUMO vehicle, rendered or not |
 | Position | the applied transform the frame was rendered from | `Vehicle.getPosition`, converted by `Simulation.convertGeo` — SUMO's own PROJ, no second implementation (`SumoCotBridge.py:298-299`) |
 | Height | drape / bare-earth decoupling: `hae` and `hae_dtm`, `:83-86` | a lookup in `bareearth.bin` at (x, y), `BareEarthGrid.height_at`, `:115-119` |
 | Velocity | `WorldObserver.cpp:385` serialises `GetActor()->GetVelocity()`, which for a pose-applied non-simulating body **is the velocity the bridge wrote with its pose** — SUMO's own ([03](03_CoSimulation_Runtime.md) D3.5) | `Vehicle.getSpeed` and `getAngle`, exact and never zero for a moving vehicle (measured: 0 of 2000 sample rows have speed 0) |
@@ -1457,22 +1451,16 @@ because a body nothing reported is itself one of its figures.
 
 ### 4.4 Three vehicle states, and what truth says about each
 
-**There are three, and there is deliberately no fourth.** A *rendered, arriving* state would be an
-actor that existed but was mid-dissolve, excluded
-from the capture sidecar because [09 §5.2](../../Findings/09_Telemetry_CoT_Contract.md) fixes that a
-half-dissolved car is not something a sensor should be told is there. **That state is gone.** [01 D1.11](01_Architecture.md) designs no fade behaviour, and the user
-has demoted fade for this mode — it is a client-side computation pushed one blocking RPC per vehicle
-per reconcile, and `--fade` carries `default=False`
-(`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`, which states that cost in its
-own help text). Vehicles spawn fully opaque, `IsActorEstablished` returns true for any actor with no
-fade record (`CarlaClient.cs:1571`), and the truth producer's gate is inert in exactly that case
-(`VehicleTelemetryService.cs:66-73`). So **a vehicle is admitted and is immediately rendered and
-reported**, and there is no `render_state="arriving"` and no intermediate span to account for.
+**There are three.** A vehicle admitted to the render set is drawn at full visibility from its first
+tick ([01 D1.11](01_Architecture.md)), and the truth producer reports every vehicle actor except a body
+the pool has parked on that frame (§4.1, [09 §5.2](../../Findings/09_Telemetry_CoT_Contract.md)). So
+**a vehicle is admitted and is immediately rendered and reported**, and there is no
+`render_state="arriving"` and no intermediate span to account for.
 
-The state is named and buried rather than silently deleted because it is the thing a later reader will
-expect to find: doc 20, doc 09 §5.2 and [17 §12.2](../../Findings/17_Photoreal_Occlusion_Metric.md)
-all describe an arrival gate, and all three are describing a mechanism that is switched off here. If
-fade is ever restored this row comes back with it; nothing else in this section does.
+The vehicle fade, which drew staging traffic part-transparent at the edge of the scene, was removed
+from the code on 2026-10-18, together with the arrival gate that kept such a vehicle out of truth until
+it was fully drawn ([17 §12.2](../../Findings/17_Photoreal_Occlusion_Metric.md)). A SUMO drive never
+set the fade, so the gate never withheld a SUMO vehicle.
 
 | State | In SUMO | In CARLA | Capture sidecar | World truth track | Manifest |
 |---|---|---|---|---|---|
@@ -1480,11 +1468,11 @@ fade is ever restored this row comes back with it; nothing else in this section 
 | **Rendered** | yes | actor exists, opaque from its first tick | present, `producer="reconciled"`, with residuals | present, `render_state="rendered"` | rendered span open, from the **admission instant** |
 | **Rendered, SUMO-removed** | no | drawn on the frame of its last SUMO step, where SUMO last had it, and parked from the next ([03](03_CoSimulation_Runtime.md) D3.45) | present until released, with `sumo_state="removed"` | present until released | interval closed `sumo_removed` or `entity_arrived`; rendered span closed at the **release instant**, the frame after its last |
 
-**The two instants are the record that replaces fade.** For every vehicle CARLA rendered, the pool
-records the tick it was admitted and the tick it was released. Both are exact — a vehicle appears
-abruptly and vanishes abruptly, so there is no ramp to attribute, no opacity to threshold, and no
-latching rule. They are written per vehicle as the manifest's `render_admitted` and `render_released`
-rows, and each `interval_closed` row carries the spans its participant was not drawn (§8.4).
+**The two instants are the record of when a vehicle is drawn.** For every vehicle CARLA rendered, the
+pool records the tick it was admitted and the tick it was released. Both are exact: a vehicle appears
+abruptly and vanishes abruptly, so there is no ramp to attribute and no latching rule. They are
+written per vehicle as the manifest's `render_admitted` and `render_released` rows, and each
+`interval_closed` row carries the spans its participant was not drawn (§8.4).
 
 The first row is the one doc 20 had no concept of and the one most likely to be got wrong. **A vehicle
 SUMO is simulating and CARLA is not rendering is not absent from the world; it is absent from the
@@ -2290,14 +2278,9 @@ Notes, each carrying a decision:
 - **`speed="0.00"` on a parked guard is now true**, not an artifact. It reads identically to the
   teleport defect it used to be, which is why `kinematics_source="sumo"` is not optional cosmetics: it
   is the only thing distinguishing a genuinely stationary vehicle from a broken one.
-- **`admitted_tick` is carried and `opacity` is not.** `VehicleTelemetry.Opacity` exists and is
-  populated from `GetActorOpacity` (`VehicleTelemetryService.cs:112`), which returns 1.0 for any actor
-  nobody has faded (`CarlaClient.cs:1562`). With fade off (§4.4) it is **constant 1.0 for every
-  vehicle in every capture**, and a field that never varies invites a consumer to believe it carries
-  information. It is therefore not emitted in this mode. What a consumer actually needs from that
-  neighbourhood is when the vehicle entered and left the render set, so `admitted_tick` is emitted
-  instead and `released_tick` is recorded in the manifest, where a release is known only after it
-  happens. If fade is ever restored, `opacity` returns alongside it and is meaningful again.
+- **`admitted_tick` is carried.** A consumer needs to know when the vehicle entered and left the
+  render set (§4.4), so `admitted_tick` is emitted on every rendered vehicle and the release is
+  recorded in the manifest's `render_released` row, where a release is known only after it happens.
 - **`special_type` is a class field and carries no supervision.** The `"marked"` value the
   standalone producer wrote at `SumoCotBridge.py:321-322` is removed (§9.1, D6.18). Its value is the
   vehicle catalogue's kind for the blueprint of the body that drew the vehicle — `taxi` or
@@ -3701,8 +3684,7 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 - The wire shape of the render-set contract, the `vType`-to-blueprint tolerance, and the identity
   contract as a versioned interface — [04](04_Contracts.md).
 - Whether `set_transform` and `apply_batch` are implemented end to end at the batch sizes this mode
-  needs — [05](05_CarlaNet_Capability_Audit.md). `set_actor_fade` is deliberately not on that list:
-  fade is demoted for this mode (§4.4) and nothing in this section depends on it.
+  needs — [05](05_CarlaNet_Capability_Audit.md).
 - The detector, the tracker and the model service, all of which are **external to this effort**
   ([`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md)) — [08](08_Collection_And_EPoL.md) owns the interfaces to
   them. There is **no scoring harness anywhere in this plan**, in this section or in any other; §10.1
@@ -3730,7 +3712,7 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 
 | Needed from | Property required |
 |---|---|
-| [01](01_Architecture.md) | `VehicleBodyPool` and `RenderSetManager` record an **admission tick and a release tick per vehicle**, written to the manifest as `render_admitted` and `render_released` rows (built); the two instants replace the arrival/opacity notion that fade used to supply (§4.4). `RenderSetManager` admits every vehicle SUMO has inside a capture window and reads no supervision, so render-set membership is independent of the label (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10), and since 2026-10-05 is held on the server and carried on every world-observer snapshot (D6.41) |
+| [01](01_Architecture.md) | `VehicleBodyPool` and `RenderSetManager` record an **admission tick and a release tick per vehicle**, written to the manifest as `render_admitted` and `render_released` rows (built); the two instants record when each vehicle is drawn (§4.4). `RenderSetManager` admits every vehicle SUMO has inside a capture window and reads no supervision, so render-set membership is independent of the label (§10.4). `WorldSupervisionState` is tick-stamped and published on change (already D1.10), and since 2026-10-05 is held on the server and carried on every world-observer snapshot (D6.41) |
 | [03](03_CoSimulation_Runtime.md) | The SUMO snapshot used for reconciliation is of the **same tick** as the frame, and is captured into the encoding job rather than read at write time (§4.3) |
 | [04](04_Contracts.md) | `scenario_id`, `session_id` and a stable `sensor_id` are supplied, not derived from a start instant (§7.1). The `vType`-to-blueprint dimension tolerance, held at compile time ([07](07_Scenario_Authoring.md) check 15), so no dimension comparison is taken at run time |
 | [07](07_Scenario_Authoring.md) | The supervision file is emitted by the builder beside the routes, a skipped occasion writes no trip and no row (§2.2, §3.5), and the confounder rules of §9.3 are enforced at authoring |
@@ -3777,7 +3759,7 @@ owner acts on it rather than rediscovers it.
 | **D6.16** | **Withdrawn 2026-09-30.** There is no render cap: every vehicle SUMO has is drawn, so scene density cannot depend on the label and no span is withheld from the training export (§10.4) |
 | **D6.17** | **Four artifacts, one writer each**: the supervision plan (compile time), the capture truth sidecar (per camera per capture), the world truth track (per run, every SUMO vehicle), and the run supervision manifest (per session, authoritative). The world truth track is new and is what keeps the base rate from being computed over a render-filtered population (§8) |
 | **D6.18** | **The two label leaks in the existing producer are defects and are fixed wherever that code produces ground truth**, including the standalone CARLA-free path: `special_type = "marked"` (`SumoCotBridge.py:321-322`) and the anomaly-to-`u` affiliation mapping. This is a narrow amendment to [01 D1.18](01_Architecture.md)'s "retained unchanged" — unchanged in role, corrected in these two places (§2.4, §8.3, §9.1). **Both are fixed in the standalone path (2026-09-29).** `special_type` means the kind of vehicle and nothing else. SUMO reports no kind, and **the kind comes from the vehicle catalogue (owner's ruling, 2026-10-02)**: a vehicle whose body's blueprint a catalogue class draws carries that class's `cot_special_type`, empty where the class curates none, whatever the blueprint itself declares; a blueprint no class draws keeps the kind it declares. The capture sidecar and the live pull of the process running the drive take it from the client the session drives through, which the session hands its catalogue's table as it starts; a reader on another client is handed none and reports the declared kind. The standalone producer, given the catalogue, writes the kind for the blueprint each vehicle type names, and without one writes it empty (§2.4, §4.2, §8.3). **`base_type` follows the catalogue's `cot_base_type` by the same rule (owner's ruling, 2026-10-05)**, in the capture sidecar, the live pull, the callsign built from it, the world truth track and the standalone producer; a blueprint no class draws keeps the base type it declares, from its wheel count where it declares none, and in the world truth track and the standalone producer a type naming none of the catalogue's blueprints takes its SUMO vehicle class's. A planted vehicle carries the kinds of its blueprint like any other: the author's marking never goes in `special_type`. A legacy labels file's `u` is withheld. **This reconciles with `8d3eafc5d`**, which made the XML and CSV the truth sidecar carrying the whole record: the marking leaves the field that means something else, not the sidecar. Both files carry it in their own `marked` field (`1`/`0`), which is not a CoT contract field — a CSV column as before, and a `_carla` attribute the XML gained with this fix, since measured before it the XML carried the marking only through `special_type`. The datagram feed carries neither. A compiled scenario marks nothing there; its labels are its `*.supervision.json`, joined to the sidecar by vehicle id, so no information is lost (§8.3) |
-| **D6.19** | **Vehicle fade is not designed around, and the rendered span replaces it.** The user has demoted fade for this mode — it is a client-side computation pushed one blocking RPC per vehicle per reconcile, and `--fade` carries `default=False` (`CarlaControl/src/carlacontrol/CarlaControlArgumentParser.py:317-328`). Vehicles spawn fully opaque, so `VehicleTelemetryService.cs:73`'s arrival gate is inert (`CarlaClient.cs:1571`), there is no *arriving* vehicle state, and `VehicleTelemetry.Opacity` is a constant 1.0 (`VehicleTelemetryService.cs:112`, `CarlaClient.cs:1562`) and is **not emitted**. What truth records instead is the **admission and release instant per vehicle**, which is exact because there is no ramp. This is a simplification of the onset model, not a loss: the committed-to-observed gap becomes purely the co-simulation seam, with no fade duration mixed into it (§3.3, §4.4, §5.1, §8.2) |
+| **D6.19** | **The rendered span records when each vehicle is drawn.** There is no vehicle fade in the stack: a vehicle admitted to the render set is drawn at full visibility from its first tick and is reported from that tick, so there is no *arriving* vehicle state. Truth records the **admission and release instant per vehicle**, which is exact because there is no ramp, and the committed-to-observed gap is purely the co-simulation seam (§3.3, §4.4, §5.1, §8.2) |
 | **D6.20** | **Illumination is part of the truth record, and the record carries the declared civil instant, the asserted policy and the residual — not only the achieved sun.** `_solar` already carries nine achieved attributes in every sidecar and every PNG (`CotWriter.cs:52-65`, `SolarMetadata.cs:14-20`, measured). Four are added: `declared_civil_time` / `declared_civil_date` / `declared_utc_offset_h`, `solar_policy` with its rate and anchor tick, `solar_time_residual_s` with `sun_elevation_residual_deg`, and `illumination_band`. **The policy is asserted rather than read**, because `advancing` defaults to `false` when nothing ever configured the sun (`CesiumHeightSampler.cpp:784-796`, measured), so a deliberately frozen run and a never-configured run are otherwise indistinguishable. The residual is what makes the silent failure loud: an unset sun shows up as a multi-hour residual against an achieved `solar_time` of exactly `12.0`, the spawn default (§2.7, §4.5) |
 | **D6.21** | **Illumination is derived context of the same class as an area relation, and never supervision.** It is carried by the world-scoped `<_solar>` element, a sibling of world-scoped `<_supervision>`, and by no `<event>`, no `<_carla>` block and no supervision row. The code boundary is the type graph: `SupervisionPlan` has no solar field, the interval binder has no reader for the solar cache, and the scenario epoch compiles into a **separate** civil-time map consumed by the capture session. The deletion test is the enforcement — a consumer must be able to delete every `<_solar>` element and every `carla:solar` chunk and still have complete supervision, exactly as for `<_aoi>` (§3.6, §8.1). **As built (2026-10-05):** the interval binder holds no solar type -- a test walks every field of it and of the types nested in it -- and never reads the sun the rendered frames carry |
 | **D6.22** | **Withdrawn 2026-10-05 by the owner's ruling.** There are no observability outcomes for darkness to qualify, and no resolvability cutoff will be asked for or applied. What stands: `illumination_band` and both elevations the world reported, on every capture and every world-truth-track row, from the achieved sun (§5.1, [11](11_Time_And_Illumination.md) §4.4) |

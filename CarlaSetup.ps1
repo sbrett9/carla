@@ -532,8 +532,8 @@ if (Test-Path (Join-Path $contentCarlaDir '.git')) {
 } else {
     Write-Host 'Could not find CARLA content. Downloading...'
     New-Item -ItemType Directory -Force -Path $contentDir | Out-Null
-    # Private snapshot mirror of carla-simulator/carla-content (ue5-dev). It carries the
-    # vehicle staging-fade asset changes and is owned by this project. The upstream Bitbucket
+    # Private snapshot mirror of carla-simulator/carla-content (ue5-dev). It carries this
+    # project's own asset changes and is owned by this project. The upstream Bitbucket
     # repo (https://bitbucket.org/carla-simulator/carla-content.git, branch ue5-dev) is the
     # original source if a pristine pull is ever needed.
     Invoke-Checked 'git clone carla-content' {

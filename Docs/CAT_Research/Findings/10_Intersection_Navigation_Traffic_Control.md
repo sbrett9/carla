@@ -408,7 +408,7 @@ A phased combination, ordered by value-per-effort:
    data is sufficient and netconvert never emits them. Gives real stop-sign and speed-limit behavior
    without the grouping bug.
 3. **Bind the traffic-light + speed-limit RPCs** into the shim (§7.1 step 4) so scripts like
-   `test_generate_fade_traffic.py` and the telemetry/observer clients can query and drive intersection
+   `generate_traffic_carlanet.py` and the telemetry/observer clients can query and drive intersection
    state.
 4. **Traffic lights** last, via either fixing the grouping bug (§7.1 step 2) or the virtual scheduler
    (§7.2) — the virtual scheduler is preferred for a headless EO digital twin because it needs neither
@@ -428,8 +428,9 @@ the client. Only signal *phase/timing* and *approach grouping* must be synthesiz
   `build_world:273`; supersedes the retired `test_digital_twin.py`),
   [`OsmConverter.cs`](../../../CarlaNet/src/CarlaNet.Map/OsmConverter.cs)
   (`BuildArguments`), [`osm_clip.py`](../../../CarlaNet/python/osm_clip.py).
-- Traffic demo (commands no intersection behavior):
-  [`test_generate_fade_traffic.py`](../../../CarlaNet/python/test_generate_fade_traffic.py).
+- Traffic clients (command no intersection behavior):
+  [`generate_traffic_carlanet.py`](../../../PythonAPI/examples/generate_traffic_carlanet.py),
+  [`TrafficController.py`](../../../CarlaControl/src/carlacontrol/TrafficController.py).
 - TM runtime (.NET port): `CarlaNet/src/CarlaNet.TrafficManager/Stages/ALSM.cs` (the stubs),
   `…/Stages/TrafficLightStage.cs`, `…/Stages/MotionPlanStage.cs`; doc `Docs/adv_traffic_manager.md`.
 - Native signal model & spawning (reference): `LibCarla/source/carla/road/SignalType.{h,cpp}`,

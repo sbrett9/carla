@@ -118,12 +118,6 @@ public sealed record VehicleTelemetry(
     public double HeadingDeg { get; init; } = double.NaN;
 
     /// <summary>
-    /// The vehicle's staging opacity: 1 = fully opaque, below 1 = part-way through the dissolve that
-    /// fades boundary-aware traffic in and out at the scene edge.
-    /// </summary>
-    public double Opacity { get; init; } = 1.0;
-
-    /// <summary>
     /// The vehicle's pose in simulator coordinates, paired with <see cref="BoundingBox"/> to give the
     /// oriented box an occlusion test or a bounding-box projection works from. Geometry rather than
     /// telemetry: it is not serialized to the sidecar as it stands; the <see cref="Box"/> of a vehicle
