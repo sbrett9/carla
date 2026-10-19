@@ -48,6 +48,15 @@ SCHEMAS = _REPO / "CarlaControl" / "schemas"
 SKILL_SCHEMAS = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios" / "schemas"
 PAGES_DIRECTORY = _REPO / "Docs" / "CAT_Research" / "Schemas"
 INDEX = PAGES_DIRECTORY / "README.md"
+# The rules for whoever writes a page here: they sit beside the pages but describe no kind of file.
+RULES_FILES = {"AGENTS.md", "CLAUDE.md"}
+
+
+def schema_pages():
+    """Every page in the folder that describes a kind of file: not the index, not the writing rules."""
+    return [path for path in PAGES_DIRECTORY.glob("*.md") if path != INDEX and path.name not in RULES_FILES]
+
+
 # Each schema's description page: every schema in CarlaControl/schemas, and the authoring skill's two.
 PAGES = {
     "truth_sidecar.xsd": "Truth_Sidecar.md",
@@ -209,15 +218,14 @@ def test_each_schema_has_a_description_page_naming_it_and_its_urn(name):
 
 
 def test_every_page_is_named_title_case_with_underscores():
-    pages = sorted(path.name for path in PAGES_DIRECTORY.glob("*.md") if path != INDEX)
+    pages = sorted(path.name for path in schema_pages())
     assert pages and [name for name in pages if not PAGE_NAME.match(name)] == []
 
 
 def test_the_index_lists_every_page_and_every_schema_with_its_urn():
     index = INDEX.read_text(encoding="utf-8")
-    for page in PAGES_DIRECTORY.glob("*.md"):
-        if page != INDEX:
-            assert f"]({page.name})" in index, f"the index does not link {page.name}"
+    for page in schema_pages():
+        assert f"]({page.name})" in index, f"the index does not link {page.name}"
     for name in PAGES:
         assert f"`{name}`" in index, f"the index does not list {name}"
         if urn_of(name):
