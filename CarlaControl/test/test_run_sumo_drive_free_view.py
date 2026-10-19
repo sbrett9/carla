@@ -88,28 +88,32 @@ class _StagedWorld:
 
 def test_the_flown_rig_starts_over_the_world_s_centre_and_measures_depth_as_far_as_a_capture_run(
         drive, monkeypatch):
+    from carlacontrol.DriveCamera import DriveCamera
+    from carlacontrol.FreeViewParts import FreeViewParts
     from carlacontrol.RunConfiguration import RunConfiguration
     from carlacontrol.SensorRig import SensorRig
 
     args = _arguments(drive, monkeypatch, "--view", "free", "--camera-z", "450")
-    centre = drive.world_centre(_StagedWorld({"min_x": -838.9, "min_y": -455.1, "max_x": 839.1,
-                                              "max_y": 456.9, "margin": 50.0}))
+    centre = DriveCamera.world_centre(_StagedWorld({"min_x": -838.9, "min_y": -455.1,
+                                                    "max_x": 839.1, "max_y": 456.9,
+                                                    "margin": 50.0}))
 
-    settings = drive.free_view_settings(args, centre, SensorRig.FT_PER_M, drive.depth_range_m())
+    settings = FreeViewParts.settings(args, centre, SensorRig.FT_PER_M,
+                                      DriveCamera.depth_range_m())
 
     # The staging bounds are in CARLA's frame, as the camera is.
     assert (settings.x, settings.y) == pytest.approx((0.1, 0.9))
     assert settings.z / SensorRig.FT_PER_M == pytest.approx(450.0)
     # The run configuration's one depth range, read from its field table, for both views' cameras.
     assert settings.depth_max_range == 20000.0
-    assert drive.depth_range_m() == RunConfiguration.field("occlusion.depth_max_range_m").default
+    assert DriveCamera.depth_range_m() == RunConfiguration.field("occlusion.depth_max_range_m").default
     assert (settings.width, settings.height, settings.fov) == (1280, 720, 90.0)
     assert settings.asynchronous is True
     assert settings.ev is None
     # No name given: the rig's camera is its default.
     assert settings.camera_name is None
     named = _arguments(drive, monkeypatch, "--view", "free", "--camera-name", "DECK-I25")
-    assert drive.free_view_settings(named, centre, SensorRig.FT_PER_M, 20000.0).camera_name == \
+    assert FreeViewParts.settings(named, centre, SensorRig.FT_PER_M, 20000.0).camera_name == \
         "DECK-I25"
 
 
@@ -140,12 +144,13 @@ class _RecordingWorld:
 
 def test_a_span_of_a_named_camera_is_written_to_a_folder_named_after_it(drive, monkeypatch,
                                                                        tmp_path):
+    from carlacontrol.FreeViewParts import FreeViewParts
     args = _arguments(drive, monkeypatch, "--view", "free", "--record-dir", str(tmp_path),
                       "--camera-name", "DECK-I25")
     recording = _RecordingWorld(names={4121: "DECK-I25"})
     session = SimpleNamespace(Illumination=None, RenderSet=None, WindowOpensAtSeconds=0.0,
                               RenderedTimeSeconds=0.0)
-    parts = drive.FreeViewParts()
+    parts = FreeViewParts()
     parts.rig = SimpleNamespace(camera=SimpleNamespace(id=4121), depth_cam=None)
 
     recorder = parts.span_recorder(SimpleNamespace(get_world=lambda: recording), session, args,
@@ -199,9 +204,11 @@ class _SpawningWorld:
 
 
 def test_the_fixed_camera_is_spawned_under_its_name_or_left_its_default(drive, monkeypatch):
+    from carlacontrol.DriveCamera import DriveCamera
     world = _SpawningWorld()
-    drive.spawn_camera(world, _arguments(drive, monkeypatch, "--camera-name", "DECK-I25"), (0, 0))
-    drive.spawn_camera(world, _arguments(drive, monkeypatch), (0, 0))
+    DriveCamera.spawn_camera(world, _arguments(drive, monkeypatch, "--camera-name", "DECK-I25"),
+                             (0, 0))
+    DriveCamera.spawn_camera(world, _arguments(drive, monkeypatch), (0, 0))
     assert world.spawned == [("sensor.camera.rgb", "DECK-I25"), ("sensor.camera.rgb", None)]
 
 
@@ -213,11 +220,13 @@ def test_the_fixed_camera_carries_a_depth_camera_attached_at_its_pose_with_its_o
     # depth range rather than the depth camera's stock 1000 m.
     import carlanet
 
+    from carlacontrol.DriveCamera import DriveCamera
+
     world = _SpawningWorld()
     args = _arguments(drive, monkeypatch, "--record-hz", "4")
-    camera = drive.spawn_camera(world, args, (0, 0))
+    camera = DriveCamera.spawn_camera(world, args, (0, 0))
 
-    depth = drive.spawn_depth_camera(world, args, camera, drive.depth_range_m())
+    depth = DriveCamera.spawn_depth_camera(world, args, camera, DriveCamera.depth_range_m())
 
     [(blueprint_id, attached_to, attachment)] = world.attached
     assert (blueprint_id, attached_to, attachment) == ("sensor.camera.depth", camera,
@@ -234,11 +243,12 @@ def test_the_fixed_camera_carries_a_depth_camera_attached_at_its_pose_with_its_o
 
 def test_a_server_whose_depth_camera_has_no_range_attribute_is_said_loudly(drive, monkeypatch,
                                                                             caplog):
+    from carlacontrol.DriveCamera import DriveCamera
     world = _SpawningWorld(depth=_SpawningWorld.DEPTH - {"max_range"})
     args = _arguments(drive, monkeypatch)
-    camera = drive.spawn_camera(world, args, (0, 0))
-    with caplog.at_level("WARNING", logger="run_sumo_drive"):
-        drive.spawn_depth_camera(world, args, camera, 20000.0)
+    camera = DriveCamera.spawn_camera(world, args, (0, 0))
+    with caplog.at_level("WARNING", logger="carlacontrol.DriveCamera"):
+        DriveCamera.spawn_depth_camera(world, args, camera, 20000.0)
     assert "no max_range attribute" in caplog.text
     assert "max_range" not in world.blueprints["sensor.camera.depth"].values
 
@@ -250,20 +260,21 @@ def test_a_camera_name_the_rule_refuses_ends_the_drive_before_it_connects(drive,
     for name in ("s.sumocfg", "w.cwp", "vehicles.catalogue.json"):
         (tmp_path / name).write_text("{}", encoding="utf-8")
     connected: list = []
-    monkeypatch.setattr(drive, "carla", SimpleNamespace(
+    monkeypatch.setattr(importlib.import_module("carlacontrol.DriveRun"), "carla", SimpleNamespace(
         camera_name_problem=CameraName.problem, Client=lambda *a: connected.append(a)))
     monkeypatch.setattr(sys, "argv", [
         "run_sumo_drive.py", "--scenario", str(tmp_path / "s.sumocfg"),
         "--world-package", str(tmp_path / "w.cwp"),
         "--catalogue", str(tmp_path / "vehicles.catalogue.json"), "--camera-name", "DECK:I25"])
 
-    with caplog.at_level("ERROR", logger="run_sumo_drive"):
+    with caplog.at_level("ERROR", logger="carlacontrol.DriveRun"):
         assert drive.main() == 2
     assert connected == []
     assert "--camera-name: camera name 'DECK:I25' holds ':'" in caplog.text
 
 
 def test_a_span_records_the_flown_camera_as_the_fixed_camera_records(drive, monkeypatch, tmp_path):
+    from carlacontrol.FreeViewParts import FreeViewParts
     args = _arguments(drive, monkeypatch, "--view", "free", "--record-dir", str(tmp_path),
                       "--record-hz", "4")
     recording = _RecordingWorld()
@@ -271,7 +282,7 @@ def test_a_span_records_the_flown_camera_as_the_fixed_camera_records(drive, monk
     session = SimpleNamespace(Illumination="the session's illumination",
                               RenderSet="the session's render set",
                               WindowOpensAtSeconds=310.0, RenderedTimeSeconds=300.0)
-    parts = drive.FreeViewParts()
+    parts = FreeViewParts()
     parts.rig = SimpleNamespace(camera=SimpleNamespace(id=4121), depth_cam="the rig's depth camera")
 
     recorder = parts.span_recorder(client, session, args, "run-20260930-142233")
@@ -335,7 +346,8 @@ def _run_main(drive, monkeypatch, tmp_path, *extra: str) -> _DriveWorld:
         def get_server_version(self) -> str:
             return "stand-in"
 
-    monkeypatch.setattr(drive, "carla", SimpleNamespace(Client=_Client))
+    monkeypatch.setattr(importlib.import_module("carlacontrol.DriveRun"), "carla",
+                        SimpleNamespace(Client=_Client))
     monkeypatch.setattr(sys, "argv", [
         "run_sumo_drive.py", "--scenario", str(tmp_path / "s.sumocfg"),
         "--world-package", str(package),
@@ -372,6 +384,7 @@ def test_a_skipped_dry_run_is_accepted_only_when_asked_for(drive, monkeypatch, t
 
 
 def test_collision_detail_is_off_unless_asked_for_and_only_binds_a_printer(drive, monkeypatch, tmp_path):
+    from carlacontrol.DriveReport import DriveReport
     # Off by default: the report prints the count, and nothing is called per collision.
     world = _run_main(drive, monkeypatch, tmp_path)
     assert world.drive_arguments["collision_detail"] is False
@@ -380,12 +393,13 @@ def test_collision_detail_is_off_unless_asked_for_and_only_binds_a_printer(drive
     # nothing the session does not already keep.
     world = _run_main(drive, monkeypatch, tmp_path, "--collision-detail")
     assert world.drive_arguments["collision_detail"] is True
-    assert world.drive_arguments["on_collision"] is drive.print_collision
+    assert world.drive_arguments["on_collision"] is DriveReport.print_collision
 
 
 def test_a_collision_printed_as_it_ends_is_the_span_s_own_words(drive, caplog):
-    with caplog.at_level("INFO", logger="run_sumo_drive"):
-        drive.print_collision("'goer' into 'turner' (collision) on approach_0 at 50.91 m, t=2.15 to 4.4 s")
+    from carlacontrol.DriveReport import DriveReport
+    with caplog.at_level("INFO", logger="carlacontrol.DriveReport"):
+        DriveReport.print_collision("'goer' into 'turner' (collision) on approach_0 at 50.91 m, t=2.15 to 4.4 s")
     assert "collision: 'goer' into 'turner' (collision) on approach_0 at 50.91 m, t=2.15 to 4.4 s" \
         in caplog.text
 
@@ -410,32 +424,35 @@ def test_a_run_manifest_reaches_the_session_only_when_asked_for(drive, monkeypat
     world = _run_main(drive, monkeypatch, tmp_path, "--run-manifest", manifest)
     assert world.drive_arguments["run_manifest"] == manifest
     header = world.drive_arguments["run_manifest_header"]
-    assert header["tool"] == "run_sumo_drive.py" and header["run_id"].startswith("run-")
+    assert header["tool"] == "carla-drive" and header["run_id"].startswith("run-")
     assert header["view"] == "fixed"
 
 
 def test_the_launch_says_where_the_world_truth_track_goes_and_how_often(drive):
-    assert drive.describe_world_truth_track(None) == \
+    from carlacontrol.DriveReport import DriveReport
+    assert DriveReport.describe_world_truth_track(None) == \
         "none written; give --world-truth-track to write one"
     every_frame = SimpleNamespace(Path="t.csv", SummaryPath="t.summary.json", SumoStepsPerSample=1,
                                   IntervalSeconds=0.1)
-    assert drive.describe_world_truth_track(every_frame).startswith(
+    assert DriveReport.describe_world_truth_track(every_frame).startswith(
         "t.csv, every SUMO frame inside the capture window, every vehicle SUMO has, drawn or not")
     sampled = SimpleNamespace(Path="t.csv", SummaryPath="t.summary.json", SumoStepsPerSample=10,
                               IntervalSeconds=1.0)
-    assert drive.describe_world_truth_track(sampled).startswith("t.csv, every 1 s inside")
+    assert DriveReport.describe_world_truth_track(sampled).startswith("t.csv, every 1 s inside")
 
 
 def test_the_launch_says_what_a_draw_distance_does_and_what_it_leaves_alone(drive):
-    assert drive.describe_draw_distance(None) == "none; every body is drawn at any range"
-    said = drive.describe_draw_distance(400.0)
+    from carlacontrol.DriveReport import DriveReport
+    assert DriveReport.describe_draw_distance(None) == "none; every body is drawn at any range"
+    said = DriveReport.describe_draw_distance(400.0)
     assert said.startswith("400 m, rendering only: every vehicle has its body, is posed and is in "
                            "the truth")
     assert "each capture's sidecar marks it" in said
 
 
 def test_a_world_with_no_staging_bounds_starts_the_flown_rig_over_carla_s_origin(drive):
-    assert drive.world_centre(_StagedWorld(None)) == (0.0, 0.0)
+    from carlacontrol.DriveCamera import DriveCamera
+    assert DriveCamera.world_centre(_StagedWorld(None)) == (0.0, 0.0)
 
 
 def test_by_default_nothing_the_session_is_handed_limits_which_vehicles_are_rendered(
@@ -488,8 +505,9 @@ class _Following:
 
 
 def test_the_flown_camera_is_followed_under_the_cameras_and_let_go_before_it_is_destroyed(drive):
+    from carlacontrol.FreeViewParts import FreeViewParts
     session = _Following()
-    parts = drive.FreeViewParts()
+    parts = FreeViewParts()
     torn_down: list[str] = []
     parts.rig = SimpleNamespace(camera=SimpleNamespace(id=4121),
                                 cleanup=lambda: torn_down.append(f"rig, followed {session.removed}"))
@@ -504,29 +522,31 @@ def test_the_flown_camera_is_followed_under_the_cameras_and_let_go_before_it_is_
 
 def test_a_free_view_over_a_circle_smaller_than_the_world_is_told_how_to_take_it_all_in(
         drive, monkeypatch, tmp_path, caplog):
+    from carlacontrol.FreeViewParts import FreeViewParts
     package = tmp_path / "Gardnerville_Centerville_Lane.cwp"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr("world.json", json.dumps(GARDNERVILLE))
     args = _arguments(drive, monkeypatch, "--view", "free", "--render-set", "circle",
                       "--region-radius", "400", package=package)
 
-    with caplog.at_level("INFO", logger="run_sumo_drive"):
-        drive.warn_of_an_uncovered_world(args)
+    with caplog.at_level("INFO", logger="carlacontrol.FreeViewParts"):
+        FreeViewParts.warn_of_an_uncovered_world(args)
     assert "--region-x 0 --region-y -1 --region-radius 956" in caplog.text
 
     caplog.clear()
-    with caplog.at_level("INFO", logger="run_sumo_drive"):
-        drive.warn_of_an_uncovered_world(_arguments(drive, monkeypatch, "--view", "free",
-                                                    package=package))
+    with caplog.at_level("INFO", logger="carlacontrol.FreeViewParts"):
+        FreeViewParts.warn_of_an_uncovered_world(_arguments(drive, monkeypatch, "--view", "free",
+                                                            package=package))
     assert caplog.text == ""
 
 
 def test_the_launch_says_plainly_that_vehicles_outside_a_limit_are_not_in_carla(drive):
+    from carlacontrol.DriveReport import DriveReport
     every = SimpleNamespace(RenderSetLimits=False, RenderSetPolicy="every vehicle SUMO has",
                             SumoSeed=42)
     circle = SimpleNamespace(RenderSetLimits=True, SumoSeed=42,
                              RenderSetPolicy="circle of 300 m around (0, 0) in SUMO metres")
-    assert drive.describe_render_set(every) == "every vehicle SUMO has; SUMO runs under seed 42"
-    said = drive.describe_render_set(circle)
+    assert DriveReport.describe_render_set(every) == "every vehicle SUMO has; SUMO runs under seed 42"
+    said = DriveReport.describe_render_set(circle)
     assert said.startswith("circle of 300 m around (0, 0) in SUMO metres; SUMO runs under seed 42")
     assert "a vehicle outside it is simulated by SUMO and is not in CARLA" in said

@@ -38,8 +38,8 @@ class StareAim:
         The camera is `standoff_m` from the point horizontally, on the side opposite the bearing it
         looks along, and `altitude_m` above it, so the boresight passes through the point and dips
         by atan(altitude / standoff) below the horizon. With no standoff it looks straight down and
-        the bearing sets which way is up in the picture. This is the geometry `camera_transform` in
-        `CarlaNet/python/run_sumo_drive.py` computes for its recording camera, with the look-at
+        the bearing sets which way is up in the picture. This is the geometry
+        `DriveCamera.camera_transform` computes for carla-drive's fixed camera, with the look-at
         point's own height added, and with the bearing still setting the yaw when there is no
         standoff (where `camera_transform`'s yaw falls to 0).
 

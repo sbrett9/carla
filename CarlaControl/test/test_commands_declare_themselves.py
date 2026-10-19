@@ -37,6 +37,8 @@ WRITERS = {
     "carla-sctmv": [],
     "carla-build-world": [],
 }
+# Where a command's run creates its client, for a command whose own module does not.
+CLIENT_MODULES = {"carla-drive": "carlacontrol.DriveRun"}
 
 
 class _DeclarationReachedError(Exception):
@@ -72,7 +74,8 @@ def test_a_command_that_writes_through_carlanet_declares_its_own_name_first(name
     module = sys.modules[main.__module__]
     _Producer.declared = []
     monkeypatch.setattr(ProducerRecord, "_carlanet_producer", staticmethod(lambda: _Producer))
-    monkeypatch.setattr(module, "carla", SimpleNamespace(Client=_no_server))
+    client_module = importlib.import_module(CLIENT_MODULES.get(name, main.__module__))
+    monkeypatch.setattr(client_module, "carla", SimpleNamespace(Client=_no_server))
     monkeypatch.setattr(sys, "argv", [name, *WRITERS[name]])
 
     with pytest.raises(_DeclarationReachedError):

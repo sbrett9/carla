@@ -5,8 +5,8 @@ looks at the centre of the vehicles the session rendered on the last frame befor
 for the capture window. The middle of the world is a poor stand-in: on a corridor scenario the world
 is built around a road that runs through it, and a run aimed at the middle of its area framed a
 builder's yard while the traffic was on a highway a hundred metres away
-(`CarlaNet/python/run_sumo_drive.py`, `RenderedVehicleCentre`). The mean of the poses is not a guess about where the traffic ought to be;
-it is where the bodies were put.
+(`RenderedVehicleCentre`, which aims carla-drive's fixed camera). The mean of the poses is not a
+guess about where the traffic ought to be; it is where the bodies were put.
 
 The session hands `on_pose` one record per rendered vehicle per tick, on the thread that called
 `Advance` and before that call returns (`SumoDriveSession.ComputePoses`), so once a step's `Advance`
