@@ -21,9 +21,6 @@ The areas file itself is described in [Areas_Of_Interest.md](Areas_Of_Interest.m
 Its schema is `area_of_interest.schema.json`.\
 The package holds a byte-for-byte copy of the areas file as `areas.aoi.geojson`.
 
-- Schema: `CarlaControl/schemas/areas_resolved.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:areas-resolved:1`
-
 ## Writers and readers
 
 When the authoring reference set (the areas, place index and solar frame) is published, carlacontrol's `AreaOfInterestResolver` writes this file.\

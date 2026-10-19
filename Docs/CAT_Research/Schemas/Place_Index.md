@@ -15,9 +15,6 @@ It also says which way each edge heads.\
 With it, a scenario that names a place as "eastbound on Centerville Lane" can be resolved to edges.\
 The index also says how much of the network its names cover, because on some maps few roads are named.
 
-- Schema: `CarlaControl/schemas/place_index.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:place-index:1`
-
 ## Writers and readers
 
 When the world build publishes the authoring reference set, carlacontrol's `PlaceIndex` writes it.\

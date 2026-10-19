@@ -21,9 +21,6 @@ This file is for legacy scenarios only.\
 A compiled scenario states its supervision in its compiled supervision plan, a different file that also ends in `.supervision.json`.\
 It labels the vehicle that deviates rather than describing a gap.
 
-- Schema: `CarlaControl/schemas/supervision_gaps.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:supervision-gaps:1`
-
 ## Writers and readers
 
 If the labels describe at least one gap, `carla-cot-telemetry --labels <file>.labels.json` writes it (`carlacontrol.SupervisionSidecar`).\

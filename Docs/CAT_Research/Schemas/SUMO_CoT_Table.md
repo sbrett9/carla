@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | File | the file `carla-cot-telemetry --csv` writes, one row per vehicle per update, with `<name>.summary.json` beside it |
-| Schema | `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json`; the summary's is `sumo_cot_telemetry_summary.schema.json` |
+| Schema | `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json` (Frictionless Table Schema); the summary's is `sumo_cot_telemetry_summary.schema.json` (JSON Schema) |
 | Schema id | `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1`; the summary's is `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1` |
 | Format version | 1 |
 | Version field | `format_version`, in the summary beside the CSV |
@@ -17,11 +17,6 @@ When it opens the CSV, it also writes `<file stem>.summary.json` beside it.\
 The summary records the CSV's format version, its columns and what made it.\
 The CSV's own first line stays its header.\
 Any CSV reader can therefore read it.
-
-- Table schema: `CarlaControl/schemas/sumo_cot_telemetry.tableschema.json` (Frictionless Table Schema)
-- Table schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1`
-- Summary schema: `CarlaControl/schemas/sumo_cot_telemetry_summary.schema.json` (JSON Schema)
-- Summary schema id: `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1`
 
 ## Writers and readers
 

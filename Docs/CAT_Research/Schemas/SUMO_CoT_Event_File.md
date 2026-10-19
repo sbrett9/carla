@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | File | the file `carla-cot-telemetry --xml` writes: every event of a run, each with its whole record |
-| Schema | `CarlaControl/schemas/sumo_cot_events.xsd`, written by hand |
+| Schema | `CarlaControl/schemas/sumo_cot_events.xsd` (XSD 1.0), written by hand |
 | Schema id | `urn:carla-sumo-capture:schema:sumo-cot-events:1` |
 | Format version | 1 |
 | Version field | `format_version` |
@@ -16,9 +16,6 @@ Given `--xml <file>`, it writes every event of the run to one XML file.\
 The file is truth: each event carries the whole record.\
 The record includes the scenario author's names for its vehicle types and flows.\
 It also shows which vehicles the scenario planted.
-
-- Schema: `CarlaControl/schemas/sumo_cot_events.xsd` (XSD 1.0), root element `<events>`
-- Schema id: `urn:carla-sumo-capture:schema:sumo-cot-events:1`
 
 The events have the shape of the live feed's events, described in [CoT_Telemetry_Stream.md](CoT_Telemetry_Stream.md).\
 Each one, taken alone, is also a valid datagram.\

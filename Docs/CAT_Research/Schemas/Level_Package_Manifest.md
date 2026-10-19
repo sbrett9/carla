@@ -20,9 +20,6 @@ That file says what the world is and what it needs from the package it is instal
 This is a different file from the `world.json` inside a world package (`.cwp`).\
 [World_Package_Manifest.md](World_Package_Manifest.md) describes that file.
 
-- Schema: `CarlaControl/schemas/level_package_manifest.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:level-package-manifest:1`
-
 ## Writers and readers
 
 An Unreal tech artist imports a `.cwp` into a level with the World Package Importer.\

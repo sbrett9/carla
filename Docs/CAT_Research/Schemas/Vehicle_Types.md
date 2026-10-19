@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | File | `vehicles.vtypes.rou.xml`: the catalog in SUMO's form and the parameters these tools set on a vehicle type |
-| Schema | `CarlaControl/schemas/vehicle_types.xsd`, written by hand |
+| Schema | `CarlaControl/schemas/vehicle_types.xsd` (XSD 1.0), written by hand |
 | Schema id | `urn:carla-sumo-capture:schema:vehicle-types:1` |
 | Format version | 1 |
 | Version field | none: the file carries no version; its shape changes only with the catalog's `catalogue_version` |
@@ -21,9 +21,6 @@ So the size SUMO reserves on the road and the body CARLA draws are the same.
 
 The file is a SUMO route file that holds only types, so SUMO's own `routes_file.xsd` accepts it.\
 The schema these tools publish is narrower: it describes exactly what the writer writes.
-
-- Schema: `CarlaControl/schemas/vehicle_types.xsd` (XSD 1.0)
-- Schema id: `urn:carla-sumo-capture:schema:vehicle-types:1`
 
 ## Writers and readers
 

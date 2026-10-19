@@ -23,9 +23,6 @@ The local civil time there is +03:30.
 The scenario compiler reports the difference between the two.\
 The file never claims a civil time zone.
 
-- Schema: `CarlaControl/schemas/solar_frame.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:solar-frame:1`
-
 ## Writers and readers
 
 When the authoring reference set is published, carlacontrol's `SolarFrame` writes it from `world.json`'s origin.\

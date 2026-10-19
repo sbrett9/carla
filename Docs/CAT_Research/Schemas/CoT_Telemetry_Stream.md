@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | File | one UDP datagram of the live feed: one CoT event for one vehicle at one instant |
-| Schema | `CarlaControl/schemas/cot_telemetry.xsd`, with `cot_event_body.xsd` |
+| Schema | `CarlaControl/schemas/cot_telemetry.xsd` (XSD 1.0), with `cot_event_body.xsd` |
 | Schema id | `urn:carla-sumo-capture:schema:cot-telemetry:1` |
 | Format version | 1 |
 | Version field | none: a datagram carries no format version of these tools; `version="2.0"` is the CoT event version |
@@ -15,9 +15,6 @@ Each UDP datagram holds exactly one CoT `<event>`: one vehicle at one instant.
 
 The feed is for a moving-map display: it carries what a display needs.\
 It leaves out what only the truth files carry.
-
-- Schema: `CarlaControl/schemas/cot_telemetry.xsd` (XSD 1.0), root element `<event>`
-- Schema id: `urn:carla-sumo-capture:schema:cot-telemetry:1`
 
 A vehicle event has the same shape as a vehicle event in a capture's truth sidecar.\
 The attributes they share mean the same thing.\

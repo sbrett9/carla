@@ -19,9 +19,6 @@ So the width without mirrors is measured from the mesh in the Unreal Editor and 
 The [vehicle catalog](Vehicle_Catalogue.md) merges it as `body_width_m`.\
 The [SUMO vehicle types](Vehicle_Types.md) use it as their `width`.
 
-- Schema: `CarlaControl/schemas/vehicle_body_widths.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:vehicle-body-widths:1`
-
 ## Writers and readers
 
 `CarlaControl/scripts/measure_vehicle_body_widths.py` writes it from a folder of meshes exported from the editor as ASCII FBX, one `<blueprint id>.fbx` per vehicle.\

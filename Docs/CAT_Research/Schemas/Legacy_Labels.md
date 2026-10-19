@@ -17,9 +17,6 @@ Nothing in the tools writes this file anymore.\
 A compiled scenario's labels are its compiled supervision plan.\
 The tools still read a labels file to keep runs of the old scenarios repeatable.
 
-- Schema: `CarlaControl/schemas/legacy_labels.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:legacy-labels:1`
-
 ## Writers and readers
 
 - `carla-cot-telemetry --labels <file>` reads all three keys:

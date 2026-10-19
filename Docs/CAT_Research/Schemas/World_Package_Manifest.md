@@ -24,9 +24,6 @@ See [World_Package.md](World_Package.md) for the other entries.
 This is a different file from the `world.json` in a level package.\
 That one is described in [Level_Package_Manifest.md](Level_Package_Manifest.md).
 
-- Schema: `CarlaControl/schemas/world_package_manifest.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:world-package-manifest:1`
-
 ## Writers and readers
 
 When the world build writes the package, CarlaNet's `WorldPackage.Write` writes this file.\

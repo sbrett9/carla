@@ -27,9 +27,6 @@ An installed `carlacontrol` carries a copy.\
 SUMO's view of the same bodies is [`vehicles.vtypes.rou.xml`](Vehicle_Types.md).\
 The body widths without mirrors come from [`vehicle_body_widths.json`](Vehicle_Body_Widths.md).
 
-- Schema: `CarlaControl/schemas/vehicle_catalogue.schema.json`
-- Schema id: `urn:carla-sumo-capture:schema:vehicle-catalogue:1`
-
 ## Writers and readers
 
 `CarlaControl/scripts/make_vehicle_catalogue.py` (`VehicleCatalogueBuilder`) writes it against a running CARLA server.\
