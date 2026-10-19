@@ -8,8 +8,8 @@ description: The page template for the reference pages under Docs/CAT_Research/S
 Every page under `Docs/CAT_Research/Schemas` describes one kind of file: what writes it, what reads
 it, every field, and its format version. Forty-one such pages exist. A reader who has learnt one
 must find the same things in the same places on the next, which is what this template is for.
-The sentence rules are separate and already enforced (`.claude/writing_rules.md` in the workspace
-root, with `scratchpad/copyedit/check_layout.py`); this skill is about the shape of the page.
+The prose rules are separate, in `.claude/CLAUDE.md` at the repository root. `AGENTS.md` adds the
+layout of a page's sentences. This skill is about the shape of the page.
 
 ## The template
 
@@ -28,15 +28,16 @@ cell of its own. `Description` and `Writers and readers` are such nouns; the ver
 the field that carries it are two facts, so they are two rows.
 
 The checker names the template's heading for each older one, so renaming is mechanical. A rename
-moves an anchor: every link into the renamed heading from another page must be updated in the same
-change, which `scratchpad/copyedit/check_technical.py` lists.
+moves an anchor: every link to the renamed heading must be updated in the same change. No checker
+finds them; `git grep -n '#<old-anchor>'` does, where the anchor is the old heading in lower case
+with hyphens for spaces and the punctuation dropped.
 
 ## Writing a page
 
 1. Read the schema the page describes, under `CarlaControl/schemas/`, and the code that writes the
    file. The schema says what the writer writes; the page says what it means. Never invent a field,
    a default or a version. A fact you cannot find is a gap to report, not a sentence to write.
-2. Copy `references/template.md` and fill it, in the sentence style of the writing rules: one
+2. Copy `references/template.md` and fill it, in the sentence style `AGENTS.md` sets: one
    sentence per line, each line of a paragraph except its last ending in a backslash, no first
    person, no bold, no tacked-on clauses.
 3. Run the checker on the page:
@@ -48,9 +49,7 @@ change, which `scratchpad/copyedit/check_technical.py` lists.
    It prints every departure with the line and the template's name for the heading. Exit 0 means
    the page fits. The test `CarlaControl/test/test_schema_pages.py` runs it over the folder, so a
    page that departs fails the build.
-4. Run the sentence checks, `check_layout.py --base <commit>` and `check_technical.py <commit>`,
-   then the watermark remover, as the writing rules ask.
-5. If the page is new, add its row to the folder's `README.md`.
+4. If the page is new, add its row to the folder's `README.md`.
 
 ## When a format changes
 

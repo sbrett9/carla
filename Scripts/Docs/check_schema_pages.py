@@ -15,10 +15,10 @@ every page shares, so a reader finds the same thing in the same place on every p
   * the Format version cell holds the number alone; the Version field cell names the field that
     carries it, in backticks, or says `none` when a file of the kind carries no version field.
 
-The sentence rules are checked elsewhere (scratchpad/copyedit/check_layout.py); this script checks
-the structure only. It names every departure by page and line, with the template's name for a
-heading the older pages used, and exits 1 when any page departs, so a test can hold the folder to
-the template.
+This script checks the structure only. The sentence rules, in .claude/CLAUDE.md and the folder's
+AGENTS.md, have no checker. The script names every departure by page and line, with the template's
+name for a heading the older pages used, and exits 1 when any page departs, so a test can hold the
+folder to the template.
 
 Usage: python check_schema_pages.py [--json] [<page or folder> ...]
        With no argument, the Schemas folder of this repository.

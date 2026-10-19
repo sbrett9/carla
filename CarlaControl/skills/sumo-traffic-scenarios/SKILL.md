@@ -426,13 +426,6 @@ There the scenario writers write to `Import/`:
   `<scenario>.display.json` beside the `--config` `.sumocfg` when there is one and logs which file it
   used, or that there was none; a named file wins over a found one, and either wins outright over a
   `--labels` file's affiliations.
-- `listen_cot.py` (in the bundles) — a minimal UDP receiver to confirm the live feed.
-
-Each scenario is also shipped as a **standalone zip at the workspace root** (`GardnervilleOrbit.zip`,
-`ArapahoeUnderpass.zip`, `BahonarPatternOfLife.zip`): the four Stage-2 modules vendored into a pure
-`sumo_orbit/` package (imports rewritten), the scenario files, the source OSM + bare-earth grid, a
-CoT sample, and a README. Rebuilt by the `make_*_bundle.py` scripts in the scratchpad. The zips run
-on any box with `SUMO_HOME` set — no repo, no CARLA.
 
 ## Which vehicles a scenario may ask for
 

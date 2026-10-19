@@ -6,7 +6,7 @@ Every page describes one kind of file the capture tools write or read.\
 Every page has the same shape.\
 `Scripts/Docs/check_schema_pages.py` names every departure from it.\
 The test `CarlaControl/test/test_schema_pages.py` holds the folder to it.\
-The sentence rules are in `.claude/writing_rules.md` at the workspace root.\
+The prose rules are in `.claude/CLAUDE.md` at the repository root.\
 They apply to every sentence here.
 
 ## The header table
@@ -64,8 +64,9 @@ Everything that describes the file's content goes under Fields, never in a secti
   Every line of a paragraph except its last ends in a backslash.\
   No first person, no bold, no em dash, no clause tacked on after a comma with the word and.
 - Never rename a heading without updating every link to it.\
-  `scratchpad/copyedit/check_technical.py` lists the links.
-- Before you finish, run the checker on the page, then the layout and technical checks and the watermark remover, as the writing rules say:
+  `git grep -n '#<old-anchor>'` finds the links.\
+  The anchor is the old heading in lower case, with hyphens for spaces and the punctuation dropped.
+- Before you finish, run the checker on the page:
 
   ```
   python Scripts/Docs/check_schema_pages.py Docs/CAT_Research/Schemas/<Page>.md
