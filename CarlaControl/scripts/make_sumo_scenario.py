@@ -38,7 +38,7 @@ what `sumo_cot_telemetry.py --marked-vehicle` names by default; the specificatio
 
 **A run file is written beside the specification**, `<scenario>.run.json`, once the scenario compiles:
 `carla-capture` records 240 s from t = 600 s, one lap of a camera orbiting the block while the orbiter
-drives its laps, the orbit's centre read from the network as the middle of the block's corners.
+drives its laps, the orbit's center read from the network as the middle of the block's corners.
 
 **Where it runs.** From a checkout, under `CarlaControl/scripts/`, it writes to `Import/` against the
 checkout's world package, catalogue and staged SUMO. A distribution ships a copy beside the scenario,
