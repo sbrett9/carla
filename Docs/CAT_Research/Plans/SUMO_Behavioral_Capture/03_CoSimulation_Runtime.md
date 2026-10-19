@@ -3742,7 +3742,7 @@ nothing**, so a session that does not set it ticks as fast as the machine allows
 once, in its constructor, so a caller writing the options object afterwards changes nothing. A
 negative, infinite or NaN factor refuses the session before anything is started, as does a
 non-positive or non-finite `PacingWindowSeconds`
-(`SumoDriveSession.RequireAUsablePace`). This is `pacing.real_time_factor` of
+(`SessionOptionsCheck.RequireAUsablePace`). This is `pacing.real_time_factor` of
 [`12`](12_Operator_Control_Surface.md) §5.2.
 
 **Where the wait is.** In `SumoDriveSession.Advance()`, inside the tick loop, **immediately before each

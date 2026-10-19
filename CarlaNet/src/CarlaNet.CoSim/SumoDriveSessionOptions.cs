@@ -271,6 +271,23 @@ public sealed record SumoDriveSessionOptions(
     public IlluminationPolicy? Illumination { get; set; }
 
     /// <summary>
+    /// The illumination policy the session runs under: the one declared, or, for a session that
+    /// renders a world and declares none, <see cref="IlluminationPolicy.Default"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Time always advances. A run that does not say what its sun is doing gets an advancing sun
+    /// at a rate of 1.0. The sun starts at the civil instant the window opens and follows simulated
+    /// time. The session writes it for every frame.</para>
+    ///
+    /// <para>The records stay honest about it. The report carries the policy in force, marked
+    /// <see cref="IlluminationPolicy.Defaulted"/>. The run manifest writes it as in force with no
+    /// declared policy beside it. A session with no world renders nothing and has no sun. It takes
+    /// no default.</para>
+    /// </remarks>
+    internal IlluminationPolicy? IlluminationInForce =>
+        World is null ? Illumination : Illumination ?? IlluminationPolicy.Default;
+
+    /// <summary>
     /// Whether the generated road surface is drawn for the session.
     /// </summary>
     /// <remarks>
