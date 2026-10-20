@@ -11,7 +11,7 @@ namespace CarlaNet.CoSim.Tests;
 /// </remarks>
 public sealed class SolarLeaseTests
 {
-    /// <summary>The sizing scenario's epoch: t = 0 is midnight at the port, at +03:30.</summary>
+    /// <summary>The Shahid Bahonar Port scenario's epoch: t = 0 is midnight at the port, at +03:30.</summary>
     internal static SolarEpoch PortEpoch(bool calendarAdvances = true) => SolarEpoch.Declare(
         "2026-03-21T00:00:00+03:30", 3.5, "2026-03-20T20:30:00Z", calendarAdvances,
         dstInEffect: false, "Asia/Tehran");

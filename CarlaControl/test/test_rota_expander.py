@@ -1,6 +1,6 @@
-"""A rota expresses the sizing scenario's guard rota exactly, and a skip must plant what it claims to.
+"""A rota expresses the Shahid Bahonar Port scenario's guard rota exactly, and a skip must plant what it claims to.
 
-The honest test of the rota construct: re-expressed as a rota, the sizing scenario's guard postings
+The honest test of the rota construct: re-expressed as a rota, that scenario's guard postings
 must produce **byte-identical** departure seconds and ids from civil-time literals, or the rota does
 not express what the triple loop expressed. This compares against the 335 guard trips of the route
 file that loop shipped (`fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml`, whose `t = 0`

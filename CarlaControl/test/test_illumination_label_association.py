@@ -1,6 +1,6 @@
 """Check 41's statistic reproduces the measured figure, buckets by band, and only ever warns.
 
-`I(hour; label) / H(label)` was measured at 0.600 on the sizing scenario's contingency table (610
+`I(hour; label) / H(label)` was measured at 0.600 on the Shahid Bahonar Port scenario's contingency table (610
 route entries, 9 annotated, by departure hour). The statistic does not care what its buckets are, so
 feeding it that table must give that number; a computation that did not would be computing something
 other than what was measured. The band function is pinned at its edges, and is the table in
@@ -20,7 +20,7 @@ from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
 from carlacontrol.IlluminationBand import BAND_SOURCE, IlluminationBand  # noqa: E402
 from carlacontrol.IlluminationLabelAssociation import IlluminationLabelAssociation  # noqa: E402
 
-# Hour -> (annotated, total), the shipped sizing scenario's 610 route entries.
+# Hour -> (annotated, total), the Shahid Bahonar Port scenario's 610 route entries as it shipped.
 BAHONAR_BY_HOUR = {
     "00": (0, 21), "02": (1, 1), "06": (0, 35), "07": (0, 125), "08": (1, 15), "09": (0, 7),
     "10": (5, 40), "11": (2, 2), "12-14": (0, 35), "15": (0, 126), "16-18": (0, 56), "20": (0, 21),

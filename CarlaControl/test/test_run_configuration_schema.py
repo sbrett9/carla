@@ -1,9 +1,9 @@
 """The run configuration's schema refuses what it does not name, and is the one source of its help.
 
 An assistant generating a configuration makes mistakes that `argparse` would accept in silence: a
-misspelt key, a number where a name belongs, a field that does not exist on this build. Each must be
-a refusal naming the field and the candidates, and some must be refusals that point at the field
-that does exist -- the camera blueprint's own name for part of the exposure, which a channel sets
+misspelt key, a number where a name belongs, a field that does not exist on this build. Each of
+these mistakes must be refused with a message that names the field and the valid field names nearest
+to it. Some refusals must also point at the field that does exist -- the camera blueprint's own name for part of the exposure, which a channel sets
 with a field in the run's units, and a world build (check 38) -- because a generic "unknown key"
 would leave the operator no better off.
 

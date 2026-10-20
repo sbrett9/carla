@@ -23,7 +23,7 @@ namespace CarlaNet.CoSim;
 /// corpus's frames were lit by. <see cref="TimeZoneId"/> is carried for a reader and is never
 /// resolved. Daylight saving is part of the declared offset; <see cref="DstInEffect"/> only says
 /// whether it is, so "+02:00 standard" and "+02:00 because it is summer" read differently. Half-hour
-/// and quarter-hour offsets are ordinary: the sizing scenario's port is at +03:30.</para>
+/// and quarter-hour offsets are ordinary: Shahid Bahonar Port is at +03:30.</para>
 ///
 /// <para><b>Declared twice on purpose.</b> The instant is given as a civil time with its offset and
 /// again in UTC, and the two must agree to the second. The likeliest authoring error is an offset

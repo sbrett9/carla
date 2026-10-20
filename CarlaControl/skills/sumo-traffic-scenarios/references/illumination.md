@@ -50,18 +50,23 @@ Each band holds its upper edge. They are terms the pipeline derives, never an au
 
 ## Night
 
-**Below −6° the scene holds no light source at all**, and under SUMO drive nothing
-switches a headlight on. The compiler states each window's lowest sun elevation and its band in the
-resolution report (`capture_windows[].sun_lowest`, check 42) and concludes nothing — neither a warning
-nor a refusal — so an author who captures a night window does it knowing the number, and a night window
-still yields complete behavioural truth. At the sizing site 23:00 is −38° to −80° on every date.
+**Below −6° the sun no longer lights the scene**, and the world has no moon and no street lamps. The
+vehicles carry their own light: while SUMO drives, the session switches every rendered vehicle's
+headlights on once the sun falls below +3° and off again once it rises above +6°, so every vehicle in
+a night window has its headlights on. `carla-drive --no-vehicle-lamps` turns the lamps off for a
+control run.
+
+The compiler states each window's lowest sun elevation and its band in the resolution report
+(`capture_windows[].sun_lowest`, check 42) and concludes nothing — neither a warning nor a refusal — so
+an author who captures a night window does it knowing the number, and a night window still yields
+complete behavioural truth. At Shahid Bahonar Port, 23:00 is −38° to −80° on every date.
 
 ## The illumination–label association
 
 If behaviour correlates with the hour, the light correlates with the label, and a model trained on the
 corpus can learn the clock. The compiler computes `I(band; supervision) / H(supervision)` over the
 declared windows and over the span, records it in the lock and **warns, always, never refusing**
-(check 41): in a pattern of life the correlation is structural — the sizing scenario measures 0.600, with
+(check 41): in a pattern of life the correlation is structural — the Shahid Bahonar Port scenario measures 0.600, with
 two hours wholly annotated. Report the number to the author in words, with the degenerate bands and
 the remedies the resolution report lists.
 

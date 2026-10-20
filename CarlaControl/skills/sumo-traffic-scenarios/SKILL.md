@@ -368,11 +368,11 @@ carries none, and the compiler refuses a route file carrying anything but the ve
   A plain sentence says whether the sun climbs, sinks or holds during the window.
 - **Expect the illumination–label association (check 41) to be non-zero, and report it to the author
   in words** with the bands where one state alone occurs, the bands where both do, and the remedies. In
-  a pattern of life the correlation is structural — the sizing scenario measures 0.600 — and it is a
+  a pattern of life the correlation is structural — the Shahid Bahonar Port scenario measures 0.600 — and it is a
   warning, never a refusal. The report carries counts, ratios and bands and no word that judges them.
 - **Tell the author what light each window is under.** The resolution report states every window's
   lowest sun elevation and its band (`capture_windows[].sun_lowest`, check 42) and concludes nothing;
-  `references/illumination.md` (**Night**) says why a sun below −6° renders no lit scene. Read the
+  `references/illumination.md` (**Night**) says what lights a scene once the sun is below −6°. Read the
   number to the author; the choice is theirs.
 
 ### Sweeps and counterfactual pairs

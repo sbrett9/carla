@@ -1,8 +1,10 @@
 """An author writes civil time and the compiler emits seconds, with the session's function as authority.
 
-Every form in `CivilTimeResolver`'s table is exercised against a known answer, including the one
-that motivates the whole construct: the sizing scenario's probe departs `day * 137` seconds after
-11:00, an instant its generator states nowhere, and the resolver names it d2 11:04:34 and d5 11:11:25.
+Every time format `CivilTimeResolver` accepts -- plain seconds, a day plus a civil clock, a civil
+clock alone, an absolute civil instant, a named instant, and an offset from a named instant or a
+clock -- is tested against a known answer. One answer shows why authors write civil time: in
+the Shahid Bahonar Port scenario a probe departs `day * 137` seconds after 11:00, an instant its
+generator states nowhere, and the resolver names it d2 11:04:34 and d5 11:11:25.
 The refusals are exercised too, because a resolver that never refused a bare clock on a multi-day
 scenario would let SUMO's `H:M:S`-is-an-offset trap back in.
 """

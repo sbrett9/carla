@@ -1,6 +1,6 @@
 """run_capture writes no capture before the capture camera's tiles are in and its picture has settled.
 
-Run check 50: readiness is two conditions from two witnesses. The server says the tiles are in -- the
+Run check 50 (camera view readiness) needs two conditions from two witnesses. The server says the tiles are in -- the
 camera published on the last tick, every visible tileset at load progress 100, no failed tile in
 view -- and the camera's own frames say the picture has settled: a frame within 0.5 grey levels of
 its frame ten or more ticks earlier in its worst judged 80-pixel block, counting only frames rendered

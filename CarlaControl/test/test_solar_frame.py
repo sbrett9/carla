@@ -3,8 +3,8 @@
 The engine sets `TimeZone = longitude / 15` when it configures a world's georeference. At Bahonar that
 is +03:44:43 against Iran's civil +03:30 -- 14.72 minutes of clock, and up to 3.3 degrees of sun
 elevation near the horizon. The frame publishes the derived figure so a scenario's declared offset
-can be compared with it offline; these tests pin the figure to the three shipped worlds' origins and
-to the sizing site's correction against its declared +03:30.
+can be compared with it offline. These tests pin the figure to the origins of the three shipped
+worlds, and pin Bahonar's correction against the +03:30 its scenario declares.
 """
 from __future__ import annotations
 

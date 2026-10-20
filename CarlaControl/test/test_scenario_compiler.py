@@ -295,7 +295,8 @@ def test_the_schema_spells_the_core_s_terms_as_the_core_does():
     assert set(supervision["series"]["items"]["properties"]["supervision"]["enum"]) == states
     assert definitions["term"]["properties"]["applies_to"]["items"]["enum"] == \
         CORE_TERMS["subject_kind"] == ["entity", "cohort"]
-    # The absence shape is gone from the schema: a label follows a vehicle.
+    # The schema has no absences block, no realisation field on a term and no observability_outcome
+    # term, because every label belongs to a vehicle.
     assert "realisation" not in definitions["term"]["properties"]
     assert "absences" not in supervision
     assert "realisation" not in CORE_TERMS and "observability_outcome" not in CORE_TERMS
@@ -1032,9 +1033,9 @@ def test_an_instance_with_no_participant_is_refused_under_check_19(world, instal
 
 
 def test_the_absence_shape_is_refused_by_the_schema_under_check_53(world, installation, tmp_path):
-    """A specification written to the old absence shape -- an `absences` block, a
-    term that applies to a `slot`, a term declaring a `realisation` -- is refused at the schema, naming
-    each field, rather than read as a place's label."""
+    """A specification with an `absences` block, a term that applies to a `slot`, or a term that
+    declares a `realisation` is refused by the schema, and the refusal names each field. No label is
+    ever attached to a place."""
     block = supervision_with(world, absences=[{"name": "patrol_missed_d0_h8", "series": "kerb_patrol",
                                                "entry": "patrol_d0_h8",
                                                "labels": ["fixture:routine_patrol"]}])

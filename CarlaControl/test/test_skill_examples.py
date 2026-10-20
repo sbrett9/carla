@@ -1,11 +1,11 @@
 """The authoring skill's examples compile, and resolve to exactly what their recorded reports say.
 
 Worked examples ship beside the skill, and this file keeps them true by mechanism: each is compiled
-against the compiler's fixture world in the ordinary test run and what it resolved to is compared
+against the compiler's test street layout in the ordinary test run and what it resolved to is compared
 with the report recorded beside it. So an example that stops compiling, or
 starts resolving to something else, fails here rather than misleading an author.
 
-The fixture world is `ScenarioWorldFixture`'s street layout. An example names it as `StreetLayout.cwp`
+The test street layout is the one `ScenarioWorldFixture` builds. An example names it as `StreetLayout.cwp`
 and the catalogue by its path in the repository; the test copies each example beside a freshly built
 fixture package, points the catalogue at the repository's, and compiles. A report is compared whole,
 less the one field that names the compiling machine: the SUMO installation's path.

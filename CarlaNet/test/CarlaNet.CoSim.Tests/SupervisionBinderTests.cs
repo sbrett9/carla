@@ -456,7 +456,7 @@ public sealed class SupervisionBinderTests
     [Fact]
     public void TheBinderHoldsNoSolarType()
     {
-        // The binder has no reader for the sun, so illumination can never write supervision.
+        // SupervisionBinder has no reader for the sun, so illumination can never write supervision.
         // Every field of the binder and of every type nested in it, generic arguments included.
         List<Type> held = [];
         foreach (Type type in new[] { typeof(SupervisionBinder) }.Concat(typeof(SupervisionBinder).GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Public)))

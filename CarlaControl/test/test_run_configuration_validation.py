@@ -495,7 +495,7 @@ def test_the_echo_states_the_draw_distance_and_what_it_leaves_alone(layout):
 
 def test_the_disk_estimate_counts_the_pictures_and_says_it_leaves_the_sidecars_out(layout):
     effective, validator, findings, _, _ = offline(layout, free=10**9)
-    # The fixture's one channel at 2 Hz: its PNGs alone, at the measured size per pixel.
+    # The test run configuration's one channel at 2 Hz: its PNGs alone, at the measured size per pixel.
     values = effective.channel_values(0)
     assert validator.bytes_per_captured_second(effective) == pytest.approx(
         2.0 * PNG_BYTES_PER_PIXEL * values["width"] * values["height"])

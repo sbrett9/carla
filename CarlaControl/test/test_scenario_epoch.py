@@ -22,7 +22,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError  # noqa: E402
 
-# The sizing site's epoch: midnight of day 0 at the port, Iran at +03:30 with no daylight saving.
+# The Shahid Bahonar Port scenario's epoch: midnight of day 0 at the port, Iran at +03:30 with no daylight saving.
 BAHONAR = {
     "epoch_version": 1,
     "civil_datetime": "2026-03-21T00:00:00+03:30",

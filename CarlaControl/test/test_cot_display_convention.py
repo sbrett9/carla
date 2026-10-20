@@ -2,8 +2,8 @@
 
 The display half of the legacy `affiliation_by_type` -- civilian traffic neutral, military friendly,
 which is what makes a TAK view of the port readable -- is kept as a run display convention, and the
-half that gave every anomaly type `u` is deleted. The convention is no part of the scenario
-specification. Held here:
+half that gave every anomaly type `u` is deleted. The display convention is not part of the
+scenario specification. Held here:
 
 * **The convention is applied by population.** A compiled scenario's vType is one body of a class,
   named in its `carla:class_id` parameter, and the bridge reads the class back from the type rather
@@ -251,7 +251,8 @@ def _planted(specification: dict) -> frozenset[str]:
 
 
 def _shipped_roster() -> tuple[list[tuple[str, str]], _TypeTable]:
-    """The sizing scenario as it shipped in SUMO XML: every trip, and each flow's member types."""
+    """The Shahid Bahonar Port scenario as it shipped in SUMO XML: every trip, and each flow's member
+    types."""
     root = ET.parse(SHIPPED_ROUTES).getroot()
     table = _TypeTable("".join(ET.tostring(e, encoding="unicode") for e in root
                                if e.tag in ("vType", "vTypeDistribution")))
@@ -744,7 +745,8 @@ def test_a_compiled_vehicle_s_kinds_are_the_catalogue_s_for_its_blueprint(tmp_pa
     In the XML and the CSV every vehicle's `base_type` and `special_type` are the ones the catalogue
     curates for the blueprint its type names -- `taxi` for the cabs and no kind for every other body
     Bahonar draws -- so the army's and the port authority's classes, which SUMO's vehicle classes
-    would report as `army` and `authority`, are the cars and lorries their bodies are. No base type,
+    would report as `army` and `authority` (SUMO's class for the vehicles of a public authority, such
+    as the police), are the cars and lorries their bodies are. No base type,
     no kind and no pairing of the base type with the CoT type is carried by the planted vehicles
     alone. The callsign is built from the catalogue's base type, the datagrams carry no kind,
     nothing is marked, each type's blueprint is asked for once, and types written from this
@@ -819,7 +821,8 @@ def test_only_a_blueprint_the_catalogue_curates_takes_its_kinds_and_another_cata
     """The catalogue decides the base type and the kind; a type from another catalogue is named.
 
     The ambulance is a van and the fire appliance a truck, where their `emergency` class reads as a
-    car; the police car a car, where its `authority` class would read as `authority`; the
+    car; the police car a car, where its `authority` class (SUMO's class for the vehicles of a public
+    authority) would read as `authority`; the
     army jeep a car, where `army` reads as itself; and the three emergency bodies carry the
     emergency kind. A cab type written from an older catalogue that drew the Crown as a taxi carries
     what this catalogue gives the Crown, a car of no kind. A type naming a blueprint no class draws,

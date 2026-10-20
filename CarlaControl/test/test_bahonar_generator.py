@@ -1,5 +1,6 @@
 """The Shahid Bahonar pattern of life: what `Import/` carries is what its generator writes today, and the
-generator reproduces the sizing scenario it replaced, entry for entry, at the same local times.
+generator reproduces the scenario it replaced, the route file and labels shipped in
+`BahonarPatternOfLife.zip`, entry for entry, at the same local times.
 
 `make_bahonar_scenario.py` writes the scenario as a specification and compiles it against the world
 package. Held here:
@@ -12,7 +13,7 @@ package. Held here:
 * **Every stage after the bodies passes.** With only the unmeasured blueprints swapped for measured
   ones, the specification compiles against the world package and the session's own network check
   admits the result, so the refusal above is the whole of what stands between the scenario and a run.
-* **The sizing scenario survives.** `fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml` and
+* **The replaced scenario survives.** `fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml` and
   `.shipped.labels.json` are the route file and labels of `BahonarPatternOfLife.zip` (members sha256
   `af542454...` and `db3e5060...`, line endings here normalised to LF), written by the SUMO-XML
   generator this one replaced, whose `t = 0` was midnight of day 0. Under the 07:00 epoch every entry
@@ -450,7 +451,7 @@ def test_t0_is_07_00_at_bahonar_and_every_local_time_is_kept():
     assert guard["parameters"]["expected_shift_start"] == skips[0].depart.civil
 
 
-# ---- the sizing scenario it replaced ---------------------------------------------------------------------
+# ---- the scenario it replaced ----------------------------------------------------------------------------
 
 def resolver_for(specification: dict) -> CivilTimeResolver:
     epoch = ScenarioEpoch.read(specification["epoch"])
@@ -529,7 +530,7 @@ def test_the_guard_rota_and_the_hauls_come_back_entry_for_entry():
 
 
 def test_the_nine_planted_vehicles_come_back_with_their_roads_stops_and_local_times():
-    """The sizing scenario's nine come back; the tenth, the deviating guard, is the run's own."""
+    """The replaced scenario's nine come back; the tenth, the deviating guard, is the run's own."""
     specification = generated_specification()
     reading = Reading(specification)
     _, trips = shipped_entries()

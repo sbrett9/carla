@@ -7,7 +7,8 @@ drive `CaptureSession` against stand-ins for the client, the world, the session 
 recorders started and with which identity, and which outcome each way of failing ends in. No server
 is contacted.
 
-The values asserted are derived from the fixture, not read from the code under test: the session's
+Each expected value is worked out from the run configuration, scenario package and world package the
+test writes, never read from the code under test: the session's
 region is the render region with y negated (SUMO's frame), its warm-up is the window's begin less
 the prewarm, the window opens at its own begin, and a stare camera stands where `StareAim` puts it.
 

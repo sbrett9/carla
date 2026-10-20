@@ -15,7 +15,7 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>A pure, total function of the signal word and nothing else.</b> SUMO writes only the
 /// blinkers, the brake light and, for a vehicle of <c>vClass="emergency"</c>, the blue beacon
-/// (<c>MSVehicle.h:1108-1139</c>, measured over the sizing scenario); the other bits it declares are
+/// (<c>MSVehicle.h:1108-1139</c>, measured over the Shahid Bahonar Port scenario); the other bits it declares are
 /// mapped where CARLA has a lamp for them, for completeness, and never occur. SUMO has no headlight
 /// model, so <c>Position</c> and <c>LowBeam</c> never come from here; <see cref="HeadlightRule"/>
 /// supplies them from the sun. <c>HighBeam</c>, <c>Fog</c> and <c>Interior</c> are never set: asserting

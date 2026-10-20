@@ -119,7 +119,8 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(13, OFFLINE, "The window's civil span is computable from the epoch", _R, RUN_CAPTURE,
              "ScenarioEpoch, which reads the epoch with the session's SolarEpoch"),
     RunCheck(14, OFFLINE, "A window darker than -6 degrees states solar.vehicle_lights", (),
-             NOT_BUILT, "the session writes no vehicle lamps, so there is no field to state"),
+             NOT_BUILT, "the run configuration has no solar.vehicle_lights field: the session "
+             "switches every vehicle's headlights by the sun"),
     RunCheck(15, OFFLINE, "The illumination object is one a capture run permits: accepted by "
              "IlluminationPolicy, and advancing only at one sun-second per simulated second; "
              "'ignore' warns", _RW, RUN_CAPTURE, "RunConfigurationValidator",

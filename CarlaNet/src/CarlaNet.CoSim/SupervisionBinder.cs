@@ -45,8 +45,8 @@ namespace CarlaNet.CoSim;
 /// is the SUMO vehicle's for its life, and a span with no body is recorded as not drawn.
 /// <c>render_released</c>, a body the CARLA side lost, has no producer yet.</para>
 ///
-/// <para><b>Nothing is invented for the time before the window.</b> The binder sees SUMO from the first
-/// frame the session reads. A plan subject already in the simulation there is read back once -- its
+/// <para><b>Nothing is invented for the time before the window.</b> <c>SupervisionBinder</c> sees SUMO
+/// from the first frame the session reads. A plan subject already in the simulation there is read back once -- its
 /// departure, the stops it has completed and the one under way, its route index -- and each event SUMO
 /// stamped becomes the committed onset of an interval that began before the window, at the stamp plus
 /// one SUMO step, which is the clock of the step that would have listed it. A phase entered

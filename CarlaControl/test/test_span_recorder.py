@@ -2,8 +2,8 @@
 
 `SpanRecorder` is the F key of the free view `run_sumo_drive.py --view free` opens. A camera flown to
 new ground renders it while Cesium is still streaming it, so a span waits for the server to say the
-camera's tiles are in before it starts, gives up at a 90 s wall-clock ceiling, and never starts
-before the capture window opens. The native recorder, the server's readiness answers
+camera's tiles are in before it starts. If the tiles are not in after 90 s of wall-clock time, the
+span is not started. A span never starts before the capture window opens. The native recorder, the server's readiness answers
 and the clocks are stand-ins here, so each rule is asserted exactly; one test runs the recorder's
 own thread to show that starting and stopping happen there and not on the caller's.
 """

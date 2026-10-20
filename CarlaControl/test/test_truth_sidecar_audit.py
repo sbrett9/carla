@@ -81,11 +81,10 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
             unmeasured: str | None = "no_depth_camera", box: bool = True,
             lights: str | None = AS_WRITTEN, pose_source: str | None = AS_WRITTEN) -> str:
     """A vehicle record as `CotWriter` writes one: where its box fell against the picture, and either
-    the five occlusion fields (`occlusion` given) or the reason they are absent (`unmeasured`); None
-    for either leaves it out, as a recorder written before 2026-10-05 did. A record in the picture
-    carries its box, as the recorder has written it since 2026-10-06, unless `box` is false, as one
-    written before then did not; and its lights, and a SUMO vehicle's its pose source, as the recorder
-    writes them since that date, unless given None, or another value written whatever the place."""
+    the five occlusion fields (`occlusion` given) or the reason they are absent (`unmeasured`). None
+    for either leaves that field out. A record in the picture carries its box unless `box` is false.
+    It carries its lights and, for a SUMO vehicle, its pose source as `CotWriter` writes them; None
+    leaves the attribute out, and any other value is written as given wherever the vehicle is."""
     identity = "" if sumo_id is None else (
         f' sumo_id="{sumo_id}" vtype_id="passenger" admitted_tick="100"')
     place = "" if in_frame is None else f' in_frame="{in_frame}"'
@@ -265,8 +264,8 @@ def test_sidecars_named_after_their_camera_and_those_from_before_cameras_had_nam
 
 
 # A supervised drive's sidecars, as `CotWriter` writes them from the supervision the server carried on
-# the frame: the plan on the container, every SUMO vehicle's state. STRAY is the world-scoped element
-# an older recorder wrote: a label with no vehicle, which the audit faults.
+# the frame: the plan on the container, every SUMO vehicle's state. STRAY is a <_supervision> element
+# outside every vehicle record, a label attached to no vehicle, which the audit counts as a defect.
 PLAN = "Shahid_Bahonar_Port_PatternOfLife"
 DIGEST = "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad"
 STRAY = (f'  <_supervision scope="world" vocabulary="3" vocabulary_digest="{DIGEST}">\n'
@@ -349,8 +348,8 @@ def test_a_state_outside_the_three_and_states_contradicting_their_annotations_ar
 
 
 def test_a_supervision_element_outside_a_vehicle_record_and_a_sidecar_saying_nothing_are_defects(tmp_path):
-    # A sidecar an older recorder wrote, carrying a world-scoped element: a label with
-    # no vehicle to follow, which no recorder writes now and the audit faults.
+    # A <_supervision> element outside every vehicle record is a label attached to no vehicle, and the
+    # audit counts the sidecar carrying it as a defect.
     supervised_sidecar(tmp_path, 100, [supervised_vehicle("CARLA-TRUTH-SUMO-a", 1, "a", "unlabelled")],
                        stray=True)
     # A sidecar of the same run that names no plan and does not say its supervision was unknown.
@@ -413,8 +412,8 @@ def test_a_capture_whose_every_record_says_where_it_fell_and_why_has_no_defect(t
 
 
 def test_a_record_that_does_not_say_whether_it_is_in_the_picture_is_a_defect(tmp_path):
-    # A capture written before the recorder said where each vehicle fell: the fields are simply absent,
-    # a silence the audit counts as a defect.
+    # A record with neither in_frame nor occlusion_unmeasured does not say whether its vehicle is in
+    # the picture, and the audit counts it as a defect.
     sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame=None, unmeasured=None),
                             vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b")],
             vehicles="rendered")
@@ -658,9 +657,9 @@ def test_lights_or_a_pose_source_outside_the_picture_on_no_sumo_vehicle_or_in_ot
     assert [record.sumo_id for record in result.records_with_unknown_pose_source] == ["c"]
     assert len(result.defects(sumo_drive=False)) == 4
 
-def test_the_words_an_older_recorder_wrote_are_outside_the_recorder_s(tmp_path):
-    # The recorder writes sumo, interpolated, jump or stale; the words an older recorder wrote are no
-    # longer among them.
+def test_a_pose_source_outside_the_four_words_is_a_defect(tmp_path):
+    # CotWriter writes one of four words for a pose source: sumo, interpolated, jump or stale. A record
+    # carrying any other word, such as simulated or held, is a defect.
     sidecar(tmp_path, 100, [
         vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights="none", pose_source="simulated"),
         vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", lights="none", pose_source="held")],

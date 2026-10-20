@@ -12,7 +12,7 @@ namespace CarlaNet.CoSim;
 /// signal bits and never writes any of them, so a headlight is not something the simulation knows. What
 /// is known is the sun, so the rule asserts <c>Position | LowBeam</c> once the sun's elevation falls
 /// below <see cref="OnBelowDegrees"/> and clears it once the elevation rises above
-/// <see cref="OffAboveDegrees"/>, +3 and +6 degrees by default. At the sizing site the sun takes about
+/// <see cref="OffAboveDegrees"/>, +3 and +6 degrees by default. At Shahid Bahonar Port the sun takes about
 /// fourteen minutes to cross that band, so a window sees at most one switch and no chatter.</para>
 ///
 /// <para><b>The elevation is the one the world reports</b> -- the geometric elevation it publishes with

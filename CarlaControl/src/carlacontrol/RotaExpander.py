@@ -1,6 +1,6 @@
 """A rota: the one repetition form a specification has, written as days x civil clocks x subjects.
 
-The sizing scenario's guard rota is a triple loop over seven days, three shift changes and sixteen
+The Shahid Bahonar Port scenario's guard rota is a triple loop over seven days, three shift changes and sixteen
 towers with one iteration skipped to leave a posting unmanned (`CarlaControl/scripts/make_bahonar_scenario.py`,
 `tower_postings`). As a rota it is one block:
 
@@ -19,7 +19,7 @@ with an explicit exclusion list. Each entry departs at `d<day> <clock>` under th
 `CivilTimeResolver`, so the civil meaning of every departure is recoverable from the artifact.
 
 **A skip removes an occasion, so it must hit something** (check 48). A skip matching no entry is an
-anomaly that was never planted -- the whole of the sizing scenario's no-show rests on one `continue`
+anomaly that was never planted -- the whole of that scenario's no-show rests on one `continue`
 firing -- and a skip carries its reason as a field, so the report can state it. A skipped occasion
 writes no trip and no supervision row: there is no vehicle for a label to follow, so the
 gap it makes in the schedule is stated by the report, and an author who wants it in the record labels

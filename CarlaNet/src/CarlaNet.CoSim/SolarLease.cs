@@ -20,7 +20,7 @@ namespace CarlaNet.CoSim;
 /// together and the sun is recomputed once. Then <c>set_time_advance(false, 0)</c>, under every
 /// policy: the engine's own advance is never used. Setting the zone to the declared offset is what
 /// makes the clock civil time rather than local mean solar time at the map's longitude, a difference
-/// of 14 minutes 43 seconds at the sizing site.</para>
+/// of 14 minutes 43 seconds at Shahid Bahonar Port.</para>
 ///
 /// <para><b>Under <c>advance</c>, one write per frame.</b> <see cref="WriteForFrame"/> writes the sun
 /// for the frame the world is about to render, before its tick cue, so the frame is lit by the sun

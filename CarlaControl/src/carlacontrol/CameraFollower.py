@@ -22,9 +22,9 @@ from .StareAim import StareAim
 class CameraFollower:
     """Watches a world through one camera of its own, and changes nothing else in it.
 
-    It is a *camera follower*: it follows the world's clock and never cues it.
-    Whoever owns the clock -- `run_sumo_drive.py` while SUMO drives -- decides when the world
-    advances, and this process only sees the frames that result. In every state it:
+    It is a *camera follower*: another process owns the world's clock -- `run_sumo_drive.py` while
+    SUMO drives -- and decides when the world advances. This process only shows the frames that
+    result and never advances the world itself. In every state it:
 
     * never calls `world.tick()` and never writes episode settings;
     * never touches the sun, the weather, layer visibility or the map;

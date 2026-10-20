@@ -1,7 +1,8 @@
 """A camera follower watches the world and changes nothing in it but its own camera.
 
-The world's clock has one owner: while SUMO drives, that is the drive, and a camera-follower process
-follows that clock and never cues it. A viewer that ticked the world would
+One process owns the world's clock and decides when the world advances. While SUMO drives, that
+process is the drive. A camera follower only shows the frames the drive produces and never advances
+the world itself. A viewer that ticked the world would
 advance SUMO's rendering out from under the drive; one that wrote episode settings could drop a
 synchronous drive into free-running; one that touched the sun, a layer or the map would change what
 the drive is recording; and one that cleaned up by destroying actors could take the drive's vehicles

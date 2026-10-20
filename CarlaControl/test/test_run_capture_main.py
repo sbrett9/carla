@@ -2,9 +2,8 @@
 
 The short options are generated from the fields' aliases, so each is exercised here for the field it
 sets and for its precedence below `--set`. Only paths that contact no server are run: `--validate-only`,
-offline refusals and those before them, `--help` and `--write-schema`. The exit status is compared with the
-outcome read back from the result file, because the status is read from the result's `outcome`
-(`RunResult.exit_status`).
+offline refusals and those before them, `--help` and `--write-schema`. The tests compare each exit status with the
+outcome in the result file, because `RunResult.exit_status` derives the status from that outcome.
 """
 from __future__ import annotations
 

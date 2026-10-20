@@ -31,8 +31,8 @@ ground truth and knows everything, including which vehicles a scenario author pl
 author called them. The XML and CSV are the truth sidecar and are written from the whole record. The
 datagram feed is a moving-map display and is given what a display needs, which leaves out the fields
 named in `AUTHORED_TRUTH_FIELDS`. A field means one thing in every sink: `special_type` is the
-vehicle's kind as the contract spells it and never the author's marking, which the sidecar carries
-in `marked`, a field of its own and not of the contract. SUMO reports no kind, and its vehicle class
+vehicle's kind (`emergency`, `taxi`, `electric` or empty) and never the author's marking, which the
+sidecar carries in `marked`, a field of its own. SUMO reports no kind, and its vehicle class
 is no base type, so both are the measured vehicle catalogue's for the CARLA blueprint a vehicle's
 type names, where the bridge is given the catalogue, exactly as the capture path's truth takes them;
 only a type that names none of the catalogue's blueprints has its base type read from its vehicle
@@ -78,7 +78,7 @@ XML_FORMAT_VERSION = 1
 CSV_FORMAT_VERSION = 1
 CSV_SUMMARY_SUFFIX = ".summary.json"
 
-# SUMO's own vehicle classes as the contract's base_type, for a vehicle whose type names no blueprint
+# SUMO's own vehicle classes as a truth record's base_type, for a vehicle whose type names no blueprint
 # the catalogue curates: a type that names one takes the catalogue's base type, because a class says
 # how SUMO drives a vehicle and not what it is -- an ambulance's `emergency` reads as a car here, a
 # police car's `authority` as nothing at all. Anything unlisted is reported as it comes.

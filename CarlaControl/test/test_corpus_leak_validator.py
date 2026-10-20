@@ -1,6 +1,6 @@
 """What the truth sidecar a Bahonar run writes says about its planted vehicles, and in which field.
 
-A corpus is generated here rather than asserted about in the abstract: the sizing scenario's own
+A corpus is generated here rather than asserted about in the abstract: the Shahid Bahonar Port scenario's own
 definitions -- the vehicle types, trips, flows and labels it shipped with,
 `fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml` and `.shipped.labels.json` -- drive the
 real `SumoCotBridge` writers through a stand-in for TraCI, so what is checked is the file the
@@ -71,7 +71,8 @@ PRE_REPAIR_CSV_COLUMNS = [
 
 
 class _ShippedScenario:
-    """The sizing scenario as it shipped: its vehicle types, scheduled trips, flows and labels."""
+    """The Shahid Bahonar Port scenario as it shipped: its vehicle types, scheduled trips, flows
+    and labels."""
 
     def __init__(self) -> None:
         root = ET.parse(SHIPPED_ROUTES).getroot()
@@ -370,12 +371,13 @@ def test_the_check_names_every_field_that_separates_the_two_groups(corpus, marke
 
 @pytest.mark.parametrize("sink", ["csv", "xml"])
 def test_the_check_still_catches_a_special_type_that_says_marked(corpus, marked_ids, sink):
-    """The control: the corpus as the writer used to produce it is caught on `special_type`.
+    """The check catches planted vehicles marked in `special_type`, in the CSV and in the XML.
 
-    The writer used to give every planted vehicle `special_type="marked"`, the answer in the
-    vehicle-kind field. Put that value back into either written sink and the check names
-    it, on all nine planted vehicles and no other, so its silence on the corpus written today is
-    measured rather than assumed.
+    `special_type` says what kind of vehicle a record is (`emergency`, `taxi`, `electric` or empty).
+    A planted vehicle marked there would give its answer away to a model trained on the output. The
+    test first asserts that the check finds nothing in `special_type` on the output as written, then
+    writes `special_type="marked"` on every planted vehicle and asserts that the check names that
+    value on all nine planted vehicles and on no other.
     """
     csv_path, xml_path = corpus
     records = _rows(csv_path) if sink == "csv" else list(
