@@ -3,7 +3,7 @@
 // from the camera, the body's tilt, and the box's eight corners in latitude, longitude and bare-earth
 // height converted as the record's own point is -- and no other vehicle does: the owner's rulings of
 // 2026-10-06. Every number below is worked by hand from the camera's pinhole and the box's corners.
-// See <_carla> and <_box3d> in Docs/CAT_Research/Schemas/Truth_Sidecar.md.
+// See <_carla> and <_box3d> in Docs/Schemas/Truth_Sidecar.md.
 using System.Xml.Linq;
 using CarlaNet.Recording;
 

@@ -20,7 +20,7 @@ from carlacontrol.RunResult import OUTCOMES, RunResult  # noqa: E402
 PLAN_STATUSES = {"run_finished": 0, "usage_error": 1, "refused_offline": 2, "refused_server": 3,
                  "refused_authority": 4, "refused_preroll": 5, "run_stopped": 6,
                  "internal_error": 7}
-PLAN_12 = (_REPO / "Docs" / "CAT_Research" / "Plans" / "SUMO_Behavioral_Capture"
+PLAN_12 = (_REPO / "Docs" / "Plans" / "SUMO_Behavioral_Capture"
            / "12_Operator_Control_Surface.md")
 
 

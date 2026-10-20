@@ -3,7 +3,7 @@
 // box's eight corners projected through the camera's pinhole and nothing else; and where its occlusion
 // was not measured, why. The owner's ruling of 2026-10-05: a truth field carries what was declared, what
 // happened, or a measurement from the frame's geometry by a fixed published method with no pass mark.
-// See the <_carla> truth record in Docs/CAT_Research/Schemas/Truth_Sidecar.md.
+// See the <_carla> truth record in Docs/Schemas/Truth_Sidecar.md.
 using System.Xml.Linq;
 using CarlaNet.Recording;
 

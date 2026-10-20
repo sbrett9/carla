@@ -1,4 +1,4 @@
-// The illumination bands of Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/11_Time_And_Illumination.md
+// The illumination bands of Docs/Plans/SUMO_Behavioral_Capture/11_Time_And_Illumination.md
 // §4.4, pinned at the edges that section names. This table is the only definition in the tree: the
 // recorder writes each capture's band from it, and CarlaControl's statistic and vocabulary read it
 // through carlanet (CarlaControl/test/test_illumination_label_association.py pins the same edges there).

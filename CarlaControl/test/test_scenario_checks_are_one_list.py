@@ -23,7 +23,7 @@ from carlacontrol.ScenarioSchema import SCHEMA  # noqa: E402
 from carlacontrol.ScenarioSweep import SWEEP_SCHEMA  # noqa: E402
 
 SKILL = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios"
-PLAN = _REPO / "Docs" / "CAT_Research" / "Plans" / "SUMO_Behavioral_Capture" / "07_Scenario_Authoring.md"
+PLAN = _REPO / "Docs" / "Plans" / "SUMO_Behavioral_Capture" / "07_Scenario_Authoring.md"
 SOURCES = _REPO / "CarlaControl" / "src" / "carlacontrol"
 
 

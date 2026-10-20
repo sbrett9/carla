@@ -83,9 +83,9 @@ becomes the regression fixture every later stage runs against.
 
 Binding. Several exist because ignoring them has already cost this project real work.
 
-**Conventions.** [`CLAUDE.md`](../../../../CLAUDE.md) — no conversational jargon in committed code or
+**Conventions.** [`CLAUDE.md`](../../../CLAUDE.md) — no conversational jargon in committed code or
 commit messages; no `Option A`, no `Phase 2b`, no `step N`. Name the concept.
-[`AGENTS.md`](../../../../AGENTS.md) — Python conventions: union type syntax, import layout, logging,
+[`AGENTS.md`](../../../AGENTS.md) — Python conventions: union type syntax, import layout, logging,
 one class per file, the two class shapes.
 
 **Measure, don't theorise.** A systemic explanation offered ahead of a measurement has repeatedly been

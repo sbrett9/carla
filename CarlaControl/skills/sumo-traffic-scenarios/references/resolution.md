@@ -4,7 +4,7 @@ A route never carries a bare edge id and a departure never carries a multiplied 
 names a place or writes a civil time; the compiler resolves each, **refuses rather than guesses**, and
 states in the resolution report what everything became. Read the report back.
 
-Design record: `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §4.
+Design record: `Docs/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §4.
 Resolvers: `CarlaControl/src/carlacontrol/PlaceResolver.py::PlaceResolver` and
 `CarlaControl/src/carlacontrol/CivilTimeResolver.py::CivilTimeResolver`.
 

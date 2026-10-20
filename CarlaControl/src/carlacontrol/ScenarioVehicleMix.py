@@ -5,7 +5,7 @@ car-following model reserves and the space a junction counts as occupied, and th
 bridge converts SUMO's front-bumper reference point to CARLA's actor origin using that same length.
 The vehicle SUMO reserved road for and the vehicle CARLA draws therefore have to be the same one,
 which is what the vehicle mapping contract fixes (contract `C1` in
-`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md`).
+`Docs/Plans/SUMO_Behavioral_Capture/04_Contracts.md`).
 
 This is the authoring half of that contract. A scenario declares what kinds of vehicle its traffic is
 made of and how each kind drives; this class supplies the bodies, from the measured catalogue and

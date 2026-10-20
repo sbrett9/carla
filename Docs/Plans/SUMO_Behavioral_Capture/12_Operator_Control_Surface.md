@@ -588,7 +588,7 @@ stops us, and nothing in this surface depends on either happening.
 
 ### 3.9 The classes
 
-Under [`AGENTS.md`](../../../../AGENTS.md): one public class per file, the file named for the class in
+Under [`AGENTS.md`](../../../AGENTS.md): one public class per file, the file named for the class in
 PascalCase, modern union hints, absolute imports outside the package, all imports at the top,
 `logging` rather than `print`, and a thin `main` that parses, constructs and calls.
 

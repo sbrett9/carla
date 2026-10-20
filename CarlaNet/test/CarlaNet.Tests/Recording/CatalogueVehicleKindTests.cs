@@ -1,6 +1,6 @@
 // The truth record's base_type and special_type come from the vehicle catalogue. See
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md D6.18 and
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md §3.4.3.
+// Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md D6.18 and
+// Docs/Plans/SUMO_Behavioral_Capture/04_Contracts.md §3.4.3.
 //
 // The content build's own base_type and special_type are hand-edited: when the catalogue was first
 // swept six saloons declared themselves buses, a van declared nothing, and every special_type was

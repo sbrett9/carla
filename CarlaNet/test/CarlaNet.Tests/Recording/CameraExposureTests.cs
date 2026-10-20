@@ -1,5 +1,5 @@
 // The exposure a camera was given, read from its attributes and written on every capture beside the
-// intrinsics. See Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §4.8 and
+// intrinsics. See Docs/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §4.8 and
 // D8.26-D8.28: a declared camera fact, as the intrinsics are, read from the camera as the server spawned
 // it, by the rule the plugin applies the attributes with (ActorBlueprintFunctionLibrary.cpp,
 // ApplyCameraExposureAttributes).

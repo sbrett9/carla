@@ -16,7 +16,7 @@ Two fixes answer it, and this check proves each on its own:
     pass once the wheel is rebuilt, whatever the server does, and the recorder's disagreement count
     says what the server did.
 
-Plan: Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md section 9.6.
+Plan: Docs/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md section 9.6.
 
 What it does, on the generated world the server has loaded (the recorder needs its georeference):
 

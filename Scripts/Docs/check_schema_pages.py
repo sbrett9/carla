@@ -1,4 +1,4 @@
-"""Check the reference pages under Docs/CAT_Research/Schemas against their page template.
+"""Check the reference pages under Docs/Schemas against their page template.
 
 Each page there describes one kind of file these tools write or read. The template fixes the shape
 every page shares, so a reader finds the same thing in the same place on every page:
@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-SCHEMAS = REPOSITORY / "Docs" / "CAT_Research" / "Schemas"
+SCHEMAS = REPOSITORY / "Docs" / "Schemas"
 # The Markdown files in the folder that are not pages: the index, and the rules for an assistant.
 NOT_PAGES = {"README.md", "AGENTS.md", "CLAUDE.md"}
 

@@ -1,7 +1,7 @@
 """The typed description of one camera channel, and the one place its defaults are defined.
 
 Field names and defaults follow the per-channel camera-rig rows of
-`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md` section 5.2. A
+`Docs/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md` section 5.2. A
 front end that offers one of these fields reads its default from here (`default_of`) rather than
 writing the number again, because a default written twice is a default that drifts (the same
 document's section 1.5 measured three that already had).

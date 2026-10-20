@@ -24,7 +24,7 @@ from carlacontrol.RunConfigurationCheckCatalogue import (  # noqa: E402
     RunConfigurationCheckCatalogue,
 )
 
-PLAN_12 = (_REPO / "Docs" / "CAT_Research" / "Plans" / "SUMO_Behavioral_Capture"
+PLAN_12 = (_REPO / "Docs" / "Plans" / "SUMO_Behavioral_Capture"
            / "12_Operator_Control_Surface.md")
 NO_DEFAULT_MARKS = ("**—**", "**cond.**")
 

@@ -4,7 +4,7 @@ The sun is derived context. A scenario declares what its time means and a defaul
 behaves; the operator chooses the window and may override the policy; the pipeline records the sun it
 got. Light is never a label.
 
-Design record: `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5.2,
+Design record: `Docs/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5.2,
 §5.6 and §8.2.2; the bands and the night verdict are `11_Time_And_Illumination.md` §4.4 and D11.7.
 
 ## The illumination default

@@ -24,7 +24,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.ChannelDescription import ChannelDescription  # noqa: E402
 
-PLAN_12 = (_REPO / "Docs" / "CAT_Research" / "Plans" / "SUMO_Behavioral_Capture"
+PLAN_12 = (_REPO / "Docs" / "Plans" / "SUMO_Behavioral_Capture"
            / "12_Operator_Control_Surface.md")
 
 # The values the camera-rig table gave these fields when this class was written, repeated so that

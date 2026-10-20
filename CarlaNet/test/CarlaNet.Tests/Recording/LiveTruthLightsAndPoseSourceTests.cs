@@ -1,7 +1,7 @@
 // Each vehicle in the picture carries the lights commanded on for it and, where a SUMO drive lent it a
 // body, where its drawn pose came from -- both from the world-observer snapshot of the capture's own
 // frame, never from the recording process (the owner's rulings of 2026-10-05 and 2026-10-06). See
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §5.1 and §6.4.
+// Docs/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §5.1 and §6.4.
 //
 // A stand-in server streams a real client the snapshots a drive produces, and a recorder given no source
 // of its own writes the sidecar: the pose source is computed from the frame's own number against the

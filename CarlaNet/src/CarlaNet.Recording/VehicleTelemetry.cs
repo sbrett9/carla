@@ -5,8 +5,8 @@ using CarlaNet.Types.Streaming;
 namespace CarlaNet.Recording;
 
 /// <summary>
-/// One vehicle's truth telemetry at an instant — the field set of the <_carla> truth record in
-/// Docs/CAT_Research/Schemas/Truth_Sidecar.md. Heights are ellipsoidal WGS84 (HAE). This is the single source of truth
+/// One vehicle's truth telemetry at an instant — the field set of the <c>_carla</c> truth record in
+/// Docs/Schemas/Truth_Sidecar.md. Heights are ellipsoidal WGS84 (HAE). This is the single source of truth
 /// consumed by both the CoT-XML sidecar (recorder) and the Python get_vehicle_telemetry shim.
 /// </summary>
 public sealed record VehicleTelemetry(

@@ -362,7 +362,7 @@ audited, **not required**. The RPC name mismatch it found stays a recorded defec
   Numbered stages are fine *only* when each also carries a descriptive name that stands alone.
 - **Windows and Linux script parity.** Any change to `Scripts/Windows/*.ps1` requires its
   `Scripts/Linux/*.sh` counterpart in the same change, help text and documentation included.
-- **Python conventions** are in [`carla/AGENTS.md`](../../../../AGENTS.md): one public class per file,
+- **Python conventions** are in [`carla/AGENTS.md`](../../../AGENTS.md): one public class per file,
   file named for the class in PascalCase, modern union type hints (`X | None`), absolute imports
   outside the package, all imports at the top, `logging` not `print`, thin `main`.
 - **C# lives in `CarlaNet/src/CarlaNet.*`**; a new assembly may only reference assemblies that do

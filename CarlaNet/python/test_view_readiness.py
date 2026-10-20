@@ -4,7 +4,7 @@
 get_view_readiness(actor) is the tile half of a capture's readiness: only the server can see tiles
 stream. It answers as of the end of the last tick: the frame, whether the camera's view drove the
 tilesets' selection on that tick ("published"), and per tileset its load progress, load queues and
-failed tiles. Plan: Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md 9.5.1.
+failed tiles. Plan: Docs/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md 9.5.1.
 
 What it does, on the generated world the server has loaded (a stock map has no tilesets to report):
 

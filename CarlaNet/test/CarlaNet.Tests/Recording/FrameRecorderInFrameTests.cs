@@ -2,8 +2,8 @@
 // where its occlusion was not measured, why -- whether or not a depth camera is attached. The owner
 // ruled (2026-10-05) that the five occlusion fields may no longer simply be absent: a reader could not
 // tell "no occlusion value" from "not hidden". See in_frame and
-// occlusion_unmeasured in Docs/CAT_Research/Schemas/Truth_Sidecar.md, and
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2.
+// occlusion_unmeasured in Docs/Schemas/Truth_Sidecar.md, and
+// Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2.
 //
 // A stand-in server streams a real FrameRecorder a world of four vehicles under a camera looking
 // straight down from 100 m -- one under the camera, one far outside the picture, one above the camera

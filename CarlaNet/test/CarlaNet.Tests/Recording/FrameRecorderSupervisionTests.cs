@@ -1,7 +1,7 @@
 // Each capture's truth sidecar carries the supervision in force on its own frame, as the server carried it
 // on that frame's world-observer snapshot -- never from a source in the recording process, so a recorder in
 // any process writes the same thing (the owner's ruling of 2026-10-05). See
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2 and D6.41.
+// Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2 and D6.41.
 //
 // A stand-in server streams a real client the snapshots a supervised drive produces -- the render set and
 // the supervision block inside it -- and a camera's images, and the recorder's files and counters are read

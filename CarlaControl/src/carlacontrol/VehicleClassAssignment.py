@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # The truth record's `base_type` vocabulary, as the CoT contract publishes it
-# (`base_type` in Docs/CAT_Research/Schemas/CoT_Telemetry_Stream.md).
+# (`base_type` in Docs/Schemas/CoT_Telemetry_Stream.md).
 COT_BASE_TYPES = frozenset({"car", "van", "truck", "bus", "motorcycle", "bicycle"})
 
 # The truth record's `special_type` vocabulary from the same source: emergency covers fire, ambulance

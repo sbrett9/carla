@@ -646,7 +646,7 @@ $netconvert = Join-Path $sumoInstall 'bin\netconvert.exe'
 $sumoRequiredBinaries = @('netconvert.exe', 'sumo.exe', 'duarouter.exe', 'sumo-gui.exe')
 # sumo-gui is staged for development: watching a co-simulation drive. MakeDistribution's own list
 # leaves it out, because whether a distribution carries it is an open decision that turns on FOX's
-# LGPL (Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/09_Toolchain_And_Packaging.md section 5.4).
+# LGPL (Docs/Plans/SUMO_Behavioral_Capture/09_Toolchain_And_Packaging.md section 5.4).
 # A NAMED SUBSET of data/ and tools/, not the whole of either. Measured: the full copy is 89 MB to
 # deliver the 3.2 MB anything here consumes, and tools\contributed alone is 47 MB of third-party
 # contributions that would each need a row in the distribution's licence manifest. Add a directory

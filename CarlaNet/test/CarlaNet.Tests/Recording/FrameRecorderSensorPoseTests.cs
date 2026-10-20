@@ -1,7 +1,7 @@
 // A capture's platform pose is the pose its own image was taken from, which is the camera's pose in
 // the client's snapshot of the image's frame -- not the pose in the image's sensor header, and not
 // wherever the camera has been moved to by the time the recorder handles the image. See
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md §9.6.
+// Docs/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md §9.6.
 //
 // The header was once taken to be the image's pose, on the understanding that the server stamped it
 // in the game-thread call that captures the frame. It did not, on this path: the camera's image is

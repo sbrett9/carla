@@ -148,7 +148,7 @@ def assert_plain(texts, where: str, rules: dict[str, str] = EVERY_RULE) -> None:
 
 @pytest.mark.parametrize("text", [
     "a view not ready refuses the run (03 §9.5.1)", "see 12 D12.8", "as doc 10 measured",
-    "in 07_Scenario_Authoring.md", "Docs/CAT_Research/Findings/x", "07 §12 question 12",
+    "in 07_Scenario_Authoring.md", "Docs/Plans/x", "07 §12 question 12",
     "by the owner's ruling of 2026-10-06", "The owner checks supervision live", "in metres",
     "the orbit centre", "a flat grey ribbon", "a corpus with no hard negatives", "the guard rota",
     "eligible 12, drawn 4", "where the vehicle lands", "pulls to the kerb", "photon budget"])

@@ -46,7 +46,7 @@ from carlacontrol.SchemaPublication import SchemaPublication  # noqa: E402
 
 SCHEMAS = _REPO / "CarlaControl" / "schemas"
 SKILL_SCHEMAS = _REPO / "CarlaControl" / "skills" / "sumo-traffic-scenarios" / "schemas"
-PAGES_DIRECTORY = _REPO / "Docs" / "CAT_Research" / "Schemas"
+PAGES_DIRECTORY = _REPO / "Docs" / "Schemas"
 INDEX = PAGES_DIRECTORY / "README.md"
 # The rules for whoever writes a page here: they sit beside the pages but describe no kind of file.
 RULES_FILES = {"AGENTS.md", "CLAUDE.md"}

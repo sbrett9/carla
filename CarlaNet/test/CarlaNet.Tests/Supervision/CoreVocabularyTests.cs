@@ -1,4 +1,4 @@
-// The annotation vocabulary's closed core of Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/
+// The annotation vocabulary's closed core of Docs/Plans/SUMO_Behavioral_Capture/
 // 06_Truth_And_Annotation.md §3.7, pinned term by term. This table is the only definition in the tree:
 // the scenario compiler publishes it into every supervision plan through carlanet
 // (CarlaControl/test/test_scenario_compiler.py pins the same families there), and the world truth track

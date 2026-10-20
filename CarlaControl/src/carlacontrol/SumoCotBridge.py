@@ -6,7 +6,7 @@ TAK situational-awareness multicast group), one XML file holding every event, an
 vehicle per update for use as a plain dataset.
 
 The events are built by `CotUdpEmitter.vehicle_telemetry_to_cot`, the same formatter the CARLA truth
-producer uses, so what comes out here is the event `Docs/CAT_Research/Schemas/SUMO_CoT_Event_File.md`
+producer uses, so what comes out here is the event `Docs/Schemas/SUMO_CoT_Event_File.md`
 describes and is directly comparable to CARLA truth rather than a second dialect of it.
 
 Two conversions matter and both avoid guesswork:
@@ -171,7 +171,7 @@ class BareEarthGrid:
             raise ValueError(f"{path} is not a bare-earth grid (magic {magic:#x})")
         count = cols * rows
         header_size = struct.calcsize(cls.HEADER)
-        # A grid is its header and two whole planes (Docs/CAT_Research/Schemas/Bare_Earth_Grid.md); a
+        # A grid is its header and two whole planes (Docs/Schemas/Bare_Earth_Grid.md); a
         # file of any other length was cut short or is not one, and a plane read short would be
         # heights from nowhere.
         if len(raw) != header_size + 8 * count:

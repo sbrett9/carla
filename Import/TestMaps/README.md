@@ -16,4 +16,4 @@ Each was produced from the same OSM extract; they differ only in what the pipeli
 
 `elev_snap`, `nodeheights`, `flatnode`, `decks` and `decks2` are experiments that were measured
 and set aside; they are kept because the measurements that rejected them are worth repeating
-before anyone tries the same idea again. See Docs/CAT_Research for the write-ups.
+before anyone tries the same idea again.

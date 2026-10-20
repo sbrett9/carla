@@ -32,7 +32,7 @@ namespace CarlaNet.CoSim;
 /// statements of one fact can.</para>
 ///
 /// <para>The wire shape is the <c>epoch</c> object of the scenario contract
-/// (<c>Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md</c> section 11.3). A document
+/// (<c>Docs/Plans/SUMO_Behavioral_Capture/04_Contracts.md</c> section 11.3). A document
 /// that breaks any rule is refused whole, naming every rule it broke, because a time declaration
 /// read in part renders six days of a week on the wrong date.</para>
 /// </remarks>

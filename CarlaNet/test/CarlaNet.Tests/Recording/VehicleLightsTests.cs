@@ -1,6 +1,6 @@
 // The words a truth record's `lights` and `pose_source` attributes hold, as the owner ruled on 2026-10-06:
 // the lights commanded on for a vehicle in the picture on the capture's frame, and where its drawn pose
-// came from. See Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §5.1.
+// came from. See Docs/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §5.1.
 using CarlaNet.Recording;
 using CarlaNet.Types.Rpc.Lighting;
 using CarlaNet.Types.Streaming;

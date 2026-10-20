@@ -4,7 +4,7 @@ namespace CarlaNet.Recording;
 /// Client-supplied configuration for recording the EO collection platform (the airborne camera) as a CoT
 /// air track. The simulation server has no concept of the airframe a sensor is notionally mounted on, so
 /// platform identity and optics are attributed here, at collection-config time (the camera platform's
-/// event in Docs/CAT_Research/Schemas/Truth_Sidecar.md). The recorder combines these with the
+/// event in Docs/Schemas/Truth_Sidecar.md). The recorder combines these with the
 /// per-frame sensor-header pose to produce a <see cref="SensorPose"/>.
 /// </summary>
 /// <param name="HFovDeg">Camera horizontal field of view, degrees (from the camera blueprint).</param>

@@ -121,7 +121,7 @@ SOFTWARE = ("CarlaControl/src/carlacontrol/ScenarioCompiler.py", "CarlaNet/src/S
             # is software like any other.
             "CarlaNet/Import/Reader.py")
 NOT_SOFTWARE = ("Import/Arapahoe_I25_UnderpassDwell.lock.json", "Import/Arapahoe_I25.osm",
-                "Docs/CAT_Research/notes.txt", "README.md", "CarlaControl/skills/x/SKILL.MD",
+                "Docs/notes.txt", "README.md", "CarlaControl/skills/x/SKILL.MD",
                 "CarlaControl/skills/sumo-traffic-scenarios/examples/minimal/m.resolution.json")
 
 

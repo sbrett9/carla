@@ -18,7 +18,7 @@
       Scenarios\     the example scenarios, whole, with the OpenStreetMap extracts they are built on
                      and, beside each scenario, the script from CarlaControl\scripts\ that writes it
       docs\          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
-                     Docs\CAT_Research\, with their folder structure kept so their links resolve.
+                     Docs\, with their folder structure kept so their links resolve.
                      Links that leave it are pointed at the bundle by
                      Scripts\Distribution\rewrite_doc_links.py, which needs python on PATH
       tools\sumo\    the SUMO toolchain laid out as a SUMO installation: bin\ with netconvert, sumo,
@@ -455,14 +455,14 @@ if (Test-Path $skillsSrc) {
                     -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'skills\'
 } else { Write-Warning "no authoring skills under $skillsSrc" }
 
-# 3c. The user documentation: the guides and the reference pages, from Docs\CAT_Research\ into docs\
+# 3c. The user documentation: the guides and the reference pages, from Docs\ into docs\
 #     with their folder structure kept, so the relative links between them still resolve. Only these
-#     folders are written for users. Plans\, Findings\ and the rest of Docs\CAT_Research\ are internal
-#     and stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
+#     folders are written for users. Docs\Plans\ is internal, and the rest of Docs\ is CARLA's own
+#     documentation; both stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
 #     and stops the assembly.
 $userDocFolders = @('Guides', 'EPOL', 'Tracking', 'Schemas', 'Skills')
 function Copy-UserDocs {
-    $docsSrc  = Join-Path $CarlaRoot 'Docs\CAT_Research'
+    $docsSrc  = Join-Path $CarlaRoot 'Docs'
     $docsDest = Join-Path $dist 'docs'
     New-Item -ItemType Directory -Force -Path $docsDest | Out-Null
     foreach ($folder in $userDocFolders) {
@@ -477,7 +477,7 @@ function Copy-UserDocs {
     }
     Write-Info "[dist] docs: $($userDocFolders -join ', ') ($(@(Get-ChildItem -Recurse -File $docsDest).Count) files)"
     Add-ManifestRow -Component "user documentation ($($userDocFolders -join ', '))" `
-                    -Provenance 'built from this repository, Docs\CAT_Research\' `
+                    -Provenance 'built from this repository, Docs\' `
                     -License 'Sierra Nevada Corporation (licenses\CarlaControl-LICENSE.txt)' -Location 'docs\'
 }
 Copy-UserDocs

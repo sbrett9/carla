@@ -69,7 +69,7 @@ Everything that describes the file's content goes under Fields, never in a secti
 - Before you finish, run the checker on the page:
 
   ```
-  python Scripts/Docs/check_schema_pages.py Docs/CAT_Research/Schemas/<Page>.md
+  python Scripts/Docs/check_schema_pages.py Docs/Schemas/<Page>.md
   ```
 
   The checker covers the header table and the sections only.\

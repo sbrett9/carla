@@ -425,7 +425,7 @@ An installed copy uses the current folder.
 | Vehicle catalog | `catalogue/`. A copy is also installed with `carlacontrol`. | `CarlaControl/catalogue/` |
 | Schemas | the copies installed with `carlacontrol` | `CarlaControl/schemas/` |
 | The scenario-authoring skill, with its schemas and examples | `skills/sumo-traffic-scenarios/` | `CarlaControl/skills/sumo-traffic-scenarios/` |
-| These pages | `docs/` | `Docs/CAT_Research/` |
+| These pages | `docs/` | `Docs/` |
 | `PackageWorld` and `InstallWorld` | `world-tools/` | `Scripts/Windows/` and `Scripts/Linux/` |
 | SUMO toolchain | `tools/sumo/`. `carla-env` names it through `SUMO_HOME`, `CARLA_NETCONVERT` and `PROJ_LIB`. | `Build/sumo-install/` |
 

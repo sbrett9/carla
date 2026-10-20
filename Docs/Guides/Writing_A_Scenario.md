@@ -35,7 +35,7 @@ You need:
 - The vehicle catalog, `vehicles.catalogue.json`.\
   It lists every vehicle body CARLA can draw, each one measured.\
   It is `CarlaControl/catalogue/vehicles.catalogue.json` in a source checkout and `catalogue/vehicles.catalogue.json` in a distribution.\
-  [The vehicles reference](../../../CarlaControl/skills/sumo-traffic-scenarios/references/vehicles.md) lists every class and body in it.
+  [The vehicles reference](../../CarlaControl/skills/sumo-traffic-scenarios/references/vehicles.md) lists every class and body in it.
 - SUMO 1.27.0, the release that built the shipped worlds.\
   The compiler routes with its `duarouter`.\
   It refuses a release other than the one that built the world (check 6).\
@@ -936,7 +936,7 @@ The `sumo-traffic-scenarios` skill is a set of instructions an AI coding assista
 It is `CarlaControl/skills/sumo-traffic-scenarios/` in a source checkout and `skills/sumo-traffic-scenarios/` in a distribution.\
 It holds:
 
-- [`SKILL.md`](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md)
+- [`SKILL.md`](../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md)
 - `checks.json`
 - the scenario and sweep schemas
 - the examples above
