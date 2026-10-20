@@ -1,8 +1,8 @@
 """The Windows and Linux capture launchers describe the same options and return the same status.
 
-Plan 12 §10, D12.19: the launchers ship together, their `--help` comes from the schema, and a check
-compares the two -- the Windows distribution once shipped a launcher for a script that had been deleted,
-and nothing noticed because nothing compared them. So both launchers are run here: with `--help`, whose
+The launchers ship together, their `--help` comes from the schema, and a check compares the two --
+the Windows distribution once shipped a launcher for a script that had been deleted, and nothing
+noticed because nothing compared them. So both launchers are run here: with `--help`, whose
 option sets must be equal and must name every field; with a configuration the offline checks refuse, whose exit
 status must be 2 from both and equal to the status in the result each wrote at the `--result` path it
 was passed; and with a malformed override, which must be 1 from both.

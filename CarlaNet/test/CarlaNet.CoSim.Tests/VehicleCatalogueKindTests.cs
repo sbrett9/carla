@@ -2,7 +2,7 @@ namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
 /// What kind of vehicle each body is, as the catalogue curates it: the truth record's <c>base_type</c>
-/// and <c>special_type</c> come from the catalogue's class for the body's blueprint (doc 06 D6.18).
+/// and <c>special_type</c> come from the catalogue's class for the body's blueprint.
 /// </summary>
 public sealed class VehicleCatalogueKindTests
 {

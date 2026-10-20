@@ -126,10 +126,10 @@ public sealed class IlluminationPolicy
     /// <summary>Why this policy, in one sentence.</summary>
     public string? Note { get; }
 
-    /// <summary>The policy's name as the scenario contract spells it.</summary>
+    /// <summary>The policy's name as a scenario spells it.</summary>
     public string Name => NameOf(Kind);
 
-    /// <summary>A policy kind's name as the scenario contract spells it, and every record writes it.</summary>
+    /// <summary>A policy kind's name as a scenario spells it, and every record writes it.</summary>
     public static string NameOf(IlluminationPolicyKind kind) => kind switch
     {
         IlluminationPolicyKind.FreezeAtWindowStart => "freeze_at_window_start",
@@ -218,7 +218,8 @@ public sealed class IlluminationPolicy
     /// Read an illumination object, refusing it whole if any rule is broken.
     /// </summary>
     /// <param name="json">
-    /// The <c>illumination</c> object of a scenario, as JSON text (<c>04_Contracts.md</c> section 11.5).
+    /// The <c>illumination</c> object of a scenario, as JSON text
+    /// (<c>Docs/Schemas/Scenario_Specification.md</c>).
     /// </param>
     /// <remarks>
     /// <para>An object that names no <c>policy</c> is read as <c>advance</c>. The policy is marked
@@ -231,9 +232,10 @@ public sealed class IlluminationPolicy
     /// field this consumer does not read, because a field nobody honours is one somebody will later
     /// believe was honoured.</para>
     ///
-    /// <para>The two audit-tolerance overrides the contract names are refused too. The contract
-    /// bounds them by a value doc 10 has not yet set, and an override with no upper bound is an off
-    /// switch for the audit. Until the bound exists the audit runs at its measured floor.</para>
+    /// <para>The two audit-tolerance overrides, <c>solar_audit_tolerance_s</c> and
+    /// <c>solar_audit_tolerance_elev_deg</c>, are refused too. No upper bound for them has been set,
+    /// and an override with no upper bound is an off switch for the audit. Until a bound exists the
+    /// audit runs at its measured floor.</para>
     /// </remarks>
     /// <exception cref="CoSimSessionRefusedException">
     /// The document is not an illumination object or breaks one or more of the rules; the message
@@ -302,9 +304,9 @@ public sealed class IlluminationPolicy
         {
             if (root.TryGetProperty(tolerance, out _))
             {
-                problems.Add($"{tolerance} overrides the solar audit's tolerance, and the contract "
-                             + "bounds an override by a value that has not been set; without the "
-                             + "bound it is an off switch, so the audit runs at its measured floor");
+                problems.Add($"{tolerance} overrides the solar audit's tolerance, and no upper bound "
+                             + "for an override has been set; without the bound it is an off switch, "
+                             + "so the audit runs at its measured floor");
             }
         }
 

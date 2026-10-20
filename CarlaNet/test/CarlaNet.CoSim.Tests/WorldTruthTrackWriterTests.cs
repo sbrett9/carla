@@ -367,8 +367,7 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
                          row["time_utc"]);
         }
 
-        // The measured vehicles are drawn on every frame, their last SUMO frame included (the owner's ruling
-        // of 2026-10-06) -- where that frame was rendered at all: the second vehicle is the scenario's last,
+        // The measured vehicles are drawn on every frame, their last SUMO frame included -- where that frame was rendered at all: the second vehicle is the scenario's last,
         // and its last frame is among the two read after the last frame rendered. The first has a row at its
         // last frame, drawn by its body. The unmeasured one is never drawn, for want of a body, on its last
         // frame as on every other.

@@ -4,11 +4,10 @@ A Cursor-on-Target type carries an affiliation -- `a-n-G-E-V` neutral, `a-f-G-E-
 a TAK client colours every track by it. Drawing a port's civilian traffic neutral and its naval
 traffic friendly is what makes a live picture of the port readable at a glance. That is a choice
 about how one run is displayed and says nothing about what the scenario asserts, so it is not part
-of the specification, not covered by its digest and not checked by the compiler
-(`06_Truth_And_Annotation.md` §9.1, `07_Scenario_Authoring.md` §3.4.1). It is a file the run is
-given, kept beside the scenario it suits as `<scenario>.display.json` -- named for the stem of the
-scenario's `.sumocfg`, so a run of that scenario finds it without being told (`beside`) -- and the
-run records which one it drew with.
+of the specification, not covered by its digest and not checked by the compiler. It is a file the
+run is given, kept beside the scenario it suits as `<scenario>.display.json` -- named for the stem
+of the scenario's `.sumocfg`, so a run of that scenario finds it without being told (`beside`) --
+and the run records which one it drew with.
 
 A convention names **populations**, as the telemetry can tell them apart: in a compiled scenario,
 the vehicle class a vType carries in its `carla:class_id` parameter -- a class draws several
@@ -18,12 +17,12 @@ the run's default.
 
 **It never names a vehicle.** Which vehicles a scenario planted is supervision, and the CoT type is
 the one field every consumer of the feed reads, so a letter that picked the planted vehicles out
-would put the answer there (doc 20 decision 9). A file carrying anything but populations -- a
+would put the answer there. A file carrying anything but populations -- a
 `marked_ids`, say -- is refused rather than partly read.
 
 The same map once travelled in a scenario's legacy `*.labels.json`, beside a second half that gave
-every anomaly type `u`. That half was the label written into the CoT type, which D6.18 names a
-defect wherever this code produces ground truth, and it is not a display convention:
+every anomaly type `u`. That half was the label written into the CoT type, the leak the previous
+paragraph describes, and it is not a display convention:
 `from_legacy_labels` keeps the display half and withholds the other.
 
 A convention file is also checked against its published schema (`schema()`,

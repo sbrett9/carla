@@ -1,11 +1,11 @@
 """The authoring skill's examples compile, and resolve to exactly what their recorded reports say.
 
-`07_Scenario_Authoring.md` §8.3 ships worked examples beside the skill and §8.5 keeps them true by
-mechanism: each is compiled against the compiler's fixture world in the ordinary test run and what it
-resolved to is compared with the report recorded beside it. So an example that stops compiling, or
+Worked examples ship beside the skill, and this file keeps them true by mechanism: each is compiled
+against the compiler's test street layout in the ordinary test run and what it resolved to is compared
+with the report recorded beside it. So an example that stops compiling, or
 starts resolving to something else, fails here rather than misleading an author.
 
-The fixture world is `ScenarioWorldFixture`'s street layout. An example names it as `StreetLayout.cwp`
+The test street layout is the one `ScenarioWorldFixture` builds. An example names it as `StreetLayout.cwp`
 and the catalogue by its path in the repository; the test copies each example beside a freshly built
 fixture package, points the catalogue at the repository's, and compiles. A report is compared whole,
 less the one field that names the compiling machine: the SUMO installation's path.
@@ -84,7 +84,7 @@ def recorded(path: Path, actual: dict) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_there_are_examples_of_each_kind_the_plan_names():
+def test_there_are_examples_of_each_kind_the_skill_names():
     assert {p.parent.name for p in SPECIFICATIONS} == {"minimal", "epoch"}
     assert len(list(EXAMPLES.glob("epoch/*.scenario.json"))) == 3
     assert list(EXAMPLES.glob("counterfactual/*.sweep.json"))

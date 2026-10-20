@@ -2,8 +2,7 @@
 // of the newest one. A camera image arrives some ticks after the snapshot of its frame, so "newest"
 // was routinely a tick or more ahead of the pixels; these tests pin the lookup that replaces it: a
 // frame is served exactly or not at all, and a frame is kept for as long as a reader holding the
-// history may still ask for it (the owner's ruling of 2026-10-05: a still is never written with
-// another frame's truth).
+// history may still ask for it, because a still is never written with another frame's truth.
 using CarlaNet.Transport;
 using CarlaNet.Types.Streaming;
 using CarlaNet.Types.Supervision;

@@ -1,4 +1,4 @@
-"""Every reference page under Docs/CAT_Research/Schemas keeps the page template.
+"""Every reference page under Docs/Schemas keeps the page template.
 
 The pages describe one kind of file each, and a reader who has learnt one must find the same things
 in the same places on the next. `Scripts/Docs/check_schema_pages.py` names every departure from the
@@ -11,7 +11,7 @@ from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[2]
 CHECKER = _REPO / "Scripts" / "Docs" / "check_schema_pages.py"
-SCHEMAS = _REPO / "Docs" / "CAT_Research" / "Schemas"
+SCHEMAS = _REPO / "Docs" / "Schemas"
 
 
 def load_checker():

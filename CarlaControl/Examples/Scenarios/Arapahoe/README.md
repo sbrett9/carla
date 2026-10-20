@@ -161,7 +161,7 @@ export CESIUM_ION_TOKEN="<your token>"
 ```
 
 Unless a section says otherwise, run the commands on this page from the distribution's folder.\
-[Getting started](../../../../Docs/CAT_Research/Guides/Getting_Started.md) explains the distribution and its commands.
+[Getting started](../../../../Docs/Guides/Getting_Started.md) explains the distribution and its commands.
 
 ## Installing the level pack
 
@@ -184,7 +184,7 @@ Then the script copies the world into `CarlaServer/CarlaUnreal/Plugins/Generated
 It replaces a copy of the world that is already installed.\
 At the end, it prints the command that loads the world.\
 If a server from this distribution has the world loaded, stop the server before you install.\
-A refusal means the pack was not cooked for this distribution (see [When it refuses](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#when-it-refuses-1)).
+A refusal means the pack was not cooked for this distribution (see [When it refuses](../../../../Docs/Guides/Making_A_Level.md#when-it-refuses-1)).
 
 The pack is for Windows only: its `world.json` names the platform `Win64`.\
 The install scripts do not check the platform.\
@@ -210,7 +210,7 @@ The server runs headless, with no window.\
 Give the map's full path.\
 A packaged server does not find a world installed later by its short name.\
 If the server does not find the map, it loads its default map instead.\
-To make sure that it loaded this world, read the log lines in [Checking it loaded](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#checking-it-loaded).
+To make sure that it loaded this world, read the log lines in [Checking it loaded](../../../../Docs/Guides/Making_A_Level.md#checking-it-loaded).
 
 This pack was installed with the command above and loaded in `Carla-0.10.0-Win64-Development`.\
 The server log showed `[GeneratedWorld] applied: origin ...` with `per-cell surface field`.\
@@ -311,7 +311,7 @@ Write one in the distribution's folder:
 carla-capture --write-site-profile site.json
 ```
 
-Then edit it as [The site profile](../../../../Docs/CAT_Research/Guides/Getting_Started.md#the-site-profile) shows.\
+Then edit it as [The site profile](../../../../Docs/Guides/Getting_Started.md#the-site-profile) shows.\
 Set its `sumo.home` to `tools/sumo`.
 
 The capture finds a compiled scenario by its id, as `<id>/<id>.lock.json` under `paths.scenario_root`.\
@@ -323,7 +323,7 @@ Run them from the distribution's folder.
 
 This run file, `Arapahoe_I25_UnderpassDwell.run.json`, is in this folder.\
 The script that writes the scenario writes it too, with the dwell spot read from the compiled resolution report.\
-[Running a capture](../../../../Docs/CAT_Research/Guides/Running_A_Capture.md#an-orbit-flown-by-the-server) uses it as its orbit example.\
+[Running a capture](../../../../Docs/Guides/Running_A_Capture.md#an-orbit-flown-by-the-server) uses it as its orbit example.\
 It records 240 s from t = 600 s.\
 In the SUMO-only run, the marked vehicle waits at its stop through the whole window.\
 Before that, it renders a 60 s prewarm: simulated time that gets the views ready and is not recorded.\
@@ -379,6 +379,7 @@ The launch echo says what the run will do, with the window's civil times and the
 The scenario's sun policy, `advance`, sets the sun to the civil time the window opens.\
 From there the sun follows simulated time.\
 The echo shows that it climbs from +2.56° to +3.29° over this window, in the `golden` band.\
+`golden` is the sun no more than 6° above the horizon, morning or evening (photographers call it the golden hour).\
 Then run it for real:
 
 ```
@@ -394,7 +395,7 @@ carla-validate captures/<session id>
 carla-audit-sidecars captures/<session id>
 ```
 
-[Running a capture](../../../../Docs/CAT_Research/Guides/Running_A_Capture.md) describes the run file, the timing and the results in full.
+[Running a capture](../../../../Docs/Guides/Running_A_Capture.md) describes the run file, the timing and the results in full.
 
 ## The supervision check
 
@@ -468,7 +469,7 @@ Every other vehicle in that window is `unlabelled`.\
 The run manifest holds the plan's three `instance` rows and nine `cohort` rows.\
 Then it holds an `interval_opened` and an `interval_closed` row for each interval the window reached.\
 `Arapahoe_I25_SupervisionCheck.sample.manifest.jsonl` is the manifest of such a capture, made on 8 October 2026 from a checkout's compile of this specification.\
-[Behavioral annotations](../../../../Docs/CAT_Research/EPOL/Behavioral_Annotations.md) reads that capture row by row in its worked example.
+[Behavioral annotations](../../../../Docs/EPOL/Behavioral_Annotations.md) reads that capture row by row in its worked example.
 
 ## Making the scenario from its parts
 
@@ -548,7 +549,7 @@ A rebuilt package can differ from it.\
 A drive or a capture refuses a package that does not describe the loaded world.\
 So use the rebuilt package on the world the build left loaded.
 
-[Building a world](../../../../Docs/CAT_Research/Guides/Building_A_World.md) explains every part of the build.
+[Building a world](../../../../Docs/Guides/Building_A_World.md) explains every part of the build.
 
 ### Compiling against the new package
 
@@ -572,18 +573,18 @@ It writes the specification against that package and compiles it.\
 The supervision check names the same package.\
 Run `make_supervision_check_scenario.py` the same way.
 
-[Writing a scenario](../../../../Docs/CAT_Research/Guides/Writing_A_Scenario.md) explains every field of the specification.
+[Writing a scenario](../../../../Docs/Guides/Writing_A_Scenario.md) explains every field of the specification.
 
 ## How the level pack was made
 
 The level pack is the world `Arapahoe_I25` as an Unreal level.\
 It is cooked as add-on content (DLC) for one distribution.\
-[Making a level](../../../../Docs/CAT_Research/Guides/Making_A_Level.md) gives every step in full.\
+[Making a level](../../../../Docs/Guides/Making_A_Level.md) gives every step in full.\
 Run its commands from the top of the CARLA checkout.\
 For this world, the steps were:
 
 1. Set up the engine, Visual Studio 2022 and a CARLA checkout at the distribution's commits.\
-   [Section 1 of Making a level](../../../../Docs/CAT_Research/Guides/Making_A_Level.md#1-what-you-need) lists what each needs.\
+   [Section 1 of Making a level](../../../../Docs/Guides/Making_A_Level.md#1-what-you-need) lists what each needs.\
    This pack was cooked from a checkout at a later CARLA commit, as step 9 says.
 2. Copy `Arapahoe_I25.cwp` into the checkout's `Build\world-packages\` folder.\
    Do not rename it.\

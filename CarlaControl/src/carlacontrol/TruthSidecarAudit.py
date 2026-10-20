@@ -2,7 +2,7 @@
 
 A SUMO drive renders its vehicles through a pool of CARLA bodies: a body is lent to a SUMO vehicle
 while it is rendered, given back when it leaves, lent to the next, and parked out of sight about
-300 m below the ground in between (`03_CoSimulation_Runtime.md` §8.2). Two things then go wrong in a
+300 m below the ground in between. Two things then go wrong in a
 sidecar that lists the world's vehicle actors as they are:
 
 * **parked bodies are listed as vehicles** -- records hundreds of metres underground, standing
@@ -14,7 +14,7 @@ sidecar that lists the world's vehicle actors as they are:
 
 This reads the sidecars back and counts both, from the files alone, so a capture made before the
 recorder listed only the rendered set is shown to carry the defect and one made after is shown not
-to (`06_Truth_And_Annotation.md` §8.2).
+to.
 
 **And the supervision, where the run had a plan.** A sidecar of a frame a supervision plan was in force
 on names the plan on its container, and every
@@ -29,14 +29,14 @@ with no world element, and a sidecar saying nothing of supervision at all are ea
 **And whether each vehicle is in the picture.** Every vehicle record a recorder writes says where the
 vehicle's box fell against the camera's picture, `in_frame` -- `wholly`, `partly`, `none` or
 `behind_camera` -- and, where the five occlusion fields are absent, why, in one word of
-`occlusion_unmeasured` (the owner's ruling of 2026-10-05: an absent fraction was being read as "not
-hidden"). A record saying nothing of its place, one carrying occlusion fields while its place says the
-picture has no view of the vehicle, one carrying neither occlusion nor a reason, one carrying a reason
-beside a measurement, and a place or a reason outside the recorder's words are each a defect. A capture
+`occlusion_unmeasured`, because an absent fraction without a reason reads as "not hidden". A record
+saying nothing of its place, one carrying occlusion fields while its place says the picture has no
+view of the vehicle, one carrying neither occlusion nor a reason, one carrying a reason beside a
+measurement, and a place or a reason outside the recorder's words are each a defect. A capture
 made before the recorder wrote the place is shown to carry the first.
 
 **And a box on every vehicle in the picture, and on no other.** A vehicle whose box fell in the picture
-(`in_frame` of `wholly` or `partly`) carries its box, as the owner ruled on 2026-10-06: `box_px`,
+(`in_frame` of `wholly` or `partly`) carries its box: `box_px`,
 `box_oriented_px`, `truncation`, `pitch_deg`, `roll_deg` and `camera_range_m` in `_carla`, and a
 `<_box3d frame="geodetic">` beside it holding eight corners, each with its `lat`, `lon` and `hae`. A
 record in the picture missing any of them, and a record outside the picture or behind the lens carrying
@@ -47,9 +47,9 @@ encloses the box's corners, or a corner agrees with the record's point, is the w
 tests do.
 
 **And the lights and the pose source of every vehicle in the picture.** A vehicle in the picture also
-carries, from the world-observer snapshot of the capture's own frame, as the owner ruled on 2026-10-06:
-`lights`, the lights commanded on for it in CARLA's words or `none`, and, where it names its SUMO
-vehicle, `pose_source` in the owner's words -- `sumo`, `interpolated`, `jump` or `stale`. A sidecar
+carries, from the world-observer snapshot of the capture's own frame: `lights`, the lights commanded
+on for it in CARLA's words or `none`, and, where it names its SUMO vehicle, `pose_source` -- `sumo`,
+`interpolated`, `jump` or `stale`. A sidecar
 whose frame's snapshot did not carry one -- a server built before it did, or one that refused the
 session's pose source -- says `lights="unknown"` or `pose_source="unknown"` on its container and its
 records carry none, which is counted and not faulted here: the run's closeout gates it. Otherwise a
@@ -143,7 +143,7 @@ LIGHT_WORDS = ("position", "low_beam", "high_beam", "brake", "right_blinker", "l
 NO_LIGHT = "none"
 
 # Where a SUMO vehicle's drawn pose came from, as the recorder writes it (`CarlaNet.Recording.PoseSources`).
-# The owner's four words (2026-10-06): the frame falls on a SUMO step; between two steps, filled in along the
+# The four words, in order: the frame falls on a SUMO step; between two steps, filled in along the
 # lane; shown at SUMO's later position across a step too far to drive in one; standing where it was last drawn.
 POSE_SOURCES = ("sumo", "interpolated", "jump", "stale")
 
@@ -465,7 +465,7 @@ class TruthSidecarAudit:
         result.sidecars_with_plan += 1
         result.plans.add(plan)
         # Every supervision element is a vehicle's, inside its event: a `<_supervision>` directly under
-        # the container would be a label with no vehicle, which the recorder never writes (06 §3.5).
+        # the container would be a label with no vehicle, which the recorder never writes.
         for stray in root.findall("_supervision"):
             result.sidecars_with_world_supervision.append(path.name)
             break

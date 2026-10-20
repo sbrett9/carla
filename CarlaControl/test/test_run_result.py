@@ -1,9 +1,9 @@
 """The run result names how a run ended, the exit status is read from it, and it never lies about it.
 
-Plan 12 §3.10.2-§3.10.3: eight outcomes whose one live distinction is finished against stopped, a
-status read from the outcome rather than computed beside it, a file written whole or not at all, and
-no aggregate verdict anywhere in it. The status numbers are the plan's table, repeated here so the
-table and the code drifting together is caught as well as apart.
+Eight outcomes whose one live distinction is finished against stopped, a status read from the
+outcome rather than computed beside it, a file written whole or not at all, and no aggregate verdict
+anywhere in it. The status numbers are the table published in `Docs/Schemas/Run_Result.md`, repeated
+here so the page and the code drifting together is caught as well as apart.
 """
 from __future__ import annotations
 
@@ -17,21 +17,20 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.RunResult import OUTCOMES, RunResult  # noqa: E402
 
-PLAN_STATUSES = {"run_finished": 0, "usage_error": 1, "refused_offline": 2, "refused_server": 3,
+PUBLISHED_STATUSES = {"run_finished": 0, "usage_error": 1, "refused_offline": 2, "refused_server": 3,
                  "refused_authority": 4, "refused_preroll": 5, "run_stopped": 6,
                  "internal_error": 7}
-PLAN_12 = (_REPO / "Docs" / "CAT_Research" / "Plans" / "SUMO_Behavioral_Capture"
-           / "12_Operator_Control_Surface.md")
+PAGE = _REPO / "Docs" / "Schemas" / "Run_Result.md"
 
 
-def test_the_statuses_are_the_plan_s():
-    assert PLAN_STATUSES == OUTCOMES
-    text = PLAN_12.read_text(encoding="utf-8")
-    for name, status in PLAN_STATUSES.items():
+def test_the_statuses_are_the_published_ones():
+    assert PUBLISHED_STATUSES == OUTCOMES
+    text = PAGE.read_text(encoding="utf-8")
+    for name, status in PUBLISHED_STATUSES.items():
         assert f"| {status} | `{name}` |" in text, name
 
 
-@pytest.mark.parametrize(("outcome", "status"), sorted(PLAN_STATUSES.items()))
+@pytest.mark.parametrize(("outcome", "status"), sorted(PUBLISHED_STATUSES.items()))
 def test_the_exit_status_is_read_from_the_outcome(outcome, status):
     assert RunResult("cap-x").conclude(outcome).exit_status == status
 

@@ -6,9 +6,6 @@ time a vehicle departs. The compiler reads the epoch with the co-simulation sess
 `CarlaNet.CoSim.SolarEpoch` (`CarlaControl/src/carlacontrol/ScenarioEpoch.py::ScenarioEpoch`), so a
 scenario the compiler accepts is one the session accepts, with the same digest.
 
-Design record: `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5.1,
-§4.5 and §8.2.1; the object is `04_Contracts.md` C9.
-
 ## The object
 
 ```json
@@ -31,8 +28,8 @@ Design record: `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Auth
    is, ask, and offer a candidate from the site — the world package's `solar.json` gives the origin
    and `longitude / 15`. A guessed epoch compiles and asserts the wrong thing. Every scenario declares
    one (check 33).
-2. **Write civil times; never multiply.** `"d0 07:00"`, not `25200`. The sizing scenario had sixteen
-   multiplication sites and 533 of 610 departures on exact hours; under the epoch it has none, and the
+2. **Write civil times; never multiply.** `"d0 07:00"`, not `25200`. The Shahid Bahonar Port scenario had
+   sixteen multiplication sites and 533 of 610 departures on exact hours; under the epoch it has none, and the
    civil meaning of all 610 is in the report.
 3. **`t = 0` is conventionally midnight, and need not be.** Day N is the epoch's date plus N days and a
    clock is read at the epoch's offset, so a 06:00-to-06:00 day is an epoch at 06:00.

@@ -1,10 +1,10 @@
-"""Every check a capture run's configuration is subject to, by the number the plan gives it.
+"""Every check a capture run's configuration is subject to, by its number.
 
-`12_Operator_Control_Surface.md` §6.2 numbers the checks, and the numbers are stable and never
-reused because other sections cite them (`08_Collection_And_EPoL.md` §15 cites check 17). A check
-withdrawn is retired with its number (`RETIRED`), which no other check is ever given. They are a
-different numbering from the scenario compiler's (`ScenarioCheckCatalogue`): a run's findings are
-reported under this catalogue, and a resolution report says which catalogue it cites.
+The numbers are stable and never reused, because findings, reports, help text and comments cite a
+check by its number. A check withdrawn is retired with its number (`RETIRED`), which no other check
+is ever given. They are a different numbering from the scenario compiler's
+(`ScenarioCheckCatalogue`): a run's findings are reported under this catalogue, and a resolution
+report says which catalogue it cites.
 
 A check is carried out in one of four places, and the catalogue says which, so a check's presence in
 the list is never read as a guarantee:
@@ -119,7 +119,8 @@ _CHECKS: tuple[RunCheck, ...] = (
     RunCheck(13, OFFLINE, "The window's civil span is computable from the epoch", _R, RUN_CAPTURE,
              "ScenarioEpoch, which reads the epoch with the session's SolarEpoch"),
     RunCheck(14, OFFLINE, "A window darker than -6 degrees states solar.vehicle_lights", (),
-             NOT_BUILT, "the session writes no vehicle lamps, so there is no field to state"),
+             NOT_BUILT, "the run configuration has no solar.vehicle_lights field: the session "
+             "switches every vehicle's headlights by the sun"),
     RunCheck(15, OFFLINE, "The illumination object is one a capture run permits: accepted by "
              "IlluminationPolicy, and advancing only at one sun-second per simulated second; "
              "'ignore' warns", _RW, RUN_CAPTURE, "RunConfigurationValidator",

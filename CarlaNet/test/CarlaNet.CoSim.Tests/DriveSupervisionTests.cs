@@ -4,7 +4,7 @@ namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
 /// What the interval binder hands a drive: the supervision in force per SUMO vehicle, bound to one plan
-/// and never minted. Nothing is held for the world apart from the plan (06 §3.5).
+/// and never minted. Nothing is held for the world apart from the plan.
 /// </summary>
 public sealed class DriveSupervisionTests
 {
@@ -48,7 +48,7 @@ public sealed class DriveSupervisionTests
     [Fact]
     public void Every_Row_Is_A_Vehicle_s()
     {
-        // The owner's ruling of 2026-10-05: SUMO reports vehicles, not places, so this table has no row
+        // SUMO reports vehicles, not places, so this table has no row
         // for the world and no way to hold one. A vehicle id is the only key.
         var supervision = new DriveSupervision();
         supervision.Bind(Plan);

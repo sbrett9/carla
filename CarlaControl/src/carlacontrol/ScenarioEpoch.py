@@ -1,9 +1,9 @@
 """The scenario epoch on the authoring side, read by the reader the co-simulation session uses.
 
 A scenario declares what simulated second zero means in civil time at the site: the `epoch` object of
-`04_Contracts.md` §11.3 -- a civil instant with an explicit numeric offset, the same instant in UTC, the
-offset again as signed hours, whether the calendar advances, whether the offset includes daylight
-saving, and optionally the IANA zone name and a note. The session reads that object with
+`Docs/Schemas/Epoch.md` -- a civil instant with an explicit numeric offset, the same instant in UTC,
+the offset again as signed hours, whether the calendar advances, whether the offset includes
+daylight saving, and optionally the IANA zone name and a note. The session reads that object with
 `CarlaNet.CoSim.SolarEpoch` and binds the sun from it.
 
 **This class does not re-implement the rules.** It hands the object to the same `SolarEpoch` the
@@ -17,7 +17,7 @@ the refusal's problems attributed to checks 33 and 34, so a report can cite them
 
 **The offset is normative; the zone name is not.** `time_zone_id` is carried for a reader and never
 resolved: `zoneinfo` resolves zero zones on this machine, and two hosts with different databases would
-disagree about a corpus (`07_Scenario_Authoring.md` §2.8, §9.6).
+disagree about a corpus.
 
 **The published schema** (`schema()`, `epoch.schema.json`) states the object's shape for a reader
 and for `carla-drive --epoch`, which checks a file against it before handing it to the session. It
@@ -83,7 +83,7 @@ class ScenarioEpoch:
 
         `declaration` is the specification's `epoch` value as parsed JSON. None -- no epoch at all --
         is refused under check 33: a default would be a silent assertion about what the scenario
-        means (`07_Scenario_Authoring.md` §4.5).
+        means.
         """
         if declaration is None:
             raise ScenarioEpochRefusedError([(PRESENT_CHECK, "the specification declares no epoch; every "

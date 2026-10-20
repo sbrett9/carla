@@ -6,8 +6,7 @@ namespace CarlaNet.CoSim;
 
 /// <summary>
 /// The vocabulary a supervision plan carries, resolved and import-flattened: the closed core's version
-/// and every author namespace the plan's labels, roles, phases and area kinds name
-/// (<c>06_Truth_And_Annotation.md</c> §3.7, §3.8, D6.30).
+/// and every author namespace the plan's labels, roles, phases and area kinds name.
 /// </summary>
 /// <remarks>
 /// <para><b>The core is <see cref="CoreVocabulary"/>, not a copy of it.</b> The compiler publishes the
@@ -16,9 +15,9 @@ namespace CarlaNet.CoSim;
 /// so every core value a run writes is one the plan's vocabulary defines, which is what the release
 /// validator holds a corpus to.</para>
 ///
-/// <para><b>Author terms are carried, never interpreted.</b> Nothing in this pipeline branches on one
-/// (D6.27); they are here so a record can carry a term's declaration to a consumer who never met its
-/// author, and so the vocabulary's digest can be checked against what is carried.</para>
+/// <para><b>Author terms are carried, never interpreted.</b> Nothing in this pipeline branches on one;
+/// they are here so a record can carry a term's declaration to a consumer who never met its author, and
+/// so the vocabulary's digest can be checked against what is carried.</para>
 /// </remarks>
 public sealed record PlanVocabulary
 {
@@ -43,8 +42,7 @@ public sealed record PlanVocabulary
 
     /// <summary>
     /// SHA-256 of the vocabulary document as the compiler canonicalises it, which every record that
-    /// quotes the vocabulary carries; checked against the document on reading (<c>04_Contracts.md</c>
-    /// C3 V3.15).
+    /// quotes the vocabulary carries; checked against the document on reading.
     /// </summary>
     public string Digest { get; }
 
@@ -103,7 +101,7 @@ public sealed record PlanVocabulary
     }
 }
 
-/// <summary>One author namespace, versioned on its own (06 D6.29).</summary>
+/// <summary>One author namespace, versioned on its own.</summary>
 public sealed record AuthorNamespace
 {
     private AuthorNamespace(JsonElement json, SupervisionPlanReading reading, string where)
@@ -139,7 +137,7 @@ public sealed record AuthorNamespace
 }
 
 /// <summary>
-/// One author term, self-describing as D6.28 requires: its definition, the kinds of subject it may be
+/// One author term, self-describing: its definition, the kinds of subject it may be
 /// asserted of, and its optional relations, each as declared.
 /// </summary>
 public sealed record AuthorTerm
@@ -181,10 +179,10 @@ public sealed record AuthorTerm
     /// <summary>What it means, for a reader who never met the author.</summary>
     public string Definition { get; }
 
-    /// <summary>Its one broader parent, or null (06 D6.33).</summary>
+    /// <summary>Its one broader parent, or null.</summary>
     public string? Broader { get; }
 
-    /// <summary>The parameters a row carrying it may give, each with its type, unit and meaning (06 §3.8).</summary>
+    /// <summary>The parameters a row carrying it may give, each with its type, unit and meaning.</summary>
     public ImmutableSortedDictionary<string, TermParameter> Parameters { get; }
 
     /// <summary>What it is the counterfactual of, resolved by the compiler; null where it names none.</summary>
@@ -195,7 +193,7 @@ public sealed record AuthorTerm
 
     /// <summary>
     /// The terms a nominal subject carrying it is a matched negative for; it narrows, never widens, and
-    /// empty means unspecified (06 D6.32).
+    /// empty means unspecified.
     /// </summary>
     public ImmutableArray<string> HardNegativeFor { get; }
 
@@ -231,7 +229,7 @@ public sealed record TermParameter
 
 /// <summary>
 /// A counterfactual: a pointer to the subject or term an instance or a term is to be read against, and
-/// never a supervision write (06 D6.33).
+/// never a supervision write.
 /// </summary>
 public sealed record Counterfactual
 {

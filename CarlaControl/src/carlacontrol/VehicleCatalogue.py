@@ -73,8 +73,8 @@ LAMP_NAMES: tuple[str, ...] = tuple(name for name, _ in LAMP_BITS)
 LAMP_VERDICTS = frozenset({"lit", "unlit", "unknown"})
 
 # The lights the co-simulation session drives, as an author reads them, and the lamps each one is made
-# of: the headlights the session switches on by the sun (`Position | LowBeam`, doc 11 D11.9), and the
-# brake lights and turn signals it writes from SUMO's signals (D11.8). What an author needs to know is
+# of: the headlights the session switches on by the sun (`Position | LowBeam`), and the brake lights
+# and turn signals it writes from SUMO's signals. What an author needs to know is
 # whether each lights up on a body, which is read from the optical pass's verdict on those lamps.
 LIGHT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("headlights", ("low_beam", "position")),
@@ -278,7 +278,7 @@ class VehicleCatalogue:
 
         The base type is the curated `cot_base_type` of the class whose members include the
         blueprint. Truth takes a vehicle's base type from here rather than from what its blueprint
-        declares, or from a SUMO vehicle class (`06_Truth_And_Annotation.md` D6.18). None is the
+        declares, or from a SUMO vehicle class. None is the
         catalogue saying nothing about the blueprint, and the caller falls back to what it holds.
         """
         return self._base_types.get(blueprint_id)
@@ -288,9 +288,8 @@ class VehicleCatalogue:
 
         The kind is the curated `cot_special_type` of the class whose members include the blueprint,
         and the empty string where that class curates none. Truth takes a vehicle's kind from here
-        rather than from what its blueprint declares (`06_Truth_And_Annotation.md` D6.18). None is
-        the catalogue saying nothing about the blueprint, and a caller that holds the blueprint's own
-        declaration keeps it.
+        rather than from what its blueprint declares. None is the catalogue saying nothing about the
+        blueprint, and a caller that holds the blueprint's own declaration keeps it.
         """
         return self._special_types.get(blueprint_id)
 

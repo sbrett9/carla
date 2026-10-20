@@ -1,11 +1,11 @@
 """The place index: which edges of a world's network carry which street name, heading which way.
 
-It is what turns "eastbound on Centerville Lane" into edges (`07_Scenario_Authoring.md` §2.5, §4), and
-it carries its own coverage, because on some maps it is nearly empty. Measured on the shipped world
-packages: 52 of 57 normal edges named on Gardnerville (91.2%), 288 of 317 on Arapahoe (90.9%), 47 of
-1044 on Bahonar (4.5%, six names, all in Arabic script). A name is never an edge: on Arapahoe
-`South Yosemite Street` is carried by 65 edges, so a street is always narrowed by direction and
-position before it names anything.
+It is what turns "eastbound on Centerville Lane" into edges, and it carries its own coverage,
+because on some maps it is nearly empty. Measured on the shipped world packages: 52 of 57 normal
+edges named on Gardnerville (91.2%), 288 of 317 on Arapahoe (90.9%), 47 of 1044 on Bahonar (4.5%,
+six names, all in Arabic script). A name is never an edge: on Arapahoe `South Yosemite Street` is
+carried by 65 edges, so a street is always narrowed by direction and position before it names
+anything.
 
 Derived from the network alone. Every place form resolves to SUMO edges, the network carries each
 edge's street name when netconvert is given `--output.street-names` (the world build always passes

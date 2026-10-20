@@ -147,7 +147,8 @@ def _anywhere(shim):
     return shim.Transform(shim.Location(0.0, 0.0, 100.0), shim.Rotation(-90.0, 0.0, 0.0))
 
 
-def test_a_camera_spawned_with_no_name_takes_the_name_the_server_gives_it(shim, capsys):
+def test_a_camera_spawned_with_no_name_takes_the_name_the_server_gives_it(shim, capsys, caplog):
+    caplog.set_level("WARNING", logger=shim._logger.name)
     client = _Client(shim)
     world = shim.World(client)
 
@@ -162,6 +163,7 @@ def test_a_camera_spawned_with_no_name_takes_the_name_the_server_gives_it(shim, 
     assert shim.camera_named_by_server(first)
     # Nothing to say: this server names cameras.
     assert capsys.readouterr().err == ""
+    assert caplog.text == ""
 
 
 def test_a_name_the_client_gives_is_sent_as_the_role_name_and_read_back(shim):
@@ -213,7 +215,8 @@ def test_a_name_a_live_camera_holds_is_refused_by_the_server_with_its_reason(shi
 
 
 def test_a_server_that_names_no_cameras_leaves_an_unnamed_camera_its_default_and_is_said_once(
-        shim, capsys):
+        shim, caplog):
+    caplog.set_level("WARNING", logger=shim._logger.name)
     client = _Client(shim, names_cameras=False)
     world = shim.World(client)
     shim._server_names_no_cameras_said = False
@@ -228,7 +231,7 @@ def test_a_server_that_names_no_cameras_leaves_an_unnamed_camera_its_default_and
     assert not shim.camera_named_by_server(first)
     # A name the client gave is held by such a server as by any other.
     assert world.camera_name(named) == "DECK-I25"
-    said = capsys.readouterr().err
+    said = caplog.text
     assert said.count("this server names no cameras") == 1
     assert f"camera {first.id} was spawned without a name" in said
     assert "rebuild the server" in said

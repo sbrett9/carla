@@ -1,15 +1,15 @@
 """A stare aimed at the rendered traffic looks at where the session put the vehicles before the window.
 
-Plan 12 §5.2 and D12.37: `stare_look_at_target: rendered_traffic` resolves to the mean position,
-height included, of the vehicles the session rendered on the last frame before its camera holds for
-the window, measured from the poses it wrote to bodies. The camera follows that centre through the
-prewarm until one SUMO step and the picture's ceiling -- its 60 frames at 2 Hz and the ten-tick
-span, 32 one-second steps at the defaults -- before the window opens, and then holds one pose, so
-the view whose tiles and picture are waited on (03 §9.5.1) is the view the window holds; the run
-result records the point so the view is reproducible as an ordinary look-at stare. That hold is the
-one `capture.picture_settled_wait` true asks for, and the tests that work it out set the field; at
-its default, off by the owner's ruling of 2026-10-06, only the tiles are waited on and the camera
-holds for their own lead, `capture.tiles_hold_s`, 10 s, which the tests at the end work out.
+`stare_look_at_target: rendered_traffic` resolves to the mean position, height included, of the
+vehicles the session rendered on the last frame before its camera holds for the window, measured
+from the poses it wrote to bodies. The camera follows that centre through the prewarm until one SUMO
+step and the picture's ceiling -- its 60 frames at 2 Hz and the ten-tick span, 32 one-second steps
+at the defaults -- before the window opens, and then holds one pose, so the view whose tiles and
+picture are waited on is the view the window holds; the run result records the point so the view is
+reproducible as an ordinary look-at stare. That hold is the one `capture.picture_settled_wait` true
+asks for, and the tests that work it out set the field; at its default, off, only the tiles are
+waited on and the camera holds for their own lead, `capture.tiles_hold_s`, 10 s, which the tests at
+the end work out.
 
 The stand-in session hands `on_pose` one record per vehicle per tick. Its vehicles drive east at one
 metre per simulated second, so the centre of a step's last frame, the centre of the whole step and the

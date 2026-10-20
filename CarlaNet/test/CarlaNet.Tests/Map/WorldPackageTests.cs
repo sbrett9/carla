@@ -559,7 +559,7 @@ public class WorldPackageTests : IDisposable
     [Fact]
     public void AnAreaTableResolvedFromAnotherSourceIsRefused()
     {
-        // C5 V5.11: the table records the digest of the GeoJSON it came from, and a different
+        // The table records the digest of the GeoJSON it came from, and a different
         // GeoJSON beside it means the table describes areas this package does not declare.
         WriteWorld();
         byte[] other = Utf8(GeoJson.Replace("\"kerb\"", "\"gate\""));

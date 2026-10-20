@@ -65,8 +65,8 @@ public sealed class ScenarioLockCheckTests
                           + $"run: its compile lock {compiled.Lock} records that the run was skipped ({reason}).",
                           refused.Message);
         Assert.Contains("SUMO has not been started", refused.Message);
-        Assert.Contains("AcceptSkippedDryRun; run_sumo_drive.py --accept-skipped-dry-run; run_capture "
-                        + "scenario.accept_skipped_dry_run", refused.Message);
+        Assert.Contains("AcceptSkippedDryRun; carla-drive --accept-skipped-dry-run; carla-capture --set "
+                        + "scenario.accept_skipped_dry_run=true", refused.Message);
         Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
 
         // Accepted, it runs, with its plan bound, and the report says the acceptance.

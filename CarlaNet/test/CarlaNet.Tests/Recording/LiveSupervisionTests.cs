@@ -1,8 +1,5 @@
 // The supervision in force is held on the CARLA server, not in the process that drives the run, so every
-// client of one world reads the same truth for the same frame -- the owner's ruling of 2026-10-05: "I do
-// not want two clients ever having different truth state." See
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2 and
-// 04_Contracts.md §8.3b.
+// client of one world reads the same truth for the same frame.
 //
 // A stand-in server here takes the change a session puts (update_supervision), holds it as the plugin
 // holds it, and streams two real clients the snapshots its world observer would write from what it holds.

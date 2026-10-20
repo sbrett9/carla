@@ -29,8 +29,7 @@ namespace CarlaNet.Recording;
 /// The <c>carla:capture</c> chunk also carries its <c>format_version</c> and, where the recorder gave one,
 /// what made the still (<see cref="Producer"/>, <c>producer</c>): the chunk that says which capture a
 /// still is says what wrote it too, so a still separated from everything else can be traced to the
-/// release of the distribution that made it, and the PNG keeps its four chunks
-/// (<c>04_Contracts.md</c> rev 42).
+/// release of the distribution that made it, and the PNG keeps its four chunks.
 /// </remarks>
 public sealed record CaptureIdentity(
     ulong Tick,

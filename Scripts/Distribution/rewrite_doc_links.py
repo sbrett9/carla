@@ -1,6 +1,6 @@
 """Point the links in a distribution's copied pages at what the bundle holds.
 
-The pages are written for the repository. The user documentation lives in Docs/CAT_Research/ and the
+The pages are written for the repository. The user documentation lives in Docs/ and the
 example scenarios' READMEs in CarlaControl/Examples/Scenarios/. A link that leaves its own folder
 names a file by its place in the repository, and in a bundle that place does not exist: the pages
 are shipped as docs/ and Scenarios/, and the other repository folders are shipped under other names
@@ -32,13 +32,13 @@ import sys
 # The folders of pages the bundle copies, each with where it came from in the repository: (bundle
 # path, repository path). A folder the bundle goes without is skipped.
 PAGE_ROOTS = [
-    ("docs", "Docs/CAT_Research"),
+    ("docs", "Docs"),
     ("Scenarios", "CarlaControl/Examples/Scenarios"),
 ]
 
 # Repository folders the bundle ships under another name: (repository path, bundle path).
 SHIPPED_AS = [
-    ("Docs/CAT_Research", "docs"),
+    ("Docs", "docs"),
     ("CarlaControl/Examples/Scenarios", "Scenarios"),
     ("CarlaControl/skills", "skills"),
 ]
@@ -135,7 +135,7 @@ def rewrite_page(path, relative_page, bundle_name, repository_root, bundle_root)
         path: the page's file in the bundle.
         relative_page: the page's path inside its folder, with forward slashes.
         bundle_name: the folder's name in the bundle, such as `docs`.
-        repository_root: where the folder came from in the repository, such as `Docs/CAT_Research`.
+        repository_root: where the folder came from in the repository, such as `Docs`.
         bundle_root: the bundle's folder, where what shipped is read from.
     """
     with open(path, "rb") as f:

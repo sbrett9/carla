@@ -159,10 +159,9 @@ class CotUdpEmitter:
         carla["color"] = rec["color"]
         if "role_name" in rec:
             carla["role_name"] = rec["role_name"]
-        # `marked` is not a contract field. The SUMO bridge's truth sidecar supplies it to say
-        # which vehicles the author planted, 1 or 0 as in its CSV column, and so leaves
-        # `special_type` to say what kind of vehicle it is (06 D6.18). No CARLA record and no
-        # datagram carries it.
+        # Only the SUMO bridge's truth sidecar supplies `marked`, to say which vehicles the author
+        # planted, 1 or 0 as in its CSV column, and so leaves `special_type` to say what kind of
+        # vehicle it is. No CARLA record and no datagram carries it.
         if "marked" in rec:
             carla["marked"] = "1" if rec["marked"] else "0"
         carla["vx"] = f"{rec['vx']:.2f}"

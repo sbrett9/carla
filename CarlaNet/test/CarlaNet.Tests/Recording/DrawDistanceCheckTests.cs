@@ -1,8 +1,7 @@
 // A vehicle farther from a camera than the draw distance a SUMO drive was run under is in the world
 // and in the truth, and not in that camera's image: its record in that camera's sidecar says so, and
 // it is never measured for occlusion against a depth capture that cannot show it either. See
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2 and
-// Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md.
+// beyond_draw_distance in Docs/Schemas/Truth_Sidecar.md.
 using System.Xml.Linq;
 using CarlaNet.Recording;
 

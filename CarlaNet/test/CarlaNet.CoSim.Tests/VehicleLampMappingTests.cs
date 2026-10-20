@@ -8,7 +8,7 @@ namespace CarlaNet.CoSim.Tests;
 /// SUMO has no model for.
 /// </summary>
 /// <remarks>
-/// The words are the eight the sizing scenario was measured producing, and nothing else: 0, brake,
+/// The words are the eight the Shahid Bahonar Port scenario was measured producing, and nothing else: 0, brake,
 /// left, right, brake with either, brake with both, and both.
 /// </remarks>
 public sealed class VehicleLampMappingTests

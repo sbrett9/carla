@@ -1,10 +1,12 @@
-"""The two-run manifest diff: two runs of one scenario name the same supervision rows (06 D6.8).
+"""The two-run manifest diff: two runs of one scenario name the same supervision rows.
 
-The fixtures are the manifests of three real runs of one supervised scenario -- the fixture cross
-under a plan with a stop-anchored dwell, an unanchored approach and a route-part transit --
-written by `CarlaNet.CoSim.RunManifestWriter` against SUMO with no CARLA: at a 1 s SUMO step, at a
-0.5 s step, and at 1 s with the capture window opening at 15 s, the three ways the binder's own D6.8
-test runs it. Only the absolute paths in their opening rows were cut to file names. Asserted:
+The test data are the manifests of three real runs of one supervised scenario -- the test network's
+cross of four approaches, under a plan with a stop-anchored dwell, an unanchored approach and a
+route-part transit -- written by `CarlaNet.CoSim.RunManifestWriter` against SUMO with no CARLA: at a
+1 s SUMO step, at a 0.5 s step, and at 1 s with the capture window opening at 15 s. These are the
+three runs `SupervisionBinderSessionTests.TwoRunsOfOneScenarioBindTheSameRowsDifferingOnlyInTheirTimes`
+makes of `SupervisionBinder`. Only the absolute paths in their opening rows
+were cut to file names. Asserted:
 
   * the runs at two steps, and the run whose window opens late, name the same triples and pass,
     their onsets and closings listed as bound differently;

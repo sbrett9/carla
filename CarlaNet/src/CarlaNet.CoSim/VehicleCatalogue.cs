@@ -18,7 +18,7 @@ namespace CarlaNet.CoSim;
 /// catalogue's Python reader reads, and it makes the same refusals for the same reasons.</para>
 ///
 /// <para>It also says what kind of vehicle each body is. The truth record's <c>base_type</c> and
-/// <c>special_type</c> come from the catalogue (doc 06 D6.18): each class curates both for its
+/// <c>special_type</c> come from the catalogue: each class curates both for its
 /// members, because the content build's own are hand-edited -- when first swept, the base type was
 /// wrong or absent for seven of seventeen blueprints and the special type empty for all of them.</para>
 /// </remarks>

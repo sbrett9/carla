@@ -552,7 +552,7 @@ public sealed class CoSimRunReport
     /// <remarks>
     /// The server carries the step and the named bodies on every world-observer snapshot, so every reader
     /// computes where each lent body's pose on a frame came from with that frame's number, and nothing is
-    /// sent per tick (the owner's ruling of 2026-10-06).
+    /// sent per tick.
     /// </remarks>
     public long PoseSourceUpdates { get; internal set; }
 

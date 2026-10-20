@@ -1,8 +1,8 @@
 // Every vehicle record a recorder writes says whether the vehicle is in this camera's picture, and,
-// where its occlusion was not measured, why -- whether or not a depth camera is attached. The owner
-// ruled (2026-10-05) that the five occlusion fields may no longer simply be absent: a reader could not
-// tell "no occlusion value" from "not hidden". See Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md
-// §5.1 and Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2.
+// where its occlusion was not measured, why -- whether or not a depth camera is attached. The five
+// occlusion fields are never absent without a reason, because without one a reader could not tell
+// "no occlusion value" from "not hidden". See in_frame and occlusion_unmeasured in
+// Docs/Schemas/Truth_Sidecar.md.
 //
 // A stand-in server streams a real FrameRecorder a world of four vehicles under a camera looking
 // straight down from 100 m -- one under the camera, one far outside the picture, one above the camera

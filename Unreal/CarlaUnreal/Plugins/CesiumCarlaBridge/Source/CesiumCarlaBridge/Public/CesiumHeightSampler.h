@@ -77,7 +77,7 @@ public:
 	 * up with the active .xodr. Sets the default ACesiumGeoreference's cartographic origin
 	 * to (OriginLatitude, OriginLongitude, OriginHeight).
 	 *
-	 * Layer model (08_Layer_Architecture): ensures up to two tagged tilesets sharing the
+	 * Layer model: ensures up to two tagged tilesets sharing the
 	 * georeference — a "photoreal" visual tileset (IonAssetId, visible, no collision) and,
 	 * when GroundIonAssetId &gt; 0, a "ground" bare-earth tileset (e.g. Cesium World Terrain
 	 * asset 1) that is HIDDEN with collision ON and is the height-sample source. Each is

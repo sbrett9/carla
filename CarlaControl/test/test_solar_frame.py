@@ -2,9 +2,9 @@
 
 The engine sets `TimeZone = longitude / 15` when it configures a world's georeference. At Bahonar that
 is +03:44:43 against Iran's civil +03:30 -- 14.72 minutes of clock, and up to 3.3 degrees of sun
-elevation near the horizon (`04_Contracts.md` §11.4). The frame publishes the derived figure so a
-scenario's declared offset can be compared with it offline; these tests pin the figure to the three
-shipped worlds' origins and to the arithmetic `04_Contracts.md` works through for the sizing site.
+elevation near the horizon. The frame publishes the derived figure so a scenario's declared offset
+can be compared with it offline. These tests pin the figure to the origins of the three shipped
+worlds, and pin Bahonar's correction against the +03:30 its scenario declares.
 """
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ def test_the_zone_is_longitude_over_fifteen(latitude, longitude, hours, formatte
     assert (frame["origin_latitude"], frame["origin_longitude"]) == (latitude, longitude)
 
 
-def test_the_sizing_sites_correction_is_the_one_the_contract_works_through():
-    """`04_Contracts.md` §11.4: +0.2453767 h, 14.72 minutes, against a declared +03:30."""
+def test_the_sizing_sites_correction_against_its_declared_offset():
+    """+0.2453767 h, 14.72 minutes, against a declared +03:30."""
     zone = SolarFrame(27.15012, 56.18065).to_dict()["engine_time_zone_hours"]
     assert (zone - 3.5) == pytest.approx(0.2453767, abs=1e-7)
     assert (zone - 3.5) * 60.0 == pytest.approx(14.72, abs=0.005)

@@ -1,8 +1,8 @@
 """An area of interest is placed where it was drawn: in CARLA metres, and on the SUMO lanes it covers.
 
-`AreaOfInterestResolver` turns validated GeoJSON into the table the world package carries
-(`04_Contracts.md` C5 §7.2-§7.3). Nothing here is mocked: every area is placed by a real SUMO process
-holding a real netconvert network, and cross-checked against CarlaNet's real `Geodesy`.
+`AreaOfInterestResolver` turns validated GeoJSON into the table the world package carries. Nothing
+here is mocked: every area is placed by a real SUMO process holding a real netconvert network, and
+cross-checked against CarlaNet's real `Geodesy`.
 
 Most tests use the cross-shaped network the world-build tests already use, whose lanes run along
 known lines (`street_names_true.net.xml`, origin 39.5 N 104.9 W). Areas are drawn in that network's
@@ -16,7 +16,7 @@ they are absent:
     which must resolve to the lane position its own scenario parks the guard at;
   * a two-lane Arapahoe edge, for the rule that makes an edge inside, crossing or near.
 
-The frame check (C5 V5.12) is shown refusing a manifest whose origin is a tenth of a metre from the
+The frame check is shown refusing a manifest whose origin is a tenth of a metre from the
 network's, and a network carrying a road offset.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
-from carlacontrol.AreaOfInterestResolver import AreaOfInterestResolver  # noqa: E402
+from carlacontrol.AreaOfInterestResolver import UNREACHABLE, AreaOfInterestResolver  # noqa: E402
 from carlacontrol.AreaOfInterestSource import (  # noqa: E402
     AreaOfInterestError,
     AreaOfInterestSource,
@@ -238,12 +238,12 @@ def test_the_table_records_the_frame_it_was_placed_in(query):
 
 
 def test_an_origin_a_tenth_of_a_metre_away_is_refused(query):
-    """V5.12. 1e-6 degree of latitude is 0.11 m: the network and the manifest describe different
+    """The frame check. 1e-6 degree of latitude is 0.11 m: the network and the manifest describe different
     frames. 1e-7 degree is 0.011 m, inside the limit, and passes."""
     moved = dict(MANIFEST, OriginLatitude=MANIFEST["OriginLatitude"] + 1e-6)
     with pytest.raises(AreaOfInterestError) as raised:
         resolve(query, circle(query, "kerb", 50.0, -1.68, 10.0), manifest=moved)
-    assert raised.value.problems[0].startswith("V5.12 area 'kerb'")
+    assert raised.value.problems[0].startswith("area 'kerb': SUMO's projection and the world's")
     nudged = dict(MANIFEST, OriginLatitude=MANIFEST["OriginLatitude"] + 1e-7)
     assert resolve(query, circle(query, "kerb", 50.0, -1.68, 10.0), manifest=nudged)["areas"]
 
@@ -256,25 +256,26 @@ def test_a_network_carrying_a_road_offset_is_refused_naming_the_offset(installat
         feature = circle(shifted, "kerb", 60.0, -1.68, 10.0)
         with pytest.raises(AreaOfInterestError) as raised:
             resolve(shifted, feature, network=offset)
-    assert "V5.12" in raised.value.problems[0] and "netOffset [10.0, 0.0]" in raised.value.problems[0]
+    assert "frame disagree" in raised.value.problems[0]
+    assert "netOffset [10.0, 0.0]" in raised.value.problems[0]
 
 
 # ---- warnings -----------------------------------------------------------------------------------
 
 def test_an_area_across_the_staging_edge_is_warned_about(query):
     area = resolve(query, circle(query, "edge", 195.0, -1.68, 10.0))["areas"][0]
-    assert any(w.startswith("V5.5") and "crosses the edge" in w for w in area["warnings"])
+    assert any("staging rectangle" in w and "crosses the edge" in w for w in area["warnings"])
     outside = resolve(query, circle(query, "beyond", 260.0, -1.68, 5.0))["areas"][0]
-    assert any(w.startswith("V5.5") and "wholly outside" in w for w in outside["warnings"])
+    assert any("staging rectangle" in w and "wholly outside" in w for w in outside["warnings"])
 
 
 def test_an_area_in_the_staging_ring_and_out_of_reach_is_warned_about(query):
     # SUMO (180, 60) is CARLA (180, -60): inside the staging rectangle, outside the 30 m inset.
     area = resolve(query, circle(query, "ring", 180.0, 60.0, 5.0))["areas"][0]
-    assert any(w.startswith("V5.6") for w in area["warnings"])
-    assert any(w.startswith("V5.7") for w in area["warnings"])
+    assert any("staging ring" in w for w in area["warnings"])
+    assert any(UNREACHABLE in w for w in area["warnings"])
     inland = resolve(query, circle(query, "inland", -150.0, 60.0, 5.0))["areas"][0]
-    assert not any(w.startswith("V5.6") for w in inland["warnings"])
+    assert not any("staging ring" in w for w in inland["warnings"])
 
 
 def test_an_area_on_the_roads_warns_about_nothing(query):

@@ -2,9 +2,9 @@
 
 A SUMO drive limited to a circle -- an optional performance control; by default every vehicle SUMO
 has is drawn -- renders vehicles only inside it, in SUMO's frame, and a free camera can be flown
-anywhere over the world's sandbox (`12_Operator_Control_Surface.md` section 9.6). The
-sandbox is recorded in CARLA's frame in the world package, whose northing runs the other way, so
-the conversion is checked against the shipped packages' own SUMO networks where they are on disk.
+anywhere over the world's sandbox. The sandbox is recorded in CARLA's frame in the world package,
+whose northing runs the other way, so the conversion is checked against the shipped packages' own
+SUMO networks where they are on disk.
 """
 from __future__ import annotations
 

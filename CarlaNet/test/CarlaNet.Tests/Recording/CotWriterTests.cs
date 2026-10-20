@@ -1,5 +1,5 @@
-// Guards the CoT sidecar's _carla block against the schema in
-// Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md.
+// Guards the CoT sidecar's _carla block against the truth record the truth sidecar's page
+// describes, Docs/Schemas/Truth_Sidecar.md.
 using System.Xml.Linq;
 using CarlaNet.Recording;
 using CarlaNet.Types.Illumination;
@@ -129,7 +129,7 @@ public class CotWriterTests
     [Fact]
     public void A_Sun_The_Engine_Could_Not_Compute_Is_Recorded_Without_A_Band()
     {
-        // -180 degrees is the engine's sentinel for an impossible date (doc 11 F4), not a night.
+        // -180 degrees is the engine's sentinel for an impossible date, not a night.
         double[] sentinel = [12.0, 2026, 2, 31, 3.5, 27.15012, 56.18065, -180.0, 0.0, 0.0, 0.0, -180.0];
         string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
         try
@@ -404,7 +404,7 @@ public class CotWriterTests
                     <annotation instance="Shahid_Bahonar_Port_PatternOfLife/pi_escort_drydock_d3" labels="bahonar:coordinated_group_transit bahonar:destination_off_pattern" phase="transit" role="bahonar:lead" />
                   </_supervision>
             """.ReplaceLineEndings(), xml);
-        // A nominal vehicle names which authored ordinary behaviour it is (06 D6.31).
+        // A nominal vehicle names which authored ordinary behaviour it is.
         Assert.Contains(
             """
                   <_supervision state="nominal" vocabulary="3" vocabulary_digest="e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad">
@@ -424,7 +424,7 @@ public class CotWriterTests
         Assert.Null(unnamedEvent.Element("detail")!.Element("_supervision"));
         Assert.Equal(4, root.Elements("event").Count());
         // Nothing is written for the world apart from the plan on the container: every label follows a
-        // vehicle, so every _supervision element is inside a vehicle's event (06 §3.5).
+        // vehicle, so every _supervision element is inside a vehicle's event.
         Assert.Empty(root.Elements("_supervision"));
         Assert.Equal(3, root.Descendants("_supervision").Count());
         Assert.All(root.Descendants("_supervision"), element => Assert.Equal("detail", element.Parent!.Name.LocalName));

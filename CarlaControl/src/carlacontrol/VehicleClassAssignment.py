@@ -3,7 +3,7 @@
 The content build declares a `BaseType` and a `SpecialType` per vehicle in a hand-edited file, and
 nothing checks them against the bodies. When they were first measured, six saloons declared `bus`, a
 van declared nothing, and every special type was empty, so the ambulance, the fire truck and the
-police car were indistinguishable from a hatchback in the truth record (doc 04, C1 Measurement 1).
+police car were indistinguishable from a hatchback in the truth record.
 The catalogue therefore carries its own answer, derived from what the sweep measures, rather than
 repeating the file.
 
@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # The truth record's `base_type` vocabulary, as the CoT contract publishes it
-# (Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md, section 4).
+# (`base_type` in Docs/Schemas/CoT_Telemetry_Stream.md).
 COT_BASE_TYPES = frozenset({"car", "van", "truck", "bus", "motorcycle", "bicycle"})
 
 # The truth record's `special_type` vocabulary from the same source: emergency covers fire, ambulance

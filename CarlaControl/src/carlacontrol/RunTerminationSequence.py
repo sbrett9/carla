@@ -1,6 +1,6 @@
 """One ordered path out of a capture run, for a stop, a signal and a fault alike.
 
-`12_Operator_Control_Surface.md` §3.10.2, D12.33. The external caller may stop us at any instant, so
+The external caller may stop us at any instant, so
 termination is the expected path and there is one order to get right. That order is the inverse of
 the one the interactive viewer uses, which despawns the world before it drains the recorder
 (`run_SCTMV.py`): **the corpus is made safe before anything is spent on the world.**
@@ -31,7 +31,7 @@ ignores it is a hang.
 Idempotent -- running it twice runs each step once -- and re-entrant: a call from inside a step
 returns at once.
 
-What it must never do (§3.10.2): delete or rewrite anything already written; stage an artifact for
+What it must never do: delete or rewrite anything already written; stage an artifact for
 publication at the end; block the corpus on the server, SUMO or the external chain; report a signal
 as a fault.
 """

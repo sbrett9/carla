@@ -764,7 +764,7 @@ void FCarlaServer::FPimpl::BindActions()
   // request_terrain_heights, then poll_terrain_heights until results arrive. The game
   // thread ticks freely between polls (async mode), driving the sample to completion.
   // Coordinates are carla::geom::GeoLocation (doubles) — Vector3D's float32 would lose
-  // ~1 m of longitude precision. See CesiumCarlaBridge / DYNAMIC_WORLD_PIPELINE_PLAN.md.
+  // ~1 m of longitude precision. The sampling itself is UCesiumHeightSampler's, in CesiumCarlaBridge.
 
   BIND_SYNC(request_terrain_heights) << [this](
       std::vector<cg::GeoLocation> points,
@@ -841,7 +841,8 @@ void FCarlaServer::FPimpl::BindActions()
       RESPOND_ERROR("no world to configure Cesium georeference in");
     }
     // ion_asset_id = visual "photoreal" layer; ground_ion_asset_id (>0) = hidden collidable
-    // bare-earth "ground" layer (the height-sample source). See 08_Layer_Architecture.
+    // bare-earth "ground" layer (the height-sample source). Each layer is a tileset with its own
+    // visibility and collision, and the ground layer alone supplies heights for roads and telemetry.
     const bool ok = UCesiumHeightSampler::ConfigureCesiumForOrigin(
         World, origin.latitude, origin.longitude, origin.altitude,
         cr::ToFString(ion_token), static_cast<int64>(ion_asset_id),
@@ -988,7 +989,7 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
-  // Per-layer visibility (08_Layer_Architecture). `layer` is "photoreal"/"ground" (a Cesium
+  // Per-layer visibility. `layer` is "photoreal"/"ground" (a Cesium
   // tileset tag), "road" (the OpenDRIVE mesh) or "signals" (the traffic lights and signs generated
   // from OpenDRIVE). Rendering only — collision is independent.
   BIND_SYNC(set_layer_visible) << [this](std::string layer, bool visible) -> R<bool>
@@ -1030,7 +1031,7 @@ void FCarlaServer::FPimpl::BindActions()
     return true;
   };
 
-  // Per-layer physics collision (08_Layer_Architecture). Tilesets: SetCreatePhysicsMeshes;
+  // Per-layer physics collision. Tilesets: SetCreatePhysicsMeshes;
   // "road": AProceduralMeshActor collision. Independent of visibility.
   BIND_SYNC(set_layer_collision) << [this](std::string layer, bool enabled) -> R<bool>
   {
@@ -1907,7 +1908,7 @@ void FCarlaServer::FPimpl::BindActions()
   // the pattern instances in force -- with the plan every row is bound from and the vocabulary
   // version and digest that pin what its terms mean. Every row is a vehicle's: nothing is held for
   // the world apart from the plan, because SUMO reports vehicles, not places, and a label follows the
-  // vehicle it is about (06_Truth_And_Annotation.md §3.5). The world observer carries what is held
+  // vehicle it is about. The world observer carries what is held
   // on every snapshot from the next frame on, after the render set's entries, so every client of the
   // world reads the same truth for the same frame; nothing about it is kept in one client's process.
   // Sent by the session only when the supervision changes, after its render set and before the tick

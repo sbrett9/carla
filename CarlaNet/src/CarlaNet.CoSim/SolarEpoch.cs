@@ -23,7 +23,7 @@ namespace CarlaNet.CoSim;
 /// corpus's frames were lit by. <see cref="TimeZoneId"/> is carried for a reader and is never
 /// resolved. Daylight saving is part of the declared offset; <see cref="DstInEffect"/> only says
 /// whether it is, so "+02:00 standard" and "+02:00 because it is summer" read differently. Half-hour
-/// and quarter-hour offsets are ordinary: the sizing scenario's port is at +03:30.</para>
+/// and quarter-hour offsets are ordinary: Shahid Bahonar Port is at +03:30.</para>
 ///
 /// <para><b>Declared twice on purpose.</b> The instant is given as a civil time with its offset and
 /// again in UTC, and the two must agree to the second. The likeliest authoring error is an offset
@@ -31,8 +31,8 @@ namespace CarlaNet.CoSim;
 /// that looks entirely plausible. Nothing about the rendered frame can catch that; comparing two
 /// statements of one fact can.</para>
 ///
-/// <para>The wire shape is the <c>epoch</c> object of the scenario contract
-/// (<c>Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md</c> section 11.3). A document
+/// <para>The wire shape is the <c>epoch</c> object of a scenario specification
+/// (<c>Docs/Schemas/Epoch.md</c>). A document
 /// that breaks any rule is refused whole, naming every rule it broke, because a time declaration
 /// read in part renders six days of a week on the wrong date.</para>
 /// </remarks>

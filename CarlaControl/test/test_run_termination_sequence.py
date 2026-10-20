@@ -1,10 +1,10 @@
 """One ordered, bounded, idempotent path out of a run, whatever started it.
 
-Plan 12 §3.10.2, D12.33. The order is the substance -- the corpus is made safe before anything is spent
-on the world -- so it is asserted with the steps registered in the wrong order. A step that hangs on a
-server the caller has killed must not hold the rest hostage, a step that fails must not stop the ones
-after it, a second call must do nothing, and a second signal must abandon what is left. The signals are
-raised in this process with `signal.raise_signal`, so the handlers under test are the real ones.
+The order is the substance -- the corpus is made safe before anything is spent on the world -- so it
+is asserted with the steps registered in the wrong order. A step that hangs on a server the caller has
+killed must not hold the rest hostage, a step that fails must not stop the ones after it, a second
+call must do nothing, and a second signal must abandon what is left. The signals are raised in this
+process with `signal.raise_signal`, so the handlers under test are the real ones.
 """
 from __future__ import annotations
 

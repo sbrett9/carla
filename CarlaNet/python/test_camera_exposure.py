@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """The RGB camera takes its exposure from its attributes, over its profile, and every capture records it.
 
-Stage K, as the owner ruled on 2026-10-06 (13_Work_Breakdown.md; 08_Collection_And_EPoL.md D8.26-D8.27).
 The camera publishes upstream CARLA 0.9's exposure attributes -- `exposure_mode`, `exposure_compensation`,
 `iso`, `shutter_speed` (per second) and `fstop` -- recommended at the `Default` profile's values, and the
 plugin applies them after the post-process profile loads, so they set the exposure whatever the profile.

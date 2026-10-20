@@ -4,7 +4,7 @@ A report that states the sun a window opens under is only worth reading if it is
 will bind. So nothing is re-derived here: the window's declared instant comes from
 `CarlaNet.CoSim.DeclaredSun` -- the function the session writes the sun from and audits it against --
 and the direction from `CarlaNet.CoSim.SolarPositionModel.AtInstant`, the engine's algorithm evaluated
-at that instant, which is the audit's own expectation (`04_Contracts.md` C6 §8.3a). The elevation a
+at that instant, which is the audit's own expectation. The elevation a
 window is declared by is the one `DeclaredSunElevation` names -- refraction-corrected, the angle the
 light is rotated by -- with the geometric one carried beside it.
 

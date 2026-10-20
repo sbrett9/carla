@@ -1,9 +1,8 @@
 """Whether a capture camera's view is ready to be written: its photoreal tiles in, and its picture settled
 where the run asks for that.
 
-`03_CoSimulation_Runtime.md` §9.5.1. Cesium selects and refines tiles on the world tick, from the views
-registered for that tick, so this readiness progresses only while the world ticks. The capture
-checks two things:
+Cesium selects and refines tiles on the world tick, from the views registered for that tick, so this
+readiness progresses only while the world ticks. The capture checks two things:
 
 * **The tiles.** The server reports the load status of the tiles in a camera's view:
   `world.get_view_readiness(camera)` answers as of the end of the last tick. The tiles are in when
@@ -13,8 +12,8 @@ checks two things:
   failure: Cesium never retries a failed tile, counts it as loaded and draws it empty. The status
   is each tileset's for every view registered with Cesium at once: the published sensors and the player
   camera where the server is not headless. Two channels of one run therefore read the same status.
-  A headless server registers no player camera since 2026-10-15; doc 03 §9.5.1 records the
-  measurement behind that change.
+  A headless server registers no player camera (`ACesiumSensorViewPublisher`): a view left at the
+  world's origin selects tiles out to the horizon, and every readiness figure would wait on them.
 * **The picture.** The capture compares the camera's frames to tell whether the rendered image has
   stopped changing. With every tile in, the renderer still moves the
   picture for tens of ticks. It has settled when the camera's frame differs from its newest frame at
@@ -25,29 +24,28 @@ checks two things:
   the tick the tiles were answered in for count, and a view whose tiles stop being in starts its
   picture again.
 
-**The picture's wait is off by default.** By the owner's ruling of 2026-10-06 -- "It's in a state
-that is not something I'd like to include at publication" -- the picture is waited on only where the
-run configuration sets `capture.picture_settled_wait` true; its tool default is
-`PICTURE_SETTLED_WAIT`, false. Off, a view is ready on the step its tiles are in: the camera's frames
-are not listened to, none is compared, and the record says the wait was not run, names the field and
-holds no picture figure. The tiles then have a lead of their own, `capture.tiles_hold_s`
-(`TILES_HOLD_S`, 10 s): a stare that follows the traffic holds the pose the window opens on for that
-long before the window, in whole SUMO steps, and every camera's prewarm must hold it, so the tiles are
-asked about after every step of it. The picture's code below is kept as it is and runs, unchanged,
-only where the field is true, and then its ceiling sets the hold and the tiles' lead is not read. It is off for a fault left unfixed: the comparison places each frame's rendered
-vehicles from the client's snapshot of that frame, and the gate is asked once per SUMO step, after the
-step's last tick, so at Bahonar's 1 s step of twenty ticks the client no longer holds the older
-compared frame's snapshot by then and every comparison is `vehicles_unknown` -- 59 of 59 on the guard
-run of 2026-10-06, refused at pre-roll. Arapahoe steps every tick, so it never showed there. The owner
-had also found the wait too strict.
+**The picture's wait is off by default.** The picture is waited on only where the run configuration
+sets `capture.picture_settled_wait` true; its tool default is `PICTURE_SETTLED_WAIT`, false. Off, a
+view is ready on the step its tiles are in: the camera's frames are not listened to, none is
+compared, and the record says the wait was not run, names the field and holds no picture figure. The
+tiles then have a lead of their own, `capture.tiles_hold_s` (`TILES_HOLD_S`, 10 s): a stare that
+follows the traffic holds the pose the window opens on for that long before the window, in whole SUMO
+steps, and every camera's prewarm must hold it, so the tiles are asked about after every step of it.
+The picture's code below is kept as it is and runs, unchanged, only where the field is true, and then
+its ceiling sets the hold and the tiles' lead is not read. It is off for a fault left unfixed: the
+comparison places each frame's rendered vehicles from the client's snapshot of that frame, and the
+gate is asked once per SUMO step, after the step's last tick, so at Bahonar's 1 s step of twenty
+ticks the client no longer holds the older compared frame's snapshot by then and every comparison is
+`vehicles_unknown` -- 59 of 59 on the guard run of 2026-10-06, refused at pre-roll. Arapahoe steps
+every tick, so it never showed there.
 
 **The span is counted in ticks; the ceiling in the camera's own frames.** The placements were
 measured with a camera rendering every tick, where ten frames and ten ticks are the same thing. A
 frame is compared with the newest one rendered ten or more ticks before it -- the frame before it at
 2 Hz, the frame ten before it at 20 Hz. The ceiling was first written as 120 of the camera's frames,
 then as 120 ticks after one Bahonar run at 2 Hz whose view had settled five frames after its tiles,
-and is counted in the camera's frames again by the owner's ruling of 2026-10-06, from what the
-Arapahoe check stare measured: judged under a running session at 2 Hz, its worst block fell 2.63,
+and is counted in the camera's frames again, from what the Arapahoe check
+stare measured: judged under a running session at 2 Hz, its worst block fell 2.63,
 1.90, 2.04, 1.53, 1.15, 0.94, 0.76, 0.73, 0.73, 0.62 gray levels from its 4th to its 13th frame,
 heading under 0.5 around its 15th, just past the 120 ticks, which at 2 Hz are twelve frames; the run
 that passed the day before was judged on the camera's 72nd frame only because its tiles took 712
@@ -61,7 +59,7 @@ view changes its blocks whatever the tiles are doing: on Bahonar, 56 rendered ve
 block at 1.8 to 2.0 grey levels for 120 frames while the same view with none settled in 16. So every
 block a rendered vehicle covers, in either frame of a comparison, is left out of it. A vehicle covers
 its box -- the bounding box its actor description reports, posed where the client's snapshot of that
-frame holds its body, for every body the session's render set says the frame drew (03 §8.9) --
+frame holds its body, for every body the session's render set says the frame drew --
 projected from the camera's pose in the same snapshot with the pinhole the occlusion estimate uses
 (`OcclusionEstimator`), together with the shadow the box casts on the ground from the world's sun, and
 a margin of `VEHICLE_MARGIN_PX` pixels. A comparison that leaves less than half the view's blocks to
@@ -74,15 +72,15 @@ builds a tile's mesh inside the tileset actor's Tick, so a tile can only finish 
 world ticks; the tiles' ceiling is therefore the window's opening, which the prewarm sets in ticks
 (`TILES_CEILING`). A view whose tiles are not in by then is refused with the load status in
 the message. Until 2026-10-15 the tiles also had a 90 s wall-clock ceiling. At a slow pace that
-ceiling refused a view whose tiles were still loading; doc 03 §9.5.1 records the run. The wall
-seconds are still recorded. The session's tick timeout catches a server that stops ticking. An ask
-the server fails to answer is asked again after the next step (`ASK_FAILURES_TOLERATED`) and the
-record counts it. The picture's ceiling is a number of the camera's frames, counted from the first
-frame rendered on or after the tick the tiles were reported in on. The picture's ceiling and its
-tolerance are session-fixed run-configuration fields,
-`capture.picture_ceiling_frames` and `capture.picture_tolerance_levels`, whose tool defaults are
-`PICTURE_CEILING_FRAMES` and `PICTURE_TOLERANCE_LEVELS` here, so either can be changed for a run
-without a code change and the lock records the value; the ten-tick span is not a field.
+ceiling refused a view whose tiles were still loading. The wall seconds are still recorded. The
+session's tick timeout catches a server that stops ticking. An ask the server fails to answer is
+asked again after the next step (`ASK_FAILURES_TOLERATED`) and the record counts it. The picture's
+ceiling is a number of the camera's frames, counted from the first frame rendered on or after the
+tick the tiles were reported in on. The picture's ceiling and its tolerance are session-fixed
+run-configuration fields, `capture.picture_ceiling_frames` and `capture.picture_tolerance_levels`,
+whose tool defaults are `PICTURE_CEILING_FRAMES` and `PICTURE_TOLERANCE_LEVELS` here, so either can
+be changed for a run without a code change and the lock records the value; the ten-tick span is not
+a field.
 
 **The gate never ticks the world.** `ViewReadinessGate.after_step` is called by the process that owns
 the clock after each of its steps, and asks the server once then; a wait that did not tick would have
@@ -98,7 +96,7 @@ held: a refusal then shows whether the picture was converging and how fast, agai
 frame count, the count the ceiling is in. The three refusals of 2026-10-06 were judged over a
 camera's 2nd to 13th frames, its tiles in 4 ticks after it was spawned, with no vehicle within 250 m
 of the view; the run that passed the day before was judged over the same camera's 72nd and 73rd
-frames, its tiles in after 712 ticks (03 §9.5.1). Nothing here is written into a capture. An image
+frames, its tiles in after 712 ticks. Nothing here is written into a capture. An image
 reaches a recorder several ticks after its frame, and the server answers only for the last tick, so a
 capture's own readiness would need the server to publish it per frame, which it does not.
 """
@@ -119,22 +117,21 @@ import numpy as np
 # The window's opening ends a view's wait for its tiles. Cesium builds a tile's mesh inside the
 # tileset actor's Tick, which the engine calls once per world tick, so a tile can only finish
 # loading when the world ticks. The wait therefore has no wall-clock ceiling. The 90 s wall-clock
-# ceiling that stood until 2026-10-15
-# refused a view whose tiles were still loading whenever the pace was slow; doc 03 §9.5.1 records
-# that run. The session's tick timeout catches a server that stops ticking. The wall seconds are
-# still recorded.
+# ceiling that stood until 2026-10-15 refused a view whose tiles were still loading whenever the
+# pace was slow. The session's tick timeout catches a server that stops ticking. The wall seconds
+# are still recorded.
 TILES_CEILING = "the window's opening"
 # The server may fail to answer this many asks in a row before the view is refused. With one, a
 # single failed round trip is asked again after the next step and the run goes on.
 ASK_FAILURES_TOLERATED = 1
 PICTURE_SPAN_TICKS = 10
 # The tool default of capture.picture_settled_wait: whether the picture is waited on once the tiles
-# are in. Off, by the owner's ruling of 2026-10-06.
+# are in. Off; the module docstring says why.
 PICTURE_SETTLED_WAIT = False
 # The tool default of capture.tiles_hold_s: with the picture's wait off, how long every camera holds
-# the pose the window opens on before it, its tiles asked about after each step of that hold. The
-# measurements behind the value are in doc 03 §9.5.1. 10 s stands until the hold is measured again
-# on a headless server that registers no player camera as a Cesium view.
+# the pose the window opens on before it, its tiles asked about after each step of that hold. 10 s
+# stands until the hold is measured again on a headless server that registers no player camera as a
+# Cesium view.
 TILES_HOLD_S = 10.0
 # The tool defaults of capture.picture_ceiling_frames and capture.picture_tolerance_levels: how many
 # of its own frames a camera has, from its tiles being in, to settle its picture (30 s at 2 Hz), and
@@ -440,7 +437,7 @@ def blocks_covered(rectangles: list[tuple[float, float, float, float]], width: i
 class SessionFrameVehicles:
     """Where a frame's rendered vehicles stood, as the session and the client hold it.
 
-    The bodies are the session's render set of the frame (`session.RenderSet`, 03 §8.9), each posed
+    The bodies are the session's render set of the frame (`session.RenderSet`), each posed
     where the client's world snapshot of exactly that frame holds it (`CarlaClient.GetSnapshotFrame`,
     a lookup in memory), with the box its actor description reports, fetched once per body; the
     camera is posed from the same snapshot, or at the pose it is held at where the snapshot does not

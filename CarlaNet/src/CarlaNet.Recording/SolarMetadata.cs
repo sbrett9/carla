@@ -14,8 +14,7 @@ namespace CarlaNet.Recording;
 /// <remarks>
 /// Beside the sun it writes the sun's illumination band (<see cref="IlluminationBands"/>), derived
 /// from this block and nothing else, so the band of every capture comes from the sun the world
-/// achieved on its tick and never from the time the run declared
-/// (<c>06_Truth_And_Annotation.md</c> D6.23).
+/// achieved on its tick and never from the time the run declared.
 /// </remarks>
 public static class SolarMetadata
 {

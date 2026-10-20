@@ -113,7 +113,7 @@ public sealed class RunManifestSupervisionTests : IDisposable
                                           NumberOrNull(standoffOpened, "declared_duration_s")));
         Assert.Equal(("trigger", 31.0, 31.0), (standoffClosed.GetProperty("closed_by").GetString(),
                                                NumberOrNull(standoffClosed, "sim_time_s"), NumberOrNull(standoffClosed, "committed_end_s")));
-        // Every interval row names its participant: there is no interval of no vehicle (06 §3.5).
+        // Every interval row names its participant: there is no interval of no vehicle.
         Assert.All(rows.Where(row => Kind(row) is "interval_opened" or "interval_closed"),
                    row => Assert.Equal(JsonValueKind.String, row.GetProperty("participant").ValueKind));
 
@@ -257,8 +257,9 @@ public sealed class RunManifestSupervisionTests : IDisposable
     [RequiresSumoFact]
     public void TwoRunsOfOneScenarioWriteTheSameTriplesDifferingOnlyInTheirTimes()
     {
-        // 06 D6.8, read from the manifests: a run at another step and a run whose window opens late name
-        // the same (instance_id, participant, phase) triples as the first, the plan's own.
+        // Read from the manifests: the runtime only binds the plan's rows, so a run at another step and a
+        // run whose window opens late name the same (instance_id, participant, phase) triples as the
+        // first, the plan's own.
         using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();
         string wholePath = Path.Combine(_directory, "whole.jsonl");
         string finerPath = Path.Combine(_directory, "finer.jsonl");

@@ -6,9 +6,8 @@ TAK situational-awareness multicast group), one XML file holding every event, an
 vehicle per update for use as a plain dataset.
 
 The events are built by `CotUdpEmitter.vehicle_telemetry_to_cot`, the same formatter the CARLA truth
-producer uses, so what comes out here is the schema described in
-`Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md` and is directly comparable to CARLA truth
-rather than a second dialect of it.
+producer uses, so what comes out here is the event `Docs/Schemas/SUMO_CoT_Event_File.md`
+describes and is directly comparable to CARLA truth rather than a second dialect of it.
 
 Two conversions matter and both avoid guesswork:
 
@@ -32,12 +31,12 @@ ground truth and knows everything, including which vehicles a scenario author pl
 author called them. The XML and CSV are the truth sidecar and are written from the whole record. The
 datagram feed is a moving-map display and is given what a display needs, which leaves out the fields
 named in `AUTHORED_TRUTH_FIELDS`. A field means one thing in every sink: `special_type` is the
-vehicle's kind as the contract spells it and never the author's marking, which the sidecar carries
-in `marked`, a field of its own and not of the contract (`06_Truth_And_Annotation.md` D6.18). SUMO
-reports no kind, and its vehicle class is no base type, so both are the measured vehicle catalogue's
-for the CARLA blueprint a vehicle's type names, where the bridge is given the catalogue, exactly as
-the capture path's truth takes them; only a type that names none of the catalogue's blueprints has
-its base type read from its vehicle class. A compiled scenario marks nothing here; its labels are its
+vehicle's kind (`emergency`, `taxi`, `electric` or empty) and never the author's marking, which the
+sidecar carries in `marked`, a field of its own. SUMO reports no kind, and its vehicle class
+is no base type, so both are the measured vehicle catalogue's for the CARLA blueprint a vehicle's
+type names, where the bridge is given the catalogue, exactly as the capture path's truth takes them;
+only a type that names none of the catalogue's blueprints has its base type read from its vehicle
+class. A compiled scenario marks nothing here; its labels are its
 `*.supervision.json`, joined to the sidecar by vehicle id.
 
 **Both files name their format and what made them.** The XML's `<events>` carries `format_version` and,
@@ -79,7 +78,7 @@ XML_FORMAT_VERSION = 1
 CSV_FORMAT_VERSION = 1
 CSV_SUMMARY_SUFFIX = ".summary.json"
 
-# SUMO's own vehicle classes as the contract's base_type, for a vehicle whose type names no blueprint
+# SUMO's own vehicle classes as a truth record's base_type, for a vehicle whose type names no blueprint
 # the catalogue curates: a type that names one takes the catalogue's base type, because a class says
 # how SUMO drives a vehicle and not what it is -- an ambulance's `emergency` reads as a car here, a
 # police car's `authority` as nothing at all. Anything unlisted is reported as it comes.
@@ -172,7 +171,7 @@ class BareEarthGrid:
             raise ValueError(f"{path} is not a bare-earth grid (magic {magic:#x})")
         count = cols * rows
         header_size = struct.calcsize(cls.HEADER)
-        # A grid is its header and two whole planes (Docs/CAT_Research/Schemas/Bare_Earth_Grid.md); a
+        # A grid is its header and two whole planes (Docs/Schemas/Bare_Earth_Grid.md); a
         # file of any other length was cut short or is not one, and a plane read short would be
         # heights from nowhere.
         if len(raw) != header_size + 8 * count:
@@ -478,12 +477,11 @@ class SumoCotBridge:
             "vy": -speed * math.cos(heading),
             "vz": 0.0,
             # The catalogue's for the blueprint the type names, and the vehicle class's only for a
-            # type that names none of its blueprints (06 D6.18).
+            # type that names none of its blueprints.
             "base_type": base_type,
             "type_id": type_id,
             # The contract's vehicle kind, which SUMO does not report: the catalogue's for the
-            # blueprint the type names. Whether the author planted this one is `marked`, never
-            # this (06 D6.18).
+            # blueprint the type names. Whether the author planted this one is `marked`, never this.
             "special_type": special_type,
             "marked": marked,
             "length_m": traci.vehicle.getLength(vehicle_id),
@@ -506,7 +504,7 @@ class SumoCotBridge:
         it is. A compiled scenario's vType names the CARLA blueprint it was measured from in its
         `carla:blueprint` parameter, and the catalogue curates a base type and a kind for every
         blueprint its classes draw, so a bridge given the catalogue reports what the capture path
-        reports for the same body (`06_Truth_And_Annotation.md` D6.18). A type that names no
+        reports for the same body. A type that names no
         blueprint, one that names a blueprint the catalogue does not curate, and every type on a
         bridge given no catalogue have their base type read from their vehicle class
         (`BASE_TYPE_BY_VEHICLE_CLASS`) and no kind. Whether the author planted the vehicle never

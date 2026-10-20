@@ -1,16 +1,15 @@
 """One capture run, from an invocation to its result: resolve, validate, launch, record, close.
 
-`12_Operator_Control_Surface.md` §6.3's sequence, with the co-simulation session doing what only it can
-do. `01_Architecture.md` §2.3 names the component that assigns one session identity to every recorder
-and a stable `sensor_id` to every camera `CaptureSession`; this is it, in the process that drives the
-world (D1.12):
+The run's sequence, with the co-simulation session doing what only it can do. This class assigns one
+session identity to every recorder and a stable `sensor_id` to every camera, in the process that
+drives the world:
 
 * **Resolve** the six layers (`RunConfigurationResolver`) and **validate offline**
   (`RunConfigurationValidator`), then compute the **launch echo** (`LaunchEcho`) and check the
   caller's expectations and adjudications against it. The resolution report is written on every
   path; the lock and the replayable effective configuration only when the offline checks accept.
 * **Echo.** An attended launch prints the echo, and blocks only when a warning was raised that no
-  `on_warning` adjudicates (§6.4.2); with no terminal to ask, it refuses rather than guessing.
+  `on_warning` adjudicates; with no terminal to ask, it refuses rather than guessing.
 * **Connect and check the server.**
 * **Start the session** (`world.start_sumo_drive`), which checks the loaded world is the package's
   and the scenario's files are the ones its compile lock digests, refuses a scenario that lets SUMO
@@ -28,11 +27,11 @@ world (D1.12):
   outside the limit simulated by SUMO and out of CARLA and the truth. And it is always handed the
   world truth track's path, `truth/world_truth_track.csv` under the capture directory, beside the
   channels' directories: every vehicle SUMO has, drawn or not, at every SUMO frame inside the window,
-  which a base rate is taken over where the sidecars list only what was drawn (06 §8.3, D6.17). The
+  which a base rate is taken over where the sidecars list only what was drawn. The
   session writes it a row at a time with its summary beside it; the run result names it. And the run
   manifest's, `truth/manifest.jsonl` beside it, with a header of what the run is -- its identity, its
   window, its channels -- which the session writes verbatim on the manifest's opening row beside what it
-  established itself (04 §12.7, 06 §8.4); each channel's camera is named on it as it is placed.
+  established itself; each channel's camera is named on it as it is placed.
 * **Map every refusal by its stage.** A refusal from the session's start or from `Advance` is a
   `CoSimSessionRefusedException` whose `StageName` says how far the session had got: `Validation`
   and `Launch` are `refused_server`; `Authority` is `refused_authority`, with the holder a held
@@ -50,8 +49,8 @@ world (D1.12):
   server gives its camera, `Camera_<n>`, read back from the spawned camera. That name is the
   channel's directory, the first part of every still's file name in it and the callsign of its
   platform track. And a depth camera attached to the channel's camera, rigidly and at its pose, for
-  a stare and an orbit alike -- occlusion is measured on every channel, and nothing turns it off
-  (the owner's ruling of 2026-10-05): one move of the camera carries both, so
+  a stare and an orbit alike -- occlusion is measured on every channel, and nothing turns it off:
+  one move of the camera carries both, so
   the two are never captured a frame apart -- not a stare's through the prewarm, not an orbit's
   through the window -- and the server reports the depth camera's world pose on its snapshot and in
   its image header, which is what the recorder's depth pose check reads. The cameras
@@ -64,9 +63,9 @@ world (D1.12):
   depth camera shares its view and is not registered. Under any other render set where the cameras
   look decides nothing about which vehicles are rendered.
 * **Prewarm**: advance until the window's begin without recording, and wait there for every
-  channel's view to be ready (03 §9.5.1, check 50): after each step the server is asked whether the
+  channel's view to be ready (check 50): after each step the server is asked whether the
   camera's photoreal tiles are in. By default that is the whole wait: the picture's wait,
-  `capture.picture_settled_wait`, is off by the owner's ruling of 2026-10-06, so a view is ready on
+  `capture.picture_settled_wait`, is off, so a view is ready on
   the step its tiles are in and no frame is compared. Where the field is true, once the tiles are in
   the camera's own frames are compared until its picture has settled, leaving out every block a
   rendered vehicle covers -- placed from the session's render set of the frame and the client's
@@ -102,8 +101,8 @@ world (D1.12):
   only then destroy the cameras and dispose the session.
 
 The recorders are not given the scenario id or the seed: both would enter every PNG's `carla:capture`
-chunk, and whether the observation side may carry either is open (`04_Contracts.md` open question 15);
-the run result and the lock carry both.
+chunk, and whether the observation side may carry either is not yet decided; the run result and the
+lock carry both.
 
 **Every file the run writes says what made it** (`ProducerRecord`): the session declares itself the
 tool, `carlacontrol.CaptureSession`, so the CarlaNet writers -- each still's sidecar and PNG, the run
@@ -700,7 +699,7 @@ class CaptureSession:
 
     def _watch_views(self) -> None:
         """Ask about every capture camera's tiles from the prewarm on, so that no capture is written
-        before its view is ready (03 §9.5.1). Where capture.picture_settled_wait is true, also
+        before its view is ready. Where capture.picture_settled_wait is true, also
         listen to its frames, each frame's rendered vehicles placed from the session's render set of
         the frame and the client's snapshot of it, so the blocks they cover are left out of the
         picture's comparisons; with it off, its default, no camera is listened to."""
@@ -803,7 +802,7 @@ class CaptureSession:
         """Spawn the depth camera occlusion is measured against, attached to the channel's camera.
 
         Every channel gets one: occlusion is measured wherever a camera records, and nothing turns
-        it off (the owner's ruling of 2026-10-05). The depth camera takes the camera's image size,
+        it off. The depth camera takes the camera's image size,
         field of view and sensor tick, so its captures pair with the camera's frame for frame.
 
         The attachment is rigid and the depth camera's pose relative to its parent the identity, so
@@ -941,7 +940,7 @@ class CaptureSession:
     def _prewarm(self) -> None:
         """Advance to the window's opening without recording, waiting there for every view.
 
-        The wait for each channel's view (03 §9.5.1) is told after every step the session renders
+        The wait for each channel's view is told after every step the session renders
         and asks nothing in between, so it ticks with the prewarm and cannot run without it. It
         begins once every camera holds the pose the window opens on: at once, or -- where a stare
         follows the rendered traffic -- when that stare stops to hold its pose, capture.tiles_hold_s
@@ -1241,7 +1240,7 @@ class CaptureSession:
         """The session's own report, logged once it has given everything back.
 
         Its counts are live throughout -- the admissions are the latest admission pass's running
-        total (03 §8.8), and the run result carries that pass and the window's -- and it is read
+        total, and the run result carries that pass and the window's -- and it is read
         after disposal only so that the text includes what disposal
         tallies last: the refused vehicle types, the bodies and the time spent.
         """

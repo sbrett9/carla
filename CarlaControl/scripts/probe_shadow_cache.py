@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure what invalidating the directional shadow cache every frame costs.
 
-The capture plan freezes the sun on most of its windows and offers an advancing one. Setting the sun
+A capture window's sun is either held still or advancing, by its illumination policy. Setting the sun
 does not stall the game thread, but this project renders with virtual shadow maps, whose directional
 clipmap cache is invalidated whenever the light direction changes -- so an advancing sun re-renders
 the directional shadow set uncached on every frame it moves, and a frozen one does not. Epic exposes

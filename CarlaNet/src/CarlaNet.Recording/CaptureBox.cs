@@ -13,7 +13,7 @@ public readonly record struct GeodeticCorner(double Lat, double Lon, double Hae)
 /// <summary>
 /// A vehicle's box as one capture holds it, written on the vehicle's record in the truth sidecar for a
 /// vehicle whose box fell in the picture (<c>in_frame</c> of <c>wholly</c> or <c>partly</c>) and for no
-/// other, as the owner ruled on 2026-10-06. Every value is a measurement from the frame's geometry -- the
+/// other. Every value is a measurement from the frame's geometry -- the
 /// box's eight corners, the camera's pinhole and the picture's edges -- by the fixed methods below, or a
 /// fact of the body's pose; none rests on a pass mark.
 /// </summary>

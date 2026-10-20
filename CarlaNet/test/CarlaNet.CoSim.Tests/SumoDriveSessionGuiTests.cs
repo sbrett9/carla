@@ -42,6 +42,9 @@ public sealed class SumoDriveSessionGuiTests
         Assert.Contains("CarlaSetup.ps1", refused.Message, StringComparison.Ordinal);
         Assert.Contains("CarlaSetup.sh", refused.Message, StringComparison.Ordinal);
         Assert.Contains("--sumo-gui", refused.Message, StringComparison.Ordinal);
+        // A distribution has no setup script and its own SUMO has no GUI, so the refusal also names
+        // the installed command's way to point at another installation.
+        Assert.Contains("carla-drive --sumo-home", refused.Message, StringComparison.Ordinal);
         Assert.Empty(console);
     }
 

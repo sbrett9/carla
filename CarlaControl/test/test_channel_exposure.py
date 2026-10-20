@@ -1,10 +1,9 @@
 """A channel's exposure: its defaults, its conversion to the camera's attributes, and what it refuses.
 
-`08_Collection_And_EPoL.md` D8.26-D8.27: exposure is a per-channel collection parameter, set in numbers
-over the post-process profile. Asserted:
+Exposure is a per-channel collection parameter, set in numbers over the post-process profile. Asserted:
 
   * each default is the `Default` profile's (manual, ISO 100, 1/320 s, f/4, no compensation), whose
-    EV100 doc 08 §2.9 measured at +12.32, so a run that sets none renders as every capture before it;
+    EV100 was measured at +12.32, so a run that sets none renders as every capture before it;
   * the camera is given every attribute, by upstream CARLA's names and units: the shutter in seconds
     in the run is per second on the camera;
   * EV100 is the engine's manual figure, and there is none under histogram; and

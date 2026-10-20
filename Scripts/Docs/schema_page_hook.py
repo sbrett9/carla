@@ -1,7 +1,7 @@
 """The Claude Code hook that holds an edited schema page to its template.
 
 Claude Code runs it after every Edit or Write, with the tool call as JSON on stdin. When the file is
-a page under Docs/CAT_Research/Schemas (the README excepted), the page is checked against the
+a page under Docs/Schemas (the README excepted), the page is checked against the
 template with `check_schema_pages.py`, and every departure is printed with the template's name for
 an older heading. Exit code 2 hands the findings back to the model as feedback on the edit; exit 0
 is silence, for a page that fits and for every other file.
@@ -41,7 +41,7 @@ def main() -> int:
         return 0
     # Claude Code relays a blocking hook's stderr to the model, not its stdout.
     print(f"schema-page: {path.name} departs from the page template in {len(findings)} place(s); "
-          "the rules are Docs/CAT_Research/Schemas/AGENTS.md in the carla repository",
+          "the rules are Docs/Schemas/AGENTS.md in the carla repository",
           file=sys.stderr)
     for line, what in findings:
         print(f"  line {line}: {what}", file=sys.stderr)

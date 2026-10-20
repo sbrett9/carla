@@ -25,7 +25,7 @@ namespace CarlaNet.CoSim;
 /// component included.
 /// </param>
 /// <remarks>
-/// <para><b>This is the plan's own check on the three pose conversions, and it is free.</b> The
+/// <para><b>This is the session's own check on the three pose conversions, and it is free.</b> The
 /// world observer streams every actor's transform and velocity every tick whether or not anything
 /// reads them, so a comparison against the pose that was just written costs an arithmetic
 /// subtraction and no round trip. What it turns into a measurement is the whole class of failure

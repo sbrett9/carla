@@ -1,14 +1,14 @@
 """The Gardnerville orbit in `Import/` is exactly what its generator compiles today.
 
-`make_sumo_scenario.py` writes the orbit as a specification and compiles it (`07_Scenario_Authoring.md`
-§3.4). The compiled package it writes into `Import/` is what the owner runs and watches, so it must be
-the generator's output and not a hand-edited or stale copy: rerun against the same world package, the
-generator must give the same route file, configuration, network and supervision plan byte for byte,
-and the same lock but for the digest of the specification, whose relative paths name another output
-directory. This is the canary the authoring skill names for shared-code edits (07 §8.5).
+`make_sumo_scenario.py` writes the orbit as a specification and compiles it. The compiled package it
+writes into `Import/` is what the owner runs and watches, so it must be the generator's output and
+not a hand-edited or stale copy: rerun against the same world package, the generator must give the
+same route file, configuration, network and supervision plan byte for byte, and the same lock but
+for the digest of the specification, whose relative paths name another output directory. This is
+the canary the authoring skill names for shared-code edits.
 
 What it cannot see: whether the scenario still behaves as intended. That is measured in SUMO when the
-scenario changes (07 §3.4), not asserted here.
+scenario changes, not asserted here.
 """
 from __future__ import annotations
 

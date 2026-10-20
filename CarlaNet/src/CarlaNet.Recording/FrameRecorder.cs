@@ -643,7 +643,7 @@ public sealed class FrameRecorder : IDisposable
         // one was given, so the projection agrees with the intrinsics the sidecar writes. A vehicle
         // whose box fell in the picture gets its box too -- the pixel rectangles, the share outside the
         // picture, its range and tilt, and the box's corners converted as its own point was -- and no
-        // other vehicle does, as the owner ruled.
+        // other vehicle does.
         var picture = new PinholeCamera(cameraPose, arrival.Width, arrival.Height,
                                         _platform?.HFovDeg ?? arrival.HeaderHFovDeg);
         recs = _haveOrigin ? BoxProjector.Mark(recs, picture, _origin) : BoxProjector.Mark(recs, picture);
@@ -761,8 +761,7 @@ public sealed class FrameRecorder : IDisposable
                     // One record of what made the still, for its image and its sidecar alike.
                     ProducerRecord producer = Producer.Now(_server, _sumo);
                     // The still carries its sun, its declaration, its pose and its identity, with what
-                    // made it, and never any supervision: truth stays out of the observation artifact
-                    // (doc 04 D4.20).
+                    // made it, and never any supervision: truth stays out of the observation artifact.
                     PngEncoder.WriteBgraToFile(job.Bgra, job.Width, job.Height,
                                                Path.Combine(_dir, stem + ".png"),
                                                SolarMetadata.PngTextChunks(job.Solar)

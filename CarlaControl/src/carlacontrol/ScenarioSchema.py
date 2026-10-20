@@ -1,7 +1,7 @@
 """The scenario specification's schema: one document, used to validate and published as-is.
 
-`07_Scenario_Authoring.md` §8.3 ships `schemas/scenario.schema.json` beside the authoring skill and
-requires it to be the compiler's own schema, not a copy. So the schema lives here once, as a JSON
+The authoring skill ships `schemas/scenario.schema.json`, which has to be the compiler's own schema,
+not a copy. So the schema lives here once, as a JSON
 Schema (draft 2020-12) document; `validate` checks a specification against it and `write` publishes
 the same document. A field the schema does not name is refused (check 53), because a field nothing
 reads is one its author will later believe was honoured.

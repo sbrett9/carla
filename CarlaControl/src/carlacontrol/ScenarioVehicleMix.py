@@ -3,9 +3,8 @@
 A SUMO `vType` is a driving model and a body at once: its `length` and `width` decide the gaps the
 car-following model reserves and the space a junction counts as occupied, and the co-simulation
 bridge converts SUMO's front-bumper reference point to CARLA's actor origin using that same length.
-The vehicle SUMO reserved road for and the vehicle CARLA draws therefore have to be the same one,
-which is what the vehicle mapping contract fixes (contract `C1` in
-`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md`).
+The vehicle SUMO reserved road for and the vehicle CARLA draws therefore have to be the same one;
+that rule is the vehicle mapping contract.
 
 This is the authoring half of that contract. A scenario declares what kinds of vehicle its traffic is
 made of and how each kind drives; this class supplies the bodies, from the measured catalogue and
@@ -68,7 +67,7 @@ GENERATED_ATTRIBUTES = ("id", "vClass", "guiShape", "color", *MEASURED_ATTRIBUTE
 # so there is nothing to draw and nothing to fall back to.
 TWO_WHEELER_CLASSES = frozenset({"motorcycle", "moped", "bicycle"})
 
-# Colour form every SUMO artifact uses, per the contract. Hex rather than a comma triple because
+# Colour form every SUMO artifact uses. Hex rather than a comma triple because
 # SUMO re-reads an all-at-most-1 triple as fractions of 255.
 GUI_COLOUR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 

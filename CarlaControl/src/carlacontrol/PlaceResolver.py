@@ -1,7 +1,7 @@
 """Turn a named place into the edge, lane or lane position it means, or refuse and list candidates.
 
 A specification never puts a bare edge id in a route: it names a place, declares what the place is,
-and the compiler resolves it (`07_Scenario_Authoring.md` §3.5, §4.2). Seven forms are accepted:
+and the compiler resolves it. Seven forms are accepted:
 
 | Form | Example | Resolves to |
 |---|---|---|
@@ -23,14 +23,14 @@ way -- within `GATEWAY_MARGIN_M` of the network's boundary, on the side it lies 
 netconvert's `dead_end` junction type: a two-way road cut by the clip ends at a `priority` junction
 holding its turnaround, as all 5 boundary ends on Gardnerville do.
 
-**It never guesses** (D7.4). A place that resolves to several edges where one is needed is refused
+**It never guesses.** A place that resolves to several edges where one is needed is refused
 with every candidate listed -- direction, length and extent -- so the author can narrow it; a name that
 matches nothing is refused with the nearest names. What a place is used for decides what it must
 resolve to: an origin, destination or via needs one edge, a stop needs one lane and a position.
 
 What it cannot see, and does not build: degenerate-edge detection, a street that curves through more
-than 90 degrees, a warning threshold below `max_snap_m`, and the staging-ring warning for a place
-(§4.3). Two lanes of different edges within `TIE_M` of a point are a tie, refused with both named.
+than 90 degrees, a warning threshold below `max_snap_m`, and the staging-ring warning for a place.
+Two lanes of different edges within `TIE_M` of a point are a tie, refused with both named.
 """
 from __future__ import annotations
 

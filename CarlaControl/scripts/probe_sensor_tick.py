@@ -4,7 +4,7 @@
 Every camera this pipeline has ever spawned leaves `sensor_tick` at its default of 0, which renders
 and streams a frame on every world tick. A capture at 2 Hz against a 0.05 s step keeps one frame in
 ten and discards nine. `sensor_tick` is documented as the simulation seconds between captures, and
-the question the capture plan's whole wall-clock budget turns on is whether setting it removes the
+the question a capture's wall-clock cost turns on is whether setting it removes the
 render and the readout of the nine, or only their delivery.
 
 Two arms, one variable. Same world, same camera pair, same resolution, same field of view, same

@@ -22,7 +22,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.ScenarioEpoch import ScenarioEpoch, ScenarioEpochRefusedError  # noqa: E402
 
-# The sizing site's epoch: midnight of day 0 at the port, Iran at +03:30 with no daylight saving.
+# The Shahid Bahonar Port scenario's epoch: midnight of day 0 at the port, Iran at +03:30 with no daylight saving.
 BAHONAR = {
     "epoch_version": 1,
     "civil_datetime": "2026-03-21T00:00:00+03:30",
@@ -58,8 +58,8 @@ def test_the_sizing_site_epoch_reads_and_states_itself():
     assert "2026-03-21T00:00:00+03:30" in read.describe()
 
 
-def test_the_digest_is_the_canonical_python_form_the_contract_names():
-    """04 §11.2: the digest is SHA-256 of `json.dumps(epoch, sort_keys=True, indent=2)`. The compiler
+def test_the_digest_is_the_canonical_python_form():
+    """The digest is SHA-256 of `json.dumps(epoch, sort_keys=True, indent=2)`. The compiler
     records SolarEpoch's digest; this pins that it is exactly the Python form, so a record written by
     either language names the epoch the same way."""
     read = ScenarioEpoch.read(BAHONAR)
@@ -127,7 +127,7 @@ def test_half_and_quarter_hour_offsets_are_ordinary(civil, hours, utc):
 
 
 def test_a_zone_name_is_carried_and_never_resolved():
-    """04 §11.3: `time_zone_id` is provenance only. A name no database holds is accepted and carried
+    """`time_zone_id` is provenance only. A name no database holds is accepted and carried
     verbatim; a compiler that resolved it would refuse this, or refuse every name on this machine,
     where zoneinfo holds zero zones."""
     read = ScenarioEpoch.read(epoch(time_zone_id="Nowhere/Not_A_Zone"))

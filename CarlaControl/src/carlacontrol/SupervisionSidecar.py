@@ -20,9 +20,9 @@ as `marked_ids` does.
 
 The shape here is a carry-forward, not a schema: one record per described gap, the author's keys
 untouched, plus the resolved window, read only for datasets made before compiled scenarios. A compiled
-scenario conveys an omission one way, by the owner's ruling (`06_Truth_And_Annotation.md` §3.5): it
-labels the vehicle that deviates. Nothing is ever written per frame for a place
-no vehicle came to, because SUMO reports vehicles, not places, and a label follows its vehicle.
+scenario conveys an omission one way: it labels the vehicle that deviates. Nothing is ever written
+per frame for a place no vehicle came to, because SUMO reports vehicles, not places, and a label
+follows its vehicle.
 """
 from __future__ import annotations
 

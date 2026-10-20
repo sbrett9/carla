@@ -1,18 +1,18 @@
 """Validate every authored route with SUMO's own router, and refuse what `duarouter` falsely accepts.
 
-`duarouter` is the authority on whether a trip routes (`07_Scenario_Authoring.md` §5.5): `sumolib`'s
+`duarouter` is the authority on whether a trip routes: `sumolib`'s
 shortest path traverses one-way edges the real router refuses. It is run once over every trip and flow
 of a scenario, with `--ignore-errors` so one compile reports every broken route rather than the first,
 and `--keep-flows` so a flow stays one flow with one route.
 
-**A `<vehicle>` coming out is not the test** (D7.7). Measured, again on the staged `duarouter` 1.27.0
+**A `<vehicle>` coming out is not the test.** Measured, again on the staged `duarouter` 1.27.0
 against the fixture network: a trip and a flow whose destination edge does not exist each come back
 with a one-edge route -- `900` -- exit 0, and only a warning on stderr. So a routed result is accepted
 only when it **starts on the requested origin, ends on the requested destination, and passes every via
 edge and every stop's edge in the order given** (check 12). A request with no routed result at all is
 check 11.
 
-The routed edges are what the compiler writes, so no routing happens when the scenario runs (D7.8):
+The routed edges are what the compiler writes, so no routing happens when the scenario runs:
 two runs of one scenario cannot diverge because of the router, and a run does not fail at load for a
 reason the compile already checked. `duarouter` is given the scenario's SUMO seed so the one choice it
 makes per flow -- which member of a type distribution to route a flow with -- is reproducible too.

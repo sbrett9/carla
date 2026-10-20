@@ -1,6 +1,6 @@
 """Resolve a capture run's configuration from its six layers, recording where every value came from.
 
-`12_Operator_Control_Surface.md` §3.5-§3.6. In strictly increasing precedence:
+The layers, in strictly increasing precedence:
 
 1. **tool defaults** -- `RunConfiguration.FIELDS`;
 2. **the site profile** -- `SiteProfile`, this machine's facts;
@@ -14,12 +14,12 @@
 5. **the run configuration** -- a `RunConfiguration` document;
 6. **operator overrides** -- `--set <path>=<value>` and the short aliases, in the order given.
 
-Three rules make the layering safe (§3.5):
+Three rules make the layering safe:
 
 * a field no layer supplies and no default covers resolves as `unsupplied`, and check 2 refuses it;
 * a field that depends on another has no value where that other makes it meaningless -- the pacing
   factors under `as_available` resolve as `not_applicable`, and under `advance` the sun's rate is
-  pinned to 1.0 (`pinned_by_policy`, D12.8);
+  pinned to 1.0 (`pinned_by_policy`);
 * an illumination field that belongs to a policy a higher layer replaced is dropped and recorded as
   dropped, rather than carried into a policy that would refuse it or silently honoured.
 

@@ -6,7 +6,7 @@
 // names, each of the JSON type the schema gives it; the fields the schema requires are the record's
 // required members; and the record of what made the package has the schema's fields.
 //
-// The layout of bareearth.bin is described in words (Docs/CAT_Research/Schemas/Bare_Earth_Grid.md) and
+// The layout of bareearth.bin is described in words (Docs/Schemas/Bare_Earth_Grid.md) and
 // by carlacontrol.WorldPackageSchemas.BARE_EARTH_HEADER. The last test reads a written grid entry at
 // the byte offsets that page gives.
 using System;

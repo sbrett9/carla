@@ -1,13 +1,12 @@
 """Publishes a world's authoring reference set into its world package.
 
 The reference set is what a scenario author and the scenario compiler read about a world before
-writing anything, without a running server (`13_Work_Breakdown.md` stage E; `07_Scenario_Authoring.md`
-§2). Three of its artifacts are built here and written into the package beside the network they are
-derived from:
+writing anything, without a running server. Three of its artifacts are built here and written into
+the package beside the network they are derived from:
 
   * `areas.resolved.json` and `areas.aoi.geojson` -- the areas of interest, resolved to CARLA metres
     and SUMO lanes (`AreaOfInterestResolver`), and the GeoJSON they came from, byte for byte, whose
-    digest the table records (C5 V5.11);
+    digest the table records;
   * `places.json` -- the place index (`PlaceIndex`);
   * `solar.json` -- the solar frame (`SolarFrame`).
 
@@ -22,7 +21,7 @@ across byte for byte. Publishing again replaces the whole set rather than adding
 never outlive the declarations it described.
 
 **What refuses what.** Areas that fail resolution -- SUMO's projection and the world's geographic frame
-disagreeing (V5.12), an area outside the network's extent when the extract had no `<bounds>` to check
+disagreeing, an area outside the network's extent when the extract had no `<bounds>` to check
 it against, or no SUMO to project with -- are not published, and the place index and solar frame are
 published without them: neither depends on an area. The package then carries no `areas.resolved.json`,
 which reads as "not published", and the refusal is in the build log naming every rule broken.
@@ -135,7 +134,7 @@ class AuthoringReferenceSet:
             extent = self._network_extent(network)
             if extent is None:
                 raise AreaOfInterestError(source.source_name, [
-                    "V5.3 neither the extract nor the network records a geographic extent, so no "
+                    "neither the extract nor the network records a geographic extent, so no "
                     "area can be shown to lie inside the world"])
             problems = source.envelope_problems(extent)
             if problems:

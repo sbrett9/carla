@@ -1,16 +1,15 @@
 """A world's own road types reach the network the world publishes, and every scenario on that world.
 
-`07_Scenario_Authoring.md` D7.9 and D7.32: what a road admits is decided when the world is built, by
-the netconvert run that writes the world's network and its OpenDRIVE, and a scenario runs the world's
-network byte for byte. So a world whose roads must admit vehicles SUMO's own type map keeps off them
-is built with a type map of its own (`carlacontrol.NetconvertTypeMap`), not given a network rewritten
-after the fact.
+What a road admits is decided when the world is built, by the netconvert run that writes the world's
+network and its OpenDRIVE, and a scenario runs the world's network byte for byte. So a world whose
+roads must admit vehicles SUMO's own type map keeps off them is built with a type map of its own
+(`carlacontrol.NetconvertTypeMap`), not given a network rewritten after the fact.
 
 Held here, in order: the map is found and validated before anything is built; the world build passes
 SUMO's own map first and the world's second, after every other extra argument, and refuses a second
 `--type-files`; a real conversion admits what the map sets and changes nothing else; and the Shahid
 Bahonar world, rebuilt with its map -- `Import/Shahid_Bahonar_Port.typ.xml` -- records the invocation
-that gives the network it carries, and compiles the sizing scenario's guard rota, all 335 postings,
+that gives the network it carries, and compiles the Shahid Bahonar Port scenario's guard rota, all 335 postings,
 where the same invocation without the map refuses every one.
 
 What these cannot see: a type map is keyed on road type, so the tests also pin that a private service
@@ -274,7 +273,7 @@ def bahonar_generator():
 
 
 def shipped_guard_postings() -> dict[str, float]:
-    """Every guard trip of the sizing scenario's shipped route file: id to departure second."""
+    """Every guard trip of the Shahid Bahonar Port scenario's shipped route file: id to departure second."""
     return {trip.get("id"): float(trip.get("depart"))
             for trip in ET.parse(SHIPPED_ROUTES).getroot().iter("trip")
             if trip.get("id").startswith("guard_")}
@@ -308,7 +307,7 @@ def bahonar_package(network: Path, argv: list[str], directory: Path,
 
 
 def compile_guard_rota(package: Path, directory: Path, installation: SumoInstallation):
-    """The generator's guard rota alone, under the midnight epoch the sizing scenario shipped with,
+    """The generator's guard rota alone, under the midnight epoch the Shahid Bahonar Port scenario shipped with,
     so its departure seconds are the shipped file's."""
     generator = bahonar_generator()
     rota = generator.BahonarPatternOfLifeSpecification(
@@ -322,7 +321,7 @@ def compile_guard_rota(package: Path, directory: Path, installation: SumoInstall
     specification = {
         "spec_version": 1, "scenario_id": "bahonar_guard_rota",
         "scenario_name": "Bahonar guard rota",
-        "description": "The sizing scenario's seven-day guard rota as one rota block, with the "
+        "description": "The Shahid Bahonar Port scenario's seven-day guard rota as one rota block, with the "
                        "no-show.",
         "world": {"package": str(package), "network_fingerprint": fingerprint},
         "epoch": {"epoch_version": 1, "civil_datetime": "2026-03-21T00:00:00+03:30",
@@ -367,7 +366,7 @@ def test_the_bahonar_world_carries_its_type_map_and_its_guard_rota_compiles_on_i
     recorded = list(manifest["NetconvertArgv"])
     if "--type-files" not in recorded:
         pytest.fail("the Shahid Bahonar package records no --type-files: it predates its type map; "
-                    "rebuild it (07 §9.8)")
+                    "rebuild it")
     assert recorded[recorded.index("--type-files") + 1].endswith(str(BAHONAR_MAP.resolve()))
 
     # The recorded invocation is the network the package carries.

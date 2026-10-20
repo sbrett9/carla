@@ -1,11 +1,10 @@
 """What a capture run is about to do, stated before it commits: the echo before commit.
 
-`12_Operator_Control_Surface.md` §6.4, D12.24. One block, computed once after the offline checks and before
-anything is acquired, containing what a reader has to be told to notice that the run is not the run
-they meant: the simulated span and the captures it will make, the civil span, the sun at the window's
-first and last captured instants and the policy holding it, the world, what is rendered and how far
-from a camera, the disk it will cost, where it writes, the wait for every channel's view before the window opens, and the
-warnings raised.
+One block, computed once after the offline checks and before anything is acquired, containing what a
+reader has to be told to notice that the run is not the run they meant: the simulated span and the
+captures it will make, the civil span, the sun at the window's first and last captured instants and
+the policy holding it, the world, what is rendered and how far from a camera, the disk it will cost,
+where it writes, the wait for every channel's view before the window opens, and the warnings raised.
 
 **One computation, two renderings.** `to_dict()` is the block, serialised into the resolution report
 and the run result whether or not anyone reads it; `render()` is the same block laid out for a
@@ -229,7 +228,7 @@ class LaunchEcho:
 
     @staticmethod
     def _readiness(effective: EffectiveRunConfiguration) -> dict:
-        """The wait for every channel's view inside the prewarm (03 §9.5.1), and where it begins:
+        """The wait for every channel's view inside the prewarm, and where it begins:
         the tiles, and the picture only where capture.picture_settled_wait is true, whose figures
         are left out where it is not."""
         window = effective.window

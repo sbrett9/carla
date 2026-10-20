@@ -1,9 +1,9 @@
 """A run's CoT display convention draws each population as it really looks, and no planted vehicle.
 
-`06_Truth_And_Annotation.md` §9.1 keeps the display half of the legacy `affiliation_by_type` --
-civilian traffic neutral, military friendly, which is what makes a TAK view of the port readable --
-as a run display convention, and deletes the half that gave every anomaly type `u`.
-`07_Scenario_Authoring.md` §3.4.1 keeps it out of the specification. Held here:
+The display half of the legacy `affiliation_by_type` -- civilian traffic neutral, military friendly,
+which is what makes a TAK view of the port readable -- is kept as a run display convention, and the
+half that gave every anomaly type `u` is deleted. The display convention is not part of the
+scenario specification. Held here:
 
 * **The convention is applied by population.** A compiled scenario's vType is one body of a class,
   named in its `carla:class_id` parameter, and the bridge reads the class back from the type rather
@@ -23,18 +23,17 @@ as a run display convention, and deletes the half that gave every anomaly type `
   `sumo_cot_telemetry.py` draws with `<scenario>.display.json` beside the `.sumocfg` and says so;
   a found file behaves as a named one, so it wins over a labels file's affiliations and is refused
   when it does not read; a named file wins over a found one; with neither, the run says so.
-* **A planted vehicle is marked in the files and nowhere else** (06 D6.18, 08 D8.23). Its
-  `special_type` is its kind, in every sink: empty on a bridge given no catalogue, as every SUMO
-  vehicle's then is. The XML and CSV carry `marked`; the datagrams carry neither field, and draw a
-  planted vehicle apart only when `--marked-affiliation` asks, which never reaches a file. A
-  compiled scenario marks none, and its planted vehicles are the supervision plan's, found in the
-  sidecar by vehicle id.
-* **A vehicle's base type and kind are the catalogue's for the blueprint its type names** (06
-  D6.18). A bridge given the catalogue writes, into the XML and CSV, the base type and the kind the
-  catalogue curates for the blueprint a compiled type names in `carla:blueprint` -- an ambulance a
-  van, a fire appliance a truck, a police car and an army jeep cars -- and for a type that names none,
-  or names a blueprint the catalogue does not curate, its vehicle class's base type and no kind; each
-  type is asked once. Without a catalogue every base type is the vehicle class's. Over the compiled
+* **A planted vehicle is marked in the files and nowhere else.** Its `special_type` is its kind, in
+  every sink: empty on a bridge given no catalogue, as every SUMO vehicle's then is. The XML and CSV
+  carry `marked`; the datagrams carry neither field, and draw a planted vehicle apart only when
+  `--marked-affiliation` asks, which never reaches a file. A compiled scenario marks none, and its
+  planted vehicles are the supervision plan's, found in the sidecar by vehicle id.
+* **A vehicle's base type and kind are the catalogue's for the blueprint its type names.** A bridge
+  given the catalogue writes, into the XML and CSV, the base type and the kind the catalogue curates
+  for the blueprint a compiled type names in `carla:blueprint` -- an ambulance a van, a fire
+  appliance a truck, a police car and an army jeep cars -- and for a type that names none, or names a
+  blueprint the catalogue does not curate, its vehicle class's base type and no kind; each type is
+  asked once. Without a catalogue every base type is the vehicle class's. Over the compiled
   Bahonar traffic no base type and no kind is carried by the planted vehicles alone. A type written
   from another catalogue is warned about once. `sumo_cot_telemetry.py` reads the catalogue it is
   given, or this repository's.
@@ -252,7 +251,8 @@ def _planted(specification: dict) -> frozenset[str]:
 
 
 def _shipped_roster() -> tuple[list[tuple[str, str]], _TypeTable]:
-    """The sizing scenario as it shipped in SUMO XML: every trip, and each flow's member types."""
+    """The Shahid Bahonar Port scenario as it shipped in SUMO XML: every trip, and each flow's member
+    types."""
     root = ET.parse(SHIPPED_ROUTES).getroot()
     table = _TypeTable("".join(ET.tostring(e, encoding="unicode") for e in root
                                if e.tag in ("vType", "vTypeDistribution")))
@@ -514,7 +514,7 @@ def test_a_legacy_labels_file_keeps_its_display_half_and_withholds_its_anomaly_h
     longer names any planted vehicle. What the legacy scenario's own types still separate is
     measured too: its escort and shadow types are army and take the default, so the pairing of kind
     and CoT type still names them -- a property of the legacy route file, which gives them types of
-    their own (06 §2.4), that a display convention naming those types closes.
+    their own, that a display convention naming those types closes.
     """
     labels = json.loads(SHIPPED_LABELS.read_text(encoding="utf-8"))
     planted = frozenset(labels["marked_ids"])
@@ -745,7 +745,8 @@ def test_a_compiled_vehicle_s_kinds_are_the_catalogue_s_for_its_blueprint(tmp_pa
     In the XML and the CSV every vehicle's `base_type` and `special_type` are the ones the catalogue
     curates for the blueprint its type names -- `taxi` for the cabs and no kind for every other body
     Bahonar draws -- so the army's and the port authority's classes, which SUMO's vehicle classes
-    would report as `army` and `authority`, are the cars and lorries their bodies are. No base type,
+    would report as `army` and `authority` (SUMO's class for the vehicles of a public authority, such
+    as the police), are the cars and lorries their bodies are. No base type,
     no kind and no pairing of the base type with the CoT type is carried by the planted vehicles
     alone. The callsign is built from the catalogue's base type, the datagrams carry no kind,
     nothing is marked, each type's blueprint is asked for once, and types written from this
@@ -820,7 +821,8 @@ def test_only_a_blueprint_the_catalogue_curates_takes_its_kinds_and_another_cata
     """The catalogue decides the base type and the kind; a type from another catalogue is named.
 
     The ambulance is a van and the fire appliance a truck, where their `emergency` class reads as a
-    car; the police car a car, where its `authority` class reads as nothing the contract knows; the
+    car; the police car a car, where its `authority` class (SUMO's class for the vehicles of a public
+    authority) would read as `authority`; the
     army jeep a car, where `army` reads as itself; and the three emergency bodies carry the
     emergency kind. A cab type written from an older catalogue that drew the Crown as a taxi carries
     what this catalogue gives the Crown, a car of no kind. A type naming a blueprint no class draws,

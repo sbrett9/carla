@@ -1,8 +1,7 @@
 """Civil time as an authoring construct: an author writes 07:00 and the compiler emits 25200.
 
 Every time a specification takes -- a departure, a flow window, a stop, a capture window, an
-interval -- may be written in any of these forms, and resolves to simulated seconds under the epoch
-(`07_Scenario_Authoring.md` §3.5.1, §4.5):
+interval -- may be written in any of these forms, and resolves to simulated seconds under the epoch:
 
 | Form | Example | Resolves to |
 |---|---|---|
@@ -17,7 +16,7 @@ A duration is plain seconds or `[Nd][Nh][Nm][Ns]`: `"8h"`, `"30m"`, `"1h30m"`, `
 
 **The day is the epoch's civil date plus N**, so `"d0 07:00"` on an epoch at 06:00 is 3 600 s, and on
 one at midnight 25 200 s. One offset holds for the whole run -- daylight saving is carried by the
-declared offset (`04_Contracts.md` §11.3) -- so simulated seconds map linearly onto civil time.
+declared offset -- so simulated seconds map linearly onto civil time.
 
 **The session's function is the authority.** Every day-clock and absolute instant is resolved here and
 then handed back to `SolarEpoch.CivilInstantAt` through `ScenarioEpoch.civil_instant_at`; if the civil
@@ -25,7 +24,7 @@ instant that comes back is not the one written, that is a compiler defect and th
 the second a report prints beside `07:00` is, by construction, the second the session will call 07:00.
 
 **A clock-shaped literal that is really an offset is refused.** SUMO resolves `--begin 7:00:00` to step
-25 200 with no epoch (`07_Scenario_Authoring.md` §1.4), so a bare clock is accepted only when there is
+25 200 with no epoch, so a bare clock is accepted only when there is
 one day it can mean.
 """
 from __future__ import annotations

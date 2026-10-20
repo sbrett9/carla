@@ -1,11 +1,11 @@
 """The render set's admission passes as one capture window saw them.
 
 The co-simulation session makes an admission pass once per SUMO step and hands every one to
-`on_admission_pass` as it is made (`CarlaNet.CoSim.AdmissionPass`, `03_CoSimulation_Runtime.md`
-§8.8): the vehicles SUMO has, those admitted and released at the pass and, where an optional
-render-set limit is in force, how many the limit admitted (eligible), how many hold a body after the
-pass (admitted) and how many a capacity declined (shed). With no limit -- the default -- every vehicle
-SUMO has is rendered, and eligible and admitted are the population. A pass is made for the SUMO frame
+`on_admission_pass` as it is made (`CarlaNet.CoSim.AdmissionPass`): the vehicles SUMO has, those
+admitted and released at the pass and, where an optional render-set limit is in force, how many the
+limit admitted (eligible), how many hold a body after the pass (admitted) and how many a capacity
+declined (shed). With no limit -- the default -- every vehicle SUMO has is rendered, and eligible and
+admitted are the population. A pass is made for the SUMO frame
 it names (`SimulatedTimeSeconds`), one step ahead of the last frame rendered, and its render set is
 what the next step renders: a pass for frame F governs the ticks from F - step up to F. The vehicles
 SUMO inserted at F are one exception: they are drawn from F on, never on those ticks. The vehicles SUMO

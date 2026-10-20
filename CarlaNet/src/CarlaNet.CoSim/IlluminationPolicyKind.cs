@@ -1,8 +1,8 @@
 namespace CarlaNet.CoSim;
 
 /// <summary>
-/// How a session drives the sun across a capture window: the four policies of the scenario
-/// contract (<c>04_Contracts.md</c> section 11.6).
+/// How a session drives the sun across a capture window: the four policies a scenario's
+/// <c>illumination</c> object may name.
 /// </summary>
 public enum IlluminationPolicyKind
 {

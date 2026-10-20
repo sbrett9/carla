@@ -183,8 +183,8 @@ class WorldPackageReader:
     def areas_of_interest(self) -> dict | None:
         """The resolved area table, or None when the package predates the reference set.
 
-        Refuses a table whose recorded source digest does not match the GeoJSON carried beside it
-        (C5 V5.11): the table would then describe areas other than the ones the package declares.
+        Refuses a table whose recorded source digest does not match the GeoJSON carried beside it:
+        the table would then describe areas other than the ones the package declares.
         """
         table = self._reference_entry(self.AREAS_RESOLVED_ENTRY)
         if table is None:

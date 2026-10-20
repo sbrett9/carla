@@ -1,13 +1,12 @@
 namespace CarlaNet.Types.Supervision;
 
-// The accounting half of the closed core (06_Truth_And_Annotation.md §3.7, §4.4, §8.3): whether a body
-// drew a vehicle on a frame, and why none did. None of it is supervision; all of it is what happened,
-// written by this pipeline's own code and read by its world truth track, so a value outside these sets
-// is a defect. The core carries no outcome that rests on a pass mark (the charter's §4b): what became of
-// a vehicle in the imagery is measured per frame -- occlusion, apparent size, range -- and never summed
-// into a word.
+// The accounting half of the closed core: whether a body drew a vehicle on a frame, and why none did.
+// None of it is supervision; all of it is what happened, written by this pipeline's own code and read
+// by its world truth track, so a value outside these sets is a defect. The core carries no outcome that
+// rests on a pass mark: what became of a vehicle in the imagery is measured per frame -- occlusion,
+// apparent size, range -- and never summed into a word.
 
-/// <summary>Whether a body drew a vehicle on a frame, as the world truth track writes it (06 §8.3).</summary>
+/// <summary>Whether a body drew a vehicle on a frame, as the world truth track writes it.</summary>
 public enum RenderState
 {
     /// <summary>A body drew it.</summary>
@@ -18,7 +17,7 @@ public enum RenderState
 }
 
 /// <summary>
-/// Why no body drew a vehicle SUMO had: the first that holds, in this order (06 §4.4, D6.40).
+/// Why no body drew a vehicle SUMO had: the first that holds, in this order.
 /// </summary>
 public enum RenderReason
 {

@@ -17,7 +17,7 @@ Instead, **describe the actual concept**: what it does and why. Examples:
 
 **This is NOT a ban on domain terms or stable references.** Keep things that are meaningful on their
 own: real algorithm step numbers from a cited source, protocol/standard names, a traffic-light
-`Phase 2`, `RoadOption`, persistent doc names (e.g. `Docs/CAT_Research/Findings/08_*.md`), issue IDs.
+`Phase 2`, `RoadOption`, persistent doc names (e.g. `Docs/Schemas/Truth_Sidecar.md`), issue IDs.
 The test is simply: *would a new reader understand this without the originating conversation?* If not,
 reword it before committing.
 

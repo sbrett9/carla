@@ -38,7 +38,7 @@ namespace CarlaNet.CoSim;
 /// a SUMO step shows every vehicle SUMO had at that step. One SUMO inserts during the run is drawn first at
 /// the position SUMO first reported, moving from there, and never on a frame before SUMO inserted it; one
 /// SUMO stops reporting is drawn last at the position SUMO last reported, on that step's own frame, and on
-/// no frame after it (the owner's ruling of 2026-10-06).
+/// no frame after it.
 /// Nothing limits how many unless the caller asks for a limit; a scenario heavier than the machine is
 /// comfortable with makes a synchronous run slower on the wall clock, never different in content.</para>
 ///
@@ -256,7 +256,7 @@ public sealed class SumoDriveSession : IDisposable
             DriveLeaseHolder = drive?.Holder,
             DriveLeaseRefused = drive?.Refusal,
             Epoch = options.Epoch,
-            Illumination = IlluminationInForce(options),
+            Illumination = options.IlluminationInForce,
             SumoSeed = seed,
             RoadMapping = roads.Mapping,
             DrawDistanceMetres = options.DrawDistanceMetres,
@@ -675,15 +675,7 @@ public sealed class SumoDriveSession : IDisposable
                                           ref CoSimSessionStage stage,
                                           List<Exception> giveBack)
     {
-        RequireAnEpoch(options);
-        RequireAUsablePace(options);
-        RequireOneWayToAdvanceTheWorld(options);
-        RequireAWindowTheSessionRenders(options);
-        RequireABoundOnSumoSAnswers(options);
-        RequireAUsableDrawDistance(options);
-        RequireARenderSetPolicy(options);
-        RequireAUsableWorldTruthTrack(options);
-        RequireAUsableRunManifest(options);
+        SessionOptionsCheck.Require(options);
         HeadlightRule? headlights = options.VehicleLampsDriven
             ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
             : null;
@@ -728,7 +720,7 @@ public sealed class SumoDriveSession : IDisposable
 
             // And what kind of vehicle each body is: every body the pool lends is one of the
             // catalogue's blueprints, and its truth carries the base type and the special type its
-            // catalogue class curates rather than the ones the blueprint declares (doc 06 D6.18).
+            // catalogue class curates rather than the ones the blueprint declares.
             // Client-side, like the grids.
             loaded.AdoptCatalogueBaseTypes(catalogue.BaseTypes);
             loaded.AdoptCatalogueSpecialTypes(catalogue.SpecialTypes);
@@ -742,13 +734,13 @@ public sealed class SumoDriveSession : IDisposable
         // Which SUMO, whether it has the binary the session is to launch, and whether that binary is
         // the release that converted this world: settled before it is started, like every other
         // refusal that needs no simulation to find out.
-        SumoInstallation installation = ResolveSumo(options);
-        RequireTheGui(installation, options);
-        SumoReleaseCheck release = RequireTheWorldSConverter(installation, manifest, options);
+        SumoInstallation installation = SumoLaunchCheck.ResolveSumo(options);
+        SumoLaunchCheck.RequireTheGui(installation, options);
+        SumoReleaseCheck release = SumoLaunchCheck.RequireTheWorldSConverter(installation, manifest, options);
 
         // Whether the package's network is in the world's frame. It needs nothing but the package,
         // so it is settled here rather than once SUMO is running.
-        RequireTheWorldSNetwork(manifest, network, options);
+        NetworkFrameCheck.Require(manifest, network, options);
 
         // And whether the network SUMO would drive is the one the session reads its lanes from. The
         // frame check compares the package's network with the package; this is the one that looks at
@@ -1571,7 +1563,7 @@ public sealed class SumoDriveSession : IDisposable
     /// falls on and which bodies it could not place, and a truth record of a frame is written by whichever
     /// process records it. Put to the server, it rides on every world-observer snapshot beside the render
     /// set, and every reader of a frame -- a recorder beside the session or in another process -- reads the
-    /// same pose source for it (the owner's ruling of 2026-10-06).</para>
+    /// same pose source for it.</para>
     ///
     /// <para><b>The step once, not every tick.</b> The SUMO step is a whole number of world ticks
     /// (<see cref="CoSimClock.WorldTicksPerSumoStep"/>), and on the first tick of every step the
@@ -2535,9 +2527,9 @@ public sealed class SumoDriveSession : IDisposable
     /// actor id and needs the vehicle; only the pair of instants tells it which of the succession of
     /// vehicles that body carried was the one it is looking at.</para>
     ///
-    /// <para><b>A vehicle SUMO removed is drawn on the frame of its last step</b> (the owner's ruling of
-    /// 2026-10-06). The pass that finds it gone reads the frame one step ahead of the rendered clock, and
-    /// the next frame rendered falls on the last step that had it, which shows every vehicle SUMO had then.
+    /// <para><b>A vehicle SUMO removed is drawn on the frame of its last step.</b> The pass that finds it
+    /// gone reads the frame one step ahead of the rendered clock, and the next frame rendered falls on the
+    /// last step that had it, which shows every vehicle SUMO had then.
     /// So it keeps its body for that frame, posed at that step's state (<see cref="ComputePoses"/>), and
     /// gives it back once the frame has rendered (<see cref="GiveBackTheLeaving"/>): parked from the next
     /// frame, and named parked to the server before that frame's cue. Its interval is handed out then,
@@ -2739,375 +2731,6 @@ public sealed class SumoDriveSession : IDisposable
     }
 
     /// <summary>
-    /// The illumination policy the session runs under: the one declared, or, for a session that
-    /// renders a world and declares none, <see cref="IlluminationPolicy.Default"/>.
-    /// </summary>
-    /// <remarks>
-    /// <para>Time always advances. A run that does not say what its sun is doing gets an advancing sun
-    /// at a rate of 1.0. The sun starts at the civil instant the window opens and follows simulated
-    /// time. The session writes it for every frame.</para>
-    ///
-    /// <para>The records stay honest about it. The report carries the policy in force, marked
-    /// <see cref="IlluminationPolicy.Defaulted"/>. The run manifest writes it as in force with no
-    /// declared policy beside it. A session with no world renders nothing and has no sun. It takes
-    /// no default.</para>
-    /// </remarks>
-    private static IlluminationPolicy? IlluminationInForce(SumoDriveSessionOptions options) =>
-        options.World is null ? options.Illumination : options.Illumination ?? IlluminationPolicy.Default;
-
-    /// <summary>
-    /// When nothing says what civil time it is, refuse a session that renders a world.
-    /// </summary>
-    /// <remarks>
-    /// Checked before anything is started, because it needs nothing but the options. Every still a
-    /// recorder writes from a session is named and stamped from the scenario's civil time, and every
-    /// row of the world truth track carries it, so a session that renders a world has to declare an
-    /// epoch whatever its sun policy does: under <c>ignore</c> the sun is left alone and the record
-    /// still says what time the scene was. Where the policy binds the sun as well, the refusal says so,
-    /// and says the policy is the default where it is. A session with no world renders nothing, writes
-    /// no still and binds no sun, so it needs none.
-    /// </remarks>
-    private static void RequireAnEpoch(SumoDriveSessionOptions options)
-    {
-        if (options.World is null || options.Epoch is not null)
-        {
-            return;
-        }
-
-        IlluminationPolicy? policy = IlluminationInForce(options);
-        string sun = policy is { BindsTheSun: true }
-            ? (policy.Defaulted
-                   ? "The session declares no illumination policy. The sun advances by default. "
-                   : string.Empty)
-              + $"The '{policy.Name}' policy binds the sun to the scenario's civil time. "
-            : string.Empty;
-        throw new CoSimSessionRefusedException(
-            sun
-            + "The session declares no epoch. Every still a recorder writes is named and stamped from "
-            + "the scenario's civil time, and the world truth track carries it, so a session that "
-            + "renders a world needs one under every sun policy. Declare what simulated second zero "
-            + "means in civil time.");
-    }
-
-    /// <summary>
-    /// Refuse a real-time factor, or a window to measure it over, that describes no pace.
-    /// </summary>
-    /// <remarks>
-    /// Checked before anything is started, because it needs nothing but the options. A factor that
-    /// is negative, infinite or undefined is not rounded to the nearest pace that makes sense:
-    /// whichever pace that was, it is one nobody asked for, and the run would record it as declared.
-    /// </remarks>
-    private static void RequireAUsablePace(SumoDriveSessionOptions options)
-    {
-        if (!double.IsFinite(options.RealTimeFactor) || options.RealTimeFactor < 0.0)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The real-time factor is {options.RealTimeFactor}. It is simulated seconds per "
-                + "wall-clock second: 1.0 holds the world to the pace of real traffic, 0.5 to half "
-                + "of it, 2.0 to twice it, and 0 runs it as fast as the machine allows. A negative, "
-                + "infinite or undefined factor is no pace at all.");
-        }
-
-        if (!double.IsFinite(options.PacingWindowSeconds) || options.PacingWindowSeconds <= 0.0)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The pacing window is {options.PacingWindowSeconds} s. The achieved real-time "
-                + "factor is published over windows of that much wall clock, so it has to be a "
-                + "positive number of seconds.");
-        }
-
-        if (options.WallClock is null)
-        {
-            throw new CoSimSessionRefusedException(
-                "The session was given no wall clock to pace against and time its ticks by. Leave "
-                + "it at the system's unless a test is standing one in.");
-        }
-    }
-
-    /// <summary>
-    /// Refuse a bound on SUMO's answers that is not a positive length of time.
-    /// </summary>
-    /// <remarks>
-    /// A session with no bound waits forever on a SUMO that has hung, holding the world in synchronous
-    /// mode with nothing ticking it. A bound that is zero, negative or not a number is not rounded to
-    /// one that works: whichever that was, nobody asked for it.
-    /// </remarks>
-    private static void RequireABoundOnSumoSAnswers(SumoDriveSessionOptions options)
-    {
-        if (!double.IsFinite(options.SumoAnswerTimeoutSeconds) || options.SumoAnswerTimeoutSeconds <= 0.0)
-        {
-            throw new CoSimSessionRefusedException(
-                $"SUMO's answers are bounded at {options.SumoAnswerTimeoutSeconds} s. The bound is how "
-                + "long the session waits for SUMO to answer one command, a step included, before it "
-                + "decides SUMO has stopped answering and stops the run, so it has to be a positive "
-                + "number of seconds longer than the slowest step the scenario produces.");
-        }
-    }
-
-    /// <summary>
-    /// Refuse a draw distance that is not a positive number of metres.
-    /// </summary>
-    /// <remarks>
-    /// No limit is null, never zero or a negative number standing in for it: a value that means
-    /// something other than what it says is one a report would record as declared.
-    /// </remarks>
-    private static void RequireAUsableDrawDistance(SumoDriveSessionOptions options)
-    {
-        if (options.DrawDistanceMetres is { } metres && (!double.IsFinite(metres) || metres <= 0.0))
-        {
-            throw new CoSimSessionRefusedException(
-                $"The draw distance is {metres} m. It is how far from a camera a vehicle's body is "
-                + "drawn, so it has to be a positive number of meters; leave it unset to draw every "
-                + "body at any range.");
-        }
-    }
-
-    /// <summary>
-    /// Refuse a session given no render-set policy.
-    /// </summary>
-    /// <remarks>
-    /// The default draws every vehicle SUMO has, so a session with none is one whose caller cleared it,
-    /// and what that was meant to draw is not something to guess.
-    /// </remarks>
-    private static void RequireARenderSetPolicy(SumoDriveSessionOptions options)
-    {
-        if (options.RenderSet is null)
-        {
-            throw new CoSimSessionRefusedException(
-                "The session was given no render-set policy. Leave it at its default to draw every vehicle "
-                + "SUMO has, or give a circle, the cameras or a capacity as a limit.");
-        }
-    }
-
-    /// <summary>
-    /// Refuse a world truth track with no usable path or rate, or one whose path already holds a track.
-    /// </summary>
-    /// <remarks>
-    /// Settled before anything is started. A rate given with no path is a setting that does nothing, and
-    /// a path that already holds a track belongs to another run, whose record is not written over.
-    /// Whether the rate is a whole number of SUMO steps waits for SUMO's step, which is known once SUMO
-    /// has loaded the scenario.
-    /// </remarks>
-    private static void RequireAUsableWorldTruthTrack(SumoDriveSessionOptions options)
-    {
-        if (options.WorldTruthTrackPath is not { } path)
-        {
-            if (options.WorldTruthTrackIntervalSeconds is { } orphan)
-            {
-                throw new CoSimSessionRefusedException(
-                    $"The world truth track is to be sampled every {orphan.ToString("0.###", CultureInfo.InvariantCulture)} s, "
-                    + "and no path was given to write it to. Give the track a path, or leave the rate unset.");
-            }
-
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new CoSimSessionRefusedException(
-                "The world truth track was given a blank path. Give the file it is to be written to, or leave "
-                + "it unset to write none.");
-        }
-
-        if (options.WorldTruthTrackIntervalSeconds is { } interval && (!double.IsFinite(interval) || interval <= 0.0))
-        {
-            throw new CoSimSessionRefusedException(
-                $"The world truth track is to be sampled every {interval.ToString(CultureInfo.InvariantCulture)} s. "
-                + "The interval is the simulated time between its samples, so it has to be a positive number "
-                + "of seconds; leave it unset to sample every SUMO frame.");
-        }
-
-        WorldTruthTrackWriter.RefuseAnExistingTrack(path);
-    }
-
-    /// <summary>
-    /// Refuse a run manifest with no usable path, a header that is not a JSON object, or a path that
-    /// already holds a manifest or is the world truth track's.
-    /// </summary>
-    /// <remarks>
-    /// Settled before anything is started, as the track's are. A header given with no path is a header
-    /// nobody writes; a manifest already on disk belongs to another run.
-    /// </remarks>
-    private static void RequireAUsableRunManifest(SumoDriveSessionOptions options)
-    {
-        if (options.RunManifestPath is not { } path)
-        {
-            if (options.RunManifestHeader is not null)
-            {
-                throw new CoSimSessionRefusedException(
-                    "The run manifest was given a header and no path to write it to. Give the manifest a path, "
-                    + "or leave the header unset.");
-            }
-
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new CoSimSessionRefusedException(
-                "The run manifest was given a blank path. Give the file it is to be written to, or leave it "
-                + "unset to write none.");
-        }
-
-        if (options.WorldTruthTrackPath is { } track
-            && string.Equals(Path.GetFullPath(track), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
-        {
-            throw new CoSimSessionRefusedException(
-                $"The run manifest and the world truth track are both to be written to {path}. Each is a file of "
-                + "its own.");
-        }
-
-        RunManifestWriter.RequireAHeaderObject(options.RunManifestHeader);
-        RunManifestWriter.RefuseAnExistingManifest(path);
-    }
-
-    /// <summary>
-    /// Refuse a session given two ways to advance the world.
-    /// </summary>
-    /// <remarks>
-    /// A world and a tick delegate together is not an ambiguity to resolve in favour of one of them:
-    /// whichever the session picked, the caller believes the other is running, and the run that
-    /// results is a world ticked a different number of times from the timeline its poses were
-    /// computed for.
-    /// </remarks>
-    private static void RequireOneWayToAdvanceTheWorld(SumoDriveSessionOptions options)
-    {
-        if (options.World is not null && options.TickWorld is not null)
-        {
-            throw new CoSimSessionRefusedException(
-                "The session was given both a CARLA world and a tick delegate. It owns the advance "
-                + "of simulated time on both sides, so exactly one thing may advance the world: "
-                + "give the world to drive it, or the delegate to compute every pose and apply "
-                + "none of them.");
-        }
-    }
-
-    /// <summary>
-    /// Refuse a window that opens before the first instant the session renders, or at no instant.
-    /// </summary>
-    /// <remarks>
-    /// The window's opening is where a frozen sun is pinned and an advancing one anchored. One before
-    /// the fast-forward's end is an instant no frame of the session is rendered at, so its sun would
-    /// light nothing the run captures as the window's start.
-    /// </remarks>
-    private static void RequireAWindowTheSessionRenders(SumoDriveSessionOptions options)
-    {
-        if (options.WindowOpensAtSimulatedSecond is not { } opens)
-        {
-            return;
-        }
-
-        if (!double.IsFinite(opens) || opens < options.WarmUpToSimulatedSecond)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The window is declared to open at {opens.ToString("0.###", CultureInfo.InvariantCulture)} s "
-                + "and the session renders from "
-                + options.WarmUpToSimulatedSecond.ToString("0.###", CultureInfo.InvariantCulture)
-                + " s, where SUMO is fast-forwarded to. A window opens on an instant the session renders: at "
-                + "the first rendered frame, or after the prewarm that precedes it.");
-        }
-    }
-
-    /// <summary>
-    /// The SUMO installation the session will launch: the one the caller named, or the one the
-    /// search resolves.
-    /// </summary>
-    private static SumoInstallation ResolveSumo(SumoDriveSessionOptions options)
-    {
-        if (string.IsNullOrWhiteSpace(options.SumoHome))
-        {
-            return SumoInstallation.LocateOrThrow();
-        }
-
-        try
-        {
-            return SumoInstallation.At(options.SumoHome);
-        }
-        catch (DirectoryNotFoundException missing)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The session was told to launch the SUMO installation at {options.SumoHome}, and "
-                + $"there is no sumo there to launch. {missing.Message}", missing);
-        }
-    }
-
-    /// <summary>
-    /// Refuse a session asked to show its simulation in <c>sumo-gui</c> where the installation it
-    /// launches from has none.
-    /// </summary>
-    /// <remarks>
-    /// Settled before anything is started, like the release. Left to the launch, the failure would
-    /// be the operating system's word for a missing file, naming neither the option that asked for
-    /// the GUI nor what builds it. The GUI is looked for in the installation already resolved, never
-    /// elsewhere: a <c>sumo-gui</c> from another installation would be another SUMO, and the
-    /// simulation it showed would not be the one the world's converter was checked against.
-    /// </remarks>
-    private static void RequireTheGui(SumoInstallation installation, SumoDriveSessionOptions options)
-    {
-        if (!options.SumoGui || installation.HasSumoGui)
-        {
-            return;
-        }
-
-        throw new CoSimSessionRefusedException(
-            "The session was asked to launch sumo-gui in place of sumo (SumoGui; run_sumo_drive.py "
-            + $"--sumo-gui), and the SUMO installation at {installation.Home} (matched by "
-            + $"{installation.Source}) has no {installation.SumoGui}. SUMO builds it only where the FOX "
-            + "toolkit is found, and the repository's setup script builds and stages it with the rest of "
-            + "the SUMO toolchain: run CarlaSetup.ps1 on Windows or CarlaSetup.sh on Linux, which rebuilds "
-            + "a staged installation that is missing it. Or name an installation that has one (SumoHome; "
-            + "run_sumo_drive.py --sumo-home), or run without the GUI. SUMO has not been started.");
-    }
-
-    /// <summary>
-    /// Refuse a SUMO whose release is not the one that converted the world, unless the mismatch was
-    /// accepted.
-    /// </summary>
-    /// <remarks>
-    /// <para>The world's network is one netconvert's output and the scenario was authored against
-    /// it; a different release is not guaranteed to read it, route on it or drive it the same way,
-    /// and nothing in the imagery says which SUMO produced the traffic in it. More than one SUMO is
-    /// commonly installed -- the repository pins one, and a system-wide installer leaves another in
-    /// <c>SUMO_HOME</c> -- so this is checked every run rather than assumed.</para>
-    ///
-    /// <para>Compared by release number (<see cref="SumoRelease"/>): the package records what the
-    /// converter printed and the installation reports its release, and the two are the same release
-    /// however each was written. A package that records no converter is not evidence of a mismatch
-    /// and proceeds; the report says the release went unchecked. An accepted mismatch proceeds and
-    /// the report says that too.</para>
-    ///
-    /// <para>The release is the one the binary about to be launched reports -- <c>sumo-gui</c>'s own
-    /// where the session launches it in place of <c>sumo</c> -- because that is the program whose
-    /// reading of the network the run is.</para>
-    /// </remarks>
-    private static SumoReleaseCheck RequireTheWorldSConverter(SumoInstallation installation,
-                                                              WorldPackageManifest manifest,
-                                                              SumoDriveSessionOptions options)
-    {
-        SumoReleaseCheck release = SumoReleaseCheck.Of(
-            installation,
-            options.SumoGui ? SumoInstallation.SumoGuiName : SumoInstallation.SumoName,
-            manifest.NetconvertVersion,
-            options.AllowSumoVersionMismatch);
-        if (release.Refused)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The world package {options.WorldPackagePath} was converted by "
-                + $"'{release.RecordedConverter}', and the SUMO the session would launch, "
-                + $"{release.Binary}, is "
-                + (release.Release is { } found ? $"release {found}" : "of a release that could not be read")
-                + $" (the installation at {release.Home}, matched by {release.Source}). Two SUMO releases are not "
-                + "guaranteed to build the same network from the same OSM or to drive it the same way, "
-                + "so SUMO has not been started. Name an installation of the world's release (SumoHome; "
-                + "run_sumo_drive.py --sumo-home), rebuild the world with this one, or accept the "
-                + "mismatch explicitly (AllowSumoVersionMismatch; run_sumo_drive.py "
-                + "--allow-sumo-version-mismatch), which the run report then records.");
-        }
-
-        return release;
-    }
-
-    /// <summary>
     /// How far the lane the bridge read puts a vehicle from where SUMO says it is, at a SUMO frame.
     /// </summary>
     /// <remarks>
@@ -3158,68 +2781,6 @@ public sealed class SumoDriveSession : IDisposable
         foreach ((string vehicleId, CoSimVehicleFrame frame) in from)
         {
             to[vehicleId] = frame;
-        }
-    }
-
-    /// <summary>
-    /// Refuse a network that is not in the world's frame.
-    /// </summary>
-    /// <remarks>
-    /// <para>Three things make the frame conversion a sign on the northing and no offset at all, and
-    /// all three are checkable before a single pose is computed: the network's projection has to be
-    /// the world's own georeference string, its normalisation offset has to be zero, and its extent
-    /// has to lie inside the ground surface the world carries.</para>
-    ///
-    /// <para>A network built at a different origin converts to a position several hundred metres
-    /// away that is inside the sandbox and looks entirely ordinary, which is why this is a refusal
-    /// rather than a warning.</para>
-    ///
-    /// <para>This compares the package's network with the package. That the scenario drives the
-    /// same network is <see cref="ScenarioNetworkCheck"/>'s, settled before SUMO was started: two
-    /// networks can agree on all three of these and still be different graphs.</para>
-    /// </remarks>
-    private static void RequireTheWorldSNetwork(WorldPackageManifest manifest,
-                                                SumoRoadNetwork network,
-                                                SumoDriveSessionOptions options)
-    {
-        if (network.NetOffset != (0.0, 0.0))
-        {
-            throw new CoSimSessionRefusedException(
-                $"The network in {options.WorldPackagePath} was normalized by "
-                + $"{network.NetOffset}, so its coordinates are not the world's. Build it with "
-                + "normalization disabled.");
-        }
-
-        if (network.Projection != manifest.GeoReferenceString)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The network projects as '{network.Projection}' and the world it is packaged with "
-                + $"as '{manifest.GeoReferenceString}'. A vehicle converted through the wrong one of "
-                + "those ends up somewhere inside the sandbox and looks entirely ordinary.");
-        }
-
-        (double minX, double minY, double maxX, double maxY) = network.ConvBoundary;
-        (double gridMinX, double gridMinY, double gridMaxX, double gridMaxY) =
-            (manifest.GridMinXMeters, manifest.GridMinYMeters,
-             manifest.GridMinXMeters + ((manifest.GridNumCols - 1) * manifest.GridCellSizeMeters),
-             manifest.GridMinYMeters + ((manifest.GridNumRows - 1) * manifest.GridCellSizeMeters));
-
-        // The network's extent is in the projected frame and the grid's is in the CARLA frame, so
-        // the northings swap places as well as sign. The tolerance is one grid cell: the surface is
-        // built from the same bounds the network was clipped to and the two agree to within
-        // rounding -- measured on the shipped Arapahoe world, the network overhangs the grid by
-        // 0.2 mm at one edge -- so a stricter test refuses every world for a fraction of a cell. A
-        // vehicle that genuinely stands off the end of the surface is counted at the tick it
-        // happens, which is where an overhang of any size shows up.
-        double slack = manifest.GridCellSizeMeters;
-        if (minX < gridMinX - slack || maxX > gridMaxX + slack
-            || -maxY < gridMinY - slack || -minY > gridMaxY + slack)
-        {
-            throw new CoSimSessionRefusedException(
-                $"The network spans ({minX:0.0}, {minY:0.0}) to ({maxX:0.0}, {maxY:0.0}) and the "
-                + $"world's ground surface covers ({gridMinX:0.0}, {gridMinY:0.0}) to "
-                + $"({gridMaxX:0.0}, {gridMaxY:0.0}) in the CARLA frame. Part of the network has no "
-                + "ground under it, so vehicles there would have no height.");
         }
     }
 }

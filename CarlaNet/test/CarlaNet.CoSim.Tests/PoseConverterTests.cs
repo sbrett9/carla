@@ -93,7 +93,7 @@ public sealed class PoseConverterTests
         // The pose convention checked against numbers worked out by hand, none of them from the
         // converter: the figures below are the arithmetic written out, and the test fails if the
         // converter's result departs from them, so a wrong reference point, a wrong frame or a wrong
-        // yaw cannot pass by agreeing with itself (06 §4.3). The bumper round-trip test above cannot
+        // yaw cannot pass by agreeing with itself. The bumper round-trip test above cannot
         // catch any of the three, because it undoes the shift with the converter's own quantities.
         //
         // The body: five metres long, its box centre half a metre behind the actor origin and 0.8 m
@@ -143,8 +143,8 @@ public sealed class PoseConverterTests
         Assert.Equal(body.LengthMetres / 2.0, Math.Sqrt((toBumperX * toBumperX) + (toBumperY * toBumperY)), 9);
         Assert.Equal(body.LengthMetres / 2.0, (toBumperX * CosYaw) + (toBumperY * SinYaw), 9);
 
-        // Each wrong convention puts the centre somewhere these numbers are not, by the residual 06 §4.3
-        // names for it, so the assertions above can tell them apart. The bumper taken as the centre: half
+        // Each wrong convention puts the centre somewhere these numbers are not, by the residual worked
+        // out for it here, so the assertions above can tell them apart. The bumper taken as the centre: half
         // a length, 2.5 m. The northing not negated: the centre mirrored to y = +57.8349364905389, which
         // is 115.6698729810778 m away. A yaw of the SUMO angle itself: the centre swung a quarter turn
         // about the bumper, 2.5 * sqrt 2 = 3.5355339059327378 m away.

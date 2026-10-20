@@ -4,7 +4,7 @@ An area of interest is a named, stable place that a scenario can site behaviour 
 can refer to. The author declares areas in GeoJSON (RFC 7946) beside the OSM extract the world is
 built from -- `<extract>.aoi.geojson`, found by name, or named explicitly -- and this class reads that
 file and refuses it whole, naming every rule it breaks, before any minutes are spent building the
-world. The contract is `04_Contracts.md` C5 (§7.1 the source, §7.5 the rules).
+world.
 
 What is accepted:
 
@@ -14,16 +14,16 @@ What is accepted:
   * `properties.id` matching `[a-z][a-z0-9_]{0,63}`, unique; `properties.name`, non-empty;
     `properties.kind`, optional.
 
-What is refused, each tagged with the rule id C5 gives it:
+What is refused:
 
-  * V5.1 -- an id that is missing, malformed or declared twice. The pattern admits lower case only,
+  * an id that is missing, malformed or declared twice. The pattern admits lower case only,
     so two ids differing only in case cannot both pass;
-  * V5.2 -- a ring that is not closed, has fewer than four positions, crosses itself, crosses
+  * a ring that is not closed, has fewer than four positions, crosses itself, crosses
     another ring of its polygon, encloses less than a square metre, or is a hole lying outside its
     exterior; a circle whose radius is not a positive number; a radius on anything but a point;
-  * V5.3 -- an area lying wholly outside the extract's `<bounds>`;
-  * V5.4 -- the same, when swapping every position's two components would put it inside: the
-    message then says so by name, because `[latitude, longitude]` is the single most likely
+  * an area lying wholly outside the extract's `<bounds>`;
+  * an area outside the bounds that swapping every position's two components would put inside:
+    the message then says so by name, because `[latitude, longitude]` is the single most likely
     authoring mistake and every internal signature in this project uses that order;
   * anything that is not the shape above -- another geometry type, a position that is not a pair
     of finite numbers, a position outside WGS84's degree ranges.
@@ -146,13 +146,15 @@ class AreaOfInterestSource:
         self.raw = raw
         self.areas = areas
         self.warnings = warnings
-        # Whether V5.3 and V5.4 have run against the extract's <bounds>. When the extract has none,
-        # the caller runs them against the network's own geographic extent once the world exists.
+        # Whether the envelope rules (an area outside the bounds, positions written latitude first)
+        # have run against the extract's <bounds>. When the extract has none, the caller runs them
+        # against the network's own geographic extent once the world exists.
         self.bounds_checked = bounds_checked
 
     @property
     def sha256(self) -> str:
-        """Lowercase hexadecimal SHA-256 of the file's bytes -- C5's `source_sha256`."""
+        """Lowercase hexadecimal SHA-256 of the file's bytes, which the resolved table records as
+        `source_sha256`."""
         return hashlib.sha256(self.raw).hexdigest()
 
     @staticmethod
@@ -171,7 +173,7 @@ class AreaOfInterestSource:
     @classmethod
     def load(cls, path: str | Path, bounds: BoundingBox | None) -> AreaOfInterestSource:
         """Read and validate a file. `bounds` is the extract's `<bounds>`; with None the envelope
-        rules (V5.3, V5.4) are left for the caller to run once some other extent is known."""
+        rules are left for the caller to run once some other extent is known."""
         source = Path(path)
         return cls.from_bytes(source.read_bytes(), source.name, bounds)
 
@@ -205,7 +207,7 @@ class AreaOfInterestSource:
                 continue
             if area.area_id in first_declared:
                 problems.append(
-                    f"V5.1 id '{area.area_id}' is declared by feature {first_declared[area.area_id]}"
+                    f"id '{area.area_id}' is declared by feature {first_declared[area.area_id]}"
                     f" and again by feature {index}")
                 continue
             first_declared[area.area_id] = index
@@ -293,7 +295,7 @@ class AreaOfInterestSource:
                      feature("Point", {"$ref": "#/$defs/position"}, circle=True)]}}})
 
     def envelope_problems(self, bounds: BoundingBox) -> list[str]:
-        """V5.3 and V5.4: every area must reach into the world's extent, stated in degrees."""
+        """Every area must reach into the world's extent, stated in degrees."""
         problems = []
         for area in self.areas:
             positions = area.positions()
@@ -304,17 +306,17 @@ class AreaOfInterestSource:
             swapped = self._envelope(swapped_positions, area.radius_m)
             if self._in_degree_range(swapped_positions) and self._intersects(swapped, bounds):
                 problems.append(
-                    f"V5.4 area '{area.area_id}': positions appear to be [latitude, longitude]; "
+                    f"area '{area.area_id}': positions appear to be [latitude, longitude]; "
                     "GeoJSON requires [longitude, latitude]. Swapped, the area falls inside the "
                     "extract's bounds; as written it does not")
             elif not self._in_degree_range(positions):
                 problems.append(
-                    f"V5.3 area '{area.area_id}': positions are outside WGS84 degree ranges "
+                    f"area '{area.area_id}': positions are outside WGS84 degree ranges "
                     "(longitude -180..180, latitude -90..90); RFC 7946 positions are "
                     "[longitude, latitude] in degrees, not projected meters")
             else:
                 problems.append(
-                    f"V5.3 area '{area.area_id}' lies wholly outside the extract's bounds: its "
+                    f"area '{area.area_id}' lies wholly outside the extract's bounds: its "
                     f"envelope is longitude {as_given[0]:.6f}..{as_given[2]:.6f}, latitude "
                     f"{as_given[1]:.6f}..{as_given[3]:.6f}; the extract covers longitude "
                     f"{bounds.min_lon:.6f}..{bounds.max_lon:.6f}, latitude "
@@ -338,12 +340,12 @@ class AreaOfInterestSource:
         area_id = properties.get("id")
         if not isinstance(area_id, str):
             problems.append(
-                f"V5.1 {label}: properties.id is required and must be a string (a Feature-level "
+                f"{label}: properties.id is required and must be a string (a Feature-level "
                 "'id' member is not read)")
             area_id = None
         elif not AREA_ID_PATTERN.fullmatch(area_id):
             problems.append(
-                f"V5.1 {label}: properties.id {area_id!r} must match [a-z][a-z0-9_]{{0,63}} -- "
+                f"{label}: properties.id {area_id!r} must match [a-z][a-z0-9_]{{0,63}} -- "
                 "lower case, a letter first, no spaces")
             area_id = None
         if area_id:
@@ -375,7 +377,7 @@ class AreaOfInterestSource:
             radius = cls._check_circle(label, geometry, radius, problems, warnings)
         else:
             if radius is not None:
-                problems.append(f"V5.2 {label}: radius_m applies to a Point only; a "
+                problems.append(f"{label}: radius_m applies to a Point only; a "
                                 f"{geometry['type']} would ignore it")
             cls._check_polygons(label, geometry, problems, warnings)
         if len(problems) > start or area_id is None or not isinstance(name, str) or not name.strip():
@@ -392,11 +394,11 @@ class AreaOfInterestSource:
             warnings.append(f"{label}: the position's altitude is ignored; areas are ground "
                             "footprints")
         if radius is None:
-            problems.append(f"V5.2 {label}: a Point needs properties.radius_m to be an area")
+            problems.append(f"{label}: a Point needs properties.radius_m to be an area")
             return None
         if isinstance(radius, bool) or not isinstance(radius, int | float) \
                 or not math.isfinite(radius) or radius <= 0:
-            problems.append(f"V5.2 {label}: radius_m must be a number greater than zero; "
+            problems.append(f"{label}: radius_m must be a number greater than zero; "
                             f"found {radius!r}")
             return None
         return radius
@@ -413,13 +415,13 @@ class AreaOfInterestSource:
         for p_index, polygon in enumerate(polygons):
             where = label if geometry["type"] == "Polygon" else f"{label} polygon {p_index}"
             if not isinstance(polygon, list) or not polygon:
-                problems.append(f"V5.2 {where}: a polygon needs at least an exterior ring")
+                problems.append(f"{where}: a polygon needs at least an exterior ring")
                 continue
             rings: list[Ring] = []
             for r_index, ring in enumerate(polygon):
                 ring_label = f"{where} {'exterior' if r_index == 0 else f'hole {r_index}'}"
                 if not isinstance(ring, list) or not all(cls._is_position(p) for p in ring):
-                    problems.append(f"V5.2 {ring_label}: every position must be "
+                    problems.append(f"{ring_label}: every position must be "
                                     "[longitude, latitude] as numbers")
                     continue
                 altitude_seen = altitude_seen or any(len(p) > 2 for p in ring)
@@ -434,19 +436,19 @@ class AreaOfInterestSource:
     @classmethod
     def _check_ring(cls, label: str, ring: Ring, problems: list[str]) -> bool:
         if len(ring) < 4:
-            problems.append(f"V5.2 {label}: a ring needs at least four positions, the last "
+            problems.append(f"{label}: a ring needs at least four positions, the last "
                             f"repeating the first; it has {len(ring)}")
             return False
         if ring[0] != ring[-1]:
-            problems.append(f"V5.2 {label}: the ring is not closed -- its last position must "
+            problems.append(f"{label}: the ring is not closed -- its last position must "
                             "repeat its first")
             return False
         distinct = cls._without_repeats(ring)
         if len(distinct) < 4:
-            problems.append(f"V5.2 {label}: the ring has fewer than three distinct vertices")
+            problems.append(f"{label}: the ring has fewer than three distinct vertices")
             return False
         if cls._self_intersects(distinct):
-            problems.append(f"V5.2 {label}: the ring crosses or touches itself")
+            problems.append(f"{label}: the ring crosses or touches itself")
             return False
         if not cls._in_degree_range(distinct):
             # Not degrees at all -- transposed, or projected metres. A square-metre figure computed
@@ -454,7 +456,7 @@ class AreaOfInterestSource:
             return True
         area = cls._ring_area_m2(distinct)
         if area < MINIMUM_RING_AREA_M2:
-            problems.append(f"V5.2 {label}: the ring encloses {area:.3g} m^2; an area needs a "
+            problems.append(f"{label}: the ring encloses {area:.3g} m^2; an area needs a "
                             f"positive area of at least {MINIMUM_RING_AREA_M2:g} m^2")
             return False
         return True
@@ -466,10 +468,10 @@ class AreaOfInterestSource:
         for h_index, hole in enumerate(holes, start=1):
             if any(cls._rings_intersect(hole, other)
                    for other in [exterior] + [h for i, h in enumerate(holes, start=1) if i != h_index]):
-                problems.append(f"V5.2 {label} hole {h_index}: the hole crosses or touches another "
+                problems.append(f"{label} hole {h_index}: the hole crosses or touches another "
                                 "ring of its polygon")
             elif not cls._point_in_ring(hole[0], exterior):
-                problems.append(f"V5.2 {label} hole {h_index}: the hole lies outside the exterior "
+                problems.append(f"{label} hole {h_index}: the hole lies outside the exterior "
                                 "ring")
 
     # ---- planar geometry, in degrees ------------------------------------------------------------

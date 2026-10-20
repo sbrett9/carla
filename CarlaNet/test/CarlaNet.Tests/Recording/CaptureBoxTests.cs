@@ -1,9 +1,8 @@
 // A vehicle whose box fell in a capture's picture carries its box on its record in the truth sidecar --
 // the axis-aligned and the minimum-area rectangles in pixels, the share outside the picture, the range
 // from the camera, the body's tilt, and the box's eight corners in latitude, longitude and bare-earth
-// height converted as the record's own point is -- and no other vehicle does: the owner's rulings of
-// 2026-10-06. Every number below is worked by hand from the camera's pinhole and the box's corners.
-// See Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md §5.1.
+// height converted as the record's own point is -- and no other vehicle does. Every number below is worked by hand from the camera's pinhole and the box's corners.
+// See <_carla> and <_box3d> in Docs/Schemas/Truth_Sidecar.md.
 using System.Xml.Linq;
 using CarlaNet.Recording;
 

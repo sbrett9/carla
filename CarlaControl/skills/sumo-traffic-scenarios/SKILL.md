@@ -122,14 +122,13 @@ Before writing, the compiler runs the scenario in SUMO alone over its whole span
 the plan names that SUMO never inserts -- discarded after waiting 900 s at its entrance, or still
 waiting when the run ends -- refuses the compile; the report's dry-run section gives every planned
 vehicle's wait, the other vehicles discarded and every collision. It adds minutes to a long scenario;
-`--skip-dry-run` skips it while drafting, and the lock says it was skipped; `run_capture` and the
+`--skip-dry-run` skips it while drafting, and the lock says it was skipped; `carla-capture` and the
 co-simulation session then refuse the scenario before anything is started (run check 54), unless
-the run accepts the skipped run in writing (`scenario.accept_skipped_dry_run`, `run_sumo_drive.py
+the run accepts the skipped run in writing (`scenario.accept_skipped_dry_run`, `carla-drive
 --accept-skipped-dry-run`), so compile without it before capturing.
 
 The schema is `schemas/scenario.schema.json` beside this file; every check, with its id, what it
-compares and whether it refuses or warns, is `checks.json`. Both are generated from the compiler. The
-design is `Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5–§7.
+compares and whether it refuses or warns, is `checks.json`. Both are generated from the compiler.
 
 Beside this file, and held to the compiler by the test suite:
 
@@ -138,8 +137,8 @@ Beside this file, and held to the compiler by the test suite:
   +03:30). `examples/README.md` says what each shows.
 - `references/resolution.md` — every place form and instant form, what each resolves to and refuses.
 - `references/time.md` — the epoch object and the six conventions for writing civil time.
-- `references/illumination.md` — the illumination default, windows, doc 11's six bands, night, and the
-  illumination–label association.
+- `references/illumination.md` — the illumination default, windows, the six illumination bands, night,
+  and the illumination–label association.
 - `references/gotchas.md` — the measured gotchas, each with the code that enforces it.
 
 **The blocks.** `world` (the package path and the network fingerprint it was authored against), `epoch`,
@@ -224,7 +223,7 @@ street names (Bahonar: 4.5 %), use points, gateways and areas:
 
 A skip must match exactly one occasion and say why (check 48); its `because` is the author's reason for
 the skip, and the report states it. It writes no trip and no supervision row: a label follows a vehicle,
-and there is none (doc 06 §3.5). An author who wants the omission in the record labels the vehicle that
+and there is none. An author who wants the omission in the record labels the vehicle that
 deviates, as the next section shows. Nothing labels the empty place, and nothing is written per frame.
 
 ### An omission: label the vehicle that deviates
@@ -369,12 +368,12 @@ carries none, and the compiler refuses a route file carrying anything but the ve
   A plain sentence says whether the sun climbs, sinks or holds during the window.
 - **Expect the illumination–label association (check 41) to be non-zero, and report it to the author
   in words** with the bands where one state alone occurs, the bands where both do, and the remedies. In
-  a pattern of life the correlation is structural — the sizing scenario measures 0.600 — and it is a
+  a pattern of life the correlation is structural — the Shahid Bahonar Port scenario measures 0.600 — and it is a
   warning, never a refusal. The report carries counts, ratios and bands and no word that judges them.
 - **Tell the author what light each window is under.** The resolution report states every window's
   lowest sun elevation and its band (`capture_windows[].sun_lowest`, check 42) and concludes nothing;
-  doc 11 D11.7 says why a sun below −6° renders no lit scene. Read the number to the author; the choice
-  is theirs.
+  `references/illumination.md` (**Night**) says what lights a scene once the sun is below −6°. Read the
+  number to the author; the choice is theirs.
 
 ### Sweeps and counterfactual pairs
 
@@ -399,7 +398,7 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
 | `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-population affiliation (a compiled type's class, read from its `carla:class_id`) + multi-marked support, real-time pacing. |
 | `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario (`<scenario>.display.json`, `beside()` names it), never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
-| `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
+| `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/Schemas/CoT_Telemetry_Stream.md`. |
 
 The command-line scripts.
 In a distribution, each `make_*_scenario.py` sits beside the scenario it writes, under `Scenarios/<Place>/` (Gardnerville, Arapahoe or Bahonar).
@@ -431,8 +430,7 @@ There the scenario writers write to `Import/`:
 
 A SUMO `vType` is a behaviour model *and* a body: its `length` and `width` set car-following gaps and
 junction occupancy, so the vehicle SUMO reserved space for and the vehicle CARLA draws have to be the
-same one. That is what the **vehicle mapping contract** fixes
-(`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/04_Contracts.md`, contract `C1`):
+same one. That is what the **vehicle mapping contract** fixes:
 
 - **One `vType` names exactly one CARLA blueprint**, by an explicit
   `<param key="carla:blueprint" value="vehicle.mini.cooper"/>` child — never by its id, its `vClass`,
@@ -610,14 +608,15 @@ The compiler enforces four of these on a specification — departure order, `--`
 
 ## CoT dataset shape and ground truth
 
-Events are CoT `<event>`s (schema in `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`),
+Events are CoT `<event>`s (schemas in `Docs/Schemas/SUMO_CoT_Event_File.md` and
+`SUMO_CoT_Table.md`),
 emitted identically to UDP, an XML file, and a 31-column CSV (one row per vehicle per update). The
 `_carla` detail block name is kept even though the source is SUMO, so the two producers are directly
 comparable. The XML and CSV are the truth sidecar: they say which vehicles were planted in `marked`
-(`1`/`0`, a `_carla` attribute in the XML and a column in the CSV, not a contract field), and
+(`1`/`0`, a `_carla` attribute in the XML and a column in the CSV), and
 `special_type` is the vehicle's kind and nothing else: the kind the measured vehicle catalogue
 (`--catalogue`, this repository's by default) curates for the CARLA blueprint a compiled vehicle
-type names, and empty for a type that names none (06 D6.18). The UDP feed carries neither.
+type names, and empty for a type that names none. The UDP feed carries neither.
 `base_type`, in every sink and in the callsign, is the catalogue's for the same blueprint, and the
 vehicle class's (`passenger` a car, `delivery` a van) only for a type that names none of its
 blueprints. A compiled scenario's ground truth is its `.supervision.json` (instances,
@@ -630,7 +629,7 @@ datasets only, and a new scenario writes none:
 - `affiliation_by_type` — CoT affiliation per SUMO vehicle type: civilian `n` (neutral), military
   `f` (friendly). The letter appears in `cot_type` = `a-<letter>-G-E-V`. It is the run's display
   convention when no display convention is given or found beside the scenario. The `u` it gave every
-  anomaly type is not applied: that letter wrote the answer into the CoT type (06 §9.1).
+  anomaly type is not applied: that letter wrote the answer into the CoT type.
 - `anomaly_notes` — an old dataset's described gaps, a location and a time window each. A run
   carries them out to a `*.supervision.json` beside its dataset, each window placed on the epoch that run stamped (`SupervisionSidecar`, written by
   `sumo_cot_telemetry`), beside the dataset and never into it or per frame. A new scenario conveys an
@@ -645,6 +644,6 @@ run against the wall clock (0 = as fast as possible, for datasets; 1 = real time
 
 ## Related
 
-- `Docs/CAT_Research/Findings/23_SUMO_Traffic_Integration.md` — the original scouting and rationale.
-- `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md` — the CoT event schema.
+- `Docs/Schemas/SUMO_CoT_Event_File.md` and `CoT_Telemetry_Stream.md` — the CoT event
+  schemas.
 - `carla/AGENTS.md` — the Python conventions these modules follow.

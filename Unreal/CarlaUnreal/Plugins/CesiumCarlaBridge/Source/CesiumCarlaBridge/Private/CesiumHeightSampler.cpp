@@ -138,7 +138,7 @@ namespace
 		return FMath::Max<int64>(0, MiB) * 1024 * 1024;
 	}
 
-	// Find-by-tag-or-spawn a tileset for a named layer (08_Layer_Architecture), then
+	// Find-by-tag-or-spawn a tileset for a named layer, then
 	// (re)configure it: georeference, ion token/asset, hidden, collision, tile cache budget, tag,
 	// refresh. The "photoreal" layer additionally ADOPTS a pre-placed untagged tileset (preserving
 	// the old "use the first existing tileset" behaviour); "ground" is always its own.
@@ -348,7 +348,7 @@ bool UCesiumHeightSampler::ConfigureCesiumForOrigin(
 		UE_LOG(LogTemp, Warning, TEXT("[CesiumCarlaBridge] could not get/create a CesiumCreditSystem."));
 	}
 
-	// Ensure the layered tilesets (08_Layer_Architecture): a visual "photoreal" tileset and,
+	// Ensure the layered tilesets: a visual "photoreal" tileset and,
 	// when a ground asset is given, a HIDDEN collidable bare-earth "ground" tileset (the
 	// height-sample source). EnsureTileset find-by-tag-or-spawns and (re)configures each so
 	// this is idempotent across the world reload in generate_opendrive_world.

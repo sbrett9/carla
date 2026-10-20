@@ -6,7 +6,7 @@ namespace CarlaNet.CoSim.Tests;
 /// <summary>
 /// Where each lent body's drawn pose came from is put on the server -- the SUMO step declared once, a body
 /// named only as it stops or starts following it -- and every snapshot carries it, so any reader of a
-/// frame computes the frame's pose source from its number, as the owner ruled on 2026-10-06, and nothing
+/// frame computes the frame's pose source from its number, and nothing
 /// is sent per tick.
 /// </summary>
 /// <remarks>
@@ -242,7 +242,7 @@ public sealed class SumoDriveSessionPoseSourceTests
         // it in shows it exactly where SUMO put it then, its body lent to it on the server's render set and
         // reading sumo; from the next frame -- the second of that step at twenty ticks per step, the next step's
         // at one -- its body is parked. No frame draws it standing where it was last drawn, and nothing is named
-        // stale on ground that is whole (the owner's ruling of 2026-10-06).
+        // stale on ground that is whole.
         using SyntheticWorld world = SyntheticWorld.Write(
             _ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
         var carla = new RecordedWorld { Loaded = world.AsLoaded() };

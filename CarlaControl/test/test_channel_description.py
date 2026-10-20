@@ -1,10 +1,10 @@
-"""A channel description's defaults are the plan's defaults, and a description that cannot work is refused.
+"""A channel description's defaults are the published ones, and a description that cannot work is refused.
 
 `ChannelDescription` is where a camera channel's defaults are defined, once, so that a second front
-end cannot quietly ship a different number from the first -- the failure the operator-surface plan
-measured three times over (12 section 1.5). The plan's table of per-channel fields and this class
-therefore have to agree, and the first test here reads that table out of the plan document itself
-rather than copying its numbers, so a change to either side that is not made to the other fails.
+end cannot quietly ship a different number from the first. `Docs/Schemas/Run_Configuration.md` is
+where an operator reads those defaults, so the page's table of channel fields and this class have to
+agree. The first test reads that table out of the page itself, so a change to either side that is not
+made to the other fails.
 
 The rest is refusal. A stare with nowhere to look, an orbit with no centre, a picture with no pixels:
 each would otherwise reach the server as a camera looking at the world origin, or as a spawn error
@@ -12,6 +12,7 @@ that names nothing the operator typed. Every problem is named in one message.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 import sys
@@ -24,12 +25,11 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 
 from carlacontrol.ChannelDescription import ChannelDescription  # noqa: E402
 
-PLAN_12 = (_REPO / "Docs" / "CAT_Research" / "Plans" / "SUMO_Behavioral_Capture"
-           / "12_Operator_Control_Surface.md")
+PAGE = _REPO / "Docs" / "Schemas" / "Run_Configuration.md"
 
-# The values the camera-rig table gave these fields when this class was written, repeated so that
-# the table and the class drifting together is caught as well as the two drifting apart.
-PLAN_DEFAULTS = {
+# The values the page gave these fields when this class was written, repeated so that the page and
+# the class drifting together is caught as well as the two drifting apart.
+PINNED_DEFAULTS = {
     "sensor_id": None,
     "pattern": "stare",
     "fov": 90.0,
@@ -47,67 +47,53 @@ A_POSE = {"stare_x_m": 120.0, "stare_y_m": 60.0, "stare_z_m": 300.0,
 AT_TRAFFIC = {"stare_look_at_target": "rendered_traffic", "stare_standoff_m": 300.0}
 
 
-class _CameraRigTable:
-    """The per-channel camera-rig rows of plan 12 section 5.2, as field name -> default.
+class _ChannelTable:
+    """The page's table of channel fields, as field name -> default.
 
-    A row names one or more fields in its first cell and their defaults, in the same order, in its
-    second. A default cell that opens with the plan's no-default marks (**—** or **cond.**) gives
-    every field in the row no default.
+    A row names one or more fields in its first cell; they share the row's Default cell, which holds
+    one JSON literal, or `none` where the field has no default.
     """
 
-    HEADING = "#### Camera rig — per channel"
-    NO_DEFAULT_MARKS = ("**—**", "**cond.**")
+    HEADING = "Each object in `capture.channels` takes these fields:"
+    NO_DEFAULT = "none"
 
     @classmethod
     def read(cls, path: Path) -> dict[str, object]:
         text = path.read_text(encoding="utf-8")
-        start = text.index(cls.HEADING)
+        lines = text[text.index(cls.HEADING):].splitlines()
+        header_row = next(i for i, line in enumerate(lines) if line.startswith("| Field |"))
+        header = [cell.strip() for cell in lines[header_row].strip().strip("|").split("|")]
+        default_column = header.index("Default")
         rows: dict[str, object] = {}
-        in_table = False
-        for line in text[start:].splitlines()[1:]:
-            if line.startswith("|"):
-                in_table = True
-                cells = [cell.strip() for cell in line.strip("|").split("|")]
-                if cells[0] in ("Toggle", "") or set(cells[0]) <= set("-: "):
-                    continue
-                rows.update(cls._row(cells[0], cells[1]))
-            elif in_table:
+        for line in lines[header_row + 2:]:
+            if not line.startswith("|"):
                 break
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            rows.update(dict.fromkeys(re.findall(r"`([^`]+)`", cells[0]),
+                                      cls._value(cells[default_column])))
         return rows
 
     @classmethod
-    def _row(cls, names_cell: str, default_cell: str) -> dict[str, object]:
-        names = re.findall(r"`([^`]+)`", names_cell)
-        if default_cell.startswith(cls.NO_DEFAULT_MARKS):
-            return dict.fromkeys(names)
-        values = [cls._value(token) for token in re.findall(r"`([^`]+)`", default_cell)]
-        if len(values) != len(names):
-            # A row whose default is prose (a conditional value, or "not offered") has no single
-            # default to compare, and none of those rows name a field this class carries.
-            return {}
-        return dict(zip(names, values, strict=True))
-
-    @staticmethod
-    def _value(token: str) -> object:
-        for kind in (int, float):
-            try:
-                return kind(token)
-            except ValueError:
-                continue
-        return token
+    def _value(cls, cell: str) -> object:
+        if cell == cls.NO_DEFAULT:
+            return None
+        literal = re.fullmatch(r"`([^`]+)`", cell)
+        assert literal, f"a default cell that is neither none nor one literal: {cell!r}"
+        return json.loads(literal.group(1))
 
 
-def test_every_field_has_the_default_the_plan_gives_it():
-    table = _CameraRigTable.read(PLAN_12)
+def test_every_field_has_the_default_the_page_gives_it():
+    table = _ChannelTable.read(PAGE)
 
     missing = [name for name in ChannelDescription.field_names() if name not in table]
-    assert missing == [], f"fields with no row in plan 12's camera-rig table: {missing}"
+    assert missing == [], f"fields with no row in Run_Configuration.md's channel table: {missing}"
     for name in ChannelDescription.field_names():
-        assert ChannelDescription.default_of(name) == table[name], name
+        default = ChannelDescription.default_of(name)
+        assert (default, type(default)) == (table[name], type(table[name])), name
 
 
-def test_the_named_defaults_are_the_plans_values():
-    for name, value in PLAN_DEFAULTS.items():
+def test_the_named_defaults_are_the_pinned_values():
+    for name, value in PINNED_DEFAULTS.items():
         assert ChannelDescription.default_of(name) == value, name
 
 

@@ -5,7 +5,7 @@ namespace CarlaNet.Types.Streaming;
 /// <summary>
 /// The supervision a world-observer snapshot carried: the plan it is bound from, and what the scenario's
 /// author asserts of the vehicle each lent body drew on that frame. Every row is a vehicle's; nothing is
-/// held for the world apart from the plan (06 §3.5).
+/// held for the world apart from the plan.
 /// </summary>
 /// <remarks>
 /// <para><b>Held on the server, so every reader reads the same truth.</b> A co-simulation session puts
@@ -13,7 +13,7 @@ namespace CarlaNet.Types.Streaming;
 /// what it holds on every snapshot beside the render set, paired to the frame like the rest of the
 /// snapshot. No client keeps it in its own process, so two clients of one world -- a recorder beside the
 /// session and one in another process, the live CoT feed -- can never hold different truth for the same
-/// frame (doc 06 §8.2, the ruling of 2026-10-05).</para>
+/// frame.</para>
 ///
 /// <para><b>Rows only where the author asserts something.</b> A body has a row only where the vehicle
 /// it draws is annotated or nominal; a body the same frame's render set names lent with no row draws a

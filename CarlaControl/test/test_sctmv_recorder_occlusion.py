@@ -1,7 +1,6 @@
 """run_SCTMV.py's recorder measures occlusion on every capture, and no option turns it off.
 
-The owner's ruling of 2026-10-05: the occlusion measurement is always on, in every capture path,
-with no switch. `--no-occlusion` is gone from the front end's parser, so a command line naming it is
+The occlusion measurement is always on, in every capture path, with no switch. `--no-occlusion` is gone from the front end's parser, so a command line naming it is
 refused as an unknown option; `--occlusion-margin` and `--occlusion-samples` stay, shaping the
 measurement rather than switching it. `NativeRecorder` records against the depth camera the rig hands
 it -- `run_SCTMV.py` passes `sensors.depth_cam` -- and starts the native recorder with it. The world

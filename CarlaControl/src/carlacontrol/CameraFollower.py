@@ -22,10 +22,9 @@ from .StareAim import StareAim
 class CameraFollower:
     """Watches a world through one camera of its own, and changes nothing else in it.
 
-    It is a *camera follower* in the sense of the capture plan's authority table
-    (`01_Architecture.md` section 4.1 and D1.1): it follows the world's clock and never cues it.
-    Whoever owns the clock -- `run_sumo_drive.py` while SUMO drives -- decides when the world
-    advances, and this process only sees the frames that result. In every state it:
+    It is a *camera follower*: another process owns the world's clock -- `run_sumo_drive.py` while
+    SUMO drives -- and decides when the world advances. This process only shows the frames that
+    result and never advances the world itself. In every state it:
 
     * never calls `world.tick()` and never writes episode settings;
     * never touches the sun, the weather, layer visibility or the map;
@@ -40,8 +39,7 @@ class CameraFollower:
 
     The overlay carries only what the frame itself carries -- its frame number and the simulated
     time stamped on it -- plus the channel's `sensor_id` and pattern. It computes no figures about
-    the run: a monitor that computes its own numbers can disagree with the record
-    (`12_Operator_Control_Surface.md` D12.14).
+    the run: a monitor that computes its own numbers can disagree with the record.
 
     An orbit is flown by the server: `OrbitSensorController` gives the circle to the server's orbit
     mover once, which advances the angle by each tick's delta on the simulation clock, so the camera
@@ -49,11 +47,10 @@ class CameraFollower:
     frame. A server built before it flew orbits refuses, and the follower ends saying so rather than
     showing a camera that does not move.
 
-    **It records nothing.** The annotation registry is process-local, so a recorder in a follower
-    process would read an empty registry and write every vehicle as unlabelled
-    (`08_Collection_And_EPoL.md` section 3.4). That section rules that annotation state is to be
-    published to the server (D8.3), and nothing publishes it yet; recording from a follower waits
-    until something does. Until then, record from the process that drives the world.
+    **It records nothing.** Captures are made by `run_capture` (`CaptureSession`), in the process that
+    drives the world. The supervision a recorder writes is held on the server and carried on every
+    snapshot (`CarlaClient.GetCachedSupervision`), so a recorder in another process would read the same
+    labels.
 
     A map load removes every actor, this camera included; restart the follower after one.
 

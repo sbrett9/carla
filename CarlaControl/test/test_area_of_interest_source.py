@@ -1,10 +1,10 @@
 """Areas of interest are refused whole, with every broken rule named, before a world is built.
 
-`AreaOfInterestSource` is the world build's gate on an author's GeoJSON (`04_Contracts.md` C5 §7.1,
-§7.5). A gate that has never rejected anything is not a gate, so most of this file is refusals: each
-test hands it a file that breaks one rule and asserts both that it is refused and that the refusal
-names the rule, because a refusal that does not say what is wrong leaves the author no better off than
-a crash. The transposition test also asserts the exact wording C5 V5.4 requires.
+`AreaOfInterestSource` is the world build's gate on an author's GeoJSON. A gate that has never
+rejected anything is not a gate, so most of this file is refusals: each test hands it a file that
+breaks one rule and asserts both that it is refused and that the refusal names the rule, because a
+refusal that does not say what is wrong leaves the author no better off than a crash. The
+transposition test also asserts the exact wording of the refusal that names the transposition.
 
 The extent used is the Arapahoe extract's own `<bounds>`, so "inside the world" means inside a real
 world's extract, not a rectangle invented for the test.
@@ -104,14 +104,14 @@ def test_the_file_is_found_beside_its_extract(tmp_path):
 
 def test_a_duplicate_id_is_refused_naming_both_features():
     problems = refusal(document(feature("gate"), feature("gate")))
-    assert any("V5.1" in p and "'gate'" in p and "feature 0" in p and "feature 1" in p
+    assert any("'gate'" in p and "feature 0" in p and "feature 1" in p
                for p in problems)
 
 
 @pytest.mark.parametrize("bad_id", ["Gate", "gate 3", "3gate", "", "g" * 65])
 def test_a_malformed_id_is_refused(bad_id):
     problems = refusal(document(feature(bad_id)))
-    assert any("V5.1" in p and "[a-z][a-z0-9_]{0,63}" in p for p in problems)
+    assert any("[a-z][a-z0-9_]{0,63}" in p for p in problems)
 
 
 def test_an_id_only_at_feature_level_is_refused_and_says_where_it_is_read():
@@ -131,27 +131,27 @@ def test_a_missing_name_is_refused():
 def test_an_open_ring_is_refused():
     open_ring = BLOCK[:-1] + [[-104.8849, 39.5941]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [open_ring]})))
-    assert any("V5.2" in p and "not closed" in p for p in problems)
+    assert any("not closed" in p for p in problems)
 
 
 def test_a_ring_of_three_positions_is_refused():
     ring = [BLOCK[0], BLOCK[1], BLOCK[0]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [ring]})))
-    assert any("V5.2" in p and "at least four positions" in p for p in problems)
+    assert any("at least four positions" in p for p in problems)
 
 
 def test_a_self_crossing_ring_is_refused():
     bow_tie = [[-104.8850, 39.5940], [-104.8840, 39.5950], [-104.8840, 39.5940],
                [-104.8850, 39.5950], [-104.8850, 39.5940]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [bow_tie]})))
-    assert any("V5.2" in p and "crosses or touches itself" in p for p in problems)
+    assert any("crosses or touches itself" in p for p in problems)
 
 
 def test_a_ring_with_no_area_is_refused():
     collinear = [[-104.8850, 39.5940], [-104.8845, 39.5940], [-104.8840, 39.5940],
                  [-104.8850, 39.5940]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [collinear]})))
-    assert any("V5.2" in p for p in problems)
+    assert any("fewer than three distinct vertices" in p or "encloses" in p for p in problems)
 
 
 def test_a_hole_outside_its_exterior_is_refused():
@@ -159,7 +159,7 @@ def test_a_hole_outside_its_exterior_is_refused():
                  [-104.8830, 39.5960]]
     problems = refusal(document(feature(
         geometry={"type": "Polygon", "coordinates": [copy.deepcopy(BLOCK), elsewhere]})))
-    assert any("V5.2" in p and "outside the exterior" in p for p in problems)
+    assert any("outside the exterior" in p for p in problems)
 
 
 def test_a_hole_crossing_its_exterior_is_refused():
@@ -167,7 +167,7 @@ def test_a_hole_crossing_its_exterior_is_refused():
                   [-104.8855, 39.5947], [-104.8855, 39.5945]]
     problems = refusal(document(feature(
         geometry={"type": "Polygon", "coordinates": [copy.deepcopy(BLOCK), straddling]})))
-    assert any("V5.2" in p and "crosses or touches another ring" in p for p in problems)
+    assert any("crosses or touches another ring" in p for p in problems)
 
 
 @pytest.mark.parametrize("radius", [None, 0, -5, "30", True])
@@ -175,12 +175,12 @@ def test_a_circle_needs_a_positive_numeric_radius(radius):
     props = {} if radius is None else {"radius_m": radius}
     problems = refusal(document(feature(
         geometry={"type": "Point", "coordinates": [-104.88449, 39.59431]}, **props)))
-    assert any("V5.2" in p and "radius_m" in p for p in problems)
+    assert any("radius_m" in p for p in problems)
 
 
 def test_a_radius_on_a_polygon_is_refused_rather_than_ignored():
     problems = refusal(document(feature(radius_m=30)))
-    assert any("V5.2" in p and "Point only" in p for p in problems)
+    assert any("Point only" in p for p in problems)
 
 
 @pytest.mark.parametrize("kind", ["LineString", "MultiPoint", "GeometryCollection"])
@@ -198,27 +198,28 @@ def test_something_that_is_not_a_feature_collection_is_refused():
 def test_an_area_outside_the_world_is_refused_with_both_extents():
     far = [[-104.80, 39.70], [-104.79, 39.70], [-104.79, 39.71], [-104.80, 39.71], [-104.80, 39.70]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [far]})))
-    assert any("V5.3" in p and "wholly outside" in p and "-104.890040" in p for p in problems)
+    assert any("wholly outside" in p and "-104.890040" in p for p in problems)
 
 
 def test_a_transposed_file_is_diagnosed_by_name():
-    """C5 V5.4: the single most likely authoring mistake gets the exact message the contract sets."""
+    """The single most likely authoring mistake, positions written latitude first, gets a message
+    that names it."""
     transposed = [[lat, lon] for lon, lat in BLOCK]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [transposed]})))
-    assert any(p.startswith("V5.4") and "positions appear to be [latitude, longitude]; GeoJSON "
+    assert any("positions appear to be [latitude, longitude]; GeoJSON "
                "requires [longitude, latitude]" in p for p in problems)
 
 
 def test_a_transposed_circle_is_diagnosed_too():
     problems = refusal(document(feature(
         geometry={"type": "Point", "coordinates": [39.59431, -104.88449]}, radius_m=50)))
-    assert any(p.startswith("V5.4") for p in problems)
+    assert any("positions appear to be [latitude, longitude]" in p for p in problems)
 
 
 def test_projected_metres_are_refused_as_not_degrees():
     metres = [[500.0, 500.0], [600.0, 500.0], [600.0, 600.0], [500.0, 600.0], [500.0, 500.0]]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [metres]})))
-    assert any("V5.3" in p and "not projected meters" in p for p in problems)
+    assert any("not projected meters" in p for p in problems)
 
 
 def test_every_problem_is_named_at_once():
@@ -229,7 +230,8 @@ def test_every_problem_is_named_at_once():
         feature("gate"),
         feature("gate2", geometry={"type": "LineString", "coordinates": []})))
     assert len(problems) >= 3
-    assert {p.split()[0] for p in problems} >= {"V5.1", "V5.2"}
+    assert any("properties.id" in p for p in problems)
+    assert any("radius_m" in p for p in problems)
 
 
 def test_the_envelope_rules_wait_when_the_extract_has_no_bounds():
@@ -237,7 +239,8 @@ def test_the_envelope_rules_wait_when_the_extract_has_no_bounds():
     source = load(document(feature(geometry={"type": "Polygon", "coordinates": [far]})),
                   bounds=None)
     assert not source.bounds_checked
-    assert any("V5.3" in p for p in source.envelope_problems(ARAPAHOE_BOUNDS))
+    assert any("lies wholly outside the extract's bounds" in p
+               for p in source.envelope_problems(ARAPAHOE_BOUNDS))
 
 
 # ---- warnings -------------------------------------------------------------------------------------

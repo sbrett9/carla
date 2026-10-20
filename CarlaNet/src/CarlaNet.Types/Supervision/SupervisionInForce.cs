@@ -1,21 +1,24 @@
 namespace CarlaNet.Types.Supervision;
 
-// The supervision in force on a frame (06_Truth_And_Annotation.md §3.1-§3.4, §8.2): what the scenario's
-// author asserts of each vehicle. One shape for every side of it -- what a drive session puts in force,
-// what the server carries on each world-observer snapshot, and what a reader decodes -- so the truth a
-// recorder writes is the truth the session named, field for field. Every row is a vehicle's: nothing is
-// held for the world apart from the plan it is all bound from (06 §3.5).
+// The supervision in force on a frame: what the scenario's author asserts of each vehicle. One shape
+// for every side of it -- what a drive session puts in force, what the server carries on each
+// world-observer snapshot, and what a reader decodes -- so the truth a recorder writes is the truth the
+// session named, field for field. Every row is a vehicle's: nothing is held for the world apart from the
+// plan it is all bound from.
 
 /// <summary>
 /// The plan supervision is bound from, by the identity every record of it carries: the plan, and the
-/// vocabulary version and digest that pin what its terms mean (06 D6.30).
+/// vocabulary version and digest that pin what its terms mean.
 /// </summary>
 /// <param name="PlanId">The supervision plan's <c>plan_id</c>.</param>
 /// <param name="VocabularyVersion">The version of the vocabulary's core the plan's terms were resolved against.</param>
 /// <param name="VocabularyDigest">The plan's <c>vocabulary_digest</c>, over its resolved term set.</param>
 public sealed record SupervisionPlanIdentity(string PlanId, int VocabularyVersion, string VocabularyDigest);
 
-/// <summary>One pattern instance in force for a vehicle (06 §3.4, §8.2's <c>&lt;annotation&gt;</c>).</summary>
+/// <summary>
+/// One pattern instance in force for a vehicle, which a capture sidecar writes as an
+/// <c>&lt;annotation&gt;</c>.
+/// </summary>
 /// <param name="InstanceId">The instance, as the plan names it: <c>&lt;scenario_id&gt;/&lt;name&gt;</c>.</param>
 /// <param name="Labels">The terms it is labelled with, each spelled as the plan's vocabulary spells it.</param>
 /// <param name="Phase">The phase of its interval in force; empty where the plan declares none.</param>
@@ -35,8 +38,7 @@ public sealed record AnnotationInForce(string InstanceId, IReadOnlyList<string> 
 }
 
 /// <summary>
-/// What the author asserts of one vehicle on a frame: its state, and the pattern instances in force
-/// (06 §3.1).
+/// What the author asserts of one vehicle on a frame: its state, and the pattern instances in force.
 /// </summary>
 /// <param name="State">
 /// <see cref="SupervisionState.Annotated"/>, <see cref="SupervisionState.Nominal"/> or

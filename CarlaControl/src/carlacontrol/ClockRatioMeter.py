@@ -1,7 +1,7 @@
 """Ticks a world a fixed number of times and reports what that cost in wall clock.
 
 The clock ratio -- simulated seconds produced per wall-clock second -- is the quantity every
-wall-clock and storage figure in the capture plan rests on, and it has only ever been recovered
+estimate of a capture's wall-clock time rests on, and it has only ever been recovered
 after the fact by differencing a capture's PNG metadata against its file timestamp. That works on a
 session that ran, but it cannot compare two configurations, because a comparison needs both arms to
 differ in exactly one thing and to be measured the same way.

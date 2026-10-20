@@ -1,7 +1,7 @@
 """Every refusal and warning one launch produced, in the scenario compiler's vocabulary.
 
 A finding is a `CompileFinding` -- the same record, with the same two outcomes, that the scenario
-compiler writes (`07_Scenario_Authoring.md` §5.2): **refuse** means nothing is emitted and no session
+compiler writes: **refuse** means nothing is emitted and no session
 starts; **warn** means the launch goes on and the warning is carried in full. What differs is the
 catalogue the check numbers belong to, which is `RunConfigurationCheckCatalogue`'s, and a warning's
 code, which is what an `on_warning.<code>` adjudication names.

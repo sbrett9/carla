@@ -1,10 +1,7 @@
 """The typed description of one camera channel, and the one place its defaults are defined.
 
-Field names and defaults follow the per-channel camera-rig rows of
-`Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md` section 5.2. A
-front end that offers one of these fields reads its default from here (`default_of`) rather than
-writing the number again, because a default written twice is a default that drifts (the same
-document's section 1.5 measured three that already had).
+A front end that offers one of these fields reads its default from here (`default_of`) rather than
+writing the number again, because a default written twice is a default that drifts.
 """
 
 from __future__ import annotations
@@ -57,14 +54,13 @@ class ChannelDescription:
     default can be recognised as supplied, so a defaulted field such as `orbit_radius_m` is simply
     unused by a stare.
 
-    **What is not here yet.** Section 5.2 also lists `capture_rgb`, `capture_depth`,
-    `capture_segmentation`, `depth_max_range_m`, `sensor_tick` and `post_process_profile` per
-    channel. They belong with the recorder and the depth camera, and are added when `SensorRig`
-    and `run_SCTMV.py`'s argument parser are made to build their rig from this class -- work that
-    belongs to the operator control surface (section 9.2 of the same document) and has not been
-    done. Until then `SensorRig` still reads its own `args`, and nothing here changes what
-    `run_SCTMV.py` does. The consumers today are `CameraFollower` and `run_capture`'s run
-    configuration, whose channel objects are this class's fields plus `post_process_profile`.
+    **What is not here yet.** The per-channel fields `capture_rgb`, `capture_depth`,
+    `capture_segmentation`, `depth_max_range_m`, `sensor_tick` and `post_process_profile` are not
+    in this class. They belong with the recorder and the depth camera, and are added when
+    `SensorRig` and `run_SCTMV.py`'s argument parser are made to build their rig from this class,
+    which has not been done. Until then `SensorRig` still reads its own `args`, and nothing here
+    changes what `run_SCTMV.py` does. The consumers today are `CameraFollower` and `run_capture`'s
+    run configuration, whose channel objects are this class's fields plus `post_process_profile`.
 
     Raises:
         ValueError: when the description is invalid. Every problem found is named in the one
@@ -164,7 +160,7 @@ class ChannelDescription:
             # Range and shape checks on a value of the wrong type would only add noise.
             return problems
 
-        # A sensor_id is its channel's camera name (04_Contracts.md section 6.3): it begins every
+        # A sensor_id is its channel's camera name: it begins every
         # still's file name and names the channel's directory, so it meets the rule every camera
         # name meets.
         if self.sensor_id is not None and (refused := CameraName.problem(self.sensor_id)):

@@ -1,11 +1,11 @@
 ---
 name: schema-page
-description: The page template for the reference pages under Docs/CAT_Research/Schemas, which describe one kind of file the capture tools write or read (its schema, fields, example and versions), with the checker that holds a page to it. Use this skill whenever you write, add, restructure, review or copy-edit any page in that folder, whenever a schema file under CarlaControl/schemas or a file format changes and its page must follow, whenever a new kind of output file needs a page, and whenever the user asks about the schema pages' layout, headings, header table, consistency or template, even if they do not say "template".
+description: The page template for the reference pages under Docs/Schemas, which describe one kind of file the capture tools write or read (its schema, fields, example and versions), with the checker that holds a page to it. Use this skill whenever you write, add, restructure, review or copy-edit any page in that folder, whenever a schema file under CarlaControl/schemas or a file format changes and its page must follow, whenever a new kind of output file needs a page, and whenever the user asks about the schema pages' layout, headings, header table, consistency or template, even if they do not say "template".
 ---
 
 # Schema page
 
-Every page under `Docs/CAT_Research/Schemas` describes one kind of file: what writes it, what reads
+Every page under `Docs/Schemas` describes one kind of file: what writes it, what reads
 it, every field, and its format version. Forty-one such pages exist. A reader who has learnt one
 must find the same things in the same places on the next, which is what this template is for.
 The prose rules are separate, in `.claude/CLAUDE.md` at the repository root. `AGENTS.md` adds the
@@ -13,7 +13,7 @@ layout of a page's sentences. This skill is about the shape of the page.
 
 ## The template
 
-The contract is `Docs/CAT_Research/Schemas/AGENTS.md`: the five header rows, the section order,
+The contract is `Docs/Schemas/AGENTS.md`: the five header rows, the section order,
 the two forms of the version cell and the writing rules. Claude Code loads it through the
 `CLAUDE.md` beside it whenever a page in that folder is touched; read it first all the same, so
 the rules are in front of you before the page is. `references/template.md` is a filled page that
@@ -43,7 +43,7 @@ with hyphens for spaces and the punctuation dropped.
 3. Run the checker on the page:
 
    ```
-   python Scripts/Docs/check_schema_pages.py Docs/CAT_Research/Schemas/<Page>.md
+   python Scripts/Docs/check_schema_pages.py Docs/Schemas/<Page>.md
    ```
 
    It prints every departure with the line and the template's name for the heading. Exit 0 means

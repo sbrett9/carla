@@ -14,7 +14,7 @@
 ///
 /// Nothing else is held for the world. Every row of supervision is a vehicle's, carried on the lent
 /// body that draws it (FActorSupervision), because SUMO reports vehicles, not places, and a label
-/// follows the vehicle it is about (06_Truth_And_Annotation.md §3.5). Held on the episode, so a map
+/// follows the vehicle it is about. Held on the episode, so a map
 /// load ends it, and withdrawn when the session that put it in force says so. While a plan is held the
 /// world observer writes a supervision block on every snapshot, and each lent body's own supervision
 /// rides in it.

@@ -3,13 +3,14 @@
 In a pattern of life the correlation between time of day and label is structural -- the sizing
 scenario's probes are a mid-morning phenomenon because that is when a probe would probe, and its guard
 rota is a 07:00 / 15:00 / 23:00 phenomenon because that is when shifts change. Measured on it,
-`I(hour; label) / H(label) = 0.600` (`07_Scenario_Authoring.md` §5.6.1). A model trained on imagery
+`I(hour; label) / H(label) = 0.600`. A model trained on imagery
 from such a corpus can learn the light instead of the behaviour, and the failure this check exists for
 is discovering that after training. So it computes the number, states it in the resolution report and
-the lock, and **never refuses**: refusing would make doc 20's class 4 -- a pattern *defined* by its
-hour -- unauthorable, and a check that fires on the only large scenario gets switched off (§5.6.4).
+the lock, and **never refuses**: refusing would make a class-conditioned presence -- a heavy goods
+vehicle in a residential area at 03:00, a pattern *defined* by its hour -- unauthorable, and a check
+that fires on the only large scenario gets switched off.
 
-**Buckets are illumination bands, not clock hours** (§5.6.2): 07:00 is a different sun in December and
+**Buckets are illumination bands, not clock hours**: 07:00 is a different sun in December and
 in June. The band is `IlluminationBand.of` applied to the declared sun (`WindowSun`), so the statistic
 rests on the same sun the session will bind.
 
@@ -20,14 +21,14 @@ Two tables are computed:
   durations, and a flow from its begin to its end; it is captured by a window it overlaps, under the
   window's sun at the entry's first instant inside it. The presence span is an estimate, and says so:
   congestion lengthens it, and only the run can say exactly who was in frame;
-* **over the span** -- every entry at its own departure, the scenario-wide picture §5.6.1 measured.
+* **over the span** -- every entry at its own departure, the scenario-wide picture.
 
 For each: the contingency table of band against the three-valued supervision state, the per-band
 rates, `I(band; supervision) / H(supervision)` in bits to three decimals with the counts it rests on,
 every band where one state alone occurs (the annotated rate is 0 or 1 there, so the band determines
-the label; `degenerate_bands`), every band where both occur (`mixed_bands`), and the ways §5.6.3
-names of changing the numbers. Every field is a count or a ratio over the declarations: the report
-carries no word that judges what the numbers mean (the charter's §4b).
+the label; `degenerate_bands`), every band where both occur (`mixed_bands`), and the ways of
+changing the numbers (`REMEDIES`). Every field is a count or a ratio over the declarations: the
+report carries no word that judges what the numbers mean.
 
 What it cannot see: what an operator's override of the illumination default or a window of their own
 would capture, and anything about the imagery. It is a statistic over declarations, not over pixels.

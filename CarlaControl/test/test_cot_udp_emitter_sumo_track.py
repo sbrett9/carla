@@ -3,7 +3,8 @@
 During a SUMO drive the live pull (`world.get_vehicle_telemetry`) lists only the bodies the newest
 frame drew, and gives each lent body the SUMO vehicle it was drawn for (`sumo_id`, `vtype_id`,
 `admitted_tick`), from the render set the server carries on every world-observer snapshot
-(`Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md` §5.2). A pooled body draws a succession of
+(a SUMO drive reports its render set, and parks a body between loans 300 m below the ground). A
+pooled body draws a succession of
 vehicles over a run, so a track built on its actor id would jump from one real vehicle to the next.
 Held here, against the formatter the live feed (`TelemetryController`) uses:
 

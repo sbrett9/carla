@@ -209,7 +209,7 @@ def declaration(drive, path: Path):
     arguments = argparse.Namespace(epoch=str(path), illumination=None, solar_rate=None,
                                    freeze_at=None, freeze_date_advances=False,
                                    no_sun_required=False)
-    return drive.SunDeclaration(arguments)
+    return importlib.import_module("carlacontrol.SunDeclaration").SunDeclaration(arguments)
 
 
 def test_an_epoch_file_that_conforms_is_handed_on(drive, tmp_path):

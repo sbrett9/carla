@@ -13,7 +13,7 @@ namespace CarlaNet.CoSim.Tests;
 public sealed class SolarEpochTests
 {
     /// <summary>
-    /// The sizing scenario's epoch as the scenario contract's worked example writes it: midnight at
+    /// The Shahid Bahonar Port scenario's epoch: midnight at
     /// the start of day 0 at the port, which every guard shift's trip id already assumes.
     /// </summary>
     private const string PortEpoch = """

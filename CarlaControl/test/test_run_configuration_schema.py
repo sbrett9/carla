@@ -1,14 +1,14 @@
 """The run configuration's schema refuses what it does not name, and is the one source of its help.
 
 An assistant generating a configuration makes mistakes that `argparse` would accept in silence: a
-misspelt key, a number where a name belongs, a field that does not exist on this build. Plan 12 R4
-requires each to be a refusal naming the field and the candidates, and some to be refusals that point
-at the field that does exist -- the camera blueprint's own name for part of the exposure, which a
-channel sets with a field in the run's units, and a world build (check 38) -- because a generic
-"unknown key" would leave the operator no better off.
+misspelt key, a number where a name belongs, a field that does not exist on this build. Each of
+these mistakes must be refused with a message that names the field and the valid field names nearest
+to it. Some refusals must also point at the field that does exist -- the camera blueprint's own name for part of the exposure, which a channel sets
+with a field in the run's units, and a world build (check 38) -- because a generic "unknown key"
+would leave the operator no better off.
 
 A channel's exposure is five fields, each defaulting to the Default profile's value: the run states
-every capture's exposure whether or not it sets one (08 D8.26-D8.27).
+every capture's exposure whether or not it sets one.
 
 The field table is also what `--help` prints and what the published schema says, so a default exists
 once; the tests hold the published file equal to the generated one and every default equal to the

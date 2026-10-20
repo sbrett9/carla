@@ -1,15 +1,14 @@
 """The checks a capture run's effective configuration faces before anything is acquired.
 
-`12_Operator_Control_Surface.md` §6.2, in the scenario compiler's refuse/warn vocabulary
-(`07_Scenario_Authoring.md` §5.2): a refusal stops the launch naming the field, both values and the
-candidates; a warning lets it go on and is carried in full. The checks are numbered by
-`RunConfigurationCheckCatalogue`, which also says which checks the co-simulation session runs itself
-(the loaded world, the SUMO release, the lease, the fast-forward and the sun's read-back), which hold
-by construction, and which have nothing in the tree to compare.
+They use the scenario compiler's refuse/warn vocabulary: a refusal stops the launch naming the field,
+both values and the candidates; a warning lets it go on and is carried in full. The checks are
+numbered by `RunConfigurationCheckCatalogue`, which also says which checks the co-simulation session
+runs itself (the loaded world, the SUMO release, the lease, the fast-forward and the sun's
+read-back), which hold by construction, and which have nothing in the tree to compare.
 
 * **The offline checks** (`validate_offline`, then `validate_launch`) need no server, no GPU and no
   SUMO, so a
-  night's runs can be validated on a laptop (02 D2.2). Where the session has a validator of its own
+  night's runs can be validated on a laptop. Where the session has a validator of its own
   for a rule, they call it rather than restate it: the clock ratio is
   `CarlaNet.CoSim.CoSimClock.ForSession`, the illumination object is `IlluminationPolicy.FromJson`,
   and the epoch is `SolarEpoch` through `ScenarioEpoch`. Where the pre-roll's wait for each view
@@ -30,7 +29,7 @@ by construction, and which have nothing in the tree to compare.
   live run declares (check 44).
 
 **What the disk figures rest on.** Check 19 and check 46 express free space in captured seconds from
-doc 10's measured PNG size: 2.25 MB per 1280x720 PNG (10 §4.6, read as MiB, the larger of the two
+a PNG size measured on a real capture: 2.25 MB per 1280x720 PNG (read as MiB, the larger of the two
 readings, since the figure guards a disk). The truth sidecars are left out: a sidecar grows with the
 vehicles in frame, every vehicle SUMO has is rendered, and how many a channel will see is not known
 before the run. A PNG's size depends on what is in frame too, so the figure is an estimate and the
@@ -479,7 +478,7 @@ class RunConfigurationValidator:
     @staticmethod
     def _readiness_prewarm(effective: EffectiveRunConfiguration,
                            findings: RunConfigurationFindings) -> None:
-        """Every channel's view is waited on inside the prewarm (03 §9.5.1), from where every camera
+        """Every channel's view is waited on inside the prewarm, from where every camera
         holds the pose the window opens on. With the picture's wait off, its default, the tiles have
         a lead of their own, capture.tiles_hold_s in whole SUMO steps, which every camera must hold
         before the window -- a stare following the traffic after the step it measures the traffic on
@@ -670,7 +669,7 @@ class RunConfigurationValidator:
 
     @staticmethod
     def bytes_per_capture(effective: EffectiveRunConfiguration, index: int) -> float:
-        """One capture's PNG, from doc 10's measured size per pixel. Its truth sidecar is not
+        """One capture's PNG, from the measured size per pixel. Its truth sidecar is not
         counted: it grows with the vehicles in frame, which no figure known before the run bounds."""
         values = effective.channel_values(index)
         return PNG_BYTES_PER_PIXEL * float(values["width"]) * float(values["height"])

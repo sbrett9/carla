@@ -1,8 +1,6 @@
 // The truth any process reads during a SUMO drive lists the bodies a frame drew, named by their SUMO
 // vehicles, and no parked body -- from the render set the server carries on every world-observer
-// snapshot, not from a source in the driving process. See
-// Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md §5.2 and
-// Docs/CAT_Research/Plans/SUMO_Behavioral_Capture/03_CoSimulation_Runtime.md §8.9.
+// snapshot, not from a source in the driving process.
 //
 // Before the server carried it, the live pull (get_vehicle_telemetry), and so the live CoT feed and a
 // recorder in any process but the driving one, returned every vehicle actor: on a Gardnerville

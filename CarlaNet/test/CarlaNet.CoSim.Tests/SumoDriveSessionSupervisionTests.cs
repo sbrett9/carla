@@ -5,8 +5,8 @@ namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
 /// The supervision in force is put on the server, onto the bodies that draw the vehicles it is about, and
-/// every snapshot carries it: so every client of the world reads the same truth for the same frame, as the
-/// owner ruled on 2026-10-05, and none holds its own.
+/// every snapshot carries it: so every client of the world reads the same truth for the same frame, and
+/// none holds its own.
 /// </summary>
 /// <remarks>
 /// The succession fixture hands one body from <c>first</c> to <c>second</c> with a spell parked between,
@@ -82,7 +82,7 @@ public sealed class SumoDriveSessionSupervisionTests
             Assert.Equal(Plan, opening.Plan);
             Assert.Single(carla.SupervisionWrites, write => write.Change.Fresh);
             // Every change after the fresh opening names bodies, and no change names anything else: there is
-            // no row for the world (06 §3.5). The opening may name none, put before any body is lent.
+            // no row for the world. The opening may name none, put before any body is lent.
             Assert.All(carla.SupervisionWrites.SkipLast(1),
                        write => Assert.True(write.Change.Fresh || write.Change.Bodies.Count > 0));
             Assert.True(carla.SupervisionWrites.Count <= 5,

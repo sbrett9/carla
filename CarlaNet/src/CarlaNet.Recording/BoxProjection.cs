@@ -279,7 +279,7 @@ public static class BoxProjector
                 ApparentWidthPx = projection.ApparentWidthPx,
                 ApparentHeightPx = projection.ApparentHeightPx,
             };
-            // Only a vehicle in the picture gets a box, as the owner ruled; its range is the one the
+            // Only a vehicle in the picture gets a box; its range is the one the
             // draw distance is marked by, from the same center and the same camera.
             if (origin is { } georeference && projection.IsInPicture)
             {

@@ -1,6 +1,6 @@
 """Reads the engine's sun and compares it against the algorithm the engine is meant to be running.
 
-Every window in a capture plan is placed by computing where the sun will be at a civil clock time on
+Every capture window is placed by computing where the sun will be at a civil clock time on
 a date at a site. That computation is a **model**. This class is what turns it into a reading: it
 sets a known epoch on the server, reads `get_solar_state` back, and differences the returned
 elevation against `SolarPositionModel` evaluated on the same inputs.

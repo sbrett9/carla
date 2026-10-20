@@ -1,13 +1,13 @@
 """Every resolved field says which layer set it, a binding cannot be overridden, and a run replays.
 
-Plan 12 D12.3: the recorded artifact is the effective configuration, and every field in it carries its
-value, its layer, the tool default it would have had, and what any override replaced. Layering is where
-implicitness creeps back in (R5), so each layer is exercised here by a field it alone supplies, and the
+The recorded artifact is the effective configuration, and every field in it carries its value, its
+layer, the tool default it would have had, and what any override replaced. Layering is where
+implicitness creeps back in, so each layer is exercised here by a field it alone supplies, and the
 record of an override is read back rather than assumed. The world package's and the scenario
 package's values are bindings: a run that restates one with a different value is refused naming both
 (check 3), because a scenario that asserts one world and a run that renders another produce a corpus
 that contradicts itself. And the effective configuration read back as a run configuration must resolve
-to itself -- R1's test made structural -- while a replay against a world that has since changed is
+to itself, so a run replays from its record, while a replay against a world that has since changed is
 refused rather than quietly re-bound.
 """
 from __future__ import annotations

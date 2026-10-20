@@ -1,11 +1,10 @@
 """Check 41's statistic reproduces the measured figure, buckets by band, and only ever warns.
 
-`07_Scenario_Authoring.md` §5.6.1 measured `I(hour; label) / H(label) = 0.600` on the sizing scenario
-from a published contingency table (610 route entries, 9 annotated, by departure hour). The statistic
-does not care what its buckets are, so feeding it that table must give that number; a computation
-that did not would be computing something other than what the plan measured. The band function is
-pinned at the edges doc 11 §4.4 names, and is the table in `CarlaNet.Types` the recorder writes every
-capture's band from.
+`I(hour; label) / H(label)` was measured at 0.600 on the Shahid Bahonar Port scenario's contingency table (610
+route entries, 9 annotated, by departure hour). The statistic does not care what its buckets are, so
+feeding it that table must give that number; a computation that did not would be computing something
+other than what was measured. The band function is pinned at its edges, and is the table in
+`CarlaNet.Types` the recorder writes every capture's band from.
 """
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ from carlacontrol.AnnotationVocabulary import CORE_TERMS  # noqa: E402
 from carlacontrol.IlluminationBand import BAND_SOURCE, IlluminationBand  # noqa: E402
 from carlacontrol.IlluminationLabelAssociation import IlluminationLabelAssociation  # noqa: E402
 
-# 07 §5.6.1: hour -> (annotated, total), the shipped sizing scenario's 610 route entries.
+# Hour -> (annotated, total), the Shahid Bahonar Port scenario's 610 route entries as it shipped.
 BAHONAR_BY_HOUR = {
     "00": (0, 21), "02": (1, 1), "06": (0, 35), "07": (0, 125), "08": (1, 15), "09": (0, 7),
     "10": (5, 40), "11": (2, 2), "12-14": (0, 35), "15": (0, 126), "16-18": (0, 56), "20": (0, 21),
@@ -71,13 +70,13 @@ def test_independence_scores_zero_and_determination_scores_one():
     (-6.0, "nautical_twilight"), (-11.99, "nautical_twilight"), (-12.0, "astronomical_twilight"),
     (-18.0, "night"), (-60.95, "night"),
 ])
-def test_the_band_edges_are_doc_11s(elevation, band):
+def test_each_band_holds_its_upper_edge(elevation, band):
     assert IlluminationBand.of(elevation) == band
 
 
 def test_the_vocabulary_spells_the_bands_the_statistic_buckets_by():
-    """Doc 11 §4.4 is the single definition of the bands (07 §12 question 13): the core vocabulary's
-    `illumination_band` terms are the names the band function assigns, in its order."""
+    """The bands have a single definition: the core vocabulary's `illumination_band` terms are the
+    names the band function assigns, in its order."""
     assert CORE_TERMS["illumination_band"] == IlluminationBand.names() == [
         "day", "golden", "civil_twilight", "nautical_twilight", "astronomical_twilight", "night"]
     assert {IlluminationBand.of(e) for e in range(-90, 91)} == set(IlluminationBand.names())
@@ -108,6 +107,6 @@ def test_the_bands_are_the_table_the_recorder_writes_every_capture_s_band_from()
 
 @pytest.mark.parametrize("elevation", [-180.0, 90.5, float("nan")])
 def test_an_elevation_that_is_not_a_sun_s_has_no_band(elevation):
-    """-180 is the engine's sun for an impossible date (doc 11 F4): below -18, and not a night."""
+    """-180 is the engine's sun for an impossible date: below -18, and not a night."""
     with pytest.raises(ValueError, match="not a sun's elevation"):
         IlluminationBand.of(elevation)

@@ -10,11 +10,10 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>From the sun, because nothing else can supply them.</b> SUMO declares front, fog and high-beam
 /// signal bits and never writes any of them, so a headlight is not something the simulation knows. What
-/// is known is the sun, and the rule is the time-and-illumination plan's (D11.9):
-/// <c>Position | LowBeam</c> asserted once the sun's elevation falls below
-/// <see cref="OnBelowDegrees"/> and cleared once it rises above <see cref="OffAboveDegrees"/>, +3 and +6
-/// degrees by default. At the sizing site the sun takes about fourteen minutes to cross that band, so a
-/// window sees at most one switch and no chatter.</para>
+/// is known is the sun, so the rule asserts <c>Position | LowBeam</c> once the sun's elevation falls
+/// below <see cref="OnBelowDegrees"/> and clears it once the elevation rises above
+/// <see cref="OffAboveDegrees"/>, +3 and +6 degrees by default. At Shahid Bahonar Port the sun takes about
+/// fourteen minutes to cross that band, so a window sees at most one switch and no chatter.</para>
 ///
 /// <para><b>The elevation is the one the world reports</b> -- the geometric elevation it publishes with
 /// each snapshot, the <c>sun_elevation_deg</c> a frame's solar record carries -- so the lamps in the imagery

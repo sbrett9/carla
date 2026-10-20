@@ -1,11 +1,11 @@
 """`--ev` sets the rig camera's exposure compensation, and says so where the server cannot take it.
 
-The RGB camera publishes `exposure_compensation` beside its other exposure attributes since stage K
-(08_Collection_And_EPoL.md D8.27), so `run_SCTMV.py --ev` and `run_free_move_camera.py --ev`, which
-`SensorRig` reads, set it: EV added to the camera's exposure, which is otherwise the blueprint's own, the
-Default profile's manual ISO 100, 1/320 s and f/4. A server built before the camera published its
-exposure has no such attribute; there a value other than zero is not applied and the rig says so,
-rather than leaving it unapplied in silence. The world is stood in for.
+The RGB camera publishes `exposure_compensation` beside its other exposure attributes, so
+`run_SCTMV.py --ev` and `run_free_move_camera.py --ev`, which `SensorRig` reads, set it: EV added to
+the camera's exposure, which is otherwise the blueprint's own, the Default profile's manual ISO 100,
+1/320 s and f/4. A server built before the camera published its exposure has no such attribute;
+there a value other than zero is not applied and the rig says so, rather than leaving it unapplied
+in silence. The world is stood in for.
 """
 from __future__ import annotations
 

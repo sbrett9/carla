@@ -13,7 +13,7 @@
 #   Scenarios/     the example scenarios, whole, with the OpenStreetMap extracts they are built on
 #                  and, beside each scenario, the script from CarlaControl/scripts/ that writes it
 #   docs/          the user documentation: Guides, EPOL, Tracking, Schemas and Skills from
-#                  Docs/CAT_Research/, with their folder structure kept so their links resolve.
+#                  Docs/, with their folder structure kept so their links resolve.
 #                  Links that leave it, and the scenario READMEs' links into it, are pointed at the
 #                  bundle by Scripts/Distribution/rewrite_doc_links.py, which needs python3 (or
 #                  $PYTHON)
@@ -231,28 +231,28 @@ else
     echo "[dist] WARNING: no authoring skills under $root/CarlaControl/skills"
 fi
 
-# 3c. The user documentation: the guides and the reference pages, from Docs/CAT_Research/ into docs/
+# 3c. The user documentation: the guides and the reference pages, from Docs/ into docs/
 #     with their folder structure kept, so the relative links between them still resolve. Only these
-#     folders are written for users. Plans/, Findings/ and the rest of Docs/CAT_Research/ are internal
-#     and stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
-#     and stops the assembly.
+#     folders are written for users. The rest of Docs/ is CARLA's own documentation and stays out.
+#     The pages are tracked in this repository, so a missing folder is a broken checkout and stops
+#     the assembly.
 user_doc_folders="Guides EPOL Tracking Schemas Skills"
 copy_user_docs() {
     local folder
     mkdir -p "$dist/docs"
     for folder in $user_doc_folders; do
-        if [ ! -d "$root/Docs/CAT_Research/$folder" ]; then
-            echo "[dist] ERROR: user documentation folder not found at $root/Docs/CAT_Research/$folder" >&2
+        if [ ! -d "$root/Docs/$folder" ]; then
+            echo "[dist] ERROR: user documentation folder not found at $root/Docs/$folder" >&2
             exit 1
         fi
-        cp -a "$root/Docs/CAT_Research/$folder" "$dist/docs/"
+        cp -a "$root/Docs/$folder" "$dist/docs/"
         # The rules for an assistant that edits the pages (AGENTS.md, with the CLAUDE.md that loads
         # it) belong to the checkout, not to a reader of the bundle.
         rm -f "$dist/docs/$folder/AGENTS.md" "$dist/docs/$folder/CLAUDE.md"
     done
     echo "[dist] docs: ${user_doc_folders// /, } ($(find "$dist/docs" -type f | wc -l) files)"
     add_manifest_row "user documentation (${user_doc_folders// /, })" \
-                     "built from this repository, Docs/CAT_Research/" \
+                     "built from this repository, Docs/" \
                      "Sierra Nevada Corporation (licenses/CarlaControl-LICENSE.txt)" "docs/"
 }
 copy_user_docs
@@ -332,8 +332,7 @@ sumo_dest="$dist/tools/sumo"
 sumo_bin_dest="$sumo_dest/bin"
 sumo_executables="netconvert sumo duarouter"
 # sumo-gui is staged beside these by CarlaSetup and deliberately not bundled: whether a distribution
-# carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md section 5.4).
-# Add it here only once that is decided.
+# carries it is an open decision that turns on FOX's LGPL. Add it here only once that is decided.
 sumo_version="unknown"
 
 # Bundle every library the given binary resolves, except the ones tied to the target's own

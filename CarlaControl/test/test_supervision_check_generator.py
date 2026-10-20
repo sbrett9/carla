@@ -4,8 +4,8 @@ vehicle can carry, and -- with no CARLA -- the whole path from the plan to the r
 `make_supervision_check_scenario.py` writes a six-minute scenario on the Arapahoe world, the world the
 owner checks supervision on live, and compiles it with the scenario compiler. Held here:
 
-* **`Import/` is the generator's output**, byte for byte, as the shipped scenarios are
-  (`07_Scenario_Authoring.md` §8.5), the run configuration written beside it included.
+* **`Import/` is the generator's output**, byte for byte, as the shipped scenarios are, the run
+  configuration written beside it included.
 * **The plan carries an annotated dwell, an annotated transit and a nominal matched negative**, each
   interval anchored to the event that commits it, and no series, because the Arapahoe package
   publishes no area of interest a slot could be sited at.
@@ -14,7 +14,7 @@ owner checks supervision on live, and compiles it with the scenario compiler. He
 * **The plan binds in a session**: driven world-less by a real SUMO, as the binder's own tests are, the
   binder opens and closes each interval on the event it names, with the closing reason each one
   should have; and two runs at different SUMO steps write manifests `diff_run_manifests.py` finds name
-  the same supervision rows (06 D6.8).
+  the same supervision rows.
 
 What these cannot see: the imagery. That is the owner's live check, which the run configuration sets
 up.
@@ -115,7 +115,7 @@ def test_the_plan_carries_a_dwell_a_transit_and_a_nominal_matched_negative():
     dwell = phases["dwell"]
     assert (dwell["anchor"]["start"]["event"], dwell["anchor"]["end"]["event"]) == (
         "stop:0", "stop_end:0")
-    # A duration stop declares its length and no instant (06 D6.4).
+    # A duration stop declares its length and no instant.
     assert (dwell["declared_start_s"], dwell["declared_duration_s"]) == (None, 120.0)
     assert phases["transit"]["anchor"] == {"start": {"event": "depart"}, "end": None}
     assert phases["transit"]["declared_start_s"] == 90.0

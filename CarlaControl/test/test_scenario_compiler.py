@@ -5,7 +5,7 @@ exactly the way the check exists to catch, and the refusal is asserted by its ch
 is asserted against what SUMO itself does with the output. Three properties are held above the rest,
 because they are why the compiler exists:
 
-* **the route file carries no supervision** -- labels travel only in the supervision plan (06 D6.1);
+* **the route file carries no supervision** -- labels travel only in the supervision plan;
 * **every time is plain seconds with its civil meaning recoverable** from the report and the plan;
 * **the same specification, seed and world give byte-identical scenario files** -- reproducible
   traffic is the priority, so the routed routes and everything that decides the traffic are fixed at
@@ -200,7 +200,7 @@ def test_the_lock_and_the_report_say_what_made_them_and_the_files_two_compiles_s
 def test_a_lane_change_takes_three_seconds_and_the_lock_and_the_report_say_so(world, installation,
                                                                              tmp_path):
     """SUMO's default lane change crosses a lane width inside one step, which renders as a sideways
-    jump (06 §6.2); the compiler writes a physical duration into the configuration and records it."""
+    jump; the compiler writes a physical duration into the configuration and records it."""
     result = compile_spec(world, installation, tmp_path)
     configuration = ET.parse(result.files["config"]).getroot()
     assert configuration.find("processing/lanechange.duration").get("value") == "3"
@@ -239,7 +239,7 @@ def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path)
     assert plan["cohorts"] == [{"flow_id": "ambient", "supervision": "unlabelled", "labels": [],
                                 "parameters": {}}]
     # Every row is a vehicle's or a flow's: no instance without a participant, no interval without
-    # its vehicle, and no row of any kind for the patrol the rota skips (06 §3.5).
+    # its vehicle, and no row of any kind for the patrol the rota skips.
     assert all(row["participants"] for row in plan["instances"])
     assert all(interval["entity_id"] for row in plan["instances"] for interval in row["intervals"])
     (series,) = plan["series"]
@@ -253,8 +253,8 @@ def test_the_plan_states_every_subject_explicitly(world, installation, tmp_path)
     assert "solar" not in json.dumps(plan) and "epoch" not in plan
 
 
-def test_the_plan_s_vocabulary_names_doc_11_s_six_illumination_bands(world, installation, tmp_path):
-    """The published vocabulary and the association statistic use one band table (07 §12 q13)."""
+def test_the_plan_s_vocabulary_names_the_six_illumination_bands(world, installation, tmp_path):
+    """The published vocabulary and the association statistic use one band table."""
     result = compile_spec(world, installation, tmp_path)
     assert result.plan["vocabulary"]["core"]["terms"]["illumination_band"] == [
         "day", "golden", "civil_twilight", "nautical_twilight", "astronomical_twilight", "night"]
@@ -264,9 +264,9 @@ def test_the_plan_s_vocabulary_names_doc_11_s_six_illumination_bands(world, inst
 
 def test_the_plan_s_core_is_version_3_generated_from_the_enumerations_in_carlanet_types(
         world, installation, tmp_path):
-    """06 D6.30: the core half is generated from the code that branches on it, so the plan publishes
+    """The core half is generated from the code that branches on it, so the plan publishes
     CarlaNet.Types' table family by family, and the lock records its version. Version 3 carries no
-    realisation, no observability outcome and no reserved phase (06 §3.5, the ruling of 2026-10-05)."""
+    realisation, no observability outcome and no reserved phase."""
     result = compile_spec(world, installation, tmp_path)
     core = result.plan["vocabulary"]["core"]
     assert core["vocabulary_version"] == result.plan["vocabulary_version"] == 3
@@ -295,7 +295,8 @@ def test_the_schema_spells_the_core_s_terms_as_the_core_does():
     assert set(supervision["series"]["items"]["properties"]["supervision"]["enum"]) == states
     assert definitions["term"]["properties"]["applies_to"]["items"]["enum"] == \
         CORE_TERMS["subject_kind"] == ["entity", "cohort"]
-    # The absence shape is gone from the schema with the ruling of 2026-10-05 (06 §3.5).
+    # The schema has no absences block, no realisation field on a term and no observability_outcome
+    # term, because every label belongs to a vehicle.
     assert "realisation" not in definitions["term"]["properties"]
     assert "absences" not in supervision
     assert "realisation" not in CORE_TERMS and "observability_outcome" not in CORE_TERMS
@@ -1019,7 +1020,7 @@ def test_the_reserved_role_is_enforced_under_check_50(world, installation, tmp_p
 
 
 def test_an_instance_with_no_participant_is_refused_under_check_19(world, installation, tmp_path):
-    """A label follows a vehicle (06 §3.5): an instance about no vehicle is refused, and told how an
+    """A label follows a vehicle: an instance about no vehicle is refused, and told how an
     omission is conveyed instead."""
     block = supervision_with(world)
     block["instances"][0]["participants"] = []
@@ -1032,9 +1033,9 @@ def test_an_instance_with_no_participant_is_refused_under_check_19(world, instal
 
 
 def test_the_absence_shape_is_refused_by_the_schema_under_check_53(world, installation, tmp_path):
-    """A specification written to the shape before the ruling of 2026-10-05 -- an `absences` block, a
-    term that applies to a `slot`, a term declaring a `realisation` -- is refused at the schema, naming
-    each field, rather than read as a place's label."""
+    """A specification with an `absences` block, a term that applies to a `slot`, or a term that
+    declares a `realisation` is refused by the schema, and the refusal names each field. No label is
+    ever attached to a place."""
     block = supervision_with(world, absences=[{"name": "patrol_missed_d0_h8", "series": "kerb_patrol",
                                                "entry": "patrol_d0_h8",
                                                "labels": ["fixture:routine_patrol"]}])
@@ -1294,7 +1295,7 @@ def standoff_interval(result) -> dict:
 
 def test_an_interval_over_a_duration_stop_declares_its_length_and_no_start(world, installation,
                                                                           tmp_path):
-    """06 D6.4: a duration stop declares a length, not a time, so the plan writes no declared
+    """A duration stop declares a length, not a time, so the plan writes no declared
     start or end, the stop's length, and the events that will commit both."""
     result = compile_document(world, installation, tmp_path, anchored(
         world, {"start": "stop:0", "end": "stop_end:0"}))
@@ -1560,7 +1561,7 @@ def test_a_window_past_the_run_is_refused_under_check_38(world, installation, tm
 def test_a_window_s_lowest_sun_is_stated_under_check_42_and_nothing_is_concluded(world, installation,
                                                                                   tmp_path):
     """Check 42 states the lowest the sun reaches over a window and the band it falls in, and makes
-    no finding of it: a fact in the report, with no pass mark (the charter's §4b)."""
+    no finding of it: a fact in the report, with no pass mark."""
     result = compile_spec(world, installation, tmp_path,
                           capture_windows=[{"id": "dark", "begin": "d0 06:00", "length": "5m"},
                                            {"id": "bright", "begin": "d0 07:00", "length": "15m"}])

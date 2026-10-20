@@ -425,7 +425,7 @@ public sealed class SumoDistributionEditCheck
                     ? " A teleport moves a vehicle straight to a lane further along its route, which would render "
                       + "as a body dragged across the map with a matching false velocity in the truth record. "
                       + "Disable each teleport trigger, or accept teleporting explicitly (AllowTeleporting; "
-                      + "run_sumo_drive.py --allow-teleporting), which the run report then records."
+                      + "carla-drive --allow-teleporting), which the run report then records."
                     : string.Empty));
         }
 

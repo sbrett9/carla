@@ -1,7 +1,7 @@
 """The resolved configuration of one capture run: every field, its value, and where it came from.
 
-`12_Operator_Control_Surface.md` §3.6-§3.7, D12.3. Every field the run is subject to is materialised,
-including every value that came from a default, and carries:
+Every field the run is subject to is materialised, including every value that came from a default,
+and carries:
 
 * `value` -- what the run uses;
 * `layer` -- which layer set it: `tool_default`, `site_profile`, `world_package`,
@@ -15,10 +15,9 @@ including every value that came from a default, and carries:
   an absence; and `dropped`, a lower layer's illumination field that belongs to a policy a higher
   layer replaced.
 
-The document is written as a flat map keyed by the field's dotted path -- the same information as
-§3.7's nested example, with one key per field.
+The document is written as a flat map keyed by the field's dotted path, with one key per field.
 
-**Reproducing a run is reading it back** (§3.6, R1). `to_run_configuration()` is a valid run
+**Reproducing a run is reading it back.** `to_run_configuration()` is a valid run
 configuration: every resolved science field, the world and scenario bindings (so a replay against a
 package that has changed is refused by check 3, naming both values), and the scenario by id rather
 than by path. Machine facts -- the server, the paths, the SUMO installation -- are left out: they are

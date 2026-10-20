@@ -1,8 +1,7 @@
 namespace CarlaNet.Types.Illumination;
 
 /// <summary>
-/// The illumination band a sun elevation falls in: <c>11_Time_And_Illumination.md</c> §4.4's six, from
-/// the highest sun down.
+/// The illumination band a sun elevation falls in: one of six, from the highest sun down.
 /// </summary>
 /// <remarks>
 /// <para>A coarse stratification key computed from the sun elevation, so a report and a corpus can
@@ -11,15 +10,18 @@ namespace CarlaNet.Types.Illumination;
 /// to be the right cut point for an electro-optical detector, which is why a band is always traceable
 /// to the edges it was cut by (<see cref="IlluminationBands.Table"/>).</para>
 ///
-/// <para>It is derived context, never a label (<c>06_Truth_And_Annotation.md</c> D6.21): nothing that
-/// reads or writes supervision branches on it.</para>
+/// <para>It is derived context, never a label: nothing that reads or writes supervision branches on
+/// it.</para>
 /// </remarks>
 public enum IlluminationBand
 {
     /// <summary>Above +6 degrees.</summary>
     Day,
 
-    /// <summary>Above 0, up to +6 degrees.</summary>
+    /// <summary>
+    /// Above 0, up to +6 degrees: the sun no more than 6 degrees above the horizon, morning or evening,
+    /// which photographers call the golden hour.
+    /// </summary>
     Golden,
 
     /// <summary>Above -6, up to 0 degrees.</summary>
@@ -57,11 +59,11 @@ public readonly record struct IlluminationBandEdge(IlluminationBand Band, string
 /// <c>carlanet</c> (<c>carlacontrol.IlluminationBand</c>), so a band in a capture's truth, a band a
 /// statistic counts and a band a vocabulary names are one table and cannot come to disagree.</para>
 ///
-/// <para><b>Which elevation.</b> The edges are elevations doc 11 declares, and a declared elevation
-/// means the refraction-corrected one: the elevation the sun's light is rotated by, and so the sun the
-/// imagery was rendered under (doc 11 open question 7). <see cref="Elevation"/> says so. It is the
-/// constant the co-simulation's <c>DeclaredSunElevation.Kind</c> also states, and a test holds the two
-/// together, so reversing that ruling moves the bands with the declarations.</para>
+/// <para><b>Which elevation.</b> The edges are declared elevations, and a declared elevation means the
+/// refraction-corrected one: the elevation the sun's light is rotated by, and so the sun the imagery was
+/// rendered under. <see cref="Elevation"/> says so. It is the constant the co-simulation's
+/// <c>DeclaredSunElevation.Kind</c> also states, and a test holds the two together, so reversing that
+/// choice moves the bands with the declarations.</para>
 ///
 /// <para>A band is defined for a sun's elevation, -90 to +90 degrees. Anything else -- the -180
 /// degrees the engine reports for a sun it could not compute, or a value that is not a number -- has

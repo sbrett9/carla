@@ -16,14 +16,14 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>What it is for.</b> A capture sidecar lists the vehicles its frame drew. The base rate of a
 /// behaviour is a count over the vehicles the world contained, and taken over the sidecars it is taken
-/// over the drawn ones only, leaving out every vehicle with no body (doc 06 §8.3, D6.17). This is the
+/// over the drawn ones only, leaving out every vehicle with no body. This is the
 /// record of what the world contained, so the denominator is taken from here.</para>
 ///
 /// <para><b>Every value but a type's kinds is SUMO's, read from the state the session already
 /// holds.</b> Each vehicle's row is its state at the frame (<see cref="SumoStepRecord.Frames"/>), with
 /// no question put to SUMO per vehicle; what a vehicle type declares -- its class, dimensions and
 /// colour -- is asked once per type (<see cref="WorldTruthVehicleType"/>), and its <c>base_type</c> and
-/// <c>special_type</c> are the catalogue's for the blueprint it names (doc 06 D6.18). Position is
+/// <c>special_type</c> are the catalogue's for the blueprint it names. Position is
 /// converted on the world's own georeference, height is the bare-earth grid's under the vehicle, and
 /// course and speed are SUMO's: the reconciled record of a vehicle drawn, with the body's pose and box,
 /// is the capture sidecar's, joined to these rows by <c>sumo_id</c> and <c>frame</c>. Every instant is
@@ -43,7 +43,7 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>Columns.</b> The standalone producer's CSV (<c>SumoCotBridge.py</c>) without
 /// <c>marked</c> -- an author's marking never travels in this track; labels join from the supervision
-/// plan by vehicle id (D6.18) -- and then <c>sumo_id</c>, <c>entity_id</c> (the SUMO id, D6.13),
+/// plan by vehicle id -- and then <c>sumo_id</c>, <c>entity_id</c> (the SUMO id),
 /// <c>frame</c>, <c>render_state</c>, <c>render_reason</c>, <c>actor_id</c>, <c>in_window</c>, and the
 /// sun in the order a capture's <c>_solar</c> block writes it: <c>sun_elevation_deg</c>, the geometric
 /// elevation the world reported on the frame's tick; <c>sun_corrected_elevation_deg</c>, the
@@ -64,20 +64,20 @@ namespace CarlaNet.CoSim;
 /// <item><term><c>not_drawn</c></term><description>None of those: the frame drew no body for it, for a
 /// reason the track cannot name.</description></item>
 /// </list>
-/// <para>A vehicle's last SUMO frame is drawn like any other (the owner's ruling of 2026-10-06): the frame
+/// <para>A vehicle's last SUMO frame is drawn like any other: the frame
 /// stamped with it shows every vehicle SUMO had then, so SUMO removing it at its next frame is never why a
 /// row reads <c>simulated_only</c>, and the track writes neither <c>left_the_simulation</c> nor
 /// <c>vanished</c>, which the vocabulary keeps. Which pass decided such a vehicle's body is its own frame's,
 /// since the pass after it no longer had the vehicle.</para>
 ///
-/// <para><b>Written to survive a kill</b> (doc 04 C10 §12.7, W2). The header is the first line, flushed as
-/// the track opens. Each row is appended as one whole line before the next is composed, and the rows are
-/// flushed once for each SUMO frame, when its every row is written, as the owner ruled: measured at four
-/// hundred vehicles, a flush per row cost about 1.5 ms more per SUMO step. Closing the track, however
-/// the session ends, flushes whatever it still holds. So a file cut off at any instant is the rows
-/// already written and at most one line without its line break, which a reader leaves off, and a kill
+/// <para><b>Written to survive a kill.</b> The header is the first line, flushed as the track opens. Each
+/// row is appended as one whole line before the next is composed, and the rows are flushed once for each
+/// SUMO frame, when its every row is written: measured at four hundred vehicles, a flush per row cost
+/// about 1.5 ms more per SUMO step. Closing the track, however the session ends, flushes whatever it
+/// still holds. So a file cut off at any instant is the rows already written and at most one line
+/// without its line break, which a reader leaves off, and a kill
 /// loses at most the rows of the frame being written. The summary beside it (<see cref="SummaryPath"/>)
-/// is written whole under a temporary name and renamed into place (W1): at the start with the rate and
+/// is written whole under a temporary name and renamed into place: at the start with the rate and
 /// the columns, and again when the session ends with what the track holds and why it ended. A summary
 /// whose <c>ended</c> is null is a track still being written, or one whose run was killed. The summary
 /// holds the track's format version, <c>world_truth_track_version</c>, so the CSV's own header stays the
@@ -92,7 +92,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
     /// <summary>The format of the track and its summary, written in the summary.</summary>
     public const int FormatVersion = 2;
 
-    // A render state and its reasons are core vocabulary terms (06 §3.7): the track writes them by the
+    // A render state and its reasons are core vocabulary terms: the track writes them by the
     // names the published vocabulary gives them, from the one table.
 
     /// <summary>A body drew the vehicle on the frame.</summary>
@@ -505,7 +505,7 @@ public sealed class WorldTruthTrackWriter : ISumoStepObserver, IDisposable
         Field("0.0");
         Field(F(course, "0.0"));
         Field(F(speed, "0.00"));
-        // The contract's frame is CARLA's, east and south, so atan2(vx, -vy) is the course.
+        // The velocity columns are in CARLA's frame, x east and y south, so atan2(vx, -vy) is the course.
         Field(F(speed * Math.Sin(radians), "0.00"));
         Field(F(-speed * Math.Cos(radians), "0.00"));
         Field("0.00");

@@ -1,17 +1,17 @@
 """The authoring skill's vehicle reference, generated from the measured vehicle catalogue.
 
-`07_Scenario_Authoring.md` §8.3: a file an author reads is generated from its source, never written
-beside the skill, so it cannot drift from what the compiler holds. This one is
+A file an author reads is generated from its source, never written beside the skill, so it cannot
+drift from what the compiler holds. This one is
 `skills/sumo-traffic-scenarios/references/vehicles.md`, written by `compile_scenario.py
 --write-vehicles-reference` from `CarlaControl/catalogue/vehicles.catalogue.json`, and a test holds the
 shipped file equal to what this module renders from the shipped catalogue.
 
 What it states, per class and per body: the measured length, body width (SUMO's, without the mirrors)
 and height, and whether the body's headlights, brake lights and turn signals light up when the
-co-simulation session drives them -- headlights by the sun (`11_Time_And_Illumination.md` D11.9), brake
-lights and turn signals from SUMO's signals (D11.8) -- read from the catalogue's optical pass
-(`lamp_capability`). Information only: the session drives every body by the same rule, and a body whose
-lamps are `unlit` is commanded and shows nothing. Nothing here refuses or warns.
+co-simulation session drives them -- headlights by the sun, brake lights and turn signals from SUMO's
+signals -- read from the catalogue's optical pass (`lamp_capability`). Information only: the session
+drives every body by the same rule, and a body whose lamps are `unlit` is commanded and shows nothing.
+Nothing here refuses or warns.
 """
 from __future__ import annotations
 

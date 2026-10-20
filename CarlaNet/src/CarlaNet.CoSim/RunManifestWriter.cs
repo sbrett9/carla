@@ -17,7 +17,7 @@ namespace CarlaNet.CoSim;
 /// population SUMO simulates, the sun at the capture window's opening and end, and why the run ended.
 /// </summary>
 /// <remarks>
-/// <para><b>Rows, not a document</b> (doc 04 §12.7, W2, D4.36). Each row is one self-contained JSON object
+/// <para><b>Rows, not a document.</b> Each row is one self-contained JSON object
 /// on a line of its own, carrying its kind in <c>row</c>, appended and flushed before the next is composed.
 /// A reader keeps every line that ends in a line break, so a manifest cut off at any instant is the rows
 /// already written, each still valid; the last row of a manifest whose run reached its end is
@@ -39,8 +39,7 @@ namespace CarlaNet.CoSim;
 /// the supervision plan and its vocabulary, the SUMO settings the session checked and runs under, the
 /// clock, the render set, the rule the vehicle lights follow (<c>vehicle_lights</c>: whether they are
 /// driven, the sun elevations the headlights switch at and which elevation they read, and that brake
-/// lights and turn signals follow SUMO's signals; doc 11 D11.9), and the epoch and illumination declared
-/// (doc 04 C9 §11.8).</description></item>
+/// lights and turn signals follow SUMO's signals), and the epoch and illumination declared.</description></item>
 /// <item><term><c>instance</c>, <c>series</c>, <c>cohort</c></term><description>Next, where the compile
 /// lock binds a supervision plan: each of its pattern instances, recurring series and cohorts as declared
 /// -- identity, supervision state, labels and parameters, an instance's participants with their roles and
@@ -60,7 +59,7 @@ namespace CarlaNet.CoSim;
 /// exposure it was given where it carries one: its post-process profile, method, ISO, shutter, aperture,
 /// compensation and EV100 (<see cref="PlaceSensor(string, uint, CameraExposure)"/>).</description></item>
 /// <item><term><c>render_admitted</c>, <c>render_released</c></term><description>A vehicle taking up a
-/// place in the render set and giving it up (doc 04 C2 §4.1): admitted at the pass that admitted it, with
+/// place in the render set and giving it up: admitted at the pass that admitted it, with
 /// why -- <c>rendering_began</c>, <c>inserted</c> or <c>entered_limit</c> -- and the frame and body that
 /// first drew it, written once that frame has rendered; released with the span and the reason the session
 /// hands <see cref="SumoDriveSessionOptions.OnRelease"/>, written as the session hands it out -- for a vehicle
@@ -74,15 +73,15 @@ namespace CarlaNet.CoSim;
 /// <item><term><c>solar_window_open</c>, <c>solar_window_end</c></term><description>The sun the world
 /// reported at the window's first and last capture tick, and at the end the audit's worst residual and
 /// whether the sun the world held matched the declaration throughout (<c>sun_matched_declaration</c>:
-/// an epoch declared, the policy binding the sun, a sun present, and the audit within its tolerance;
-/// doc 04 C9 §11.8.1, §11.8.2).</description></item>
+/// an epoch declared, the policy binding the sun, a sun present, and the audit within its
+/// tolerance).</description></item>
 /// <item><term><c>manifest_closed</c></term><description>Last: why the run ended --
 /// <c>scenario_finished</c>, <c>caller_stopped</c> or <c>run_stopped</c> with its stage and cause -- with
 /// the caller's own reason where it gave one, what the manifest holds, the intervals still open
 /// (<c>open_intervals</c>) and the word the binder closes them with after this row
 /// (<c>open_intervals_close_as</c>), the plan's intervals nothing in the run opened or closed
 /// (<c>never_opened</c>), and how far the world departed from what the bridge commanded over the whole
-/// run (<c>bridge_divergence</c>, doc 06 §4.3).</description></item>
+/// run (<c>bridge_divergence</c>).</description></item>
 /// </list>
 ///
 /// <para><b>The bridge's divergence is a run-level figure.</b> The session compares every pose and
@@ -91,7 +90,7 @@ namespace CarlaNet.CoSim;
 /// the vehicle-ticks nothing read back, the worst and mean position in metres, the worst yaw, pitch and
 /// roll in degrees, the worst and mean velocity in metres per second against the mean commanded speed,
 /// and the vehicle and instant of the worst position and the worst velocity. A capture's sidecar carries
-/// none of it, as the owner ruled (2026-10-05): a convention that is wrong is wrong on every vehicle of
+/// none of it: a convention that is wrong is wrong on every vehicle of
 /// every frame, and one figure for the run says so.</para>
 ///
 /// <para><b>Closed by its caller, or by the session's end.</b> A caller that reads the run's closing gates
@@ -101,8 +100,8 @@ namespace CarlaNet.CoSim;
 /// <para><b>Every planned interval, once, in either case.</b> The terminal row comes before the binder
 /// closes the intervals the session's end leaves open, so those are listed on it rather than written as
 /// closed; with the opened and closed rows and <c>never_opened</c>, a closed manifest names every
-/// <c>(instance_id, participant, phase)</c> triple the plan declares, which two runs of one scenario share
-/// (06 D6.8). A manifest with no terminal row writes no <c>open_at_interruption</c>: a reader infers it,
+/// <c>(instance_id, participant, phase)</c> triple the plan declares, which two runs of one scenario
+/// share. A manifest with no terminal row writes no <c>open_at_interruption</c>: a reader infers it,
 /// for each triple opened and never closed in the rows already written.</para>
 ///
 /// <para>Built and registered by the session (<see cref="SumoDriveSessionOptions.RunManifestPath"/>).
@@ -886,8 +885,8 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     /// <summary>
     /// The rule the vehicle lights follow for the whole run: whether the session drives them at all; the
     /// sun elevations the headlights come on below and go off above, read against the geometric elevation
-    /// the world reports (<see cref="HeadlightRule"/>, doc 11 D11.9); and that brake lights and turn signals
-    /// follow the signals SUMO reports for each vehicle (<see cref="VehicleLampMapping"/>, D11.8).
+    /// the world reports (<see cref="HeadlightRule"/>); and that brake lights and turn signals follow the
+    /// signals SUMO reports for each vehicle (<see cref="VehicleLampMapping"/>).
     /// </summary>
     /// <remarks>
     /// Written from the options the session runs under, which are the values its headlight rule was built
@@ -1069,8 +1068,8 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     }
 
     /// <summary>
-    /// The sun a frame's reading carries, under C9's names for the window's first or last capture tick, with
-    /// its band; every field null where the frame carries none.
+    /// The sun a frame's reading carries, under field names marked <c>begin</c> or <c>end</c> for the
+    /// window's first or last capture tick, with its band; every field null where the frame carries none.
     /// </summary>
     private static void WriteSun(Utf8JsonWriter json, SolarReading? sun, string end)
     {
@@ -1205,7 +1204,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
     /// <summary>
     /// What the terminal row says of the difference between what the bridge commanded and what the world
-    /// applied, over the whole run (06 §4.3): the comparisons taken and the vehicle-ticks nothing read back;
+    /// applied, over the whole run: the comparisons taken and the vehicle-ticks nothing read back;
     /// the worst and mean position, metres; the worst yaw, pitch and roll, degrees; the worst and mean
     /// velocity, metres per second, with the mean commanded speed they are read against; and the SUMO
     /// vehicle, instant, tick and body of the worst position and of the worst velocity.
@@ -1257,7 +1256,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         json.WriteEndObject();
     }
 
-    /// <summary>The row an interval is: its instance, its participant and its phase (06 D6.8).</summary>
+    /// <summary>The row an interval is: its instance, its participant and its phase.</summary>
     private static (string Instance, string? Participant, string Phase) KeyOf(SupervisionIntervalRecord interval) =>
         (interval.InstanceId, interval.EntityId, interval.Phase);
 

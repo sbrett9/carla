@@ -2,7 +2,7 @@
 
 A compile reports every failure it can see, not the first: one epoch error invalidates every instant
 in a file, and a scenario with twelve broken routes needs twelve fixes, so stopping at the first would
-turn one compile into a dozen (`07_Scenario_Authoring.md` §4.5, §5.5). Stages that depend on an
+turn one compile into a dozen. Stages that depend on an
 earlier one's output stop when it refused; independent checks inside a stage all run.
 """
 from __future__ import annotations

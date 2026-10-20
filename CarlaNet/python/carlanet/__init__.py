@@ -27,6 +27,12 @@ import json as _json
 import math as _math
 import threading
 import fnmatch
+import importlib.util
+import logging
+
+# The shim reports what it falls back to through this logger. A caller that configures no logging
+# still sees warnings and errors on stderr, from Python's last-resort handler.
+_logger = logging.getLogger(__name__)
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir in sys.path:
@@ -42,15 +48,14 @@ if _this_dir in sys.path:
 # assemblies loaded below carry the same number as their informational version, which
 # CarlaNet.Types.Provenance.Producer.CarlaNetVersion reads.
 def _release_version_from_checkout():
-    import importlib.util as _importlib_util
     # CarlaNet/python/carlanet/__init__.py: the checkout's root is three directories up.
     checkout = os.path.normpath(os.path.join(_this_dir, "..", "..", ".."))
     path = os.path.join(checkout, "Util", "ReleaseVersion.py")
     if not os.path.isfile(path):
         return "unknown"
     try:
-        spec = _importlib_util.spec_from_file_location("carla_release_version", path)
-        module = _importlib_util.module_from_spec(spec)
+        spec = importlib.util.spec_from_file_location("carla_release_version", path)
+        module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         if not module.ReleaseVersion.is_checkout_root(checkout):
             return "unknown"
@@ -114,7 +119,7 @@ def _ref(name):
 _ref("CarlaNet.Types")
 _ref("CarlaNet.Transport")
 _ref("CarlaNet.Sensors")
-# Wave 4 integration: CarlaNet.Map + CarlaNet.TrafficManager provide the
+# CarlaNet.Map + CarlaNet.TrafficManager provide the
 # in-process TrafficManager. Failure to load these is non-fatal — the shim
 # falls back to _NoOpTrafficManager in get_trafficmanager() if the assemblies
 # aren't available.
@@ -125,7 +130,7 @@ try:
 except FileNotFoundError:
     _CARLANET_TM_AVAILABLE = False
 
-# Wave 5 integration: CarlaNet.Nav provides the pedestrian-navigation
+# CarlaNet.Nav provides the pedestrian-navigation
 # subsystem. Same lazy-with-fallback pattern as the TM block above —
 # users without walkers never load the navmesh, and a missing Nav
 # assembly falls back to a no-op WalkerAIController stub.
@@ -184,13 +189,21 @@ except Exception:
 
 # ── C# type imports ───────────────────────────────────────────────────────────
 from CarlaNet.Transport import CarlaClient as _CarlaClient
+from CarlaNet.Transport import TickTimestamp as _CSTickTs
+from CarlaNet.Transport.Streaming import SensorFrame as _CSSensorFrame
 from CarlaNet.Types.Geom import (Transform as _CSTransform,
                                   Location as _CSLocation,
                                   Rotation as _CSRotation,
                                   Vector2D as _CSVector2D,
                                   Vector3D as _CSVector3D,
                                   BoundingBox as _CSBoundingBox,
-                                  GeoLocation)
+                                  GeoLocation,
+                                  Geodesy)
+from CarlaNet.Types.Rpc.Orbit import OrbitParameters as _OrbitParameters
+from CarlaNet.Types.Rpc.Physics import VehiclePhysicsControl as _CSVehiclePhysicsControl
+from CarlaNet.Sensors import (CollisionSensorData, GnssSensorData, ImuSensorData,
+                              ObstacleSensorData)
+from MessagePack import MessagePackSerializer
 
 # Mutable Python wrappers around the C# init-only geom record structs.
 # Upstream scripts freely mutate (e.g. `transform.location.z += 2.0`); we
@@ -518,8 +531,7 @@ class _PhysicsControlWrapper:
         for f in self._FIELDS:
             setattr(self, f, getattr(cs, f))
     def _to_cs(self):
-        from CarlaNet.Types.Rpc.Physics import VehiclePhysicsControl as _CSVPC
-        return _CSVPC(*[getattr(self, f) for f in self._FIELDS])
+        return _CSVehiclePhysicsControl(*[getattr(self, f) for f in self._FIELDS])
 from CarlaNet.Types.Rpc.Environment import (EpisodeSettings, WeatherParameters,
                                             OpendriveGenerationParameters)
 # OSM→OpenDRIVE→runtime-world: OsmConversionOptions lives in CarlaNet.Map (loaded
@@ -557,7 +569,7 @@ from CarlaNet.Types.Rpc.Commands import (
     Command, SpawnActorCommand, DestroyActorCommand, SetAutopilotCommand,
     ApplyVehicleControlCommand, ApplyTransformCommand, ApplyLocationCommand,
     ConsoleCommandCommand, SetVehicleLightStateCommand, CommandResponse)
-# Wave 4 integration: in-process TrafficManager. The import is guarded
+# The in-process TrafficManager. The import is guarded
 # because the Map / TrafficManager assemblies may be missing in stripped-down
 # deployments — get_trafficmanager() falls back to a no-op stub if so.
 if _CARLANET_TM_AVAILABLE:
@@ -569,7 +581,7 @@ if _CARLANET_TM_AVAILABLE:
 else:
     _CSTrafficManager = None  # type: ignore
 
-# Wave 5: NavigationFactory hands out the process-wide WalkerNavigation
+# NavigationFactory hands out the process-wide WalkerNavigation
 # instance lazily on first walker-related call. WalkerNavigation itself is
 # the C# facade matching upstream carla.WalkerAIController + the three
 # World.set_pedestrians_* / get_random_location_from_navigation entry points.
@@ -581,8 +593,9 @@ if _CARLANET_NAV_AVAILABLE:
         _CSNavigationFactory = None  # type: ignore
 else:
     _CSNavigationFactory = None  # type: ignore
-from System import TimeSpan
+from System import Action, Array, Double, Object, String, TimeSpan, UInt32
 from System.Collections.Generic import List
+from System.Threading import CancellationToken
 import struct
 
 
@@ -613,11 +626,9 @@ def _to_cs_geo(p):
 
 def _cs_list(items, cs_type=None):
     """Convert a Python iterable to a C# List.  If cs_type is None, uses object."""
-    from System.Collections.Generic import List as _List
-    from System import Object
     t = cs_type if cs_type is not None else Object
     try:
-        result = _List[t]()
+        result = List[t]()
         for item in items:
             result.Add(item)
         return result
@@ -803,6 +814,7 @@ def camera_name_problem(name, camera_id=None):
     if not _CARLANET_RECORDING_AVAILABLE:
         raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
                            "(rebuild the wheel/DLLs)")
+    # Imported here because CarlaNet.Recording is optional (see its guarded _ref above).
     from CarlaNet.Recording import CameraName
     problem = CameraName.Problem(None if name is None else str(name),
                                  None if camera_id is None else int(camera_id))
@@ -816,6 +828,7 @@ def camera_name_of(camera) -> str:
     if not _CARLANET_RECORDING_AVAILABLE:
         raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
                            "(rebuild the wheel/DLLs)")
+    # Imported here because CarlaNet.Recording is optional (see its guarded _ref above).
     from CarlaNet.Recording import CameraName
     return str(CameraName.Of(camera._actor))
 
@@ -825,6 +838,7 @@ def camera_named_by_server(camera) -> bool:
     if not _CARLANET_RECORDING_AVAILABLE:
         raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
                            "(rebuild the wheel/DLLs)")
+    # Imported here because CarlaNet.Recording is optional (see its guarded _ref above).
     from CarlaNet.Recording import CameraName
     return bool(CameraName.NamedByServer(camera._actor))
 
@@ -839,6 +853,7 @@ def camera_exposure_of(camera):
     if not _CARLANET_RECORDING_AVAILABLE:
         raise RuntimeError("camera exposure is read by CarlaNet.Recording, which is not loaded "
                            "(rebuild the wheel/DLLs)")
+    # Imported here because CarlaNet.Recording is optional (see its guarded _ref above).
     from CarlaNet.Recording import CameraExposure
     return CameraExposure.Of(camera._actor)
 
@@ -850,10 +865,10 @@ def _say_server_names_no_cameras(camera) -> None:
     if _server_names_no_cameras_said:
         return
     _server_names_no_cameras_said = True
-    print(f"this server names no cameras: camera {int(camera.id)} was spawned without a name and "
-          f"came back with role_name {camera.attributes.get('role_name', '')!r}, so it is "
-          f"{default_camera_name(camera.id)}; a server that names cameras gives it Camera_<n> "
-          "(rebuild the server)", file=sys.stderr)
+    _logger.warning("this server names no cameras: camera %d was spawned without a name and came back "
+                    "with role_name %r, so it is %s; a server that names cameras gives it Camera_<n> "
+                    "(rebuild the server)", int(camera.id), camera.attributes.get('role_name', ''),
+                    default_camera_name(camera.id))
 
 
 # ── Actor wrapper ─────────────────────────────────────────────────────────────
@@ -1014,23 +1029,19 @@ class Actor:
         token = self._actor.StreamToken
         if len(token) != 24:
             raise RuntimeError(f"Actor {self.id} ({self.type_id}) has no sensor stream")
-        from System import Action
-        from CarlaNet.Transport.Streaming import SensorFrame as _SF
-
         type_id = self.type_id
         parser = _SENSOR_PARSERS.get(type_id)
         actor_proxy = self
         if parser is None:
-            cs_cb = Action[_SF](callback)
+            cs_cb = Action[_CSSensorFrame](callback)
         else:
             def _dispatch(sf):
                 try:
                     data = parser(sf, actor_proxy)
                     callback(data)
                 except Exception:
-                    import traceback
-                    traceback.print_exc()
-            cs_cb = Action[_SF](_dispatch)
+                    _logger.exception("[carlanet] the %s callback raised", type_id)
+            cs_cb = Action[_CSSensorFrame](_dispatch)
         self._sub = self._client.SubscribeToStream(token, cs_cb)
 
     def stop(self):
@@ -1107,7 +1118,6 @@ class WalkerAIController(Actor):
         """Register the parent walker into the crowd and start driving it.
         Per upstream WalkerAIController::Start, also disables physics and
         collisions on the walker so Detour can drive the pose directly."""
-        import sys
         nav = Client._get_walker_navigation()
         target_id = self._target_id()
         # Issue RPCs directly against the parent walker id; we may not have an
@@ -1116,11 +1126,13 @@ class WalkerAIController(Actor):
         try:
             _sync(self._client.SetActorSimulatePhysicsAsync(target_id, False))
         except Exception as ex:
-            print(f"[carlanet] WalkerAIController.start: set_simulate_physics failed for {target_id}: {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] WalkerAIController.start: set_simulate_physics failed for %s: %s",
+                            target_id, ex)
         try:
             _sync(self._client.SetActorCollisionsAsync(target_id, False))
         except Exception as ex:
-            print(f"[carlanet] WalkerAIController.start: set_collisions failed for {target_id}: {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] WalkerAIController.start: set_collisions failed for %s: %s",
+                            target_id, ex)
         try:
             # nav.Start expects a C# Location; .location on a CS Transform is
             # already a CS Location, so pass it straight through.
@@ -1232,7 +1244,6 @@ class Sensor(Actor):
             OrbitNotOnServerError: The server binds no set_orbit; it was built before the orbit
                 mover. Nothing here moves the sensor in its place.
         """
-        from CarlaNet.Types.Rpc.Orbit import OrbitParameters as _OrbitParameters
         if hasattr(centre, "x"):
             cx, cy, cz = float(centre.x), float(centre.y), float(centre.z)
         else:
@@ -1510,8 +1521,7 @@ class TrafficManager:
         from the point the vehicle is at, with no way to see past it. Use plan_route() +
         apply_route() to have the road graph searched first and the whole route handed over.
         """
-        from System.Collections.Generic import List as _List
-        cs_path = _List[_CSLocation]()
+        cs_path = List[_CSLocation]()
         for p in path:
             cs_path.Add(p._to_cs() if hasattr(p, "_to_cs") else p)
         self._tm.SetCustomPath(actor._actor, cs_path, bool(empty_buffer))
@@ -1843,7 +1853,7 @@ class World:
         return bool(_sync(self._client.SetRoadRenderedAsync(bool(rendered))))
 
     def set_layer_visible(self, layer: str, visible: bool):
-        """Per-layer visibility (08_Layer_Architecture). `layer` is a Cesium tileset tag
+        """Per-layer visibility. `layer` is a Cesium tileset tag
         ('photoreal'/'ground', '' = all tilesets), 'road' (the OpenDRIVE mesh) or 'signals'
         (the traffic lights and stop/yield/speed-limit signs generated from OpenDRIVE — signals
         matched to a hand-placed actor, as in the shipped towns, are not affected). Rendering
@@ -1852,7 +1862,7 @@ class World:
         return bool(_sync(self._client.SetLayerVisibleAsync(str(layer), bool(visible))))
 
     def set_layer_collision(self, layer: str, enabled: bool):
-        """Per-layer physics collision (08_Layer_Architecture). Same layer naming as
+        """Per-layer physics collision. Same layer naming as
         set_layer_visible; independent of visibility."""
         return bool(_sync(self._client.SetLayerCollisionAsync(str(layer), bool(enabled))))
 
@@ -1873,7 +1883,6 @@ class World:
         corner (col 0,row 0) sits at world (origin_x, origin_y) metres, +col=+X, +row=+Y, spacing
         cell_size m. Returns True on success. The staging rectangle traffic uses is recorded
         separately — see set_staging_bounds."""
-        from System import Array, Double
         try:
             flat = heights.ravel().tolist() if hasattr(heights, "ravel") else list(heights)
         except Exception:
@@ -1979,9 +1988,8 @@ class World:
     def ground_z_below(self, x, y, z, search=4000.0):
         """Raycast straight down from (x, y, z) metres; return the surface Z (metres) hit
         below, or None if nothing was hit within `search` metres. Used for AGL readout."""
-        from CarlaNet.Types.Geom import Location as _L, Vector3D as _V
         res = _sync(self._client.ProjectPointAsync(
-            _L(float(x), float(y), float(z)), _V(0.0, 0.0, -1.0), float(search)))
+            _CSLocation(float(x), float(y), float(z)), _CSVector3D(0.0, 0.0, -1.0), float(search)))
         # res is a C# (bool Hit, LabelledPoint Point) value tuple.
         hit = res.Item1 if hasattr(res, "Item1") else res[0]
         pt = res.Item2 if hasattr(res, "Item2") else res[1]
@@ -2003,8 +2011,6 @@ class World:
         tuples / objects / GeoLocation. `selector` picks the layer to sample ('ground' =
         bare-earth World Terrain; '' = first tileset). Returns a list of (latitude, longitude,
         height) tuples; height is float('nan') where the tileset had no ground at that point."""
-        from System import TimeSpan
-        from System.Threading import CancellationToken
         cs_points = _cs_list([_to_cs_geo(p) for p in points], GeoLocation)
         results = _sync(self._client.SampleTerrainHeightsAsync(
             cs_points,
@@ -2034,6 +2040,7 @@ class World:
             s = cs[i]
             lats[i] = float(s.Latitude); lons[i] = float(s.Longitude); alts[i] = float(s.Altitude)
         try:
+            # Imported here because numpy is optional: the carlanet wheel does not depend on it.
             import numpy as _np
             table = (_np.asarray(lats), _np.asarray(lons), _np.asarray(alts))
         except Exception:
@@ -2060,6 +2067,7 @@ class World:
         if cache is not None and cache[0] == (nc, nr):
             return cache[1]
         try:
+            # Imported here because numpy is optional: the carlanet wheel does not depend on it.
             import numpy as _np
             off = _np.frombuffer(bytes(self._client.LastDrapedOffsetBytes), dtype="<f4").reshape(nr, nc)
             dtm = _np.frombuffer(bytes(self._client.LastDrapedDtmBytes), dtype="<f4").reshape(nr, nc)
@@ -2113,16 +2121,16 @@ class World:
             except Exception:
                 built_from_osm = False
             if built_from_osm:
-                print("[carlanet] this world was built from an OSM area but carries no bare-earth "
-                      "reference, so the surface shift that seats it on the photoreal imagery cannot "
-                      "be undone. Reported 'hae' is the height vehicles physically drive at, NOT "
-                      "bare-earth truth. Re-run the world build against a server that records the "
-                      "reference.", file=sys.stderr)
+                _logger.warning("[carlanet] this world was built from an OSM area but carries no "
+                                "bare-earth reference, so the surface shift that seats it on the "
+                                "photoreal imagery cannot be undone. Reported 'hae' is the height "
+                                "vehicles physically drive at, NOT bare-earth truth. Re-run the world "
+                                "build against a server that records the reference.")
         return False
 
     def get_vehicle_telemetry(self, origin=None):
         """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
-        09_Telemetry_CoT_Contract field set). Cheap — positions/velocities are world-observer cache
+        truth sidecar's <_carla> field set). Cheap — positions/velocities are world-observer cache
         reads; one get_actors() RPC per call refreshes the vehicle set. `origin` is an optional
         (lat, lon, height_m) WGS84 tuple for the local->geodetic transform; if omitted it is fetched
         once via get_cesium_origin() (pass it in from a 5 Hz loop to avoid the per-tick RPC).
@@ -2152,7 +2160,7 @@ class World:
 
         `base_type` and `special_type` are the vehicle's base type and kind as the measured vehicle
         catalogue curates them for the vehicle's blueprint, once a SUMO drive started on this client
-        has handed this client its catalogue (06_Truth_And_Annotation D6.18): the class's base type,
+        has handed this client its catalogue: the class's base type,
         and its kind, empty where it curates none, whatever the blueprint declares. A blueprint no
         catalogue handed over curates, and every vehicle on a client no drive was started on, carries
         what its blueprint declares, its base type from its wheel count where it declares none.
@@ -2168,8 +2176,6 @@ class World:
         if _CARLANET_RECORDING_AVAILABLE:
             # Single source of truth: the C# VehicleTelemetryService (also used by the native recorder).
             return self._vehicle_telemetry_native(origin)
-        import math as _m
-        from CarlaNet.Types.Geom import Geodesy, GeoLocation
         if origin is None:
             origin = self.get_cesium_origin()                      # (lat, lon, height_m)
         cs_origin = GeoLocation(float(origin[0]), float(origin[1]), float(origin[2]))
@@ -2206,11 +2212,11 @@ class World:
                 hae = physical_hae - offset
                 dtm_at_veh, _ = self._nearest_dtm(table, geo.Latitude, geo.Longitude)
             vx, vy, vz = float(vel.x), float(vel.y), float(vel.z)
-            speed = _m.hypot(vx, vy)
+            speed = _math.hypot(vx, vy)
             # Course over ground, degrees true north (CARLA +X=East, -Y=North); heading fallback ~stopped.
-            yaw = _m.radians(tf.rotation.yaw)
-            heading = _m.degrees(_m.atan2(_m.cos(yaw), -_m.sin(yaw))) % 360.0
-            course = _m.degrees(_m.atan2(vx, -vy)) % 360.0 if speed >= 0.5 else heading
+            yaw = _math.radians(tf.rotation.yaw)
+            heading = _math.degrees(_math.atan2(_math.cos(yaw), -_math.sin(yaw))) % 360.0
+            course = _math.degrees(_math.atan2(vx, -vy)) % 360.0 if speed >= 0.5 else heading
             attrs = v.attributes
             ext = v.bounding_box.extent
             base = attrs.get("base_type", "") or (
@@ -2234,7 +2240,7 @@ class World:
     def _vehicle_telemetry_native(self, origin=None):
         """get_vehicle_telemetry via the C# VehicleTelemetryService — the single source of truth shared
         with the native recorder. Returns the same dict shape as the in-Python path."""
-        from CarlaNet.Types.Geom import GeoLocation
+        # Imported here because CarlaNet.Recording is optional (see its guarded _ref above).
         from CarlaNet.Recording import VehicleTelemetryService
         svc = getattr(self, "_telemetry_service", None)
         if svc is None:
@@ -2334,7 +2340,7 @@ class World:
         recorder's `IlluminationUnpaired` counts it.
 
         Every capture's `<_solar>` element and `carla:solar` PNG chunk carry the sun of the snapshot
-        nearest its pixels and its `illumination_band` (doc 11 §4.4's six), cut from the
+        nearest its pixels and its `illumination_band`, cut from the
         refraction-corrected elevation wherever the server carries it, with
         `illumination_band_elevation` naming the elevation it was cut from. A capture whose snapshot
         carried no sun is written with neither, and `SolarBlockMissing` counts it.
@@ -2388,9 +2394,10 @@ class World:
         `sumo_version`, the SUMO release driving the vehicles, which a SUMO drive session's
         `render_set` or `illumination` gives where it is not given here."""
         if not _CARLANET_RECORDING_AVAILABLE:
-            print("native recording unavailable: CarlaNet.Recording assembly not loaded "
-                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            _logger.error("native recording unavailable: CarlaNet.Recording assembly not loaded "
+                          "(rebuild the wheel/DLLs).")
             return None
+        # Imported here because CarlaNet.Recording is optional (see its guarded _ref above).
         from CarlaNet.Recording import FrameRecorder, OcclusionOptions, SensorPlatformOptions
         # Settled before the recorder this handle holds is stopped, so a name refused stops nothing.
         name = self._recording_camera_name(camera, camera_name, platform_callsign)
@@ -2435,11 +2442,11 @@ class World:
         `Client.get_trafficmanager()`. `report` receives one line per state change — an act starting, a
         vehicle stopping — and is called from the tick thread, so it must not block."""
         if not _CARLANET_SCENARIO_AVAILABLE:
-            print("scenario execution unavailable: CarlaNet.Scenario assembly not loaded "
-                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            _logger.error("scenario execution unavailable: CarlaNet.Scenario assembly not loaded "
+                          "(rebuild the wheel/DLLs).")
             return None
+        # Imported here because CarlaNet.Scenario is optional (see its guarded _ref above).
         from CarlaNet.Scenario import OpenScenarioParser, RoadNetwork, ScenarioExecutor
-        from System import Action, String
 
         self.stop_scenario()
         definition = OpenScenarioParser.LoadFile(str(path))
@@ -2508,7 +2515,7 @@ class World:
         client its tables of curated base types and special types as it starts, so every truth
         reader on this client -- the recorder and `get_vehicle_telemetry` alike -- reports each body's
         `base_type` (and the callsign built from it) and `special_type` as its catalogue class
-        curates them (06_Truth_And_Annotation D6.18). A reader on another client is not handed them
+        curates them. A reader on another client is not handed them
         and reports what each blueprint declares.
 
         By default every vehicle SUMO has is rendered: the scenario is the only arbiter of
@@ -2566,7 +2573,7 @@ class World:
         `world_truth_track` is where the session writes the world truth track, None (the default)
         writing none: every vehicle SUMO has, drawn or not, at each sampled SUMO frame inside the
         capture window, one CSV row per vehicle -- the record of what the world contained, which a base
-        rate is taken over (06_Truth_And_Annotation §8.3). Every value is SUMO's, at TraCI's clock for
+        rate is taken over. Every value is SUMO's, at TraCI's clock for
         the frame; each row says whether a body drew the vehicle on the frame stamped with that instant
         (`render_state` 'rendered', with its `actor_id`) or why none did ('simulated_only', with a
         `render_reason`), and carries the sun the world reported for the frame. Rows are appended whole
@@ -2589,7 +2596,7 @@ class World:
         the population (`collision_began`, `collision_ended`, `vehicle_not_inserted`,
         `emergency_stop`, `teleport`) at TraCI's clock, the sun at the window's first and last capture
         tick (`solar_window_open`, `solar_window_end`), and last `manifest_closed` saying why the run
-        ended (04_Contracts §12.7, 06_Truth_And_Annotation §8.4). A manifest without that row is one whose
+        ended. A manifest without that row is one whose
         run was interrupted. `session.RunManifest.Close(reason)` writes it now -- for a caller that
         reads its closing gates before disposing the session -- and the session's end writes it
         otherwise. A path that already holds a manifest is refused before anything starts.
@@ -2808,15 +2815,15 @@ class World:
         with the kinematic-velocity change. On one built before it every driven body reads zero, and
         `session.Report.MeanVelocityDivergenceMetresPerSecond` equals the mean commanded speed."""
         if not _CARLANET_COSIM_AVAILABLE:
-            print("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
-                  "(rebuild the wheel/DLLs).", file=sys.stderr)
+            _logger.error("SUMO co-simulation unavailable: CarlaNet.CoSim assembly not loaded "
+                          "(rebuild the wheel/DLLs).")
             return None
+        # Imported here because CarlaNet.CoSim is optional (see its guarded _ref above).
         from CarlaNet.CoSim import (AdmissionPass, CameraFootprintRenderSetPolicy, CarlaClientWorld,
                                     CollisionSpan, CoSimPoseRecord, EveryVehicleRenderSetPolicy,
                                     IlluminationPolicy, PoseDivergence, RegionRenderSetPolicy,
                                     RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
                                     SumoDriveSessionOptions, VehicleNotInserted)
-        from System import Action
 
         if render_set not in ("all", "circle", "cameras"):
             raise ValueError(f"render_set is 'all', 'circle' or 'cameras', not {render_set!r}")
@@ -2927,17 +2934,17 @@ class World:
         (samples are dense ~10 m, so nearest-sample is fine)."""
         if table is None:
             return None, None
-        import math as _m
         lats, lons, alts = table
-        coslat = _m.cos(_m.radians(float(lat)))
+        coslat = _math.cos(_math.radians(float(lat)))
         try:
+            # Imported here because numpy is optional: the carlanet wheel does not depend on it.
             import numpy as _np
             if isinstance(lats, _np.ndarray):
                 dx = (lons - float(lon)) * coslat
                 dy = (lats - float(lat))
                 i = int(_np.argmin(dx * dx + dy * dy))
                 d2 = float(dx[i] * dx[i] + dy[i] * dy[i])
-                return float(alts[i]), _m.sqrt(d2) * 111320.0
+                return float(alts[i]), _math.sqrt(d2) * 111320.0
         except Exception:
             pass
         best_i, best_d2 = 0, float("inf")
@@ -2947,7 +2954,7 @@ class World:
             d2 = dx * dx + dy * dy
             if d2 < best_d2:
                 best_d2, best_i = d2, i
-        return float(alts[best_i]), _m.sqrt(best_d2) * 111320.0
+        return float(alts[best_i]), _math.sqrt(best_d2) * 111320.0
 
     def get_sim_time(self) -> float:
         """Simulated seconds carried by the most recent world-observer frame.
@@ -2971,7 +2978,6 @@ class World:
         return {int(cached[i]) for i in range(cached.Count)}
 
     def get_actors(self, actor_ids=None):
-        from System import UInt32
         if actor_ids is None:
             # Get all cached actor IDs from the world observer
             cached = self._client.GetCachedActorIds()
@@ -3093,8 +3099,7 @@ class World:
         try:
             Client._get_walker_navigation().SetPedestriansSeed(int(seed))
         except Exception as ex:
-            import sys
-            print(f"[carlanet] set_pedestrians_seed failed: {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] set_pedestrians_seed failed: %s", ex)
 
     def set_pedestrians_cross_factor(self, percentage: float):
         """Probability [0..1] that a walker chooses to cross a road instead of
@@ -3103,8 +3108,7 @@ class World:
         try:
             Client._get_walker_navigation().SetPedestriansCrossFactor(float(percentage))
         except Exception as ex:
-            import sys
-            print(f"[carlanet] set_pedestrians_cross_factor failed: {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] set_pedestrians_cross_factor failed: %s", ex)
 
     def get_random_location_from_navigation(self):
         """Returns a random reachable Location on the navmesh, or None if
@@ -3117,8 +3121,7 @@ class World:
                 return None
             return Location(loc.x, loc.y, loc.z)
         except Exception as ex:
-            import sys
-            print(f"[carlanet] get_random_location_from_navigation failed: {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] get_random_location_from_navigation failed: %s", ex)
             return None
 
     def load_map_layer(self, layer: MapLayer):
@@ -3156,9 +3159,6 @@ class World:
         Requires the world observer subscription to be active (auto-started by
         Client.get_world()).
         """
-        from System import Action
-        from CarlaNet.Transport import TickTimestamp as _CSTickTs
-
         def _handler(cs_ts):
             try:
                 callback(Timestamp(
@@ -3167,8 +3167,7 @@ class World:
                     float(cs_ts.DeltaSeconds),
                     float(cs_ts.PlatformTimestamp)))
             except Exception:
-                import traceback
-                traceback.print_exc()
+                _logger.exception("[carlanet] an on_tick callback raised")
 
         cs_action = Action[_CSTickTs](_handler)
         handle = self._client.SubscribeTick(cs_action)
@@ -3400,7 +3399,6 @@ class Client:
         drape_cache_dir caches the (slow) drape sampling per area so rebuilds are fast. osm_options
         should pin the origin; if origin_height is None the height sampled at the origin is the datum.
         """
-        from System.Threading import CancellationToken
         params = _default_osm_opendrive_params() if parameters is None else parameters
         oh = None if origin_height is None else float(origin_height)
         xodr = _sync(self._inner.GenerateWorldFromOsmWithElevationAsync(
@@ -3456,9 +3454,8 @@ class Client:
             return cached
 
         if not _CARLANET_TM_AVAILABLE or _CSTrafficManager is None:
-            import sys
-            print(f"[carlanet] CarlaNet.TrafficManager assemblies unavailable; "
-                  f"using no-op stub on port {port}.", file=sys.stderr)
+            _logger.warning("[carlanet] CarlaNet.TrafficManager assemblies unavailable; "
+                            "using no-op stub on port %s.", port)
             stub = _NoOpTrafficManager(port)
             cache[port] = stub
             return stub
@@ -3476,11 +3473,8 @@ class Client:
             cache[port] = tm
             return tm
         except Exception as ex:
-            import sys, traceback
-            print(f"[carlanet] traffic manager construction failed on port "
-                  f"{port} ({type(ex).__name__}: {ex}); using no-op stub.",
-                  file=sys.stderr)
-            traceback.print_exc()
+            _logger.exception("[carlanet] traffic manager construction failed on port %s (%s: %s); "
+                              "using no-op stub.", port, type(ex).__name__, ex)
             stub = _NoOpTrafficManager(port)
             cache[port] = stub
             return stub
@@ -3499,7 +3493,7 @@ class Client:
         Client._apply_tm_registration_from_batch(cmds, responses)
         return responses
 
-    # ── Walker navigation helper (Wave 5) ─────────────────────────────────────
+    # ── Walker navigation helper ──────────────────────────────────────────────
     # Process-wide singleton matching the _tm_cache pattern above. First
     # access fetches the navmesh via the most-recently-created Client's
     # inner CarlaClient and constructs a WalkerNavigation via the C# factory.
@@ -3518,17 +3512,15 @@ class Client:
             return Client._walker_nav_cache
 
         if not _CARLANET_NAV_AVAILABLE or _CSNavigationFactory is None:
-            import sys
-            print("[carlanet] CarlaNet.Nav assemblies unavailable; "
-                  "WalkerAIController will be a no-op stub.", file=sys.stderr)
+            _logger.warning("[carlanet] CarlaNet.Nav assemblies unavailable; "
+                            "WalkerAIController will be a no-op stub.")
             Client._walker_nav_cache = _NoOpWalkerNavigation()
             return Client._walker_nav_cache
 
         inner = Client._last_client_inner
         if inner is None:
-            import sys
-            print("[carlanet] WalkerNavigation requested before any Client was "
-                  "constructed; returning no-op stub.", file=sys.stderr)
+            _logger.warning("[carlanet] WalkerNavigation requested before any Client was "
+                            "constructed; returning no-op stub.")
             Client._walker_nav_cache = _NoOpWalkerNavigation()
             return Client._walker_nav_cache
 
@@ -3537,8 +3529,7 @@ class Client:
             Client._walker_nav_cache = wn
             return wn
         except Exception as ex:
-            import sys
-            print(f"[carlanet] WalkerNavigation unavailable: {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] WalkerNavigation unavailable: %s", ex)
             Client._walker_nav_cache = _NoOpWalkerNavigation()
             return Client._walker_nav_cache
 
@@ -3555,8 +3546,7 @@ class Client:
         cs_tm = Client._tm_for_port(tm_port)
         if cs_tm is None:
             return
-        from System.Collections.Generic import List as _List
-        cs_actors = _List[_Actor]()
+        cs_actors = List[_Actor]()
         for a in actors:
             cs_actors.Add(a)
         try:
@@ -3565,8 +3555,7 @@ class Client:
             else:
                 cs_tm.UnregisterVehicles(cs_actors)
         except Exception as ex:
-            import sys
-            print(f"traffic-manager registration failed: {ex!r}", file=sys.stderr)
+            _logger.warning("traffic-manager registration failed: %r", ex)
 
     @staticmethod
     def _tm_for_port(tm_port: int):
@@ -3591,9 +3580,7 @@ class Client:
         cs_tm = getattr(tm, "_tm", None)
         if cs_tm is None:
             return
-        from System import UInt32
-        from System.Collections.Generic import List as _List
-        cs_ids = _List[UInt32]()
+        cs_ids = List[UInt32]()
         for i in actor_ids:
             cs_ids.Add(UInt32(int(i)))
         try:
@@ -3602,8 +3589,7 @@ class Client:
             else:
                 cs_tm.UnregisterVehicleIds(cs_ids)
         except Exception as ex:
-            import sys
-            print(f"[carlanet] TM register failed (port {tm_port}): {ex}", file=sys.stderr)
+            _logger.warning("[carlanet] TM register failed (port %s): %s", tm_port, ex)
 
     @staticmethod
     def _apply_tm_registration_from_batch(cmds, responses):
@@ -3833,6 +3819,7 @@ _CITYSCAPES_PALETTE = (
 def _convert_depth_inplace(buf):
     """Apply upstream's Depth converter in-place over a BGRA bytearray."""
     try:
+        # Imported here because numpy is optional: the carlanet wheel does not depend on it.
         import numpy as np
     except ImportError:
         return
@@ -3849,6 +3836,7 @@ def _convert_depth_inplace(buf):
 
 def _convert_log_depth_inplace(buf):
     try:
+        # Imported here because numpy is optional: the carlanet wheel does not depend on it.
         import numpy as np
     except ImportError:
         return
@@ -3868,6 +3856,7 @@ def _convert_log_depth_inplace(buf):
 
 def _convert_cityscapes_inplace(buf):
     try:
+        # Imported here because numpy is optional: the carlanet wheel does not depend on it.
         import numpy as np
     except ImportError:
         return
@@ -3936,11 +3925,12 @@ class Image(SensorData):
 
     def save_to_disk(self, path):
         """Write a PNG to `path`. Falls back to raw .bin if PIL is missing."""
-        import os
         d = os.path.dirname(path)
         if d:
             os.makedirs(d, exist_ok=True)
         try:
+            # Imported here because numpy and Pillow are optional: the carlanet wheel depends on
+            # neither.
             import numpy as np
             from PIL import Image as _PIL
         except ImportError:
@@ -4001,6 +3991,7 @@ class OpticalFlowImage(SensorData):
     def get_color_coded_flow(self):
         """HSV-coded flow → returns a fake Image with BGRA raw_data."""
         try:
+            # Imported here because numpy is optional: the carlanet wheel does not depend on it.
             import numpy as np
         except ImportError:
             class _Fake:
@@ -4054,8 +4045,6 @@ class CollisionEvent(SensorData):
         super().__init__(sensor_frame)
         # Parse the msgpack payload via the C# CollisionSensorData type.
         try:
-            from CarlaNet.Sensors import CollisionSensorData
-            from MessagePack import MessagePackSerializer
             data = MessagePackSerializer.Deserialize[CollisionSensorData](
                 sensor_frame.PayloadBytes)
             self.actor = _WrappedSensorActor(data.SelfActor, listener_actor._client if listener_actor else None) if listener_actor else None
@@ -4115,8 +4104,6 @@ class GnssMeasurement(SensorData):
     def __init__(self, sensor_frame):
         super().__init__(sensor_frame)
         try:
-            from CarlaNet.Sensors import GnssSensorData
-            from MessagePack import MessagePackSerializer
             d = MessagePackSerializer.Deserialize[GnssSensorData](sensor_frame.PayloadBytes)
             self.latitude = float(d.Latitude)
             self.longitude = float(d.Longitude)
@@ -4131,8 +4118,6 @@ class IMUMeasurement(SensorData):
     def __init__(self, sensor_frame):
         super().__init__(sensor_frame)
         try:
-            from CarlaNet.Sensors import ImuSensorData
-            from MessagePack import MessagePackSerializer
             d = MessagePackSerializer.Deserialize[ImuSensorData](sensor_frame.PayloadBytes)
             self.accelerometer = _as_vector3d(d.Accelerometer)
             self.gyroscope = _as_vector3d(d.Gyroscope)
@@ -4276,8 +4261,6 @@ class ObstacleDetectionEvent(SensorData):
     def __init__(self, sensor_frame, listener_actor=None):
         super().__init__(sensor_frame)
         try:
-            from CarlaNet.Sensors import ObstacleSensorData
-            from MessagePack import MessagePackSerializer
             d = MessagePackSerializer.Deserialize[ObstacleSensorData](
                 sensor_frame.PayloadBytes)
             client = listener_actor._client if listener_actor is not None else None

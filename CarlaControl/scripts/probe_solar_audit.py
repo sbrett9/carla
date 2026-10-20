@@ -43,8 +43,8 @@ from carlacontrol.SolarPositionModel import (  # noqa: E402
 )
 from carlacontrol.WorldPackageReader import WorldPackageReader  # noqa: E402
 
-# The dates and hours 10_Scale_And_Performance.md section 9 specifies for this measurement: three
-# dates across the seasonal swing, and the four window hours the sizing scenario's population
+# The dates and hours of this measurement: three
+# dates across the seasonal swing, and the four window hours the Shahid Bahonar Port scenario's population
 # regimes fall on. Twelve points, one RPC pair each.
 AUDIT_DATES = ((2026, 12, 21), (2026, 3, 21), (2026, 6, 21))
 AUDIT_HOURS = (6.0, 7.0, 17.0, 23.0)

@@ -33,20 +33,20 @@ def staged_bundle(root: Path) -> Path:
     write(root / "skills" / "sumo-traffic-scenarios" / "SKILL.md", "# Skill\n")
     write(root / "Scenarios" / "Bahonar" / "README.md",
           "# Bahonar\n"
-          "[Getting started](../../../../Docs/CAT_Research/Guides/Getting_Started.md#the-site-profile)\\\n"
-          "[Labels](../../../../Docs/CAT_Research/EPOL/Behavioral_Annotations.md)\\\n"
+          "[Getting started](../../../../Docs/Guides/Getting_Started.md#the-site-profile)\\\n"
+          "[Labels](../../../../Docs/EPOL/Behavioral_Annotations.md)\\\n"
           "[The other example](../Arapahoe/README.md)\\\n"
           "[The skill](../../../skills/sumo-traffic-scenarios/SKILL.md)\n")
     write(root / "Scenarios" / "Arapahoe" / "README.md", "# Arapahoe\n")
     write(root / "docs" / "Guides" / "Writing_A_Scenario.md",
           "# Writing\n"
           "[Started](Getting_Started.md) and [labels](../EPOL/Behavioral_Annotations.md).\\\n"
-          "[The skill](../../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md)\\\n"
-          "[Engine notes](../../../CarlaControl/skills/third-party/ue/README.md)\\\n"
-          "[The Bahonar example](../../../CarlaControl/Examples/Scenarios/Bahonar/README.md)\\\n"
-          "[Elsewhere](../../../LICENSE) and [the web](https://example.org/x.md)\\\n"
-          "`[not a link](../../../CarlaControl/skills/x.md)`\n"
-          "```\n[fenced](../../../CarlaControl/skills/x.md)\n```\n")
+          "[The skill](../../CarlaControl/skills/sumo-traffic-scenarios/SKILL.md)\\\n"
+          "[Engine notes](../../CarlaControl/skills/third-party/ue/README.md)\\\n"
+          "[The Bahonar example](../../CarlaControl/Examples/Scenarios/Bahonar/README.md)\\\n"
+          "[Elsewhere](../../LICENSE) and [the web](https://example.org/x.md)\\\n"
+          "`[not a link](../../CarlaControl/skills/x.md)`\n"
+          "```\n[fenced](../../CarlaControl/skills/x.md)\n```\n")
     return root
 
 
@@ -72,10 +72,10 @@ def test_a_documentation_page_keeps_its_own_links_and_maps_the_rest(tmp_path: Pa
     assert "[The skill](../../skills/sumo-traffic-scenarios/SKILL.md)" in text
     assert "Engine notes\\" in text and "[Engine notes]" not in text     # dropped: it does not ship
     assert "[The Bahonar example](../../Scenarios/Bahonar/README.md)" in text
-    assert "[Elsewhere](../../../LICENSE)" in text                        # outside the repository
+    assert "[Elsewhere](../../LICENSE)" in text                           # not a shipped folder
     assert "[the web](https://example.org/x.md)" in text
-    assert "`[not a link](../../../CarlaControl/skills/x.md)`" in text   # a code span
-    assert "[fenced](../../../CarlaControl/skills/x.md)" in text         # a fenced block
+    assert "`[not a link](../../CarlaControl/skills/x.md)`" in text      # a code span
+    assert "[fenced](../../CarlaControl/skills/x.md)" in text            # a fenced block
 
 
 def test_a_page_with_nothing_to_change_is_left_byte_for_byte(tmp_path: Path) -> None:

@@ -5,10 +5,9 @@ station, ``z(ds) = a + b·ds + c·ds² + d·ds³`` with ``ds = s − record_s``.
 form CARLA evaluates in ``Road::GetDirectedPointIn``, and both the road mesh and the
 waypoint z read it through that one function.
 
-This module fits a road's sampled ``(s, z)`` series into such records under the schemes
-``CarlaNet.Map.OpenDrive.ElevationInjector`` supports today and the scheme it is being
-extended to support, so the two can be compared offline before any production change.
-See ``Docs/CAT_Research/Findings/21_Road_Elevation_Profile_Continuity.md``.
+This module fits a road's sampled ``(s, z)`` series into such records under the fit schemes
+``CarlaNet.Map.OpenDrive.ElevationInjector`` offers (``ElevationFitMode``), so a scheme can be
+compared with another offline.
 """
 
 from __future__ import annotations
