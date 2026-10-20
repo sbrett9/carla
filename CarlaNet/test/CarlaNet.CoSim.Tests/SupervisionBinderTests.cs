@@ -221,7 +221,7 @@ public sealed class SupervisionBinderTests
     [Fact]
     public void ASeriesStatesOnlyTheVehiclesThatRealiseItsSlotsAndNothingForTheWorld()
     {
-        // The owner's ruling of 2026-10-05 (06 §3.5): a series' slots are its realised postings, each a
+        // A series' slots are its realised postings, each a
         // vehicle's; an occasion the schedule skipped has no slot, no interval and no row anywhere. What the
         // binder states is a vehicle's, and only while SUMO has the vehicle.
         var feed = new BinderFeed(Read(Plan(
@@ -456,7 +456,7 @@ public sealed class SupervisionBinderTests
     [Fact]
     public void TheBinderHoldsNoSolarType()
     {
-        // 06 D6.21: the binder has no reader for the sun, so illumination can never write supervision.
+        // The binder has no reader for the sun, so illumination can never write supervision.
         // Every field of the binder and of every type nested in it, generic arguments included.
         List<Type> held = [];
         foreach (Type type in new[] { typeof(SupervisionBinder) }.Concat(typeof(SupervisionBinder).GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Public)))

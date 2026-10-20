@@ -16,8 +16,7 @@ public readonly record struct BodySupervision(ActorId Actor, SupervisionInForce 
 
 /// <summary>
 /// One change to the supervision a session holds on the server: the plan it is bound from and the bodies
-/// whose supervision changes. Every row is a vehicle's; nothing is held for the world apart from the plan
-/// (06 §3.5).
+/// whose supervision changes. Every row is a vehicle's; nothing is held for the world apart from the plan.
 /// </summary>
 /// <param name="Fresh">
 /// Whether the server drops every row it holds before applying the change: a session's first change, and

@@ -1,7 +1,6 @@
 // A capture's platform pose is the pose its own image was taken from, which is the camera's pose in
 // the client's snapshot of the image's frame -- not the pose in the image's sensor header, and not
-// wherever the camera has been moved to by the time the recorder handles the image. See
-// Docs/Plans/SUMO_Behavioral_Capture/12_Operator_Control_Surface.md §9.6.
+// wherever the camera has been moved to by the time the recorder handles the image.
 //
 // The header was once taken to be the image's pose, on the understanding that the server stamped it
 // in the game-thread call that captures the frame. It did not, on this path: the camera's image is
@@ -159,7 +158,7 @@ public sealed class FrameRecorderSensorPoseTests : IAsyncLifetime
     {
         // The client holds 101 to 103, all with the camera moved; frame 100 has gone. The nearest frame
         // held is the camera somewhere else, and the header alone is no truth of the frame's vehicles,
-        // so the still is dropped and counted rather than placed at all (the owner's ruling of 2026-10-05).
+        // so the still is dropped and counted rather than placed at all.
         await ObserveTheCameraMovedAfter(RenderedFrame, holdRenderedFrame: false);
 
         var recorder = new FrameRecorder(_client!, _streams.Token(CameraStream), _dir, 2.0, platform: _platform,

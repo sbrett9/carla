@@ -7,7 +7,7 @@ into it (`AuthoringReferenceSet`). Three properties are held here:
     out byte for byte, every entry is stored uncompressed -- the editor's importer reads nothing else
     -- and publishing again replaces the set rather than adding a second copy of any entry.
   * **What cannot be trusted is not read.** The reader refuses an area table whose recorded source
-    digest disagrees with the GeoJSON beside it (C5 V5.11) and an entry declaring a schema version it
+    digest disagrees with the GeoJSON beside it and an entry declaring a schema version it
     does not implement.
   * **A bad file stops the world build before it starts**, and a good one ends up in the package the
     build writes. `WorldBuilder` is driven with a stand-in client, so the whole build path runs

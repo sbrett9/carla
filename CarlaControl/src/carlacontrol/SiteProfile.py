@@ -1,9 +1,9 @@
 """Layer 2 of a capture run's configuration: facts about this machine, not about the science.
 
-`12_Operator_Control_Surface.md` §3.5: the server's address, the SUMO installation, and where
+The server's address, the SUMO installation, and where
 scenario packages, world packages, the catalogue, captures and run records live. Separated so a run
 configuration moves between machines unedited. **Host dependence is allowed to live here and not to
-hide here** (D12.28): every value carries where it came from, and a value read from an environment
+hide here**: every value carries where it came from, and a value read from an environment
 variable names the variable.
 
 Where the values come from, in order:
@@ -11,8 +11,8 @@ Where the values come from, in order:
 1. a site-profile file, when one is named (`--site-profile`): JSON, `site_profile_version` 1, with
    `server`, `sumo` and `paths` blocks and an `environment` list naming the variables the profile
    allows a value to be read from. A relative path in it is relative to the file;
-2. otherwise, derived from the layout the tool runs from (12 §13 question 2's recommendation,
-   `carlacontrol.ToolLayout`): in the source tree, `Build/scenarios`, `Build/world-packages`,
+2. otherwise, derived from the layout the tool runs from (`carlacontrol.ToolLayout`): in the source
+   tree, `Build/scenarios`, `Build/world-packages`,
    `CarlaControl/catalogue/vehicles.catalogue.json`, `Build/captures` and `Build/runs` under the
    repository root; installed, `scenarios`, `world-packages`, `captures` and `runs` under the current
    folder, and the catalogue installed with the package;

@@ -6,9 +6,6 @@ time a vehicle departs. The compiler reads the epoch with the co-simulation sess
 `CarlaNet.CoSim.SolarEpoch` (`CarlaControl/src/carlacontrol/ScenarioEpoch.py::ScenarioEpoch`), so a
 scenario the compiler accepts is one the session accepts, with the same digest.
 
-Design record: `Docs/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5.1,
-§4.5 and §8.2.1; the object is `04_Contracts.md` C9.
-
 ## The object
 
 ```json

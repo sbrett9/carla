@@ -1908,7 +1908,7 @@ void FCarlaServer::FPimpl::BindActions()
   // the pattern instances in force -- with the plan every row is bound from and the vocabulary
   // version and digest that pin what its terms mean. Every row is a vehicle's: nothing is held for
   // the world apart from the plan, because SUMO reports vehicles, not places, and a label follows the
-  // vehicle it is about (06_Truth_And_Annotation.md §3.5). The world observer carries what is held
+  // vehicle it is about. The world observer carries what is held
   // on every snapshot from the next frame on, after the render set's entries, so every client of the
   // world reads the same truth for the same frame; nothing about it is kept in one client's process.
   // Sent by the session only when the supervision changes, after its render set and before the tick

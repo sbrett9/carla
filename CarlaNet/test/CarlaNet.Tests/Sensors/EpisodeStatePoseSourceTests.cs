@@ -8,7 +8,7 @@
 // session declares the step once and names a body only as it stops or starts following it, and the
 // server carries both on every snapshot, so any reader takes from the frame number alone whether a body
 // stood at SUMO's own position (sumo) or between two (interpolated), and from the entries which bodies were
-// a jump or stale (the owner's rulings of 2026-10-06).
+// a jump or stale.
 using System.Buffers.Binary;
 using CarlaNet.Sensors;
 using CarlaNet.Transport;

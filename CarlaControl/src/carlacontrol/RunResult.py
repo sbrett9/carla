@@ -1,10 +1,10 @@
 """The run result: how a capture run ended, and pointers to everything it wrote.
 
-`12_Operator_Control_Surface.md` §3.10.2-§3.10.3, D12.22, D12.23. Written **in every terminal outcome
-the tool survives** -- a refusal that produced no session included -- to the path `--result` names, or
-by default beside the run's resolution report, and always outside the capture root. The process exit
-status is read from `outcome` (`exit_status`), never computed beside it: two computations of one fact
-eventually disagree, and a caller believes the cheaper one.
+Written **in every terminal outcome the tool survives** -- a refusal that produced no session
+included -- to the path `--result` names, or by default beside the run's resolution report, and
+always outside the capture root. The process exit status is read from `outcome` (`exit_status`),
+never computed beside it: two computations of one fact eventually disagree, and a caller believes the
+cheaper one.
 
 Eight outcomes, each a name that stands alone, whose one live distinction is *finished* against
 *stopped*:

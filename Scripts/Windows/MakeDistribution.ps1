@@ -457,9 +457,9 @@ if (Test-Path $skillsSrc) {
 
 # 3c. The user documentation: the guides and the reference pages, from Docs\ into docs\
 #     with their folder structure kept, so the relative links between them still resolve. Only these
-#     folders are written for users. Docs\Plans\ is internal, and the rest of Docs\ is CARLA's own
-#     documentation; both stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
-#     and stops the assembly.
+#     folders are written for users. The rest of Docs\ is CARLA's own documentation and stays out.
+#     The pages are tracked in this repository, so a missing folder is a broken checkout and stops
+#     the assembly.
 $userDocFolders = @('Guides', 'EPOL', 'Tracking', 'Schemas', 'Skills')
 function Copy-UserDocs {
     $docsSrc  = Join-Path $CarlaRoot 'Docs'
@@ -569,8 +569,8 @@ $sumoDest    = Join-Path $dist 'tools\sumo'
 $sumoBinDest = Join-Path $sumoDest 'bin'
 $sumoExecutables = @('netconvert.exe', 'sumo.exe', 'duarouter.exe')
 # sumo-gui.exe is staged beside these by CarlaSetup and deliberately not bundled: whether a
-# distribution carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md
-# section 5.4). Add it here only once that is decided.
+# distribution carries it is an open decision that turns on FOX's LGPL. Add it here only once that is
+# decided.
 $sumoNativeStaged = @()   # the DLLs actually copied; the licence inventory covers exactly these
 $sumoVersion = 'unknown'
 $nc = Join-Path $sumoBin 'netconvert.exe'

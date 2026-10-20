@@ -5,14 +5,14 @@ using CarlaNet.Types.Supervision;
 
 namespace CarlaNet.CoSim;
 
-// The rows of a supervision plan (06_Truth_And_Annotation.md §8.1), as the scenario compiler writes
+// The rows of a supervision plan (Docs/Schemas/Supervision_Plan.md), as the scenario compiler writes
 // them. Each is built only by reading a plan: its constructors are private, the one that reads its own
-// fields and the record's copy, and it has no setter, so nothing in a run can make a row, change one or add one to a plan (06 D6.8).
+// fields and the record's copy, and it has no setter, so nothing in a run can make a row, change one or
+// add one to a plan.
 
 /// <summary>
-/// A pattern instance: an authored assertion about one or more vehicles over intervals (06 §3.4). Every
-/// instance has a participant: SUMO reports vehicles, not places, and a label follows the vehicle it is
-/// about (06 §3.5).
+/// A pattern instance: an authored assertion about one or more vehicles over intervals. Every instance
+/// has a participant: SUMO reports vehicles, not places, and a label follows the vehicle it is about.
 /// </summary>
 public sealed record PatternInstance
 {
@@ -62,7 +62,7 @@ public sealed record PatternInstance
     /// <summary><see cref="SupervisionState.Annotated"/> or <see cref="SupervisionState.Nominal"/>.</summary>
     public SupervisionState Supervision { get; }
 
-    /// <summary>The terms it asserts, which a nominal instance may carry too (06 D6.31).</summary>
+    /// <summary>The terms it asserts, which a nominal instance may carry too.</summary>
     public ImmutableArray<string> Labels { get; }
 
     /// <summary>Its parameters, keys its labels' terms declare, with the values the author gave.</summary>
@@ -70,7 +70,7 @@ public sealed record PatternInstance
 
     /// <summary>
     /// Its terms' <c>hard_negative_for</c>, copied onto a nominal instance; null where nothing narrows
-    /// it, which means unspecified, not a negative for nothing (06 §3.9(d)).
+    /// it, which means unspecified, not a negative for nothing.
     /// </summary>
     public ImmutableArray<string>? HardNegativeFor { get; }
 
@@ -100,7 +100,7 @@ public sealed record InstanceParticipant
         SumoId = reading.Text(json, "sumo_id", where);
     }
 
-    /// <summary>The entity, which defaults to the SUMO vehicle id (06 D6.13).</summary>
+    /// <summary>The entity, which defaults to the SUMO vehicle id.</summary>
     public string EntityId { get; }
 
     /// <summary>
@@ -117,14 +117,13 @@ public sealed record InstanceParticipant
 }
 
 /// <summary>
-/// One declared interval: a participant's phase, with what commits it and what its author declared of it
-/// (06 §3.3).
+/// One declared interval: a participant's phase, with what commits it and what its author declared of it.
 /// </summary>
 /// <remarks>
 /// The declared fields are what the author's declaration, or the anchoring events, themselves declare:
 /// a departure its instant, an <c>until</c> stop's end its instant, a <c>duration</c> stop only its
 /// length, so <see cref="DeclaredStartSeconds"/> is null where the start declares no instant, and a
-/// consumer must tell that from zero (06 D6.4). The committed and observed onsets are the run's, bound
+/// consumer must tell that from zero. The committed and observed onsets are the run's, bound
 /// beside these, never written into them.
 /// </remarks>
 public sealed record PlannedInterval
@@ -179,7 +178,7 @@ public sealed record PlannedInterval
 
 /// <summary>
 /// The events of an interval's participant that commit its start and, where given, its end, resolved
-/// by the compiler against the vehicle's own stops and compiled route (06 §3.3, 07 check 58).
+/// by the compiler against the vehicle's own stops and compiled route (its check 58).
 /// </summary>
 public sealed record IntervalAnchor
 {
@@ -292,8 +291,8 @@ public sealed record AnchorPoint
 
 /// <summary>
 /// A recurring series: a rota read as a cadence, one slot per occasion a vehicle realises, its members
-/// in one declared state (06 §3.4, D6.5). An occasion the rota skips writes no trip and no slot: there is
-/// no vehicle for a label to follow (06 §3.5).
+/// in one declared state. An occasion the rota skips writes no trip and no slot: there is no vehicle for a
+/// label to follow.
 /// </summary>
 public sealed record RecurringSeries
 {
@@ -383,7 +382,7 @@ public sealed record SeriesSlot
 
 /// <summary>
 /// A flow's supervision: every vehicle it emits, annotated for its whole life or unlabelled, and never
-/// nominal (06 D6.2).
+/// nominal.
 /// </summary>
 public sealed record CohortSupervision
 {
@@ -421,7 +420,7 @@ public sealed record CohortSupervision
 
 /// <summary>
 /// One authored vehicle's states: every state the instances and series it belongs to assert of it, or
-/// <see cref="SupervisionState.Unlabelled"/>, written explicitly, where it belongs to none (06 §3.1).
+/// <see cref="SupervisionState.Unlabelled"/>, written explicitly, where it belongs to none.
 /// </summary>
 public sealed record EntitySupervision
 {

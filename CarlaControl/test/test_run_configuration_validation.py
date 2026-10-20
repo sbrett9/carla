@@ -1,7 +1,7 @@
 """A configuration that cannot work is refused at launch, naming why, not at minute forty.
 
-Plan 12 §6. Each test here is one thing wrong with an otherwise launchable configuration, and asserts
-the check that refuses it and a phrase an operator can act on. Where the session has a validator of
+Each test here is one thing wrong with an otherwise launchable configuration, and asserts the check
+that refuses it and a phrase an operator can act on. Where the session has a validator of
 its own for a rule -- the clock ratio, the illumination object, the epoch -- the offline checks must reach the
 same verdict offline, so those tests pass values the session itself refuses. The unattended caller's
 two mechanisms (checks 34 and 35) are exercised on both sides: a warning with no adjudication is
@@ -495,7 +495,7 @@ def test_the_echo_states_the_draw_distance_and_what_it_leaves_alone(layout):
 
 def test_the_disk_estimate_counts_the_pictures_and_says_it_leaves_the_sidecars_out(layout):
     effective, validator, findings, _, _ = offline(layout, free=10**9)
-    # The fixture's one channel at 2 Hz: its PNGs alone, at doc 10's measured size per pixel.
+    # The fixture's one channel at 2 Hz: its PNGs alone, at the measured size per pixel.
     values = effective.channel_values(0)
     assert validator.bytes_per_captured_second(effective) == pytest.approx(
         2.0 * PNG_BYTES_PER_PIXEL * values["width"] * values["height"])

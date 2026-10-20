@@ -10,7 +10,7 @@ namespace CarlaNet.CoSim.Tests;
 
 /// <summary>
 /// A vehicle SUMO stops reporting is drawn at its last SUMO position on that step's own frame and is gone
-/// from the next frame, as the owner ruled on 2026-10-06: its body is lent to nobody else on that frame,
+/// from the next frame: its body is lent to nobody else on that frame,
 /// goes back to the free bodies from the next, and its interval ends at the next frame's instant.
 /// </summary>
 /// <remarks>

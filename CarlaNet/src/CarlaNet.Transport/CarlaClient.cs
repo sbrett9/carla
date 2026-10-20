@@ -1501,7 +1501,7 @@ public sealed class CarlaClient : IAsyncDisposable
     /// Adopt a vehicle catalogue's <c>special_type</c> for each blueprint it curates, in place of
     /// whatever was adopted before. A SUMO drive session adopts its own catalogue's when it starts, so
     /// the truth this connection reports -- the recorder beside the session and the live pull alike --
-    /// takes each body's kind from the catalogue, as doc 06 D6.18 rules.
+    /// takes each body's kind from the catalogue.
     /// </summary>
     /// <remarks>
     /// Client-side only, and held for the life of the connection: a kind belongs to a blueprint, and a

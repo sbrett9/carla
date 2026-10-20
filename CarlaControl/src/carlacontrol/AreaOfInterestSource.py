@@ -4,7 +4,7 @@ An area of interest is a named, stable place that a scenario can site behaviour 
 can refer to. The author declares areas in GeoJSON (RFC 7946) beside the OSM extract the world is
 built from -- `<extract>.aoi.geojson`, found by name, or named explicitly -- and this class reads that
 file and refuses it whole, naming every rule it breaks, before any minutes are spent building the
-world. The contract is `04_Contracts.md` C5 (§7.1 the source, §7.5 the rules).
+world.
 
 What is accepted:
 
@@ -14,7 +14,7 @@ What is accepted:
   * `properties.id` matching `[a-z][a-z0-9_]{0,63}`, unique; `properties.name`, non-empty;
     `properties.kind`, optional.
 
-What is refused, each tagged with the rule id C5 gives it:
+What is refused, each tagged with the rule id its message carries:
 
   * V5.1 -- an id that is missing, malformed or declared twice. The pattern admits lower case only,
     so two ids differing only in case cannot both pass;
@@ -152,7 +152,8 @@ class AreaOfInterestSource:
 
     @property
     def sha256(self) -> str:
-        """Lowercase hexadecimal SHA-256 of the file's bytes -- C5's `source_sha256`."""
+        """Lowercase hexadecimal SHA-256 of the file's bytes, which the resolved table records as
+        `source_sha256`."""
         return hashlib.sha256(self.raw).hexdigest()
 
     @staticmethod

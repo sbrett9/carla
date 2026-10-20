@@ -1,10 +1,10 @@
 """The result keeps the admission pass for the window's begin and a summary of the window's passes.
 
-The session publishes a pass per SUMO step for the frame one step ahead of the rendered clock
-(03 §8.8), so after the last prewarm step the newest pass is the window's second frame, not its
-first; the pass kept for the window's opening has to be the one for the begin itself. The stand-in
-session publishes passes on exactly that schedule, and the tests make the population large at one
-frame only, so a reader that took the wrong pass would show it.
+The session publishes a pass per SUMO step for the frame one step ahead of the rendered clock, so
+after the last prewarm step the newest pass is the window's second frame, not its first; the pass
+kept for the window's opening has to be the one for the begin itself. The stand-in session publishes
+passes on exactly that schedule, and the tests make the population large at one frame only, so a
+reader that took the wrong pass would show it.
 
 Every vehicle SUMO has is rendered, so a crowded window is drawn in full and warned about nowhere:
 there is no cap for it to bind, and run check 33, which compared the two, is retired.

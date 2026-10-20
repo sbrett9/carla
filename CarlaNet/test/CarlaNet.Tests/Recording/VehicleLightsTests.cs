@@ -1,6 +1,5 @@
-// The words a truth record's `lights` and `pose_source` attributes hold, as the owner ruled on 2026-10-06:
-// the lights commanded on for a vehicle in the picture on the capture's frame, and where its drawn pose
-// came from. See Docs/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §5.1.
+// The words a truth record's `lights` and `pose_source` attributes hold: the lights commanded on for a
+// vehicle in the picture on the capture's frame, and where its drawn pose came from.
 using CarlaNet.Recording;
 using CarlaNet.Types.Rpc.Lighting;
 using CarlaNet.Types.Streaming;
@@ -51,9 +50,9 @@ public class VehicleLightsTests
     }
 
     [Fact]
-    public void The_Four_Words_Are_The_Owner_s_And_Every_Pose_Source_Has_One()
+    public void The_Four_Words_Are_Fixed_And_Every_Pose_Source_Has_One()
     {
-        // The owner's words of 2026-10-06, one per member, so a member added without its word fails here.
+        // The four words, one per member, so a member added without its word fails here.
         Assert.Equal(["sumo", "interpolated", "jump", "stale"],
                      Enum.GetValues<PoseSource>().Select(PoseSources.SidecarValue));
     }

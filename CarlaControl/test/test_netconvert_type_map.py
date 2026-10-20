@@ -1,10 +1,9 @@
 """A world's own road types reach the network the world publishes, and every scenario on that world.
 
-`07_Scenario_Authoring.md` D7.9 and D7.32: what a road admits is decided when the world is built, by
-the netconvert run that writes the world's network and its OpenDRIVE, and a scenario runs the world's
-network byte for byte. So a world whose roads must admit vehicles SUMO's own type map keeps off them
-is built with a type map of its own (`carlacontrol.NetconvertTypeMap`), not given a network rewritten
-after the fact.
+What a road admits is decided when the world is built, by the netconvert run that writes the world's
+network and its OpenDRIVE, and a scenario runs the world's network byte for byte. So a world whose
+roads must admit vehicles SUMO's own type map keeps off them is built with a type map of its own
+(`carlacontrol.NetconvertTypeMap`), not given a network rewritten after the fact.
 
 Held here, in order: the map is found and validated before anything is built; the world build passes
 SUMO's own map first and the world's second, after every other extra argument, and refuses a second
@@ -367,7 +366,7 @@ def test_the_bahonar_world_carries_its_type_map_and_its_guard_rota_compiles_on_i
     recorded = list(manifest["NetconvertArgv"])
     if "--type-files" not in recorded:
         pytest.fail("the Shahid Bahonar package records no --type-files: it predates its type map; "
-                    "rebuild it (07 §9.8)")
+                    "rebuild it")
     assert recorded[recorded.index("--type-files") + 1].endswith(str(BAHONAR_MAP.resolve()))
 
     # The recorded invocation is the network the package carries.

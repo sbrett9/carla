@@ -1,8 +1,8 @@
 """One check the scenario compiler runs, as a record a reader can cite.
 
-`07_Scenario_Authoring.md` §5.2 lists them; `ScenarioCheckCatalogue` holds the same list in code and
-generates the `checks.json` the authoring skill ships, so the two cannot drift silently -- a test reads
-the table in the plan and compares it with the catalogue.
+`ScenarioCheckCatalogue` holds the list in code and generates the `checks.json` the authoring skill
+ships, so the two cannot drift silently -- a test compares the shipped `checks.json` with the
+catalogue.
 """
 from __future__ import annotations
 

@@ -1,11 +1,9 @@
-// The truth record's base_type and special_type come from the vehicle catalogue. See
-// Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md D6.18 and
-// Docs/Plans/SUMO_Behavioral_Capture/04_Contracts.md §3.4.3.
+// The truth record's base_type and special_type come from the vehicle catalogue.
 //
 // The content build's own base_type and special_type are hand-edited: when the catalogue was first
 // swept six saloons declared themselves buses, a van declared nothing, and every special_type was
 // empty, so the ambulance, the fire appliance and the police car read as ordinary cars. The catalogue
-// curates both per class, and the owner ruled that the truth takes both from it. A SUMO drive session
+// curates both per class, and the truth takes both from it. A SUMO drive session
 // hands its catalogue's tables to the client it drives through; every truth reader on that client
 // then reports a catalogued blueprint with the catalogue's base type and kind, an empty kind included,
 // and any other blueprint with what it declares -- its base type from its wheel count where it

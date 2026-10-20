@@ -1,7 +1,7 @@
 """The echo before commit states the instant and the sun the run will actually use, and computes nothing.
 
-Plan 12 §6.4: a multi-hour run states its first capture's civil instant and sun elevation before it
-starts, because discovering afterwards that the sun was wrong is the most expensive failure there is.
+A multi-hour run states its first capture's civil instant and sun elevation before it starts,
+because discovering afterwards that the sun was wrong is the most expensive failure there is.
 The figures must be the ones the session will act on: the civil span from the scenario's epoch, and the
 sun from the session's own declared-sun function with the window opening where the session opens it --
 at the window's own begin, which run_capture hands the session as `window_opens_at`, not at the

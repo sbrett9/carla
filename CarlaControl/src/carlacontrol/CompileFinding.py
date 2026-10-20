@@ -1,7 +1,7 @@
 """One thing a scenario compile established: which check, what it concluded, and about what.
 
 The compiler has one vocabulary for what a check concludes, and a resolution report, a lock file and
-a corpus filter all read it (`07_Scenario_Authoring.md` §5.2). **Refuse** means the compile fails and
+a corpus filter all read it. **Refuse** means the compile fails and
 nothing is emitted. **Warn** means the compile goes on and the warning is carried, in full, into the
 resolution report, because a warning is a failure a person has to adjudicate. There is no third
 outcome: what a check measured without concluding anything is a fact in the report, not a finding.

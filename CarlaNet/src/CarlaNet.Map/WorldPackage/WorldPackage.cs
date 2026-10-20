@@ -21,9 +21,10 @@
 //   places.json           the place index: street names to edges, and its coverage
 //   solar.json            the solar frame: the origin and the time zone the engine derives
 // Each is self-describing JSON carrying its own schema version, and is read here as text; the
-// schemas are in 04_Contracts.md C5 and 07_Scenario_Authoring.md section 2. Write replaces the
-// archive, so writing a world again drops its reference set until the build publishes it again --
-// a rebuilt world's network can differ, and a set derived from the old one must not survive it.
+// schemas are described in Docs/Schemas (Areas_Resolved.md, Areas_Of_Interest.md, Place_Index.md and
+// Solar_Frame.md). Write replaces the archive, so writing a world again drops its reference set
+// until the build publishes it again -- a rebuilt world's network can differ, and a set derived from
+// the old one must not survive it.
 //
 // map.net.xml is carried rather than regenerated because it cannot be regenerated. Asking netconvert
 // for OpenDRIVE output makes it default rectangular-lane-cut to true, which feeds junction shape
@@ -496,8 +497,8 @@ public static class WorldPackage
     /// reference set; an empty area list when the world was built with no areas declared.
     /// </summary>
     /// <remarks>
-    /// Throws when the table's <c>source_sha256</c> does not match the GeoJSON carried beside it
-    /// (C5 V5.11): the table would then describe areas other than the ones the package declares, and
+    /// Throws when the table's <c>source_sha256</c> does not match the GeoJSON carried beside it: the
+    /// table would then describe areas other than the ones the package declares, and
     /// a reader that returned it anyway would be the one component nobody checks. Throws too when the
     /// table declares a <c>resolved_version</c> newer than <see cref="AreasOfInterestVersion"/>.
     /// </remarks>

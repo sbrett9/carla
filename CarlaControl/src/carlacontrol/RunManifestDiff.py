@@ -4,12 +4,11 @@ The supervision row set is fixed before a run starts: the `(instance_id, partici
 a run's manifest names are wholly determined by the compiled supervision plan, and the run may only
 bind them -- fill in onsets, close intervals, record what was drawn. Two runs of one scenario must
 therefore name identical triples, differing only in their times and their outcomes, and a diff of
-their manifests is the regression test for that rule (`06_Truth_And_Annotation.md` §3.6 point 2,
-D6.8). This reads two manifests and makes that diff.
+their manifests is the regression test for that rule. This reads two manifests and makes that diff.
 
 **What a manifest names.** The session writes the manifest as JSON rows, one per line
-(`CarlaNet.CoSim.RunManifestWriter`, `04_Contracts.md` §12.7): the plan as declared, one `instance`
-row per pattern instance with the intervals it declares, then an `interval_opened` and an
+(`CarlaNet.CoSim.RunManifestWriter`, `Docs/Schemas/Run_Manifest.md`): the plan as declared, one
+`instance` row per pattern instance with the intervals it declares, then an `interval_opened` and an
 `interval_closed` row as the binder opens and closes each interval, and last a `manifest_closed` row
 that lists the intervals still open as the run ended (`open_intervals`, which the binder closes after
 it) and those nothing in the run opened or closed (`never_opened`). The triples a closed manifest
@@ -228,7 +227,7 @@ class ManifestDiff:
 
     @property
     def same(self) -> bool:
-        """Whether the two manifests name the same triples, as D6.8 requires."""
+        """Whether the two manifests name the same triples, as two runs of one scenario must."""
         return not self.differences
 
     def describe(self, show: int = 20) -> list[str]:

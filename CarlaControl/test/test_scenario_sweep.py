@@ -2,7 +2,7 @@
 
 The properties asserted are the ones a corpus built from a sweep depends on: member ids that are
 deterministic from the axis values; an illumination rule the compiler enforces rather than trusts
-(check 43); `epoch.date` moving the sun while leaving the traffic **byte-identical** (07 §7.2.1); and a
+(check 43); `epoch.date` moving the sun while leaving the traffic **byte-identical**; and a
 counterfactual pair that shares its base's epoch, windows and light unless displaced in time, stated
 as identical inputs rather than identical trajectories.
 """

@@ -1,9 +1,9 @@
 """The geographic point, the street narrowed by a point, the gateway and the junction movement.
 
-`07_Scenario_Authoring.md` §4.2: on a map with few street names -- Bahonar names 4.5 % of its edges --
-an author places behaviour by a surveyed point, a road leaving the world or a turn, so those forms
-resolve here, against the fixture world, and each refuses rather than guesses (D7.4): a point too far
-from any road, a point equidistant from two, a gateway with nothing there, a turn made two ways.
+On a map with few street names -- Bahonar names 4.5 % of its edges -- an author places behaviour by
+a surveyed point, a road leaving the world or a turn, so those forms resolve here, against the
+fixture world, and each refuses rather than guesses: a point too far from any road, a point
+equidistant from two, a gateway with nothing there, a turn made two ways.
 
 The fixture network: West Street (900, eastbound; -900) meets East Street (901#0, 901#1; -901#0,
 -901#1) at x = 0, and Cross Street (902#0 southbound into the signal at x = 100.64, 902#1 out of it;

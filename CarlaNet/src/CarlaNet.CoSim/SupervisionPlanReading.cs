@@ -11,10 +11,9 @@ namespace CarlaNet.CoSim;
 /// </summary>
 /// <remarks>
 /// <para>A key the compiler always writes must be there, null where it writes null: the compiler
-/// writes every key of a row, and a consumer must tell an absent declaration from a zero one
-/// (<c>06_Truth_And_Annotation.md</c> D6.4), so a key that has gone missing is a plan of another
-/// shape, not an empty field. Only the vocabulary's optional declarations, which an author may leave
-/// out, are read as optional.</para>
+/// writes every key of a row, and a consumer must tell an absent declaration from a zero one, so a
+/// key that has gone missing is a plan of another shape, not an empty field. Only the vocabulary's
+/// optional declarations, which an author may leave out, are read as optional.</para>
 ///
 /// <para>A row read from a plan with problems is half-built and never leaves the reader: the plan is
 /// refused instead.</para>
@@ -146,7 +145,7 @@ internal sealed class SupervisionPlanReading
 
     /// <summary>
     /// A row's <c>parameters</c>: each key with the value the author gave it, carried as the plan
-    /// writes it. The compiler checked each against its label's declaration (07 check 56).
+    /// writes it. The compiler checked each against its label's declaration (its check 56).
     /// </summary>
     public ImmutableSortedDictionary<string, JsonElement> Values(JsonElement row, string key, string where)
     {

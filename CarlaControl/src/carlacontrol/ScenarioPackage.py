@@ -2,12 +2,12 @@
 
 `ScenarioCompiler` writes a scenario package beside one another -- the route file, the SUMO
 configuration, the world's network, the supervision plan, the resolution report and
-`<scenario_id>.lock.json` -- and the lock digests every file it names (`07_Scenario_Authoring.md`
-§5, D7.6). A capture run binds that package: it reads the lock, and refuses a package whose files are
-not the ones the lock digests, because a route file edited after the compile would run traffic the
-resolution report never described (`12_Operator_Control_Surface.md` §6.1, check 49).
+`<scenario_id>.lock.json` -- and the lock digests every file it names. A capture run binds that
+package: it reads the lock, and refuses a package whose files are not the ones the lock digests,
+because a route file edited after the compile would run traffic the resolution report never described
+(check 49).
 
-What the run reads from the lock is layer 4 of its configuration (12 §3.5): the epoch, the declared
+What the run reads from the lock is layer 4 of its configuration: the epoch, the declared
 capture windows, the SUMO step and seed, the scenario's end, the illumination default and the
 catalogue it was compiled against; and the world binding it checks the world package against.
 """

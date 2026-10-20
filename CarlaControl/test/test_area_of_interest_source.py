@@ -1,10 +1,10 @@
 """Areas of interest are refused whole, with every broken rule named, before a world is built.
 
-`AreaOfInterestSource` is the world build's gate on an author's GeoJSON (`04_Contracts.md` C5 §7.1,
-§7.5). A gate that has never rejected anything is not a gate, so most of this file is refusals: each
-test hands it a file that breaks one rule and asserts both that it is refused and that the refusal
-names the rule, because a refusal that does not say what is wrong leaves the author no better off than
-a crash. The transposition test also asserts the exact wording C5 V5.4 requires.
+`AreaOfInterestSource` is the world build's gate on an author's GeoJSON. A gate that has never
+rejected anything is not a gate, so most of this file is refusals: each test hands it a file that
+breaks one rule and asserts both that it is refused and that the refusal names the rule, because a
+refusal that does not say what is wrong leaves the author no better off than a crash. The
+transposition test also asserts the exact wording of the V5.4 refusal.
 
 The extent used is the Arapahoe extract's own `<bounds>`, so "inside the world" means inside a real
 world's extract, not a rectangle invented for the test.
@@ -202,7 +202,7 @@ def test_an_area_outside_the_world_is_refused_with_both_extents():
 
 
 def test_a_transposed_file_is_diagnosed_by_name():
-    """C5 V5.4: the single most likely authoring mistake gets the exact message the contract sets."""
+    """V5.4: the single most likely authoring mistake gets a message that names it."""
     transposed = [[lat, lon] for lon, lat in BLOCK]
     problems = refusal(document(feature(geometry={"type": "Polygon", "coordinates": [transposed]})))
     assert any(p.startswith("V5.4") and "positions appear to be [latitude, longitude]; GeoJSON "

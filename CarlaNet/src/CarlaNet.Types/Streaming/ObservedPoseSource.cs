@@ -1,6 +1,6 @@
 namespace CarlaNet.Types.Streaming;
 
-/// <summary>Where the pose a lent body was drawn at on a frame came from (the owner's words of 2026-10-06).</summary>
+/// <summary>Where the pose a lent body was drawn at on a frame came from.</summary>
 public enum PoseSource : byte
 {
     /// <summary>The frame falls on a SUMO step: the position is SUMO's own.</summary>
@@ -33,7 +33,7 @@ public enum PoseSource : byte
 /// and on every other frame between two steps. The session declares the step to the server once
 /// (<c>update_pose_source</c>) and the server carries it on every snapshot, so any reader computes from
 /// the frame number which of the two a frame shows: nothing is sent per tick, and every client of the
-/// world reads the same answer for the same frame (the owner's ruling of 2026-10-06).</para>
+/// world reads the same answer for the same frame.</para>
 ///
 /// <para><b>Named where it follows neither.</b> A body the session showed at SUMO's later position for
 /// every frame of a step too far from the last to drive in one step (<see cref="PoseSource.Jump"/>), or

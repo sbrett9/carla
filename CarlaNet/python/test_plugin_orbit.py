@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """The server flies an orbiting camera from parameters sent once; the client sends no pose per frame.
 
-Issue #37, promoted into the capture plan on 2026-10-05 (13_Work_Breakdown.md stage K). The orbit used
-to be a client thread pushing a pose about fifty times a second on the wall clock; measured, the
+Issue #37. The orbit used to be a client thread pushing a pose about fifty times a second on the wall clock; measured, the
 server's tick rate on a loaded world fell from 41.6 to 20.7 per second with it running, and under a
 synchronous drive the camera turned as far per captured frame as the pace was high. The plugin's
 UOrbitMoverComponent flies it now (set_orbit), advancing the angle by each tick's delta on the

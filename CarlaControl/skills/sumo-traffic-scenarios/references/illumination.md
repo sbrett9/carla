@@ -4,9 +4,6 @@ The sun is derived context. A scenario declares what its time means and a defaul
 behaves; the operator chooses the window and may override the policy; the pipeline records the sun it
 got. Light is never a label.
 
-Design record: `Docs/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §3.5.2,
-§5.6 and §8.2.2; the bands and the night verdict are `11_Time_And_Illumination.md` §4.4 and D11.7.
-
 ## The illumination default
 
 Optional.\
@@ -37,8 +34,8 @@ warns when the window's civil date and the date its sun is written with differ (
 
 ## The bands
 
-One definition, `11_Time_And_Illumination.md` §4.4, by the refraction-corrected sun elevation a
-declaration is made against; the statistic below buckets by it and the vocabulary spells it:
+One definition, by the refraction-corrected sun elevation a declaration is made against; the
+statistic below buckets by it and the vocabulary spells it:
 
 | Band | Sun elevation |
 |---|---|
@@ -53,7 +50,7 @@ Each band holds its upper edge. They are terms the pipeline derives, never an au
 
 ## Night
 
-**Below −6° the scene holds no light source at all** (doc 11, D11.7), and under SUMO drive nothing
+**Below −6° the scene holds no light source at all**, and under SUMO drive nothing
 switches a headlight on. The compiler states each window's lowest sun elevation and its band in the
 resolution report (`capture_windows[].sun_lowest`, check 42) and concludes nothing — neither a warning
 nor a refusal — so an author who captures a night window does it knowing the number, and a night window

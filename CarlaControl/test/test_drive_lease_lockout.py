@@ -2,7 +2,7 @@
 
 A SUMO drive session takes the lease on the server before SUMO starts; while it holds it the server
 refuses every other client's `set_autopilot(True)`, vehicle control and physics control for every
-actor, naming the holder (03 §10.2, D3.13). These establish what the Python side makes of that:
+actor, naming the holder. These establish what the Python side makes of that:
 `carlacontrol.DriveLease` recognises the server's refusal and names its holder, by the same mark the
 .NET traffic manager uses; `TrafficController` refuses to switch traffic on while the lease is held
 and switches it off when a spawn's autopilot is refused; and the shim reads the holder off the

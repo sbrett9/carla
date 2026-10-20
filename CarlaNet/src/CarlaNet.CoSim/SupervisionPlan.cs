@@ -14,16 +14,16 @@ namespace CarlaNet.CoSim;
 /// files it was compiled against.
 /// </summary>
 /// <remarks>
-/// <para><b>The row set is fixed before the run, and this type graph has no writer for it</b>
-/// (<c>06_Truth_And_Annotation.md</c> D6.8, §3.6). Every type a plan reaches is a sealed record made
-/// only by reading the plan -- its constructors are private, the one that reads its row and the
-/// record's copy -- with no setter and no collection that can be changed: so nothing in a run can make an instance, a participant, a label or an interval,
-/// change one, or add one to the plan. The run binds what it holds -- fills in onsets, closes
+/// <para><b>The row set is fixed before the run, and this type graph has no writer for it.</b> Every
+/// type a plan reaches is a sealed record made only by reading the plan -- its constructors are private,
+/// the one that reads its row and the record's copy -- with no setter and no collection that can be
+/// changed: so nothing in a run can make an instance, a participant, a label or an interval, change
+/// one, or add one to the plan. The run binds what it holds -- fills in onsets, closes
 /// intervals, records observability -- in records of its own, beside these. The plan carries no solar
-/// field and no epoch (D6.21).</para>
+/// field and no epoch.</para>
 ///
 /// <para><b>Core values are read through the core's own enumerations</b>
-/// (<c>CarlaNet.Types.Supervision</c>, D6.30): a supervision state, a subject kind, a cadence and an
+/// (<c>CarlaNet.Types.Supervision</c>): a supervision state, a subject kind, a cadence and an
 /// interval anchor are each the member whose published name the plan spells, and a
 /// spelling that is none of them is refused, naming every value the family has. The vocabulary the
 /// plan carries must publish exactly this core, at <see cref="CoreVocabulary.Version"/>.</para>
@@ -31,15 +31,15 @@ namespace CarlaNet.CoSim;
 /// <para><b>What reading checks.</b> The shape version; every field the compiler writes, of the kind it
 /// writes; the core values; the anchor grammar; that every instance has a participant and every
 /// interval is one of its instance's participants'; that no cohort is nominal and no instance
-/// unlabelled; and that the vocabulary digests as the plan says
-/// (<c>04_Contracts.md</c> C3 V3.15), by the compiler's own canonical form. Every problem is named in
-/// one refusal.</para>
+/// unlabelled; and that the vocabulary digests as the plan says, by the compiler's own canonical form.
+/// Every problem is named in one refusal.</para>
 ///
 /// <para><b>What it does not.</b> Whether the plan was compiled against the files a session runs:
 /// <see cref="ScenarioLockCheck"/> compares its digests with them, and the lock's digest with it.
 /// Whether its references resolve -- a label to a term, a participant to a vehicle of the route file, a
-/// slot to its series -- which the compiler refuses to write a plan without (07 checks 8, 18, 19, 20),
-/// and which the lock's digest of the plan carries to the run.</para>
+/// slot to its series, an area reference to an area of the world's table -- which the compiler refuses
+/// to write a plan without (its checks 8, 18, 19, 20), and which the lock's digest of the plan carries
+/// to the run.</para>
 /// </remarks>
 public sealed record SupervisionPlan
 {

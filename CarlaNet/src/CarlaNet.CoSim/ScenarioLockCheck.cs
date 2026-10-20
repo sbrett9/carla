@@ -48,7 +48,7 @@ namespace CarlaNet.CoSim;
 /// digests are compared with the files the session runs: the route file's, the configuration's and the
 /// additional file's SHA-256, or none where it was compiled against none, the network's canonical
 /// fingerprint, and its vocabulary's digest against the lock's. A plan compiled against another
-/// generation of the files would resolve some of its ids and not others (<c>06</c> §8.1), and nothing
+/// generation of the files would resolve some of its ids and not others, and nothing
 /// in a run would show it. The plan is then <see cref="Plan"/>, for the session to bind.</para>
 ///
 /// <para><b>No lock is not a refusal.</b> A scenario a generator wrote directly as SUMO files has no
@@ -59,7 +59,7 @@ namespace CarlaNet.CoSim;
 /// <para><b>A lock that names no plan is not a refusal either.</b> Every lock the compiler writes names
 /// one, since every compile writes a plan; a lock without one binds no supervision, and the run binds
 /// none and says so. A lock that names a plan which is not there is refused: supervision travels in
-/// the plan alone (06 D6.1), and a run without it would bind none of the rows its author declared.</para>
+/// the plan alone, and a run without it would bind none of the rows its author declared.</para>
 ///
 /// <para><b>A lock whose compile skipped its SUMO-only run is a refusal, unless the run accepts it.</b>
 /// The compiler runs the files it writes in SUMO alone over the scenario's whole span and refuses a

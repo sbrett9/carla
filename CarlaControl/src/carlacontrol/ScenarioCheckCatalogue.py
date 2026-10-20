@@ -1,12 +1,12 @@
 """Every check the scenario compiler knows, by stable id, with what it compares and concludes.
 
-The ids are identifiers, not positions (`07_Scenario_Authoring.md` §5.2): a resolution report cites
+The ids are identifiers, not positions: a resolution report cites
 them and a corpus filtered on "members that warned on check 41" has to mean the same thing a year
 later. So an id is assigned once and never reused, and a check that is removed stays here as retired.
 The list is in pipeline order, which is why ids appear out of numeric order.
 
-This is the source `checks.json` is generated from (`write_checks_json`), and a test compares it with
-the table in the plan, so the plan, the shipped list and the compiler name the same checks.
+This is the source `checks.json` is generated from (`write_checks_json`), and a test compares the
+shipped `checks.json` with it, so the shipped list and the compiler name the same checks.
 """
 from __future__ import annotations
 

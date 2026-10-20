@@ -17,11 +17,10 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>Declarations are made against the corrected elevation</b>, because imagery is what the
 /// corpus is for; the geometric one is recorded beside it under its own name, so nothing that
-/// reproduces the sun from an ephemeris loses it. This was ruled for the capture work pending the
-/// plan owner's confirmation (<c>11_Time_And_Illumination.md</c> open question 7), and reversing it
-/// is this constant and the illumination bands' (<see cref="IlluminationBands.Elevation"/>), whose
-/// edges are declared elevations; a test fails until both move. Every record names the kind it used,
-/// so records written under either ruling stay readable.</para>
+/// reproduces the sun from an ephemeris loses it. Reversing the choice means changing this constant
+/// and the illumination bands' (<see cref="IlluminationBands.Elevation"/>), whose edges are declared
+/// elevations; a test fails until both move. Every record names the kind it used, so records written
+/// under either choice stay readable.</para>
 /// </remarks>
 public static class DeclaredSunElevation
 {

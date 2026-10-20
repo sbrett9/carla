@@ -1,7 +1,6 @@
 // Each capture's truth sidecar carries the supervision in force on its own frame, as the server carried it
 // on that frame's world-observer snapshot -- never from a source in the recording process, so a recorder in
-// any process writes the same thing (the owner's ruling of 2026-10-05). See
-// Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2 and D6.41.
+// any process writes the same thing.
 //
 // A stand-in server streams a real client the snapshots a supervised drive produces -- the render set and
 // the supervision block inside it -- and a camera's images, and the recorder's files and counters are read
@@ -114,7 +113,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
         Assert.Null(events.Attribute("supervision"));
 
         // Nothing for the world apart from the plan on the container: every label follows a vehicle, so
-        // every other supervision element is inside a vehicle's event (06 §3.5).
+        // every other supervision element is inside a vehicle's event.
         Assert.Empty(events.Elements("_supervision"));
         Assert.Equal(3, events.Elements("event").Count());
 
@@ -151,7 +150,7 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     [Fact]
     public async Task A_Still_s_Text_Chunks_Carry_No_Supervision()
     {
-        // The owner's ruling: a still is an observation artifact and carries none, however much supervision
+        // A still is an observation artifact and carries none, however much supervision
         // the frame had in force; it is in the sidecar beside it.
         await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow])));
 
@@ -178,8 +177,8 @@ public sealed class FrameRecorderSupervisionTests : IAsyncLifetime
     public async Task A_Capture_Whose_Frame_The_Client_Does_Not_Hold_Is_Dropped_And_No_Supervision_Is_Guessed()
     {
         // The image is of frame 300 and the client holds only frame 100, whose snapshot carried a plan.
-        // Frame 100's vehicles and supervision are not frame 300's, so the still is not written at all
-        // (the owner's ruling of 2026-10-05), and counted; nothing of frame 100 is written beside it.
+        // Frame 100's vehicles and supervision are not frame 300's, so the still is not written at all,
+        // and counted; nothing of frame 100 is written beside it.
         await Observe(100, Supervised(SupervisionBlock([EscortRow, GuardRow])));
 
         string directory = Path.Combine(_dir, Guid.NewGuid().ToString("N"));

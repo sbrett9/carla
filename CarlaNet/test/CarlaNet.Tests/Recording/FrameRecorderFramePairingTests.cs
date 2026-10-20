@@ -1,5 +1,4 @@
-// A still is written with the truth of its own frame, or not at all (the owner's ruling of 2026-10-05:
-// "close the door"). See Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2.
+// A still is written with the truth of its own frame, or not at all.
 //
 // A camera image arrives some ticks after the world observer's snapshot of its frame, and before this
 // the recorder, finding the frame no longer held, served the nearest frame it did hold and stamped

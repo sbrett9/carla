@@ -224,7 +224,7 @@ public sealed class CarlaClientWorld : ICarlaWorld
     /// </summary>
     /// <remarks>
     /// Every vehicle definition declares <c>role_name</c> as a variation that is not restricted to its
-    /// recommended values (doc 04 D4.9), so the server takes any role. One that declares none is given
+    /// recommended values, so the server takes any role. One that declares none is given
     /// the attribute, rather than spawned with no provenance.
     /// </remarks>
     private static ActorDescription WithRole(ActorDescription description, string roleName)

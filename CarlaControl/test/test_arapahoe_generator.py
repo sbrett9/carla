@@ -1,17 +1,16 @@
 """The Arapahoe underpass dwell in `Import/` is exactly what its generator compiles today.
 
-`make_arapahoe_scenario.py` writes the dwell as a specification and compiles it
-(`07_Scenario_Authoring.md` §3.4.2). The compiled package it writes into `Import/` is what the owner
-runs and watches, so it must be the generator's output and not a hand-edited or stale copy: rerun
-against the same world package, the generator must give the same route file, configuration, lane
-closures and supervision plan byte for byte, and the same lock but for the digest of the
-specification, whose relative paths name another output directory.
+`make_arapahoe_scenario.py` writes the dwell as a specification and compiles it. The compiled package
+it writes into `Import/` is what the owner runs and watches, so it must be the generator's output
+and not a hand-edited or stale copy: rerun against the same world package, the generator must give
+the same route file, configuration, lane closures and supervision plan byte for byte, and the same
+lock but for the digest of the specification, whose relative paths name another output directory.
 
 It also holds what the port promised: every vehicle type in the route file names a measured body,
 and the incident is in the package rather than lost on the way to it.
 
 What it cannot see: whether the scenario still behaves as intended. That is measured in SUMO when the
-scenario changes (07 §3.4.2), not asserted here.
+scenario changes, not asserted here.
 """
 from __future__ import annotations
 

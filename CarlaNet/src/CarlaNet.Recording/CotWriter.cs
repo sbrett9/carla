@@ -27,14 +27,14 @@ namespace CarlaNet.Recording;
 /// vehicle. A record no camera projected -- the live pull's -- carries none of these.</para>
 ///
 /// <para>A vehicle whose box fell in the picture, <c>in_frame</c> of <c>wholly</c> or <c>partly</c>, also
-/// carries its box (<see cref="CaptureBox"/>), as the owner ruled on 2026-10-06: <c>pitch_deg</c> and
+/// carries its box (<see cref="CaptureBox"/>): <c>pitch_deg</c> and
 /// <c>roll_deg</c> beside its heading, <c>box_px</c>, <c>box_oriented_px</c> and <c>truncation</c> beside
 /// its apparent size, <c>camera_range_m</c>, and a <c>&lt;_box3d frame="geodetic"&gt;</c> beside
 /// <c>_carla</c> holding the box's eight corners. A vehicle outside the picture or behind the lens
 /// carries none of them, the range apart where the draw distance reached it.</para>
 ///
-/// <para>A vehicle in the picture also carries, from the world-observer snapshot of the capture's own frame,
-/// as the owner ruled on 2026-10-06: <c>lights</c>, the lights commanded on for it in words
+/// <para>A vehicle in the picture also carries, from the world-observer snapshot of the capture's own frame:
+/// <c>lights</c>, the lights commanded on for it in words
 /// (<see cref="VehicleLights"/>), and, where a SUMO drive lent it a body, <c>pose_source</c> -- <c>sumo</c>,
 /// <c>interpolated</c>, <c>jump</c> or <c>stale</c> (<see cref="PoseSources"/>). Neither is guessed: where the snapshot did not
 /// carry one, every record in the picture goes without it and the container says <c>lights="unknown"</c> or
@@ -303,8 +303,8 @@ public static class CotWriter
             {
                 w.WriteAttributeString("heading_deg", F(r.HeadingDeg, "0.0"));
             }
-            // A vehicle whose box fell in the picture carries its box, and no other vehicle does, as the
-            // owner ruled: the record of a vehicle outside the picture or behind the lens is written as
+            // A vehicle whose box fell in the picture carries its box, and no other vehicle does: the
+            // record of a vehicle outside the picture or behind the lens is written as
             // before, and so is every record no camera projected.
             bool inPicture = r.InFrame is InFrame.Wholly or InFrame.Partly;
             CaptureBox? box = inPicture ? r.Box : null;
@@ -362,7 +362,7 @@ public static class CotWriter
                                        string.Join(' ', box.Oriented.Select(c => $"{F(c.U, "0.00")} {F(c.V, "0.00")}")));
                 w.WriteAttributeString("truncation", F(box.Truncation, "0.000"));
             }
-            // What a vehicle in the picture shows besides its box, as the owner ruled on 2026-10-06, from
+            // What a vehicle in the picture shows besides its box, from
             // the snapshot of the capture's own frame: the lights commanded on for it, in words, and where
             // its drawn pose came from. Each is left out where that snapshot did not carry it, and the
             // container says so; neither is written for a vehicle outside the picture.

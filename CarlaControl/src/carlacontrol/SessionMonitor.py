@@ -1,20 +1,22 @@
 """What a capture run shows while it proceeds.
 
-`12_Operator_Control_Surface.md` §7.1, §7.4.1, D12.14. **Every figure shown is one the run result
-also carries, read from the same source**: the monitor is handed `RunCloseoutReport.snapshot()` and
-formats it, and it holds no reference to the session or a recorder, so it cannot compute a number of
-its own. A monitor that disagreed with the record would be believed over it.
+**Every figure shown is one the run result also carries, read from the same source**: the monitor is
+handed `RunCloseoutReport.snapshot()` and formats it, and it holds no reference to the session or a
+recorder, so it cannot compute a number of its own. A monitor that disagreed with the record would
+be believed over it.
 
 On a terminal it redraws a panel in place; where standard output is not a terminal -- an unattended
 caller's log -- it writes one line every `line_interval_s` through `logging`, so nothing depends on a
-display (§3.10.1 M1). A loud condition is written at once, at `WARNING`, whatever the interval.
+display. A loud condition is written at once, at `WARNING`, whatever the interval.
 
-The panel is the capture operator's (§7.4.1): it shows the declared sun's elevation and the policy
+The panel is the capture operator's: it shows the declared sun's elevation and the policy
 because that is how a wrong sun is made visible, and the session's latest admission pass -- the
 population, every vehicle of which is rendered unless an optional limit was chosen, the vehicles
 admitted and released at it, and under a limit the eligible, the drawn and the shed -- because the
-population is what sets the pace and a limit is what thins it. Until the recorders start it also shows where each channel's view stands in its
-wait for its tiles, and for its picture where `capture.picture_settled_wait` is true (03 §9.5.1), because that wait is what the prewarm is spent on. An exercised operator's picture is a different display and never this one (D12.31).
+population is what sets the pace and a limit is what thins it. Until the recorders start it also
+shows where each channel's view stands in its wait for its tiles, and for its picture where
+`capture.picture_settled_wait` is true, because that wait is what the prewarm is spent on. An
+exercised operator's picture is a different display and never this one.
 """
 from __future__ import annotations
 

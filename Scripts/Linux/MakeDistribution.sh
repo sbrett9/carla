@@ -233,9 +233,9 @@ fi
 
 # 3c. The user documentation: the guides and the reference pages, from Docs/ into docs/
 #     with their folder structure kept, so the relative links between them still resolve. Only these
-#     folders are written for users. Docs/Plans/ is internal, and the rest of Docs/ is CARLA's own
-#     documentation; both stay out. The pages are tracked in this repository, so a missing folder is a broken checkout
-#     and stops the assembly.
+#     folders are written for users. The rest of Docs/ is CARLA's own documentation and stays out.
+#     The pages are tracked in this repository, so a missing folder is a broken checkout and stops
+#     the assembly.
 user_doc_folders="Guides EPOL Tracking Schemas Skills"
 copy_user_docs() {
     local folder
@@ -332,8 +332,7 @@ sumo_dest="$dist/tools/sumo"
 sumo_bin_dest="$sumo_dest/bin"
 sumo_executables="netconvert sumo duarouter"
 # sumo-gui is staged beside these by CarlaSetup and deliberately not bundled: whether a distribution
-# carries it is an open decision that turns on FOX's LGPL (09_Toolchain_And_Packaging.md section 5.4).
-# Add it here only once that is decided.
+# carries it is an open decision that turns on FOX's LGPL. Add it here only once that is decided.
 sumo_version="unknown"
 
 # Bundle every library the given binary resolves, except the ones tied to the target's own

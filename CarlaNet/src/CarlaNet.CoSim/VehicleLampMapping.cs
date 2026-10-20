@@ -13,13 +13,13 @@ namespace CarlaNet.CoSim;
 /// vehicle (SUMO's 8) into one showing CARLA's brake light only by coincidence. Every bit here is
 /// translated by name.</para>
 ///
-/// <para><b>The table is the time-and-illumination plan's</b> (D11.8): a pure, total function of the
-/// signal word and nothing else. SUMO writes only the blinkers, the brake light and, for a vehicle of
-/// <c>vClass="emergency"</c>, the blue beacon (<c>MSVehicle.h:1108-1139</c>, measured over the sizing
-/// scenario); the other bits it declares are mapped where CARLA has a lamp for them, for completeness,
-/// and never occur. SUMO has no headlight model, so <c>Position</c> and <c>LowBeam</c> never come from
-/// here; <see cref="HeadlightRule"/> supplies them from the sun. <c>HighBeam</c>, <c>Fog</c> and
-/// <c>Interior</c> are never set: asserting them would be a driver decision the scenario never made.</para>
+/// <para><b>A pure, total function of the signal word and nothing else.</b> SUMO writes only the
+/// blinkers, the brake light and, for a vehicle of <c>vClass="emergency"</c>, the blue beacon
+/// (<c>MSVehicle.h:1108-1139</c>, measured over the sizing scenario); the other bits it declares are
+/// mapped where CARLA has a lamp for them, for completeness, and never occur. SUMO has no headlight
+/// model, so <c>Position</c> and <c>LowBeam</c> never come from here; <see cref="HeadlightRule"/>
+/// supplies them from the sun. <c>HighBeam</c>, <c>Fog</c> and <c>Interior</c> are never set: asserting
+/// them would be a driver decision the scenario never made.</para>
 ///
 /// <para><b>Steady, not blinking.</b> Both words are steady intent: a blinker asserted is "the
 /// indicator was on", and whether a blueprint animates it is the content's.</para>
@@ -27,7 +27,7 @@ namespace CarlaNet.CoSim;
 public static class VehicleLampMapping
 {
     // SUMO's declared signal bits that the microsimulation never writes, by SUMO's own names
-    // (MSVehicle::Signalling). Mapped because the plan's table maps them.
+    // (MSVehicle::Signalling). Mapped where CARLA has a lamp for them, for completeness.
     private const int BlinkerEmergency = 4;
     private const int BackDrive = 128;
     private const int EmergencyRed = 4096;

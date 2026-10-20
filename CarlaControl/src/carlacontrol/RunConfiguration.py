@@ -1,6 +1,6 @@
 """A capture run's configuration document, and the schema every layer of it is checked against.
 
-`12_Operator_Control_Surface.md` §3.4-§3.7: a run is described by layers -- tool defaults, the site
+A run is described by layers -- tool defaults, the site
 profile, the world package's bindings, the scenario package's declarations, a run configuration and
 operator overrides -- resolved into one effective configuration. This class is the run configuration
 as a document (layer 5), unresolved, and the one definition of every field any layer can supply: its
@@ -76,7 +76,7 @@ class _NoDefault:
 
 NO_DEFAULT = _NoDefault()
 
-# Mutability classes, 12 §5.1.
+# Mutability classes.
 BOUND = "bound"
 SESSION_FIXED = "session_fixed"
 RUN_MUTABLE = "run_mutable"
@@ -535,8 +535,8 @@ _CHANNEL_HELP = {
 # a stock sensor role name, the server's own form, another camera's default -- is check 11's.
 _CHANNEL_PATTERNS = {"sensor_id": CameraName.PATTERN}
 
-# Channel fields this schema adds to ChannelDescription's, until the description carries them
-# (12 §9.2). Each is defined here and nowhere else.
+# Channel fields this schema adds to ChannelDescription's, until the description carries them.
+# Each is defined here and nowhere else.
 _CHANNEL_CAPTURE_FIELDS = (
     RunField("post_process_profile", {"type": "string", "enum": list(POST_PROCESS_PROFILES)},
              "Default", SESSION_FIXED, help=_CHANNEL_HELP["post_process_profile"]),

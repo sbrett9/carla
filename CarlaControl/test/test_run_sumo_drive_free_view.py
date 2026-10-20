@@ -1,9 +1,8 @@
 """The drive's free view records as the fixed camera does, and adds nothing to the drive's tick loop.
 
 `carla-drive --view free` (`carlacontrol.commands.drive`, run from a checkout as
-`CarlaNet/python/run_sumo_drive.py`) flies a camera inside the process that drives the
-world (`12_Operator_Control_Surface.md` section 9.6). What is checked here, with the server and the
-session stood in for:
+`CarlaNet/python/run_sumo_drive.py`) flies a camera inside the process that drives the world. What
+is checked here, with the server and the session stood in for:
 
 * each span is recorded as the fixed camera's recording is -- the session's render set and
   illumination -- with the rig's depth camera for occlusion, this drive's run id, into the span's

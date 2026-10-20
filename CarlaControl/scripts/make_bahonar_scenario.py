@@ -292,13 +292,13 @@ VEHICLE_MIXES = [
     ("mil_mix", {"mil_jeep": 0.6, "mil_truck": 0.4}, "Naval and base traffic inside the wire."),
 ]
 
-# What commits each anomaly's interval (06_Truth_And_Annotation.md §3.3): a transit opens when SUMO
+# What commits each anomaly's interval: a transit opens when SUMO
 # inserts the vehicle; a standoff or a dwell is the vehicle's one stop, from arriving to leaving, so
 # a probe's standoff declares its five minutes and no instant, wherever the queue lets it arrive.
 FROM_DEPARTURE = {"start": "depart"}
 AT_THE_STOP = {"start": "stop:0", "end": "stop_end:0"}
 
-# The scenario's own vocabulary (06_Truth_And_Annotation.md §9.4): its terms, roles and area kinds.
+# The scenario's own vocabulary: its terms, roles and area kinds.
 VOCABULARY = {"namespaces": [{
     "namespace": "bahonar",
     "version": 2,
@@ -551,7 +551,7 @@ class BahonarPatternOfLifeSpecification:
         shift, off the running lane, so at any hour a guard stands at every post and the shift
         change is a wave of arrivals and departures across the fence. The no-show is one occasion
         the rota skips: that tower stands unmanned for a shift while the other fifteen are
-        relieved as usual. The skip writes no trip and no supervision row (06 §3.5); the guard who
+        relieved as usual. The skip writes no trip and no supervision row; the guard who
         should have taken the posting is a planted vehicle (`anomalies`), and the label is that
         vehicle's."""
         rota = {

@@ -11,7 +11,7 @@ or named explicitly -- exactly as the world's areas of interest are.
 
 **The permissions are the world's.** The type map reaches netconvert in the one invocation that writes
 the world's network and its OpenDRIVE, so the network the world package carries -- the network every
-scenario compiled against the world runs, byte for byte (`07_Scenario_Authoring.md` D7.9, D7.32) --
+scenario compiled against the world runs, byte for byte --
 already admits what the map says. Nothing edits a network after netconvert has written it.
 
 **SUMO's own map is named first.** `--type-files` replaces netconvert's built-in map rather than adding

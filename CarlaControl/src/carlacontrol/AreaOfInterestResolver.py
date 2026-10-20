@@ -2,7 +2,7 @@
 
 A declared area is geographic. Two consumers need it in other frames and neither may re-derive a
 projection: the truth producer and the engine think in CARLA-local metres, and a SUMO scenario sites
-behaviour on lanes, not on metres (`04_Contracts.md` C5 §7.2-§7.3). This produces the resolved table,
+behaviour on lanes, not on metres. This produces the resolved table,
 `areas.resolved.json`, that the world package carries beside the source GeoJSON.
 
 **Frames.** Every vertex is converted into the network's metres by SUMO's own projection, applied by
@@ -10,7 +10,7 @@ a SUMO process holding the world's own network (`SumoNetworkQuery`) -- the trans
 lane. CARLA-local metres are then the co-simulation bridge's identity, `carla(x, y) = sumo(x, -y)`,
 so an area, a lane and a rendered road are in one frame by construction. Each vertex is also placed
 independently by `GeodeticFrame`, the WGS84 transform the telemetry, the drape and the Cesium imagery
-share, and the two must agree within `GEODESY_AGREEMENT_LIMIT_M` (C5 V5.12) or the table is refused:
+share, and the two must agree within `GEODESY_AGREEMENT_LIMIT_M` (V5.12) or the table is refused:
 they measured within 0.4 mm on every shipped world, so a disagreement means the network is not in the
 geographic frame the world claims -- a road-offset build, or a package whose manifest and network
 came from different builds -- and an area's position would then depend on which frame was meant.
@@ -24,14 +24,14 @@ shape length, which is how SUMO maps a position onto a shape -- so they can be w
 Bahonar, so an unscaled arc length would put a stop metres from where the area is. A lane is `inside`
 when its whole length is contained, `crossing` when part is, `near` when none is but it passes within
 `near_m`. An edge is `inside` when all its lanes are, `crossing` when any is inside or crossing, `near`
-otherwise (C5 §7.3 rule 5). Permitted classes are SUMO's own expansion of the lane's attributes.
+otherwise. Permitted classes are SUMO's own expansion of the lane's attributes.
 
-**Warnings** (C5 V5.5-V5.7): an area crossing the edge of the staging rectangle; an area lying wholly
+**Warnings** (V5.5-V5.7): an area crossing the edge of the staging rectangle; an area lying wholly
 in the staging ring, where traffic enters and leaves; an area no four-wheeled road vehicle can reach.
 
 What it cannot see. The permissions reported are the world network's. A scenario that rewrites them
 -- the private-road fence does (`SumoScenarioBuilder.restrict_private_roads`) -- must check its own
-classes against its own network (V5.9, at scenario build). Whether an area is where the author meant
+classes against its own network. Whether an area is where the author meant
 is invisible here: an area validated and placed exactly as written can still be drawn around the
 wrong building.
 """
@@ -56,16 +56,15 @@ if TYPE_CHECKING:
 
 RESOLVED_VERSION = 1
 
-# A lane passing within this distance of an area is `near` it. The same distance as `aoi_halo_m`
-# (`10_Scale_And_Performance.md`), so a vehicle on a lane the table calls near is, at the lane's
-# closest point, one the truth producer counts as an `aoi_member`.
+# A lane passing within this distance of an area is `near` it.
 DEFAULT_NEAR_M = 50.0
 
-# C5 V5.12. Two orders of magnitude above the worst disagreement measured on the shipped worlds.
+# V5.12's limit: two orders of magnitude above the worst disagreement measured on the shipped
+# worlds.
 GEODESY_AGREEMENT_LIMIT_M = 0.05
 
-# SUMO classes a four-wheeled road vehicle can carry. Pedestrians are outside this project (brief
-# decision 5) and so are two-wheelers (D4.40: bicycle, motorcycle, moped); the rest of SUMO's classes
+# SUMO classes a four-wheeled road vehicle can carry. Pedestrians are outside this project and so
+# are two-wheelers (bicycle, motorcycle, moped); the rest of SUMO's classes
 # -- rail, tram, ship, aircraft, cable car, subway, container, wheelchair, scooter, drone -- are not
 # road vehicles. Used only to decide whether an area is reachable (V5.7), which is a warning.
 FOUR_WHEELED_ROAD_CLASSES = frozenset({
@@ -356,7 +355,8 @@ class AreaOfInterestResolver:
         return entry
 
     def _edges(self, lanes: list[dict]) -> list[dict]:
-        """C5 §7.3 rule 5. A lane of the edge that is not listed at all counts as disagreeing."""
+        """Each edge's containment, derived from its lanes'. A lane of the edge that is not listed
+        at all counts as disagreeing."""
         by_edge: dict[str, list[str]] = {}
         for lane in lanes:
             by_edge.setdefault(lane["edge_id"], []).append(lane["containment"])

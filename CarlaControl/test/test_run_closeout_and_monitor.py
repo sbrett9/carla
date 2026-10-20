@@ -1,11 +1,11 @@
 """The gate records are observations read from the run, and the monitor shows only what they read.
 
-Plan 12 §7.1-§7.2, D12.14, D12.16. A gate record names what was observed, the threshold and whether it
-was met, and nothing sums them; a gate whose input nothing publishes is `skipped` with its reason, so
-*not measured* never reads as *passed*. The monitor is handed a snapshot and formats it: a snapshot
-whose figures could not all have come from one computation -- an achieved factor that disagrees with
-simulated over wall time -- must be shown exactly as given, which is only true of a monitor that
-computes nothing. Off a terminal it writes log lines and no escape codes.
+A gate record names what was observed, the threshold and whether it was met, and nothing sums them;
+a gate whose input nothing publishes is `skipped` with its reason, so *not measured* never reads as
+*passed*. The monitor is handed a snapshot and formats it: a snapshot whose figures could not all
+have come from one computation -- an achieved factor that disagrees with simulated over wall time --
+must be shown exactly as given, which is only true of a monitor that computes nothing. Off a
+terminal it writes log lines and no escape codes.
 """
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ def test_a_dropped_capture_is_a_gate_not_met_and_a_loud_condition(layout):
 
 
 def test_a_still_dropped_for_want_of_its_own_frame_s_truth_is_a_gate_not_met(layout):
-    # Doc 06 §8.2: a still is written with the truth of its own frame or not at all, and one the client
+    # A still is written with the truth of its own frame or not at all, and one the client
     # held no truth of its frame for is dropped and counted; the gate is that there are none.
     report, session, recorder = closeout(layout)
     session.Advance()
@@ -218,7 +218,7 @@ def test_a_capture_listed_without_its_frame_s_render_set_is_a_gate_not_met(layou
 
 
 def test_a_capture_written_with_its_supervision_unknown_is_a_gate_not_met(layout):
-    # Doc 06 §8.2: a capture of a frame a plan was in force on, whose own frame's supervision was not to
+    # A capture of a frame a plan was in force on, whose own frame's supervision was not to
     # be had, is written with supervision="unknown" and none in its place; the gate is that there are none.
     report, session, recorder = closeout(layout)
     session.Advance()
@@ -252,7 +252,7 @@ def test_a_recorder_built_before_it_counted_supervision_skips_the_gate_rather_th
 
 
 def test_a_capture_written_without_a_solar_block_is_a_gate_not_met(layout):
-    # Doc 11 §8.4: a capture with no recorded sun can be neither stratified by band nor replayed, and
+    # A capture with no recorded sun can be neither stratified by band nor replayed, and
     # the gate is that there are none.
     report, session, recorder = closeout(layout)
     session.Advance()
@@ -269,7 +269,7 @@ def test_a_capture_written_without_a_solar_block_is_a_gate_not_met(layout):
 
 
 def test_a_capture_written_with_its_lights_or_pose_source_unknown_is_a_gate_not_met(layout):
-    # Doc 08 §5.1: a vehicle in the picture carries its lights and, drawn by a SUMO drive, its pose source,
+    # A vehicle in the picture carries its lights and, drawn by a SUMO drive, its pose source,
     # from the snapshot of the capture's own frame, or the capture says they are unknown; the gates are
     # that there are none.
     report, session, recorder = closeout(layout)

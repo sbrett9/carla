@@ -1154,8 +1154,7 @@ public sealed class SumoDriveSessionTests
         using SumoDriveSession session = SumoDriveSession.Start(options);
 
         // Once each, the session's own catalogue's whole tables, and only after the world had described
-        // itself: a body's truth then carries the base type and the kind its catalogue class curates
-        // (doc 06 D6.18).
+        // itself: a body's truth then carries the base type and the kind its catalogue class curates.
         (IReadOnlyDictionary<string, string> kinds, int afterDescriptions) =
             Assert.Single(carla.SpecialTypeAdoptions);
         Assert.Equal(1, afterDescriptions);

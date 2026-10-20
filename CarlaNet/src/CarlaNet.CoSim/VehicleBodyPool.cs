@@ -32,7 +32,7 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>Every body is spawned under the role <see cref="RoleName"/>.</b> <c>role_name</c> is
 /// provenance, naming the authority that drives an actor: <c>autopilot</c> for traffic-manager
-/// traffic, <c>scenario</c> for storyboard entities, <c>sumo</c> for SUMO-driven ones (doc 04 D4.9).
+/// traffic, <c>scenario</c> for storyboard entities, <c>sumo</c> for SUMO-driven ones.
 /// Left to the blueprint's default, every body read <c>autopilot</c>, and the truth record named the
 /// traffic manager as the driver of every SUMO vehicle. An attribute is fixed for the actor's life,
 /// and SUMO drives a body for all of its, so the role holds whichever vehicle the body carries.</para>

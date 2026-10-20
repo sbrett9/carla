@@ -6,8 +6,8 @@ namespace CarlaNet.Recording;
 /// Where a vehicle's drawn pose came from, as a truth record's <c>pose_source</c> writes it.
 /// </summary>
 /// <remarks>
-/// A SUMO drive poses its bodies every world tick from SUMO steps a whole number of ticks apart, and the
-/// owner ruled the four words on 2026-10-06: <c>sumo</c> where the frame falls on a SUMO step and the
+/// A SUMO drive poses its bodies every world tick from SUMO steps a whole number of ticks apart, and
+/// four words say where a pose came from: <c>sumo</c> where the frame falls on a SUMO step and the
 /// position is SUMO's own; <c>interpolated</c> on a frame between SUMO steps, the position filled in along
 /// the lane; <c>jump</c> where SUMO reported a step too far from the last to drive in one step, the body
 /// shown at SUMO's later position for the frames of that step; and <c>stale</c> where the body could not be

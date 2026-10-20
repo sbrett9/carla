@@ -12,7 +12,7 @@ namespace CarlaNet.Recording;
 /// local->geodetic transform, and the height-align/drape state cached on <see cref="CarlaClient"/>.
 /// `hae` is the BARE-EARTH ellipsoidal-WGS84 altitude: the per-vehicle physical altitude with the
 /// photoreal-seating bias removed (a constant offset in 'area'/'origin' modes, or the per-cell drape
-/// offset in 'drape' mode), matching the documented telemetry contract.
+/// offset in 'drape' mode), as Docs/Schemas/Truth_Sidecar.md documents it.
 ///
 /// During a SUMO drive the world's vehicle actors are a pool of bodies, each lent to a SUMO vehicle
 /// while it is drawn and parked out of sight between loans. The session names each body to the
@@ -26,7 +26,7 @@ namespace CarlaNet.Recording;
 /// <see cref="CarlaClient.CatalogueSpecialTypes"/>), which a SUMO drive session does when it starts:
 /// the class's base type, and its kind, an empty one where the class curates none, whatever the
 /// blueprint declares. A blueprint no adopted catalogue curates keeps what it declares itself, with
-/// the base type taken from its wheel count where it declares none (doc 06 D6.18).
+/// the base type taken from its wheel count where it declares none.
 /// </summary>
 public sealed class VehicleTelemetryService
 {

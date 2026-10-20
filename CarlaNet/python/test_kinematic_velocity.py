@@ -6,7 +6,7 @@ physics and gravity off. With the root not simulating, a vehicle's velocity reso
 vehicle movement component's `Velocity`, which nothing on that path writes, so every such vehicle
 read zero to everything that reads velocity: the world observer, the recorder, radar and the truth
 telemetry. `set_target_velocity` on a vehicle whose physics is disabled now writes the fields the
-getters read (plan doc 03 section 5, D3.5).
+getters read.
 
 Velocity is read through `get_velocity`, which serves the world observer's snapshot -- the same
 stream the truth telemetry reads.

@@ -158,7 +158,7 @@ void ACesiumSensorViewPublisher::PublishViews(UWorld* World)
 
 	// The player camera is a Cesium view only where someone can see its render. A headless server
 	// draws it to an off-screen viewport. A view left at the world's origin selects tiles out to the
-	// horizon, which every readiness figure then waits on (doc 03 §9.5.1 records the measurement).
+	// horizon, which every readiness figure then waits on.
 	if (!bPlayerCameraDecided)
 	{
 		bPlayerCameraDecided = true;

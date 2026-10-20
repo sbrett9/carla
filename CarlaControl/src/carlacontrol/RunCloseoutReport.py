@@ -1,9 +1,9 @@
 """The facts a capture run has established so far, and the gate records read from them.
 
-`12_Operator_Control_Surface.md` §7.2, D12.16. Computed at any instant from the objects that hold the
-facts -- the co-simulation session (`SumoDriveSession`: its clock, its pacing, the sun's audit, the
-newest frame's illumination declaration, its latest admission pass, and the compile lock and
-teleporting checks it made before SUMO started), the window's admission passes (`WindowAdmissions`),
+Computed at any instant from the objects that hold the facts -- the co-simulation session
+(`SumoDriveSession`: its clock, its pacing, the sun's audit, the newest frame's illumination
+declaration, its latest admission pass, and the compile lock and teleporting checks it made before
+SUMO started), the window's admission passes (`WindowAdmissions`),
 the wait for each channel's view before the window opened (`ViewReadinessGate`) and each channel's
 recorder (`FrameRecorder`: captures written, captures dropped, stills dropped for want of their own
 frame's truth, illumination
@@ -11,7 +11,7 @@ pairing, captures written without a solar block, render-set pairing, supervision
 pairing, where each capture's pose came from, the vehicles it marked beyond the draw distance, and the
 captures whose vehicles in the picture went without their lights or pose source) -- never at
 the end only, so a run stopped at minute nine has everything it knew at minute nine. `snapshot()` is
-the one computation: the live monitor renders it (D12.14), the loud conditions are read from it, and
+the one computation: the live monitor renders it, the loud conditions are read from it, and
 the run result carries the last one taken. Nothing here measures anything of its own.
 
 **Gate records are observations, never a verdict.** Each names what it observed, the threshold it
@@ -21,27 +21,27 @@ tree does not publish is recorded as `skipped` with the reason, so *not measured
 
 | gate | observed | status in the tree |
 |---|---|---|
-| `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 (10 D10.7) | measured |
-| `capture.frame_unpaired` | stills dropped because the client held no truth of their own frame when the image arrived -- a still is written with its own frame's truth or not at all -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
+| `capture.recorder_dropped` | `FrameRecorder.Dropped` per channel, threshold 0 | measured |
+| `capture.frame_unpaired` | stills dropped because the client held no truth of their own frame when the image arrived -- a still is written with its own frame's truth or not at all -- threshold 0 | measured; skipped from a recorder built before it counted them |
 | `capture.illumination_unpaired` | captures dropped because the session did not declare their frame -- the declaration carries the still's instant, so no still is written without it -- threshold 0 | measured |
-| `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 (11 §8.4) | measured |
+| `capture.solar_block_missing` | captures written without a solar block -- no `_solar`, no `carla:solar`, so no recorded sun and no illumination band -- threshold 0 | measured |
 | `capture.render_set_unpaired` | captures written with no vehicle list because their frame's render set was no longer held, threshold 0 | measured |
-| `capture.supervision_unpaired` | captures written with `supervision="unknown"` -- a plan was in force and the supervision of the capture's own frame was not to be had -- threshold 0 (06 §8.2) | measured; skipped from a recorder built before it counted them |
-| `capture.lights_unknown` | captures written with `lights="unknown"` -- a vehicle in the picture went without its lights because the snapshot of the capture's own frame did not carry them, as from a server built before it did -- threshold 0 (08 §5.1) | measured; skipped from a recorder built before it counted them |
-| `capture.pose_source_unknown` | captures written with `pose_source="unknown"` -- a drawn SUMO vehicle in the picture went without its pose source because the snapshot of the capture's own frame did not carry one -- threshold 0 (08 §5.1) | measured; skipped from a recorder built before it counted them |
+| `capture.supervision_unpaired` | captures written with `supervision="unknown"` -- a plan was in force and the supervision of the capture's own frame was not to be had -- threshold 0 | measured; skipped from a recorder built before it counted them |
+| `capture.lights_unknown` | captures written with `lights="unknown"` -- a vehicle in the picture went without its lights because the snapshot of the capture's own frame did not carry them, as from a server built before it did -- threshold 0 | measured; skipped from a recorder built before it counted them |
+| `capture.pose_source_unknown` | captures written with `pose_source="unknown"` -- a drawn SUMO vehicle in the picture went without its pose source because the snapshot of the capture's own frame did not carry one -- threshold 0 | measured; skipped from a recorder built before it counted them |
 | `capture.sensor_pose_header_disagreed` | captures whose image header placed the camera elsewhere than their own frame's snapshot, threshold 0 | measured |
 | `capture.depth_pose_header_disagreed` | the same for the depth captures occlusion is measured against, threshold 0 | measured where the channel has a depth camera |
 | `clock.ratio_recorded` | whether the session's achieved real-time factor exists | measured |
 | `pacing.achieved_factor` | under `wall_clock`, the achieved factor against `min_achieved_factor` | measured |
-| `bridge.position_divergence` | the largest distance between a pose the bridge commanded and the one the world applied to the body on the same tick, metres, over the whole run, against `bridge.position_divergence_limit_m` (06 §4.3) | measured where a vehicle-tick was compared; skipped where none was, stating the vehicle-ticks nothing read back |
+| `bridge.position_divergence` | the largest distance between a pose the bridge commanded and the one the world applied to the body on the same tick, metres, over the whole run, against `bridge.position_divergence_limit_m` | measured where a vehicle-tick was compared; skipped where none was, stating the vehicle-ticks nothing read back |
 | `bridge.velocity_divergence` | the largest difference between a velocity the bridge commanded and the one the world reported for the body, metres per second, against `bridge.velocity_divergence_limit_m_per_s` | the same |
 | `solar.applied_equals_confirmed` | the audit's worst angle between the world's sun and the declared one, against its tolerance | measured where the policy binds the sun |
 | `launch.warnings_adjudicated` | warnings raised with no adjudication, threshold 0 | measured |
 | `capture.captured_minus_written` | -- | skipped: the recorder counts no capture accepted into its queue |
 | `radiometry.profile_digest_present` | -- | skipped: nothing reads back the profile a camera loaded |
-| `supervision.manifest_closing_record` | whether the run manifest's last complete row is its terminal row, `manifest_closed` (04 §12.7, D4.36) | measured where the run writes a manifest |
+| `supervision.manifest_closing_record` | whether the run manifest's last complete row is its terminal row, `manifest_closed` | measured where the run writes a manifest |
 
-**One loud condition interrupts every run** (D12.15): a recorder's `Dropped` becoming non-zero; a live
+**One loud condition interrupts every run**: a recorder's `Dropped` becoming non-zero; a live
 run adds the achieved factor falling below its floor. With no render-set limit -- the default -- a
 participant is always drawn, because every vehicle SUMO has is drawn. Under an optional limit a
 vehicle outside it is not in CARLA or the truth; the snapshot states the limit and counts what it left
@@ -265,7 +265,7 @@ class RunCloseoutReport:
     def _divergence(cls, report: Any) -> dict:
         """How far the world departed from what the bridge commanded, over the run so far: the figures
         the session's report accumulates from its comparison of every pose and velocity written against
-        what the world reported for the body on the same tick (06 §4.3), as the run manifest's closing
+        what the world reported for the body on the same tick, as the run manifest's closing
         row writes them. The worst position and the worst velocity each name the SUMO vehicle, the
         instant on TraCI's clock, the tick and the body they were measured on, or None where nothing
         was compared."""

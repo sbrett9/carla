@@ -1,6 +1,5 @@
-// The annotation vocabulary's closed core of Docs/Plans/SUMO_Behavioral_Capture/
-// 06_Truth_And_Annotation.md §3.7, pinned term by term. This table is the only definition in the tree:
-// the scenario compiler publishes it into every supervision plan through carlanet
+// The annotation vocabulary's closed core, pinned term by term. CoreVocabulary is the only definition in
+// the tree: the scenario compiler publishes it into every supervision plan through carlanet
 // (CarlaControl/test/test_scenario_compiler.py pins the same families there), and the world truth track
 // writes its render state and reasons from it.
 using CarlaNet.Types.Illumination;
@@ -43,7 +42,7 @@ public class CoreVocabularyTests
     [Fact]
     public void The_Absence_Shape_Is_Gone_From_The_Core()
     {
-        // The owner's ruling of 2026-10-05 (06 §3.5): a label follows a vehicle, so the core publishes no
+        // A label follows a vehicle, so the core publishes no
         // place-shaped subject, no realisation, no reserved phase for an empty occasion, no close for an
         // occasion no vehicle came to, and no outcome that rests on a pass mark.
         Assert.DoesNotContain("realisation", CoreVocabulary.Families.Select(family => family.Family));

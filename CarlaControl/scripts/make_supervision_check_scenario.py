@@ -95,8 +95,8 @@ SCENARIO_NAME = f"{MAP_NAME}_SupervisionCheck"
 # beside the shipped scenario.
 LAYOUT = ScenarioGeneratorLayout.of(__file__, MAP_NAME, SCENARIO_NAME)
 
-# 07:26:00 Mountain Daylight Time: the sun crosses +6 degrees, doc 11's edge between `golden` and
-# `day`, between the two capture windows below.
+# 07:26:00 Mountain Daylight Time: the sun crosses +6 degrees, the edge between the `golden` and
+# `day` illumination bands, between the two capture windows below.
 CHECK_EPOCH = {
     **EPOCH,
     "civil_datetime": "2026-09-29T07:26:00-06:00",

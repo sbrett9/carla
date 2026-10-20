@@ -34,11 +34,11 @@ def _iso(dt: datetime) -> str:
 
 
 def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="CARLA-TRUTH") -> str:
-    """Render one get_vehicle_telemetry() dict as a CoT <event> XML string (contract §2).
+    """Render one get_vehicle_telemetry() dict as a CoT <event> XML string.
 
     A record carrying `sumo_id` -- a pooled body a SUMO drive lent -- is the track of that SUMO
     vehicle: uid `<uid_prefix>-SUMO-<sumo_id>` and callsign `<base_type>-<sumo_id>`, as the recorded
-    sidecar names it (contract §3, §5)."""
+    sidecar names it."""
     now = datetime.now(timezone.utc)
     stale = now + timedelta(seconds=stale_seconds)
     sumo_id = rec.get("sumo_id")
@@ -46,7 +46,7 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
     ev = ET.Element("event", {
         "version": "2.0",
         "uid": f"{uid_prefix}-SUMO-{track}" if sumo_id is not None else f"{uid_prefix}-{track}",
-        "type": f"a-{affiliation}-G-E-V",                 # ground equipment vehicle (v0 single symbol)
+        "type": f"a-{affiliation}-G-E-V",                 # ground equipment vehicle; one type for every class
         "how": "m-g" if source == "truth" else "m-f",
         "time": _iso(now), "start": _iso(now), "stale": _iso(stale),
     })
@@ -59,7 +59,7 @@ def to_cot(rec, affiliation="n", stale_seconds=3.0, source="truth", uid_prefix="
     ET.SubElement(detail, "track",
                   {"course": f"{rec['course_deg']:.1f}", "speed": f"{rec['speed_mps']:.2f}"})
     ET.SubElement(detail, "contact", {"callsign": f"{rec['base_type']}-{track}"})
-    # Truth extras (contract §5) — WinTAK ignores unknown detail children; the scoring harness reads them.
+    # Truth extras — WinTAK ignores unknown detail children; the scoring harness reads them.
     extras = {
         "source": source, "actor_id": str(rec["id"]), "type_id": rec["type_id"],
         "base_type": rec["base_type"], "special_type": rec["special_type"],

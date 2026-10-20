@@ -42,7 +42,7 @@ ORBIT_STEP_RADIANS = 0.25
 # once per tick -- otherwise the sweep measures the client's object churn and calls it an actor cost.
 POSE_CYCLE_LENGTH = 25
 # The measured fraction of the vehicles within 300 m of a point on the binding scenario that change
-# their signal mask per 0.05 s step (10_Scale_And_Performance.md section 4.8.1).
+# their signal mask per 0.05 s step.
 LIGHT_TRANSITION_FRACTION = 0.075
 
 

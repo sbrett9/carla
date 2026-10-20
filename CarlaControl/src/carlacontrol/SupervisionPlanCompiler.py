@@ -1,44 +1,44 @@
 """Compile a specification's supervision block into the supervision plan, the sole annotation channel.
 
-`06_Truth_And_Annotation.md` D6.1 makes the companion file `<Scenario>.supervision.json` the only place
-supervision travels: a SUMO route file is generated, validated against SUMO's own schema, and its
-`<param>` is a flat store SUMO's own devices read, so no label, no marked flag and no supervision state
-is ever written into it (the compiler's check 52 re-reads the emitted route file to confirm). This
-class produces the plan's content, in the shape of 06 §8.1, from what the author declared and from
-nothing else: **the set of rows is fixed here, before any run, and the runtime may only bind them**
-(06 §3.6). No geometric or photometric predicate writes supervision, and nothing here computes one.
+The companion file `<Scenario>.supervision.json` is the only place supervision travels: a SUMO route
+file is generated, validated against SUMO's own schema, and its `<param>` is a flat store SUMO's own
+devices read, so no label, no marked flag and no supervision state is ever written into it (the
+compiler's check 52 re-reads the emitted route file to confirm). This class produces the plan's
+content, in the shape `Docs/Schemas/Supervision_Plan.md` describes, from what the author declared
+and from nothing else: **the set of rows is fixed here, before any run, and the runtime may only bind
+them**. No geometric or photometric predicate writes supervision, and nothing here computes one.
 
 What an author declares, and what it compiles to:
 
 | Declared | Compiles to |
 |---|---|
 | `instances[]` -- annotated or nominal, over actors | a pattern instance with participants, roles and intervals |
-| `cohorts[]` -- a flow, annotated whole-life or unlabelled | a cohort row; `nominal` and intervals refuse (D6.2) |
+| `cohorts[]` -- a flow, annotated whole-life or unlabelled | a cohort row; `nominal` and intervals refuse |
 | `series[]` -- a rota read as a recurring series | a series with one slot per occasion a vehicle realises, each slot's vehicle an entity in the declared state |
 
-**Every row is a vehicle's or a flow's** (06 §3.5, the owner's ruling of 2026-10-05). SUMO reports
-vehicles, not places, so a label follows the vehicle it is about and nothing here writes a row for an
-empty place: an occasion a rota skips writes no trip and no slot, and an author who wants a planted
-omission in the record labels the vehicle that deviates. Every actor not named in an instance and every flow not named in a cohort is written explicitly
-as `unlabelled`, because a missing element must not stand for an asserted negative (06 §3.1).
+**Every row is a vehicle's or a flow's.** SUMO reports vehicles, not places, so a label follows the
+vehicle it is about and nothing here writes a row for an empty place: an occasion a rota skips writes
+no trip and no slot, and an author who wants a planted omission in the record labels the vehicle that
+deviates. Every actor not named in an instance and every flow not named in a cohort is written
+explicitly as `unlabelled`, because a missing element must not stand for an asserted negative.
 
 **A row says nothing its terms do not define.** A row's `parameters` are keys its labels' terms
 declare, each of the declared type (check 56), so a magnitude reaches a consumer with its unit and
 meaning. A nominal row carries a copy of its terms' `hard_negative_for`, which an author may restate
-and never vary (check 57): the term is the authority and the row a projection of it (06 §3.9(d)), and
+and never vary (check 57): the term is the authority and the row a projection of it, and
 `null` there means unspecified, not a negative for nothing. A term's `exemplar_instances` and its
 `counterfactual` name subjects of this plan, by the authored names an instance's own counterfactual
 uses, and each must resolve (check 8).
 
-**An interval is declared by a civil begin or by an anchor** (06 §3.3, check 58). An anchor names the
+**An interval is declared by a civil begin or by an anchor** (check 58). An anchor names the
 events of its participant that commit the interval's start and, where given, its end -- `depart`,
 `stop:<i>`, `stop_end:<i>`, `phase:<i>` -- each resolved here against the vehicle's own stops and
 compiled route, and written into the plan with what the runtime needs to recognise it. Its declared
 seconds are only what those events declare, so an interval over a `duration` stop carries a length
-and no declared start (06 D6.4). An unanchored interval has no committing event: it keeps its
+and no declared start. An unanchored interval has no committing event: it keeps its
 declared seconds and closes on its declared end.
 
-The plan carries no solar field and no epoch (06 §8.1): intervals carry their declared seconds and the
+The plan carries no solar field and no epoch: intervals carry their declared seconds and the
 civil instant the epoch names them, which is a statement of *when*, not of what the light was.
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ SUPERVISION_PLAN_VERSION = 1
 
 ANCHOR_CHECK = 58
 
-# The events an interval may be anchored to (06 §3.3): the vehicle's insertion, arriving at and
+# The events an interval may be anchored to: the vehicle's insertion, arriving at and
 # leaving one of its stops, and entering one of its declared phases -- core vocabulary terms, spelled
 # from the core's table. A stop or a phase is named by its index, counted from 0: `stop:0`,
 # `stop_end:0`, `phase:2`. The schema admits no other spelling.
@@ -263,10 +263,10 @@ class SupervisionPlanCompiler:
                            where: str) -> dict | None:
         """Check 58: an interval whose start, and end where given, are events of its participant.
 
-        The anchor says which SUMO event commits each bound (06 §3.3), and the declared seconds are
+        The anchor says which SUMO event commits each bound, and the declared seconds are
         what those events themselves declare: a departure its instant, a stop's end its `until`, and a
         `duration` stop only its length, so an interval over one carries `declared_start_s` null and
-        `declared_duration_s` (06 D6.4). An anchored interval writes no begin, end or duration of
+        `declared_duration_s`. An anchored interval writes no begin, end or duration of
         its own, which would be a second declaration of the same bound.
         """
         participant, phase, anchor = entry["participant"], entry["phase"], entry["anchor"]
@@ -357,7 +357,7 @@ class SupervisionPlanCompiler:
         """A rota read as a recurring series: one slot per occasion a vehicle realises.
 
         An occasion the rota skips has no slot: the skip writes no trip, so there is no vehicle for a
-        label to follow, and a slot of no vehicle would be a labelled place (06 §3.5).
+        label to follow, and a slot of no vehicle would be a labelled place.
         """
         series_id = entry["series_id"]
         where = f"series {series_id}"
@@ -502,7 +502,7 @@ class SupervisionPlanCompiler:
                                      "scenario declares; a counterfactual is a resolved reference")
 
     def _check_exemplars(self, instances: list[dict]) -> None:
-        """Check 8: every exemplar a term names is an instance of this plan (06 §3.8).
+        """Check 8: every exemplar a term names is an instance of this plan.
 
         An exemplar is named as an instance's counterfactual names one, by its authored name, which
         the plan's id prefixes with the scenario id: so it resolves in every member of a sweep,
@@ -527,7 +527,7 @@ class SupervisionPlanCompiler:
                         where: str) -> list[str] | None:
         """Check 57: a nominal subject carries its terms' `hard_negative_for`, and only that.
 
-        The term is the authority and the row a copy of it (06 §3.9(d)), so a nominal row carries the
+        The term is the authority and the row a copy of it, so a nominal row carries the
         union of its labels' declarations, an author who restates the set restates it exactly, and a
         subject that is not nominal declares none: the field narrows an authored negative. `None`
         where nothing narrows it, which means unspecified, not a negative for nothing.

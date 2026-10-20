@@ -3,7 +3,7 @@
 The content build declares a `BaseType` and a `SpecialType` per vehicle in a hand-edited file, and
 nothing checks them against the bodies. When they were first measured, six saloons declared `bus`, a
 van declared nothing, and every special type was empty, so the ambulance, the fire truck and the
-police car were indistinguishable from a hatchback in the truth record (doc 04, C1 Measurement 1).
+police car were indistinguishable from a hatchback in the truth record.
 The catalogue therefore carries its own answer, derived from what the sweep measures, rather than
 repeating the file.
 

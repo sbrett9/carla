@@ -85,8 +85,8 @@ ADVANCE_WINDOWS = (
 )
 ADVANCE_TICKS = 80                  # four seconds of simulated time
 
-# The origins stage C audited, and what the engine returned there at 17:00 on 2026-12-21 at the
-# civil offset: geometric and refraction-corrected elevation, degrees.
+# Each site's origin, and the elevations the engine returned there on 2026-09-21 for 17:00 on
+# 2026-12-21 at the civil offset: geometric and refraction-corrected, degrees.
 SITES = (
     ("Arapahoe", 39.59431, -104.88449,
      '{"epoch_version": 1, "civil_datetime": "2026-12-21T00:00:00-07:00", "utc_offset_hours": -7,'
@@ -100,7 +100,8 @@ SITES = (
      -1.58296, -1.37418),
 )
 
-# Stage C's resolution floor: a reading nearer the engine's measured value than this is agreement.
+# The resolution floor (SolarPositionModel.ResolutionFloorDegrees): a reading nearer the engine's
+# measured value than this is agreement.
 AGREEMENT_DEGREES = 0.01
 
 

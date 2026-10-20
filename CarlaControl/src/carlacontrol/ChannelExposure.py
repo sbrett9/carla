@@ -1,6 +1,6 @@
 """The exposure a channel's camera is given, as a run states it and as the camera takes it.
 
-`08_Collection_And_EPoL.md` D8.26-D8.27: exposure is a per-channel collection parameter, set in
+Exposure is a per-channel collection parameter, set in
 numbers over the channel's post-process profile, which sets the rest of the picture. A channel states
 five fields, each with its unit in its name, and every one is sent to the camera at spawn, so every
 capture's exposure is known from the run:
@@ -13,7 +13,7 @@ capture's exposure is known from the run:
 * `exposure_fstop` -- the aperture, as an f-number;
 * `exposure_compensation_ev` -- compensation, EV, added under either method.
 
-Each default is the `Default` profile's (08 §2.9): manual, ISO 100, 1/320 s, f/4 and no compensation,
+Each default is the `Default` profile's: manual, ISO 100, 1/320 s, f/4 and no compensation,
 EV100 +12.32, so a run that sets none renders exactly as every capture did before the camera published
 its exposure. The camera's attribute names are upstream CARLA 0.9's: `exposure_mode`, `iso`,
 `shutter_speed`, `fstop` and `exposure_compensation`.
@@ -23,7 +23,7 @@ not a finite number, or outside the range UE's own camera settings accept -- an 
 engine reads anything lower as 1), a shutter from 1/8000 s to 100 s (UE's 0.01 to 8000 per second), an
 f-stop from 1 to 32, and a compensation from -15 to +15 EV. `histogram` is permitted and warns: the
 exposure then follows what is in the picture, which suits a live exercise's operator picture and not
-captures meant to be compared (08 D8.26).
+captures meant to be compared.
 """
 from __future__ import annotations
 

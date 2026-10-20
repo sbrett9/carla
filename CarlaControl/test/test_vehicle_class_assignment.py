@@ -119,7 +119,7 @@ def test_the_emergency_vehicles_carry_a_special_type(records):
 
 
 def test_the_published_catalogue_answers_each_blueprint_s_kind_as_the_curation_assigns_it(records):
-    """Truth reads a vehicle's kind from the published catalogue (06 D6.18), so it must be this one.
+    """Truth reads a vehicle's kind from the published catalogue, so it must be this one.
 
     The reader answers every swept blueprint with the kind its class curates, which is the kind the
     curation assigns the blueprint, and answers nothing for a blueprint no class draws.
@@ -132,7 +132,7 @@ def test_the_published_catalogue_answers_each_blueprint_s_kind_as_the_curation_a
 
 def test_the_published_catalogue_answers_each_blueprint_s_base_type_as_the_curation_assigns_it(
         records):
-    """Truth reads a vehicle's base type from the published catalogue too (06 D6.18).
+    """Truth reads a vehicle's base type from the published catalogue too.
 
     The reader answers every swept blueprint with the base type its class curates, which is the base
     type the curation assigns the blueprint -- the light bus a bus, the patrol a car -- and answers

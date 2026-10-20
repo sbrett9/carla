@@ -1,13 +1,12 @@
 """Publishes a world's authoring reference set into its world package.
 
 The reference set is what a scenario author and the scenario compiler read about a world before
-writing anything, without a running server (`13_Work_Breakdown.md` stage E; `07_Scenario_Authoring.md`
-§2). Three of its artifacts are built here and written into the package beside the network they are
-derived from:
+writing anything, without a running server. Three of its artifacts are built here and written into
+the package beside the network they are derived from:
 
   * `areas.resolved.json` and `areas.aoi.geojson` -- the areas of interest, resolved to CARLA metres
     and SUMO lanes (`AreaOfInterestResolver`), and the GeoJSON they came from, byte for byte, whose
-    digest the table records (C5 V5.11);
+    digest the table records;
   * `places.json` -- the place index (`PlaceIndex`);
   * `solar.json` -- the solar frame (`SolarFrame`).
 

@@ -8,7 +8,7 @@ pipeline actually produces. Asserted:
 
   * the XML and CSV are the truth sidecar and name the planted vehicles, in `marked` and in the
     author's own type and flow names,
-  * `special_type` never does: it is the vehicle's kind (06 D6.18), and the same corpus with the
+  * `special_type` never does: it is the vehicle's kind, and the same corpus with the
     `special_type="marked"` the writer used to give a planted vehicle is caught on that field, so
     the check's silence on it is measured rather than assumed, and
   * an author who gives five vehicles the only length in the map that no other vehicle has is caught
@@ -370,10 +370,10 @@ def test_the_check_names_every_field_that_separates_the_two_groups(corpus, marke
 
 @pytest.mark.parametrize("sink", ["csv", "xml"])
 def test_the_check_still_catches_a_special_type_that_says_marked(corpus, marked_ids, sink):
-    """The control: the corpus as the writer produced it before D6.18 is caught on `special_type`.
+    """The control: the corpus as the writer used to produce it is caught on `special_type`.
 
     The writer used to give every planted vehicle `special_type="marked"`, the answer in the
-    contract's vehicle-kind field. Put that value back into either written sink and the check names
+    vehicle-kind field. Put that value back into either written sink and the check names
     it, on all nine planted vehicles and no other, so its silence on the corpus written today is
     measured rather than assumed.
     """

@@ -6,10 +6,10 @@ namespace CarlaNet.CoSim.Tests;
 /// A declared elevation and an illumination band's edges mean one elevation of the sun.
 /// </summary>
 /// <remarks>
-/// The bands' edges are elevations <c>11_Time_And_Illumination.md</c> §4.4 declares, so they mean
-/// what every declared elevation means (open question 7). The ruling is one constant here and one in
-/// the band table, which the recorder reads without this assembly; were one reversed alone, a capture's
-/// band would be cut from one elevation while its window was declared by the other.
+/// The bands' edges are declared elevations, so they mean what every declared elevation means. The
+/// choice is one constant here and one in the band table, which the recorder reads without this
+/// assembly; were one reversed alone, a capture's band would be cut from one elevation while its
+/// window was declared by the other.
 /// </remarks>
 public class DeclaredSunElevationTests
 {

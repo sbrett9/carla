@@ -11,8 +11,7 @@ namespace CarlaNet.CoSim;
 /// <remarks>
 /// <para><b>Held on the server, never here.</b> This table is what the binder hands over, not a source
 /// any recorder reads: a recorder beside the session reads the same server-held truth as one in another
-/// process, so no two clients of the world can ever hold different supervision for the same frame (doc 06
-/// §8.2, the ruling of 2026-10-05).</para>
+/// process, so no two clients of the world can ever hold different supervision for the same frame.</para>
 ///
 /// <para><b>Stated per SUMO vehicle, carried per body.</b> The binder knows the plan's subjects by their
 /// SUMO ids and nothing of the pool; the session knows which body draws which vehicle on each frame. So
@@ -20,11 +19,11 @@ namespace CarlaNet.CoSim;
 /// server for whichever body draws the vehicle -- again whenever the vehicle is lent a body anew, because
 /// the server drops a body's supervision when the body is given back or handed on. A vehicle no body
 /// draws is on no snapshot, because no frame shows it. Nothing is held for the world apart from the plan:
-/// SUMO reports vehicles, not places, and every label follows a vehicle (doc 06 §3.5).</para>
+/// SUMO reports vehicles, not places, and every label follows a vehicle.</para>
 ///
 /// <para><b>Bound to one plan, and it never mints a row.</b> Nothing is held until a plan is bound, and
 /// binding one starts afresh: every vehicle unlabelled. What is held is only what the binder copies from
-/// the plan's rows (doc 06 D6.8). This table checks that each state is one a vehicle can be in, never that
+/// the plan's rows. This table checks that each state is one a vehicle can be in, never that
 /// the plan has the row.</para>
 ///
 /// <para><b>On the session's thread.</b> Written between ticks -- from a step observer, or by whatever

@@ -1,8 +1,6 @@
 // Every capture carries the sun of the snapshot nearest its pixels, with the illumination band that
 // sun falls in, in the sidecar's <_solar> and the PNG's carla:solar chunk alike; and a capture written
-// without one is counted rather than silently left out. See
-// Docs/Plans/SUMO_Behavioral_Capture/11_Time_And_Illumination.md §8.2-§8.4 and
-// 06_Truth_And_Annotation.md §8.2.
+// without one is counted rather than silently left out.
 //
 // A stand-in server streams a real client one world-observer snapshot and one camera image, and the
 // recorder's files and counters are read once it has flushed.

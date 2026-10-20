@@ -82,7 +82,7 @@ public interface ICarlaWorld
     /// <para>The session gives them once, when the package has been admitted: the bodies it lends are
     /// the catalogue's blueprints, and the recorder that captures beside it and the live pull of the
     /// same process report them through the truth telemetry of this connection. The kind is the
-    /// catalogue's by ruling (doc 06 D6.18): the content build's own is hand-edited, and was empty for
+    /// catalogue's: the content build's own is hand-edited, and was empty for
     /// every blueprint when first swept.</para>
     ///
     /// <para>Nothing is written to the server, so nothing is given back, and a truth reader on another
@@ -98,7 +98,7 @@ public interface ICarlaWorld
     /// </summary>
     /// <remarks>
     /// Given once, beside the kinds (<see cref="AdoptCatalogueSpecialTypes"/>), and for the same
-    /// reason: the base type is the catalogue's by ruling (doc 06 D6.18), because the content build's own
+    /// reason: the base type is the catalogue's, because the content build's own
     /// was wrong or absent for seven of seventeen blueprints when first swept. Nothing is written to the
     /// server, so nothing is given back.
     /// </remarks>
@@ -149,7 +149,7 @@ public interface ICarlaWorld
     ///
     /// <para>The role name is the actor's <c>role_name</c> attribute, in place of the blueprint's
     /// default, and like every attribute it is fixed for the actor's life. It is provenance: which
-    /// authority drives the actor (doc 04 D4.9), and the truth record carries it.</para>
+    /// authority drives the actor, and the truth record carries it.</para>
     /// </remarks>
     ActorId Spawn(string blueprintId, Transform at, string roleName);
 
@@ -268,7 +268,7 @@ public interface ICarlaWorld
     /// from the same place.</para>
     ///
     /// <para>For a vehicle whose physics is disabled it is the velocity last written to it with a
-    /// target-velocity command, on a server built with the kinematic-velocity change (doc 03 D3.5).
+    /// target-velocity command, on a server built with the kinematic-velocity change.
     /// On a server built before it, such a vehicle reads zero whatever it was given.</para>
     /// </remarks>
     Vector3D? ObservedVelocity(ActorId actor);

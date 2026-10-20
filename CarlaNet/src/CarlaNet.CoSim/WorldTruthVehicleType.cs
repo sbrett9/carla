@@ -9,7 +9,7 @@ namespace CarlaNet.CoSim;
 /// </summary>
 /// <param name="VehicleClass">SUMO's vehicle class for the type, as SUMO names it.</param>
 /// <param name="BaseType">
-/// The truth contract's base type: the one the catalogue curates for the blueprint the type names, and
+/// The truth record's base type: the one the catalogue curates for the blueprint the type names, and
 /// only for a type that names no blueprint a catalogue class draws, its vehicle class's
 /// (<see cref="BaseTypeOf"/>).
 /// </param>
@@ -31,7 +31,7 @@ namespace CarlaNet.CoSim;
 /// <para><b>The values the standalone producer writes for the same type</b>
 /// (<c>CarlaControl/src/carlacontrol/SumoCotBridge.py</c>): the declared dimensions rather than the
 /// body's measured box, which a capture sidecar carries for a vehicle drawn; the catalogue's base type
-/// and kind for the blueprint the type names (doc 06 D6.18), and for a type that names none of the
+/// and kind for the blueprint the type names, and for a type that names none of the
 /// catalogue's, the base type through the same table of vehicle classes and no kind. So the capture
 /// path's track and the CARLA-free path's CSV compare column for column.</para>
 /// </remarks>
@@ -46,7 +46,7 @@ internal sealed record WorldTruthVehicleType(
     UnrenderableReason? Unrenderable)
 {
     /// <summary>
-    /// SUMO's vehicle classes as the truth contract's base types, the standalone producer's table, read
+    /// SUMO's vehicle classes as the truth record's base types, the standalone producer's table, read
     /// only for a type that names no blueprint a catalogue class draws. A class not in it is reported as
     /// SUMO names it.
     /// </summary>

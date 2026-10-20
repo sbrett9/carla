@@ -3,11 +3,11 @@
 // SupervisionEntryState) and Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/WorldObserver.cpp.
 //
 // Supervision -- what the scenario's author asserts of each vehicle on each frame -- is held on the
-// server, as the owner ruled on 2026-10-05, so no two clients of one world ever hold different truth.
+// server, so no two clients of one world ever hold different truth.
 // The session puts it in force as it changes, and the server writes what it holds on every snapshot,
 // after the render set's entries and inside the render set block, so a reader that knows only the render
 // set skips it unread. Every row is a vehicle's: the block holds nothing for the world apart from the
-// plan (06 §3.5, the owner's ruling of 2026-10-05).
+// plan.
 using System.Buffers.Binary;
 using System.Text;
 using CarlaNet.Sensors;

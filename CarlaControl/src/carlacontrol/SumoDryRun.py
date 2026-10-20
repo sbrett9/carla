@@ -5,7 +5,7 @@ waits at its entrance, and once it has waited `max-depart-delay` -- 900 s in eve
 configuration -- SUMO discards it. Both are deterministic: the same configuration and seed insert the
 same vehicles at the same steps in every run, and a drive steps SUMO through the same configuration. So
 one SUMO-only run of the compiled scenario over its whole span shows exactly what a drive of it would
-(`07_Scenario_Authoring.md` check 59): a vehicle the supervision plan names that never enters is an
+(check 59): a vehicle the supervision plan names that never enters is an
 interval with no vehicle, and it is found here rather than after a capture is spent.
 
 **SUMO's own outputs, not TraCI.** The run writes three files into a scratch directory, and nothing

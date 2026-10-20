@@ -20,7 +20,7 @@ public enum SidecarSupervision
     /// <summary>
     /// A plan was in force and the frame's supervision is written: the plan and vocabulary on the
     /// container, and every drawn SUMO vehicle's state. Nothing is written for the world apart from the
-    /// plan: every label follows a vehicle (doc 06 §3.5).
+    /// plan: every label follows a vehicle.
     /// </summary>
     InForce,
 
@@ -40,7 +40,7 @@ public enum SidecarSupervision
 /// </summary>
 /// <remarks>
 /// <para><b>From the server, never from this process.</b> The supervision in force is held on the CARLA
-/// server and carried on every world-observer snapshot (doc 06 D6.41), so a recorder in any process
+/// server and carried on every world-observer snapshot, so a recorder in any process
 /// writes the same thing for one frame. It is read from the snapshot of the capture's own frame, in the
 /// same read as the frame's vehicles and their render set, so a body's supervision is always the one it
 /// carried for the vehicle it drew on that frame.</para>
@@ -124,7 +124,7 @@ public sealed class CaptureSupervision
     /// <summary>
     /// A drawn SUMO vehicle's supervision, where it is in force: its state, always, <c>unlabelled</c>
     /// included, and one <c>&lt;annotation&gt;</c> per pattern instance in force for it -- which a nominal
-    /// vehicle may carry as an annotated one does (doc 06 D6.31), and an unlabelled one never does.
+    /// vehicle may carry as an annotated one does, and an unlabelled one never does.
     /// </summary>
     /// <param name="w">The writer, inside the vehicle's <c>&lt;detail&gt;</c>.</param>
     /// <param name="actorId">The body that drew the vehicle on the frame.</param>
@@ -162,7 +162,7 @@ public sealed class CaptureSupervision
 
     /// <summary>
     /// The vocabulary's core version and the plan's digest over its resolved terms, which pin what every
-    /// label beside them means (doc 06 D6.30).
+    /// label beside them means.
     /// </summary>
     private static void WriteVocabulary(XmlWriter w, SupervisionPlanIdentity plan)
     {

@@ -11,14 +11,13 @@ namespace CarlaNet.CoSim;
 /// it changes, for the session to put on the server.
 /// </summary>
 /// <remarks>
-/// <para><b>It binds rows; it never makes one</b> (<c>06_Truth_And_Annotation.md</c> §3.6, D6.8). It is
-/// built from the plan and the step events and from nothing else: every interval it holds is one the plan
-/// declares, every annotation it states is a copy of a plan row's instance, labels, phase and role, and
-/// what the run fills in -- committed and observed onsets, the close and why, the gaps in drawing -- sits
-/// beside the row (<see cref="SupervisionIntervalRecord"/>). It holds no solar type and reads nothing of
-/// the sun (D6.21).</para>
+/// <para><b>It binds rows; it never makes one.</b> It is built from the plan and the step events and from
+/// nothing else: every interval it holds is one the plan declares, every annotation it states is a copy
+/// of a plan row's instance, labels, phase and role, and what the run fills in -- committed and observed
+/// onsets, the close and why, the gaps in drawing -- sits beside the row
+/// (<see cref="SupervisionIntervalRecord"/>). It holds no solar type and reads nothing of the sun.</para>
 ///
-/// <para><b>What commits an interval</b> (§3.3). An anchored interval opens and closes on the events its
+/// <para><b>What commits an interval.</b> An anchored interval opens and closes on the events its
 /// anchor names, at the TraCI clock of the step whose event list announced them, never at SUMO's own stamp,
 /// which is a step earlier: <c>depart</c> on the vehicle's insertion; <c>stop:i</c> and <c>stop_end:i</c>
 /// on its starting and ending a stop, the index being how many stops SUMO says the vehicle had completed
@@ -26,31 +25,31 @@ namespace CarlaNet.CoSim;
 /// anchor); <c>phase:i</c> when SUMO first reports the vehicle at or past the route index the phase is
 /// entered at (<see cref="SumoVehicleQueries.RouteIndex"/>, asked when such a vehicle's edge changes). An
 /// unanchored interval has no committing event: it opens and closes on its declared seconds, its committed
-/// onset null, as the owner ruled.</para>
+/// onset null.</para>
 ///
 /// <para><b>What is observed</b>, inside the window and only where a world renders: a departure's onset is
 /// the first frame that draws the vehicle -- since the session draws a vehicle from the frame SUMO first
-/// reports it in (03 D3.6), it equals the committed onset, and any gap is recorded as a defect -- and a
-/// stop's is the first frame whose applied speed holds at or below 0.15 m/s, the predicate and threshold of
-/// §3.3. The body is interpolated into the stop over the step that ends at it, so a stop's observed onset
+/// reports it in, it equals the committed onset, and any gap is recorded as a defect -- and a stop's is
+/// the first frame whose applied speed holds at or below 0.15 m/s (<see cref="StandstillMetresPerSecond"/>).
+/// The body is interpolated into the stop over the step that ends at it, so a stop's observed onset
 /// may come up to one SUMO step before its committed one. An onset that did not happen is null, never
 /// substituted.</para>
 ///
-/// <para><b>Why an interval closes</b> (§3.4): <c>trigger</c> on the event or the declared second that
+/// <para><b>Why an interval closes</b>: <c>trigger</c> on the event or the declared second that
 /// ends it -- or <c>physical_predicate_never_held</c> where a stop it opened on ended while the body was
 /// drawn and never stood still; <c>entity_arrived</c> where SUMO lists the vehicle among its arrivals;
 /// <c>sumo_removed</c> where it took the vehicle out otherwise -- a teleport off the network, or gone between
 /// two steps; <c>never_inserted</c> where SUMO gave up inserting it; <c>capture_window_end</c> or
 /// <c>scenario_end</c> where the session ends with it open. A
 /// body under an optional render-set limit is lost and regained without closing anything: the annotation
-/// is the SUMO vehicle's for its life, and a span with no body is recorded as not drawn, as the owner
-/// ruled. <c>render_released</c>, a body the CARLA side lost, has no producer yet.</para>
+/// is the SUMO vehicle's for its life, and a span with no body is recorded as not drawn.
+/// <c>render_released</c>, a body the CARLA side lost, has no producer yet.</para>
 ///
-/// <para><b>Nothing is invented for the time before the window</b>, as the owner ruled. The binder sees
-/// SUMO from the first frame the session reads. A plan subject already in the simulation there is read
-/// back once -- its departure, the stops it has completed and the one under way, its route index -- and
-/// each event SUMO stamped becomes the committed onset of an interval that began before the window, at
-/// the stamp plus one SUMO step, which is the clock of the step that would have listed it. A phase entered
+/// <para><b>Nothing is invented for the time before the window.</b> The binder sees SUMO from the first
+/// frame the session reads. A plan subject already in the simulation there is read back once -- its
+/// departure, the stops it has completed and the one under way, its route index -- and each event SUMO
+/// stamped becomes the committed onset of an interval that began before the window, at the stamp plus
+/// one SUMO step, which is the clock of the step that would have listed it. A phase entered
 /// before then has no recoverable instant: its interval is open with no committed onset. An interval that
 /// began before the window has no observed onset, and nothing is put in force for the frames before the
 /// window: the session's table holds the state as of each frame from the window's first.</para>
@@ -62,10 +61,10 @@ namespace CarlaNet.CoSim;
 /// flow is annotated (named <c>cohort:&lt;flow_id&gt;</c>, for every <c>&lt;flow_id&gt;.&lt;n&gt;</c>). The state
 /// is annotated if any of them is, otherwise nominal if any is, and the annotations are those of that
 /// state. An unlabelled vehicle is never stated, and nothing is stated for the world: every label follows
-/// a vehicle (06 §3.5). Each change takes effect from the frame at its instant: it is put in force once the
+/// a vehicle. Each change takes effect from the frame at its instant: it is put in force once the
 /// next tick to be rendered has reached it.</para>
 ///
-/// <para><b>A plan subject SUMO never inserts fails the run</b>, as the owner ruled: its intervals are
+/// <para><b>A plan subject SUMO never inserts fails the run</b>: its intervals are
 /// closed <c>never_inserted</c>, and the step that showed it refuses, naming the vehicle.</para>
 ///
 /// <para>Every interval it opens and closes is told, as it happens, to each
@@ -74,8 +73,8 @@ namespace CarlaNet.CoSim;
 public sealed class SupervisionBinder : ISumoStepObserver
 {
     /// <summary>
-    /// The applied speed at or below which a rendered body stands still: the threshold of the executor's
-    /// stop predicate, kept (06 §3.3).
+    /// The applied speed at or below which a rendered body stands still: the threshold at which the
+    /// scenario executor (<c>CarlaNet.Scenario.ScenarioExecutor</c>) counts a vehicle stationary.
     /// </summary>
     public const double StandstillMetresPerSecond = 0.15;
 

@@ -31,8 +31,8 @@ namespace CarlaNet.CoSim;
 /// that looks entirely plausible. Nothing about the rendered frame can catch that; comparing two
 /// statements of one fact can.</para>
 ///
-/// <para>The wire shape is the <c>epoch</c> object of the scenario contract
-/// (<c>Docs/Plans/SUMO_Behavioral_Capture/04_Contracts.md</c> section 11.3). A document
+/// <para>The wire shape is the <c>epoch</c> object of a scenario specification
+/// (<c>Docs/Schemas/Epoch.md</c>). A document
 /// that breaks any rule is refused whole, naming every rule it broke, because a time declaration
 /// read in part renders six days of a week on the wrong date.</para>
 /// </remarks>

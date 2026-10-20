@@ -1,8 +1,8 @@
 """An area of interest is placed where it was drawn: in CARLA metres, and on the SUMO lanes it covers.
 
-`AreaOfInterestResolver` turns validated GeoJSON into the table the world package carries
-(`04_Contracts.md` C5 §7.2-§7.3). Nothing here is mocked: every area is placed by a real SUMO process
-holding a real netconvert network, and cross-checked against CarlaNet's real `Geodesy`.
+`AreaOfInterestResolver` turns validated GeoJSON into the table the world package carries. Nothing
+here is mocked: every area is placed by a real SUMO process holding a real netconvert network, and
+cross-checked against CarlaNet's real `Geodesy`.
 
 Most tests use the cross-shaped network the world-build tests already use, whose lanes run along
 known lines (`street_names_true.net.xml`, origin 39.5 N 104.9 W). Areas are drawn in that network's
@@ -16,7 +16,7 @@ they are absent:
     which must resolve to the lane position its own scenario parks the guard at;
   * a two-lane Arapahoe edge, for the rule that makes an edge inside, crossing or near.
 
-The frame check (C5 V5.12) is shown refusing a manifest whose origin is a tenth of a metre from the
+The frame check (V5.12) is shown refusing a manifest whose origin is a tenth of a metre from the
 network's, and a network carrying a road offset.
 """
 from __future__ import annotations

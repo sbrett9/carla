@@ -38,7 +38,7 @@ namespace CarlaNet.CoSim;
 /// a SUMO step shows every vehicle SUMO had at that step. One SUMO inserts during the run is drawn first at
 /// the position SUMO first reported, moving from there, and never on a frame before SUMO inserted it; one
 /// SUMO stops reporting is drawn last at the position SUMO last reported, on that step's own frame, and on
-/// no frame after it (the owner's ruling of 2026-10-06).
+/// no frame after it.
 /// Nothing limits how many unless the caller asks for a limit; a scenario heavier than the machine is
 /// comfortable with makes a synchronous run slower on the wall clock, never different in content.</para>
 ///
@@ -720,7 +720,7 @@ public sealed class SumoDriveSession : IDisposable
 
             // And what kind of vehicle each body is: every body the pool lends is one of the
             // catalogue's blueprints, and its truth carries the base type and the special type its
-            // catalogue class curates rather than the ones the blueprint declares (doc 06 D6.18).
+            // catalogue class curates rather than the ones the blueprint declares.
             // Client-side, like the grids.
             loaded.AdoptCatalogueBaseTypes(catalogue.BaseTypes);
             loaded.AdoptCatalogueSpecialTypes(catalogue.SpecialTypes);
@@ -1563,7 +1563,7 @@ public sealed class SumoDriveSession : IDisposable
     /// falls on and which bodies it could not place, and a truth record of a frame is written by whichever
     /// process records it. Put to the server, it rides on every world-observer snapshot beside the render
     /// set, and every reader of a frame -- a recorder beside the session or in another process -- reads the
-    /// same pose source for it (the owner's ruling of 2026-10-06).</para>
+    /// same pose source for it.</para>
     ///
     /// <para><b>The step once, not every tick.</b> The SUMO step is a whole number of world ticks
     /// (<see cref="CoSimClock.WorldTicksPerSumoStep"/>), and on the first tick of every step the
@@ -2527,9 +2527,9 @@ public sealed class SumoDriveSession : IDisposable
     /// actor id and needs the vehicle; only the pair of instants tells it which of the succession of
     /// vehicles that body carried was the one it is looking at.</para>
     ///
-    /// <para><b>A vehicle SUMO removed is drawn on the frame of its last step</b> (the owner's ruling of
-    /// 2026-10-06). The pass that finds it gone reads the frame one step ahead of the rendered clock, and
-    /// the next frame rendered falls on the last step that had it, which shows every vehicle SUMO had then.
+    /// <para><b>A vehicle SUMO removed is drawn on the frame of its last step.</b> The pass that finds it
+    /// gone reads the frame one step ahead of the rendered clock, and the next frame rendered falls on the
+    /// last step that had it, which shows every vehicle SUMO had then.
     /// So it keeps its body for that frame, posed at that step's state (<see cref="ComputePoses"/>), and
     /// gives it back once the frame has rendered (<see cref="GiveBackTheLeaving"/>): parked from the next
     /// frame, and named parked to the server before that frame's cue. Its interval is handed out then,

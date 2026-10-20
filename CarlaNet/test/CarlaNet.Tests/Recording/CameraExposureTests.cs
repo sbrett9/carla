@@ -1,6 +1,5 @@
 // The exposure a camera was given, read from its attributes and written on every capture beside the
-// intrinsics. See Docs/Plans/SUMO_Behavioral_Capture/08_Collection_And_EPoL.md §4.8 and
-// D8.26-D8.28: a declared camera fact, as the intrinsics are, read from the camera as the server spawned
+// intrinsics: a declared camera fact, as the intrinsics are, read from the camera as the server spawned
 // it, by the rule the plugin applies the attributes with (ActorBlueprintFunctionLibrary.cpp,
 // ApplyCameraExposureAttributes).
 using System.Text.Json;
@@ -30,7 +29,7 @@ public class CameraExposureTests
 
         Assert.Equal(new CameraExposure("Default", CameraExposure.Manual, 100.0, 320.0, 4.0, 0.0), exposure);
         Assert.Equal(1.0 / 320.0, exposure.ShutterSeconds, 12);
-        // log2(N²/t) - log2(ISO/100) = log2(16 · 320) = 12.3219, doc 08 §2.9's +12.32.
+        // log2(N²/t) - log2(ISO/100) = log2(16 · 320) = 12.3219, or 12.32 at two decimals.
         Assert.Equal(Math.Log2(16.0 * 320.0), exposure.Ev100!.Value, 12);
         Assert.Equal(12.32, exposure.Ev100!.Value, 2);
     }

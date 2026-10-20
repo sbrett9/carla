@@ -1,12 +1,12 @@
 """A capture run ends the same way whatever ends it, and the corpus is safe before the world is touched.
 
-Plan 12 §3.10.2 and §7.1: a window's end, a signal, a loud condition under an unattended caller and
-write headroom running out all take `RunTerminationSequence`'s one path -- drain every recorder, take
-the closing record, write the result, and only then destroy the cameras and dispose the session. The
-order is read off the stand-ins' shared event log, and the session's disposal records whether the
-result was already on disk when it was called. A signal is raised in this process from inside a
-simulation step, as a caller's would arrive, and the run is expected to stop at the next step
-boundary with the signal named.
+A window's end, a signal, a loud condition under an unattended caller and write headroom running out
+all take `RunTerminationSequence`'s one path -- drain every recorder, take the closing record, write
+the result, and only then destroy the cameras and dispose the session. The order is read off the
+stand-ins' shared event log, and the session's disposal records whether the result was already on
+disk when it was called. A signal is raised in this process from inside a simulation step, as a
+caller's would arrive, and the run is expected to stop at the next step boundary with the signal
+named.
 """
 from __future__ import annotations
 

@@ -51,7 +51,7 @@ namespace rpc {
   /// One change to the supervision a co-simulation session holds on the server (update_supervision):
   /// the plan it is bound from and the bodies whose supervision changes. Every row is a vehicle's;
   /// nothing is held for the world apart from the plan, because SUMO reports vehicles, not places,
-  /// and a label follows the vehicle it is about (06_Truth_And_Annotation.md §3.5).
+  /// and a label follows the vehicle it is about.
   class SupervisionUpdate {
   public:
 

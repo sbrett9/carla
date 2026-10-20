@@ -1,12 +1,12 @@
 """A free view flies its camera from a window on a thread of its own, and never writes the world.
 
 `run_sumo_drive.py --view free` opens `run_free_move_camera.py`'s window inside the process that
-drives the world (`12_Operator_Control_Surface.md` section 9.6). The drive keeps its own thread for
-the session's steps and the world's ticks, and the window -- created, pumped and drawn -- lives on
-another, which SDL needs on Windows and which keeps every frame the window draws off the drive's
-thread. The window is the real `PygameInterface`, opened on SDL's dummy video driver so no display
-is needed; the world, the rig, the flight controller and the recorder are stand-ins that record
-what is done to them and on which thread.
+drives the world. The drive keeps its own thread for the session's steps and the world's ticks, and
+the window -- created, pumped and drawn -- lives on another, which SDL needs on Windows and which
+keeps every frame the window draws off the drive's thread. The window is the real
+`PygameInterface`, opened on SDL's dummy video driver so no display is needed; the world, the rig,
+the flight controller and the recorder are stand-ins that record what is done to them and on which
+thread.
 
 The heads-up display's record field is checked on its own: for `NativeRecorder` it must read
 exactly as it did, and for the span recorder it adds the wait, the render-set pairing and the tiles.

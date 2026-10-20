@@ -1,12 +1,11 @@
 namespace CarlaNet.Types.Supervision;
 
-// The supervision half of the annotation vocabulary's closed core (06_Truth_And_Annotation.md §3.7):
-// the values the pipeline's own code branches on, so that a misspelling makes it behave differently.
-// Each is published by CoreVocabulary under the name every record writes it by. Every subject is a
-// vehicle or a flow's vehicles: SUMO reports vehicles, not places, and a label follows the vehicle it
-// is about (06 §3.5, the owner's ruling of 2026-10-05).
+// The supervision half of the annotation vocabulary's closed core: the values the pipeline's own code
+// branches on, so that a misspelling makes it behave differently. Each is published by CoreVocabulary
+// under the name every record writes it by. Every subject is a vehicle or a flow's vehicles: SUMO
+// reports vehicles, not places, and a label follows the vehicle it is about.
 
-/// <summary>What the author asserts of a subject (06 §3.1).</summary>
+/// <summary>What the author asserts of a subject.</summary>
 public enum SupervisionState
 {
     /// <summary>The subject executes the named pattern over the interval.</summary>
@@ -19,7 +18,7 @@ public enum SupervisionState
     Unlabelled,
 }
 
-/// <summary>What a supervision row is about (06 §3.2).</summary>
+/// <summary>What a supervision row is about.</summary>
 public enum SubjectKind
 {
     /// <summary>One authored vehicle.</summary>
@@ -29,7 +28,7 @@ public enum SubjectKind
     Cohort,
 }
 
-/// <summary>The three authorities an interval's start is read from (06 §3.3).</summary>
+/// <summary>The three authorities an interval's start is read from.</summary>
 public enum IntervalOnset
 {
     /// <summary>The author's, from the plan.</summary>
@@ -42,7 +41,7 @@ public enum IntervalOnset
     Observed,
 }
 
-/// <summary>Why an interval closed (06 §3.4). The values are not interchangeable.</summary>
+/// <summary>Why an interval closed. The values are not interchangeable.</summary>
 public enum ClosedBy
 {
     /// <summary>The authored condition ended it.</summary>
@@ -70,7 +69,7 @@ public enum ClosedBy
     ScenarioEnd,
 }
 
-/// <summary>How a recurring series lists its occasions (06 §3.4).</summary>
+/// <summary>How a recurring series lists its occasions.</summary>
 public enum CadenceForm
 {
     /// <summary>One slot per occasion, listed.</summary>
@@ -80,7 +79,7 @@ public enum CadenceForm
     Periodic,
 }
 
-/// <summary>The one role the pipeline reserves (06 D6.35).</summary>
+/// <summary>The one role the pipeline reserves.</summary>
 public enum ReservedRole
 {
     /// <summary>The single participant of a one-participant instance.</summary>
@@ -88,8 +87,8 @@ public enum ReservedRole
 }
 
 /// <summary>
-/// The events of a vehicle an interval may be anchored to, each committing its start or its end
-/// (06 §3.3). A stop or a phase is named with its index, counted from 0: <c>stop:0</c>, <c>phase:2</c>.
+/// The events of a vehicle an interval may be anchored to, each committing its start or its end.
+/// A stop or a phase is named with its index, counted from 0: <c>stop:0</c>, <c>phase:2</c>.
 /// </summary>
 public enum AnchorEvent
 {

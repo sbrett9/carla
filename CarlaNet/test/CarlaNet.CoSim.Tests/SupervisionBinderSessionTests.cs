@@ -61,7 +61,7 @@ public sealed class SupervisionBinderSessionTests
         Assert.Equal("annotated cohort:corridor:", frames.At(12.0, "corridor.2"));
         Assert.Equal("unlabelled", frames.At(4.95, "corridor.0"));
         Assert.Equal("annotated cohort:corridor:", frames.At(5.0, "corridor.0"));
-        // Every row the server was told is a vehicle's: nothing is held for the world (06 §3.5).
+        // Every row the server was told is a vehicle's: nothing is held for the world.
         Assert.All(frames.Vehicles(), vehicle => Assert.NotEqual(string.Empty, vehicle));
 
         // Asked of SUMO: the dweller's completed stops as its stop started and as it ended, and the left-turner's
@@ -73,7 +73,7 @@ public sealed class SupervisionBinderSessionTests
     [RequiresSumoFact]
     public void TwoRunsOfOneScenarioBindTheSameRowsDifferingOnlyInTheirTimes()
     {
-        // 06 D6.8: the row set is the plan's, so a run with another step and a run whose window opens
+        // The row set is the plan's, so a run with another step and a run whose window opens
         // late bind the same (instance, participant, phase) triples as the first; only the times and the
         // outcomes may differ.
         using CompiledFixture compiled = Supervised();
@@ -162,7 +162,7 @@ public sealed class SupervisionBinderSessionTests
         SupervisionIntervalRecord trip = intervals.Single(interval => interval.Phase == "trip");
         SupervisionIntervalRecord standoff = intervals.Single(interval => interval.Phase == "standoff");
 
-        // Drawn from the frame SUMO first reports it in (03 D3.6): the two onsets are one instant.
+        // Drawn from the frame SUMO first reports it in: the two onsets are one instant.
         Assert.NotNull(trip.CommittedStartSeconds);
         Assert.Equal(trip.CommittedStartSeconds!.Value, trip.ObservedStartSeconds!.Value, 6);
 
@@ -215,7 +215,7 @@ public sealed class SupervisionBinderSessionTests
     /// <summary>
     /// The fixture's every kind of subject, compiled: the dweller's stop and an unanchored approach, the
     /// left-turner's second route part, a nominal instance and a nominal series member, and an annotated
-    /// flow. The series' second occasion is one the schedule skipped, so it has no slot (06 §3.5).
+    /// flow. The series' second occasion is one the schedule skipped, so it has no slot.
     /// </summary>
     internal static CompiledFixture Supervised()
     {

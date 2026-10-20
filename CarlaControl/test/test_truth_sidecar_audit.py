@@ -17,7 +17,7 @@ SUMO vehicle (`CarlaNet.Recording.CotWriter` with a render-set source). Asserted
     `SCTMV_<capture time>.xml`, so a directory may hold both; and
   * where the run had a supervision plan, every SUMO vehicle record carries a `<_supervision>` in
     one of the three states, consistent with what it names, no `<_supervision>` stands outside a
-    vehicle's record (a label with no vehicle; 06 §3.5), a sidecar whose supervision was unknown says
+    vehicle's record (a label with no vehicle), a sidecar whose supervision was unknown says
     so and is counted, and a run with no plan expects none; and
   * every vehicle record says where its box fell against the picture (`in_frame`) and, where its
     occlusion fields are absent, why (`occlusion_unmeasured`): a record saying neither, occlusion
@@ -85,7 +85,7 @@ def vehicle(uid: str, actor: int, hae: float, speed: float, sumo_id: str | None 
     for either leaves it out, as a recorder written before 2026-10-05 did. A record in the picture
     carries its box, as the recorder has written it since 2026-10-06, unless `box` is false, as one
     written before then did not; and its lights, and a SUMO vehicle's its pose source, as the recorder
-    writes them since the same ruling, unless given None, or another value written whatever the place."""
+    writes them since that date, unless given None, or another value written whatever the place."""
     identity = "" if sumo_id is None else (
         f' sumo_id="{sumo_id}" vtype_id="passenger" admitted_tick="100"')
     place = "" if in_frame is None else f' in_frame="{in_frame}"'
@@ -265,9 +265,8 @@ def test_sidecars_named_after_their_camera_and_those_from_before_cameras_had_nam
 
 
 # A supervised drive's sidecars, as `CotWriter` writes them from the supervision the server carried on
-# the frame (06 §8.2): the plan on the container, every SUMO vehicle's state. STRAY is the world-scoped
-# element a recorder wrote before the owner's ruling of 2026-10-05 (06 §3.5): a label with no vehicle,
-# which the audit faults.
+# the frame: the plan on the container, every SUMO vehicle's state. STRAY is the world-scoped element
+# an older recorder wrote: a label with no vehicle, which the audit faults.
 PLAN = "Shahid_Bahonar_Port_PatternOfLife"
 DIGEST = "e3571085c17731122253518d85beb667865035305952f7c4e380d1b9e8f4a7ad"
 STRAY = (f'  <_supervision scope="world" vocabulary="3" vocabulary_digest="{DIGEST}">\n'
@@ -350,7 +349,7 @@ def test_a_state_outside_the_three_and_states_contradicting_their_annotations_ar
 
 
 def test_a_supervision_element_outside_a_vehicle_record_and_a_sidecar_saying_nothing_are_defects(tmp_path):
-    # A sidecar written before the ruling of 2026-10-05, carrying a world-scoped element: a label with
+    # A sidecar an older recorder wrote, carrying a world-scoped element: a label with
     # no vehicle to follow, which no recorder writes now and the audit faults.
     supervised_sidecar(tmp_path, 100, [supervised_vehicle("CARLA-TRUTH-SUMO-a", 1, "a", "unlabelled")],
                        stray=True)
@@ -415,7 +414,7 @@ def test_a_capture_whose_every_record_says_where_it_fell_and_why_has_no_defect(t
 
 def test_a_record_that_does_not_say_whether_it_is_in_the_picture_is_a_defect(tmp_path):
     # A capture written before the recorder said where each vehicle fell: the fields are simply absent,
-    # which is exactly the silence the owner ruled out.
+    # a silence the audit counts as a defect.
     sidecar(tmp_path, 100, [vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", in_frame=None, unmeasured=None),
                             vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b")],
             vehicles="rendered")
@@ -490,8 +489,8 @@ def test_the_in_picture_checks_apply_to_traffic_manager_captures_too(tmp_path):
                                                 "the picture (no in_frame)"]
 
 
-# The box of a vehicle in the picture, as `CotWriter` writes it since the owner's ruling of 2026-10-06
-# (the truth sidecar's `<_carla>` record): six fields in `_carla` and a geodetic `<_box3d>` of eight corners beside it, on every record
+# The box of a vehicle in the picture, as `CotWriter` writes it (the truth sidecar's `<_carla>`
+# record): six fields in `_carla` and a geodetic `<_box3d>` of eight corners beside it, on every record
 # in the picture and on no other.
 def test_a_capture_whose_every_record_in_the_picture_carries_its_box_has_no_defect(tmp_path):
     sidecar(tmp_path, 100, [
@@ -586,8 +585,8 @@ def test_a_record_saying_nothing_of_its_place_is_not_held_to_a_box(tmp_path):
     assert result.records_outside_picture_with_box == []
 
 
-# A vehicle in the picture carries its lights and, drawn by a SUMO drive, where its pose came from, from the
-# snapshot of the capture's own frame (the owner's ruling of 2026-10-06; 08 §5.1), and no other vehicle does.
+# A vehicle in the picture carries its lights and, drawn by a SUMO drive, where its pose came from, from
+# the snapshot of the capture's own frame, and no other vehicle does.
 def test_a_capture_whose_vehicles_in_the_picture_carry_their_lights_and_pose_source_has_no_defect(tmp_path):
     sidecar(tmp_path, 100, [
         vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights="position low_beam brake left_blinker",
@@ -659,9 +658,9 @@ def test_lights_or_a_pose_source_outside_the_picture_on_no_sumo_vehicle_or_in_ot
     assert [record.sumo_id for record in result.records_with_unknown_pose_source] == ["c"]
     assert len(result.defects(sumo_drive=False)) == 4
 
-def test_the_words_before_the_owner_s_ruling_are_outside_the_recorder_s(tmp_path):
-    # The recorder writes sumo, interpolated, jump or stale (the owner's ruling of 2026-10-06); the words it
-    # wrote before that ruling are no longer among them.
+def test_the_words_an_older_recorder_wrote_are_outside_the_recorder_s(tmp_path):
+    # The recorder writes sumo, interpolated, jump or stale; the words an older recorder wrote are no
+    # longer among them.
     sidecar(tmp_path, 100, [
         vehicle("CARLA-TRUTH-SUMO-a", 1, ROAD, 9.0, "a", lights="none", pose_source="simulated"),
         vehicle("CARLA-TRUTH-SUMO-b", 2, ROAD, 9.0, "b", lights="none", pose_source="held")],

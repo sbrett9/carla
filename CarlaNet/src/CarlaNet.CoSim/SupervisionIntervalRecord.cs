@@ -29,9 +29,9 @@ public readonly record struct NotDrawnSpan(double FromSeconds, double ToSeconds)
 /// <see cref="InstanceId"/> to <see cref="DeclaredDurationSeconds"/> is the plan's, copied; the rest is
 /// what the binder bound. There is exactly one record per interval the plan declares, so two runs of one
 /// scenario hold the same <c>(instance, participant, phase)</c> triples, differing only in the times and
-/// the outcomes (06 D6.8).</para>
+/// the outcomes.</para>
 ///
-/// <para><b>An onset that did not happen is null, never substituted</b> (06 D6.4): an unanchored interval
+/// <para><b>An onset that did not happen is null, never substituted</b>: an unanchored interval
 /// has no committed onset, an interval over a <c>duration</c> stop no declared start, a session with no
 /// world no observed onset, and a phase entered before the window no committed one.</para>
 ///
@@ -110,8 +110,7 @@ public sealed record SupervisionIntervalRecord
 
     /// <summary>
     /// The spans inside the window over which its participant was open, SUMO had it, and no body drew it:
-    /// a gap in drawing under an optional render-set limit, which ends nothing (the owner's ruling of
-    /// 2026-10-05).
+    /// a gap in drawing under an optional render-set limit, which ends nothing.
     /// </summary>
     public required IReadOnlyList<NotDrawnSpan> NotDrawn { get; init; }
 }

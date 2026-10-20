@@ -11,12 +11,12 @@ needs two facts about the *world*, and neither needs a running server once they 
     called from `UCesiumHeightSampler`'s configure path in `CesiumHeightSampler.cpp`), with daylight
     saving off and the clock at 12.00, whether it spawned the sun or found one. That is local mean
     solar time, not the site's civil offset: at Bahonar it is +03:44:43 against Iran's +03:30. The
-    difference is what `04_Contracts.md` V9.13 bounds and `07_Scenario_Authoring.md` check 40
-    reports, and it is computable from this file alone.
+    scenario compiler's check 40 warns where the difference exceeds an hour, and the difference is
+    computable from this file alone.
 
 What it cannot see. The zone *during a run*: a SUMO drive session writes the declared civil offset
 into the sun with `set_solar_epoch`, and an attached world holds whatever the last session left, so
-the run's own zone is read from `get_solar_state` at run start (`04_Contracts.md` D4.19). Whether the
+the run's own zone is read from `get_solar_state` at run start. Whether the
 world has a sun at all: this is written from the package, not read from a server. The site's civil
 zone: deriving one from a position needs a zone-boundary dataset and a time-zone database, and this
 machine has neither (`zoneinfo` resolves zero zones), so the frame carries only what the engine

@@ -1,6 +1,6 @@
 """Compile a scenario specification against a world package into a scenario package, or refuse.
 
-`07_Scenario_Authoring.md` D7.2: the specification is the artifact that is compiled, validated,
+The specification is the artifact that is compiled, validated,
 archived and run, and a generator writes a specification rather than SUMO XML, so every scenario --
 hand-written or generated -- passes through this one compiler and this one set of checks. It consumes
 the specification, the world package (its network, place index, area table and solar frame) and the
@@ -19,7 +19,7 @@ measured vehicle catalogue; it emits, beside one another:
 A refused compile writes only its resolution report, marked refused, so the refusals can be read; no
 scenario file is written. Checks are identified by the stable ids of `ScenarioCheckCatalogue`.
 
-**The stages run in the plan's order** (§5.4): the specification's shape; the world binding; resolution
+**The stages run in this order**: the specification's shape; the world binding; resolution
 of the epoch, the instants, the places and the vehicles; routes; supervision; the epoch and illumination
 group; emission and its self-checks; a SUMO-only run of what is about to be written; and the writing.
 Checks inside a stage all run, so one compile reports every failure a stage can see; a stage that
@@ -116,13 +116,13 @@ LOCK_VERSION = 1
 # fixed here, written into the configuration and recorded in the lock rather than left to a default.
 PROCESSING_OPTIONS = {
     # A teleport is a position jump nothing downstream can reproduce; -1 forbids it and lets a jam
-    # stay a jam (07 §7.1).
+    # stay a jam.
     "time-to-teleport": "-1",
     "max-depart-delay": "900",
     "collision.action": "warn",
     # A lane change takes this long, the vehicle moving sideways at a steady rate, where SUMO's
-    # default of 0 crosses a lane width inside one step and renders as a sideways jump (06 §6.2).
-    # 3 s is a physical lane-change time for a passenger car, held for every vehicle (04 §5.3).
+    # default of 0 crosses a lane width inside one step and renders as a sideways jump.
+    # 3 s is a physical lane-change time for a passenger car, held for every vehicle.
     "lanechange.duration": "3",
 }
 
@@ -575,14 +575,14 @@ class ScenarioCompiler:
         """An explicit route in phases, each driven `repeat` times, a held phase waypointed per edge.
 
         A SUMO waypoint -- a `<stop>` carrying `speed` -- holds a vehicle to that speed only between
-        its own start and end on its own edge (07 §6 gotcha 1), so holding a phase to a speed is one
+        its own start and end on its own edge, so holding a phase to a speed is one
         waypoint spanning the whole of each of its edges, on the edge's first lane. `hold` is a speed
         in m/s capped at each edge's limit, or `posted`, each edge's own limit. A stop is refused
         beside phases: on a repeated route it names no one pass.
 
         Where each phase is entered is recorded as the index in the compiled route of its first
         edge's first pass, which is what SUMO reports a vehicle's progress by, so an interval can be
-        anchored to entering it (06 §3.3).
+        anchored to entering it.
         """
         if any(key in declared for key in ("route", "from", "to", "via")):
             self.findings.refuse(53, where, "gives phases and also route or from/to/via; an actor's "
@@ -911,7 +911,7 @@ class ScenarioCompiler:
             self.findings.refuse(38, where, f"runs to {self.epoch.civil_instant_at(end_s)}, after the "
                                  f"run ends at {self.end.civil}")
         # Only declared bounds can be compared with a window. An interval anchored to a stop's
-        # arrival or to a later phase declares no start (06 D6.4); where it falls is the run's.
+        # arrival or to a later phase declares no start; where it falls is the run's.
         for interval in self.supervision.intervals:
             if interval.begin is None or interval.end is None:
                 continue
@@ -939,7 +939,7 @@ class ScenarioCompiler:
                                "renders under that date's seasonal sun")
         # Check 42 states a fact and concludes nothing: the lowest the sun reaches over the window, and
         # the band that elevation falls in, so the author knows what light the window is under. What
-        # to make of it is the author's; the report carries no pass mark (the charter's §4b).
+        # to make of it is the author's; the report carries no pass mark.
         lowest = min(opens.elevation_deg, closes.elevation_deg)
         record["sun_lowest"] = {"elevation_deg": round(lowest, 4),
                                 "elevation_kind": WindowSun.ELEVATION_KIND,

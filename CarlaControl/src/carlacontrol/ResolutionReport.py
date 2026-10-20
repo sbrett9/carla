@@ -1,16 +1,15 @@
 """What a scenario compile resolved, stated so a person or an assistant can check it against intent.
 
 `sumo-gui` is the only preview of a SUMO scenario, and it knows nothing about supervision, areas,
-catalogue entries, dates or the sun: its clock reads elapsed seconds (`07_Scenario_Authoring.md` §3.6,
-§5.3). So this report is **the only place an annotation or an epoch can be checked** before a capture
-is spent. It states every place and what it became, the epoch in one sentence, every declared instant
-with its second and its civil time, every rota and every skip with its reason, every route as
-`duarouter` produced it, every lane closure and its window, every vehicle type and the body it binds
-with whether that body's headlights, brake lights and turn signals light up,
-every supervision instance with its intervals in seconds and civil time, every capture window with its
-civil date and the sun the session will declare, the illumination-label association in full, every
-warning in full, what a SUMO-only run of the compiled files showed, the SUMO options the compiler fixed,
-and the lock.
+catalogue entries, dates or the sun: its clock reads elapsed seconds. So this report is **the only
+place an annotation or an epoch can be checked** before a capture is spent. It states every place
+and what it became, the epoch in one sentence, every declared instant with its second and its civil
+time, every rota and every skip with its reason, every route as `duarouter` produced it, every lane
+closure and its window, every vehicle type and the body it binds with whether that body's
+headlights, brake lights and turn signals light up, every supervision instance with its intervals
+in seconds and civil time, every capture window with its civil date and the sun the session will
+declare, the illumination-label association in full, every warning in full, what a SUMO-only run of
+the compiled files showed, the SUMO options the compiler fixed, and the lock.
 
 `<scenario>.resolution.json` is the record; `<scenario>.resolution.md` renders it for reading. A
 refused compile writes the report too, marked refused, with every refusal. Both say what made them

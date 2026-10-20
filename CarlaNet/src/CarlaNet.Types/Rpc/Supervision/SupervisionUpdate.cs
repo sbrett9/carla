@@ -7,7 +7,7 @@ namespace CarlaNet.Types.Rpc.Supervision;
 /// <summary>
 /// One change to the supervision a co-simulation session holds on the server (<c>update_supervision</c>):
 /// the plan it is bound from and the bodies whose supervision changes. Every row is a vehicle's; nothing
-/// is held for the world apart from the plan (06 §3.5).
+/// is held for the world apart from the plan.
 /// </summary>
 /// <param name="Fresh">
 /// Drop every row the server holds before applying this change: a session's first change, and the first

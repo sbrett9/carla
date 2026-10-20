@@ -124,7 +124,7 @@ public sealed class VehicleBodyPoolTests
     [Fact]
     public void EveryBodyIsSpawnedAsSumoDrivenAndNotAsTheTrafficManagersTraffic()
     {
-        // role_name is provenance (doc 04 D4.9): left to the blueprint's default, every body read
+        // role_name is provenance: left to the blueprint's default, every body read
         // "autopilot", and the truth record named the traffic manager as the driver of every SUMO
         // vehicle -- 152 of 152 in a Bahonar sidecar.
         var world = new RecordedWorld();

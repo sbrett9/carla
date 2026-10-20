@@ -1,21 +1,20 @@
 """run_capture builds the capture its effective configuration describes, and nothing else.
 
-Plan 12 §3.8 and §6.3: a run binds a compiled scenario and its world package, takes the clock through
-the co-simulation session with the declared pacing and illumination, and records the declared
-channels. These tests drive `CaptureSession` against stand-ins for the client, the world, the session
-and the recorders (`CaptureFakes`), and assert what the session was started with, where the cameras
-went, when the recorders started and with which identity, and which outcome each way of failing
-ends in. No server is contacted.
+A run binds a compiled scenario and its world package, takes the clock through the co-simulation
+session with the declared pacing and illumination, and records the declared channels. These tests
+drive `CaptureSession` against stand-ins for the client, the world, the session and the recorders
+(`CaptureFakes`), and assert what the session was started with, where the cameras went, when the
+recorders started and with which identity, and which outcome each way of failing ends in. No server
+is contacted.
 
-The values asserted are read from the fixture and the plan, not from the code under test: the
-session's region is the render region with y negated (SUMO's frame), its warm-up is the window's
-begin less the prewarm, the window opens at its own begin, and a stare camera stands where `StareAim`
-puts it.
+The values asserted are derived from the fixture, not read from the code under test: the session's
+region is the render region with y negated (SUMO's frame), its warm-up is the window's begin less
+the prewarm, the window opens at its own begin, and a stare camera stands where `StareAim` puts it.
 
-Every refusal the session raises carries the stage it had reached (03 §11.10), and the run's outcome
-is read from that stage alone (12 §6.3). The refusals here are the real `CarlaNet.CoSim` exceptions,
-given the stage the session would give them; the setter is the session's own, so a test sets it the
-way the session does, by reflection over the property.
+Every refusal the session raises carries the stage it had reached, and the run's outcome is read
+from that stage alone. The refusals here are the real `CarlaNet.CoSim` exceptions, given the stage
+the session would give them; the setter is the session's own, so a test sets it the way the session
+does, by reflection over the property.
 """
 from __future__ import annotations
 
@@ -641,9 +640,9 @@ def test_a_server_that_cannot_fly_an_orbit_refuses_the_run_at_preroll(layout, se
 
 def test_every_channel_records_against_a_depth_camera_and_nothing_turns_the_measurement_off(
         layout, server):
-    # The owner's ruling of 2026-10-05: occlusion is measured in every capture path, with no
-    # switch. A run configuration naming the switch there was is refused as naming a field the
-    # schema does not have, before anything is spawned.
+    # Occlusion is measured in every capture path, with no switch. A run configuration naming the
+    # switch there was is refused as naming a field the schema does not have, before anything is
+    # spawned.
     document = run_document()
     document["capture"]["channels"] = [A_STARE, dict(AN_ORBIT, sensor_id="ORBIT-2")]
     _, result = capture(layout, server, document)
@@ -768,7 +767,7 @@ def test_a_sun_that_did_not_bind_refuses_at_preroll(layout, server):
     assert (result.outcome, result.closed_by) == ("refused_preroll", "aborted_at_preroll")
 
 
-# The session's stages, and the outcome each is the run's (12 §6.3). The refusal's type plays no part:
+# The session's stages, and the outcome each is the run's. The refusal's type plays no part:
 # a solar audit that failed as the window opened, raised as its start's PreRoll, and the same class of
 # refusal before anything was written are told apart by the stage alone.
 START_STAGES = {

@@ -1,6 +1,6 @@
 """An author writes civil time and the compiler emits seconds, with the session's function as authority.
 
-Every form of `07_Scenario_Authoring.md` §3.5.1 is exercised against a known answer, including the one
+Every form in `CivilTimeResolver`'s table is exercised against a known answer, including the one
 that motivates the whole construct: the sizing scenario's probe departs `day * 137` seconds after
 11:00, an instant its generator states nowhere, and the resolver names it d2 11:04:34 and d5 11:11:25.
 The refusals are exercised too, because a resolver that never refused a bare clock on a multi-day

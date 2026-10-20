@@ -1,11 +1,11 @@
 """run_capture writes no capture before the capture camera's tiles are in and its picture has settled.
 
-Plan 03 §9.5.1 and plan 12 §6.2 check 50: readiness is two conditions from two witnesses. The server
-says the tiles are in -- the camera published on the last tick, every visible tileset at load progress
-100, no failed tile in view -- and the camera's own frames say the picture has settled: a frame within
-0.5 grey levels of its frame ten or more ticks earlier in its worst judged 80-pixel block, counting
-only frames rendered once the tiles were in, and leaving out every block a rendered vehicle covers in
-either frame. The wait lives in the prewarm and ticks with it. The tiles have no wall-clock ceiling.
+Run check 50: readiness is two conditions from two witnesses. The server says the tiles are in -- the
+camera published on the last tick, every visible tileset at load progress 100, no failed tile in
+view -- and the camera's own frames say the picture has settled: a frame within 0.5 grey levels of
+its frame ten or more ticks earlier in its worst judged 80-pixel block, counting only frames rendered
+once the tiles were in, and leaving out every block a rendered vehicle covers in either frame. The
+wait lives in the prewarm and ticks with it. The tiles have no wall-clock ceiling.
 Cesium builds a tile's mesh inside the tileset actor's Tick, so a tile can only finish loading when
 the world ticks. The window's opening is the tiles' ceiling. An ask the server fails to answer is
 asked again after the next step. A view not ready as the window opens refuses the run at pre-roll.
@@ -15,11 +15,11 @@ window's first frame is not moved. The ceiling and the limit,
 `capture.picture_tolerance_levels`, are the run configuration's, so a test that moves either does so
 with an override and not a constant.
 
-The picture's wait is off by default, by the owner's ruling of 2026-10-06, and runs only under
-`capture.picture_settled_wait` true, which every test of the picture here sets. Off, a view is ready
-on the step its tiles are in, no camera is listened to and no frame compared, the prewarm must hold
-the tiles' own lead, `capture.tiles_hold_s` (10 s), and the record says the wait was not run; the
-tests of that default are together near the end.
+The picture's wait is off by default and runs only under `capture.picture_settled_wait` true, which
+every test of the picture here sets. Off, a view is ready on the step its tiles are in, no camera is
+listened to and no frame compared, the prewarm must hold the tiles' own lead, `capture.tiles_hold_s`
+(10 s), and the record says the wait was not run; the tests of that default are together near the
+end.
 
 The stand-in server numbers its frames from 1000 and the camera is spawned on that frame; with a
 one-second SUMO step of twenty 0.05 s ticks and a 2 Hz capture, the camera renders every tenth frame,

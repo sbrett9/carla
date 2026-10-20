@@ -1,11 +1,11 @@
 """The vocabulary a scenario's labels resolve against: the closed core, and the author's namespaces.
 
-`06_Truth_And_Annotation.md` §3.7 splits the vocabulary on one test -- **does the pipeline's own code
-branch on this term?** The core is the set of terms whose misspelling makes the pipeline behave
-differently; it is closed, versioned and never declared by an author. Everything else -- what a label
-means, what a role signifies, what an area kind is -- is the author's, carried **opaquely but
-self-describingly**: this class never interprets an author term, it only requires that each one is
-declared, with its definition, where a consumer who has never met the author can read it.
+The vocabulary splits on one test -- **does the pipeline's own code branch on this term?** The core
+is the set of terms whose misspelling makes the pipeline behave differently; it is closed, versioned
+and never declared by an author. Everything else -- what a label means, what a role signifies, what
+an area kind is -- is the author's, carried **opaquely but self-describingly**: this class never
+interprets an author term, it only requires that each one is declared, with its definition, where a
+consumer who has never met the author can read it.
 
 Labelling is a contract between the scenario author and the model trainer, and this pipeline carries
 it without adjudicating it. So this class invents no terms and refuses none on grounds of meaning.
@@ -17,22 +17,21 @@ What it refuses is only what it can establish from the declarations in front of 
   (`broader`, `contrast_with`, `hard_negative_for`, `superseded_by`, a `term` counterfactual) that does
   not resolve inside the published document, and a `broader` chain with a cycle;
 * check 45 -- a label whose `applies_to` excludes the kind of subject it is attached to: a vehicle
-  (`entity`) or every vehicle of a flow (`cohort`), the only kinds there are (06 §3.5);
+  (`entity`) or every vehicle of a flow (`cohort`), the only kinds there are;
 * check 56 -- a parameter that none of the subject's labels declares in its `parameters{}`, a value
   not of the declared type, and one key that two of its labels declare differently.
 
-It also projects a term's `hard_negative_for` onto the subjects that carry it (06 §3.9(d)): the term is
+It also projects a term's `hard_negative_for` onto the subjects that carry it: the term is
 the authority, and the record carries a copy so neither the plan nor a sidecar has to be read against
 the vocabulary to be usable.
 
-**The core is not written here.** D6.30 generates it from the enumerations the pipeline's code
-switches on, and this module reads them through `carlanet` from `CarlaNet.Types.Supervision`'s
+**The core is not written here.** `CarlaNet.Types` generates it from the enumerations the pipeline's
+code switches on, and this module reads them through `carlanet` from `CarlaNet.Types.Supervision`'s
 `CoreVocabulary`, as `IlluminationBand` reads the bands: every family, its terms in their published
 order, the core's version and the reserved role. So a term the code gains reaches every plan
 compiled after it, and the vocabulary, the band in every capture's truth and the render state the world
 truth track writes are spelled from one table. The published document is resolved and
-import-flattened, and `digest` is over exactly what is published, so a consumer can bind it
-(`04_Contracts.md` C3 V3.15).
+import-flattened, and `digest` is over exactly what is published, so a consumer can bind it.
 """
 from __future__ import annotations
 
@@ -56,7 +55,7 @@ PARAMETER_CHECK = 56
 
 SUBJECT_ROLE = str(CoreVocabulary.SubjectRole)
 
-# 06 §3.7, the closed core: the terms the pipeline's own code branches on, family by family.
+# The closed core: the terms the pipeline's own code branches on, family by family.
 CORE_TERMS: dict[str, list[str]] = {str(family.Family): [str(term) for term in family.Terms]
                                     for family in CoreVocabulary.Families}
 
@@ -201,7 +200,7 @@ class AnnotationVocabulary:
         """Check 56: each parameter is a key one of the labels' terms declares, of the declared type.
 
         A parameter is read against the declaration of every label declaring its key, so two such
-        labels must agree on its type and unit: a value carries one meaning (06 §3.8). A label that
+        labels must agree on its type and unit: a value carries one meaning. A label that
         is not a term was refused by `check_labels` and declares nothing here.
         """
         declared = {label: self.terms[label].get("parameters", {}) for label in labels
@@ -236,7 +235,7 @@ class AnnotationVocabulary:
 
     def hard_negatives_of(self, labels: list[str]) -> list[str]:
         """The terms a subject carrying these labels is a matched negative for: every label's
-        `hard_negative_for`, in declaration order, once each (06 §3.9(d))."""
+        `hard_negative_for`, in declaration order, once each."""
         found: list[str] = []
         for label in labels:
             for other in self.terms.get(label, {}).get("hard_negative_for", []):

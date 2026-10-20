@@ -5,8 +5,6 @@ the world build does, or it stays a judgement, and cites the enforcement site as
 the repository root. `test_skill_references.py` fails when a cited file or symbol no longer exists, or
 a cited check is not in the check list, so a citation here cannot outlive the code it names.
 
-Design record: `Docs/Plans/SUMO_Behavioral_Capture/07_Scenario_Authoring.md` §6.
-
 ## 1. A `<stop speed>` waypoint binds only its own edge
 
 It caps speed between its own `startPos` and `endPos` on its own edge, so holding a phase to a speed

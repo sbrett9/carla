@@ -2,30 +2,31 @@
 generator reproduces the sizing scenario it replaced, entry for entry, at the same local times.
 
 `make_bahonar_scenario.py` writes the scenario as a specification and compiles it against the world
-package (`07_Scenario_Authoring.md` §3.4). Held here:
+package. Held here:
 
 * **`Import/` is the generator's output.** Rerun against the same world package and catalogue, the
   generator writes the same specification and reaches the same outcome: while the catalogue lacks a
   body the scenario names, a refusal whose every finding is check 14 naming such a body; once it has
   them all, the same scenario files byte for byte and the same lock but for the specification's
-  digest, as the Gardnerville canary holds (07 §8.5).
+  digest, as the Gardnerville canary holds.
 * **Every stage after the bodies passes.** With only the unmeasured blueprints swapped for measured
   ones, the specification compiles against the world package and the session's own network check
   admits the result, so the refusal above is the whole of what stands between the scenario and a run.
 * **The sizing scenario survives.** `fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.rou.xml` and
   `.shipped.labels.json` are the route file and labels of `BahonarPatternOfLife.zip` (members sha256
   `af542454...` and `db3e5060...`, line endings here normalised to LF), written by the SUMO-XML
-  generator this one replaced, whose `t = 0` was midnight of day 0 (07 §1.4). Under the 07:00 epoch every entry of it that falls in the run --
-  the 335 guard postings, the 21 hauls, the nine planted vehicles and every flow window -- comes back
-  with the same id, the same roads and stops and the same local time; what it held before 07:00 on
-  day 0 is gone and what the run adds is day 7 before 07:00, and the guard who leaves the gap.
+  generator this one replaced, whose `t = 0` was midnight of day 0. Under the 07:00 epoch every entry
+  of it that falls in the run -- the 335 guard postings, the 21 hauls, the nine planted vehicles and
+  every flow window -- comes back with the same id, the same roads and stops and the same local
+  time; what it held before 07:00 on day 0 is gone and what the run adds is day 7 before 07:00, and
+  the guard who leaves the gap.
 * **The six anomalies are supervision, each a vehicle's, and the no-show is a skip.** The ten planted
   vehicles are the participants of the six annotated instances. The guard schedule skips the posting
   at the tower, instant and length the labels' described gap gave it, so the posting has no trip and
   no row; the guard who should have taken it departs the apron at that instant as the guards do,
   parks for that length elsewhere inside the wire, never at the tower, and carries the label, because
-  a label follows a vehicle (06 §3.5, the owner's rulings of 2026-10-05 and 2026-10-06). A label on
-  the skipped posting itself is refused: there is no vehicle for it to follow (check 19).
+  a label follows a vehicle. A label on the skipped posting itself is refused: there is no vehicle
+  for it to follow (check 19).
 * **The plan says nothing its terms do not define.** The perimeter shadow's `speed_factor` and
   `circuit_edges`, and the deviating guard's `expected_tower` and `expected_shift_start`, are the keys
   their terms declare, of the declared types, and a value of another type or a key no term declares
@@ -33,8 +34,7 @@ package (`07_Scenario_Authoring.md` §3.4). Held here:
   which for a posting includes the posting not taken up.
 
 What these cannot see: whether the traffic behaves as intended in SUMO -- that is measured when the
-scenario changes (07 §3.4) -- and whether a body suits the vehicle it is drawn for, which is the
-owner's choice.
+scenario changes -- and whether a body suits the vehicle it is drawn for, which is the owner's choice.
 """
 from __future__ import annotations
 
@@ -275,7 +275,7 @@ def test_the_shipped_plan_projects_hard_negative_for_from_the_terms_onto_its_neg
 def test_the_shipped_anomalies_are_anchored_to_the_events_that_commit_them():
     """Each transit opens at its vehicle's departure, which it declares; each probe's standoff, the
     stay-behind's dwell and the deviating guard's parked shift are their one stop, which declares a
-    length (06 D6.4) or an end."""
+    length or an end."""
     intervals = {i["instance_id"].split("/", 1)[1]: i["intervals"]
                  for i in shipped_plan()["instances"] if i["supervision"] == "annotated"}
     reading = Reading(generated_specification())
@@ -367,7 +367,7 @@ def test_a_probe_anchored_to_a_stop_it_does_not_make_is_refused_under_check_58(t
 def test_the_shipped_plan_carries_a_row_for_the_deviating_guard_and_none_for_the_skipped_posting():
     """The omission is the guard's: one annotated instance about the vehicle that parks elsewhere,
     naming the tower and the shift it was due at, while no instance, slot or interval names the
-    posting the schedule leaves out, and every row of the plan is a vehicle's or a flow's (06 §3.5)."""
+    posting the schedule leaves out, and every row of the plan is a vehicle's or a flow's."""
     plan = shipped_plan()
     (row,) = [i for i in plan["instances"] if i["labels"] == ["bahonar:posting_not_taken_up"]]
     assert row["instance_id"] == f"{SCENARIO}/pi_posting_not_taken_up_d4"

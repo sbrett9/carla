@@ -2160,7 +2160,7 @@ class World:
 
         `base_type` and `special_type` are the vehicle's base type and kind as the measured vehicle
         catalogue curates them for the vehicle's blueprint, once a SUMO drive started on this client
-        has handed this client its catalogue (06_Truth_And_Annotation D6.18): the class's base type,
+        has handed this client its catalogue: the class's base type,
         and its kind, empty where it curates none, whatever the blueprint declares. A blueprint no
         catalogue handed over curates, and every vehicle on a client no drive was started on, carries
         what its blueprint declares, its base type from its wheel count where it declares none.
@@ -2340,7 +2340,7 @@ class World:
         recorder's `IlluminationUnpaired` counts it.
 
         Every capture's `<_solar>` element and `carla:solar` PNG chunk carry the sun of the snapshot
-        nearest its pixels and its `illumination_band` (doc 11 §4.4's six), cut from the
+        nearest its pixels and its `illumination_band`, cut from the
         refraction-corrected elevation wherever the server carries it, with
         `illumination_band_elevation` naming the elevation it was cut from. A capture whose snapshot
         carried no sun is written with neither, and `SolarBlockMissing` counts it.
@@ -2515,7 +2515,7 @@ class World:
         client its tables of curated base types and special types as it starts, so every truth
         reader on this client -- the recorder and `get_vehicle_telemetry` alike -- reports each body's
         `base_type` (and the callsign built from it) and `special_type` as its catalogue class
-        curates them (06_Truth_And_Annotation D6.18). A reader on another client is not handed them
+        curates them. A reader on another client is not handed them
         and reports what each blueprint declares.
 
         By default every vehicle SUMO has is rendered: the scenario is the only arbiter of
@@ -2573,7 +2573,7 @@ class World:
         `world_truth_track` is where the session writes the world truth track, None (the default)
         writing none: every vehicle SUMO has, drawn or not, at each sampled SUMO frame inside the
         capture window, one CSV row per vehicle -- the record of what the world contained, which a base
-        rate is taken over (06_Truth_And_Annotation §8.3). Every value is SUMO's, at TraCI's clock for
+        rate is taken over. Every value is SUMO's, at TraCI's clock for
         the frame; each row says whether a body drew the vehicle on the frame stamped with that instant
         (`render_state` 'rendered', with its `actor_id`) or why none did ('simulated_only', with a
         `render_reason`), and carries the sun the world reported for the frame. Rows are appended whole
@@ -2596,7 +2596,7 @@ class World:
         the population (`collision_began`, `collision_ended`, `vehicle_not_inserted`,
         `emergency_stop`, `teleport`) at TraCI's clock, the sun at the window's first and last capture
         tick (`solar_window_open`, `solar_window_end`), and last `manifest_closed` saying why the run
-        ended (04_Contracts §12.7, 06_Truth_And_Annotation §8.4). A manifest without that row is one whose
+        ended. A manifest without that row is one whose
         run was interrupted. `session.RunManifest.Close(reason)` writes it now -- for a caller that
         reads its closing gates before disposing the session -- and the session's end writes it
         otherwise. A path that already holds a manifest is refused before anything starts.

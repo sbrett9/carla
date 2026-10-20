@@ -12,12 +12,12 @@ public sealed record CoreTermFamily(string Family, IReadOnlyList<string> Terms);
 /// from the enumerations that code switches on.
 /// </summary>
 /// <remarks>
-/// <para><b>One test decides membership</b> (<c>06_Truth_And_Annotation.md</c> §3.7, D6.27): does the
-/// pipeline's own code branch on the term? If it does, a misspelling makes the pipeline behave
-/// differently, so the term is closed, versioned and published here; every other term is an author's,
-/// declared in the scenario and carried opaquely.</para>
+/// <para><b>One test decides membership</b>: does the pipeline's own code branch on the term? If it
+/// does, a misspelling makes the pipeline behave differently, so the term is closed, versioned and
+/// published here; every other term is an author's, declared in the scenario and carried
+/// opaquely.</para>
 ///
-/// <para><b>Generated, never copied</b> (D6.30). The scenario compiler publishes this table into every
+/// <para><b>Generated, never copied.</b> The scenario compiler publishes this table into every
 /// supervision plan through <c>carlanet</c> (<c>carlacontrol.AnnotationVocabulary</c>), so a value added
 /// to one of these enumerations reaches every vocabulary compiled after it without anyone restating it.
 /// Adding a value bumps <see cref="Version"/>; removing or renaming one bumps it and breaks every
@@ -34,8 +34,7 @@ public static class CoreVocabulary
     /// The core's version. 2 added the interval anchor, render state and render reason families and
     /// generates the core from here. 3 removed the <c>realisation</c>, <c>observability_outcome</c> and
     /// <c>reserved_phase</c> families, the subject kind <c>slot</c> and the close <c>slot_unrealised</c>:
-    /// every label follows a vehicle, and the core carries no outcome that rests on a pass mark (06 §3.5,
-    /// the owner's rulings of 2026-10-05).
+    /// every label follows a vehicle, and the core carries no outcome that rests on a pass mark.
     /// </summary>
     public const int Version = 3;
 
@@ -45,7 +44,10 @@ public static class CoreVocabulary
     /// <summary>The published spelling of <see cref="CadenceForm.Periodic"/>: the fields it is given by.</summary>
     public const string PeriodicCadence = "period_s + offsets_s[] + span";
 
-    /// <summary>Every family, in the order §3.7 tabulates them, then those added since.</summary>
+    /// <summary>
+    /// Every family, in the published order: the families of the core's first version, then those added
+    /// since.
+    /// </summary>
     public static IReadOnlyList<CoreTermFamily> Families { get; } =
     [
         Family<SupervisionState>("supervision_state"),

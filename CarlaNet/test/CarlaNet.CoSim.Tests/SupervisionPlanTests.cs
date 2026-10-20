@@ -70,7 +70,7 @@ public sealed class SupervisionPlanTests
             Assert.Equal(270000.0 + (4 * pair.index), pair.interval.DeclaredStartSeconds);
         });
 
-        // The gate probe: a duration stop declares its length and no start (06 D6.4).
+        // The gate probe: a duration stop declares its length and no start.
         PlannedInterval standoff = Assert.Single(Instance(plan, "pi_gate_probe_d2").Intervals);
         Assert.Equal("standoff", standoff.Phase);
         Assert.Equal((AnchorEvent.Stop, 0, "-431672573#2_0", 30.0),
@@ -91,7 +91,7 @@ public sealed class SupervisionPlanTests
         Assert.Null(dwell.DeclaredDurationSeconds);
 
         // The guard who should have relieved tower 3 on day 4 at 07:00 and parks elsewhere for the shift: the
-        // omission is carried by the vehicle that deviates (06 §3.5, the owner's ruling of 2026-10-06).
+        // omission is carried by the vehicle that deviates.
         PatternInstance offPost = Instance(plan, "pi_posting_not_taken_up_d4");
         Assert.Equal(SupervisionState.Annotated, offPost.Supervision);
         Assert.Equal<string>(["bahonar:posting_not_taken_up"], offPost.Labels);
@@ -109,7 +109,7 @@ public sealed class SupervisionPlanTests
         Assert.Null(shift.DeclaredStartSeconds);
         Assert.Equal(28800.0, shift.DeclaredDurationSeconds);
 
-        // A haul: nominal, carrying its term's matched negatives (06 §3.9(d)).
+        // A haul: nominal, carrying its term's matched negatives.
         PatternInstance haul = Instance(plan, "haul_d0_0");
         Assert.Equal(SupervisionState.Nominal, haul.Supervision);
         Assert.Equal<string>(["bahonar:coordinated_group_transit", "bahonar:destination_off_pattern"], haul.HardNegativeFor!);
@@ -119,7 +119,7 @@ public sealed class SupervisionPlanTests
 
         // The guard rota as a series: 335 slots, one per posting a guard realises. The schedule skips the
         // posting at tower 3 on day 4 at 07:00, and a skipped occasion has no slot: there is no vehicle for
-        // a label to follow (06 §3.5, the owner's ruling of 2026-10-05). The guard who should have taken it
+        // a label to follow. The guard who should have taken it
         // is the instance above, and is no slot either.
         RecurringSeries relief = Assert.Single(plan.Series);
         Assert.Equal(("tower_relief", "guard_posting", CadenceForm.Enumerated, "bahonar:guard", SupervisionState.Nominal),
@@ -180,7 +180,7 @@ public sealed class SupervisionPlanTests
         Assert.Equal<string>(["bahonar:guard_post", "bahonar:gate", "bahonar:drydock", "bahonar:ferry_terminal"],
                      bahonar.AreaKinds.Select(kind => kind.Kind));
 
-        // Every term applies to a vehicle or to a flow's vehicles: no term labels a place (06 §3.5).
+        // Every term applies to a vehicle or to a flow's vehicles: no term labels a place.
         Assert.All(bahonar.Terms, term => Assert.All(term.AppliesTo, kind => Assert.Contains(kind, new[] { SubjectKind.Entity, SubjectKind.Cohort })));
         Assert.DoesNotContain(bahonar.Terms, term => term.Term is "bahonar:post_unmanned" or "bahonar:expected_arrival_absent");
         AuthorTerm posting = Term(bahonar, "bahonar:tower_posting");
@@ -243,8 +243,8 @@ public sealed class SupervisionPlanTests
     [Fact]
     public void EveryTypeAPlanReachesIsARecordNothingCanWriteOrMake()
     {
-        // 06 D6.8 in the type graph: the runtime may only bind rows, so no row can be made, changed or
-        // added to outside a reading of the plan. Walked from the plan, so a type added later is held
+        // The runtime may only bind rows, and the type graph holds it to that: no row can be made, changed
+        // or added to outside a reading of the plan. Walked from the plan, so a type added later is held
         // to it without anyone listing it here.
         List<Type> types = PlanTypes();
         _output.WriteLine(string.Join(", ", types.Select(type => type.Name)));
@@ -429,7 +429,7 @@ public sealed class SupervisionPlanTests
     [Fact]
     public void APlanCarryingTheAbsenceShapeIsRefused()
     {
-        // The owner's ruling of 2026-10-05 (06 §3.5): an instance is an assertion about vehicles. A row with
+        // An instance is an assertion about vehicles. A row with
         // no participant, and an interval of no vehicle, are refused rather than read as a place's label.
         using var copy = new PlanCopy(Bahonar, plan =>
         {

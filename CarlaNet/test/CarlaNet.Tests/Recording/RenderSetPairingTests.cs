@@ -1,6 +1,5 @@
 // A capture's truth is cut to the bodies its own frame rendered, each named by the SUMO vehicle it
-// rendered; a frame whose render set is no longer held lists no vehicle and is counted. See
-// Docs/Plans/SUMO_Behavioral_Capture/06_Truth_And_Annotation.md §8.2.
+// rendered; a frame whose render set is no longer held lists no vehicle and is counted.
 using CarlaNet.Recording;
 
 namespace CarlaNet.Tests.Recording;

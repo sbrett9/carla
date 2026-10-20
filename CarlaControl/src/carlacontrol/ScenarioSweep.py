@@ -2,7 +2,7 @@
 compiled in full.
 
 A corpus is many runs of one scenario with parameters varied, and that only means something if two
-members differ only where they were meant to (`07_Scenario_Authoring.md` §7). A sweep is a file,
+members differ only where they were meant to. A sweep is a file,
 `<Sweep>.sweep.json`:
 
 ```jsonc
@@ -21,15 +21,15 @@ the base scenario id and the member's axis values, with no counter and no timest
 joinable across a rebuild. The swept values are recorded per member, beside the member's epoch, its
 windows' civil dates and the sun each opens under, in `<sweep_id>.sweep-index.json`.
 
-**Illumination is an axis in its own right, and the compiler decides which axes it is** (§7.2, §7.4,
-check 43): any axis whose path touches `epoch`, `illumination` or a capture window's `begin` changes
+**Illumination is an axis in its own right, and the compiler decides which axes it is** (check 43):
+any axis whose path touches `epoch`, `illumination` or a capture window's `begin` changes
 the light, whether or not it says so. `hold` refuses such an axis, `vary` refuses any other, and
 `factorial` warns, naming the cells, so a crossed design cannot be read as a controlled comparison.
 `epoch.date` sweeps the date the epoch falls on -- the one illumination axis that holds every authored
-behaviour fixed, because behaviour is indexed on the clock and the sun on both (§7.2.1): it moves
+behaviour fixed, because behaviour is indexed on the clock and the sun on both: it moves
 `civil_datetime` and `utc_datetime` together, so the epoch stays valid.
 
-**A counterfactual pair holds the inputs fixed except one actor** (§7.3, D7.12, D7.24): `absent`
+**A counterfactual pair holds the inputs fixed except one actor**: `absent`
 removes the actor; `nominal` keeps its type, route and timing, removes what the author names as its
 anomalous element, and states it `nominal`; `displaced` moves it by a declared shift in time and/or a
 declared place substitution. A car-following model reacts to what is in front of it, so the pair is

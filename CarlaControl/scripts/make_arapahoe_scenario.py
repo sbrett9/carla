@@ -255,9 +255,9 @@ class Flow:
 
 
 # Ambient traffic. The rates are what the map was tuned to and measured at (peak 437 live vehicles,
-# median 336, doc 10 section 3.2): it is the heaviest population of any shipped scenario.
+# median 336): it is the heaviest population of any shipped scenario.
 #
-# The compiler routes each flow once, and every vehicle of it drives that route (D7.8). The SUMO-XML
+# The compiler routes each flow once, and every vehicle of it drives that route. The SUMO-XML
 # scenario these rates were tuned in left SUMO to route each vehicle as it entered, on travel times
 # that follow the congestion, so a flow spread itself over several routes and kept off a road that
 # had jammed. Routed once, ten flows were sent a way most of their vehicles had not taken, and measured
