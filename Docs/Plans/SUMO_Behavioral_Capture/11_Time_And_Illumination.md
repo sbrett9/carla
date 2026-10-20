@@ -39,15 +39,13 @@ vehicle signals to CARLA's lamps.
   [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md). This section states the
   *parameters* that surface must expose and the *semantics* it must not change.
 - **Weather.** Fog, rain, wind, cloud and wetness are a separate track,
-  [`Findings/14_Weather_Resurrection.md`](../../Findings/14_Weather_Resurrection.md) and
   [issue #6](https://github.com/sbrett9/carla/issues/6). §5.4 states the one interaction that matters
   here: weather is inert in a generated world today, so illumination has exactly one driver.
 - **Camera and rig design.** [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) owns the rig.
   §5.5 hands it one finding it needs — the exposure lever it assumed and the one that actually exists.
 - **The per-tick performance budget.** [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)
   owns it. §9 states the properties to measure and hands them over rather than inventing numbers.
-- **Thermal or infrared sensing.** Out of scope, as in
-  [`Findings/13_Usable_Night_Lighting.md`](../../Findings/13_Usable_Night_Lighting.md) §5.
+- **Thermal or infrared sensing.** Out of scope: the code has no thermal or infrared sensor.
 - **Lunar ephemeris.** No moon light exists to point (§5.2), so there is nothing to compute yet.
 
 ---
@@ -748,8 +746,7 @@ Read from source, in the order it matters.
 directional light and no moon**. The header exposes `SolarTime`, `TimeZone`, the date and DST as the
 entire time-of-day surface — no moon, no night intensity, no ambient floor
 (`CesiumSunSky.h:60-142`). `UpdateSun` rotates the sun and nothing else
-(`CesiumSunSky.cpp:405-466`). Carried forward from
-[`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §2 and re-verified here.
+(`CesiumSunSky.cpp:405-466`).
 
 **Every other light in the level is switched off on purpose.** The bridge iterates
 `ADirectionalLight` and `ASkyLight` and sets their light components invisible so that CesiumSunSky is
@@ -766,24 +763,26 @@ means the fallback illumination the level template shipped with is gone.
   `LightManager`, `get_all_lights` — no hits); and
 - a **generated** world contains no `UCarlaLight` to control. Its content is the `OpenDriveMap`
   template — whose actors are `OpenDriveGenerator_2`, `PlayerStart_1`, `DirectionalLight_1`,
-  `SkyLight_1`, `LevelScriptActor` only
-  ([`Findings/14`](../../Findings/14_Weather_Resurrection.md) §1, byte-read of
+  `SkyLight_1`, `LevelScriptActor` only (byte-read of
   `Content/Carla/Maps/OpenDriveMap.umap`) — plus a photoreal Cesium tileset, the generated road mesh
   and the generated signal actors. None of those carries a light.
 
 **The photoreal tiles cannot be relit.** Asset 2275207 is unlit photogrammetry whose textures already
 encode the aerial capture's sun-lit albedo, cast shadows and ambient occlusion from a daytime pass
-([`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §4). Any light added at night is
-*additive on top of* baked daylight: roofs lit by the capture's midday sun still look sunlit, and the
-hard shadows baked into the pavement still point the capture sun's way. There is no per-texel
+(2275207 is the default `--ion-asset-id` in `CarlaControlArgumentParser`, the visual photoreal
+tileset). Any light added at night is *additive on top of* baked daylight: roofs lit by the capture's
+midday sun still look sunlit, and the hard shadows baked into the pavement still point the capture
+sun's way. There is no per-texel
 un-shadow operation. This is a hard ceiling on realism, independent of how much lighting is added.
 
 **Weather cannot help.** The generated world has no `AWeather` actor
-([`Findings/14`](../../Findings/14_Weather_Resurrection.md) §1), so every `set_weather` call fails
-with "weather is disabled". `BP_Carla_Sky` does own a `DirectionalLightComponentMoon`
-(`Carla/Weather/Sky.h:38`) — but resurrecting it as-is would place a second sun, a second sky
-atmosphere and a second sky light against Cesium's, which
-[`Findings/14`](../../Findings/14_Weather_Resurrection.md) §3 explicitly rejects.
+(`ACarlaGameModeBase::InitGame` finds none placed in the level, has no `WeatherClass` to spawn one
+from, and logs "Missing weather class!"), so every `set_weather` call fails with "weather is
+disabled". `BP_Carla_Sky` does own a `DirectionalLightComponentMoon` (`Carla/Weather/Sky.h:38`) —
+but resurrecting it as-is would place a second sun, a second sky atmosphere and a second sky light
+against Cesium's. The bridge keeps `ACesiumSunSky` the only sun by hiding the light component of
+every `ADirectionalLight` and `ASkyLight` actor in the level
+(`UCesiumHeightSampler::ConfigureCesiumForOrigin`).
 
 ### 5.3 How dark, measured
 
@@ -794,7 +793,7 @@ At the sizing site, at the windows the plan already recommends:
 | 07:00 | **+18.38°** | day |
 | 15:00 | **+34.84°** | day |
 | **23:00** | **−60.95°** | **night — 43° past the end of astronomical twilight** |
-| **03:00** — doc 20's class-4 pattern, *a heavy goods vehicle in a residential area at 03:00* | **−34.17°** | **night — 16° past astronomical twilight** |
+| **03:00** — the class-conditioned presence named in `IlluminationLabelAssociation`'s docstring, *a heavy goods vehicle in a residential area at 03:00* | **−34.17°** | **night — 16° past astronomical twilight** |
 
 Both night instants are far below the −18° at which even indirect atmospheric scattering has ceased.
 There is no residual sky light to recover; the physically-based answer to "no light source above the
@@ -815,11 +814,11 @@ whole of the low-light product available without new engine work.
 ### 5.4 What has *not* been measured, and why the verdict stands anyway
 
 **Honesty ledger.** Nobody in this fork has captured a frame at a negative sun elevation and reported
-its pixel histogram. [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §1's "the scene goes
-near-black" is a source-grounded prediction, not a measurement, and this section carries it forward as
-such. Nor is there anything to look back at: **every capture this pipeline has ever made is noon**,
-because `run_SCTMV.py:138` calls `setup_solar_time` unconditionally and the no-`--time` default is
-12:00 (`WorldBuilder.py:231-232`) — §2.1.
+its pixel histogram. That the scene goes near-black is a prediction from source (`ACesiumSunSky`'s
+constructor creates one directional light, the sun, and no other, §5.2), not a measurement, and this
+section carries it forward as such. Nor is there anything to look back at: **every capture this
+pipeline has ever made is noon**, because `run_SCTMV.py:138` calls `setup_solar_time`
+unconditionally and the no-`--time` default is 12:00 (`WorldBuilder.py:231-232`) — §2.1.
 
 The verdict does not depend on that measurement, because the *mechanism* facts settle it: with no
 moon, no artificial light, no relightable surfaces and no reachable exposure control, whatever is
@@ -848,9 +847,9 @@ in §9.
 > ([`08`](08_Collection_And_EPoL.md) §2.9), a clear-sun exposure, fixed. The rest is the tree as measured
 > before.
 
-[`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §2 names a fixed camera exposure as "the
-only night-relevant lever that exists today", via the `exposure_compensation` camera attribute. That
-is stale, and [`08`](08_Collection_And_EPoL.md) §2.8 is right:
+The one night-relevant lever is a fixed camera exposure, which `SensorRig` sets from `--ev` through the
+`exposure_compensation` camera attribute (`SensorRig.py:81-83` in the current tree). In the tree
+measured here that attribute did not exist, and [`08`](08_Collection_And_EPoL.md) §2.8 is right:
 
 - `MakeCameraDefinition` offers `fov`, `image_size_x`, `image_size_y`, the six `lens_*` parameters,
   `enable_postprocess_effects` and `post_process_profile` — and **no exposure attribute of any kind**
@@ -905,10 +904,9 @@ together they are what turns D11.7 from "no" into "yes".
 | **N5 — vehicle headlights** | Already reachable: §6. Contributes forward pools on the road, not overhead signature | The bridge, no new engine work | Negligible at altitude, §6.4 |
 
 Two things that are **not** on this list and should not be attempted: resurrecting `BP_Carla_Sky`
-intact (a second sun —
-[`Findings/14`](../../Findings/14_Weather_Resurrection.md) §3 option 3, rejected), and relighting the
-photoreal tiles (not possible from a single baked capture —
-[`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §4).
+intact (a second sun, where `ConfigureCesiumForOrigin` hides every other level light so that
+`ACesiumSunSky` is the only one), and relighting the photoreal tiles (not possible from a single
+baked capture).
 
 Note that even with all five, the honest description of the product remains **"low-key dusk over a
 day-captured city"**, not a physically faithful night — because N4's light pools are correct and
@@ -922,10 +920,11 @@ everything between them is not. Any night EO deliverable must carry that limitat
    *imagery* of it. [`10`](10_Scale_And_Performance.md)'s recommended plan of "one window on each
    daily peak and one overnight" should be re-read as: the overnight window is behavioural-only until
    N1–N4 are built.
-2. **Doc 20's pattern class 4 is unrenderable as written.** *A heavy goods vehicle in a residential
-   area at 03:00* is a pattern defined by time of day, at −34.17° of sun elevation. Either the class
-   is re-sited into the twilight band for imagery purposes — which changes the pattern — or it stays
-   behavioural-only. **This needs the user** (§12.2).
+2. **The class-conditioned presence pattern (`IlluminationLabelAssociation`'s example) is
+   unrenderable as written.** *A heavy goods vehicle in a residential area at 03:00* is a pattern
+   defined by time of day, at −34.17° of sun elevation. Either the class is re-sited into the
+   twilight band for imagery purposes — which changes the pattern — or it stays behavioural-only.
+   **This needs the user** (§12.2).
 3. **The illumination axis of a stratified corpus is, today, elevation from +86° down to about −6°.**
    That is a wide and genuinely useful range: it includes high sun, low sun, long shadows and the
    golden and civil-twilight bands, which between them cover most of what changes an EO detector's
@@ -1068,14 +1067,16 @@ shows headlights, brake lights or turn signals lit; the authoring skill's genera
 For an EO capture at altitude, honestly:
 
 - A brake lamp is rear-facing and emissive. At the measured ~1.1 km with a 90° camera a vehicle is
-  about **3 px** long ([`Findings/09`](../../Findings/09_Telemetry_CoT_Contract.md) §5.1), so a brake
-  lamp is a sub-pixel emitter contributing a fraction of one pixel's value. **Inference**, from the
-  measured apparent size — not measured directly.
+  about **3 px** long (the projected footprint `BoxProjection.ApparentWidthPx` measures and
+  `CotWriter` writes as `apparent_width_px`), so a brake lamp is a sub-pixel emitter contributing a
+  fraction of one pixel's value. **Inference**, from the measured apparent size — not measured
+  directly.
 - A headlight is a forward-pointing spot. From overhead the sensor sees the *pool on the road ahead*,
   not the lamp. That pool is a real, sizeable feature at low altitude or oblique look angles, and
   nearly nothing at high nadir.
-- At oblique or ground-level look angles — which [`00`](00_Overview.md) §2 notes is the regime doc 23's
-  physics-driven actuation was written for — lights matter a great deal more.
+- At oblique or ground-level look angles — which [`00`](00_Overview.md) §2 notes is the regime
+  physics-driven actuation was written for (not built: `VehicleBodyPool` turns every SUMO body's
+  physics off and the session poses it from SUMO) — lights matter a great deal more.
 
 > **D11.10 — the SUMO-signal mapping is on by default (`vehicle_lights = "sumo_signals"`), and
 > headlight driving is on by default, because the cost is measured at effectively zero (§6.6) and the
@@ -1489,7 +1490,7 @@ an inference from the light's configuration, not a measurement**, and it is the 
 
 | # | Property | Why it matters |
 |---|---|---|
-| **M-SOL-1** | **Pixel statistics of a headless capture at sun elevation −61° and at −34°, and at −3°, 0°, +3° and +6°.** Report the mean, the 5th and 95th percentile and the fraction of pixels at zero — **and the camera's exposure state alongside, because without it the result is uninterpretable (§5.5)**. Costs one short run on an existing world | Bounds the dim end of the twilight product and converts [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §1's "near-black" prediction into a number. §5.4 |
+| **M-SOL-1** | **Pixel statistics of a headless capture at sun elevation −61° and at −34°, and at −3°, 0°, +3° and +6°.** Report the mean, the 5th and 95th percentile and the fraction of pixels at zero — **and the camera's exposure state alongside, because without it the result is uninterpretable (§5.5)**. Costs one short run on an existing world | Bounds the dim end of the twilight product and converts the "near-black" prediction into a number. §5.4 |
 | **M-SOL-2** | **Whether a vehicle's lights are legible in a capture at operational altitude.** Capture one vehicle at each of the rig's altitudes with `Brake` asserted and cleared, and difference the frames | Confirms or overturns D11.10's default and §6.4's sub-pixel inference |
 | **M-SOL-3** | **Per-tick cost of the advancing policy's write at a full population** — Arapahoe's, peak 437 and median 336 live vehicles, the population [`10`](10_Scale_And_Performance.md) M2 measures pace at — one `set_solar_epoch` round trip and one `UpdateSun()` per tick. Difference the tick time under `advance` against `freeze_at_window_start`, all else held | The only per-tick cost the advancing policy adds. Measured at 0.09 ms per tick on an empty world (§9.1); the world's load at a full population is what is not measured. The written clock changes whole second once in twenty ticks at `rate = 1.0`, so the light's direction does too |
 | **M-SOL-4** | **Unconditional per-tick cost of `GetSolarState` inside `WorldObserver::Serialize`.** It performs **three full actor-list sweeps per tick** — `TActorIterator<ACesiumSunSky>` (`CesiumHeightSampler.cpp:683-697`), `ACesiumGeoreference::GetDefaultGeoreference` which itself iterates all actors (`CesiumGeoreference.cpp:70-88, 144-161`), and `TActorIterator<ACesiumTimeOfDayController>` (`CesiumHeightSampler.cpp:786-794`) | This runs on **every** tick, including under `frozen` where the answer cannot have changed, and it scales with total actor count — which in a capture window includes every vehicle SUMO has, 437 at Arapahoe's peak, plus every generated signal actor. The fix is to cache the three pointers and the packed block, invalidated on `UpdateSun`, making the frozen policy genuinely free (§10, F2) |
@@ -1512,8 +1513,8 @@ exists or would silently corrupt data that is about to.
 | **F6** | **The solar date defaults to the host system date and the time defaults to noon**, applied unconditionally including in `--no-build` attach mode | `WorldBuilder.py:227-232`; `run_SCTMV.py:138`, whose comment at `:137` — "the sun is respawned on each world build" — is false for attach mode | Two runs of the same scenario on different days render under different seasonal sun angles, with nothing recording that the date was not chosen. Measured seasonal range at the sizing site: peak elevation 39.41° to 86.29°. **Every capture and every shipped CoT dataset this pipeline has produced is therefore noon on an arbitrary date** |
 | **F7** | **Setting the sun is two RPCs and two `UpdateSun()` calls**, so between them the world holds the new time on the old date | `WorldBuilder.py:238-239`; `CesiumHeightSampler.cpp:731, 749` | Harmless if no frame is captured between, which is not guaranteed. The session uses D11.5's atomic call |
 | **F8** | **The `_solar` block is silently omitted when the cache is unpopulated**, rather than failing | `CotWriter.cs`; `SolarMetadata.cs` | Right for a frame, wrong for a run. The session's audit stops a run whose snapshot carries no sun after one was bound (§8.3), and each recorder counts a capture written without a block, gated at zero by the run's closeout (§8.4) |
-| **F9** | **The camera exposure API is implemented and never published to clients**, so `--ev` is inert and exposure is uncontrolled auto | `ActorBlueprintFunctionLibrary.cpp:313-410` lists no exposure attribute and `:1359-1382` applies none, while the full API exists at `SceneCaptureSensor.h:237, 240, 255, 351, 357, 363, 369` (implemented `SceneCaptureSensor.cpp:108-399`, override bits at `:1057-1090`); `SensorRig.py:66-67` guards on `has_attribute` | An omitted publication, not a missing capability. The one night lever [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §2 relied on is unreachable, **and auto-exposure across a dusk window compensates away the illumination change the corpus is recording** — so this blocks the daylight corpus too (D11.17). Confirms [`08`](08_Collection_And_EPoL.md) §2.8 *Closed 2026-10-07 (stage K): the five exposure attributes are published and applied over the profile, `--ev` sets the compensation, and every capture records the exposure (§5.5).* |
-| **F10** | **`Findings/13` §2's claim that no time-of-day RPC exists is now stale.** Its Phase 0 was built | `CarlaServer.cpp:614-680`; `CesiumHeightSampler.cpp:718-845`; `CesiumTimeOfDayController.cpp` | Not a code defect, a documentation one. [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) should be amended to mark Phase 0 done and to correct §2's `--ev` claim per F9 |
+| **F9** | **The camera exposure API is implemented and never published to clients**, so `--ev` is inert and exposure is uncontrolled auto | `ActorBlueprintFunctionLibrary.cpp:313-410` lists no exposure attribute and `:1359-1382` applies none, while the full API exists at `SceneCaptureSensor.h:237, 240, 255, 351, 357, 363, 369` (implemented `SceneCaptureSensor.cpp:108-399`, override bits at `:1057-1090`); `SensorRig.py:66-67` guards on `has_attribute` | An omitted publication, not a missing capability. The one night lever, `SensorRig`'s `--ev`, is unreachable, **and auto-exposure across a dusk window compensates away the illumination change the corpus is recording** — so this blocks the daylight corpus too (D11.17). Confirms [`08`](08_Collection_And_EPoL.md) §2.8 *Closed 2026-10-07 (stage K): the five exposure attributes are published and applied over the profile, `--ev` sets the compensation, and every capture records the exposure (§5.5).* |
+| **F10** | **A time-of-day RPC exists.** The server binds `set_solar_time`, `set_solar_date`, `set_solar_epoch`, `get_solar_state` and `set_time_advance`, which set, advance and read `ACesiumSunSky`'s clock and date through the bridge | `CarlaServer.cpp:614-680`; `CesiumHeightSampler.cpp:718-845`; `CesiumTimeOfDayController.cpp` | Not a code defect |
 | **F11** | **A world inherits the previous session's date.** Configuring the georeference applies noon, DST-off and the longitude zone to a spawned or found sun, but not the date, which the scenario declares | `CesiumHeightSampler.cpp`, the sun block of `ConfigureCesiumForOrigin`; measured in stage C, a world reaching a session with no epoch holds 2019-09-21 | **A capture's illumination is a function of session history** unless something binds the date — including a still-true `advancing` flag. Closed by D11.16: the session binds everything and records the sun it found |
 | **F12** | **`--time-rate` is a silent no-op without `--time-advance`** | `WorldBuilder.py:246-247` — the rate is read only inside `if args.time_advance:` | An operator asks for accelerated sun and gets a frozen one, with no message. Closed by D11.18, which makes the combination a refusal |
 | **F13** | **The solar state reports the geometric sun elevation while the scene is lit by the refraction-corrected one.** `ACesiumSunSky::UpdateSun_Implementation` computes `Elevation` and `CorrectedElevation` and rotates the sun directional light by `-CorrectedElevation` (`CesiumSunSky.cpp:436-441`), but the bridge reads back `Elevation` alone | `CesiumSunSky.cpp:436-441`; `CesiumHeightSampler.cpp` `GetSunElevationDeg`. Measured at the Arapahoe site: the two differ by **+0.089° to +0.284°** near the horizon | Every threshold in this section - D11.9's +3.0°/+6.0° headlight band, D11.7's -6° corpus floor, §4.4's illumination bands and any declared window elevation - is stated against the geometric value while the imagery is lit by the corrected one. Near the horizon that is **5 to 25 per cent of the elevation itself**, which is exactly where the capture windows sit. `get_solar_state` reports both, the corrected value appended last, and the per-tick episode-state header carries both from a server built with the widened header (§8.1). Declarations are made against the corrected value, with the geometric carried beside it (§12, question 7), and a capture's band is cut from the corrected value wherever its block carries it (§8.2) |
@@ -1559,9 +1560,10 @@ exists or would silently corrupt data that is about to.
    satisfies (a) and (b) together, with (c) available later as a corpus axis at no authoring cost.
 
 2. **Do the night-defined pattern classes stay behavioural-only, or are they re-sited into the
-   twilight band?** Doc 20's class 4 is *a heavy goods vehicle in a residential area at 03:00*, at
-   −34.17° of sun elevation — unrenderable per D11.7. Re-siting it to, say, 05:30 makes it
-   renderable but changes the pattern, and "at 03:00" may be the point. **Needs the user.**
+   twilight band?** The class-conditioned presence `IlluminationLabelAssociation` keeps authorable
+   is *a heavy goods vehicle in a residential area at 03:00*, at −34.17° of sun elevation —
+   unrenderable per D11.7. Re-siting it to, say, 05:30 makes it renderable but changes the pattern,
+   and "at 03:00" may be the point. **Needs the user.**
    **Recommendation: keep the authored time and capture it behavioural-only**, recording the window
    as `imagery: false` in the manifest, and re-site only if the imagery is what the class is for.
    This preserves the truth record, which is the part that is not blocked.

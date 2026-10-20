@@ -11,8 +11,8 @@ captured under, the capture, the per-image labels, the corpus's own
 metadata, and the contracts by which an external detect-and-track team and an external
 estimated-pattern-of-life (EPoL) team read all of it. Covers both products: a **recorded corpus** and a
 **live exercise** in which the same records leave the process over a socket while the world runs.
-**Audience:** an engineer who has read neither the conversation that produced this plan nor the whole
-Findings set. Every external claim is cited.
+**Audience:** an engineer who has not read the conversation that produced this plan. Every external
+claim is cited.
 
 ### Change history
 
@@ -65,15 +65,15 @@ Findings set. Every external claim is cited.
 > service without any part of this plan changing.** That is the test every paragraph of §7 and §11 is
 > written to pass, and **D8.39** states it as a decision.
 
-**Reads from:**
-[20 — Behavioral Annotation and Areas of Interest](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) ·
-[17 — Photoreal Occlusion Metric](../../Findings/17_Photoreal_Occlusion_Metric.md) ·
-[16 — Sensor Pose in Recordings](../../Findings/16_Sensor_Pose_In_Recordings.md) ·
-[19 — Image Labeling during Orbit](../../Findings/19_Image_Labeling_during_Orbit.md) ·
-[13 — Usable Night-Time Lighting](../../Findings/13_Usable_Night_Lighting.md) ·
-[12 — CarlaNet.Labeling](../../Findings/12_CarlaNet_Labeling.md) ·
-[09 — Telemetry CoT Contract](../../Findings/09_Telemetry_CoT_Contract.md) ·
-[23 — SUMO Traffic Integration](../../Findings/23_SUMO_Traffic_Integration.md).
+**Reads from the code:**
+supervision and areas of interest (`SupervisionBinder`, `AnnotationVocabulary`, `AreaOfInterestResolver`) ·
+occlusion (`OcclusionEstimator`) ·
+sensor pose and intrinsics (`VehicleTelemetryService.ComputeSensorPose`, `SensorMetadata`) ·
+orbit capture (`OrbitSensorController`) ·
+the sun (`ACesiumSunSky` and the `set_solar_epoch` RPC family) ·
+per-image boxes (`BoxProjector`, `CaptureBoxes`) ·
+the truth sidecar (`CotWriter`, `TruthSidecarSchema`) ·
+the SUMO drive (`CarlaNet.Sumo`, `SumoDriveSession`).
 
 **Depends on, and states the property it needs rather than designing it:**
 [`01_Architecture.md`](01_Architecture.md) (process topology, `SolarStateActuator`, `SumoSignalProjector`),
@@ -270,17 +270,16 @@ rig's RGB camera with that rig's depth camera attached (`run_SCTMV.py:190-192`).
 
 ### 2.2 The single-camera limit is a shim field, not an architectural one
 
-This paragraph corrects a premise doc 20 decision 11 rests on, and it was re-verified against the source
-because the multi-camera decision (§3.4) turns on it.
+This paragraph corrects the premise that a second camera needs a second client process, and it was
+re-verified against the source because the multi-camera decision (§3.4) turns on it.
 
 **A recorder already opens two streams, not one.** `FrameRecorder`'s constructor takes a single 24-byte
 *camera* token and rejects anything else
 (`CarlaNet/src/CarlaNet.Recording/FrameRecorder.cs:83-90`), but it opens a subscription for the depth
 stream at `FrameRecorder.cs:112-113` (via `OcclusionEstimator`, whose own constructor subscribes at
-`OcclusionEstimator.cs:83-90`) and a second for the camera at `FrameRecorder.cs:125-126`. The range
-`FrameRecorder.cs:59-98`, which doc 20 §2.5 and §7.3 both cite as the place a single stream token is
-bound, is the occlusion counter block (`:59-69`) followed by the constructor's XML documentation and
-signature (`:71-90`). It binds nothing.
+`OcclusionEstimator.cs:83-90`) and a second for the camera at `FrameRecorder.cs:125-126`. Lines
+`FrameRecorder.cs:59-98` are the occlusion counter block (`:59-69`) followed by the constructor's XML
+documentation and signature (`:71-90`); they bind no stream token.
 
 **The transport imposes no limit either.** `CarlaClient.SubscribeToStream` parses a token, constructs a
 `SensorStream` and appends it to a list (`CarlaNet/src/CarlaNet.Transport/CarlaClient.cs:1748-1754`).
@@ -297,8 +296,8 @@ world-observer stream and one actor cache.
 
 **Consequence:** several collection channels in one process is a rig change and a shim change —
 or no shim change at all, since a purpose-built rig can construct `FrameRecorder` per channel directly,
-as the shim itself does (`carlanet/__init__.py:1907, 1924-1929`). Doc 20 §7.3's premise that "adding one
-today means adding a client process" is wrong, and §3.4 takes the decision on the corrected premise.
+as the shim itself does (`carlanet/__init__.py:1907, 1924-1929`). The premise that adding a camera
+means adding a client process is wrong, and §3.4 takes the decision on the corrected premise.
 
 What is *not* free is throughput: N channels means 2N or 3N subscriptions on one connection, and
 `run_SCTMV.py:215-219` records two streams already saturating it (§2.3).
@@ -356,9 +355,8 @@ measured: `occlusion`, `occlusion_level`, `occlusion_samples`, only ever on a ve
 in the picture; where they are absent, `occlusion_unmeasured` says why in one word -- `behind_camera`,
 `outside_frame`, `beyond_draw_distance`, `no_depth_camera`, `no_depth_capture`, `depth_out_of_step`,
 `depth_pose_mismatch`, `beyond_depth_range` or `no_sample` -- and never beside a measurement
-(`CotWriter.cs`, [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). Before 2026-10-05 the five
-occlusion fields were simply absent when unmeasured, in six different situations, and nothing said
-which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect.
+(`CotWriter.cs`; the reasons are `OcclusionUnmeasured`'s). Before 2026-10-05 the five occlusion
+fields were simply absent when unmeasured, in six different situations, and nothing said which; `audit_truth_sidecars.py` reports a record without `in_frame` as a defect.
 
 **The capture identity is the join key that already works.** `CaptureIdentity(Tick, SimTimeSeconds,
 RunId, ScenarioId, Seed)` (`CaptureMetadata.cs`) is taken from the very sensor frame that
@@ -429,7 +427,7 @@ section may assume one. Every vehicle is telemetered and labelled from the first
 vehicle that appears inside a frame is in the imagery from that tick, which is §5.7's subject.
 
 The vehicle fade, which drew staging traffic part-transparent at the edge of the scene, was removed
-from the code on 2026-10-18, together with doc 17 §12.2's arrival gate, which kept such a vehicle out
+from the code on 2026-10-18, together with the client-held arrival gate, which kept such a vehicle out
 of truth until it was fully drawn.
 
 ### 2.7 The recorder already computes the 3D box and throws it away
@@ -440,11 +438,11 @@ than telemetry: it is not part of the CoT contract and is not serialized to the 
 
 So the oriented 3D box for every telemetered vehicle, frame-coherent with the pixels, already exists in
 memory at write time. **Per-image labelling is a serialisation change plus a projection, not a new
-measurement.** That is the same conclusion doc 12 §2 reached, and it is still true. Since 2026-10-05
-the projection itself runs for every record of every capture (`BoxProjector.Mark`, §2.5), and what is
-written of it is where the box fell (`in_frame`) and its apparent size. Since 2026-10-06 a vehicle in
-the picture also carries its box on its record in the sidecar: the projected rectangles, the share
-outside the picture, the range, the body's tilt and the 3D box's eight corners (§5.1).
+measurement.** Since 2026-10-05 the projection itself runs for every record of every capture
+(`BoxProjector.Mark`, §2.5), and what is written of it is where the box fell (`in_frame`) and its
+apparent size. Since 2026-10-06 a vehicle in the picture also carries its box on its record in the
+sidecar: the projected rectangles, the share outside the picture, the range, the body's tilt and the
+3D box's eight corners (§5.1).
 
 ### 2.8 What does not exist — corrected
 
@@ -453,13 +451,13 @@ the reason §2.9 exists.**
 
 | Named in | Thing | State on 2026-09-18 |
 |---|---|---|
-| doc 12 | `CarlaNet.Labeling` assembly | **Absent.** `CarlaNet/src/` holds Map, Nav, Python, Recording, Scenario, Sensors, TrafficManager, Transport, Types — no Labeling |
-| doc 19 | `Training_Data_Generator.py` | **Absent** from the tree |
-| doc 19, doc 12 | `eo_observer.py` | **Absent**; only a stale `CarlaNet/python/__pycache__/eo_observer.cpython-314.pyc` remains |
-| doc 20 §7.5 | run manifest | **Absent.** Nothing writes one |
-| doc 20 §4.2 | `scenario_id` supplied to the recorder | **Still never supplied, at a new address.** The live call site is `CarlaControl/src/carlacontrol/NativeRecorder.py:96-111`, which passes `run_id`, `seed`, `fov`, the four `platform_*` arguments, `depth_camera`, `occlusion_margin_m` and `occlusion_samples` — and no `scenario_id`, though the shim accepts one (`carlanet/__init__.py:1876`). `ScenarioController` never learns an id at all (`ScenarioController.py:30`) |
+| — | `CarlaNet.Labeling` assembly (never built; `BoxProjector` and `CaptureBoxes` in `CarlaNet.Recording` project the boxes) | **Absent.** `CarlaNet/src/` holds Map, Nav, Python, Recording, Scenario, Sensors, TrafficManager, Transport, Types — no Labeling |
+| — | `Training_Data_Generator.py` (still absent; no code writes a YOLO or OBB label file) | **Absent** from the tree |
+| — | `eo_observer.py` (still absent) | **Absent**; only a stale `CarlaNet/python/__pycache__/eo_observer.cpython-314.pyc` remains |
+| — | run manifest (built: `RunManifestWriter` writes `truth/manifest.jsonl`) | **Absent.** Nothing writes one |
+| — | `scenario_id` supplied to the recorder (built: `NativeRecorder.resolve_scenario_id` supplies it) | **Still never supplied, at a new address.** The live call site is `CarlaControl/src/carlacontrol/NativeRecorder.py:96-111`, which passes `run_id`, `seed`, `fov`, the four `platform_*` arguments, `depth_camera`, `occlusion_margin_m` and `occlusion_samples` — and no `scenario_id`, though the shim accepts one (`carlanet/__init__.py:1876`). `ScenarioController` never learns an id at all (`ScenarioController.py:30`) |
 | — | any detector, tracker, or EPoL client | **Absent.** The only mention of YOLO in code is a comment (`CarlaNet/python/cot_telemetry.py:5`) |
-| doc 13 §6 Phases 1–3 | a moon light, a night sky-light floor, street lamps, emissive facades | **All absent.** `ACesiumSunSky` still creates exactly one directional light at 111 000 lux, one real-time `SkyLight` with `bLowerHemisphereIsBlack = false`, and one atmosphere — **no second directional light** (`Unreal/CarlaUnreal/Plugins/CesiumForUnreal/Source/CesiumRuntime/Private/CesiumSunSky.cpp:59`, `:82`, `:86`). A search of `CarlaControl/src` and `CarlaNet/src` for `street_lamp`, `StreetLight`, `PointLight` or `SpotLight` returns exactly one hit — `MapLayer.StreetLights` (`CarlaNet/src/CarlaNet.Types/Rpc/Enums/MapLayer.cs:8`), a layered-map flag for the stock towns with nothing to do with a generated world. **Doc 13's Phase 0 is built and everything after it is not** (§4.6) |
+| — | a moon light, a night sky-light floor, street lamps, emissive facades (still absent) | **All absent.** `ACesiumSunSky` still creates exactly one directional light at 111 000 lux, one real-time `SkyLight` with `bLowerHemisphereIsBlack = false`, and one atmosphere — **no second directional light** (`Unreal/CarlaUnreal/Plugins/CesiumForUnreal/Source/CesiumRuntime/Private/CesiumSunSky.cpp:59`, `:82`, `:86`). A search of `CarlaControl/src` and `CarlaNet/src` for `street_lamp`, `StreetLight`, `PointLight` or `SpotLight` returns exactly one hit — `MapLayer.StreetLights` (`CarlaNet/src/CarlaNet.Types/Rpc/Enums/MapLayer.cs:8`), a layered-map flag for the stock towns with nothing to do with a generated world. **The time-of-day RPCs (`set_solar_time`, `set_solar_date`, `set_time_advance`) are built and none of these lights is** (§4.6) |
 | upstream CARLA | a camera **motion-blur attribute** | **Still absent as an attribute** — the camera definition offers `fov`, `image_size_x/y`, `lens_*`, `enable_postprocess_effects`, `post_process_profile`, `sensor_tick` (`ActorBlueprintFunctionLibrary.cpp:244-254`, `:313-410`) and a search for `motion_blur` finds nothing. **But motion blur is switched on in every shipped profile and is rendering today** (§2.9, §6.5): the knob is absent from this fork, the effect is not |
 | — | `exposure_compensation` | **Still not offered by the server's camera definition** — a search for `exposure` in `ActorBlueprintFunctionLibrary.cpp` returns nothing — so `SensorRig`'s `--ev` path is inert behind its `has_attribute` guard (`SensorRig.py:66-67`). The guard's other half never fires: `--ev` carries `default=0.0`, not `None` (`CarlaControlArgumentParser.py:237-241`), so `args.ev is not None` is always true and only `has_attribute` blocks it. **But exposure is fully settable at spawn, by a different attribute that does exist** (§2.9), so "the rig cannot currently set either" is **half wrong**, and §4.2 states what is actually true |
 
@@ -628,11 +626,13 @@ Two things follow for collection.
 
 ### 3.1 How much a camera can actually see — measured geometry
 
-The camera is a pinhole with square pixels and a centred principal point (doc 16 §4.4), so
+The camera is a pinhole with square pixels and a centred principal point
+(`VehicleTelemetryService.ComputeSensorPose` writes `fy = fx` and `cx, cy` at the frame's centre), so
 `fx = W / (2·tan(hfov/2))`. At the defaults — 1280×720, 90° (`CarlaControlArgumentParser.py:236`,
 `:274-275`) — `fx = 640 px` exactly, and the ground sample distance at slant range `R` is `R/640` metres
-per pixel. Computed here; it reproduces doc 17 §12.3's measured figures (a 4.5 m vehicle at 555 m is
-about 5 px, at 914 m about 3 px) to within a tenth of a pixel, so the model and the measurement agree.
+per pixel. Computed here; `BoxProjection` projects through the same focal length, and the model
+reproduces the measured apparent sizes (a 4.5 m vehicle at 555 m is about 5 px, at 914 m about 3 px)
+to within a tenth of a pixel, so the model and the measurement agree.
 
 | slant range | GSD (m/px) | 4.5 m vehicle | 28 m/s over 1.0 s | over 0.5 s | over 0.1 s |
 |---|---|---|---|---|---|
@@ -647,9 +647,11 @@ about 5 px, at 914 m about 3 px) to within a tenth of a pixel, so the model and 
 28 m/s is the measured median vehicle speed in the sizing scenario (§6.1).
 
 At 90° the largest slant range at which a 4.5 m vehicle reaches a given pixel length is 960 m for 3 px,
-576 m for 5 px, 288 m for 10 px, 144 m for 20 px. Doc 17 §12.3 records that neither resolution nor
-field of view affects range *precision*, but that a narrower field of view buys more resolution of the
-occlusion metric than a larger frame does; the same is true of a detection.
+576 m for 5 px, 288 m for 10 px, 144 m for 20 px. As measured against the depth camera, neither
+resolution nor field of view affects range *precision*, but a narrower field of view buys more
+resolution of the occlusion metric than a larger frame does, because the metric's sample count is set
+by the vehicle's footprint in pixels (`OcclusionEstimator`, `VehicleOcclusion.Samples`); the same is
+true of a detection.
 
 **The footprint at a usable resolution is fixed, and it is small.** Holding 10 px on a 4.5 m vehicle
 means holding GSD at 0.45 m/px, and at 1280×720 that is a **576 × 324 m ground swath — 0.187 km² —
@@ -669,10 +671,10 @@ Measured against the sizing scenario: the Bahonar network's `convBoundary` is
 resolution covers **0.64 % of it.**
 
 That single number decides the rig. A seven-day, 29 km², 245-flow scenario cannot be observed by one
-camera in any useful sense, and the "honest denominator" of doc 20 §2.5 will be nearly empty unless
-cameras are **aimed at the places the annotations are about**. Coverage is a design input, not an
-outcome. §4.1 adds the second design input, which is that the same swath contains a shadow field whose
-size varies by a factor of fourteen with the sun.
+camera in any useful sense, and the honest denominator, the annotated intervals at least one camera
+observed, will be nearly empty unless cameras are **aimed at the places the annotations are about**.
+Coverage is a design input, not an outcome. §4.1 adds the second design input, which is that the same
+swath contains a shadow field whose size varies by a factor of fourteen with the sun.
 
 ### 3.2 The unit of collection is a channel, not a camera
 
@@ -681,8 +683,8 @@ A "camera" in this rig is three co-posed sensors, of which the first is the prod
 | Sensor | Role | Required? |
 |---|---|---|
 | `sensor.camera.rgb` | the imagery — the only product a consumer ever sees | yes |
-| `sensor.camera.depth` | the occlusion measurement (doc 17 §12.1) | yes: every recording camera carries one, attached to it, and nothing turns the measurement off (2026-10-05) |
-| `sensor.camera.instance_segmentation` | modal (visible-region) vehicle masks, the doc 17 §5.2 upgrade | optional |
+| `sensor.camera.depth` | the occlusion measurement (`OcclusionEstimator`) | yes: every recording camera carries one, attached to it, and nothing turns the measurement off (2026-10-05) |
+| `sensor.camera.instance_segmentation` | modal (visible-region) vehicle masks (not built: no rig spawns one, and the shim only decodes its image) | optional |
 
 The depth camera **must** be held at the RGB camera's pose and field of view: `OcclusionEstimator`
 refuses a pair whose poses have drifted (`OcclusionEstimator.cs:161-172`), and `SensorRig` already moves
@@ -698,17 +700,18 @@ batch ([`12`](12_Operator_Control_Surface.md) check 47). `run_sumo_drive.py`'s f
 depth camera the same way (`spawn_depth_camera`). Every channel has one, and so does every camera the
 drive records from: the measurement has no switch since 2026-10-05 (§2.5).
 
-On the third: doc 12 §1 rejected segmentation cameras *as a source of bounding-box truth*, because
-Cesium photoreal tiles are not CARLA actors and every building, tree and terrain pixel falls into
-"Unlabeled". That reasoning is sound and unchanged. It does **not** apply to the use wanted here:
-vehicles *are* CARLA actors, so an instance-segmentation camera gives an exact per-vehicle visible mask
-against an unlabelled background, which is precisely the modal mask doc 17 §5.2 wants and the
-`occlusion_src` attribution doc 17 §6 defers. Its other advertised benefit, weighting a translucent
-occluder by its opacity (doc 17 §9), has no subject, because every vehicle is drawn at full visibility
-(§2.6). **It has a second use**: at low sun and at night
-the amodal box and the visible extent diverge by the whole vehicle (§5.8), and the instance mask is the
-only thing in the rig that measures the divergence rather than assuming it. Adopting it is optional and
-additive; nothing depends on it.
+On the third: segmentation cameras are rejected *as a source of bounding-box truth*, because Cesium
+photoreal tiles are not CARLA actors and every building, tree and terrain pixel falls into
+"Unlabeled"; the boxes come from projecting each vehicle's 3D box (`BoxProjector`). That
+reasoning is sound and unchanged. It does **not** apply to the use wanted here: vehicles *are* CARLA
+actors, so an instance-segmentation camera gives an exact per-vehicle visible mask against an
+unlabelled background, which is precisely the modal mask the depth measurement cannot give
+(`OcclusionEstimator` yields only a fraction) and the `occlusion_src` attribution the sidecar
+does not carry. Its other advertised benefit, weighting a translucent occluder by its opacity, has no
+subject, because every vehicle is drawn at full visibility (§2.6). **It has a second use**: at low
+sun and at night the amodal box and the visible extent diverge by the whole vehicle (§5.8), and the
+instance mask is the only thing in the rig that measures the divergence rather than assuming it.
+Adopting it is optional and additive; nothing depends on it.
 
 Note that the depth and segmentation cameras are **not** given the post-process pair — only the RGB
 camera is (`SceneCaptureCamera.cpp:19-22` versus `DepthCamera.cpp:14`, §2.9) — which is correct, because
@@ -736,8 +739,9 @@ promise coverage of an interval and a stare alone cannot give look-angle diversi
 consecutive captures at 2 Hz, regardless of altitude** — nearly two vehicle lengths at 518 m. Platform
 translation adds only 3–5 px on top (5.2 m/s at a 200 m radius, 26 m/s at 1000 m). So the dominant
 image-space motion in an orbit collect is *camera rotation*, not vehicle motion, and any tracker must
-compensate for ego-motion using the recorded pose and intrinsics before it associates anything. Doc 16
-put both in the sidecar and the PNG; this is what they are for.
+compensate for ego-motion using the recorded pose and intrinsics before it associates anything. The
+recorder puts both in the sidecar (`CotWriter`'s platform track and `<_carla_intrinsics>`) and the PNG
+(`SensorMetadata`'s `carla:sensor` chunk); this is what they are for.
 
 **An orbit interacts with the sun, and the interaction is not small.** An orbit sweeps the sensor
 azimuth through a full 360° every 240 s while the sun stays where it is, so the sun–target–sensor
@@ -749,51 +753,53 @@ absolute sun azimuth, and an orbit collect samples that whole axis for free, whi
 
 ### 3.4 The multi-camera decision
 
-Doc 20 decision 11 states the problem and demands the decision be taken before multi-camera capture,
-not after: the annotation registry is process-local, a recorder in another process reads an empty
-registry and silently writes `unlabelled` on every vehicle, and the two ways out are (a) publish the
-annotation state to the server the way staging bounds are, or (b) require every recorder to live in the
-executor's process.
+The problem, which has to be decided before multi-camera capture: with a process-local annotation
+registry, a recorder in another process reads an empty registry and silently writes `unlabelled` on
+every vehicle, and the two ways out are (a) publish the annotation state to the server the way staging
+bounds are, or (b) require every recorder to live in the executor's process. (The code takes (a): the
+session sends each change with `update_supervision`, and `CarlaClient.GetCachedSupervision` reads it
+from the world-observer snapshot in any process.)
 
-**The premise behind its framing is wrong, and correcting it splits the question in two.** Doc 20 §7.3
-argues from "adding one camera today means adding a client process". §2.2 shows that is not so: a
-recorder already opens two streams, the transport holds an unbounded list of them, and the only limit is
-a `World`-instance field over a `Client` that hands out fresh `World` objects. So there are two separate
-questions, and they have different answers:
+**The premise behind that framing is wrong, and correcting it splits the question in two.** The
+framing argues from "adding one camera today means adding a client process". §2.2 shows that is not
+so: a recorder already opens two streams, the transport holds an unbounded list of them, and the only
+limit is a `World`-instance field over a `Client` that hands out fresh `World` objects. So there are
+two separate questions, and they have different answers:
 
 | Question | Answer |
 |---|---|
 | **Where does world-scoped state live?** | Published server-side. Unchanged by the correction, and consistent with [`01_Architecture.md`](01_Architecture.md) **D1.10** |
-| **How many processes should a multi-channel capture session use?** | **One**, by default — which the correction makes materially cheaper than doc 20 assumed |
+| **How many processes should a multi-channel capture session use?** | **One**, by default — which the correction makes materially cheaper than a process per camera |
 
 **Decision on the first: publish the annotation state, and publish it on the world-observer snapshot
 rather than through an RPC.**
 
 Reasons, in order of weight:
 
-1. **The silent failure mode is unacceptable and (b) does not remove it, it only forbids it.** Doc 20
-   says so itself: (b) "is free and must then be enforced, because the failure mode is silent". Nothing
+1. **The silent failure mode is unacceptable and (b) does not remove it, it only forbids it.** Option
+   (b) costs nothing to build and must then be enforced, because the failure mode is silent. Nothing
    in the shim or the recorder can detect the difference between "no scenario is running" and "the
-   scenario is running in another process", because both produce an empty registry, and doc 20 decision
-   2 makes `unlabelled` a legitimate written state. A corpus silently collected unsupervised is
-   indistinguishable from a corpus legitimately collected unsupervised.
+   scenario is running in another process", because both produce an empty registry, and `unlabelled`
+   is a legitimate written state (`SupervisionState.Unlabelled`, "No assertion. Never a negative.").
+   A corpus silently collected unsupervised is indistinguishable from a corpus legitimately collected
+   unsupervised.
 2. **(b) is incompatible with the live exercise, which is one of the two products.** A live exercise
    places the consumer outside the simulator process by construction, and the truth writer — which must
    keep recording supervision and coverage while that happens — has to run somewhere. Under (b) it must
    be in the co-simulation process.
-3. *Withdrawn 2026-10-18:* this reason concerned doc 17 §12.2's client-held arrival gate, which was
-   removed from the code with the vehicle fade (§2.6). Reasons 1, 2, 4, 5 and 6 carry the decision.
-4. **The mechanism already exists and has exactly the three properties doc 20 §7.3 asked for.** Solar
-   state rides the world-observer datagram into a `volatile double[]` that is swapped wholesale per
-   frame (`CarlaClient.cs:169`, `:1855`) and read lock-free with no RPC and no poll
+3. *Withdrawn 2026-10-18:* this reason concerned the client-held arrival gate, which was removed from
+   the code with the vehicle fade (§2.6). Reasons 1, 2, 4, 5 and 6 carry the decision.
+4. **The mechanism already exists and has exactly the three properties the annotation state needs.**
+   Solar state rides the world-observer datagram into a `volatile double[]` that is swapped wholesale
+   per frame (`CarlaClient.cs:169`, `:1855`) and read lock-free with no RPC and no poll
    (`CarlaClient.cs:1987-1991`), which is how `FrameRecorder` consumes it at capture time
-   (`FrameRecorder.cs:160-162`). That is tick-stamped, lock-free, snapshot-swapped — doc 20 §7.3's list,
-   already implemented for a different payload. **And the payload in question is precisely the
-   illumination state that §4 makes first-class**, so the mechanism is not merely analogous to what is
-   needed: it is already carrying half of it.
+   (`FrameRecorder.cs:160-162`). That is tick-stamped, lock-free, snapshot-swapped — the three
+   properties, already implemented for a different payload. **And the payload in question is
+   precisely the illumination state that §4 makes first-class**, so the mechanism is not merely
+   analogous to what is needed: it is already carrying half of it.
 5. **Widening the observer packet costs little here.** No client holds the annotation state, the
-   payload is sparse (doc 20 decision 2 makes `unlabelled` the default, so only annotated and nominal
-   actors need an entry), and the alternative is an RPC in the capture path.
+   payload is sparse (`unlabelled` is the default, so only annotated and nominal actors need an entry,
+   which is how `ObservedSupervision` carries it), and the alternative is an RPC in the capture path.
 6. Rebuilds are neutral (team brief §4). "It is more work" is not a reason and does not appear in this
    comparison.
 
@@ -802,10 +808,10 @@ premise changes the recommendation here even though it changes nothing above:
 
 - Every channel then shares one connection, one world-observer stream and one actor cache, so the
   per-tick truth the recorders read is provably the same snapshot rather than N snapshots that agree
-  most of the time. Doc 20 decision 15 calls a per-camera disagreement in `<_supervision>` at one tick a
-  defect; one process makes it structurally impossible rather than merely required. **The same argument
-  now covers illumination**: one process means every channel stamps the same tick with the same solar
-  block, so a per-camera disagreement about what the sun was doing is impossible too.
+  most of the time. A per-camera disagreement in `<_supervision>` at one tick is a defect; one process
+  makes it structurally impossible rather than merely required. **The same argument now covers
+  illumination**: one process means every channel stamps the same tick with the same solar block, so
+  a per-camera disagreement about what the sun was doing is impossible too.
 - The capture-session identity (§3.5) is then trivially assigned once, and the manifest has one writer
   in the process that already holds every channel's coverage.
 - The cost is contention on one connection, measured at two streams already
@@ -815,7 +821,7 @@ premise changes the recommendation here even though it changes nothing above:
 **These two decisions are deliberately independent, and that is the point.** Publication means that
 moving a channel into its own process — for throughput, or because a detector wants to sit beside it, or
 because a live exercise puts a consumer on another machine — is a deployment choice with no correctness
-consequence. Under doc 20's option (b) the same move would silently produce an unsupervised corpus.
+consequence. Under option (b) the same move would silently produce an unsupervised corpus.
 **Correctness must not depend on which process a recorder is in; performance may.**
 
 **Property needed from [`01_Architecture.md`](01_Architecture.md):** the topology must permit a
@@ -826,8 +832,9 @@ collection inside the co-simulation process, this section's design still works; 
 **Property needed from [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md):** the world-scoped
 snapshot must carry, per actor, the supervision state and the instance and phase references, stamped
 with the tick it describes — so that two recorders reading it at different wall-clock moments produce
-identical `<_supervision>` for the same tick, which doc 20 decision 15 requires and calls a defect if
-violated.
+identical `<_supervision>` for the same tick. `ObservedSupervision` is held on the server and carried
+on every snapshot for that reason: two clients of one world can never hold different truth for the
+same frame.
 
 **As built for the render set (2026-09-30), and what it depends on.** The truth sidecar must list the
 bodies a frame drew and name each by its SUMO vehicle, and nothing but the co-simulation session knows
@@ -889,20 +896,21 @@ Three identity defects, one already half-solved:
 - **Session identity exists but is per process, not per session.** `run_SCTMV.py:152` derives
   `run-<UTC>` once per process and hands it to the recorder (`:190-192`), which is the right level for
   today's one-camera rig. `FrameRecorder`'s own fallback derives one from its start instant and the
-  comment calls it "unique enough per recorder" (`FrameRecorder.cs:98-103`) — doc 20 §7.5 correctly
-  identifies that as the wrong property. **Decision: a capture session identity is assigned once and
-  handed to every channel; the per-recorder fallback survives only for a single-channel run.**
+  comment calls it "unique enough per recorder" (`FrameRecorder.cs:98-103`), which is the wrong
+  property for a session of several channels. **Decision: a capture session identity is assigned
+  once and handed to every channel; the per-recorder fallback survives only for a single-channel
+  run.**
 - **`sensor_id` defaults to an actor id.** `platform_uid` defaults to `CARLA-SENSOR-<camera id>`
   (`carlanet/__init__.py:1910`) and the CLI offers `--platform-uid` with that default
-  (`CarlaControlArgumentParser.py:537-541`). Doc 20 §6.3 records that this has the same defect
-  `actor_id` has. **Decision: for a session with more than one channel, an authored `sensor_id` is
-  required, validated unique within the session, and stable across runs.** Everything in §8, §10 and
-  §11 keys on it, and §2.9's finding sharpens it: a camera that must be respawned to change exposure
-  would otherwise change identity mid-session. **As built (2026-10-02), the `sensor_id` is the
-  camera's name:** its directory, the first part of every capture's file name and its platform
-  track's callsign, which had defaulted to `OVERWATCH` for every camera given none. It is unique
-  within the session without regard to case, since a Windows file system holds `Deck` and `deck` as
-  one name, and the camera is spawned under it as its `role_name`. Since 2026-10-05 it is short and
+  (`CarlaControlArgumentParser.py:537-541`). That default has the same defect `actor_id` has: a
+  camera is an actor, so its id differs in every run. **Decision: for a session with more than one
+  channel, an authored `sensor_id` is required, validated unique within the session, and stable
+  across runs.** Everything in §8, §10 and §11 keys on it, and §2.9's finding sharpens it: a camera
+  that must be respawned to change exposure would otherwise change identity mid-session. **As built
+  (2026-10-02), the `sensor_id` is the camera's name:** its directory, the first part of every
+  capture's file name and its platform track's callsign, which had defaulted to `OVERWATCH` for every
+  camera given none. It is unique within the session without regard to case, since a Windows file
+  system holds `Deck` and `deck` as one name, and the camera is spawned under it as its `role_name`. Since 2026-10-05 it is short and
   plain: 1 to 63 ASCII letters, digits, underscores and hyphens, such as `Overwatch_1` or
   `Southeast_1700m_orbit`, and not a Windows device name, a sensor's stock role name, the server's
   own `Camera_<digits>` or another camera's default. **The server issues the names and refuses the
@@ -1020,7 +1028,7 @@ flowchart LR
 
     subgraph WORLDL["World — one lighting authority"]
         SKY["CesiumSunSky<br/>1 directional light, 1 skylight,<br/>1 atmosphere. No moon.<br/>No street lamps. No emissive facades."]
-        TILES["Cesium photoreal tiles<br/>unlit, daytime radiance baked in<br/>(doc 13 §4)"]
+        TILES["Cesium photoreal tiles<br/>unlit, daytime radiance baked in<br/>(ion asset 2275207)"]
         LAMPS["vehicle lamps —<br/>the only light we control<br/>below the horizon"]
     end
 
@@ -1059,8 +1067,8 @@ radiometry, fixed at spawn** (§2.9). **One output format, 8-bit and tonemapped*
 
 The sizing site is at latitude **27.150 12°**, longitude **56.180 65°**, read from the `projParameter`
 of `BahonarPatternOfLife/scenario/Shahid_Bahonar_Port.net.xml` (measured; the same `<location>` element
-carries `netOffset="0.00,0.00"`, which doc 23 §2 measured at Arapahoe and
-[`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §2.7 confirms here).
+carries `netOffset="0.00,0.00"`, which `NetworkFrameCheck` requires of every world package's network
+and [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §2.7 confirms here).
 
 Sun elevation and azimuth at that latitude, computed here from the standard solar-position identity
 `sin h = sin φ sin δ + cos φ cos δ cos H`, at the three declared window hours the plan already names:
@@ -1163,9 +1171,10 @@ everything else in the same frame; a run of frames containing more vehicles is e
 a run containing fewer. Worse for this plan's purpose, **adaptation partially cancels the very covariate
 the corpus is being stratified by**: two windows at different sun elevations can produce similar pixel
 statistics because the camera compensated, so an illumination axis measured in EV at the sensor would
-look flat while the scene illumination varied by stops. Doc 13 §5 reached the same conclusion from the
-determinism side — "prefer scheduled fixed `--ev` over auto-exposure when generating reproducible EO
-frames" — and that is adopted here for a second, independent reason.
+look flat while the scene illumination varied by stops. Determinism gives the same conclusion — a
+fixed exposure produces reproducible frames and auto-exposure does not — and that is adopted here for
+a second, independent reason (`ChannelExposure` defaults every channel to manual exposure and warns
+on `histogram`).
 
 **Decision (D8.26): the corpus uses a fixed, manual, per-window exposure, set in numbers per channel,
 and recorded per capture. Auto-exposure is permitted only in a live exercise and only when recorded as
@@ -1185,9 +1194,9 @@ Three measured properties of the product, and what each costs.
   all four profiles). **Consequence:** the scene's dynamic range is compressed and quantised *before*
   anything is written, so under-exposure is not recoverable and over-exposure is not recoverable. A
   night frame that comes back near-black is black in the data, not merely dark on a screen. This is the
-  single hardest constraint in §4.6's verdict, and it is the one that would survive even if every
-  lighting phase of doc 13 were built, because it is a property of the capture path rather than of the
-  scene.
+  single hardest constraint in §4.6's verdict, and it is the one that would survive even if a moon
+  light, a night sky-light floor, street lamps and emissive facades were all built, because it is a
+  property of the capture path rather than of the scene.
 - **No sensor-noise model.** `filmGrainIntensity = 0` in all four profiles (measured). Real low-light EO
   imagery is noise-dominated: photon shot noise sets the detection floor and a detector trained without
   it learns a clean-dark world that does not exist. **This is a domain gap, it is one-sided (synthetic
@@ -1208,19 +1217,19 @@ Three measured properties of the product, and what each costs.
 
 §4.1 gives the shadow magnitudes. Two further facts bound what any amount of work can achieve.
 
-**The photoreal tiles carry daytime lighting baked into their albedo.** Doc 13 §4 states it plainly:
-asset 2275207 is unlit photogrammetry whose textures "already encode the aerial capture's sun-lit
-albedo, cast shadows, and ambient occlusion from a daytime pass", there is no per-texel operation that
-recovers true albedo from a single baked capture, and any added light is additive on top. Two
-consequences fall on collection rather than on rendering:
+**The photoreal tiles carry daytime lighting baked into their albedo.** Asset 2275207, the default
+`--ion-asset-id` (`CarlaControlArgumentParser`), is unlit photogrammetry whose textures already encode
+the aerial capture's sun-lit albedo, cast shadows and ambient occlusion from a daytime pass; there is
+no per-texel operation that recovers true albedo from a single baked capture, and any added light is
+additive on top. Two consequences fall on collection rather than on rendering:
 
 - **Shadows in the imagery are two populations, and only one of them moves with our sun.** The tiles'
   baked shadows point wherever the aerial capture's sun pointed and are **identical in every capture of
   the corpus, at every declared hour**; the CARLA actors' shadows point wherever `CesiumSunSky` puts
   them. A model that learns to use shadow direction as a cue will learn the *baked* direction, because
-  it is the one that never varies. **Inference, labelled:** this follows from doc 13 §4's statement plus
-  the single-lighting-authority measurement, not from a rendered comparison. It is cheap to check and is
-  listed in §12.1.
+  it is the one that never varies. **Inference, labelled:** this follows from the tiles' baked lighting
+  plus the single-lighting-authority measurement, not from a rendered comparison. It is cheap to
+  check and is listed in §12.1.
 - **Illumination stratification is therefore partial by construction.** Varying the sun varies the
   actors' shading and shadows and the specular response of any lit surface, and does **not** vary the
   tiles' own apparent lighting. A report that claims a model was validated across illumination must say
@@ -1350,9 +1359,9 @@ possible:
 
 | Link | Measured state | Consequence if unfixed |
 |---|---|---|
-| Is there any light below the horizon? | **No.** `CesiumSunSky` has one directional light, one real-time skylight and one atmosphere; no moon, no night floor (`CesiumSunSky.cpp:59`, `:82`, `:86`; doc 13 §2). The generator disables every other light in the level (`CesiumHeightSampler.cpp:358-381`) | The scene's only illumination is a sun below the horizon |
+| Is there any light below the horizon? | **No.** `CesiumSunSky` has one directional light, one real-time skylight and one atmosphere; no moon, no night floor (`CesiumSunSky.cpp:59`, `:82`, `:86`). The generator disables every other light in the level (`CesiumHeightSampler.cpp:358-381`) | The scene's only illumination is a sun below the horizon |
 | Are there artificial lights? | **No.** No street-lamp or emissive-facade ingestion exists anywhere in `CarlaControl/src` or `CarlaNet/src` (§2.8) | Nothing lights the ground, the buildings or the roads |
-| Do the tiles help? | **No, and they cannot.** They are unlit photogrammetry with daytime radiance baked in; multiplying baked radiance by near-zero light gives near-zero, and there is no de-lighting operation (doc 13 §4) | No surface texture survives |
+| Do the tiles help? | **No, and they cannot.** They are unlit photogrammetry with daytime radiance baked in; multiplying baked radiance by near-zero light gives near-zero, and there is no de-lighting operation (the Cesium bridge sets no material on the tileset) | No surface texture survives |
 | Is the exposure right? | **No.** Every capture today runs `Default.json` at EV100 +12.3, a clear-sun exposure (§2.9) | The scene is under-exposed by roughly nine to sixteen stops |
 | Can that be recovered later? | **No.** The product is 8-bit tonemapped sRGB with no raw path (`PngEncoder.cs:37-38`) | The under-exposure is quantised away before the file exists |
 | Is it actually night at 23:00? | **Yes, unambiguously.** At the sizing site the sun at 23:00 is between **−37.4° and −76.0°** below the horizon across the year (computed, §4.1) — far past astronomical twilight at −18°, in every season | There is no twilight term to fall back on |
@@ -1382,27 +1391,30 @@ near-uniform field plus whatever lamps exist, not a night scene. The measurement
   field. **A dusk corpus is available for the cost of setting a time; a night corpus is not available at
   any collection-side cost.**
 - **What is a consequence for the plan, not for this section:** the sizing scenario's 23:00 window and
-  doc 20's class-4 pattern ("a heavy goods vehicle in a residential area at 03:00") are **currently
+  the class-conditioned presence `IlluminationLabelAssociation` keeps authorable ("a heavy goods
+  vehicle in a residential area at 03:00") are **currently
   unrenderable as detector training data**. That is a finding with consequences for corpus design, and
   the right response is to say so in the plan — and in the corpus's own statement of what it does not
   contain (§10.2) — rather than to collect a window of black frames and let a consumer discover it.
 
 **What would change the verdict, in collection terms, so that [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)
-knows what to build for.** Doc 13 §6 already phases the engine work; this is what each phase buys a
-*detector*, which is a different question from what it buys an eye:
+knows what to build for.** The engine work falls into three phases, none of them built
+(`ACesiumSunSky` creates one directional light and nothing ingests street lamps, §2.8); this is what
+each phase buys a *detector*, which is a different question from what it buys an eye:
 
-| Doc 13 phase | What a detector gains | What it still lacks |
+| Engine phase | What a detector gains | What it still lacks |
 |---|---|---|
 | Phase 1 — ambient floor | A non-black frame with no structure. Flat, shadowless, and the tiles still read day-lit | Nothing detectable that was not detectable before; a floor raises the black level, not the contrast between a vehicle and the road |
-| Phase 2 — moon key light | **Modelled vehicles and real cast shadows.** This is the first phase that produces a vehicle-shaped signature at night | The tiles' baked daytime shadows now disagree with the moon's direction in every frame (doc 13 §4) — a fixed, learnable artefact |
+| Phase 2 — moon key light | **Modelled vehicles and real cast shadows.** This is the first phase that produces a vehicle-shaped signature at night | The tiles' baked daytime shadows now disagree with the moon's direction in every frame — a fixed, learnable artefact |
 | Phase 3 — street lamps and emissive facades | **The only night-correct illumination available**, because they are real light sources under our control, producing genuine pools of light on the ground that vehicles pass through | Nothing further in the scene; the remaining gap is the capture path, below |
 | **Independent of all three** | — | **Exposure must become a per-window collection parameter and must be recorded** (§4.2, §4.8), or every phase above is captured at the wrong EV and the work is invisible. This is the collection-side prerequisite and it is on the critical path for any night corpus |
 
 **Recommendation to the plan: order the illumination work by what it unlocks for a detector, not by
 rendering cost.** Publishing the exposure attributes and recording radiometry (§4.8) unlocks the *dusk*
-corpus, which is available immediately and is the largest covariate excursion. Doc 13's Phase 2 is the
-first phase that makes a night vehicle detectable at all. Phase 1 alone produces a readable picture and
-no additional detections, so it should not be mistaken for progress toward a night corpus.
+corpus, which is available immediately and is the largest covariate excursion. The moon key light
+(Phase 2 in the table above, a second directional light `ACesiumSunSky` does not have) is the first
+phase that makes a night vehicle detectable at all. Phase 1 alone produces a readable picture and no
+additional detections, so it should not be mistaken for progress toward a night corpus.
 
 ### 4.7 Freeze or advance: what the collection needs as a default
 
@@ -1551,7 +1563,7 @@ Stated as properties, not designs, per the house rule.
 | 2 | **The civil-to-solar-zone conversion is applied in exactly one place**, so a declared civil hour is not passed raw into `set_solar_time`. 06 §2.7 measured the residual at the sizing site as 14 min 43 s |
 | 3 | **A verdict on the darkness threshold at which lamps switch on**, expressed in `sun_elevation_deg`, because §10.5 stratifies on that same quantity and the two must use one definition |
 | 4 | **The light-mapping table**: which `VEH_SIGNAL_*` bit becomes which `VehicleLightStateFlags` bit, and which lamps the solar state adds. §4.5 states the one guard rail the mapping must respect |
-| 5 | **A decision on whether doc 13's Phase 2 moon light is built**, because it is the first phase that makes a night vehicle detectable at all (§4.6), and §12.2's B-dark result should feed that decision rather than the other way round |
+| 5 | **A decision on whether a moon key light (a second directional light on `ACesiumSunSky`, which has none) is built**, because it is the first phase that makes a night vehicle detectable at all (§4.6), and §12.2's B-dark result should feed that decision rather than the other way round |
 | 6 | **The date-rollover defect is owned there**: the advancing clock wraps at midnight and never advances the date (`CesiumTimeOfDayController.cpp:34-36`), so a multi-day run re-lives one declination. 06 §2.7 measured it; collection only needs the manifest to say whether a rollover occurred |
 
 **From [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md):**
@@ -1575,15 +1587,15 @@ existing record, with no separate label file per image (D8.6), that the 3D box i
 corners, and that only a vehicle in the picture gets a box (`in_frame` of `wholly` or `partly`). Under
 the charter's rule on what a truth file may carry
 ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b, the owner's ruling of 2026-10-05) the record holds geometry and happened facts and nothing that
-depends on a pass mark. Fields, with provenance; the written names and their exact form are
-[09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md).
+depends on a pass mark. Fields, with provenance; the written names and their exact form are in
+`TruthSidecarSchema`, the schema of the sidecar `CotWriter` writes (`CarlaControl/schemas/truth_sidecar.xsd`).
 
 | Field | What it is | Source today |
 |---|---|---|
 | `tick`, `sim_time_s` | the simulation instant | `CaptureIdentity` (`CaptureMetadata.cs:24-29`) |
 | `session_id`, `sensor_id` | which collection, which channel | §3.5 |
 | `actor_id` | intra-run join to the truth sidecar | `VehicleTelemetry.Id`, written as `CARLA-TRUTH-<id>` (`CotWriter.cs:134`) |
-| `entity_id`, `instance_id` | cross-run join to the authored entity and pattern instance | doc 20 §6.3, §7.2 — **not emitted today** |
+| `entity_id`, `instance_id` | cross-run join to the authored entity and pattern instance | **not emitted today** (the code writes the instance id as `instance` on each `<annotation>` of `<_supervision>`, `TruthSidecarSchema`, and writes no `entity_id`) |
 | `class` | detector class: `base_type` plus a `special_type` suffix | `VehicleTelemetry.BaseType/SpecialType`, from the vehicle catalogue |
 | `box3d_local` | 8 corners in CARLA-local metres, from the oriented box | **not written**: the geodetic corners below are, and a consumer holding the world's georeference recovers these from them |
 | `box3d_geodetic` | the same corners as lat/lon/hae, so the label survives a coordinate-frame change | **written since 2026-10-06** on every vehicle in the picture as `<_box3d frame="geodetic">`, eight explicit corners in a fixed order, each converted as the record's own point is (`Geodesy.CarlaLocalToGeodetic` from the same origin, less the height-align offset taken off the point), so a corner and the point agree (`CaptureBoxes.GeodeticCorners`) |
@@ -1594,10 +1606,10 @@ depends on a pass mark. Fields, with provenance; the written names and their exa
 | `occlusion`, `occlusion_level`, `occlusion_samples` | how much is hidden and how well that is known | measured, written only where measured (`CotWriter.cs`) |
 | `occlusion_unmeasured` | why the three above are absent, in one word | **written since 2026-10-05** wherever they are absent, never beside them (§2.4) |
 | `apparent_width_px`, `apparent_height_px` | projected footprint including any part off-frame | from the projection, written wherever the box has a footprint (`CotWriter.cs`) |
-| `range_m` | camera-to-centre distance; a natural loss weight (doc 12 §5.5) | **written since 2026-10-06** on every vehicle in the picture as `camera_range_m`, the name it already had under a draw distance: one range, one method (`OrientedBox.RangeFrom`), written once whichever needs it |
+| `range_m` | camera-to-centre distance; a natural loss weight | **written since 2026-10-06** on every vehicle in the picture as `camera_range_m`, the name it already had under a draw distance: one range, one method (`OrientedBox.RangeFrom`), written once whichever needs it |
 | `truncation` | fraction of the amodal box outside the frame | **written since 2026-10-06** as `truncation`, the share of `box_px`'s area outside the picture |
 | `pose_source` | `sumo` / `interpolated` / `jump` / `stale`, the owner's words — see §6.4 | **written since 2026-10-06** on every SUMO vehicle in the picture, from the snapshot of the capture's own frame: the SUMO step the session declared to the server and the bodies it named a jump or stale, resolved with the frame's number (`ObservedPoseSource`, `ActorSnapshot.PoseSource`), so a recorder in any process writes the same word. Left out, with `pose_source="unknown"` on the container, where the snapshot carried no pose source (§6.4). The plugin change awaits a build |
-| `yaw_world_deg` | heading supervision for free (doc 12 §7) | `ActorTransform`; the sidecar writes `heading_deg`, and since 2026-10-06 `pitch_deg` and `roll_deg` beside it on every vehicle in the picture |
+| `yaw_world_deg` | heading supervision for free | `ActorTransform`; the sidecar writes `heading_deg`, and since 2026-10-06 `pitch_deg` and `roll_deg` beside it on every vehicle in the picture |
 | `light_state` | the `VehicleLightStateFlags` commanded on for this vehicle at this tick, a happened fact | **written since 2026-10-06** as `lights` on every vehicle in the picture, in words in the flags' order -- `position`, `low_beam`, `high_beam`, `brake`, `right_blinker`, `left_blinker`, `reverse`, `fog`, `interior`, `special1`, `special2`, or `none` (`VehicleLights`) -- from the snapshot of the capture's own frame: the world observer puts each vehicle's light state in `VehicleData` (`light_state`, bytes 30-33 of the 54-byte union, so the per-actor size stays 119) and says so with `VehicleLightStateCarried`. A server built before it leaves those bytes zero and the flag clear; its records go without, and the container says `lights="unknown"` rather than every light off. The plugin and LibCarla change awaits a build |
 
 **Withdrawn 2026-10-05 by the owner's ruling:** `lit_face_px`, `visible_signature`, `shadow_px`,
@@ -1614,15 +1626,17 @@ sidecar's vehicle record. None may be placed in the observation root, and the PN
 
 ### 5.2 Format: a record, not a text line
 
-Doc 12 §4.4 proposed a DOTA-style polygon `.obb.txt` as the artifact. **That should be a derived
-projection, not the primary.** A whitespace line cannot carry `entity_id`, `instance_id`, `sensor_id`,
-the tick, the 3D box, the gate inputs, `pose_source` or any of §5.1's four new fields without becoming a
-private format nobody else reads, and the moment a field is dropped to fit the line it stops existing.
-Write one self-describing record per frame; generate `.obb.txt`, `.yolo.txt` or COCO JSON from it with a
-converter, which costs nothing and can be re-run with different gates (doc 19's "record once, experiment
-with different label parameters" advantage, preserved properly). The illumination fields make the
-argument stronger rather than weaker: a night export that emits lamp centroids and a day export that
-emits body boxes are two projections of one record, and neither is expressible as the other's text line.
+A DOTA-style polygon `.obb.txt` is one candidate artifact (not built: no code writes a label file;
+each box rides on the vehicle's sidecar record, `CotWriter`). **That should be a derived projection,
+not the primary.** A whitespace line cannot carry `entity_id`, `instance_id`, `sensor_id`, the tick,
+the 3D box, the gate inputs, `pose_source` or any of §5.1's four new fields without becoming a private
+format nobody else reads, and the moment a field is dropped to fit the line it stops existing. Write
+one self-describing record per frame; generate `.obb.txt`, `.yolo.txt` or COCO JSON from it with a
+converter, which costs nothing and can be re-run with different gates, so a corpus is recorded once
+and its label parameters varied afterwards (no converter is built in the tree). The illumination
+fields make the argument stronger rather than weaker: a night export that emits lamp centroids and a
+day export that emits body boxes are two projections of one record, and neither is expressible as the
+other's text line.
 
 The self-describing record per frame is the truth sidecar, as the owner ruled on 2026-10-06: each
 vehicle's box rides on its existing record there, beside its identity, occlusion and the frame's sun, so
@@ -1630,14 +1644,16 @@ no second file per image has to be kept in step with the first.
 
 ### 5.3 Gates are recorded, never applied at write time
 
-Doc 17 §7 proposes a label policy of drop / tag / retighten, with a heavy-occlusion cutoff around
-70–80 %. Doc 17 §12.5 records that a minimum apparent size has not been chosen, and that the data to
-choose it now rides in the sidecar but nothing acts on it.
+A label policy can drop, tag or retighten a box, with a heavy-occlusion cutoff around 70–80 % (not
+built: no code applies one). No minimum apparent size has been chosen: the data to choose it rides in
+the sidecar (`apparent_width_px`, `apparent_height_px`, `occlusion_samples`) and nothing in the code
+acts on it.
 
 **Decision: the writer emits every vehicle that projects into the frame, with every gate input
 attached, and applies no gate.** Consumers gate. The reasons are specific:
 
-- The gate thresholds are **unmeasured** (doc 17 §12.5) and choosing one at write time bakes an
+- The gate thresholds are **unmeasured** (`OcclusionOptions` holds only the measurement's margin and
+  sample density, and no code holds a gate threshold) and choosing one at write time bakes an
   unvalidated number into an expensive artifact.
 - Only the ungated record lets a consumer tell a small vehicle from an absent one, and apply a cutoff of
   their own choosing. The pipeline applies none (§10.2, withdrawn 2026-10-05).
@@ -1650,28 +1666,28 @@ attached, and applies no gate.** Consumers gate. The reasons are specific:
   discard exactly the frames the night question is about.
 
 The gates a consumer will want, all computable from the record: **apparent size** (below a chosen pixel
-length, a vehicle is a poor example whether or not anything is in front of it — doc 17 §12.4),
-**occlusion** (the doc 17 §7 cutoff), **truncation**, and, where the lamp state is recorded and the sun
+length, a vehicle is a poor example whether or not anything is in front of it), **occlusion** (a
+heavy-occlusion cutoff), **truncation**, and, where the lamp state is recorded and the sun
 is low, the **light state** itself. Every one of these is the consumer's to choose and the pipeline's
 to leave unchosen ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b).
 
 ### 5.4 Where the occlusion measurement is used here, precisely
 
-Doc 17's measurement is used in three distinct places in this chain, and conflating them is the easy
-mistake:
+The occlusion measurement (`OcclusionEstimator`) is used in three distinct places in this chain, and
+conflating them is the easy mistake:
 
 1. **As a label gate input** (§5.3) — attached to every label, applied by nobody at write time, so a
    consumer chooses their own cutoff and can re-choose it without a re-collect.
 2. *Withdrawn 2026-10-05 by the owner's ruling.* As an observability predicate: an interval counted as
    *observed* only if its participant was in the frustum, resolvable and "not occluded past the cutoff",
    a pass mark nobody valued. The pipeline writes the fraction and no word about it (§10.2).
-3. **As the reason a truth row is not in the pixels** (§8.4) — doc 17 §10 frames this as adjudicating
-   "a 'missed' detection … vs a legitimately occluded target", and the *fact* it rests on is ours to
-   publish: a hidden vehicle is present in truth and absent from the imagery, and the corpus says so on
-   the row. **Without it, a consumer cannot tell a hidden vehicle from a labelling error.**
+3. **As the reason a truth row is not in the pixels** (§8.4) — telling a missed detection from a
+   legitimately occluded target, and the *fact* it rests on is ours to publish: a hidden vehicle is
+   present in truth and absent from the imagery, and the corpus says so on the row. **Without it, a
+   consumer cannot tell a hidden vehicle from a labelling error.**
 
-Note that an absent `occlusion` attribute means "this camera cannot say", not "not occluded" (doc 09
-§5.1); since 2026-10-05 the record says *why* it is absent, in one word (`occlusion_unmeasured`:
+Note that an absent `occlusion` attribute means "this camera cannot say", not "not occluded"; since
+2026-10-05 the record says *why* it is absent, in one word (`occlusion_unmeasured`:
 `behind_camera`, `outside_frame`, `beyond_draw_distance`, `no_depth_camera`, `no_depth_capture`,
 `depth_out_of_step`, `depth_pose_mismatch`, `beyond_depth_range`, `no_sample`), beside `in_frame` on every
 record (§2.4, §5.1).
@@ -1682,10 +1698,11 @@ crane is `occluded` at noon and at midnight alike. That is why the fraction is a
 
 ### 5.5 The behavioural annotation is not in the label file
 
-`<_supervision>` belongs in the truth sidecar and the manifest (doc 20 §7.4, §7.5) and must not appear
-in a per-image label record. Two reasons: the label record is a *detector* artifact and a detector has
-no business learning behaviour from a per-frame flag; and keeping the behavioural statement out of the
-label file makes the artifact classes of §9.4 separable by file rather than by field.
+`<_supervision>` belongs in the truth sidecar and the manifest (`CotWriter` writes it per vehicle;
+`RunManifestWriter` writes the instances and their intervals) and must not appear in a per-image label
+record. Two reasons: the label record is a *detector* artifact and a detector has no business
+learning behaviour from a per-frame flag; and keeping the behavioural statement out of the label file
+makes the artifact classes of §9.4 separable by file rather than by field.
 
 **Amended 2026-10-06 by the owner's ruling on D8.6.** There is no separate label file: a vehicle's box
 is on its record in the truth sidecar, beside its `<_supervision>`. The two stay apart by element
@@ -1695,10 +1712,10 @@ never the second. The first reason stands; the separation now rests on the eleme
 
 ### 5.6 A measured confounder already present in the sizing scenario
 
-Doc 20 §2.6 names appearance as the first way a synthetic corpus lets a model cheat. Measured in
+Appearance is the first way a synthetic corpus lets a model cheat; `CorpusLeakValidator` reports any
+field value only planted vehicles carry. Measured in
 `BahonarPatternOfLife/scenario/Shahid_Bahonar_Port_PatternOfLife.rou.xml`, the fourteen `vType`
-definitions colour the four anomaly types in saturated hues and everything else in greys and earth
-tones:
+definitions colour the four anomaly types in saturated hues and everything else in greys and earth tones:
 
 | vType | colour | vClass |
 |---|---|---|
@@ -1714,11 +1731,12 @@ into the CARLA blueprint or its colour attribute at playback, the corpus teaches
 anomaly" and every number downstream is meaningless.**
 
 The same file also maps `affiliation_by_type` to give the anomaly types CoT `u` (unknown) while
-civilians get `n` — which is doc 20 decision 9's prohibition ("the CoT affiliation is not overloaded")
-violated in the largest authored scenario that exists. **It is in our truth sidecar**, so it reaches an
-operator's picture and every consumer that reads our truth CoT: the label is encoded in a field that is
-supposed to carry affiliation, which makes it a leak inside the labels themselves rather than a
-cosmetic choice.
+civilians get `n` — a label overloaded onto the CoT affiliation in the largest authored scenario that
+exists (the code does otherwise: `SumoCotBridge` gives a planted vehicle its population's affiliation,
+so the affiliation never announces it). **It is in our truth sidecar**, so it reaches an operator's
+picture and every consumer that reads our truth CoT: the label is encoded in a field that is supposed
+to carry affiliation, which makes it a leak inside the labels themselves rather than a cosmetic
+choice.
 
 **Property needed from [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) and
 [`04_Contracts.md`](04_Contracts.md):** the `vType` → blueprint mapping must draw appearance from the
@@ -1814,7 +1832,7 @@ Three regimes, and they are different products:
 |---|---|---|
 | **Held** — write the pose once per SUMO step, leave it | stationary for 20 world ticks, then a 28 m jump | at 2 Hz capture, alternating captures show 0 px and 69 px of motion. No constant-velocity tracker survives this: the association gate must be sized for the jump, which admits every neighbouring vehicle on the same lane |
 | **Linearly interpolated** — divide the step across world ticks | constant velocity within a step, a velocity **discontinuity at every step boundary** | smooth within a step; but at a 1.0 s step and a 0.5 s capture interval there is a kink between *every* pair of captures, so the tracker's process model sees a fresh acceleration each frame and its velocity estimate never converges |
-| **Physically executed** — SUMO's decision fed through a controller, doc 23 §4.1 | continuous and once-differentiable by construction; a physical body cannot have a velocity discontinuity | the only regime in which apparent velocity in the imagery is a usable tracker feature |
+| **Physically executed** — SUMO's decision fed through a controller (not built: `VehicleBodyPool` turns every SUMO body's physics off) | continuous and once-differentiable by construction; a physical body cannot have a velocity discontinuity | the only regime in which apparent velocity in the imagery is a usable tracker feature |
 
 Team brief §3.2 accepts teleport-style control for this mode and forbids re-litigating it. So the
 finding here is not "do not teleport" — it is **what teleport costs the imagery and what must be true
@@ -1834,8 +1852,7 @@ Two things follow, and only the second is a free parameter:
 - **The capture rate cannot fix this.** Capturing faster does not smooth motion; it samples the same
   discontinuities more finely. Capturing slower hides them and destroys the velocity signal with them.
 - **The SUMO step is the lever.** With a 2 Hz capture, "one discontinuity per five capture intervals"
-  means a SUMO step at or below **0.1 s** — which is the figure doc 23 §6.10 already records as
-  co-simulation practice.
+  means a SUMO step at or below **0.1 s**.
 
 But the sizing case runs at 1.0 s over seven days and cannot be re-run at 0.1 s without changing the
 trajectories it was authored around — which [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md)
@@ -1862,9 +1879,10 @@ Failing that, the truth speed must be derived from the pose actually rendered (�
 SUMO's reported speed, so that at least the record is self-consistent and the discontinuity is visible
 in the data instead of hidden between two disagreeing fields.
 
-Doc 23 §4.1's "SUMO decides, CARLA physics executes" avoids the question entirely, because a
-controller-driven physical body cannot produce a kink at all. Team brief §3.2 accepts teleport for this
-mode, so that is context rather than a recommendation.
+Physical execution, in which SUMO decides and CARLA physics executes, avoids the question entirely,
+because a controller-driven physical body cannot produce a kink at all (not built: `VehicleBodyPool`
+turns every SUMO body's physics off). Team brief §3.2 accepts teleport for this mode, so that is
+context rather than a recommendation.
 
 ### 6.4 What the truth record must then say
 
@@ -1995,9 +2013,10 @@ rule that decides borderline cases is §9.7.
 
 ### 7.2 What the observation handover contains
 
-One **collection frame**: the image, plus a metadata record that is a strict subset of what doc 16
-already puts in the sidecar and the `carla:sensor` PNG chunk (doc 16 §4.1, §4.2; `CotWriter.cs:71-128`),
-now extended by the two blocks §4.8 adds:
+One **collection frame**: the image, plus a metadata record that is a strict subset of what the
+recorder already puts in the sidecar and the `carla:sensor` PNG chunk (`CotWriter.cs:71-128`;
+`SensorMetadata`, from `VehicleTelemetryService.ComputeSensorPose`), now extended by the two blocks
+§4.8 adds:
 
 ```
 CollectionFrame
@@ -2070,18 +2089,19 @@ rule is useless without them:
 **A consumer whose output lacks any of the three can still use the corpus** — they simply cannot apply
 our transfer rule unmodified, and that is their choice to make, not a defect in either side.
 
-**On CoT, because it will be assumed.** Doc 09 §3 fixes detection uids as `CARLA-DET-<track_id>` and
-`how="m-f"`, and that identity exists for anyone who wants to put their output on a TAK feed beside
-ours. It is a **display projection and not an interchange format** — a CoT event cannot carry a track's
-history — and this plan neither requires it nor reads it. What our *own* stream uses is stated in §11
-and in D8.13; what theirs uses is theirs.
+**On CoT, because it will be assumed.** A detection's CoT identity is a `CARLA-DET-<track_id>` uid
+with `how="m-f"` (`cot_telemetry.to_cot` writes `m-f` for a detection under the `uid_prefix` it is
+given; no code writes a detection), and that identity exists for anyone who wants to put their output
+on a TAK feed beside ours. It is a **display projection and not an interchange format** — a CoT event
+cannot carry a track's history — and this plan neither requires it nor reads it. What our *own* stream
+uses is stated in §11 and in D8.13; what theirs uses is theirs.
 
 ### 7.4 Geolocation: what ground surface the corpus is entitled to publish
 
 A consumer holding a pixel box needs a position on the ground, and they get there by intersecting the
-pixel ray — reconstructed from the pose and `K` we published — with a ground surface. Doc 16 §10 names
-that round trip as the payoff of recording the intrinsics, and the existing pixel-picker math is the
-worked example (`SensorRig.pick_world_point`, `SensorRig.py:253-348`).
+pixel ray — reconstructed from the pose and `K` we published — with a ground surface. The recorder
+writes the pose and intrinsics for that round trip (`ComputeSensorPose`, `<_carla_intrinsics>`), and
+the existing pixel-picker math is the worked example (`SensorRig.pick_world_point`, `SensorRig.py:253-348`).
 
 **The question this section owns is not how they do it. It is which surface we are entitled to put in
 the observation root**, which is an anti-leak question about our data, and the answer is not obvious:
@@ -2123,7 +2143,7 @@ doing any of it for them.
 | **Ungated labels.** Every vehicle that projects into the frame, with every gate input attached and no gate applied, so a consumer chooses their own thresholds and can re-choose them without a re-collect | (sensor, tick, vehicle) | §5.3, D8.7 |
 | **How much of a vehicle the picture could show** — `occlusion`, `occlusion_level`, `occlusion_samples`, `apparent_width_px`, `apparent_height_px`, `truncation`; measured, with no word about them | (sensor, tick, vehicle) | §5.1, §5.4 |
 | **Label precision** — `pose_source`, the interpolation rule, the stated positional bound, the SUMO step, and which fields are unsound at a step boundary | (sensor, tick, vehicle) and per session | §6.3, §6.4 |
-| **Three-valued supervision**, with pattern instances, participants and intervals, and the vocabulary version | per instance, per interval | doc 20 §7.4; §10.3 |
+| **Three-valued supervision**, with pattern instances, participants and intervals, and the vocabulary version | per instance, per interval | `<_supervision>` (`CotWriter`) and the manifest's `instance` and interval rows (`RunManifestWriter`); §10.3 |
 | **The world truth track** — every SUMO vehicle at every SUMO frame of the window, drawn or not, with `render_state` and `render_reason` and the sun | (frame, vehicle) | [`06`](06_Truth_And_Annotation.md) §8.3 |
 | **The manifest** — the plan as declared, every interval as it opened and closed with its `not_drawn` spans, admissions and releases, the sun at the window's ends, the partition, and the terminal row | per session | §10.1, [`06`](06_Truth_And_Annotation.md) §8.4 |
 | **The transfer rule** — how supervision *would* be carried onto their tracks | published as a rule, not run | §8.5 |
@@ -2163,9 +2183,11 @@ consumer's tracker behaviour and neither is our business.
 
 ### 8.1 Truth carries no identity a track could borrow — and that is a format guarantee
 
-Doc 09 §3 fixes it: truth uids are `CARLA-TRUTH-<actor_id>`, detection uids are `CARLA-DET-<track_id>`,
-and truth is associated to detection by position and time, **not** by uid. Doc 09 §9 repeats it and doc
-20 §7.6 builds on it.
+The CoT writers fix it: truth uids are `CARLA-TRUTH-<actor_id>` (`CotWriter`,
+`cot_telemetry.to_cot`), detection uids are `CARLA-DET-<track_id>` (no code writes a detection;
+`to_cot` takes the prefix as `uid_prefix`), and truth is associated to detection by position and time,
+**not** by uid. The published [`Matching_Tracks_To_Truth.md`](../../Tracking/Matching_Tracks_To_Truth.md)
+states it as its first rule.
 
 **That rule is a constraint on what we publish**, not a rule about how a scoring harness must behave,
 and as a constraint it is enforceable by us alone: a consumer's track has no actor id, no affiliation
@@ -2201,20 +2223,20 @@ by everyone, is reproducible, and is checkable against the label-quality fields 
    and only the first is a mis-label.
 3. **Gate on a scaled radius, not an absolute one:** `max(g_min, k · max(apparent_width_px,
    apparent_height_px))`. A gate in absolute pixels is wrong across the frame, because apparent size
-   varies by a factor of several between frame centre and corner at these look angles (doc 12 §5.5
-   records 5.5–7 km of range variation across one frame at 18 kft). **§8.7 replaces the scale term when
-   the signature is a lamp**, because apparent size then describes the render profile rather than the
-   target.
+   varies by a factor of several between frame centre and corner at these look angles. **§8.7
+   replaces the scale term when the signature is a lamp**, because apparent size then describes the
+   render profile rather than the target.
 4. **Assign globally, not greedily.** A minimum-cost bipartite assignment over the surviving pairs.
    Greedy nearest-neighbour is the classic source of systematic mis-assignment in dense traffic, and
    dense traffic is what a 245-flow scenario produces. **This matters for labelling and not only for
    accounting**: a greedy mis-assignment does not merely miscount, it attaches one vehicle's supervision
    to another vehicle's track, which is a wrong label in somebody's training set.
-5. **Record `residual_px`, `residual_norm` and the margin to the runner-up per transferred label.** Doc
-   20 §7.6 requires this so "a mis-associated label is findable later rather than being an unexplained
-   hard example" — and note that doc 20's own justification is about *labels*, not about scores. The
-   corpus therefore asks a consumer to keep these numbers with their labels, and ships the two fields
-   (§8.3) that let them be interpreted.
+5. **Record `residual_px`, `residual_norm` and the margin to the runner-up per transferred label.**
+   The published rule asks for this (rule 5 of
+   [`Matching_Tracks_To_Truth.md`](../../Tracking/Matching_Tracks_To_Truth.md)) so a mis-associated
+   label is findable later rather than being an unexplained hard example — a justification about
+   *labels*, not about scores. The corpus therefore asks a consumer to keep these numbers with their
+   labels, and ships the two fields (§8.3) that let them be interpreted.
 
 **What the rule does not say.** It says nothing about what to do with an unmatched detection, because an
 unmatched detection is a statement about a model. It says nothing about counting. It produces labels,
@@ -2222,7 +2244,7 @@ not numbers.
 
 ### 8.3 The association-quality block, and which side of the line each field falls on
 
-**Withdrawn 2026-10-05 by the owner's ruling** ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b). Of doc 20 §7.6's eight fields, two were
+**Withdrawn 2026-10-05 by the owner's ruling** ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b). Of the block's eight fields, none of which the code writes, two were
 model metrics and were never ours (`assigned_fraction`, `switch_count`); two are rules a consumer applies
 to its own transfer and are published in §8.5 (`residual_px`/`residual_norm`, `dominant_truth_fraction`);
 two were the label's own `occlusion` and a word now withdrawn (§5.8). The remaining two,
@@ -2241,8 +2263,9 @@ occlusion is absent (§5.1, §5.4, built 2026-10-05). A consumer reads the numbe
 
 ### 8.5 The supervision-transfer rule, published
 
-Doc 20 §7.6 sets three rules. **The corpus publishes them as the transfer contract and does not execute
-them:**
+Three rules govern the transfer. **The corpus publishes them as the transfer contract ("Carrying
+labels across time" in [`Matching_Tracks_To_Truth.md`](../../Tracking/Matching_Tracks_To_Truth.md))
+and does not execute them:**
 
 - exported supervision is **per (sensor, track, interval)**, not per entity, because one truth entity
   maps to several tracks;
@@ -2260,9 +2283,9 @@ Two additions this section makes, both about label quality:
   later reader can find a mis-transfer instead of meeting it as an unexplained hard example. The boxes
   and apparent sizes in the record are what those numbers are read against.
 
-Clipping needs interval *bounds*, which exist only in the manifest, not in the per-frame sidecar — doc
-20 §7.6's closing point, and the reason the manifest is the authoritative artifact and travels with the
-corpus (doc 20 §7.7).
+Clipping needs interval *bounds*, which exist only in the manifest (`RunManifestWriter`'s
+`interval_opened` and `interval_closed` rows), not in the per-frame sidecar — the reason the manifest
+is the authoritative artifact and travels with the corpus.
 
 ### 8.6 The observability life of a truth row
 
@@ -2310,8 +2333,9 @@ all of it is derivable from what the collection legitimately holds, and all of i
 CorpusContext                     # published once per session, in the OBSERVATION root
   session_id
   sensor_scope[]                  # the sensor_ids in the session; "fused" is a consumer's choice,
-                                  #   and it changes what "observed" means (doc 20 §7.6, §11.4)
-  areas_of_interest               # the resolved GeoJSON table, doc 20 §8.2
+                                  #   and it changes what "observed" means (each camera is a separate
+                                  #   observation: Docs/Tracking/Matching_Tracks_To_Truth.md)
+  areas_of_interest               # the resolved table, areas.resolved.json (AreaOfInterestResolver)
   road_network                    # the .xodr or a derived graph
   solar                           # solar_time, date, time_zone, lat, lon, sun elevation/azimuth
                                   #   — already in every sidecar (CotWriter.cs:52-65) and every PNG
@@ -2343,10 +2367,10 @@ to catch a leak after the fact. Four rows come from §4 and §5; three more from
 | Truth | Because |
 |---|---|
 | Any `<event uid="CARLA-TRUTH-…">`, any element with `source="truth"` | it is the simulator's own answer |
-| `<_supervision>`, `<_aoi>` | authored intent and derived context over truth objects (doc 20 §7.4) |
+| `<_supervision>`, `<_aoi>` | authored intent and derived context over truth objects (`CotWriter` writes `<_supervision>`; no code writes `<_aoi>`) |
 | `actor_id`, `entity_id`, `instance_id` | identities only the simulator assigns |
 | `sumo_id`, `vtype_id`, `admitted_tick`, and a uid built on `sumo_id` | the SUMO vehicle's identity and type, and when the render set took it up: the authoring surface's names and a render-set fact ([06](06_Truth_And_Annotation.md) §8.2) |
-| `occlusion`, `occlusion_level`, `occlusion_samples` | computed from the simulator's depth buffer against the true 3D box (doc 17 §12.1) |
+| `occlusion`, `occlusion_level`, `occlusion_samples` | computed from the simulator's depth buffer against the true 3D box (`OcclusionEstimator`) |
 | `apparent_width_px` / `apparent_height_px` | computed from the true 3D box |
 | `hae_dtm`, `align_offset_m` on a *vehicle* | bare-earth height *at the vehicle* — a truth-conditioned sample of an otherwise legitimate surface |
 | the depth capture | §7.4 |
@@ -2359,8 +2383,9 @@ to catch a leak after the fact. Four rows come from §4 and §5; three more from
 | **`advancing`, `rate`** | simulator configuration. A fielded system does not know that its sun has been frozen, and knowing it reveals that the run is part of a controlled sweep (§4.8, §9.7) |
 
 Note `align_offset_m` appears twice with different verdicts: on the **sensor** record it is the
-collection's own altitude bookkeeping (doc 16 §5) and is legitimate; sampled **at a vehicle** it is a
-function of that vehicle's true position. §9.7 generalises exactly that pattern.
+collection's own altitude bookkeeping (`ComputeSensorPose` takes the height-align offset at the
+camera's column off its altitude and records it, so physical altitude is `hae + align_offset_m`) and
+is legitimate; sampled **at a vehicle** it is a function of that vehicle's true position. §9.7 generalises exactly that pattern.
 
 **A feature derived only from truth is truth.** The four that will be proposed and must be refused:
 occlusion as a "visibility feature", `hae_dtm` as a "terrain feature", the truth track's continuous id
@@ -2436,8 +2461,8 @@ a schema for it would be a schema for a file we never open. **What an external c
 they define their own output format, and if they want it to be joinable to our supervision, they key it
 by `(session_id, sensor_id, tick)` and use the vocabulary below. Nothing more is required of them by us.
 
-**What is squarely ours is the vocabulary itself.** A label is worthless without the
-terms that define it and the version that pins them, and doc 20 §6.2 owns the vocabulary. The corpus
+**What is squarely ours is the vocabulary itself.** A label is worthless without the terms that
+define it and the version that pins them, and `AnnotationVocabulary` holds the vocabulary. The corpus
 publishes, per session:
 
 ```
@@ -2445,7 +2470,7 @@ SupervisionVocabulary              # written to the TRUTH root beside the manife
                                    #   verbatim into the training export (06 §10.3, §10.1 below)
   vocabulary_version               # pinned; a corpus and a consumer that disagree about what
                                    #   `loiter` means must be able to detect the disagreement
-  terms[]                          # each with its definition, per doc 20 §6.2
+  terms[]                          # each with its definition (AnnotationVocabulary requires one)
   three_valued_semantics           # what annotated / nominal / unlabelled each ASSERT (§10.3)
   interval_onsets                  # declared / committed / observed, all three, per 06 §3.3 (§10.4)
   area_reference                   # the area-of-interest table the terms are defined against
@@ -2507,8 +2532,9 @@ scene* must not be placed where a model's input comes from. Solar state is not a
   height estimation (§7.4), knowing that a lamp signature rather than a body signature is to be
   expected, and — for a pattern-of-life consumer — the fact that *time of day is itself a feature of a
   pattern of life.* The question "is a heavy goods vehicle in a residential area unusual?" has no answer
-  that does not include the hour; doc 20's pattern class 4 is defined by it. Withholding the hour would
-  not make a corpus stricter; it would make it unusable for the thing it is for.
+  that does not include the hour; the class-conditioned presence `IlluminationLabelAssociation` keeps
+  authorable is defined by it. Withholding the hour would not make a corpus stricter; it would make it
+  unusable for the thing it is for.
 
 **The principle — the observer-derivability test.** State it once, apply it everywhere:
 
@@ -2650,15 +2676,16 @@ measures no model (team brief §3b). **What an external consumer does instead:**
 of those they need, over the observability accounting of §10.2, using the label semantics below — and
 the corpus is built so that they can, which is the only obligation we have.
 
-**What this section carries is not a metric but the meaning of a label.** Doc 20 decision 2's three-valued
-supervision is a statement about what the author asserted, and a consumer who misreads it will build a
-wrong training set regardless of what they later compute:
+**What this section carries is not a metric but the meaning of a label.** The three-valued
+supervision (`SupervisionState`: `Annotated`, `Nominal`, `Unlabelled`) is a statement about what the
+author asserted, and a consumer who misreads it will build a wrong training set regardless of what
+they later compute:
 
 | Supervision value | What it asserts | What it does **not** assert |
 |---|---|---|
 | `annotated` | the author asserts this behaviour occurred, over this interval, by these participants | nothing about any other vehicle in the frame |
-| `nominal` | the author asserts this behaviour **did not** occur here — a genuine, authored negative, and doc 20 §2.7 calls these the scenario system's unique product | that the vehicle was uninteresting in some other respect |
-| `unlabelled` | **the author made no claim.** This is the default state for the large majority of the population (doc 20 decision 2) | **that the behaviour was absent.** An `unlabelled` vehicle is not a negative, and treating it as one manufactures false labels out of silence |
+| `nominal` | the author asserts this behaviour **did not** occur here — a genuine, authored negative (`SupervisionState.Nominal`), and the scenario system's unique product | that the vehicle was uninteresting in some other respect |
+| `unlabelled` | **the author made no claim.** This is the default state for the large majority of the population (`ObservedSupervision` carries a row only for an annotated or nominal vehicle) | **that the behaviour was absent.** An `unlabelled` vehicle is not a negative, and treating it as one manufactures false labels out of silence |
 
 **The corpus publishes this table in `vocabulary.json`** (§9.5), not only in a plan document, because the
 artifact is what travels — **and the training export carries that same document** (§10.1), because the
@@ -2668,28 +2695,29 @@ collapsing it turns every un-annotated vehicle into an asserted negative that no
 
 ### 10.4 The corpus publishes all three interval onsets and substitutes none
 
-Doc 20 decision 5: all three onsets are recorded — the gap between them is an authored property rather
-than a calibratable constant, and "which one defines the interval is the trainer's choice". Doc 20 §2.4
-measures the consequence: at a 2 Hz capture, even a short ramp is several frames of a label on a vehicle
-that is visibly still moving.
+All three onsets are recorded (`SupervisionIntervalRecord` holds the committed and observed onsets
+beside the declared row) — the gap between them is an authored property rather than a calibratable
+constant, and which one defines the interval is the trainer's choice. The consequence: at a 2 Hz
+capture, even a short ramp is several frames of a label on a vehicle that is visibly still moving.
 
 **Decision: the corpus emits all three onsets per interval and picks none.** Picking one would bake a
 labelling convention into the artifact, and a corpus assembled under one convention is not
 interchangeable with a corpus assembled under another. The choice belongs to whoever builds a training
-set from it, which is precisely doc 20 decision 5's position.
+set from it, and `SupervisionIntervalRecord` leaves it there: it holds every onset and picks none.
 
-Doc 20's three onsets were defined against the OpenSCENARIO executor's decomposition of a speed action,
-and that executor is not the authoring surface here.
+The three onsets were first framed against the OpenSCENARIO executor's decomposition of a speed action
+(`CarlaNet.Scenario`), and that executor is not the authoring surface here.
 [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) §3.3 re-seats them on SUMO and names them by
 the authority that produces each — **declared** (the author), **committed** (SUMO's own
 model), **observed** (the rendered body) — showing that SUMO already makes the declared/committed
 distinction itself in `StopData.intendedArrival` versus `arrival`. **This section uses those names and
 that decomposition, and adds nothing to it.** Two consequences fall on the corpus:
 
-- **An onset can be legitimately absent, which doc 20's schema had no case for.** 06 §3.3 measured that
-  337 of the 338 stops in the sizing scenario use `duration`, and the stay-behind's uses `until` the
-  run's end, so for those 337 there is no declared instant at all — only a declared *length*. And the observed onset is absent whenever the participant
-  was never rendered. **The corpus therefore records the absence explicitly and never substitutes:** an
+- **An onset can be legitimately absent** (`SupervisionIntervalRecord` holds it as null, never
+  substituted). 06 §3.3 measured that 337 of the 338 stops in the sizing scenario use `duration`, and
+  the stay-behind's uses `until` the run's end, so for those 337 there is no declared instant at all —
+  only a declared *length*. And the observed onset is absent whenever the participant was never
+  rendered. **The corpus therefore records the absence explicitly and never substitutes:** an
   interval with no declared onset carries an absent field with a stated reason, not a zero and not a
   quiet fallback to another onset. A silent fallback would mix two labelling conventions inside one
   field, and nothing downstream could tell.
@@ -2728,8 +2756,9 @@ is a fact about the world and belongs in the collection's documentation.
 
 Measured: the sizing scenario's guard shifts depart at 25 200 s, 54 000 s and 82 800 s — 07:00, 15:00
 and 23:00 (team brief §3a), and [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md) §3.1.3
-identifies exactly those three as the daily traffic peaks. Doc 20's pattern class 4 is *"a heavy goods
-vehicle in a residential area at 03:00"* — a class **defined by its hour**. So in any realistic pattern
+identifies exactly those three as the daily traffic peaks. The class-conditioned presence
+`IlluminationLabelAssociation` keeps authorable is *"a heavy goods vehicle in a residential area at
+03:00"* — a class **defined by its hour**. So in any realistic pattern
 of life, annotated ⇒ a particular hour ⇒ a particular sun elevation ⇒ a particular illumination.
 
 **What is withdrawn, 2026-10-05, by the owner's ruling** ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b): the three probes — stratum-conditioned
@@ -3112,15 +3141,17 @@ computes a number. **The operator picture shows our run; the reports are on the 
 Existing facts: the live feed is one CoT event per UDP datagram (`CotUdpEmitter.py:38-44`), truth events
 are built by `vehicle_telemetry_to_cot` with `uid_prefix="CARLA-TRUTH"` and `how="m-g"`
 (`CotUdpEmitter.py:62-96`), and `TelemetryController` emits at `--rate`, default 5 Hz
-(`TelemetryController.py:38`, `CarlaControlArgumentParser.py:477`). Doc 09 §5 records that "WinTAK
-ignores unknown detail children", which is why `_carla`, `_solar` and `_capture` already ride the feed
-(`CotUdpEmitter.py:131-167`).
+(`TelemetryController.py:38`, `CarlaControlArgumentParser.py:477`). The comment on the truth extras in
+`cot_telemetry.py` records that "WinTAK ignores unknown detail children", which is why `_carla`,
+`_solar` and `_capture` already ride the feed (`CotUdpEmitter.py:131-167`).
 
 **No EPoL assessment rides the feed as a `<_epol>` detail child**, because this pipeline emits no
 assessments and does not re-broadcast anyone else's.
-If an external consumer wants their output on a TAK feed, doc 09 §3's `CARLA-DET-<track_id>` /
-`how="m-f"` identity and doc 09 §5's unknown-detail-child extension point are there for them to use, and
-doc 20 decision 9's refusal to overload the CoT affiliation applies to their output as it does to ours.
+If an external consumer wants their output on a TAK feed, the `CARLA-DET-<track_id>` / `how="m-f"`
+detection identity (`cot_telemetry.to_cot` with a `uid_prefix` of their choosing) and the
+unknown-detail-child extension point (`_carla` is one) are there for them to use, and the refusal to
+overload the CoT affiliation (`SumoCotBridge` gives a planted vehicle its population's affiliation)
+applies to their output as it does to ours.
 **That is a note for them, not a stage for us.**
 
 What *is* ours:
@@ -3133,7 +3164,8 @@ What *is* ours:
   that is about our data, and it is the half
   [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md) cites for `telemetry.truth_endpoint`.
 - **The recorded outputs never overload the CoT affiliation; the live display feed does only when an
-  operator opts in.** Doc 20 decision 9 refuses encoding a label in the CoT type, and §5.6 records
+  operator opts in.** The recorded outputs refuse encoding a label in the CoT type (`SumoCotBridge`:
+  a recorded CoT type carries the population's affiliation and nothing else), and §5.6 records
   that the largest authored scenario violates it today by mapping `affiliation_by_type` to give the
   anomaly types `u` while civilians get `n`. That is a live corpus defect, not a display preference.
   The one qualification is on the live display feed: an operator watching TAK during an exercise has
@@ -3145,12 +3177,12 @@ What *is* ours:
   observer-derivable, so its presence on the feed (`CotUdpEmitter.py:131-167`) is not a leak — with the
   same two exceptions: `advancing` and `rate` describe the simulation's configuration and must not ride
   a feed an exercised operator sees, for the same reason they must not ride the PNG.
-- **One operational consequence of multi-channel, reduced to the part that is ours.** Doc 20 §7.4 warns
-  that several clients emitting to one address multiply the events a viewer sees. Whether a downstream
-  consumer fuses their per-sensor output before displaying it is their design problem. **What is ours is
-  that the choice changes what "observed" means in our coverage record** (doc 20 §7.6 — union under
-  fusion, per-sensor without it), so the corpus publishes coverage **both ways**, per sensor and unioned
-  (doc 20 decision 15), and a consumer picks the one matching what they did. **Nothing we ship waits on
+- **One operational consequence of multi-channel, reduced to the part that is ours.** Several clients
+  emitting to one address multiply the events a viewer sees. Whether a downstream consumer fuses their
+  per-sensor output before displaying it is their design problem. **What is ours is that the choice
+  changes what "observed" means in our coverage record** (union under fusion, per-sensor without it),
+  so the corpus publishes coverage **both ways**, per sensor and unioned (not built: no code writes a
+  coverage record), and a consumer picks the one matching what they did. **Nothing we ship waits on
   a fusion stage that was never ours.**
 
 ### 11.5 How an arbitrary consumer attaches, and one illustrative adapter
@@ -3243,10 +3275,10 @@ detector and tracker over our imagery to say whether an annotated interval was "
 collecting", and its Tier A counted in-frustum, resolvable and unoccluded captures against `w_min` and
 `c_max`. Both are usefulness measurements by another name: the first runs a model, the second applies
 pass marks nobody valued. Usefulness is in the eye of the beholder, and scoring of any model is the model
-developer's work and outside this effort. Doc 20 §11 question 1 is therefore not answered here, by
-design. Its place in stage C ([`13`](13_Work_Breakdown.md) §4, measurement 5) is withdrawn with it, and
-the rig's altitude, field of view and channel count are the operator's declared choices, recorded per
-run, not the output of a probe.
+developer's work and outside this effort. Whether an annotated interval yields a usable detector track
+is therefore not answered here, by design. Its place in stage C ([`13`](13_Work_Breakdown.md) §4,
+measurement 5) is withdrawn with it, and the rig's altitude, field of view and channel count are the
+operator's declared choices, recorded per run, not the output of a probe.
 
 ### 12.1 Measurements this section still asks for, none of them a verdict
 
@@ -3462,13 +3494,14 @@ count and a timestamp: the operator sees *that* a transcript is filling, never w
 D8.41). `U19 --> U20` because the two are read together — a run below its target factor and a run
 dropping frames are the two halves of one question, and D8.40 orders them.
 
-**U4 stays with the consumer alone**, and that is doc 20 decision 5's practical consequence: the onset
-is not a property of the corpus, so the corpus publishes all three (§10.4) and whoever builds a training
-set picks. U12 likewise: the corpus publishes its composition per stratum, and what a consumer pools is
-their business.
+**U4 stays with the consumer alone**, the practical consequence of holding every onset and picking none
+(`SupervisionIntervalRecord`): the onset is not a property of the corpus, so the corpus publishes all
+three (§10.4) and whoever builds a training set picks. U12 likewise: the corpus publishes its
+composition per stratum, and what a consumer pools is their business.
 
-`U9` (replay) depends on the manifest travelling with the captures, per doc 20 §7.7. `U11` is the
-author's feedback loop: the manifest's `not_drawn` spans say when a participant had no body, and the
+`U9` (replay) depends on the manifest travelling with the captures (`CaptureSession` hands the session
+the path `truth/manifest.jsonl` in the capture folder, and `RunManifestWriter` writes it there).
+`U11` is the author's feedback loop: the manifest's `not_drawn` spans say when a participant had no body, and the
 world truth track says where every vehicle was. **`U13 --> U14` is the uncomfortable loop**: the
 compiler shows the author, from their own declarations, that the labels follow the hour, and the only
 real fix is upstream, in what the author wrote.
@@ -3495,13 +3528,13 @@ with this one:**
 | # | Decision |
 |---|---|
 | **D8.1** | **The corpus and the live exercise are one chain with two ends.** Everything from photons to the handover record is shared; they differ only in transport, pacing and what illumination is for. **The handover is defined as a record, never as a directory**, so one contract serves both products and a consumer writes one reader. It is a property of the chain and not of a detect-and-track *stage*, because there is no such stage here (§1, §7.2) |
-| **D8.2** | **The unit of collection is a channel, not a camera** — `(sensor_id, rgb, depth, seg?)`, co-posed. The depth camera is for the occlusion measurement (doc 17; `occlusion`, `occlusion_samples` and apparent size on every vehicle in the picture), is always present -- attached to the channel's camera, with no switch to leave it out (2026-10-05) -- and its captures are **truth artifacts** (§3.2, §7.4). Amended 2026-10-05: it no longer serves an observability accounting, which is withdrawn (§10.2) |
-| **D8.3** | **Multi-camera decision, part one — where world-scoped state lives: published to the server, taking doc 20 decision 11's first branch, and specifically on the world-observer snapshot** — tick-stamped, lock-free, snapshot-swapped, zero-RPC, in the manner `_solar` already is (`CarlaClient.cs:169, 1855, 1991`). Consistent with [`01_Architecture.md`](01_Architecture.md) D1.10. **Correctness must not depend on which process a recorder runs in** (§3.4) |
-| **D8.3a** | **Multi-camera decision, part two — how many processes: one, by default.** Doc 20 §7.3's premise that a second camera needs a second client process is wrong: a recorder already opens two streams (`FrameRecorder.cs:112-113, 125-126`), the transport holds an unbounded list (`CarlaClient.cs:1748-1754`), and the limit is the shim's `World._recorder` field over a `Client` that returns a fresh `World` per call (`carlanet/__init__.py:1908, 1924, 2285, 2295`). One process gives every channel the same world-observer snapshot, so a per-camera `<_supervision>` **or `_solar`** disagreement at one tick becomes impossible rather than merely prohibited. Moving a channel out is then a throughput decision, not a correctness one (§2.2, §3.4) |
+| **D8.2** | **The unit of collection is a channel, not a camera** — `(sensor_id, rgb, depth, seg?)`, co-posed. The depth camera is for the occlusion measurement (`OcclusionEstimator`; `occlusion`, `occlusion_samples` and apparent size on every vehicle in the picture), is always present -- attached to the channel's camera, with no switch to leave it out (2026-10-05) -- and its captures are **truth artifacts** (§3.2, §7.4). Amended 2026-10-05: it no longer serves an observability accounting, which is withdrawn (§10.2) |
+| **D8.3** | **Multi-camera decision, part one — where world-scoped state lives: published to the server, the first of the two ways out (§3.4), and specifically on the world-observer snapshot** (built: `update_supervision`, read back by `CarlaClient.GetCachedSupervision`) — tick-stamped, lock-free, snapshot-swapped, zero-RPC, in the manner `_solar` already is (`CarlaClient.cs:169, 1855, 1991`). Consistent with [`01_Architecture.md`](01_Architecture.md) D1.10. **Correctness must not depend on which process a recorder runs in** (§3.4) |
+| **D8.3a** | **Multi-camera decision, part two — how many processes: one, by default.** The premise that a second camera needs a second client process is wrong: a recorder already opens two streams (`FrameRecorder.cs:112-113, 125-126`), the transport holds an unbounded list (`CarlaClient.cs:1748-1754`), and the limit is the shim's `World._recorder` field over a `Client` that returns a fresh `World` per call (`carlanet/__init__.py:1908, 1924, 2285, 2295`). One process gives every channel the same world-observer snapshot, so a per-camera `<_supervision>` **or `_solar`** disagreement at one tick becomes impossible rather than merely prohibited. Moving a channel out is then a throughput decision, not a correctness one (§2.2, §3.4) |
 | **D8.4** | **A capture session identity is assigned once and handed to every channel**; the per-recorder wall-clock fallback (`FrameRecorder.cs:98-103`) survives only for a single-channel run. **A stable `sensor_id` is required and validated unique** for any multi-channel session. Nothing is ever paired across channels by filename; the tick is the join key (§3.5) |
 | **D8.5** | **Coverage is a design input — and so is the sun.** One channel at detector-usable resolution covers a 576 × 324 m swath whatever the altitude — 0.64 % of the measured 29.0 km² sizing world — so channels are placed against the declared areas of interest the annotations reference, and a session's coverage of its own authored intervals is computed at planning time, not discovered afterwards. **The window's sun elevation is resolved at the same planning step**, because it sets the shadow field (112 px at 1.7° against a 10 px vehicle) and the exposure profile (§3.1, §3.3, §4.1, §4.7) |
 | **D8.6** | **Amended 2026-10-06 by the owner's ruling: per-image labels are the truth sidecar's vehicle records**, one self-describing file per frame per sensor, with no separate label file. A vehicle in the picture carries its box on its existing record -- the pixel rectangles, the share outside the picture, the range, the tilt, and the 3D box as eight explicit corners -- and no other vehicle does. YOLO/DOTA/COCO text forms are derived projections, never the primary, because a text line cannot carry the identity keys, the 3D box, the gate inputs or the illumination fields (§5.1, §5.2). As first decided: per-image labels were to be a separate artifact from the truth sidecar |
-| **D8.7** | **The label writer emits every in-frame vehicle with every gate input attached and applies no gate.** Apparent size, occlusion and truncation thresholds are consumer-side and are unmeasured (doc 17 §12.5); baking one into the artifact would fix an unvalidated number. **A fourth reason:** a size gate calibrated on daylight silhouettes is meaningless on a lamp, so a writer that gated would discard exactly the frames the night question is about (§5.3) |
+| **D8.7** | **The label writer emits every in-frame vehicle with every gate input attached and applies no gate.** Apparent size, occlusion and truncation thresholds are consumer-side and are unmeasured (no code holds one); baking one into the artifact would fix an unvalidated number. **A fourth reason:** a size gate calibrated on daylight silhouettes is meaningless on a lamp, so a writer that gated would discard exactly the frames the night question is about (§5.3) |
 | **D8.8** | **The behavioural annotation never appears in a detector label.** It lives in the truth sidecar and the manifest. Amended 2026-10-06 with D8.6: with no separate label file, the box and `<_supervision>` share the sidecar and are separable by element, so a detector export derived from it takes the box and never the supervision (§5.5) |
 | **D8.9** | **The imagery's requirement on the co-simulation runtime is pose continuity, not capture rate.** Per-tick pose increments small against the projected vehicle length, and velocity discontinuities no more often than one per five capture intervals — which at a 2 Hz capture means a resampled pose whatever the authored SUMO step. Capturing faster does not fix a discontinuity; it samples it more finely. Against [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) **D3.6** this sharpens to: **the sub-step interpolant must be continuous in along-lane speed, not only in position** — a cubic Hermite through the two buffered endpoints and their two speeds, which costs nothing over the linear form D3.6 already has the inputs for (§6.2, §6.3) |
 | **D8.10** | **Fabricated motion is labelled.** Every vehicle carries `pose_source` ∈ `sumo` \| `interpolated` \| `jump` \| `stale` per capture, the owner's words of 2026-10-06. This is a **label-accuracy declaration**: only a `sumo` pose is exact for its frame, and the corpus publishes the interpolation rule and a stated positional bound for an `interpolated` one, so a consumer knows the precision of each label rather than assuming they are all equal (§6.4). **Written since 2026-10-06** on every SUMO vehicle in the picture, from the step the session declares once to the server and the bodies it names a jump or stale on a change, resolved with the capture's own frame number; a server built before the jump state writes a jump `sumo`, said on the run report and closeout (§6.4); the plugin change awaits a build |
@@ -3514,17 +3547,17 @@ with this one:**
 | **D8.16a** | **Withdrawn 2026-09-30.** There is no render volume: every vehicle SUMO has is drawn, so a vehicle appears or disappears in frame only where SUMO inserts or removes it, and §5.7 flags those ticks rather than repairing them. |
 | **D8.17** | **Withdrawn 2026-10-05 by the owner's ruling.** Imagery and truth stay side by side in one capture folder, as the recorder writes them: there is no separate imagery folder, no held-back partition and no validator over an imagery folder. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, and the truth sidecar sits beside it; there is no `SCORE` root and no place for model output ([`04`](04_Contracts.md) D4.26 as amended); the supervision-transfer rule is published and never performed (D8.14, §8.5). The amendment of earlier on 2026-10-05 -- the split kept as a packaging rule with a validator naming no withdrawn field, and the held-back partition cut to one axis -- is withdrawn with it. As decided: **The anti-leak rule is enforced structurally, by four mechanisms, not by discipline.** **Two artifact roots, not three:** `OBSERVATION` and `TRUTH`, one writer each; the split performed *at the writer* so nothing is ever stripped; a mechanical validator over the observation root run in CI — **which must read PNG tEXt chunks, not only files**, because `carla:solar` carries `advancing`/`rate` (`SolarMetadata.cs:26-34`) and `carla:capture` carries `scenario_id`/`seed` (`CaptureMetadata.cs:39-48`); and a **held-back release partition** at session granularity whose truth is not released but whose manifest digest is. **There is no `SCORE` root**: it would be a directory for artifacts this pipeline never produces, and a named empty shelf invites somebody's model output into our tree (§3.5). A fifth, weaker mechanism is a **release attestation** recording both roots' digests, every held-back manifest digest, and the validator's verdict and ruleset version. §9.3 is the exhaustive truth list, and a feature derived only from truth is truth (§3.5, §9.4) |
 | **D8.18** | **The corpus publishes no identity that a consumer's output could key on, and publishes the label vocabulary that makes its labels readable.** There is no `EpolAssessment` schema — model output is neither produced nor consumed here. What remains is ours: `actor_id`, `entity_id` and `instance_id` never reach the observation root, so any consumer output carrying one is evidence of a leak **in what we handed over**; and `vocabulary.json` travels with the corpus carrying the term definitions, the version, the three-valued semantics and the three onsets (§9.3, §9.5) |
-| **D8.19** | **Withdrawn 2026-10-05 by the owner's ruling.** The five levels were pass marks (`w_min`, `c_max`, a lamp-on elevation), and the accounting arithmetic over them; what stands is in §10.2. As decided: **Observability is accounted at nested levels, published per sensor and unioned**, per doc 20 §2.5 and decision 15. There are **five** levels: rendered, in-frustum, resolvable, unoccluded, **illuminated**. The first four are illumination-independent by construction and the fifth is not, which is why they are separated. A capture whose occlusion could not be paired is excluded from the unoccluded count entirely, and a capture with no solar or radiometric record is excluded from the illuminated count — never counted as lit. **The corpus publishes this accounting as a description of itself**, including the count of authored intervals with an empty span and the level at which each was lost; what anybody computes over it is theirs (§10.2) |
-| **D8.20** | **`unlabelled` is not a negative; `nominal` is an asserted negative; and the corpus says so in the artifact.** `annotated` asserts the behaviour occurred, `nominal` asserts it did not — the hard negatives doc 20 §2.7 calls the scenario system's unique product — and `unlabelled` asserts nothing at all. Collapsing the last two manufactures false labels out of silence, which is why the distinction is published in `vocabulary.json` rather than only in this plan (§9.5, §10.3) |
+| **D8.19** | **Withdrawn 2026-10-05 by the owner's ruling.** The five levels were pass marks (`w_min`, `c_max`, a lamp-on elevation), and the accounting arithmetic over them; what stands is in §10.2. As decided: **Observability is accounted at nested levels, published per sensor and unioned** (never built: no code computes the levels). There are **five** levels: rendered, in-frustum, resolvable, unoccluded, **illuminated**. The first four are illumination-independent by construction and the fifth is not, which is why they are separated. A capture whose occlusion could not be paired is excluded from the unoccluded count entirely, and a capture with no solar or radiometric record is excluded from the illuminated count — never counted as lit. **The corpus publishes this accounting as a description of itself**, including the count of authored intervals with an empty span and the level at which each was lost; what anybody computes over it is theirs (§10.2) |
+| **D8.20** | **`unlabelled` is not a negative; `nominal` is an asserted negative; and the corpus says so in the artifact.** `annotated` asserts the behaviour occurred, `nominal` asserts it did not — the hard negatives that are the scenario system's unique product (`SupervisionState.Nominal`, "an authored negative") — and `unlabelled` asserts nothing at all. Collapsing the last two manufactures false labels out of silence, which is why the distinction is published in `vocabulary.json` rather than only in this plan (§9.5, §10.3) |
 | **D8.21** | **The corpus emits all three interval onsets and picks none.** Declared, committed and observed — the three names are seated on the SUMO authoring surface, with definitions in 06 §3.3. An absent onset is recorded as absent with a stated reason and is **never silently substituted**, since a quiet fallback mixes two labelling conventions inside one field. The manifest carries the SUMO step, so the quantisation floor on every temporal label is visible in the artifact (§10.4) |
 | **D8.22** | **In a live exercise the world never blocks on the consumer.** This decision states the never-block half; **D8.40** orders the response. Drop-oldest at the emission socket with a recorded per-sensor drop count — the pattern `FrameRecorder` already uses for its own encode queue (`FrameRecorder.cs:118`, `:46`, `:184-185`). A dropped frame is recorded in coverage as **covered but not delivered**, which is a two-valued fact about the link and not a judgement about anybody; it is recordable only because coverage is written by the recorder, independently of anything downstream. Back-pressuring the world would also move the sun, since the solar clock advances on the world tick (§11.3) |
-| **D8.23** | **Truth rides its own endpoint and is off by default in a live exercise; the recorded outputs never overload the CoT affiliation, and an operator may explicitly opt in to a distinct affiliation for planted vehicles on the live display feed only — off by default, never recorded.** **No EPoL assessment rides the feed as a `<_epol>` detail child**, because this pipeline emits no assessments. What stands is the separation — truth on a viewer's feed is a leak when the operator is part of what is being exercised and a confusion when they are not — and doc 20 decision 9's refusal to encode a label in the CoT type, which §5.6 measured being violated by `affiliation_by_type` in the largest authored scenario, until `b12d7bdc8` withheld its unknown entries and moved the display half to a run convention. The opt-in exists because an operator watching TAK during an exercise has a legitimate reason to see which vehicle was planted (`cb90fdd84`); it is `--marked-affiliation`, which reaches the UDP feed alone and is refused without `--udp`. `_solar` on the feed is fine; `advancing` and `rate` are not (§11.4) |
-| **D8.24** | **Coverage is published both per sensor and unioned, so a consumer's fusion choice does not change what our record means.** Fusion is a consumer's design problem, and **a multi-channel live exercise does not wait on a fusion stage**. What is ours is that fusing changes what "observed" means (doc 20 §7.6), so the corpus carries both forms per doc 20 decision 15 and the consumer picks the one matching what they did (§11.4) |
-| **D8.25** | **Withdrawn 2026-10-05 by the owner's ruling.** The probe ran a model over our data and applied pass marks to say whether an interval was worth collecting; usefulness is in the eye of the beholder and scoring is the model developer's work (§12). As decided: **Doc 20 §11 question 1 is a question about our corpus, answered by a two-tier fitness probe, and it sequences first.** Tier A — the in-frustum / resolvable / unoccluded span of an annotated interval, computed by a reader over sidecars today's recorder already produces — **needs no detector, no SUMO and nothing external at all**, and bounds the answer at every illumination simultaneously. Tier B applies **one stock detector, pinned by version and weights digest, as an instrument** and reports the longest single track covering the interval, the interval's detection continuity, and the track's `dominant_truth_fraction`. **It emits no figure of merit for the detector**: no precision, no recall, no F1, no comparison between instruments. Its outputs set our altitude, our field of view and our channel count before any corpus is collected (§12) |
-| **D8.26** | **The corpus uses a fixed, manual, per-window exposure, set in numbers per channel, and recorded per capture.** *Amended 2026-10-07: it read "chosen from a named EO profile set"; no profile set is made, and `histogram` warns and is recorded (§4.2).* Auto-exposure is permitted only in a live exercise and only when recorded as such. Two independent reasons: it makes the exposure a function of the scene's content, which is what is being detected; and it partially cancels the illumination covariate the corpus is stratified by, so two windows at different sun elevations can produce similar pixel statistics. Doc 13 §5 reached the same conclusion from determinism (§4.2) |
+| **D8.23** | **Truth rides its own endpoint and is off by default in a live exercise; the recorded outputs never overload the CoT affiliation, and an operator may explicitly opt in to a distinct affiliation for planted vehicles on the live display feed only — off by default, never recorded.** **No EPoL assessment rides the feed as a `<_epol>` detail child**, because this pipeline emits no assessments. What stands is the separation — truth on a viewer's feed is a leak when the operator is part of what is being exercised and a confusion when they are not — and the refusal to encode a label in the CoT type (`SumoCotBridge` gives a planted vehicle its population's affiliation in every recorded output), which §5.6 measured being violated by `affiliation_by_type` in the largest authored scenario, until `b12d7bdc8` withheld its unknown entries and moved the display half to a run convention. The opt-in exists because an operator watching TAK during an exercise has a legitimate reason to see which vehicle was planted (`cb90fdd84`); it is `--marked-affiliation`, which reaches the UDP feed alone and is refused without `--udp`. `_solar` on the feed is fine; `advancing` and `rate` are not (§11.4) |
+| **D8.24** | **Coverage is published both per sensor and unioned, so a consumer's fusion choice does not change what our record means.** Fusion is a consumer's design problem, and **a multi-channel live exercise does not wait on a fusion stage**. What is ours is that fusing changes what "observed" means, so the corpus carries both forms and the consumer picks the one matching what they did (§11.4; not built: no code writes a coverage record) |
+| **D8.25** | **Withdrawn 2026-10-05 by the owner's ruling.** The probe ran a model over our data and applied pass marks to say whether an interval was worth collecting; usefulness is in the eye of the beholder and scoring is the model developer's work (§12). As decided: **Whether an annotated interval yields a usable detector track is a question about our corpus, answered by a two-tier fitness probe, and it sequences first.** Tier A — the in-frustum / resolvable / unoccluded span of an annotated interval, computed by a reader over sidecars today's recorder already produces — **needs no detector, no SUMO and nothing external at all**, and bounds the answer at every illumination simultaneously. Tier B applies **one stock detector, pinned by version and weights digest, as an instrument** and reports the longest single track covering the interval, the interval's detection continuity, and the track's `dominant_truth_fraction`. **It emits no figure of merit for the detector**: no precision, no recall, no F1, no comparison between instruments. Its outputs set our altitude, our field of view and our channel count before any corpus is collected (§12) |
+| **D8.26** | **The corpus uses a fixed, manual, per-window exposure, set in numbers per channel, and recorded per capture.** *Amended 2026-10-07: it read "chosen from a named EO profile set"; no profile set is made, and `histogram` warns and is recorded (§4.2).* Auto-exposure is permitted only in a live exercise and only when recorded as such. Two independent reasons: it makes the exposure a function of the scene's content, which is what is being detected; and it partially cancels the illumination covariate the corpus is stratified by, so two windows at different sun elevations can produce similar pixel statistics. Determinism gives the same conclusion, and `ChannelExposure` defaults every channel to manual exposure and warns on `histogram` (§4.2) |
 | **D8.27** | **Exposure is a published, per-run collection parameter, set in numbers -- method, ISO, shutter, aperture and compensation -- over the channel's post-process profile; no profile set is made, because the numbers are the control.** *Amended 2026-10-07: it read "and the profile set is named for illumination regimes rather than for stock towns". Built: the camera publishes upstream CARLA's `exposure_mode`, `exposure_compensation`, `iso`, `shutter_speed` and `fstop`, applied after the profile, and a run's channel states them, defaulting to the `Default` profile's (§2.9, §4.2).* As measured before, the only lever was `post_process_profile` over four files spanning EV100 +12.32 to −1.06 (measured), applied at spawn (`ActorBlueprintFunctionLibrary.cpp:1369-1381`) and unrecorded, while the engine-side setters were complete and unpublished (`SceneCaptureSensor.h:237-393`); publishing them was an additive change to one function, and a rebuild is not a cost (§2.9, §4.2) |
 | **D8.28** | **Every capture records its own radiometry on the OBSERVATION side, including a digest of the profile the server actually loaded.** The name the client asked for is not evidence: a missing profile file fails silently and the return value is discarded (`ActorBlueprintFunctionLibrary.cpp:1376-1380`). **A capture with no radiometric record fails the session**, on the same principle as a capture with no `_solar` element (§4.8). *As built 2026-10-07: the record is the exposure the run gave the camera, on every capture's sidecar as `<_carla_exposure>` and in the run manifest's camera entry, the two-folder split being withdrawn (2026-10-05); `run_capture` refuses a server whose camera cannot take it (run check 24), and the plugin logs a profile that does not load. The digest of the loaded profile is not built (run check 43).* |
-| **D8.29** | **Night capture is not viable today as a detector corpus, and low-sun capture is where the illumination axis is built.** The chain is broken at every link: no light below the horizon (`CesiumSunSky.cpp:59, 82, 86`), no artificial lights anywhere in the tree, tiles with daytime radiance baked in (doc 13 §4), a clear-sun exposure, and an 8-bit tonemapped product in which under-exposure is not recoverable (`PngEncoder.cs:37-38`). At the sizing site the 23:00 sun is 37° to 76° below the horizon in every season (computed). **What may be viable is a corpus of vehicle lamps against a dark field — a different task, and it must be named as one.** Doc 13's Phase 2 moon light is the first phase that makes a night vehicle detectable at all; Phase 1 alone produces a readable picture and no additional detections (§4.6) |
+| **D8.29** | **Night capture is not viable today as a detector corpus, and low-sun capture is where the illumination axis is built.** The chain is broken at every link: no light below the horizon (`CesiumSunSky.cpp:59, 82, 86`), no artificial lights anywhere in the tree, tiles with daytime radiance baked in (ion asset 2275207, the default `--ion-asset-id`), a clear-sun exposure, and an 8-bit tonemapped product in which under-exposure is not recoverable (`PngEncoder.cs:37-38`). At the sizing site the 23:00 sun is 37° to 76° below the horizon in every season (computed). **What may be viable is a corpus of vehicle lamps against a dark field — a different task, and it must be named as one.** A moon key light (a second directional light, which `ACesiumSunSky` does not have) is the first phase that makes a night vehicle detectable at all; an ambient floor alone produces a readable picture and no additional detections (§4.6) |
 | **D8.30** | **A session never takes its illumination from the host clock.** `--date` currently defaults to `datetime.now()` (`WorldBuilder.py:226-230`), and at the sizing site the seasonal spread at a fixed hour is 21.4° of sun elevation and a factor of fourteen in shadow length (computed). The epoch belongs to [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md); the collection-side requirement is that no capture's light is a function of the day somebody ran it (§2.10, §4.1) |
 | **D8.31** | **The default solar policy for a corpus is frozen at the window's opening instant, one window per run.** A sweep comparing behaviours must hold illumination constant; a twenty-minute window at rate 1.0 sweeps 4.5° of elevation at this latitude (computed), which at low sun is most of a stratum; a frozen policy makes 06 §4.5's residual check decisive rather than merely indicative; and it removes the mid-session exposure problem instead of managing it. **Advance is correct in exactly two cases** — a window whose subject *is* a transition, and a live exercise long enough that a frozen sun would be visibly wrong. When advancing, the rate is bounded by the stratum width, and the arithmetic is stated rather than a number baked in (§4.7) |
 | **D8.32** | **Vehicle light state is composed from SUMO's motion signals and the world's illumination, and from nothing else.** SUMO sets only `BRAKELIGHT` and the blinkers (`MSVehicle.cpp:4255-4257`, `:6836-6853`) and has no notion of time of day, so headlights can only come from the solar state; the only automatic-headlight logic in the tree is gated on CARLA weather, which is inert here (`VehicleLightStage.cs:228-254`, `CarlaServer.cpp:611-612`). **The composition may never read a supervision state, an anomaly flag, an `instance_id` or a `vType` name**, and emergency lights are permitted only for a vehicle class that also occurs in the nominal population — because at night the lamp is the entire signal, so a leak there is not a bias but the whole feature (§4.5) |
@@ -3542,18 +3575,19 @@ with this one:**
 
 ## 16. Open questions
 
-1. *Moot 2026-10-05: no level is computed from them (§10.2), so neither value is chosen or recorded; a consumer brings its own.* **`w_min` and `c_max` — the resolvable and unoccluded thresholds.** Doc 17 §12.5 records that a
-   minimum apparent size has not been chosen and that the occlusion margin and sample density are
-   defaulted but untuned. Every level in §10.2 is a function of both. They are corpus parameters for
-   now, but **a corpus assembled under one pair and read under another is not one corpus**, and the
-   values are part of what the corpus is rather than part of how it is judged.
+1. *Moot 2026-10-05: no level is computed from them (§10.2), so neither value is chosen or recorded; a consumer brings its own.* **`w_min` and `c_max` — the resolvable and unoccluded thresholds.** No minimum apparent size has
+   been chosen, and the occlusion margin and sample density are defaulted but untuned
+   (`OcclusionOptions.MarginMetres` and `SamplesAcross`). Every level in §10.2 is a function of both.
+   They are corpus parameters for now, but **a corpus assembled under one pair and read under another
+   is not one corpus**, and the values are part of what the corpus is rather than part of how it is
+   judged.
    **Recommendation:** fix them from Tier B of §12, and record them in the manifest.
 
 2. **Whether an instance-segmentation channel is worth its stream.** It delivers exact modal
    (visible-region) vehicle masks, at the cost of a third stream per channel against a connection
-   already measured as contended (`run_SCTMV.py:215-219`). Its *second* benefit has no subject: doc 17
-   §9 wanted instance segmentation to weight a translucent occluder by its opacity, and every vehicle
-   is drawn at full visibility (§2.6). **It has a third benefit**: at low sun and below the horizon the
+   already measured as contended (`run_SCTMV.py:215-219`). Its *second* benefit, weighting a
+   translucent occluder by its opacity, has no subject, because every vehicle is drawn at full
+   visibility (§2.6). **It has a third benefit**: at low sun and below the horizon the
    amodal box and the visible extent diverge by the whole vehicle, and the instance mask is the only
    instrument in the rig that *measures* the divergence rather than inferring it from
    `visible_signature`. **Recommendation:** optional per channel, off by default, and measured once against the throughput budget that
@@ -3562,17 +3596,18 @@ with this one:**
    corpus whose boxes nobody can check.
 
 3. *Moot 2026-10-05: no coverage is published (§10.2).* **Per-sensor coverage or unioned coverage, when a consumer fuses.** Fusion itself is a consumer's
-   design problem and D8.24 places no dependency on it. What remains open is small and is ours: doc 20
-   §7.6 records that the fusion choice changes what "observed" means, so the corpus publishes coverage
-   **both** per sensor and unioned (doc 20 decision 15). **Recommendation:** publish both, always; the
-   cost is one extra aggregation over a file we already write, and the alternative is a consumer
-   silently reading a per-sensor denominator as if it were a union.
+   design problem and D8.24 places no dependency on it. What remains open is small and is ours: the
+   fusion choice changes what "observed" means, so the corpus publishes coverage **both** per sensor
+   and unioned (not built: no code writes a coverage record). **Recommendation:** publish both,
+   always; the cost is one extra aggregation over a file we already write, and the alternative is a
+   consumer silently reading a per-sensor denominator as if it were a union.
 
 4. **What class taxonomy the corpus should publish as its `class` field.** The truth side has
-   `base_type` and `special_type` (doc 09 §5) and the SUMO side has fourteen `vType`s over six
-   `vClass`es in the sizing scenario (measured, §5.6). **`vType` names the authoring surface's own
-   categories, which are not observable from pixels at 5 px** — so a label field carrying `vType` is a
-   label nothing in the imagery supports, which is a labelling defect regardless of who trains on it.
+   `base_type` and `special_type` (`CotWriter` writes both in `_carla`) and the SUMO side has
+   fourteen `vType`s over six `vClass`es in the sizing scenario (measured, §5.6). **`vType` names the
+   authoring surface's own categories, which are not observable from pixels at 5 px** — so a label
+   field carrying `vType` is a label nothing in the imagery supports, which is a labelling defect
+   regardless of who trains on it.
    **Recommendation:** the published `class` is `base_type`, `vType` stays on the truth side as
    provenance, and the corpus documents the difference — but this interacts with the vehicle catalogue
    contract ([`04_Contracts.md`](04_Contracts.md),
@@ -3581,14 +3616,15 @@ with this one:**
    different product.
 
 5. **Whether the corpus should carry sessions in which nothing was annotated.** They are pure negatives
-   and doc 20 §2.7 argues hard negatives are the scenario system's unique product — but they are also
+   and hard negatives are the scenario system's unique product — but they are also
    the cheapest data to over-collect. **Recommendation:** yes; the manifest's `instance`, `series` and
    `cohort` rows already say what each session declared, so a trainer can count. *The prevalence part of
    this question is moot 2026-10-05: no prevalence is computed (§10.2).*
 
-6. **How a session that crashes mid-run is treated.** Doc 20 §7.5 requires the manifest to be written
-   incrementally, "not held in memory until then". A session with a closed manifest but truncated
-   coverage from one channel is partially usable; one with an unclosed manifest is not, because its
+6. **How a session that crashes mid-run is treated.** The manifest is written incrementally
+   (`RunManifestWriter` appends and flushes each row before composing the next, and a manifest without
+   its `manifest_closed` row is a run that was interrupted). A session with a closed manifest but
+   truncated coverage from one channel is partially usable; one with an unclosed manifest is not, because its
    observability accounting describes fewer captures than the session actually produced.
    **Recommendation:** the manifest carries a `closed` flag and a per-sensor last-tick, and **the
    release step refuses to publish a session whose manifest is unclosed** rather than shipping a corpus
@@ -3630,7 +3666,7 @@ with this one:**
 
 10. **Whether a lamp-only corpus is worth building at all, if §12.2's B-dark point says it is
     possible.** It is a real EO task, it is what a fielded system sees at night, and it is the only
-    night product available before doc 13's Phase 2. It is also a task with no class taxonomy, boxes
+    night product available before a moon key light exists. It is also a task with no class taxonomy, boxes
     that describe invisible objects, a signature that is a light state rather than a body, and a truth
     population dominated by vehicles nothing can see (§4.6, §5.8). **Recommendation:** decide it *after*
     B-dark and not before, and if it is built, build it as a separate corpus with its own label

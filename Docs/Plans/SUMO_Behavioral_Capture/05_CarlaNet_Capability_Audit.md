@@ -23,8 +23,8 @@
 ## What this section does **not** cover
 
 - Whether the SUMO side can produce what CARLA needs (network, demand, `tlLogic`, per-vehicle
-  signals). That is [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) and
-  [doc 23](../../Findings/23_SUMO_Traffic_Integration.md).
+  signals). That is [`07_Scenario_Authoring.md`](07_Scenario_Authoring.md) and the TraCI client in
+  `CarlaNet.Sumo` (`SumoConnection`, which reads each vehicle's signal word as `SumoVehicleSignals`).
 - The admission and release of rendered vehicles, the clock contract, or physics authority. Those are
   decisions for [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) and [`04_Contracts.md`](04_Contracts.md);
   this section supplies the mechanisms they may assume exist and names the ones they may not.
@@ -355,8 +355,8 @@ Missing from Python, present in C#: `ApplyTargetVelocity`, `ApplyTargetAngularVe
 velocity commands that go with them — those become one RPC per vehicle through
 `Actor.set_simulate_physics` / `Actor.set_target_velocity` (`:790-800`). From C#, they ride in the
 same batch. This is the clearest single argument in the audit for the co-simulation runtime being a
-.NET assembly, which is what [doc 23 §5](../../Findings/23_SUMO_Traffic_Integration.md) already
-recommends for an unrelated reason.
+.NET assembly, which it is: `SumoDriveSession` in `CarlaNet.CoSim` writes each tick's poses,
+velocities and lamps as one batch (`TickBatch`).
 
 Each missing wrapper is a five-line class beside the existing eight and an added name in the import
 at `:485-487`. Nothing below Python changes.
@@ -503,7 +503,7 @@ Two shapes worth knowing:
 - At scale, spawn belongs in the batch (`SpawnActorCommand`, §4), which also returns a per-entry
   error string rather than an exception.
 
-### 6.2 Custom attributes — doc 20 §4.5 verified, with one citation corrected
+### 6.2 Custom attributes — accepted by the server, refused by the shim
 
 **Read.** The RPC→engine conversion copies every attribute into the description's `Variations` map
 with no membership test (`LibCarla/source/carla/rpc/ActorDescription.h:47-56`, the
@@ -513,12 +513,10 @@ with no membership test (`LibCarla/source/carla/rpc/ActorDescription.h:47-56`, t
 `RetrieveActorAttributeToInt` and its five siblings all return `Default` when the key is absent and
 never enumerate the map looking for strangers (`Actor/ActorBlueprintFunctionLibrary.cpp:1293-1339`).
 
-So the server accepts an attribute no blueprint declares, and it is inert. Doc 20 §4.5's claim
-**holds**; its citation `CarlaServer.cpp:1139-1146` is stale in this tree — that range is inside the
-`request_file` binding. The correct range is `CarlaServer.cpp:1311-1332`.
+So the server accepts an attribute no blueprint declares, and it is inert. The spawn binding that
+forwards it is `CarlaServer.cpp:1311-1332` in this tree.
 
-**The shim's refusal**, exactly as doc 20 cites it
-(`CarlaNet/python/carlanet/__init__.py:611-614`):
+**The shim's refusal** (`CarlaNet/python/carlanet/__init__.py:611-614`):
 
 ```python
     def set_attribute(self, name: str, value: str):
@@ -569,10 +567,10 @@ fork already works post-spawn because it has no choice: `ScenarioExecutor.SetDow
 (`CarlaNet.Scenario/ScenarioExecutor.cs:168-182`); the traffic manager reads `BoundingBox.Extent`
 off live actors (`Stages/ALSM.cs:536`, `:589`, `:602`, `:620`). A SUMO `vType`'s `length` and
 `width` change car-following gaps, so the correspondence has to be established **at authoring time
-from a catalogue produced by a running server**, exactly as
-[doc 20 decision 12](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) argues — not
-looked up at playback. [`04_Contracts.md`](04_Contracts.md) owns that contract; this audit supplies
-the reason it cannot be a runtime query.
+from a catalogue produced by a running server** — which `VehicleCatalogueBuilder` builds by spawning
+each blueprint and measuring the body that appears — not looked up at playback.
+[`04_Contracts.md`](04_Contracts.md) owns that contract; this audit supplies the reason it cannot be
+a runtime query.
 
 ---
 
@@ -591,7 +589,7 @@ velocity, acceleration and a 54-byte type-dependent union (`:1861-1892`), cachin
 Accessors are pure cache reads, no RPC: `GetActorTransform`, `GetActorVelocity`,
 `GetActorAngularVelocity`, `GetActorAcceleration`, `GetActorSnapshot` (`:1915-1919`).
 
-### 7.2 Where velocity comes from — doc 23's `WorldObserver.cpp:373` verified
+### 7.2 Where velocity comes from — the world observer's velocity read
 
 **Read**, line for line:
 
@@ -636,7 +634,7 @@ Following `GetActor()->GetVelocity()` down for a CARLA vehicle:
    `ComponentVelocity` field (`.../Private/Components/SceneComponent.cpp:2995-2998`), is reached only
    while the root simulates, and then reads the body.
 
-### 7.3 The conclusion, stated more strongly than doc 23 states it
+### 7.3 The conclusion: a structural zero
 
 **Read.** The Chaos vehicle plugin never assigns `UMovementComponent::Velocity`: a grep of
 `Engine/Plugins/Experimental/ChaosVehiclesPlugin/Source/ChaosVehicles` finds one `Velocity =`, and it
@@ -649,9 +647,9 @@ called only by AI path following, and `UMovementComponent::StopMovementImmediate
 `ACarlaWheeledVehicle::SetKinematicVelocity` (§7.4) writes the field a non-simulating CARLA
 vehicle's velocity is read from. So for a vehicle whose physics is off and whose velocity nobody
 sets, the world observer does not report a *stale* velocity — it reports a
-**structural zero**, and would do so however the vehicle got where it is. Doc 23's framing ("a
-teleport does not update component velocity") is correct but understates the problem: there is no
-history to be stale.
+**structural zero**, and would do so however the vehicle got where it is. That a teleport does not
+update component velocity is correct, but it understates the problem: there is no history to be
+stale.
 
 Nor can the client set it through the base implementation. `FCarlaActor::SetActorTargetVelocity` on
 a non-dormant actor calls `RootComponent->SetPhysicsLinearVelocity(...)`
@@ -673,8 +671,9 @@ is a description of the shape of a fix, not a usable mechanism today.
 
 Everything downstream of the observer's velocity reads it, not just the CoT record: the engine
 recorder, radar's Doppler term and the traffic manager's collision stage
-([`03`](03_CoSimulation_Runtime.md) §5.2 traces each; doc 17's occlusion and arrival gating does not
-read velocity). The team brief's decision 2 already says a pose-applied body's zero is a problem to be
+([`03`](03_CoSimulation_Runtime.md) §5.2 traces each; `OcclusionEstimator` works from each vehicle's
+pose, box and depth capture and does not read velocity, and the code holds no arrival gate). The team
+brief's decision 2 already says a pose-applied body's zero is a problem to be
 solved rather than a reason to reject the mode. The audit's contribution is to say **where** it must
 be solved: in the engine, because no ordering of client calls produces a non-zero reading through the
 base implementation. The candidate shapes:
@@ -831,13 +830,14 @@ subscription is independent of any other listener on the same camera.
 - `Actor.listen` stores into a single `self._sub` (`:872`); a second `listen()` on the same actor
   orphans the first subscription.
 
-**Inferred.** Doc 20 decision 11's warning — that the process-local annotation registry does not
-survive multiple collection cameras — is about *process* boundaries. This audit finds that the
-process boundary is not forced by the transport: constructing `FrameRecorder` N times with N camera
-tokens works today in one process, each with its own worker pool, channel and sockets. The
-restriction is a shim API shape. That weakens the premise of decision 11's "additional cameras mean
-additional client processes" and should be revisited in
-[`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) rather than inherited.
+**Inferred.** The warning that a process-local annotation registry does not survive multiple
+collection cameras is about *process* boundaries. (The code keeps no such registry: `SupervisionBinder`
+states the supervision in force for each vehicle for the session to put on the server, and the
+world-observer snapshot carries it to every process.) This audit finds that the process boundary is
+not forced by the transport: constructing `FrameRecorder` N times with N camera tokens works today in
+one process, each with its own worker pool, channel and sockets. The restriction is a shim API shape.
+That weakens the premise that additional cameras mean additional client processes, which should be
+revisited in [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) rather than inherited.
 
 ---
 
@@ -915,9 +915,10 @@ The pattern, in the five parts an author copying it needs:
 5. **Include the plugin header** alongside `BareEarthReference.h`, `DrapedTerrain.h` and
    `StagingBounds.h` inside the `<util/ue-header-guard-begin.h>` block at `CarlaServer.cpp:78-81`.
 
-Doc 20 §8.4's citations are stale in this tree (`CarlaServer.cpp:727-760`, shim `:1562`/`:1569`);
-current lines are `:808-842` and `__init__.py:1589`/`:1596`. Its recommendation — that areas of
-interest be a second pair in the same shape — is confirmed by this reading and needs no revision.
+The staging-bounds pair is at `CarlaServer.cpp:808-842` and `__init__.py:1589`/`:1596` in this
+tree. This reading confirms that areas of interest could be a second pair in the same shape (not
+built: the server binds no areas-of-interest RPC, and `AreaOfInterestResolver` writes the resolved
+areas to `areas.resolved.json` in the world package).
 
 ---
 
@@ -936,7 +937,7 @@ Naming caution for anyone reading the shim: `Client.start_recorder` (the native 
 `World.start_recording` (CarlaNet's PNG + CoT `FrameRecorder`) are unrelated subsystems that coexist
 in the same file.
 
-**Doc 20 §4.5's recorder claim is confirmed.** `ACarlaRecorder::CreateRecorderEventAdd` copies the
+**The recorder keeps every spawn attribute.** `ACarlaRecorder::CreateRecorderEventAdd` copies the
 entire `Variations` map into the actor-add event
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Recorder/CarlaRecorder.cpp:747-769`), and
 `CarlaRecorderEventAdd` writes and reads those attributes symmetrically to and from disk
@@ -971,9 +972,7 @@ Above the RPC layer there are three gaps:
    (`__init__.py:1002-1004`), and `TrafficSign` is likewise `pass` (`:997-999`). There is no
    `__getattr__` forwarding on `Actor`. The enum is exported (`:476-478`) with nothing to pass it
    to. `World` has no `reset_all_traffic_lights` or `freeze_all_traffic_lights` either. This was a
-   deliberate deferral, recorded in
-   [doc 10](../../Findings/10_Intersection_Navigation_Traffic_Control.md) as "Layer C — deferred"
-   (`:76-77`) and again at `:247-250`.
+   deliberate deferral.
 2. **Phase times and the frozen flag are decoded and then discarded in C#.**
    `ParseTrafficLightState` (`CarlaClient.cs:79-97`) decodes sign id, state, green/yellow/red/elapsed
    times, pole index and `time_is_frozen` from the observer's type-dependent union — and the only
@@ -994,23 +993,25 @@ Above the RPC layer there are three gaps:
 `TrafficLightInjector` already establishes the `tlLogic` ↔ OpenDRIVE `sign_id` correspondence at
 world-build time — one `<controller>` per green phase, with the xodr signal id `{tlLogicId}_{k}`
 matching tlLogic link index *k* and the controller id matching the junction name
-([doc 10 §Implementation status](../../Findings/10_Intersection_Navigation_Traffic_Control.md), `:60-74`).
+(`CarlaNet.Map/OpenDrive/TrafficLightInjector.cs`, whose header comment states the correspondence).
 A client keying off `sign_id` directly would sidestep gap 3; gaps 1 and 2 would not be sidestepped
 the same way. **None of this is required by this plan:** CARLA renders no traffic-light or sign
 actors and drives no light state from SUMO ([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)), so gaps 1, 2 and
 3 are all present, audited, and not required here.
 
-Two related facts from doc 10, kept for completeness though neither is required by this plan
-(§3e):
+Two related facts, read from the engine and the injector, kept for completeness though neither is
+required by this plan (§3e):
 
 - Signal timing currently uses CARLA's defaults — 10 s green, 3 s yellow, 2 s red per controller —
-  and does **not** reproduce netconvert's per-phase durations (`:115-116`). Driving real SUMO phase
-  durations is exactly what `set_traffic_light_green_time` and its siblings are for, and they are
-  the surface not bound in Python.
+  and does **not** reproduce netconvert's per-phase durations (`UTrafficLightController::LightStates`
+  in `Traffic/TrafficLightController.h`; `TrafficLightInjector` writes no durations). Driving real
+  SUMO phase durations is exactly what `set_traffic_light_green_time` and its siblings are for, and
+  they are the surface not bound in Python.
 - CARLA builds one stop-line trigger box **per lane listed in a signal's `<validity>`**, so
   collapsing heads without merging validity leaves lanes with no trigger box and vehicles drive
-  through (`:95-104`). This governs CARLA's own signal-triggered behaviour, which this plan does not
-  invoke.
+  through (`UTrafficLightComponent::InitializeSign`; `TrafficLightInjector` merges each approach's
+  lanes into the validity of the head it keeps). This governs CARLA's own signal-triggered behaviour,
+  which this plan does not invoke.
 
 ### 12.3 Upstream's `Co-Simulation/Sumo`, reconstructed and checked call by call
 
@@ -1020,10 +1021,9 @@ and by a search for any `cosim` / `co-simulation` path. The only SUMO-aware code
 and `CarlaNet/src/CarlaNet.Map/OpenDrive/TrafficLightInjector.cs`, none of which talks to a running
 CARLA server. So upstream's dependency set cannot be cited from this tree.
 
-**Inferred**, from [doc 23 §4](../../Findings/23_SUMO_Traffic_Integration.md) and from the structure
-of upstream's module (`run_synchronization.py`; `sumo_integration/carla_simulation.py`;
-`sumo_integration/bridge_helper.py`; `data/vtypes.json`), the CARLA-client surface it depends on is
-the following. Everything in the right-hand column **is** read from our tree and cited above.
+**Inferred**, from the structure of upstream's module (`run_synchronization.py`;
+`sumo_integration/carla_simulation.py`; `sumo_integration/bridge_helper.py`; `data/vtypes.json`), the
+CARLA-client surface it depends on is the following. Everything in the right-hand column **is** read from our tree and cited above.
 
 | Upstream co-simulation needs | What for | Our client |
 |---|---|---|
@@ -1040,7 +1040,7 @@ the following. Everything in the right-hand column **is** read from our tree and
 | `world.get_traffic_lights_from_waypoint()` | find which lights an edge's stop line carries | **Absent.** Gap G5.11. **Not required by this plan** (§3e); would be sidesteppable via the injector's `tlLogic` ↔ `sign_id` correspondence if ever needed (§12.2, D5.10) |
 | `world.get_actor(id)` | fetch one actor by id | **Present in substance**: our shim has `get_actors([id])` and `ActorList.find()` (`__init__.py:2038-2049`, `:1043-1048`), not a singular `get_actor` |
 | `world.get_snapshot()` / `WorldSnapshot` | read all actor poses for one frame | **Not found in the Python shim.** The equivalent exists one layer down as the C# observer cache — `GetCachedActorIds`, `GetActorTransform`, `GetActorVelocity`, `GetActorSnapshot` (`CarlaClient.cs:1915-1919`, `:1985`) — which is a better primitive for this purpose because it costs no RPC. A shim `get_snapshot` over it would be a thin wrapper |
-| Pose arithmetic: Y negation, `yaw = sumoAngle − 90`, half-length shift | `BridgeHelper.get_carla_transform` / `get_sumo_transform` | **Client-side arithmetic, no CARLA dependency.** New code in `CarlaNet.CoSim`; doc 23 §6.7 already names all three conversions |
+| Pose arithmetic: Y negation, `yaw = sumoAngle − 90`, half-length shift | `BridgeHelper.get_carla_transform` / `get_sumo_transform` | **Client-side arithmetic, no CARLA dependency.** New code in `CarlaNet.CoSim`: `PoseConverter` negates Y and takes `yaw = sumoAngle − 90`, and shifts the reference point back by the catalogue's measured bumper-to-origin distance rather than half the vType's length |
 
 **Conclusion for this capability.** Nothing upstream's co-simulation asks of the CARLA client is
 missing from our C# client except the pre-spawn extent, and that is missing from upstream's client
@@ -1150,10 +1150,9 @@ concurrent calls pipeline. Per-call timeout is `Task.WaitAsync(_timeout)` (`:54`
 leaves its entry in `_pending` until the late response arrives and removes it (`:209`) — self-healing
 in practice, worth knowing if a step ever stalls.
 
-**Issue #14's tick-thread contention claim.** Referenced twice in the tree
-([doc 23 §6.11](../../Findings/23_SUMO_Traffic_Integration.md), `_TEAM_BRIEF.md:154-155`) and in
-both cases as a one-line cross-reference. The issue body is not in the repository and **no measured
-contention figure exists in either document**. Treat the claim as recorded but unquantified; if the
+**Issue #14's tick-thread contention claim.** Referenced in the tree at `_TEAM_BRIEF.md:154-155`, as
+a one-line cross-reference, and nowhere in the code. The issue body is not in the repository and **no
+measured contention figure exists there**. Treat the claim as recorded but unquantified; if the
 magnitude matters to a design decision, it has to be measured or the issue fetched.
 
 ---
@@ -1817,7 +1816,7 @@ number.
 | **G5.4** | Vehicle dimensions unavailable before spawn — no size attribute on any blueprint definition, no dimension field on `FVehicleParameters` (§6.3) | **RPC / engine** | A runtime `vType` ↔ blueprint fit check. Forces the correspondence to be a build-time catalogue. | Either accept the build-time catalogue (recommended; see D5.6), or add dimensions to `FVehicleParameters` and `MakeVehicleDefinition` and carry them on `ActorDefinition`, which is an engine + LibCarla + C# type change. |
 | **G5.5** | No client-facing actor freeze/sleep; several dormant-branch writes silently dropped (§8.3, §8.2) | **Server / engine** | A cheap "instantiated but inert" state for the render-set contract; state survival across large-map dormancy | Bind `PutActorToSleep`/`WakeActorUp`, and fill the empty dormant branches in `CarlaActor.cpp`. Both engine-side. |
 | **G5.6** | `wait_for_tick` returns a synthetic `Timestamp(0, 0.0, 0.0, now)` (§5.3) | **Shim** | Any caller reading `.frame` or `.elapsed_seconds` from it | Capture the handler's timestamp in the closure. Shim only. |
-| **G5.7** | Shim holds one recorder and one listener per object, so one process appears limited to one camera (§9) | **Shim** | Multi-camera capture in one process — and, through that, doc 20 decision 11's premise | A dict keyed by camera id in place of `self._recorder` / `self._sub`. Shim only; C# already supports N. |
+| **G5.7** | Shim holds one recorder and one listener per object, so one process appears limited to one camera (§9) | **Shim** | Multi-camera capture in one process — and, through that, the premise that each added camera needs its own client process (the code publishes supervision on the world-observer snapshot, so a recorder in any process reads it) | A dict keyed by camera id in place of `self._recorder` / `self._sub`. Shim only; C# already supports N. |
 | **G5.8** | Shim `set_attribute` refuses undeclared attributes although the server accepts them (§6.2) | **Shim** | Setting a custom identity attribute at spawn from Python | A sibling `set_attribute_unchecked`. Shim only. C# has no gate. |
 | **G5.9** | `drape_ground_elevation` does not prime the grid, so it returns `None` on a reconnected client (§10) | **Shim** | Silent null Z for any consumer that runs before telemetry | Call `EnsureBareEarthReference()` first. Shim only. |
 | **G5.10** | Three recorder/replay RPCs unwrapped in the shim; `PythonAPI/util/start_replaying.py` breaks (§12.1) | **Shim** | Replay utilities and recorder inspection from Python | Three two-line wrappers. |
@@ -1866,10 +1865,10 @@ Where CarlaNet otherwise falls short of upstream's *Python* client, it falls sho
 shim**, not in the port. The shim exposes 8 of 22 batch commands and leaves `TrafficLight` an empty
 class — the latter present, audited, and not required by this plan in any language, now that traffic
 lights are not rendered or driven from CARLA (§3e). The batch-command gap is a real limitation and it
-would bite hard if the SUMO bridge were written in Python — which is precisely what doc 23 already
-rules out for an unrelated reason (no Python in the per-tick path). A .NET co-simulation assembly,
-subscribing to `OnWorldTickCompleted` the way the traffic manager already does, reaches all of it
-today.
+would bite hard if the SUMO bridge were written in Python — which the tree does not do: the bridge is
+the C# `SumoDriveSession`, and its Python caller (`DriveRun`) only calls `Advance` once per step. A
+.NET co-simulation assembly, subscribing to `OnWorldTickCompleted` the way the traffic manager
+already does, reaches all of it today.
 
 **On the added requirement — driving simulated time of day in tandem with playback — the answer is
 that the mechanism exists, works, and is already in production use.** Solar time, date, advancement
@@ -1907,15 +1906,15 @@ number. `D5.13`–`D5.20` all concern time of day, illumination and vehicle ligh
 
 | # | Decision |
 |---|---|
-| **D5.1** | **The SUMO-driven runtime is a .NET assembly, and this audit is the reason.** Only C# reaches all 22 batch commands (§4.3); a Python bridge would pay one RPC per vehicle for every physics toggle. This reinforces [doc 23 §5](../../Findings/23_SUMO_Traffic_Integration.md) on independent grounds. The ten traffic-light RPCs (§12.2) are also C#-only, but they play no part in this decision: they are present, audited, and **not required by this plan** (§3e). |
+| **D5.1** | **The SUMO-driven runtime is a .NET assembly, and this audit is the reason.** Only C# reaches all 22 batch commands (§4.3); a Python bridge would pay one RPC per vehicle for every physics toggle. The tree builds it so: `SumoDriveSession` in `CarlaNet.CoSim` writes each tick's commands as one batch (`TickBatch`). The ten traffic-light RPCs (§12.2) are also C#-only, but they play no part in this decision: they are present, audited, and **not required by this plan** (§3e). |
 | **D5.2** | **Per-step actuation is exactly two RPC round trips, independent of vehicle count**: one `apply_batch` carrying spawns, transforms, velocity commands, physics toggles and destroys; then one `tick_cue` through `SendTickCueAsync`. Per-vehicle RPCs in the step loop are a defect, not a tuning choice (§4.4). |
 | **D5.3** | **Do not use `apply_batch`'s `do_tick_cue` flag in the co-simulation loop.** It ticks the server without the client waiting for the frame, so the next read can be one frame stale. `SendTickCueAsync` is the call that waits (§4.4). |
 | **D5.4** | **The co-simulation bridge subscribes to `CarlaClient.OnWorldTickCompleted`, not `OnTick`.** The former runs on the ticking thread after the frame has arrived and blocks it; the latter runs on a stream thread the tick does not wait for (§5.2). |
 | **D5.5** | **Truth velocity for a teleported vehicle is fixed in the engine or not at all.** No client-side call produces a non-zero reading (§7.3). [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) and [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) choose between the three shapes in §7.4; a client-side finite difference, if chosen, must be labelled in truth as a derived quantity and never as measured speed. |
 | **D5.6** | **The `vType` ↔ blueprint correspondence is a build-time catalogue, not a runtime lookup.** No RPC and no engine path exposes a vehicle's dimensions before spawn (§6.3), and `vType.length`/`width` change SUMO's car-following gaps, so the numbers must agree before the scenario is authored. Owned by [`04_Contracts.md`](04_Contracts.md). |
-| **D5.7** | **Areas of interest copy the staging-bounds pattern exactly** — flat primitives over `Response<T>`, a dedicated tagged holder actor found by `TActorIterator`, empty-result-means-absent on the getter, and no LibCarla file touched (§11). This confirms [doc 20 decision 10](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md); only its line citations need updating. |
+| **D5.7** | **Areas of interest copy the staging-bounds pattern exactly** — flat primitives over `Response<T>`, a dedicated tagged holder actor found by `TActorIterator`, empty-result-means-absent on the getter, and no LibCarla file touched (§11). Not built that way: the server binds no areas-of-interest RPC, and `AreaOfInterestResolver` writes the resolved areas to `areas.resolved.json` in the world package. |
 | **D5.8** | **Z for a teleported pose comes from `CarlaClient.SampleDrapeGroundElevation`**, which is a local bilinear lookup costing no RPC (§10). The runtime calls `EnsureBareEarthReference()` once at startup and refuses to place vehicles when `HasBareEarthReference` is false, rather than silently seating them on the shifted surface. |
-| **D5.9** | **Multi-camera capture is not blocked by the transport.** The C# client supports unbounded simultaneous sensor streams and `FrameRecorder` is instantiable N times; the single-camera limit is the shim's `self._recorder` / `self._sub` fields (§9). [doc 20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s premise that additional cameras force additional processes should be re-examined in [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) rather than inherited. |
+| **D5.9** | **Multi-camera capture is not blocked by the transport.** The C# client supports unbounded simultaneous sensor streams and `FrameRecorder` is instantiable N times; the single-camera limit is the shim's `self._recorder` / `self._sub` fields (§9). The premise that additional cameras force additional processes should be re-examined in [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) rather than inherited; the code publishes supervision on the world-observer snapshot, so a recorder in any process reads it. |
 | **D5.10** | **Traffic lights are not rendered or driven from SUMO in this plan** ([`_TEAM_BRIEF.md` §3e](_TEAM_BRIEF.md)). The injector's `tlLogic` ↔ OpenDRIVE `sign_id` correspondence, established at build time, and `GetTrafficLightStatesBySignId`'s no-RPC read-back (§12.2) are retained as audited facts about the client and engine, not as a requirement: if a client ever did need to key a light to the map, it would use `sign_id` rather than a waypoint query. G5.11 and the unexposed `sign_id` RPC (§12.4) are both out of scope for this plan on that basis. |
 | **D5.11** | **The RPC budget is an asynchronous-mode concern and does not bound a synchronous SUMO run.** Under synchronous mode the engine drains the request queue until the tick cue arrives (§13). The quantity to manage is per-step latency, not calls per tick; no per-call service cost is documented anywhere and none is assumed here. |
 | **D5.12** | **Every shim gap in §17 is optional work for this plan.** G5.2, G5.6–G5.10 and G5.12 block Python callers only. They are worth closing because the shim is the fork's public API and a silently divergent shim is a trap, but no part of the SUMO-driven mode waits on them. G5.3 is not merely a Python-only block here — it is not required in **any** language, because this plan drives no traffic-light state at all (§3e). |
@@ -1948,7 +1947,8 @@ number. `D5.13`–`D5.20` all concern time of day, illumination and vehicle ligh
    It decides what a step costs on the wall clock at a given population — every vehicle SUMO has is
    rendered, so a larger population makes a step slower and never leaves a vehicle out — and it
    should be measured against a real batch before any wall-clock claim is made. It is also the number
-   open question 2 of [doc 23 §9](../../Findings/23_SUMO_Traffic_Integration.md) depends on.
+   a physics-actuated control loop's tracking tolerance would depend on (not built: `VehicleBodyPool`
+   turns every SUMO body's physics off and the session poses it from SUMO).
 4. **Should the shim's batch-command and traffic-light gaps be closed anyway?** They block nothing in
    this plan (D5.12), but the shim is the fork's public API, `PythonAPI/util/start_replaying.py`
    already breaks against it (§12.1), and each gap is small. **Recommendation:** close G5.2, G5.3,

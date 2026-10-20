@@ -38,8 +38,8 @@
   answer that audit returns, and then records what it actually returned.
 - **The interpolation scheme and the tick contract.**
   [`03_CoSimulation_Runtime.md`](03_CoSimulation_Runtime.md) §6 and `04` §8. Taken as given here.
-- **Sensor and imagery quality.** [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md) and
-  [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md).
+- **Sensor and imagery quality.** The occlusion measurement (`CarlaNet.Recording.OcclusionEstimator`)
+  and [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md).
 - **Whether a night capture is *viable*.** [`11_Time_And_Illumination.md`](11_Time_And_Illumination.md)
   §5 owns the verdict and [`08_Collection_And_EPoL.md`](08_Collection_And_EPoL.md) §4 owns what a
   collection does with it. **This section owns only the cost**, and where the cost cannot be measured
@@ -324,14 +324,14 @@ real-time budget at `fixed_delta = 0.05`, and against a **1,000 ms** budget at B
 
 ### 3.3 The networks
 
-Measured by parsing each `.net.xml` on 2026-09-18. The right-hand column is doc 23 §2's Arapahoe measurement on the
+Measured by parsing each `.net.xml` on 2026-09-18. The right-hand column is an Arapahoe measurement of 2026-08-21 on the
 **unclipped** OSM, carried forward, so there is a second point on the curve for the same location. The
 networks shipped on 2026-10-05 differ a little, after the type-map build of Bahonar, the ramp meters on
 Arapahoe and the unified netconvert flags: normal and internal edges are 1,000 and 2,984 (Bahonar), 319
 and 691 (Arapahoe) and 57 and 207 (Gardnerville), and the place index names 90.3% of Arapahoe's edges,
 91.2% of Gardnerville's and 4.7% of Bahonar's (47 of 1,000). The sizing conclusions below do not move.
 
-| | **Bahonar** | **Arapahoe (clipped, shipped)** | **Gardnerville** | *Arapahoe (doc 23 §2, unclipped)* |
+| | **Bahonar** | **Arapahoe (clipped, shipped)** | **Gardnerville** | *Arapahoe (2026-08-21, unclipped)* |
 |---|---|---|---|---|
 | File size | 2.47 MB | 1.15 MB | 0.17 MB | — |
 | `netOffset` | `0.00,0.00` | `0.00,0.00` | `0.00,0.00` | `0.00,0.00` |
@@ -363,7 +363,9 @@ Three things worth carrying forward:
   program. Arapahoe's 23 and 45 are where SUMO's actuated programs shape the behaviour. **Neither
   count is an RPC or batch budget line**: signals are simulated in SUMO and rendered nowhere
   ([`03`](03_CoSimulation_Runtime.md) `D3.24`), so no traffic-light state crosses the wire on any map.
-- The flatness (`0` distinct `z`) is doc 23 §6.5 confirmed on all three, including the large one.
+- The flatness (`0` distinct `z`) holds on all three, including the large one, which is why
+  `PoseConverter` takes no height, pitch or roll from SUMO and seats each body on the draped ground or
+  on the OpenDRIVE road profile.
 
 ### 3.4 The bare-earth grid
 
@@ -442,8 +444,9 @@ Three readings, in order of importance:
 
 1. **23:00 is deep night on every date.** The sun spans **−38.15° to −79.49°**. Astronomical twilight
    ends at −18°, so the best case is twenty degrees past the darkest twilight band. **No choice of date
-   makes the 23:00 window renderable.** Neither does 03:00 (doc 20's pattern class 4, the heavy goods
-   vehicle in a residential area at 03:00), which spans −21.23° to −47.50°.
+   makes the 23:00 window renderable.** Neither does 03:00 (the hour of a heavy goods vehicle in a
+   residential area at 03:00, the pattern `IlluminationLabelAssociation` names as the reason check 41
+   never refuses), which spans −21.23° to −47.50°.
 2. **07:00 is never night, and is the most useful window in the scenario for a second reason.** It spans
    **+3.97° to +25.92° — a 22-degree range produced purely by the date**, at identical scenario seconds
    and therefore an identical vehicle population. That is an illumination axis that costs nothing in
@@ -583,12 +586,12 @@ The relationship is linear in pixels with a small constant term — which means 
 *pixel-rate* work (GPU readout, serialisation, stream), not by per-frame overhead, not by actor count,
 and not by anything the SUMO bridge does.
 
-Two anchors carried forward from [doc 18](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md),
-both measured there, both at much smaller camera sizes:
+Two anchors carried forward from earlier measurements on this content, both at much smaller camera
+sizes:
 
-- §5.4: **1,014 ticks in 60 s of wall clock — 16.9 Hz against a 20 Hz target, 84% of real time** — with
+- **1,014 ticks in 60 s of wall clock — 16.9 Hz against a 20 Hz target, 84% of real time** — with
   traffic at the 30-vehicle default, a recorder and a second client attached.
-- §6: **~171 ticks/s free-running with no client driving it.** That is **5.85 ms per frame** for the bare
+- **~171 ticks/s free-running with no client driving it.** That is **5.85 ms per frame** for the bare
   engine on this content, and it is the ceiling nothing else can exceed.
 
 Now the answer:
@@ -827,10 +830,10 @@ same run's captures show **5.90 ticks per wall-second** with a 6.24 Mpx RGB came
 camera streaming every tick and no dropped captures. **One hundred concurrent, rendered, telemetered,
 occlusion-measured vehicles are a fact about this fork, not a projection.**
 
-Doc 17 §12.4 reports a collect in which "234 vehicle records carried 104 occlusion annotations; the other
-130 vehicles were outside that camera's frame" — consistent with 234 rendered vehicles in one sidecar,
-though the text does not say unambiguously whether that is one tick or a whole collect. Treated as
-supporting, not load-bearing.
+An earlier collect recorded 234 vehicle records, 104 of them with an occlusion measurement and the
+other 130 outside that camera's frame — consistent with 234 rendered vehicles in one sidecar, though it
+was not recorded whether that was one tick or a whole collect (a sidecar today holds one tick:
+`CotWriter` writes the tick once on the container). Treated as supporting, not load-bearing.
 
 **What a heavier population costs.** Per drawn actor per tick, on the game thread:
 
@@ -1004,8 +1007,9 @@ Three consequences the plan must carry:
 
 ### 4.5 TraCI cost per step
 
-Doc 23 §6.11 says subscriptions are "non-optional at scale". **Measured, and the word is right by a factor
-of fourteen.**
+Subscriptions are non-optional at scale (`SubscribedPopulation` subscribes every SUMO vehicle through
+`SumoVehicleSubscription`, and `SumoVehicleDomain.ReadStateWithoutSubscription` is kept for a question
+asked once). **Measured, and the word is right by a factor of fourteen.**
 
 Probe: `traci` (Python binding) against `sumo.exe` on the Arapahoe scenario, fast-forwarded to t = 1,000 s
 (388 live vehicles), 200–300 steps, median per step. Seven variables read per vehicle — position, angle,
@@ -1172,16 +1176,17 @@ in all four recorded runs is exactly 10 ticks, so `_dropped` was zero.
 anywhere in the tree** — grepped across `CarlaNet/src`, `CarlaControl` and the shim. It is read now:
 `RunCloseoutReport` records it per channel as the gate `capture.recorder_dropped` at a threshold of 0,
 and a non-zero value is the run's loud condition ([`12`](12_Operator_Control_Surface.md) §7.1, §7.2).
-Before that, a recorder that fell behind produced a corpus with holes and said nothing. That is a hole in the observability denominator of exactly
-the kind doc 20 §2.5 forbids.
+Before that, a recorder that fell behind produced a corpus with holes and said nothing. That is a hole in the observability denominator: an
+interval recorded in truth with no imagery of it.
 
 > **D10.7 — `FrameRecorder.Dropped` is read at window close and written into the run manifest, and a
 > non-zero value fails the run's quality gate.** One counter, already incremented (`:184`), currently
 > discarded.
 
 **The sidecar.** Measured over the 54 sidecars on disk: **662 bytes per CoT event**, 66,875 bytes median
-for 101 events. Doc 20 §7.4's `<_aoi>` warning, quantified — a `<relation>` element of the shape doc 20
-gives is **78 bytes**:
+for 101 events. The `<_aoi>` warning — that per-vehicle area relations inflate the sidecar — quantified,
+with a `<relation>` element of the proposed shape at **78 bytes** (not built: `truth_sidecar.xsd` has no
+`<_aoi>` element):
 
 | Relations per vehicle | Event | ×base | Sidecar @437 veh (Arapahoe peak, scaled) | At 2 Hz | Per simulated hour |
 |---|---|---|---|---|---|
@@ -1191,7 +1196,7 @@ gives is **78 bytes**:
 | 16 | 1,923 B | 2.90× | 840 KB | 1.681 MB/s | 6.05 GB |
 | **50** | 4,575 B | **6.91×** | 1,999 KB | 3.999 MB/s | **14.39 GB** |
 
-Doc 20 §7.4 says a map with fifty areas "triples the sidecar". **Measured, it is worse: 6.9×.** The
+The estimate was that a map with fifty areas triples the sidecar. **Measured, it is worse: 6.9×.** The
 correction matters because the sidecar is the artefact a consumer parses per frame.
 
 > **D10.8 — `aoi_max_relations_per_vehicle` = 4, nearest always present**, selected as (areas containing
@@ -1598,7 +1603,7 @@ The general fear about night rendering is many light sources. **On a generated w
 | Light source | Count in a generated world | Evidence |
 |---|---|---|
 | Sun | 1 directional light, below the horizon at 23:00 | `CesiumSunSky.cpp:56-72`; §3.5.1 |
-| Moon | **0** | `ACesiumSunSky` creates exactly one directional light, one real-time-capture sky light and one sky atmosphere, and no moon (`CesiumSunSky.cpp:46-110`; [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §1, §2) |
+| Moon | **0** | `ACesiumSunSky` creates exactly one directional light, one real-time-capture sky light and one sky atmosphere, and no moon (`CesiumSunSky.cpp:46-110`; `UCesiumHeightSampler::ConfigureCesiumForOrigin` spawns that one actor and hides the level's own `ADirectionalLight` and `ASkyLight`, `CesiumHeightSampler.cpp:377-452`) |
 | Street lamps, from OSM | **0** on Bahonar, **0** on Gardnerville, **2** on Arapahoe | **Measured**: `highway=street_lamp` node count in each shipped clipped OSM extract |
 | Street lamps, in the world | **0** | Byte scan of `Plugins/GeneratedWorlds/Arapahoe_I25/Content/Maps/Arapahoe_I25.umap`: zero `CarlaLight`, `PointLight`, `SpotLight`, `StreetLight`; only `DirectionalLight` and `SkyLight`. The plugin has no `Source/` directory, so no code path can spawn one. For contrast, `Content/Carla/Maps/Town10HD_Opt.umap` carries 140 `BP_StreetLight` references |
 | Emissive building facades | **0** | The world is photoreal Cesium tiles; 1,661 OSM `building` tags on Bahonar are never ingested as geometry |
@@ -1610,8 +1615,8 @@ This produces an unusual and, for once, unambiguous answer in **two parts**.
 **Part one — night as the world stands today is nearly as expensive as day and returns nothing.** The
 intuition that a dark frame must be cheap to render is wrong here, and it is worth stating explicitly
 because it is the reason a night window looks affordable until it is costed. With the sun 38–79° below
-the horizon and no other emitter, the render has nothing to light.
-[`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §1 predicts "near-black"; §4.6 bounds what
+the horizon and no other emitter, the render has nothing to light, and the scene goes near-black
+(nothing in the code adds a moon, an ambient floor or a street lamp); §4.6 bounds what
 near-black costs to store (0.1–14% of a daylit frame) and what it costs in tone (8 of 256 levels at
 −5 EV). The wall clock is *not* correspondingly cheaper, because §4.1 measured the tick as **13.3 ms per
 streamed megapixel** and the dominant terms in that — GPU readout, serialisation and stream — are
@@ -1629,11 +1634,11 @@ is already justified on other grounds. Until then the honest statement is a boun
 **a night window costs at most a day window and at least the readout, and nobody has measured where in
 that interval it falls.**
 
-**Part two — the fix inverts the sign.** Every option [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md)
-§3 lists for making night usable adds light sources, and light sources are the thing that is genuinely
-expensive:
+**Part two — the fix inverts the sign.** Every option for making night usable adds light sources (none
+is built; exposure is a per-channel camera setting, `ChannelExposure`), and light sources are the thing
+that is genuinely expensive:
 
-| Findings/13 option | What it adds | Cost shape |
+| Night option | What it adds | Cost shape |
 |---|---|---|
 | A — sky-light ambient floor | Nothing new; raises an existing component's floor | Free. The real-time capture already runs every frame (§4.7.3) |
 | B — moon as a second directional light | **One more shadow-casting directional light**, i.e. **a second VSM clipmap set** | The §4.7.3 cost, doubled, and invalidated every frame if the moon is driven from an ephemeris |
@@ -1778,7 +1783,7 @@ sequenceDiagram
         Rec->>Rec: CotWriter: one event per drawn vehicle x 987 B
     end
 
-    Note over Bridge,Rec: engine base with no client and no camera:<br/>5.85 ms/frame (171 tick/s, doc 18 §6, carried forward)
+    Note over Bridge,Rec: engine base with no client and no camera:<br/>5.85 ms/frame (171 tick/s, carried forward)
 ```
 
 ---
@@ -1892,7 +1897,9 @@ Three properties this needs, and each closes a silent-failure path of exactly th
    rather than a runtime surprise — the same treatment `04` §4.2's `V2` checks give the other window
    properties.
 2. **A truth-only window still records `sumo_population` per admission pass**, so the observability
-   denominator of doc 20 §2.5 is complete across the whole scenario and not only across its lit hours.
+   denominator is complete across the whole scenario and not only across its lit hours (the code keeps
+   no observability record — `CoreVocabulary` version 3 removed `observability_outcome` — and publishes
+   each pass's population as `AdmissionPass.Population`).
    Without this, a night shift looks like a gap in the data rather than a deliberate absence of imagery.
 3. **Sun elevation is recorded per capture whether or not it mattered.** It is already in the
    world-observer header at zero cost (§4.7.2), so there is no reason to record it conditionally, and a
@@ -1904,7 +1911,7 @@ clothes:
 - **`FrameRecorder.Dropped`** had no reader (`FrameRecorder.cs:49`; §4.6, `D10.7`); it is gated at 0 now.
 - **The clock ratio was not recorded anywhere.** It was recoverable here only by differencing PNG `tEXt`
   ticks against filename timestamps; the closeout records it now (`clock.ratio_recorded`) and the
-  achieved real-time factor per window beside it. Doc 18 §6 already measured that it is **not a constant** — 84% in one
+  achieved real-time factor per window beside it. Earlier measurements showed it is **not a constant** — 84% in one
   session, 99% in another, and 29.5% in the sessions measured here. A window that ran at 15% produced the
   same imagery as one that ran at 90% and cost six times as much; nothing in the corpus says which.
   Record achieved ticks per wall-second per window in the manifest.
@@ -1966,7 +1973,7 @@ them.
 | **5** | **M7** | **What does an advancing sun cost on the render thread?** §4.7.3 reads from source that the VSM directional clipmap cache is invalidated on every frame in which the light direction changes; the magnitude is unknown. | **`r.Shadow.Virtual.Cache.ForceInvalidateDirectional` 1 versus 0**, sun frozen in both, everything else identical, differencing the clock ratio. Epic added the cvar for exactly this purpose (`VirtualShadowMapClipmap.cpp:23-27`). **No code change, no scenario change, no SUMO.** Run it on Gardnerville, where 51 vehicles leave the frame uncontended. Capture the `SkyAtmosphere` LUT pass count in the same trace to settle §4.7.3's atmosphere caveat at no extra cost. | Whether the *advancing* solar policy is affordable on a long window. Since 2026-10-13 it is the default policy. Measured end to end that day on Arapahoe, with 334 vehicles and one orbit camera: trials alternating the two policies ran at 0.557x frozen and 0.551x advancing, within the run-to-run noise. The cvar sweep still isolates the shadow-cache cost. | One cvar sweep |
 | **6** | **M8** | **What does one `RefreshLightState` transition cost?** It is Blueprint graph work (`CarlaWheeledVehicle.h:310-311`, implemented in `BaseVehiclePawn.uasset`), so source cannot answer it. | Taken on M2's drive: run the same span with `vehicle_lights` on and off and difference the clock ratio. **The budget line is the measured ≈ 40 transitions per tick at 417 live vehicles, not 417.** | Whether `vehicle_lights = on` (§8) survives, and whether §7's trade order has it in the right place. | One more run of M2's drive |
 | **7** | **M4** | **Does moving the live CoT feed off the tick thread recover the ratio?** ([issue #14](https://github.com/sbrett9/carla/issues/14), whose own verification section specifies this) | Run one window with the feed on and one with it off at the same N, and difference the clock ratio. | Whether the live mode and the capture mode can share a session, or must be separate runs. | Two short runs |
-| **8** | **M10** | **How many dynamic lights does a vehicle actually have, and what do N of them cost?** The light components are assembled at runtime by the shared vehicle graph rather than declared as construction-script variables, so the count cannot be read from the assets (§4.9). | `r.DumpLights` / the light-complexity view mode / `stat SceneRendering` at one vehicle and at Gardnerville's full population (peak 51), headlights off versus on. Gardnerville again, for a clean frame. | **`D10.16`** — whether a lit night is affordable at all, and therefore whether any of [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §3's options B and D can be costed. It is rank 8 rather than higher **only because night is already ruled out on viability grounds** ([`11`](11_Time_And_Illumination.md) §5); it becomes rank 2 the moment anyone proposes to build a night capability. | One run per configuration |
+| **8** | **M10** | **How many dynamic lights does a vehicle actually have, and what do N of them cost?** The light components are assembled at runtime by the shared vehicle graph rather than declared as construction-script variables, so the count cannot be read from the assets (§4.9). | `r.DumpLights` / the light-complexity view mode / `stat SceneRendering` at one vehicle and at Gardnerville's full population (peak 51), headlights off versus on. Gardnerville again, for a clean frame. | **`D10.16`** — whether a lit night is affordable at all, and therefore whether options B and D of §4.9's table, a moon and street lamps with emissive facades, neither built, can be costed. It is rank 8 rather than higher **only because night is already ruled out on viability grounds** ([`11`](11_Time_And_Illumination.md) §5); it becomes rank 2 the moment anyone proposes to build a night capability. | One run per configuration |
 | **9** | **M11** | **What does a frame at a given sun elevation actually look like?** Pixel mean, 5th and 95th percentile, and the fraction of pixels at zero, at sun elevations of roughly −61°, −34°, −3°, 0°, +3° and +6°. | One short headless run on an existing world, stepping the epoch between captures. | The *viability* threshold is [`11`](11_Time_And_Illumination.md) §9.2's `M-SOL-1`, not this section's. But **the same run answers a cost question for free**: differencing the clock ratio across the sweep separates the content-dependent part of §4.1's 13.3 ms per streamed megapixel from the readout, which is the one unmeasured term in §4.9's claim that a dark window costs nearly as much as a lit one. Record the clock ratio per elevation as well as the pixel statistics. §4.6's attenuation bound is a synthetic stand-in until this exists. | One short run |
 | **10** | **M12** | **Is a vehicle's brake light legible at the collection altitude?** | [`11`](11_Time_And_Illumination.md) §9.2's `M-SOL-2`: capture one vehicle at each rig altitude with `Brake` asserted and cleared, and difference the frames. | **Not this section's question.** Listed because §4.8.4 establishes that cost is not the reason to decide either way, so this is the measurement that actually decides it. | Two captures |
 | **11** | **M5** | **Does `--load-state` compose with a pre-routed route file?** | `duarouter` the Bahonar route file into explicit `<route edges="…"/>`, then repeat §4.2.1(c). | Nothing, under D10.2 — this is insurance against a future scenario whose fast-forward exceeds ~10 minutes. **Do not do this until one exists.** | Minutes, no CARLA |
@@ -2013,7 +2020,7 @@ and M2's drive at full population already contains them.
 | **D10.5** | **Withdrawn 2026-09-30.** There is no render region: every vehicle SUMO has is drawn, wherever it is. |
 | **D10.6** | **TraCI reads are subscriptions, for every vehicle SUMO has, restricted to the variables the bridge and truth record consume.** Measured 116.0 ms → 8.1 ms per step at 388 vehicles (14×), and the naive path alone exceeds a 50 ms tick budget by 2.3× (§4.5). A subscription is charged inside the step whether or not it is read (3.73 ms → 9.26 ms subscribed and unread), so the **subscribed** population is a budget line in its own right, and at 388 vehicles it is the measured 9.26 ms. |
 | **D10.7** | **`FrameRecorder.Dropped` is read at window close, written into the run manifest, and a non-zero value fails the run's quality gate.** Built as the gate `capture.recorder_dropped[<sensor>]` at 0 in the run result and the run's loud condition; when decided it was incremented (`FrameRecorder.cs:184`) and had no reader anywhere in the tree (§4.6). |
-| **D10.8** | **`aoi_max_relations_per_vehicle` = 4, nearest always present, and truncation is marked `<_aoi truncated="true">`.** Measured: 4 relations cost 1.49× the base sidecar; 50 cost 6.91×, not the 3× doc 20 §7.4 estimates (§4.6). |
+| **D10.8** | **`aoi_max_relations_per_vehicle` = 4, nearest always present, and truncation is marked `<_aoi truncated="true">`.** Measured: 4 relations cost 1.49× the base sidecar; 50 cost 6.91×, not the 3× first estimated (§4.6; not built: `truth_sidecar.xsd` has no `<_aoi>` element). |
 | **D10.9** | **The bare-earth plane is read as `array.array('f')` or a `numpy` view, not a tuple of Python floats.** Measured: 243.6 MB → 32.3 MB, 5.61 s → 0.011 s, identical semantics, one line at `SumoCotBridge.py:112` (§3.4). |
 | **D10.10** | **A capture window runs in synchronous mode with no other polling client attached.** In sync mode the server drains every client's pending requests on the game thread before advancing (`CarlaEngine.cpp:331-343`), so a second client's service time is added directly to the tick. A consumer needing world state reads the world-observer push stream, which costs no RPC (§4.4). |
 | **D10.11** | **The live CoT feed does not run on the tick thread in a SUMO-drive session.** [Issue #14](https://github.com/sbrett9/carla/issues/14) is a prerequisite of drawing every vehicle, not an adjacent concern: at Arapahoe's peak of 437 vehicles and 5 Hz it would put 2,185 serialisations and sends per second inside the tick (scaled; §4.3, M4). |
@@ -2060,9 +2067,10 @@ and M2's drive at full population already contains them.
 6. **Is there a second, cheaper depth path for occlusion?** The depth camera doubles the streamed pixel
    rate — the dominant term — purely to measure occlusion at the 2 Hz capture rate. If `sensor_tick`
    works (M1), that concern evaporates. If it does not, a lower-resolution depth camera would halve the
-   dominant cost, at some loss of occlusion precision that [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md)
-   would need to bound. Recommendation: resolve M1 first; this question exists only in the branch where
-   M1 fails.
+   dominant cost, at some loss of occlusion precision that the occlusion measurement would need to
+   bound (`OcclusionEstimator` widens its depth threshold with range by
+   `OcclusionOptions.RangeErrorCoefficient`). Recommendation: resolve M1 first; this question exists
+   only in the branch where M1 fails.
 7. **How many illumination strata is a window worth?** §3.5.1 measured that the *same* window at a
    different declared date moves the sun by up to 21° with an identical population, an identical render
    set and an identical corpus size, so an illumination stratum is free of everything except its own wall
@@ -2077,10 +2085,10 @@ and M2's drive at full population already contains them.
    tested**, because (b) spends the scarcest resource in this document — wall clock — on the cheapest
    axis in it.
 8. **Is the 07:00 low-sun window at +3.97° usable, or is it already past the point where the photoreal
-   tiles stop behaving?** [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md) §4 establishes that
-   the Cesium tiles carry daytime radiance baked into their albedo, including cast shadows pointing the
-   way the capture sun pointed. At high sun that disagreement is subtle; at +4° the scene's own cast
-   shadows are 14.4 times object height (§3.5.3) and the tiles' baked shadows are not. **This is a
+   tiles stop behaving?** The Cesium tiles carry daytime radiance baked into their albedo, including
+   cast shadows pointing the way the capture sun pointed. At high sun that disagreement is subtle; at
+   +4° the scene's own cast shadows are 14.4 times object height (§3.5.3) and the tiles' baked shadows
+   are not. **This is a
    fidelity question, not a cost one** — [`08`](08_Collection_And_EPoL.md) and
    [`11`](11_Time_And_Illumination.md) own it — but it is raised here because it bounds how much of the
    21° illumination axis of §3.5.1 is actually usable, and therefore how much value question 7's

@@ -16,12 +16,13 @@ from inferences, and inferences labelled.
 | 8 · 2026-10-05 | The judgement text is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (`_EXECUTION_CHARTER.md` §4b): §3's "labels; never scores" row names what stays — the declared labels, the record of what happened and the measured numbers — and no observability, prevalence or statement of absences. |
 | 9 · 2026-10-13 | The sun advances by default, as the owner ruled. A declared freeze still holds it still. |
 
-**Scope:** Realising, as one system, the supervision model of
-[`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and the SUMO
-integration of [`Findings/23`](../../Findings/23_SUMO_Traffic_Integration.md) — a SUMO traffic
-simulation driving the vehicles rendered in a generated CARLA world, producing electro-optical
-imagery whose truth sidecar carries behavioural annotation, for training and validating
-estimated-pattern-of-life (EPoL) models, and for exercising one live.
+**Scope:** Realising, as one system, a behavioural supervision model (authored labels and intervals,
+compiled into a supervision plan by `carlacontrol.SupervisionPlanCompiler` and bound to a run by
+`CarlaNet.CoSim.SupervisionBinder`) and a SUMO integration (`CarlaNet.CoSim.SumoDriveSession` over the
+TraCI client in `CarlaNet.Sumo`) — a SUMO traffic simulation driving the vehicles rendered in a
+generated CARLA world, producing electro-optical imagery whose truth sidecar carries behavioural
+annotation, for training and validating estimated-pattern-of-life (EPoL) models, and for exercising
+one live.
 **Audience:** Engineers who will build this, and reviewers deciding whether it should be built.
 
 ---
@@ -71,20 +72,21 @@ coincide** — the network is rebuilt from the same clipped OSM at the same pinn
 vehicle poses are all the same tick** — verified from the engine's tick ordering, so there is no
 skew to reconcile.
 
-## 2. The seams between the source documents, and how they were closed
+## 2. The seams between the two source designs, and how they were closed
 
-| | Doc 20 assumed | Doc 23 assumed | What this plan does |
+| | The storyboard-annotation design assumed | The physics-actuated SUMO design assumed | What this plan does |
 |---|---|---|---|
 | **Authoring surface** | An OpenSCENARIO storyboard executed by `CarlaNet.Scenario` | Not addressed | A declarative traffic-scenario specification compiled to SUMO artifacts, with a companion supervision plan as the sole annotation channel ([07](07_Scenario_Authoring.md), [06](06_Truth_And_Annotation.md) D6.1) |
 | **Who knows when a behaviour began** | The executor, from its own speed-action ramp | Not addressed | SUMO's own model. The onsets are renamed for the authority producing each — **declared**, **committed**, **observed** ([06](06_Truth_And_Annotation.md) §3.3) |
-| **Actuation** | Not addressed | "SUMO decides, CARLA physics executes"; teleporting regresses capabilities | Pose application, with doc 23's shape retained as a second **actuation strategy behind the same bridge** ([01](01_Architecture.md) D1.15) |
+| **Actuation** | Not addressed | "SUMO decides, CARLA physics executes"; teleporting regresses capabilities | Pose application, with the physics-actuated shape retained as a second **actuation strategy behind the same bridge** ([01](01_Architecture.md) D1.15; not built: `VehicleBodyPool` turns every body's physics off and `TickBatch` writes each vehicle an `ApplyTransformCommand`) |
 | **Truth producer** | CARLA's `VehicleTelemetryService` | Notes a teleported body reports zero velocity | Authority settled **field by field**, not producer by producer ([06](06_Truth_And_Annotation.md) D6.9) |
 | **Scale** | Hand-sited scenarios | Ordinary ambient traffic | Windowed capture over a simulation far longer than can be rendered; inside a window every vehicle SUMO has is drawn ([10](10_Scale_And_Performance.md), [03](03_CoSimulation_Runtime.md) §8.3) |
 | **Time of day** | Not addressed | Not addressed | A scenario declares an epoch; the clock owner projects civil time through it; the sun is bound per window and advances by default ([11](11_Time_And_Illumination.md), [04](04_Contracts.md) C9) |
 
-**Doc 23 is not overturned.** Its recommendation was made for believable ambient background at
-ordinary scale, where body dynamics are most of the point. It remains right for that, and for oblique
-or ground-level imagery. This plan scopes it to the mode it was written for.
+**The physics-actuated SUMO design is not overturned.** Its recommendation was made for believable
+ambient background at ordinary scale, where body dynamics are most of the point. It remains right for
+that, and for oblique or ground-level imagery. This plan scopes it to the mode it was written for
+(not built: `PopulationMode` has no physics-actuated SUMO member).
 
 ## 3. The decisions that shape everything else
 
@@ -175,8 +177,9 @@ physically impossible constant sun and nothing flags it.
 - **Pedestrians.** Out of scope by user decision: the pipeline does not yet produce footway meshes
   good enough to render them onto. A second bridge when it comes, not a gap in this one.
 - **Night imagery.** Established as not viable (§3) rather than deferred. Building it means a
-  lighting capability — emitters in the world, a moon, de-lit tiles — which is
-  [`Findings/13`](../../Findings/13_Usable_Night_Lighting.md)'s work, not this plan's.
+  lighting capability — emitters in the world, a moon, de-lit tiles — which is separate lighting
+  work, not this plan's (not built: `CesiumHeightSampler.cpp` disables the level's own lights so the
+  `CesiumSunSky` it spawns is the sole sun, and the bridge adds no moon or night sky light).
 - **The EPoL model, the detector and the tracker.** Specified at their boundaries; internals are
   elsewhere. No detector exists in the tree today.
 - **Vehicle dynamics fidelity.** Deliberately traded in this mode and bounded to it: collision
@@ -184,22 +187,25 @@ physically impossible constant sun and nothing flags it.
 - **Scoring anything.** The detect-and-track model and the EPoL model are **external to this
   effort**. This pipeline produces imagery, truth and labels for training and validating them
   downstream; it runs no model, associates no model output to truth, and emits no metric, comparison
-  or verdict. Doc 18 §3.2 already rejected scoring in the ScenarioRunner sense of driving-quality
-  criteria; this is the wider exclusion. Quality gates on **our own data** — is it consistent,
-  leak-free, complete, does it say what it lacks — are not scoring and remain in full
+  or verdict. Scoring in the ScenarioRunner sense of driving-quality criteria was already left out of
+  the storyboard path (`CarlaNet.Scenario.ScenarioExecutor` runs a storyboard to its stop trigger and
+  evaluates no criteria); this is the wider exclusion. Quality gates on **our own data** — is it
+  consistent, leak-free, complete, does it say what it lacks — are not scoring and remain in full
   (`_TEAM_BRIEF.md` §3b).
-- **Grade-responsive speed.** Doc 23 §3.3's work, independent of which actuator is used.
+- **Grade-responsive speed.** Separate work, independent of which actuator is used: turning road
+  grade into a per-lane SUMO speed (not built: lane speeds come from netconvert's road types, and no
+  world-build or bridge code sets one from the elevation profile).
 
 ## 8. How to read this plan
 
 | Read this | If you want |
 |---|---|
-| [01 — Architecture](01_Architecture.md) | Components, topology, the authority model, the mode matrix, how doc 23's costs are answered |
+| [01 — Architecture](01_Architecture.md) | Components, topology, the authority model, the mode matrix, how the costs of teleporting bodies are answered (`TickBatch` writes each pose's velocity; `PoseConverter` seats and pitches each body on the ground or the OpenDRIVE road profile under it) |
 | [02 — Use cases](02_Use_Cases.md) | Twelve use cases with flows, plus activity diagrams for authoring and capture |
 | [03 — Co-simulation runtime](03_CoSimulation_Runtime.md) | The bridge: binding, pose conversion, interpolation, lifecycle, the tick loop, lamps, failure paths |
 | [04 — Contracts](04_Contracts.md) | Every interface field by field, with validation rules and what breaks when each is violated |
 | [05 — CarlaNet capability audit](05_CarlaNet_Capability_Audit.md) | Whether the .NET client can do this, traced shim → C# → RPC → engine |
-| [06 — Truth and annotation](06_Truth_And_Annotation.md) | Doc 20's supervision model re-seated on SUMO, and the truth producers reconciled |
+| [06 — Truth and annotation](06_Truth_And_Annotation.md) | The supervision model re-seated on SUMO (`SupervisionBinder` opens and closes the plan's intervals on SUMO's events), and the truth producers reconciled |
 | [07 — Scenario authoring](07_Scenario_Authoring.md) | How a scenario is written, by a human or an assistant, and validated before it costs a run |
 | [08 — Collection and EPoL](08_Collection_And_EPoL.md) | Cameras, labels, occlusion, the anti-leak rule, and what an external model team is handed |
 | [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | Finishing and shipping the SUMO toolchain, both platforms |

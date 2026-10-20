@@ -20,16 +20,16 @@ was (optical detect-and-track truth) and **what the author asserted each vehicle
 behavioural annotation, usable to train and to validate EPoL models, plus a live mode that exercises
 an EPoL model end to end.
 
-## 2. The two source documents and the seam between them
+## 2. The two starting points and the seam between them
 
-| Document | What it establishes | What it assumes that is now false |
+| Starting point | What it establishes | What it assumes that is now false |
 |---|---|---|
-| [`Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) | The supervision model: three-valued supervision, pattern instances with participants and intervals, areas of interest, the run manifest, the `<_supervision>` / `<_aoi>` sidecar elements, the vehicle catalogue, four identifiers | That the authoring surface is an **OpenSCENARIO storyboard** executed by `CarlaNet.Scenario`, and that CARLA's own executor owns behaviour |
-| [`Findings/23_SUMO_Traffic_Integration.md`](../../Findings/23_SUMO_Traffic_Integration.md) | That the SUMO toolchain is built and verified, that SUMO ships first-party C# bindings, that our pipeline already produces and then discards the SUMO network, and the hurdle list | That the production shape is **"SUMO decides, CARLA physics executes"** and that teleporting is only a comparison oracle |
+| The supervision model (built: `SupervisionPlanCompiler` compiles a scenario's supervision into the supervision plan, `SupervisionBinder` binds the plan to a run, `CotWriter` writes `<_supervision>`, and `RunManifestWriter` writes the run manifest; the truth sidecar schema has no `<_aoi>` element) | The supervision model: three-valued supervision, pattern instances with participants and intervals, areas of interest, the run manifest, the `<_supervision>` / `<_aoi>` sidecar elements, the vehicle catalogue, four identifiers | That the authoring surface is an **OpenSCENARIO storyboard** executed by `CarlaNet.Scenario`, and that CARLA's own executor owns behaviour |
+| The SUMO integration (built: `CarlaSetup.ps1` builds and stages the toolchain, `CarlaNet.Sumo` is the TraCI client, and the world package keeps the `map.net.xml` from the same netconvert run as `map.xodr`; the drive applies SUMO's poses to bodies whose physics `VehicleBodyPool` disables) | That the SUMO toolchain is built and verified, that SUMO ships first-party C# bindings, that our pipeline already produces and then discards the SUMO network, and the hurdle list | That the production shape is **"SUMO decides, CARLA physics executes"** and that teleporting is only a comparison oracle |
 
-**The seam is the work.** Doc 20's supervision model has to be re-seated on a SUMO authoring
-surface, and doc 23's recommended integration shape has to be revisited against a use case it was
-not written for. Neither document is wrong; each was written without the other's requirement in
+**The seam is the work.** The supervision model has to be re-seated on a SUMO authoring surface,
+and the recommended SUMO integration shape has to be revisited against a use case it was not
+written for. Neither starting point is wrong; each was written without the other's requirement in
 hand. Say so plainly where you find a conflict, and resolve it — do not paper over it.
 
 ## 3. Decisions the user has already taken. Do not re-litigate these.
@@ -76,8 +76,9 @@ never connected it to the sun. That was an oversight, and it is load-bearing.
 - It would fail **silently and in the worst possible way**: the truth sidecar records solar state, so
   the record would faithfully report noon while the scenario asserts 23:00. A corpus would be
   internally contradictory and nothing would flag it.
-- It makes one of doc 20's ten pattern classes unrenderable. Class 4 is *"a heavy goods vehicle in a
-  residential area at 03:00"* — a pattern defined by time of day.
+- It makes one of the behavioural pattern classes unrenderable: *"a heavy goods vehicle in a
+  residential area at 03:00"* — a pattern defined by time of day (`IlluminationLabelAssociation`
+  names it as the reason check 41 warns and never refuses).
 - Illumination is the single largest covariate an electro-optical detector faces. A corpus captured
   entirely at noon cannot validate a model that must work at dusk.
 
@@ -135,9 +136,8 @@ are both **external to this effort**. This body of work exists to create synthet
 truth and label data that can be used to train and validate those models downstream. **No part of
 this pipeline or tool suite scores anything.**
 
-This is narrower than [`Findings/20`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s
-existing exclusion, which rejected scoring only in the ScenarioRunner sense of driving-quality
-criteria. It now also excludes measuring the performance of the external models.
+This is narrower than the supervision model's original exclusion, which rejected scoring only in the
+ScenarioRunner sense of driving-quality criteria. It now also excludes measuring the performance of the external models.
 
 **In scope — produce, and label as richly as we can:**
 
@@ -400,15 +400,17 @@ Verified by reading the tree on 2026-09-17 unless marked otherwise.
   for ellipsoidal height and a `.labels.json` sidecar for ground truth.
 - **Coordinate identity** — because the SUMO network is rebuilt from the same clipped OSM at the same
   pinned origin with `--offset.disable-normalization`, **SUMO (x, y) equals CARLA (x, −y)** with no
-  offset arithmetic. Doc 23 §2 measured `netOffset` as `0.00,0.00` on Arapahoe.
-- **The SUMO toolchain is built** — doc 23 §1.2 records `sumo` and `duarouter` compiling clean from
-  the unmodified CMake configuration, exit 0. `netconvert` is the only binary *staged* into
-  `Build/sumo-install/bin`; `SUMO_HOME` is set nowhere.
+  offset arithmetic. `NetworkFrameCheck.Require` refuses to drive a packaged network whose
+  `netOffset` is not `0.00,0.00`.
+- **The SUMO toolchain is built** — `sumo` and `duarouter` compile clean from the unmodified CMake
+  configuration, exit 0 (`CarlaSetup.ps1:725` builds them with `netconvert` and `sumo-gui` in one
+  `cmake --build`). `netconvert` is the only binary *staged* into `Build/sumo-install/bin`;
+  `SUMO_HOME` is set nowhere.
 - **TraCI is a wire protocol over TCP, not a library** — `sumo --remote-port` is the server, and SUMO's
   own reference client under `tools/traci` is pure Python with no native module: `connection.py` (407
   lines) and `storage.py` (103) are the whole transport. So a client is writable in any language, and
-  `CarlaNet.Sumo` is one in C# (doc 23 §1.1, §6.3). SUMO's generated C#/SWIG bindings exist in the build
-  tree and are not used.
+  `CarlaNet.Sumo` is one in C# (`TraCIConnection` is ported from `tools/traci/connection.py`). SUMO's
+  generated C#/SWIG bindings exist in the build tree and are not used.
 
 ### Shim API surface that matters here
 Confirmed present in `carla/CarlaNet/python/carlanet/__init__.py`:
@@ -452,19 +454,20 @@ parked ones included. If the machine cannot keep up, the synchronous run is slow
 never different in content.** The only vehicles in a window that are not drawn are those whose type
 names no measured blueprint; they are simulated and recorded, but never placed at a guessed size.
 
-### A correction that invalidates citations in both source documents
+### A correction that invalidates every `SCTMV.py` citation
 
 **`CarlaNet/python/SCTMV.py` no longer exists.** It was deleted from the tree; the only remaining copy
 is a stale one inside a built distribution (`carla/Build/Dist/.../scripts/SCTMV.py`), which is build
 output and must not be cited. The live entry point is
 **`carla/CarlaControl/scripts/run_SCTMV.py`** over the `carlacontrol` package. Every `SCTMV.py:NNN`
-citation in `Findings/20`, in `Findings/23` and in earlier revisions of this brief is therefore stale
-and must be re-resolved against `carla/CarlaControl/` before it is repeated. Verified 2026-09-17.
+citation, in earlier revisions of this brief and elsewhere, is therefore stale and must be re-resolved
+against `carla/CarlaControl/` before it is repeated. Verified 2026-09-17.
 
-The *substance* of those citations survives — only the location moved. For example, doc 20 §4.2's
-finding that `scenario_id` is accepted by the recorder and never supplied is still true: the live call
-passes `run_id` and `seed` and no `scenario_id`
-(`carla/CarlaControl/src/carlacontrol/NativeRecorder.py:96-111`).
+The *substance* of those citations survives — only the location moved. For example, the finding that
+`scenario_id` is accepted by the recorder and never supplied is still true: the live call passes
+`run_id` and `seed` and no `scenario_id` (`carla/CarlaControl/src/carlacontrol/NativeRecorder.py:96-111`;
+the code now supplies it: `NativeRecorder.resolve_scenario_id` takes `--scenario-id`, or the
+storyboard's file name, and passes it to `start_recording`).
 
 ### The vehicle fade is removed
 
@@ -479,20 +482,23 @@ What has to be recorded is the **render-set admission and release instant** per 
 vehicle appearing or vanishing abruptly is a fact about the capture that the observability accounting
 needs.
 
-### Known problems carried in from the source documents
+### Known problems carried in
 - **Teleported bodies report zero velocity in truth.** `WorldObserver.cpp:373` serialises
   `GetActor()->GetVelocity()`, which a `set_transform` on a non-simulating body does not update. This
   reaches the Cursor-on-Target truth record, the traffic manager's collision stage, and the occlusion
-  gating of [doc 17](../../Findings/17_Photoreal_Occlusion_Metric.md). (Read from doc 23 §4; verify
-  against the source before relying on it.)
-- **The SUMO network is flat** — zero distinct `z` values in any lane shape (doc 23 §2, measured).
+  gating (the current occlusion measurement, `OcclusionEstimator`, reads the box pose and the depth
+  capture and not the velocity). The SUMO drive answers it: `TickBatch` follows each pose write with an
+  `ApplyTargetVelocityCommand` carrying that pose's velocity.
+- **The SUMO network is flat** — zero distinct `z` values in any lane shape, measured, so `PoseConverter`
+  takes no height, pitch or roll from SUMO and seats each body on the draped ground or the OpenDRIVE
+  road profile.
 - **Turn restrictions are discarded before netconvert sees them** — `osm_clip.py` drops all OSM
   relations ([issue #12](https://github.com/sbrett9/carla/issues/12)).
 - **Three pose conventions must each be applied**: CARLA's Y is negated relative to SUMO's; CARLA yaw
   is `sumoAngle − 90`; **SUMO's reference point is the front bumper centre, CARLA's is the body
   centre**, so every pose needs a half-length shift along the heading.
 - **`scenario_id` is accepted by the recorder and never supplied** by the viewer
-  (doc 20 §4.2; `SCTMV.py:1472-1479`).
+  (`SCTMV.py:1472-1479`; the code now supplies it: `NativeRecorder.resolve_scenario_id`).
 - **Two subsystems already destroy vehicles with different signals**
   ([issue #18](https://github.com/sbrett9/carla/issues/18)); SUMO's arrival and removal make a third.
 - **The tick thread is already contended** by telemetry emission
@@ -504,10 +510,12 @@ These are named because the user named them. They are not the complete list; fin
 
 1. **The vehicle catalogue** — how a user hands the assistant authoring a SUMO scenario a catalogue of
    vehicles to choose from, with real dimensions (length, width, height) and colour, and how a SUMO
-   `vType` in the resulting network maps to a CARLA blueprint at playback. Doc 20 §5.6 and decision 12
-   already argue for an OpenSCENARIO vehicle catalogue generated from a running server; reconcile that
-   with SUMO's `vType`, whose `length` and `width` change car-following gaps and therefore the
-   behaviour itself.
+   `vType` in the resulting network maps to a CARLA blueprint at playback. The case for an OpenSCENARIO
+   vehicle catalogue generated from a running server has already been made; reconcile that with SUMO's
+   `vType`, whose `length` and `width` change car-following gaps and therefore the behaviour itself
+   (built: `VehicleCatalogueBuilder` measures every vehicle blueprint on a running server, and
+   `SumoVehicleTypeWriter` writes one `vType` per measured blueprint with its measured length and its
+   body width without mirrors).
 2. **The render-set contract** — which SUMO vehicles CARLA instantiates, when they appear, when they
    are released, and what the truth record says about a vehicle that SUMO is simulating but CARLA is
    not rendering.
@@ -517,19 +525,20 @@ These are named because the user named them. They are not the complete list; fin
 4. **Physics and control authority per actor** — what is disabled for a SUMO-driven vehicle, what
    still has to be true of it (seating on the draped terrain, velocity in truth, bounding box), and
    how authority is handed over if it is ever handed over.
-5. **The behavioural annotation contract** — doc 20's pattern instances, three-valued supervision,
-   intervals and manifest, expressed against a SUMO authoring surface, and the migration path from
-   today's `.labels.json`.
-6. **Areas of interest** — doc 20 §8's GeoJSON contract, shared by SUMO scenario authoring and by the
-   CARLA world.
+5. **The behavioural annotation contract** — the supervision model's pattern instances, three-valued
+   supervision, intervals and manifest, expressed against a SUMO authoring surface, and the migration
+   path from today's `.labels.json` (built: `SupervisionPlanCompiler`, `SupervisionBinder`,
+   `RunManifestWriter`).
+6. **Areas of interest** — a GeoJSON contract, shared by SUMO scenario authoring and by the CARLA world
+   (built: `AreaOfInterestSource` reads `<extract>.aoi.geojson`, and `AreaOfInterestResolver` writes
+   `areas.resolved.json` in CARLA metres and on SUMO lanes).
 7. **The EPoL-facing interfaces** — what the detect-and-track stage consumes and emits, what the EPoL
    model service is given, and how truth is joined to it for scoring without leaking truth into it.
 
 ## 7. How to work
 
 - **Read the tree.** Every claim about existing behaviour must be read from a source and cited as
-  `path:line`, or carried forward from a measurement already recorded in a Findings document and
-  marked as carried forward.
+  `path:line`, or carried forward from a measurement already recorded and marked as carried forward.
 - **Do not modify any code, and do not run a build, a cook, or the engine.** This is a planning
   exercise. The only files you write are documents in this folder.
 - Running read-only commands to *measure* something (inspecting an XML file, counting rows, reading a
@@ -595,8 +604,7 @@ X is itself a measured fact about the tree, in which case it is a finding and be
 
 ## 9. House style for these documents
 
-Follow the Findings documents' style, because this plan will be read beside them: a short header
-block stating status, date and scope; claims cited to source; tables where a table is clearer than
-prose; an explicit list of what the section does *not* cover; and decisions recorded in a numbered
-table at the end so they can be referenced from elsewhere. Number your decisions with your section
+Follow this style: a short header block stating status, date and scope; claims cited to source;
+tables where a table is clearer than prose; an explicit list of what the section does *not* cover;
+and decisions recorded in a numbered table at the end so they can be referenced from elsewhere. Number your decisions with your section
 number as a prefix (for example `D4.3` in `04_Contracts.md`) so they are unique across the folder.

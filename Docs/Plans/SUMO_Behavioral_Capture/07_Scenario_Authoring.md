@@ -17,9 +17,9 @@ using it. It assumes no knowledge of the conversation that produced this plan.
 
 **Evidence convention.** Every claim below is marked. *Read* — taken from a source, cited
 `path:line`. *Measured* — produced by running something read-only on this machine on 2026-09-17 or
-2026-09-18, with the method stated. *Carried forward* — a measurement recorded in a Findings document
-or in the authoring skill, cited, not re-run. *Inferred* — a conclusion drawn from the above, and
-labelled as such. A line citation of `make_bahonar_scenario.py` is to the SUMO-XML generator the
+2026-09-18, with the method stated. *Carried forward* — a measurement recorded in the authoring
+skill, cited, not re-run. *Inferred* — a conclusion drawn from the above, and labelled as such. A
+line citation of `make_bahonar_scenario.py` is to the SUMO-XML generator the
 specification generator replaced, as it stands at commit `308e4aaab` and in `BahonarPatternOfLife.zip`,
 whose route file and labels are the test fixtures
 `CarlaControl/test/fixtures/Shahid_Bahonar_Port_PatternOfLife.shipped.*`; §3.4.1 describes the one that
@@ -50,8 +50,9 @@ choice. §3.9 draws the boundary.
   the sun, overriding the authored default — is
   [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md). This section supplies the
   authored defaults and the lock file it reads; it does not design the surface.
-- The **shape of the annotation record**. Doc 20 §6.1's `AnnotationSet`, `PatternInstance` and
-  `Interval` and their migration from today's `.labels.json` belong to
+- The **shape of the annotation record** — in code the supervision plan,
+  `CarlaNet.CoSim.SupervisionPlan`, with its `PatternInstance` and `PlannedInterval` rows — and its
+  migration from today's `.labels.json` belong to
   [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md). This section says only where an author
   writes an annotation and what validates it.
 - The **vehicle catalogue's content and its blueprint binding**, which is
@@ -159,7 +160,7 @@ specification names the package and the fingerprint of the network it carries (�
 ### 1.3 The frame is shared. The graph is not.
 
 This is the most consequential measurement in this section, and it contradicts an assumption that
-runs through the authoring skill and through doc 23.
+runs through the authoring skill.
 
 The invariant everyone relies on — SUMO (x, y) ≡ CARLA (x, −y) — **holds**. *Measured:* every shipped
 network's `<location netOffset="0.00,0.00">` and its `convBoundary` equal the corresponding `.xodr`
@@ -207,9 +208,10 @@ stopped being true.
 
 **Inference:** the authoring bundle must contain *the world's own* `.net.xml`, from the same
 netconvert invocation that produced the `.xodr`, and the compile step must refuse a scenario built
-against any other. Doc 23 §6.4 already asks for the network to be persisted for the runtime's
-benefit; this makes it an authoring prerequisite as well, and adds the reason: it is the only way the
-author's graph and the rendered graph are the same graph.
+against any other. The runtime needs the network persisted as well: the co-simulation session reads
+the lanes it interpolates along from the package's `map.net.xml` (`SumoRoadNetwork.FromWorldPackage`).
+This makes it an authoring prerequisite too, and adds the reason: it is the only way the author's
+graph and the rendered graph are the same graph.
 
 ### 1.4 The scenario is authored in civil time and emitted in seconds, and the mapping is lost
 
@@ -324,19 +326,21 @@ package does not carry it.
 
 ### 2.3 `bareearth.bin` is the only elevation an author has
 
-*Carried forward,* doc 23 §2: the SUMO network is flat. *Measured, confirmed on all three shipped
-networks:* zero distinct `z` values in any lane shape. So any authored behaviour that depends on
-height — a vehicle under a bridge, a hilltop overwatch, an area of interest with a vertical relation
-— has to get its height from `bareearth.bin`, which is what `SumoCotBridge`'s `BareEarthGrid` already
-does (`SKILL.md:88`). The bundle therefore includes it, and the compile step can report the
-bare-earth height of every resolved place without needing a running server.
+The SUMO network is flat (`PoseConverter` and `GroundSurface` take a body's height, pitch and roll
+from the draped ground and the OpenDRIVE profile for that reason). *Measured, confirmed on all three
+shipped networks:* zero distinct `z` values in any lane shape. So any authored behaviour that depends
+on height — a vehicle under a bridge, a hilltop overwatch, an area of interest with a vertical
+relation — has to get its height from `bareearth.bin`, which is what `SumoCotBridge`'s
+`BareEarthGrid` already does (`SKILL.md:88`). The bundle therefore includes it, and the compile step
+can report the bare-earth height of every resolved place without needing a running server.
 
 ### 2.4 The world's `.net.xml`, kept
 
 *Read.* `OsmConverter.ConvertFileWithNetworkAsync` (`OsmConverter.cs:122-148`) already asks
 netconvert for the network in the same invocation that produces the OpenDRIVE, reads it, and deletes
 it in a `finally` block at `:146`. Keeping it is a matter of writing it into the world package
-beside `map.xodr`. Everything in §1.3 follows from that one change, and doc 23 §6.4 wants it anyway.
+beside `map.xodr`. Everything in §1.3 follows from that one change, and the runtime needs it anyway
+(`SumoRoadNetwork.FromWorldPackage` reads the session's lanes from the package's `map.net.xml`).
 
 The pair must be **from the same invocation**, not merely from the same flags: that is what makes
 lane lengths, junction identity and edge identifiers correspond by construction rather than by
@@ -404,15 +408,21 @@ stated as a dependency rather than a design:
    presentation. Today the three scenarios invent them: fourteen `vType`s across the Bahonar file
    with hand-written lengths from 4.4 m to 16.5 m (*read*, `make_bahonar_scenario.py:121-149`,
    `make_arapahoe_scenario.py:96-137`), none of which was checked against any blueprint's bounding
-   box. Doc 20 §5.6 records the same defect on the OpenSCENARIO side, where the storyboard's declared
-   `<BoundingBox>` and the truth record's measured `length_m` already disagree and nothing notices.
+   box. The same defect is on the OpenSCENARIO side, where the storyboard's declared `<BoundingBox>`
+   and the truth record's measured `length_m` already disagree and nothing notices
+   (`OpenScenarioParser` never reads `<BoundingBox>`; `VehicleTelemetryService` takes `length_m` from
+   the spawned actor's box).
 3. **`vType` → blueprint resolution is declared, not inferred.** An entry is named; nothing
-   substring-matches. Doc 20 D12 settles this for storyboards; the same rule applies here.
-4. **A category resolves to a *set*, drawn on the run seed.** Doc 20 §2.6's appearance confounder is
-   sharper under SUMO drive than under storyboards, because SUMO's `vTypeDistribution` already does
-   exactly this for *behaviour* — `freeway_mix` draws seven types on declared probabilities
-   (`make_arapahoe_scenario.py:123-125`) — while the blueprint behind each type is a single
-   identifier. Without an appearance draw, every `car_quick` in a corpus is the same car.
+   substring-matches. The same rule was set for storyboards and is not built there
+   (`BlueprintChooser.Choose` still takes the first blueprint whose id contains a preferred
+   fragment); it applies here.
+4. **A category resolves to a *set*, drawn on the run seed.** The appearance confounder — a model
+   learning a label from the body that carries it — is sharper under SUMO drive than under
+   storyboards, because SUMO's `vTypeDistribution` already does exactly this for *behaviour* —
+   `freeway_mix` draws seven types on declared probabilities (`make_arapahoe_scenario.py:123-125`) —
+   while the blueprint behind each type is a single identifier. Without an appearance draw, every
+   `car_quick` in a corpus is the same car (`ScenarioVehicleMix` now writes each class as a
+   `<vTypeDistribution>` over its bodies, drawn on SUMO's seed).
 
 **Dependency stated:** if the catalogue cannot give a `vType` its real dimensions, then either the
 authored gaps are wrong or the rendered vehicle does not fit its SUMO footprint. There is no third
@@ -440,8 +450,10 @@ Two consequences, and they point in opposite directions, which is why both are w
   Today's 45–55 hard-coded literals per scenario are not fragile in the way they look.
 - **Blocking:** `SourceOsmSha256` and `OpenDriveSha256` in `world.json` are digests of *file bytes*,
   so a world rebuilt from the same inputs gets a different binding and any digest gate rejects it.
-  Doc 20 §7.5 wants the `.xodr` digest in the run manifest and doc 20 §8.4 already worries about
-  digest tiering; this measurement says the naive digest cannot carry that weight.
+  The run manifest carries the `.xodr` digest (`RunManifestWriter` writes `world_opendrive_sha256`
+  from the lock), and areas of interest travel as package entries with a digest of their own
+  (`source_sha256`, `AuthoringReferenceSet`), so an area edit leaves `map.xodr` unchanged; this
+  measurement says the naive digest cannot carry that weight.
 
 **The fix belongs here, not in the clipper.** Sorting `used_orig` would make the file stable and is
 worth doing, but a byte digest would still change for reasons that do not matter — a netconvert patch
@@ -688,8 +700,9 @@ any replacement that loses them is worse.
 - **The behavioural annotation has nowhere structured to live.** Today it is `.labels.json` with
   three keys, and one of the six Bahonar anomalies — the guard who never arrives — is a free-text
   `note` because there is no vehicle to attach it to (*read*, `make_bahonar_scenario.py:372-379`;
-  *measured*, the emitted `labels.json` carries exactly one such note). Doc 20 §2.3 requires pattern
-  instances with participants, roles and intervals; none of that is expressible.
+  *measured*, the emitted `labels.json` carries exactly one such note). Supervision needs pattern
+  instances with participants, roles and intervals, which is what `SupervisionPlanCompiler` now
+  compiles an `instances[]` entry to; none of that is expressible.
 - **The scenario does not say what time it is.** §1.4. Sixteen sites in the largest script multiply a
   civil hour into seconds; 533 of the 610 emitted entries fall on an exact civil hour; and the only
   surviving trace of what those hours *were* is the substring `_h7_` in a vehicle id. Every author
@@ -699,9 +712,10 @@ any replacement that loses them is worse.
   `make_arapahoe_scenario.py:71-75`'s five lines of prose, and the prose is not machine-readable, so
   nothing can check it still describes that edge after a rebuild.
 - **The netconvert flag set is reimplemented.** §1.3.
-- **Nothing reports what a scenario resolved to.** Doc 20 §5.5 argues for this explicitly on the
-  storyboard side, because a preview cannot check annotations. It is more true here: there is no
-  preview at all except running SUMO.
+- **Nothing reports what a scenario resolved to.** A preview cannot check annotations, which argues
+  for such a report on the storyboard side as well, where nothing writes one (`World.start_scenario`
+  parses a storyboard and runs it). It is more true here: there is no preview at all except running
+  SUMO.
 
 ### 3.3 The three candidate surfaces
 
@@ -714,7 +728,7 @@ any replacement that loses them is worse.
 | States what civil time `t = 0` is | no — a naming convention (§1.4) | yes | **yes — one declared `epoch`, checked** |
 | An author writes `07:00` rather than `25200` | no — sixteen arithmetic sites measured | yes | **yes — the compiler emits the seconds** |
 | Reviewable diff | Python | data | **both — the generator in Python, the compiled specification as the artifact** |
-| Hand-authorable without tooling (doc 20 D13) | yes, by writing Python | **yes, by writing one file** | **yes, either way** |
+| Hand-authorable without tooling | yes, by writing Python | **yes, by writing one file** | **yes, either way** |
 | Reliably emittable by an assistant | poor — must get SUMO XML ordering, `speedDev`, `<stop speed>` and comment escaping right | good | **good** |
 | Measured helpers reused | yes | must be re-expressed as specification constructs | **yes — the compiler owns them** |
 | One place to add a new check | no | yes | **yes** |
@@ -1582,8 +1596,9 @@ dwell's published coordinates, 39.600357 N 104.886490 W, snap 0.09 m to `2189658
 against the 87.93 m the script authored; East Arapahoe Road onto South Yosemite Street is four
 connections, and is refused until a direction narrows it.
 
-The last row is doc 20 §11 question 8, answered for this surface: a movement through a junction is
-named by the roads either side. *Measured:* junction internals carry the converter's own identifier —
+The last row answers, for this surface, how a movement through a junction is named: by the roads
+either side (`PlaceResolver._movement` resolves `from_street` and `to_street` to the two edges one
+connection joins). *Measured:* junction internals carry the converter's own identifier —
 646 of Arapahoe's 917 `.xodr` roads, 2868 of Bahonar's 3891 — so there is nothing else to name them by.
 Whether junctions want stable derived names remains open (§12).
 
@@ -1605,14 +1620,14 @@ makes it safe for an assistant to use.
 | Snap distance large | point resolution falls far from any road | **warn** past a stated threshold, **refuse** past `max_snap_m` | **refuse**, check 7, naming the distance; every snap distance is in the report. No warning threshold is stated, so none is built |
 | A point equidistant from two roads | lanes of two edges within 0.01 m of each other's distance | **refuse**, naming both | **yes**, check 7 |
 | A gateway or a turn that is several | several edges at one side, or several connections from one street onto another | **refuse**, listing them; `street`, `from_direction` and `to_direction` narrow | **yes**, check 7 |
-| Place is in the staging ring | inside the margin of the staging rectangle | **warn** — doc 20 §8.3 | no; for an area, the area table's V5.5/V5.6 warning is carried (check 27) |
+| Place is in the staging ring | inside the margin of the staging rectangle | **warn** | no; for an area, the area table's V5.5/V5.6 warning is carried (check 27) |
 | Place is on a degenerate edge | lane length below a stated threshold | **refuse** — §6 | no |
 
 ### 4.4 Name resolution is a strong tool on some maps and unavailable on others
 
-Doc 20 §5 records that the generated `.xodr` carries real street names, and takes it as the mechanism
-that makes assisted authoring work. *Measured,* it is true, and it is much weaker than the sentence
-suggests:
+The generated `.xodr` carries real street names, and that was taken as the mechanism that makes
+assisted authoring work (in the code, `PlaceIndex` takes the names from the SUMO network, §2.5). *Measured,*
+the claim is true, and the mechanism is much weaker than it suggests:
 
 | Map | `.xodr` roads | Carrying a real street name | Junction internals (`:node`) | Blank name | Distinct street names |
 |---|---|---|---|---|---|
@@ -1685,10 +1700,11 @@ turns one compile into one fix, rather than one compile into 610 individually wr
 
 ## 5. Compile and validate
 
-Doc 20 §7.1 defines a compile step for storyboards: read the annotations, resolve area references
-against the world actually loaded, assign instance ids deterministically, validate every reference,
-and hand the executor an `AnnotationSet` beside the `ScenarioDefinition`. This is its SUMO
-equivalent, with the traffic half added.
+A compile step for storyboards would read the annotations, resolve area references against the world
+actually loaded, assign instance ids deterministically, validate every reference, and hand the
+executor an `AnnotationSet` beside the `ScenarioDefinition` (not built: `World.start_scenario` parses
+a storyboard and runs it, and no `AnnotationSet` type exists). This is its SUMO equivalent, with the
+traffic half added.
 
 ### 5.1 What compile consumes and emits
 
@@ -1780,20 +1796,20 @@ the same ids and outcomes.
 | 16 | Every type a flow or actor names is a declared class, one of its member types, the mix or a named mix | the specification | **refuse** | A vehicle drawn from a type nothing declares. Class shares are weights, normalised by design (`ScenarioVehicleMix`), so a class the content build has no body for redistributes in the proportions authored |
 | 17 | A vehicle class draws from more than one body | the specification | **warn** | Appearance becoming the label: every member of the class is the same car |
 | **Annotation** ||||
-| 18 | Every label is a declared term and every role but `subject` a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary | the vocabulary block | **refuse** | A corpus in which `loiter` is spelled three ways (doc 20 §6.2), or a label no consumer can read |
+| 18 | Every label is a declared term and every role but `subject` a declared role; an annotation carries a label; the declarations resolve inside the published vocabulary | the vocabulary block | **refuse** | A corpus in which `loiter` is spelled three ways, or a label no consumer can read |
 | 45 | Every label's `applies_to` includes the subject kind: a vehicle (`entity`), or every vehicle of a flow (`cohort`) | the vocabulary | **refuse** | A per-member term on a `<flow>`, or a whole-flow term on one vehicle. This is how [`06`](06_Truth_And_Annotation.md) D6.2 reaches a term the compiler cannot interpret; there is no place-shaped kind (06 §3.5) |
 | 46 | Every namespace appearing in a label, role, phase or area kind was declared in `vocabulary.namespaces[]` or imported | the specification | **refuse** | A term resolving against a namespace that travels in nobody's bundle (06 §8.7) |
 | 56 | Every key in an instance's, series' or cohort's `parameters` is declared in the `parameters{}` of one of its labels' terms, and its value is of the declared type; two labels declaring one key agree on its type and unit | the vocabulary | **refuse**, naming the key, the value, the declaring term and the type it declares | A magnitude no consumer can read: `group_size` in one scenario and `n_vehicles` in another, or a count written as a fraction ([`06`](06_Truth_And_Annotation.md) §3.8). A parameter is the author's structured metadata, carried in the one channel that defines it, so there is no free-form map beside it |
 | 57 | A nominal instance's or series' `hard_negative_for` is the set its labels' terms declare, which the plan copies onto the row; an author may restate it exactly and may not vary it, and no subject that is not nominal declares one | the vocabulary | **refuse** | A matched negative on which the record and its term disagree. The term is the authority and the row a projection of it ([`06`](06_Truth_And_Annotation.md) §3.9(d)) |
 | 19 | Every participant names a declared actor, and every instance has a participant | the specification | **refuse**, telling an author of an instance about no vehicle to label the vehicle that deviates | An instance with a participant that never exists, or a label with no vehicle to follow ([`06`](06_Truth_And_Annotation.md) §3.5) |
-| 20 | Every `aoi_ref`, and every slot's area, names an area in the world's area table | `areas.resolved.json` | **refuse** | An annotation naming a place only the author can see (doc 20 §8.1) |
-| 21 | Instance ids are `<scenario_id>/<name>`, deterministic and unique | the specification | **refuse** on collision | Sweep members that cannot be joined (doc 20 §7.1) |
+| 20 | Every `aoi_ref`, and every slot's area, names an area in the world's area table | `areas.resolved.json` | **refuse** | An annotation naming a place only the author can see |
+| 21 | Instance ids are `<scenario_id>/<name>`, deterministic and unique | the specification | **refuse** on collision | Sweep members that cannot be joined |
 | 58 | Every interval is declared by a civil `begin` or by an `anchor`, not both; an anchor names its participant's departure, one of its stops or one of its `phases[]`, by an index the actor has, and its end comes after its start; only an entity's interval is anchored | the participant's resolved stops and compiled route | **refuse**, naming the event, the participant and how many stops or phases it has | An interval bound to an event its vehicle never has, so it never opens; a bound declared twice; a phase asserted over a flow's members ([`06`](06_Truth_And_Annotation.md) §3.2, §3.3) |
 | 22 | No annotated interval begins before its participant departs | the resolved departures | **warn** | An interval no vehicle could have been in. Its end is not checked: only the run knows when a vehicle arrives |
 | 23 | A **cohort** carries only a whole-life annotation, never an interval | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A phase asserted over a generator, whose member count is not known until the run |
 | 49 | No cohort is `nominal` | [`06`](06_Truth_And_Annotation.md) D6.2 | **refuse** | A negative asserted of vehicles nobody authored one by one |
 | 50 | A one-participant instance names its participant `subject` | [`06`](06_Truth_And_Annotation.md) §3.7 | **refuse** | A consumer guessing which track an instance is about |
-| 24 | Some subject is `nominal` when any is `annotated` | the plan | **warn** | The missing hard negatives of doc 20 §2.7 |
+| 24 | Some subject is `nominal` when any is `annotated` | the plan | **warn** | A dataset with no hard negatives: no authored `nominal` vehicle to set against an annotated one |
 | **Areas** ||||
 | 25 | Area ids unique, rings closed and non-self-intersecting, `radius_m > 0` | [`04`](04_Contracts.md) C5 V5.1–V5.4 | **refuse** — carried out by `AreaOfInterestSource` when the world is built; the compiler reads only a table the world build validated | Undefined containment tests |
 | 26 | An area's envelope intersects the world | [`04`](04_Contracts.md) C5 | **refuse** — at world build | An area outside the world entirely |
@@ -1819,7 +1835,7 @@ the same ids and outcomes.
 | 44 | No attribute of an emitted SUMO file is a clock | the files, before they are written | **refuse** (a compiler bug) | §6 gotcha 12. *Measured:* SUMO resolves `--begin 7:00:00` to step 25 200 — an **offset** wearing a clock's clothes. The epoch restated in a comment is not an attribute |
 | 51 | The route file is valid against SUMO's `routes_file.xsd`, and the additional file, where there is one, against `additional_file.xsd` | the staged SUMO's schemas | **refuse** | A file SUMO will not load — a `departLane` SUMO does not accept, for one |
 | 52 | The route file carries no parameter but the vehicle-type binding's | the file, before it is written | **refuse** | Supervision reaching the channel it must never use (§3.6) |
-| 31 | The run ends after every declared interval and every stop | the resolved instants | **warn** | A behaviour truncated by the run ending, recorded as if it completed (doc 20 §6.1 `closed_by`) |
+| 31 | The run ends after every declared interval and every stop | the resolved instants | **warn** | A behaviour truncated by the run ending, recorded as if it completed (the run closes an open interval as `scenario_end`: `SupervisionBinder.OnSessionEnded`) |
 | 32 | Every flow's window lies inside the run | the specification | **warn** | Flows that never fire |
 | **Dry run** ||||
 | 59 | Every vehicle the supervision plan names — each instance's participants, annotated or nominal, and every realised slot of every series — enters a SUMO-only run of the compiled scenario over its whole span: none is discarded after waiting `max-depart-delay` at its entrance, and none is still waiting when the run ends | the staged SUMO running the compiled configuration with its own seed and step, before anything is written (`SumoDryRun`) | **refuse**, naming the vehicle, what names it, its declared departure, its entrance edge and how long it waited | A planned subject a drive never draws — an interval with no vehicle, or a series' realised count that the run does not realise — found after a capture was spent. SUMO inserts a vehicle only when its entrance has room and discards one that has waited 900 s, both deterministically, so the run shows exactly what a drive will ([`06`](06_Truth_And_Annotation.md) D6.12). Every planned vehicle's wait, the other vehicles discarded and every collision SUMO registered are reported and refuse nothing. A lock that records the run skipped (`--skip-dry-run`), or records none, is refused by a capture run before anything is started — `run_capture` check 54 offline, the session's compile-lock check before SUMO starts — unless the run accepts it in writing (`scenario.accept_skipped_dry_run`; `run_sumo_drive.py --accept-skipped-dry-run`), which the run records ([`12`](12_Operator_Control_Surface.md) §6.2, [`03`](03_CoSimulation_Runtime.md) §2.7) |
@@ -1840,8 +1856,8 @@ in the table as retired.
 
 ### 5.3 Reporting what it resolved
 
-Doc 20 §5.5 argues for this on the storyboard side because a preview cannot check annotations. Under
-SUMO the argument is stronger: `sumo-gui` is the only preview and it knows nothing about pattern
+A preview cannot check annotations, which argues for this report on the storyboard side as well.
+Under SUMO the argument is stronger: `sumo-gui` is the only preview and it knows nothing about pattern
 instances, areas, catalogue entries or supervision (§3.6). **And it is stronger again for time:**
 *measured* (§1.4), `sumo-gui`'s clock reads elapsed seconds, so a preview cannot show a civil time, a
 date, a sun angle or an illumination band. Everything in the epoch half of this section is checkable in
@@ -2101,8 +2117,9 @@ scenario-wide picture §5.6.1 measured. For each:
    the numbers, not the pipeline's (the charter's §4b).
 5. **The remedies**, because a warning that offers nothing is one a reader learns to skip: a
    `displaced`-in-time counterfactual (§7.3), which puts the same annotation in a second band; a
-   `nominal` twin inside the annotated band, doc 20 §2.7's hard negative; and a capture window in a
-   band where the annotated class is absent.
+   `nominal` twin inside the annotated band, a hard negative lit identically
+   (`IlluminationLabelAssociation.REMEDIES`); and a capture window in a band where the annotated class
+   is absent.
 
 The warning carries the number and the degenerate bands; the tables and the remedies are in
 `<scenario_id>.resolution.json`, and the statistic with its table is in `<scenario_id>.lock.json`, so a
@@ -2113,8 +2130,8 @@ default no sun is declared, and the tables say they were not computed rather tha
 
 Three reasons, in order of how much they cost to get wrong.
 
-- **Refusing would make doc 20's class 4 unauthorable.** That class is *"a heavy goods vehicle in a
-  residential area at 03:00"* — a pattern **defined** by its hour. Any threshold that refuses a
+- **Refusing would make a class-conditioned presence unauthorable.** A heavy goods vehicle in a
+  residential area at 03:00 is a pattern **defined** by its hour. Any threshold that refuses a
   time-correlated label refuses the patterns the apparatus exists to capture. A check that forbids the
   requirement is not a check.
 - **In a pattern of life the correlation is structural, so a threshold would fire on every scenario
@@ -2198,12 +2215,12 @@ or fixed by the compiler, written into the scenario files, and bound in the lock
 | **The vehicle types** | one per measured body, from the catalogue, whose digests are in the lock; length and height the body's box, width the body's without its mirrors ([`04`](04_Contracts.md) D4.43), which a class drawing a body with none measured is refused for under check 14 |
 | **The SUMO release that routed** | recorded in the lock; a release other than the one that built the world is refused unless explicitly accepted, and an acceptance is recorded in the lock (check 6) |
 
-Two seeds doc 20 anticipated are not declared, because nothing consumes them: an **appearance seed**
-(which body a category resolves to — SUMO's own seeded `vTypeDistribution` draw does this today) and an
-**admission seed** (the render set of [`04_Contracts.md`](04_Contracts.md) C2 has no random element). A
-field nothing reads is one somebody will later believe was honoured, so each is added when something
-reads it. The **CARLA world seed** is irrelevant by design: the traffic manager is locked out while SUMO
-drives.
+Two further seeds are not declared, because nothing consumes them (`seeds` in `ScenarioSchema` admits
+`sumo` alone): an **appearance seed** (which body a category resolves to — SUMO's own seeded
+`vTypeDistribution` draw does this today) and an **admission seed** (the render set of
+[`04_Contracts.md`](04_Contracts.md) C2 has no random element). A field nothing reads is one somebody
+will later believe was honoured, so each is added when something reads it. The **CARLA world seed**
+is irrelevant by design: the traffic manager is locked out while SUMO drives.
 
 Illumination is not seeded — it is *determined*, by the epoch, the window and the policy — but it is as
 capable of making two runs differ. So the epoch and the authored default are in the lock, and the run's
@@ -2276,9 +2293,9 @@ route file (§3.6.1).
 
 ### 7.3 Counterfactual pairing
 
-Doc 20 §11 question 7 asks whether counterfactual pairing is worth building into the sweep: the same
-seed, the same ambient population, one instance's behaviour switched off, so the authored behaviour is
-the only difference between two runs. **It is built as a declared part of the sweep**, because:
+Counterfactual pairing is the same seed, the same ambient population and one instance's behaviour
+switched off, so the authored behaviour is the only difference between two runs. **It is built as a
+declared part of the sweep** (`ScenarioSweep._counterfactual`), because:
 
 - **It is nearly free here.** The ambient population is `flows[]` and the authored behaviour is
   `actors[]`, separate blocks of the specification, so a counterfactual member is the same
@@ -2300,8 +2317,9 @@ in time or space, and `illumination_differs`.
 | `nominal` | the actor keeps its type, route and timing; the fields the author names in `remove` — its `stops`, its `via` — are dropped, its instances are replaced by one `nominal` instance with the author's `labels` | **Same instant, same sun.** The twin departs at the same second from the same epoch, so the pair is lit identically. The pipeline does not decide what the anomalous element is: the author names it |
 | `displaced` | the actor moves by a declared `shift` in time — its departure and every interval of its instances shifted together — and/or a declared `places` substitution in space | **The one mode that deliberately moves time, and so the sun.** Displaced in time, the pair carries `illumination_differs: true` and must never be presented as an illumination-controlled comparison; displaced only in space, it shares the base's sun |
 
-`nominal` is the most valuable, because it generates hard negatives at no authoring cost, and doc 20 §2.7
-records hard negatives as the single most valuable output of the whole apparatus. `displaced` in time is
+`nominal` is the most valuable, because it generates hard negatives at no authoring cost, and hard
+negatives are the single most valuable output of the whole apparatus (`ScenarioSweep._counterfactual`
+writes the twin as one `nominal` instance with the author's `labels`). `displaced` in time is
 also the remedy §5.6.3 offers for a degenerate band, and the two facts sit together: it puts the same
 annotation under a second band, and the pair it produces is a *behavioural* counterfactual, not an
 *illumination* one.
@@ -2395,7 +2413,7 @@ stateDiagram-v2
 
 ---
 
-## 8. The packaged skill — answering doc 20 §11 question 9
+## 8. The packaged skill
 
 **Question:** whether the authoring conventions should ship as a packaged skill with the
 distribution.
@@ -2409,11 +2427,10 @@ two). The layout for what follows already exists.
 
 ### 8.1 Why yes
 
-Doc 20 §11 question 9 already makes the argument and it holds unchanged under SUMO: by the end of
-this section, everything an author needs is a machine-readable artifact of a build — the world
-package, the place index, the vehicle catalogue, the annotation vocabulary, the area table, and the
-fingerprint that binds them. The only thing that is not yet a build artifact is the **conventions
-that use them**, which is exactly what a skill is.
+By the end of this section, everything an author needs is a machine-readable artifact of a build —
+the world package, the place index, the vehicle catalogue, the annotation vocabulary, the area table,
+and the fingerprint that binds them. The only thing that is not yet a build artifact is the
+**conventions that use them**, which is exactly what a skill is.
 
 Three further reasons are specific to this pipeline:
 
@@ -2421,8 +2438,8 @@ Three further reasons are specific to this pipeline:
   caps speed only on its own edge. Each of the twelve entries in §6 was bought with time. Half of
   them become compiler defaults and stop needing to be known — but half remain judgements, and a
   judgement has to be written down or it is relearned.
-- **Doc 20 D13 requires it.** "Hand authoring stays possible throughout, which means every convention
-  has to be documented and validated rather than merely implemented." Validated is §5. Documented is
+- **Hand authoring requires it.** For hand authoring to stay possible throughout, every convention
+  has to be documented and validated rather than merely implemented. Validated is §5. Documented is
   this.
 - **The primary author is an assistant with no memory of this project.** A packaged skill is the
   mechanism by which an assistant gets this project's conventions rather than generic SUMO knowledge.
@@ -2445,8 +2462,8 @@ Three further reasons are specific to this pipeline:
 | Recipe step 6 is "run and verify… confirm each intended behaviour actually happened, with numbers" | **Keep this verbatim.** It is the best sentence in the skill and no amount of compile-time checking replaces it |
 | Eleven gotchas presented as things to remember (now twelve) | Gotchas split: which are now enforced (and by what), and which remain judgements |
 | Route validation described as a discipline | Route validation described as something the compiler did, including the §5.5 false accept |
-| No mention of annotation beyond `.labels.json`'s three keys | The annotation vocabulary, pattern instances, three-valued supervision, and the hard-negative requirement (doc 20 §2.2, §2.7) |
-| No mention of areas of interest | Areas as a first-class place form (§4.2) and the GeoJSON `[lon, lat]` trap (doc 20 §8.2) |
+| No mention of annotation beyond `.labels.json`'s three keys | The annotation vocabulary, pattern instances, three-valued supervision, and the hard-negative requirement (`SupervisionState` in `CarlaNet.Types`; check 24) |
+| No mention of areas of interest | Areas as a first-class place form (§4.2) and the GeoJSON `[lon, lat]` trap (`AreaOfInterestSource.envelope_problems` refuses an area that falls inside the extract only with its positions swapped, V5.4) |
 | Silent on determinism | The seed and everything else that decides the traffic, the lock file, and counterfactual pairing (§7) |
 | **Silent on time entirely** | **The epoch conventions** — §8.2.1 |
 | **Silent on illumination entirely** | **The illumination guidance** — §8.2.2 |
@@ -2545,10 +2562,10 @@ Two locations, one source. The move into the repository is authorised and is a *
   Being tracked is a precondition of everything else in this section, because §8.5's mechanism for
   keeping it true is a test suite that can only run against tracked files.
 - **In the distribution**, staged by `MakeDistribution.ps1` beside the SUMO tooling it already
-  bundles (*carried forward,* doc 23 §6.12: `MakeDistribution.ps1:237` already creates `tools\sumo\`;
-  §1.1 of the same document records the slot). A distribution that ships the compiler and not the
-  conventions ships a tool nobody can drive. Per the standing rule, the `Scripts/Linux/*.sh`
-  counterpart is part of the same change.
+  bundles (*read,* `Scripts/Windows/MakeDistribution.ps1:442-456` copies `CarlaControl\skills\`, less
+  `third-party\`, into the distribution's `skills\`, and `:566-570` stages the SUMO toolchain into
+  `tools\sumo\`). A distribution that ships the compiler and not the conventions ships a tool nobody
+  can drive. Per the standing rule, the `Scripts/Linux/*.sh` counterpart is part of the same change.
 
 ### 8.5 How it stays true
 
@@ -2593,9 +2610,10 @@ not intention.
 
 ### 9.1 Turn restrictions never reach netconvert — confirmed
 
-Doc 23 §6.6 records that `osm_clip.py` drops all OSM relations, so turn restrictions are discarded
-before netconvert sees them ([issue #12](https://github.com/sbrett9/carla/issues/12)). The brief asks
-for this to be confirmed. It is confirmed, twice over.
+`osm_clip.py` drops all OSM relations, so turn restrictions are discarded before netconvert sees them
+([issue #12](https://github.com/sbrett9/carla/issues/12); the code now carries them:
+`OsmClipper.clip_osm_to_bounds` copies every relation, and `osm_clip.py` forwards to it). The brief
+asks for this to be confirmed. It is confirmed, twice over.
 
 *Read.* Both copies of the clipper build their output document from scratch and append exactly three
 kinds of element: the `<bounds>`, the kept `<node>`s, and the reconstructed `<way>`s
@@ -2611,8 +2629,8 @@ encodes a turn restriction as a relation with `type=restriction`, so no turn res
 | `Import/Shahid_Bahonar_Port.osm` | 15 | 0 | **0** |
 | `Import/Gardnerville_Centerville_Lane.osm` | 3 | 0 | **0** |
 
-Doc 23 §6.6 cites "8 restriction relations" on the raw Arapahoe extract; that was netconvert's
-*warning* count, which covers only the restrictions it could not apply. The file holds 22.
+An earlier count of 8 restriction relations on the raw Arapahoe extract was netconvert's *warning*
+count, which covers only the restrictions it could not apply. The file holds 22.
 
 **The dependency, stated plainly.** Under SUMO drive, SUMO's router will route traffic through banned
 turns, and its junction model will let those movements proceed, because the network was built from an
@@ -2632,15 +2650,16 @@ Two further consequences that belong to this section specifically:
   away.
 
 **This section therefore depends on [issue #12](https://github.com/sbrett9/carla/issues/12) being
-fixed before any authored scenario is treated as behavioural truth**, and doc 23's plan already
-sequences it into the read-only-bridge phase, before any SUMO decision is applied to a CARLA vehicle.
-The fix is small — carry `<relation>` elements whose members survive the clip, and drop members that
-do not — and belongs in both copies of the clipper, which should be reduced to one while it is open.
+fixed before any authored scenario is treated as behavioural truth** (fixed in code:
+`OsmClipper.py:350-351` appends every relation to the clipped document). The fix is small — carry
+`<relation>` elements whose members survive the clip, and drop members that do not — and belongs in
+both copies of the clipper, which should be reduced to one while it is open.
 
 ### 9.2 The world's `.net.xml` must be kept
 
-§1.3 and §2.4. Everything in §5.2's world-binding group is unimplementable without it. Doc 23 §6.4
-already asks for it for the runtime's sake.
+§1.3 and §2.4. Everything in §5.2's world-binding group is unimplementable without it. The runtime
+needs it as well: the session reads its lanes from the package's `map.net.xml`
+(`SumoRoadNetwork.FromWorldPackage`).
 
 ### 9.3 The world digest must be reproducible
 
@@ -2780,14 +2799,14 @@ has neither its areas nor its type map; that is stage D's to close.
 | **D7.3** | **Every place is named; no route contains a bare edge identifier.** Places are resolved at compile time from descriptions — street and direction, area, gateway, geographic point, junction movement — and the resolution is reported. The 45–55 opaque literals per scenario measured in §1.1 become a named, checked, documented table (§3.5, §4.2) |
 | **D7.4** | **The resolver refuses ambiguity; it never guesses.** *Measured:* one street name maps to 65 edges. A refusal lists the candidates with direction, extent and length so the author can narrow it (§4.3) |
 | **D7.5** | **Name resolution is one place form among several, not the mechanism.** *Measured:* 91 % of edges named on the two US maps, **4.5 % on Bahonar** (47 of 1044, six names, non-Latin script). Areas of interest, geographic point-snapping and gateways are first-class, because on some maps they are all there is (§4.4) |
-| **D7.6** | **The compile step reports what it resolved, not only what it refused.** `sumo-gui` is the only preview and it knows nothing about annotations, areas, catalogue entries or supervision, so the resolution report is the sole place any of that can be checked. This is doc 20 §5.5's argument, stronger here (§3.6, §5.3) |
+| **D7.6** | **The compile step reports what it resolved, not only what it refused.** `sumo-gui` is the only preview and it knows nothing about annotations, areas, catalogue entries or supervision, so the resolution report is the sole place any of that can be checked. The same argument applies to storyboards, whose path writes no such report (`World.start_scenario` parses a storyboard and runs it), and is stronger here (§3.6, §5.3) |
 | **D7.7** | **Route validation is a build step, unconditional, and "a `<vehicle>` came out" is not the test.** *Measured:* 52 routes validated in 0.27 s; and a trip whose destination edge does not exist produced a `<vehicle>` with a one-edge route. The check is that the routed result ends on the requested destination and contains every `via` edge in order (§5.5) |
 | **D7.8** | **Compile emits the routed route file, not trips,** so no routing decision is taken at run time and two runs of one scenario cannot diverge because of the router (§5.5) |
 | **D7.9** | **Netconvert options that change the graph are world-build decisions, never scenario decisions.** `--tls.default-type`, `--junctions.join-dist` and `--remove-edges.by-type` move to `OsmConverter.BuildArguments`. A world that wants actuated signals is a world that is rebuilt with them (§6, gotchas 5 and 6). What a road admits is one of them: the world's type map (D7.33) |
 | **D7.10** | **`<param>` is identity transport, never an annotation channel.** *Measured:* `<param>` round-trips through `duarouter` and through `sumo --vehroute-output`. The compiled route file carries only the vehicle-type binding — `carla:blueprint`, `carla:class_id`, `carla:catalogue_digest` — and a vehicle's identity is its SUMO id ([`04`](04_Contracts.md) C4), so nothing else is emitted and check 52 refuses any other key. The annotation channel is [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.1's supervision plan, adopted unchanged (§3.6) |
 | **D7.11** | **Everything that decides the traffic is declared or fixed at compile time and recorded in the lock** — the SUMO seed, required; the routed routes; the world's network; the step and the end; the processing options; the vehicle types; the SUMO release that routed. An appearance seed and an admission seed are declared when something reads them: SUMO's own seeded `vTypeDistribution` draw chooses the body, and the render set has no random element (§7.1) |
-| **D7.12** | **Counterfactual pairing is a declared mode of the sweep,** in three forms — `absent`, `nominal`, `displaced`. The manifest states explicitly that downstream trajectories are *not* expected to match, because a car-following model reacts to what is in front of it. `nominal` generates doc 20 §2.7's hard negatives at no authoring cost. This answers doc 20 §11 question 7 (§7.3) |
-| **D7.13** | **The authoring conventions ship as a packaged skill with the distribution,** accompanied by machine-readable artifacts — the specification and sweep schemas, the vocabulary, the generated check list, worked examples and their recorded resolution reports. This answers doc 20 §11 question 9 (§8) |
+| **D7.12** | **Counterfactual pairing is a declared mode of the sweep,** in three forms — `absent`, `nominal`, `displaced`. The manifest states explicitly that downstream trajectories are *not* expected to match, because a car-following model reacts to what is in front of it. `nominal` generates hard negatives at no authoring cost (`ScenarioSweep._counterfactual`; §7.3) |
+| **D7.13** | **The authoring conventions ship as a packaged skill with the distribution,** accompanied by machine-readable artifacts — the specification and sweep schemas, the vocabulary, the generated check list, worked examples and their recorded resolution reports. The skill is `CarlaControl/skills/sumo-traffic-scenarios/`, which `MakeDistribution.ps1` copies into the distribution's `skills\` (§8) |
 | **D7.14** | **The skill stays true by mechanism, not intention:** schemas and the check list are generated from the compiler; every example is compiled in the test suite and its resolution report diffed; every gotcha cites its enforcement site and a test asserts the site still exists (§8.5) |
 | **D7.15** | **The world binding is a network fingerprint over canonical graph content, not a file digest.** *Measured:* the same OSM clipped three times gives three digests and three `.net.xml` digests, while the graph — 55 edges, 202 internal edges, 68 junctions, 257 lane shapes — is byte-identical. File digests stay as provenance; the fingerprint is what gates (§2.7) |
 | **D7.16** | **[Issue #12](https://github.com/sbrett9/carla/issues/12) is a hard prerequisite for treating any authored scenario as behavioural truth.** *Measured:* 22 `type=restriction` relations in the raw Arapahoe extract, **0** after clipping. It is an authoring trap as well as a runtime one — every compile check passes on a scenario built around a turn that does not exist (§9.1) |
@@ -2796,7 +2815,7 @@ has neither its areas nor its type map; that is stage D's to close.
 | **D7.19** | **An author writes civil times and the compiler emits seconds.** Day-plus-clock, absolute civil instant, duration, named instant, an offset from either, and a non-looping `rotas[]` cross product are accepted (`CivilTimeResolver`, `RotaExpander`); every day-clock and absolute instant is confirmed against `SolarEpoch.CivilInstantAt`, and the report states the second and the civil time of every one. *Measured,* the gain on the sizing scenario: **sixteen** civil-hour-to-seconds arithmetic sites go to **zero**, the civil meaning of **610 of 610** emitted entries becomes recoverable instead of **0 of 610**, and the guard rota as one block reproduces the generator's 335 ids and departure seconds exactly (§3.5.1) |
 | **D7.20** | **The author declares what the scenario's time means; the operator chooses the window and the policy.** `capture_windows[]` and `illumination` are authored *candidates and defaults*, checked here (checks 38, 39) and selected or overridden at run time by [`12_Operator_Control_Surface.md`](12_Operator_Control_Surface.md). The test: if changing a field changes what the scenario asserts it is authored; if it changes only what was captured of an unchanged scenario it is the operator's. Both the authored default and the value used go in the run manifest (§3.9, §5.1) |
 | **D7.21** | **The epoch and illumination group is checks 33, 34, 36–43, 47 and 48, each stating refuse or warn; 35 is retired.** The epoch present and accepted by `SolarEpoch`; the offset in whole quarter hours; every time in an accepted form and naming its day; every rota expanding and every skip planting what it names; every instant inside the run; each window's civil date against its sun's date; windows inside the run and cutting no interval; the illumination default accepted by `IlluminationPolicy`, with an advancing arc named; the declared offset against the world's zone; the window's sun against D11.7; the illumination–label association; and sweep inheritance (§5.2). A zone name is never resolved, so no check compares it |
-| **D7.22** | **The illumination–label association is computed at compile time, reported in full, recorded in the lock file, and never refuses.** *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`; at 02:00 and 11:00 **every** entry is annotated; and the three hours doc 10 recommends capturing carry **377 of 610 entries and zero annotations**. It warns rather than refuses because in a pattern of life the correlation is structural — doc 20's class 4 is *defined* by its hour — so a refusing threshold would forbid the requirement and be switched off. Bucketing is by doc 11 §4.4's **illumination band** of the declared sun, not by hour, over the windows and over the span (§5.6) |
+| **D7.22** | **The illumination–label association is computed at compile time, reported in full, recorded in the lock file, and never refuses.** *Measured on the shipped sizing scenario:* `I(hour; label) / H(label) = 0.600`; at 02:00 and 11:00 **every** entry is annotated; and the three hours doc 10 recommends capturing carry **377 of 610 entries and zero annotations**. It warns rather than refuses because in a pattern of life the correlation is structural — a heavy goods vehicle in a residential area at 03:00 is *defined* by its hour — so a refusing threshold would forbid the requirement and be switched off. Bucketing is by doc 11 §4.4's **illumination band** of the declared sun, not by hour, over the windows and over the span (§5.6) |
 | **D7.23** | **A sweep that varies behaviour holds illumination constant, and the compiler enforces it.** `hold` is the default and refuses an illumination axis; `vary` refuses a behaviour axis; `factorial` warns and records the crossed design. An axis is an illumination axis if its path touches `epoch`, `illumination` or a window's `begin`, whatever it is declared. **Sweep `epoch.date`, not the window hour**, when illumination is what is wanted: the date moves the sun while the traffic the route files declare stays identical — measured on the fixture scenario (§7.2.1, §7.4) |
 | **D7.24** | **A counterfactual pair holds the inputs fixed except one actor, and inherits its base member's epoch, windows and illumination verbatim unless displaced in time.** `absent` removes the actor; `nominal` keeps its type, route and timing, drops what the author names in `remove`, and states it `nominal` — the pipeline does not decide what the anomaly is; `displaced` moves it by a declared shift and/or place substitution, and displaced in time carries `illumination_differs: true`. Every pair states that trajectories are not expected to match (§7.3, check 43) |
 | **D7.25** | **The vocabulary is authored in two halves and generated in two halves, and the compiler enforces both.** An author declares terms in the specification's `vocabulary` block — `import[]` for a shared or site vocabulary travelling in the bundle, `terms[]` for this scenario's own — so they are reviewed and versioned with the scenario, and nothing may declare a term at run time. The shipped `vocabulary.json` is generated: its core half from the enumerations in `CarlaNet.Types`, its author half from the compiled specification, under §8.5's discipline rather than written beside the skill. Two checks in the annotation group enforce it: **45** refuses a label whose `applies_to` excludes the subject kind it was asserted of, which is what makes [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md) D6.2 enforceable for a term this compiler cannot interpret, and **46** refuses a namespace the specification neither declared nor imported. The term list's *content* is 06 §3.7–§3.8's; this section owns where it is written and what refuses it (§2, §3.5, §5.2, §8.3, §8.5) |
@@ -2826,11 +2845,12 @@ has neither its areas nor its type map; that is stage D's to close.
    dimension comparison is the only guard on any of it. Leaning towards pass-through with a declared
    allow-list of keys, so an unknown key is a refusal rather than a silent no-op — but the allow-list
    is maintenance, and whether it earns its keep is unsettled.
-2. **Do junctions want stable derived names?** Doc 20 §11 question 8, unchanged by anything measured
-   here. §4.2 resolves a junction movement by the roads either side, which is adequate for every
-   movement the three shipped scenarios author. It is not adequate for "the roundabout", "the
-   interchange" or "the gate" as *places* — Bahonar's gates are junctions, and they are currently
-   named by an approach edge (`make_bahonar_scenario.py:90`). A derived name would have to survive a
+2. **Do junctions want stable derived names?** Unchanged by anything measured here, and none is
+   derived: `PlaceResolver._movement` names a movement by its streets alone. §4.2 resolves a junction
+   movement by the roads either side, which is adequate for every movement the three shipped
+   scenarios author. It is not adequate for "the roundabout", "the interchange" or "the gate" as
+   *places* — Bahonar's gates are junctions, and they are currently named by an approach edge
+   (`make_bahonar_scenario.py:90`). A derived name would have to survive a
    rebuild to be worth anything, and *measured:* junction ids are stable across a re-clip but 22 of
    298 differ between two netconvert flag sets. So the answer depends on D7.9 holding.
 3. **What fraction of a scenario's places should the author be required to confirm?** §5.3 produces
@@ -2840,11 +2860,12 @@ has neither its areas nor its type map; that is stage D's to close.
    theatre. Recommendation: make it a field in the lock file, populate it from an explicit flag, and
    record it in the run manifest, so a corpus can be filtered on it later rather than argued about.
 4. **Should the specification be able to express "ambient traffic like this area really has"?**
-   Doc 23 §9 question 1 raises `routeSampler.py` matching measured counts, so density becomes a
-   modelled quantity rather than a knob. That is an authoring surface question as much as a traffic
-   one: `flows[]` with hand-set rates is what all three shipped scenarios do, and the rates carry
-   long justifying comments (`make_sumo_scenario.py:79-85`) that a measured count would replace with
-   a citation. Not required by anything here, and it would change what `flows[]` means.
+   SUMO's `routeSampler.py` can match measured counts, so density becomes a modelled quantity rather
+   than a knob (not built: nothing in the repository calls `routeSampler.py`). That is an authoring
+   surface question as much as a traffic one: `flows[]` with hand-set rates is what all three shipped
+   scenarios do, and the rates carry long justifying comments (`make_sumo_scenario.py:79-85`) that a
+   measured count would replace with a citation. Not required by anything here, and it would change
+   what `flows[]` means.
 5. **How does a scenario declare that it needs a world rebuilt?** D7.9 moves graph-changing
    netconvert options to the world build, which is right, but it leaves an author who needs actuated
    signals with no way to say so except prose. The world package records its argument vector; a

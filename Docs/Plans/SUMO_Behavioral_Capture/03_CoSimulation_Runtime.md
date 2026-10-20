@@ -9,10 +9,11 @@ ambient-traffic lockout, and failure handling.
 produced this plan. Familiarity with CARLA's client/server split is assumed; familiarity with SUMO
 is not.
 
-**Reads from:** [`Findings/23_SUMO_Traffic_Integration.md`](../../Findings/23_SUMO_Traffic_Integration.md)
-(primary), [`Findings/17_Photoreal_Occlusion_Metric.md`](../../Findings/17_Photoreal_Occlusion_Metric.md)
-(the occlusion estimate), [`Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md`](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-§5.6 (the vehicle catalogue), [`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) (§3a for the time-of-day requirement).
+**Reads from:** the TraCI client in `CarlaNet/src/CarlaNet.Sumo` and the playback bridge in
+`CarlaNet/src/CarlaNet.CoSim` (primary), the occlusion estimate in
+`CarlaNet/src/CarlaNet.Recording/OcclusionEstimator.cs`, the vehicle catalogue readers
+`CarlaNet/src/CarlaNet.CoSim/VehicleCatalogue.cs` and `CarlaControl/src/carlacontrol/VehicleCatalogue.py`,
+[`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) (§3a for the time-of-day requirement).
 
 **Depends on decisions owned elsewhere:** [`04_Contracts.md`](04_Contracts.md) (vehicle catalogue,
 admission contract), [`05_CarlaNet_Capability_Audit.md`](05_CarlaNet_Capability_Audit.md) (every gap
@@ -206,7 +207,8 @@ process-scoped lease (§10).
 
 **The interface is a wire protocol, not a library.** `sumo --remote-port N` is a TraCI server; a client
 connects over TCP and exchanges length-prefixed frames. `CarlaNet.Sumo` speaks it directly from C#,
-ported from SUMO's own reference client (doc 23 §1.1, §6.3). API surface confirmed by reading that
+ported from SUMO's own reference client (each file's header names the `tools/traci` file it ports at
+SUMO 1.27.0, e.g. `TraCIConnection.cs` from `connection.py`). API surface confirmed by reading that
 client:
 
 | Call | File:line | Note |
@@ -214,7 +216,7 @@ client:
 | the socket and the frame header | `connection.py:78`, `:105-127` | `socket.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)`; a 4-byte big-endian length prefix |
 | the typed value codec | `connection.py:154-207`, `storage.py` | 103 lines of `struct` on the read side |
 | `vehicle.moveToXY` | `_vehicle.py:1485-1499` | `edgeID`, `laneIndex`, `x`, `y`, `angle`, `keepRoute`, `matchThreshold` |
-| `subscribe` / `getAllSubscriptionResults` | `domain.py:188-202`, `:223` | the constant-call-count read path doc 23 §6.11 requires |
+| `subscribe` / `getAllSubscriptionResults` | `domain.py:188-202`, `:223` | the constant-call-count read path, ported as `SumoVehicleSubscription` |
 | `vehicle.remove`, `vehicle.add` | `_vehicle.py` over `domain.py`'s `_setCmd` | |
 | `simulationStep`, `simulation.getTime`, `getDeltaT` | `connection.py:359-379`, `_simulation.py` | |
 | `simulation.getDepartedIDList` / `getArrivedIDList` | `_simulation.py` | per-step lifecycle deltas |
@@ -244,12 +246,13 @@ Two properties of that loop matter for the decision:
   to know about reusing it: **it cannot be the playback bridge without a new sub-step mechanism**
   (§6).
 
-### 2.3 Re-examining doc 23 §6.3 under teleport
+### 2.3 The case against a Python client, re-examined under teleport
 
-Doc 23 §6.3 says: *"Reject the pure-Python `traci` client outright — it puts Python in the per-tick
-control path."* That argument was written for §4.1's shape, where each tick runs a PID controller and
-a motion-plan stage per vehicle in .NET. Under teleport there is no controller. The honest restatement
-of the per-tick work is: N pose conversions, one batch RPC, one tick RPC. Python can do that.
+Rejecting the pure-Python `traci` client outright was argued on the grounds that it puts Python in
+the per-tick control path. That argument was written for a closed-loop shape, where each tick runs a
+PID controller and a motion-plan stage per vehicle in .NET. Under teleport there is no controller. The
+honest restatement of the per-tick work is: N pose conversions, one batch RPC, one tick RPC. Python
+can do that.
 
 So the original argument does **not** survive unchanged. Four things replace it, and they are not the
 same argument. The first is a capability gap, not a performance opinion, and it is decisive on its
@@ -331,11 +334,10 @@ This is what keeps one clock and one SUMO connection, and it is also what makes 
 (§5) meaningful: the bridge holds SUMO's true speed for every vehicle, rendered or not.
 
 > **D3.2 — `CarlaNet.Sumo` speaks the TraCI wire protocol over a TCP socket to an out-of-process
-> `sumo`.** It is a port of SUMO's own reference client (doc 23 §6.3), not a binding to one, so nothing
-> native is loaded into the CarlaNet process. Out of process is therefore structural rather than
-> chosen: a SUMO assertion cannot take the CARLA client down, `sumo` can be restarted without
-> restarting the world, and a second consumer is another connection to the same server rather than a
-> second process.
+> `sumo`.** It is a port of SUMO's own reference client, not a binding to one, so nothing native is
+> loaded into the CarlaNet process. Out of process is therefore structural rather than chosen: a SUMO
+> assertion cannot take the CARLA client down, `sumo` can be restarted without restarting the world,
+> and a second consumer is another connection to the same server rather than a second process.
 
 ### 2.5 What the client owes, and how it is held to it
 
@@ -351,9 +353,10 @@ Four properties the bridge depends on, each with the thing that establishes it.
 **And one property of SUMO, not of the client, that sets what a step costs: a subscription is
 charged inside `simulationStep`, whether or not anyone reads it.** Measured at 388 live vehicles on
 Arapahoe: **3.73 ms** per step with nothing subscribed, **9.26 ms** with the seven-variable set
-subscribed and never read (doc 23 §6.11). SUMO fills the results as part of advancing; the read is only
-what it costs to collect them afterwards. The bridge subscribes every vehicle SUMO has (§8.3), so this
-is a cost of the scenario's population, paid inside SUMO's step; what it costs a run in wall clock is
+subscribed and never read (the figures recorded in `SumoVehicleSubscription`'s remarks). SUMO fills
+the results as part of advancing; the read is only what it costs to collect them afterwards. The
+bridge subscribes every vehicle SUMO has (§8.3), so this is a cost of the scenario's population, paid
+inside SUMO's step; what it costs a run in wall clock is
 [`10_Scale_And_Performance.md`](10_Scale_And_Performance.md)'s.
 
 **The client is `CarlaNet/src/CarlaNet.Sumo`, and each property above has a check that runs.** The
@@ -370,9 +373,10 @@ no SUMO installation resolves — the client itself needs none to build.
 **What a step costs through it, measured on the same network and the same warm-up** (2026-09-21, 400
 steps from t = 1 000 s, 388 vehicles, the subscribed set maintained against departures and arrivals):
 **4.40 ms** per step with nothing subscribed, **8.16 ms** with the population subscribed and never read,
-**8.86 ms** subscribed and read. The shape matches doc 23 §6.11's measurement through the generated
-binding — the subscription is most of the step and the read is a fraction of it — and the totals sit
-below it: 8.86 ms against 10.43 ms for the same work.
+**8.86 ms** subscribed and read. The shape matches the same measurement taken through SUMO's
+generated C# binding (`libtracics`, which no CarlaNet project references) — the subscription is most
+of the step and the read is a fraction of it — and the totals sit below it: 8.86 ms against 10.43 ms
+for the same work.
 
 ### 2.6 Which SUMO a session launches
 
@@ -1092,10 +1096,10 @@ wheel-spin losses are real and are the price of this mode.
 
 ### 5.1 Verified against source
 
-Doc 23 §4 and `_TEAM_BRIEF.md` §5 state that `WorldObserver.cpp:373` serialises
-`GetActor()->GetVelocity()` and that a teleport on a non-simulating body does not update it. **Both
-halves hold.** The read is at `WorldObserver.cpp:385` in the current tree, and the chain passes
-through `APawn`, which is where the outcome is decided.
+`_TEAM_BRIEF.md` §5 states that `WorldObserver.cpp:373` serialises `GetActor()->GetVelocity()` and
+that a teleport on a non-simulating body does not update it. **Both halves hold.** The read is at
+`WorldObserver.cpp:385` in the current tree, and the chain passes through `APawn`, which is where the
+outcome is decided.
 
 ```
 WorldObserver.cpp:385          Velocity = TO_METERS * View->GetActor()->GetVelocity();
@@ -1133,7 +1137,7 @@ such as `SpringBasedVegetationComponent.cpp:660`, and it too is never written on
 Consequence: a teleported vehicle whose velocity nobody sets through D3.5 (§5.3) reports **speed 0**
 into the world-observer snapshot, and everything downstream of that snapshot inherits it.
 
-### 5.2 Who actually reads it — one correction to doc 23
+### 5.2 Which consumers read the snapshot velocity
 
 | Consumer | Reads velocity? | Path |
 |---|---|---|
@@ -1142,12 +1146,13 @@ into the world-observer snapshot, and everything downstream of that snapshot inh
 | **Traffic-manager collision stage** | **yes** | `CarlaNet.TrafficManager/Stages/CollisionStage.cs:105-112`, `:371-377`, `:405` — collision radius and forward extension scale with speed |
 | **Engine recorder** | **yes** | `Recorder/CarlaRecorder.cpp:324-339` `AddActorKinematics` writes `GetActorVelocity()` into the kinematics packet of the `.log` |
 | **Radar sensor** | **yes** | `Sensor/Radar.cpp:219` `HittedActor->GetVelocity()` — the Doppler term of every return off a vehicle |
-| **Occlusion / arrival gating (doc 17)** | **no** | `CarlaNet.Recording/OcclusionEstimator.cs` contains no reference to velocity or speed at all. The truth telemetry has no arrival gate: `VehicleTelemetryService` reports every vehicle actor except a body a SUMO drive's pool has parked. |
+| **Occlusion / arrival gating** | **no** | `CarlaNet.Recording/OcclusionEstimator.cs` contains no reference to velocity or speed at all. The truth telemetry has no arrival gate: `VehicleTelemetryService` reports every vehicle actor except a body a SUMO drive's pool has parked. |
 
-> **Correction to carry into [`00_Overview.md`](00_Overview.md):** doc 23 §4's claim that zero velocity
-> reaches "the occlusion/arrival gating of doc 17" is **not supported by the source**: the occlusion
-> estimate reads no velocity, and nothing gates a vehicle on its arrival. Two of the three named
-> consumers are real; the third is not.
+> **Correction to carry into [`00_Overview.md`](00_Overview.md):** the claim that zero velocity
+> reaches the occlusion/arrival gating is **not supported by the source**: the occlusion estimate
+> (`OcclusionEstimator`) reads no velocity, and nothing gates a vehicle on its arrival. Of the three
+> consumers the claim named (truth telemetry, the traffic-manager collision stage and that gating),
+> two are real; the third is not.
 
 One mitigating detail, also verified: **course survives**. Both telemetry paths fall back to the
 transform's yaw when `speed < 0.5 m/s` (`VehicleTelemetryService.cs:89-96`;
@@ -1620,8 +1625,8 @@ front. Speed is interpolated linearly, so reported speed ramps the way SUMO's di
 CARLA's local frame is east/**negated** north/up: `Geodesy.GeodeticToCarlaLocal` returns
 `(east, −north, up)` (`CarlaNet/src/CarlaNet.Types/Geom/Geodesy.cs:104-108`). SUMO's projected frame
 from `+proj=tmerc … +x_0=0 +y_0=0` with `--offset.disable-normalization` is east/north, and the
-Bahonar network's `netOffset` is `0.00,0.00` (read from the shipped `.net.xml` header, matching doc 23
-§2's Arapahoe measurement). Therefore:
+Bahonar network's `netOffset` is `0.00,0.00` (read from the shipped `.net.xml` header, matching the
+header of `Import/Arapahoe_I25.net.xml`). Therefore:
 
 ```
 x_c = x_s
@@ -1805,7 +1810,8 @@ Check: `θ_s = 0` (north) → `ψ = −90°` → forward `(0, −1)` → north c
 pitch, roll: see §7.5
 ```
 
-This confirms doc 23 §6.7 and `_TEAM_BRIEF.md` §5 from an independent derivation.
+This confirms `_TEAM_BRIEF.md` §5 from an independent derivation. `PoseConverter.YawFromSumoAngle`
+computes the same `θ_s − 90`, normalised to (−180, 180].
 
 ### 7.4 The reference-point shift
 
@@ -1846,8 +1852,9 @@ harder than it sounds and both belong in that contract:
 - **Blueprint definitions carry no bounding box.** `ActorDefinition` is
   `(Uid, Id, Tags, Attributes)` (`CarlaNet.Types/Rpc/Actors/ActorDefinition.cs:5-9`); `BoundingBox`
   appears only on a *spawned* `Actor` (`CarlaNet.Types/Rpc/Actors/Actor.cs:8-15`). The catalogue
-  therefore requires a spawn-and-measure pass against a running server — which is exactly what doc 20
-  §5.6 and its decision 1 already propose.
+  therefore requires a spawn-and-measure pass against a running server — which is what
+  `VehicleCatalogueBuilder` does: it spawns each blueprint alone, reads `2 × extent` and the box
+  centre off the spawned actor, and destroys it.
 - **Changing a vType's length changes the behaviour.** Car-following gaps are a function of length,
   so a catalogue that adjusts `length` to match a blueprint changes the simulation it is describing.
   The adjustment must happen at **authoring** time and be part of the scenario, never applied at
@@ -2205,8 +2212,9 @@ CARLA spawning fails when the point is occupied — `EActorSpawnResultStatus::Co
 because collision at spawn position"*
 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Actor/ActorSpawnResult.h:13-21`), surfaced by the
 `spawn_actor` RPC as an error with `UE_LOG(LogCarla, Error, TEXT("Actor not Spawned"))`
-(`CarlaServer.cpp:1311-1331`). There is no queue and no retry. This is the same mechanism doc 23 §3.1
-identifies as one cause of freeway under-population.
+(`CarlaServer.cpp:1311-1331`). There is no queue and no retry. This is the same mechanism behind one
+cause of freeway under-population: the staging controller's `TrafficController.spawn_one` catches a
+failed `spawn_actor` and moves on to the next site, so a busy entry yields no vehicle.
 
 For a teleport bridge that hazard is avoidable entirely: spawn each pool actor **once**, at a known
 clear parking pose, and never spawn again during the run.
@@ -2408,8 +2416,8 @@ vehicle still has its body, is posed on every tick, is named to the server and i
   `camera_range_m` it rests on, and `draw_distance_m` on the sidecar's container. The vehicle is still
   listed, because it is in the world; a vehicle wholly beyond the distance is never measured for
   occlusion, because the depth capture, drawn under the same distance, shows the ground behind it
-  ([`06`](06_Truth_And_Annotation.md) §8.2, D6.39;
-  [`09`](../../Findings/09_Telemetry_CoT_Contract.md) §5.3). A recorder with no in-process render set
+  ([`06`](06_Truth_And_Annotation.md) §8.2, D6.39; `OcclusionUnmeasured.FromGeometry` writes such a
+  vehicle `occlusion_unmeasured="beyond_draw_distance"`). A recorder with no in-process render set
   can be given the distance the report states.
 - **Stated.** The report prints the distance asked for and what it changes, the writes and any bodies
   not found, or the refusal; `run_sumo_drive.py --draw-distance` and `run_capture`'s
@@ -2468,7 +2476,8 @@ that starts or stops mid-scene. They cost nothing to emit because the bridge alr
 [Issue #18](https://github.com/sbrett9/carla/issues/18) records two subsystems independently deciding
 to destroy a vehicle from different data on different thresholds, and proposes splitting authority by
 what each subsystem knows: the traffic manager owns *"this vehicle cannot drive"*, the viewer owns
-*"out of frame"*. Doc 23 §6.8 notes SUMO's arrival/removal makes a third.
+*"out of frame"*. SUMO's arrival and removal of a vehicle, which the session reads from
+`SumoStepEvents.Arrived`, would make a third.
 
 Under this design it does not. Both of issue #18's deciders are gone from this mode:
 
@@ -2692,9 +2701,10 @@ snapshot as [`08`](08_Collection_And_EPoL.md) D8.3 asks of every one, and it is 
   vehicle, vType and span's first frame. With no frame asked for — the live pull — and a set in the
   newest snapshot, the records come from the newest retained frame rather than the actor cache, so
   pose and naming are of one frame. The shim's dicts gain `sumo_id`, `vtype_id` and `admitted_tick`,
-  and the live CoT emitters key such a track on its SUMO id as the sidecar does
-  ([`09`](../../Findings/09_Telemetry_CoT_Contract.md) §5.2). A recorder with no source of its own
-  writes the server's set and says `vehicles="rendered"`; one with a source pairs as above.
+  and the live CoT emitters key such a track on its SUMO id as the sidecar does (`CotUdpEmitter` and
+  `cot_telemetry.py` write the uid `<uid_prefix>-SUMO-<sumo_id>`, as `CotWriter` writes
+  `CARLA-TRUTH-SUMO-<sumo_id>`). A recorder with no source of its own writes the server's set and says
+  `vehicles="rendered"`; one with a source pairs as above.
 - **Nothing outlives its bodies.** Only actors a session named are affected, and the naming lives on
   each actor's record: the session's disposal destroys its bodies and their naming with them, and a
   map load starts a new episode. A session that stops without destroying them — a crash, a dropped
@@ -4165,9 +4175,11 @@ implementation: a check that never refuses; true words accepted; a drop not reco
 waiting taken for dropped; the fast-forward's queue not taken; and SUMO's warnings not counted.
 
 Related, already open: [issue #12](https://github.com/sbrett9/carla/issues/12) — `osm_clip.py` drops
-all OSM relations, so turn restrictions never reach netconvert. Doc 23 §6.6 calls it a prerequisite,
-for a reason that applies with full force here: SUMO will happily route traffic through banned turns,
-and under teleport that illegal turn is rendered faithfully into the imagery and asserted as truth.
+all OSM relations, so turn restrictions never reach netconvert. Fixing it is a prerequisite (the code
+now carries them: `OsmClipper.clip_osm_to_bounds`, which `osm_clip.py` forwards to, copies every
+relation verbatim with the nodes it names), for a reason that applies with full force here: SUMO will
+happily route traffic through banned turns, and under teleport that illegal turn is rendered
+faithfully into the imagery and asserted as truth.
 
 ### 11.5 Collisions
 
@@ -4693,7 +4705,7 @@ Per `_TEAM_BRIEF.md` §4, nothing is lost silently.
 | L6b | Rendered traffic-light and sign actors | **not rendered in this mode, by decision** | D3.24, and the reason is the imagery: the available meshes are limited and are frequently misaligned against the photoreal, so a rendered signal is an object in frame that does not correspond to the world the photoreal shows (`_TEAM_BRIEF.md` §3e). **The behaviour they govern is not lost** — SUMO's `tlLogic` programs and right-of-way rows still run and its vehicles still obey them, and that behaviour is exactly what the pose stream carries (§3.4). The sensor streams do not change either: generated lights and signs in this fork are **sensor-invisible by design**, returning nothing to semantic lidar or radar, so what is withdrawn is the RGB mesh and the human view of it. The world build is untouched — the actors are hidden, not removed — so any other mode renders them as before. |
 | L7 | Suspension travel | **lost** | none. Bounded, deliberate, confined to this mode. |
 | L8 | Wheel rotation and steer angle | **lost** | none *today* — and note per G8 that steer angle is already unavailable in this port regardless of mode, so the marginal loss is wheel spin |
-| L9 | The staging ring's boundary-aware entry/exit | **replaced** | SUMO's fringe insertion and arrival, which is a strictly richer model (doc 23 §3.1); the `RED_CLEAR` despawn and its clipped-edge failure mode disappear with it |
+| L9 | The staging ring's boundary-aware entry/exit | **replaced** | SUMO's fringe insertion and arrival, which is a strictly richer model (SUMO queues a vehicle it cannot insert yet; `VehicleNotInserted` records one it drops from that queue); the `RED_CLEAR` despawn and its clipped-edge failure mode disappear with it |
 | L10 | Collision response between vehicles | **degraded** | kinematic bodies interpenetrate instead of colliding. SUMO's own collision model governs (`collision.action=warn`), and collisions are recorded (§11.5). A rendered interpenetration is possible where SUMO permits one. |
 | L11 | **Gained:** illumination that matches the simulated instant | **new capability** | The sun is set from the scenario epoch and, under the advancing policy, carried by the engine at `Δw × rate` per tick (§9.1–§9.3). Before this, a window opened at whatever the world was spawned in — local solar noon (`CesiumHeightSampler.cpp:409`) — so `10`'s recommended 23:00 window would have rendered in daylight while the truth sidecar recorded noon. Nothing was lost to gain this; the mechanism existed and was unused. |
 | L12 | **Gained:** vehicle lights that mean something | **new capability** | Brake lights and indicators come from SUMO's own signal word, measured at mean 14.44 transitions per step (§3.5.1), and headlights from the sun. Per G18 this is strictly more than any existing client does in a generated world, where the traffic manager's light stage is gated off entirely. |
@@ -4708,7 +4720,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 
 | # | Decision |
 |---|---|
-| **D3.1** | The per-step playback bridge is **C# — `CarlaNet.CoSim`**; orchestration, configuration and the operator surface are Python. There is **exactly one TraCI connection** and the bridge owns it; the Python side reads the bridge's per-step record rather than opening its own. Doc 23 §6.3's "no Python in the tick path" argument does **not** survive the move to teleport unchanged; it is replaced by four measured ones (§2.3). |
+| **D3.1** | The per-step playback bridge is **C# — `CarlaNet.CoSim`**; orchestration, configuration and the operator surface are Python. There is **exactly one TraCI connection** and the bridge owns it; the Python side reads the bridge's per-step record rather than opening its own. The "no Python in the tick path" argument does **not** survive the move to teleport unchanged; it is replaced by four measured ones (§2.3). |
 | **D3.2** | A managed TraCI socket client to an out-of-process `sumo`, ported from SUMO's reference client. Nothing native in the CarlaNet process; the version handshake is `CMD_GETVERSION` (§2.5). |
 | **D3.3** | One `apply_batch` per world tick carries every pose write; the tick is a separate `SendTickCueAsync` because `do_tick_cue` does not wait for the frame (G6). `apply_batch_sync` only for the admission batch. |
 | **D3.4** | A SUMO-driven actor is kinematic: physics off, gravity off, **collision response left on** so sensors still see it. |
@@ -4762,7 +4774,7 @@ renumbered and a number is never reused; a new decision takes the next free numb
 |---|---|---|---|
 | **Q3.1** | Is the sub-step **lateral blend** for a lane change (§6.4 case 2) right at 1.0 s? A full 3.35 m lane change spread over one second is a 3.35 m/s lateral rate. | (a) blend over the whole step; (b) blend over a fixed 0.4 s window inside the step; (c) derive from the vType's `lcSublane` parameters | **Superseded 2026-10-01:** the compiler writes `lanechange.duration` 3 ([`04`](04_Contracts.md) D4.42), SUMO spreads the change over 3 s itself, and the bridge follows SUMO's lateral position (§6.4 case 2); the blend now spans only SUMO's own sideways movement in the step its reported lane changes. |
 | **Q3.11** | *Decided 2026-10-02 by the owner: the heading of the body's own path, built (D3.40).* What heading does a body take where the lane's polyline turns — at a junction, whose connectors netconvert draws in five points with a median largest corner of 31–35° — and through a lane change, where the lane tangent does not turn at all? ([issue #38](https://github.com/sbrett9/carla/issues/38)) | (a) finer junction shapes at world build; (b) smooth the rendered heading in the bridge; (c) the OpenDRIVE connector's tangent; (d) the heading of the body's own path, lateral movement included; and SUMO's reported angle as a fifth | (d), with the truth's heading the body's, its course and velocity the path's, and SUMO's angle recorded beside them. Every yaw step of the lane-tangent heading fell at a polyline vertex (all 21,230 on Gardnerville, all 49,455 on Arapahoe). |
-| **Q3.2** | Should the bridge also push CARLA's real poses **back** into SUMO with `moveToXY`, as doc 23 §4.1 step 1 does? | (a) no — under teleport CARLA has no independent pose, so the push is a no-op that costs an RPC per vehicle; (b) yes, for scenario actors that CARLA *does* drive independently (doc 23 §6.9) | (a) for pure SUMO drive; (b) becomes necessary the moment a storyboard actor shares the world, which is doc 23's Phase 5 and not this section's. |
+| **Q3.2** | Should the bridge also push CARLA's real poses **back** into SUMO with `moveToXY`, as a bridge in which CARLA physics drives the bodies would do on every tick? (`SumoVehicleDomain.MoveToXY` exists; `SumoDriveSession` never calls it.) | (a) no — under teleport CARLA has no independent pose, so the push is a no-op that costs an RPC per vehicle; (b) yes, for scenario actors that CARLA *does* drive independently (not built: `SumoVehicleDomain` has no `add`, and `CarlaNet.Scenario` references neither `CarlaNet.Sumo` nor `CarlaNet.CoSim`) | (a) for pure SUMO drive; (b) becomes necessary the moment a storyboard actor shares the world, which is scenario coupling (mirroring storyboard actors into SUMO) and not this section's. |
 | **Q3.3** | Does a scenario ever need a **different** SUMO step at playback than at authoring? | (a) never — refuse; (b) allow with a manifest entry and a loud warning | (b), given the measured 62% change in mean time loss (§6.3) is a behaviour change and not a rendering one. The knob must be visible in the truth manifest so a corpus can be filtered on it. |
 | **Q3.4** | How is the **one-step lookahead latency** expressed in the truth record? | (a) invisible — everything is stamped `t_render`; (b) an explicit `lookahead_s` field in the run manifest | (b). It costs one field and it is the difference between a reader being able to reconstruct the pipeline and guessing at it. Belongs to [`06_Truth_And_Annotation.md`](06_Truth_And_Annotation.md). |
 | **Q3.5** | Should the bridge run its own `sumo` process, or attach to one started elsewhere? | (a) own it — `Simulation.start` spawns and the session owns the lifetime; (b) attach by port, so an operator can run `sumo-gui` alongside | (a) by default for determinism and clean teardown; (b) behind a flag, because watching the SUMO GUI beside the CARLA viewer is worth a great deal during bring-up. **Watching no longer needs (b):** under (a) the session launches `sumo-gui` in place of `sumo` (D3.36, §2.6), so the GUI is the process the session owns and steps. (b) is not built, and stays open only for a SUMO that something else must start. |

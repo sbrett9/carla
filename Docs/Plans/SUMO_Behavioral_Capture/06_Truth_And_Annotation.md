@@ -6,7 +6,7 @@ the real scenario artifacts. No code changed, no build run.
 
 | Revision | Change |
 |---|---|
-| 1 · 2026-09-17 | Doc 20's supervision model re-seated on a SUMO authoring surface. |
+| 1 · 2026-09-17 | The storyboard supervision model re-seated on a SUMO authoring surface. |
 | 2 · 2026-09-18 | Simulated time of day and scene illumination brought into the truth model. |
 | 3 · 2026-09-18 | Scope boundary applied: imagery, truth and labels are produced; nothing is scored. |
 | 4 · 2026-09-21 | Annotation vocabulary layered: a closed core, and author terms carried opaquely to the consumer. |
@@ -39,7 +39,7 @@ the real scenario artifacts. No code changed, no build run.
 | 31 · 2026-10-05 | The interval binder is built (§3.3, §3.4, §3.5; D6.8, D6.12, D6.21, D6.41 as built). `CarlaNet.CoSim.SupervisionBinder`, a step observer the session builds from the plan its compile lock binds, opens and closes each of the plan's intervals on the event its anchor names, at the TraCI clock of the step that listed it, or on its declared seconds where it is unanchored; observes a departure on the frame that first draws the vehicle and a stop on the first frame whose applied speed holds at or below 0.15 m/s; closes each with the core's reasons; and states each vehicle's supervision and each absence on the session's table, from the frame at each change's instant and never before the window. A plan subject already in the simulation when the session opens is read back from SUMO once, so an interval that began before the window carries SUMO's own instant for it, and a phase entered before the window carries none, as the owner ruled. A body lost under a render-set limit ends nothing and is recorded as a gap in drawing; a plan subject SUMO never inserts fails the run. Two runs of one scenario bind the same `(instance_id, participant, phase)` triples, differing only in times. |
 | 32 · 2026-10-05 | Every capture's truth sidecar carries the supervision in force on its own frame, as the server held it (§8.2, D6.41 as built): `plan_id`, `vocabulary` and `vocabulary_digest` on `<events>`, a world-scoped `<_supervision scope="world">` with an `<absence>` per absence in force, and on every rendered SUMO vehicle a `<_supervision>` whose `state` is always written, `unlabelled` included, with an `<annotation>` (instance, labels, phase, role) per instance in force. The recorder reads it from the snapshot its vehicles come from and is handed nothing for it, so a recorder in any process writes the same. A capture whose own frame's supervision is not to be had says `supervision="unknown"` and carries none, never a neighbour's; the recorder counts it and the closeout gates it at zero, and the sidecar audit holds a planned run's every SUMO vehicle record to a state. The PNG carries none. |
 | 33 · 2026-10-05 | The world truth track's rows are flushed once for each SUMO frame, when the frame's every row is written, and not after each row, as the owner ruled: the track is written on the tick thread, and measured at 400 vehicles a flush per row was about 1.5 ms of every SUMO step. Every row is still a whole line, so a track cut off is still the rows before the cut, and a kill loses at most the frame being written (§8.3, [04](04_Contracts.md) C10 §12.7 W2). |
-| 34 · 2026-10-05 | Every vehicle record of a capture's truth sidecar says where the vehicle's box fell against that camera's picture, `in_frame` (`wholly`, `partly`, `none`, `behind_camera`), with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; and where the five occlusion attributes are absent, `occlusion_unmeasured` says why in one word, never beside a measurement. The owner ruled that an absent fraction was being read as "not hidden", and that a truth field carries only what was declared, what happened, or a measurement from the frame's geometry by a fixed published method with no pass mark: nothing here rests on a threshold besides the picture's edges and the camera's near plane. The sidecar audit holds every record to it (§8.2, [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). |
+| 34 · 2026-10-05 | Every vehicle record of a capture's truth sidecar says where the vehicle's box fell against that camera's picture, `in_frame` (`wholly`, `partly`, `none`, `behind_camera`), with its apparent size wherever the box has a footprint, from the box's projection alone and so with or without a depth camera; and where the five occlusion attributes are absent, `occlusion_unmeasured` says why in one word, never beside a measurement. The owner ruled that an absent fraction was being read as "not hidden", and that a truth field carries only what was declared, what happened, or a measurement from the frame's geometry by a fixed published method with no pass mark: nothing here rests on a threshold besides the picture's edges and the camera's near plane. The sidecar audit holds every record to it (§8.2; `BoxProjector` projects the box, `TruthSidecarAudit` checks the records). |
 | 35 · 2026-10-05 | The server issues camera names and refuses duplicates, as the owner ruled (§7.1): a camera spawned without a name is `Camera_<n>` from a counter the server keeps for its lifetime, a name a live camera holds is refused at spawn, and every client reads a camera's name back from the spawned actor, so the `sensor_id` every capture and callsign carries is one the server settled, never one two clients agreed between themselves. `CARLA-SENSOR-<camera actor id>` stays the platform event's uid, and is an unnamed camera's name only on a server built before it named cameras. |
 | 36 · 2026-10-05 | Corrected against the code: the §8.2 example marks the `_carla` attributes and the `<_aoi>` block that nothing writes; the gap between the path heading and SUMO's angle is not §4.3's `heading_separation_deg`; open question 10 states the one solar limit the audit enforces. |
 | 37 · 2026-10-05 | The observability accounting is withdrawn by the owner's ruling under the charter's rule on what a truth file may carry (§5; D6.11, D6.22, D6.23, D6.25 withdrawn; D6.26, D6.27, D6.39 amended). The manifest sketch loses its observability, site-observability, prevalence, render-accounting and reconciliation blocks and its prevalence check (§8.4); no manifest summary document is planned. The sun's achieved state is in both exports with no rule based on prevalence (§10.2, §10.3). §13 names what 11 still owes. |
@@ -66,34 +66,36 @@ authorities and reconciled into one record; what the capture sidecar, the world 
 manifest each contain; **how the annotation vocabulary is layered so that a term this pipeline never
 understands still reaches a consumer who can read it**; **what the corpus contains and what it does
 not**; and which of that a model may be allowed to read as an input.
-**Re-seats:** [20 — Behavioral Annotation of Tracks, and Areas of Interest](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md).
-Doc 20 is the source of the supervision model and remains correct; what changes here is the surface it
-sits on. §11 records, decision by decision, what survived and what did not.
-**Related:** [09 — Telemetry CoT Contract](../../Findings/09_Telemetry_CoT_Contract.md) ·
-[17 — Photoreal Occlusion Metric](../../Findings/17_Photoreal_Occlusion_Metric.md) ·
-[23 — SUMO Traffic Integration](../../Findings/23_SUMO_Traffic_Integration.md) ·
+**Re-seats:** the supervision model designed for OpenSCENARIO storyboards run by
+`CarlaNet.Scenario.ScenarioExecutor`, called the storyboard design below; nothing of it was built on
+that path, whose executor writes no annotation. That design is the source of this section's
+supervision model and remains correct; what changes here is the surface it sits on. §11 records,
+decision by decision, what survived and what did not.
+**Related:** `CarlaNet.Recording.CotWriter` (the truth sidecar's CoT format) ·
+`CarlaNet.Recording.OcclusionEstimator` (the occlusion measurement) ·
+`CarlaNet.CoSim.SumoDriveSession` (the SUMO bridge) ·
 [01 — System architecture](01_Architecture.md) · [04 — Contracts](04_Contracts.md) ·
 [07 — Scenario authoring](07_Scenario_Authoring.md) · [08 — Collection and EPoL](08_Collection_And_EPoL.md) ·
 [10 — Scale and performance](10_Scale_And_Performance.md) ·
 [11 — Time and illumination](11_Time_And_Illumination.md) ·
 [12 — Operator control surface](12_Operator_Control_Surface.md)
 
-**Audience:** an engineer building the truth path, who has read neither doc 20 nor the conversation
-that produced this plan. Every claim about existing behaviour is cited `path:line` or marked as
-measured; anything else that is not cited is labelled as an inference.
+**Audience:** an engineer building the truth path, who has read neither the storyboard design nor the
+conversation that produced this plan. Every claim about existing behaviour is cited `path:line` or
+marked as measured; anything else that is not cited is labelled as an inference.
 
 **Out of scope, deliberately.**
 
 - **Scoring, of anything, by anything in this pipeline.** This is broader than the exclusion earlier
-  drafts carried. [18 §3.2](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) rejected
-  scoring in the ScenarioRunner sense — pass/fail verdicts and driving-quality criteria — and that
-  rejection stands. [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md) now also excludes **measuring the
-  performance of the external detect-and-track and estimated-pattern-of-life models**. Concretely,
-  nothing designed here runs a detector, a tracker or a model; associates model output to truth in
-  order to measure that model; computes precision, recall, F1, temporal-localisation figures or a
-  confusion matrix; or produces a scoreboard, a model comparison or a verdict on a model. There is no
-  "score" artifact root. §10 is where that boundary is drawn field by field, and §10.1 publishes the
-  transfer rule in place of performing the association.
+  drafts carried. Scoring in the ScenarioRunner sense — pass/fail verdicts and driving-quality
+  criteria — was rejected, and that rejection stands: `CarlaNet.Scenario` runs a storyboard's acts and
+  has neither criteria nor a verdict. [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md) now also excludes
+  **measuring the performance of the external detect-and-track and estimated-pattern-of-life
+  models**. Concretely, nothing designed here runs a detector, a tracker or a model; associates model
+  output to truth in order to measure that model; computes precision, recall, F1,
+  temporal-localisation figures or a confusion matrix; or produces a scoreboard, a model comparison or
+  a verdict on a model. There is no "score" artifact root. §10 is where that boundary is drawn field by
+  field, and §10.1 publishes the transfer rule in place of performing the association.
 - **Quality gates on the *data* are not scoring and remain in scope in full.** Whether the corpus is
   internally consistent, leak-free, complete, and honest about what it does not contain is this
   section's whole subject. Where a statement below reads as a judgement, check what its subject is: an
@@ -102,9 +104,11 @@ measured; anything else that is not cited is labelled as an inference.
   types, and what tool validates it — belong to [07](07_Scenario_Authoring.md). This section owns the
   *compiled* form, the runtime state and the recorded artifacts, and states the properties 07 must
   deliver.
-- **Area-of-interest geometry, supply and validation.** [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-  settles the GeoJSON contract, the build-time validation and the world-scoped actor; that is adopted
-  unchanged. What this section adds is the one new requirement SUMO creates: an area of interest stops
+- **Area-of-interest geometry, supply and validation.** The GeoJSON contract, the build-time validation
+  and the world-scoped actor are adopted unchanged ([04](04_Contracts.md) C5). As built,
+  `AreaOfInterestSource` validates the GeoJSON before the world is built, `AreaOfInterestResolver`
+  places each area in CARLA metres and on SUMO lanes in `areas.resolved.json`, and no world-scoped actor
+  exists. What this section adds is the one new requirement SUMO creates: an area of interest stops
   being optional for a whole class of anomaly (§3.5).
 - **Which vehicles are drawn.** [01 §9.2](01_Architecture.md) owns `RenderSetSelector`, which reduces
   only in simulated time: inside a capture window every vehicle SUMO has is drawn. This section owns
@@ -125,29 +129,34 @@ measured; anything else that is not cited is labelled as an inference.
 
 ## 1. What changes when SUMO drives
 
-Doc 20 derived its supervision model from an OpenSCENARIO storyboard executed by
-`CarlaNet.Scenario.ScenarioExecutor`. Under SUMO drive there is no storyboard and no executor. The
+The storyboard design derived its supervision model from an OpenSCENARIO storyboard executed by
+`CarlaNet.Scenario.ScenarioExecutor`, which holds each act's and each entity's state (`ActRuntime`,
+`EntityRuntime`) and writes no annotation. Under SUMO drive there is no storyboard and no executor. The
 model survives; three of its mechanisms do not.
 
-| Doc 20 assumed | Under SUMO drive | Consequence |
+| The storyboard design assumed | Under SUMO drive | Consequence |
 |---|---|---|
 | An **executor** holds phase state per entity and could publish it (`ScenarioExecutor.cs:611-629`) | The route file is static; SUMO holds vehicle state, not phase state | Interval state must be produced by a component that knows both the plan and SUMO's per-step events. It is the bridge, not an executor (§3.3) |
-| A **speed-action ramp** separates the three interval onsets, and the gap is an authored scenario property (§2.4) | There is no ramp. There *is* an authored departure time, an authored stop length, SUMO's own insertion and arrival instants, and the physically observed standstill | The three onsets survive, but one gap becomes a measured simulation output and the other becomes a property of the co-simulation seam. This inverts doc 20's justification for recording all three, and strengthens it (§3.3) |
-| The **annotation channel** is `UserDefinedAction`/`CustomCommandAction` inside the `.xosc` (decision 6) | SUMO's route file has no sanctioned vendor extension point and is validated against `routes_file.xsd` (`Shahid_Bahonar_Port_PatternOfLife.rou.xml:5-6`, measured) | The companion file, which doc 20 kept as an equal-status alternative, becomes the sole channel. Decision 6 changes (§3.1, D6.1) |
+| A **speed-action ramp** separates the three interval onsets, and the gap is an authored scenario property (`ApplySpeed` stores a ramp over the action's `TransitionSeconds`) | There is no ramp. There *is* an authored departure time, an authored stop length, SUMO's own insertion and arrival instants, and the physically observed standstill | The three onsets survive, but one gap becomes a measured simulation output and the other becomes a property of the co-simulation seam. This inverts the storyboard's justification for recording all three, and strengthens it (§3.3) |
+| The **annotation channel** is `UserDefinedAction`/`CustomCommandAction` inside the `.xosc` (never built: `OpenScenarioParser.ParseActions` refuses `CustomCommandAction` as unsupported) | SUMO's route file has no sanctioned vendor extension point and is validated against `routes_file.xsd` (`Shahid_Bahonar_Port_PatternOfLife.rou.xml:5-6`, measured) | The companion file, which the storyboard design kept as an equal-status alternative, becomes the sole channel. The channel decision changes (§3.1, D6.1) |
 | **Supervision is per entity**, and the entity list is known at compile time | A `<flow>` is a generator. 245 of them produce roughly 68 880 vehicles whose ids are `<flow id>.<n>` and whose count is not known until the run (measured, §2.1) | A third kind of subject is needed: the cohort. And a cohort may not carry a phased annotation (§3.2, D6.2) |
-| **Truth has one producer**, `VehicleTelemetryService` (§4.1) | Two producers exist and neither is sufficient alone: CARLA holds the rendered pose and the camera geometry, SUMO holds the kinematics and every vehicle CARLA is not rendering | Authority is settled field by field and the disagreement is recorded rather than hidden (§4) |
-| An annotated interval is either **observed or not** (§2.5) | It can also be unobserved because the participant was *never rendered*, which is a different fact about a different thing | The observability record gains a rendered-span gate upstream of the observed-span gate ([01 §7](01_Architecture.md) states the requirement; §5 gives it shape) |
-| The **Traffic Manager's idle cull** edits the ambient distribution and must be switchable (§2.8, decision 14) | The traffic manager is locked out ([01 D1.7](01_Architecture.md)). SUMO has no idle cull — a vehicle parks indefinitely, measured at 489 000 s | Decision 14 does not apply to this mode. But SUMO has several *other* distribution-editing behaviours, three of which are on by default (§6) |
-| **Illumination is not a variable.** Doc 20 never mentions the sun, because a storyboard capture was a short scripted episode under whatever light the world was spawned in | A capture window is a span of *simulated* time, and [10 §3.1](10_Scale_And_Performance.md) recommends windows at **07:00** and **23:00** on the sizing scenario. The sun is a settable, optionally advancing world variable (`CarlaServer.cpp:611-670`), and the truth sidecar **already records its state** (`CotWriter.cs:52-65`) | Illumination becomes a recorded property of the capture with an authority of its own — neither simulator's. And because the sidecar records the *achieved* sun faithfully, an unset sun produces a record that contradicts the scenario and nothing notices (§2.7, §4.5) |
+| **Truth has one producer**, `VehicleTelemetryService.Compute`, which takes no input from the scenario | Two producers exist and neither is sufficient alone: CARLA holds the rendered pose and the camera geometry, SUMO holds the kinematics and every vehicle CARLA is not rendering | Authority is settled field by field and the disagreement is recorded rather than hidden (§4) |
+| An annotated interval is either **observed or not** | It can also be unobserved because the participant was *never rendered*, which is a different fact about a different thing | The observability record gains a rendered-span gate upstream of the observed-span gate ([01 §7](01_Architecture.md) states the requirement; §5 gives it shape) |
+| The **Traffic Manager's idle cull** edits the ambient distribution and must be switchable (`ALSM` destroys a registered vehicle stationary past `Constants.VehicleRemoval.BLOCKED_TIME_THRESHOLD`, 90 s; no switch is built) | The traffic manager is locked out ([01 D1.7](01_Architecture.md)). SUMO has no idle cull — a vehicle parks indefinitely, measured at 489 000 s | The requirement that the cull be switchable does not apply to this mode. But SUMO has several *other* distribution-editing behaviours, three of which are on by default (§6) |
+| **Illumination is not a variable.** The storyboard design never mentions the sun, because a storyboard capture was a short scripted episode under whatever light the world was spawned in | A capture window is a span of *simulated* time, and [10 §3.1](10_Scale_And_Performance.md) recommends windows at **07:00** and **23:00** on the sizing scenario. The sun is a settable, optionally advancing world variable (`CarlaServer.cpp:611-670`), and the truth sidecar **already records its state** (`CotWriter.cs:52-65`) | Illumination becomes a recorded property of the capture with an authority of its own — neither simulator's. And because the sidecar records the *achieved* sun faithfully, an unset sun produces a record that contradicts the scenario and nothing notices (§2.7, §4.5) |
 
-Two things about doc 20 are load-bearing and are **not** changed here, because they are the design:
+Two things about the storyboard design are load-bearing and are **not** changed here, because they are
+the design:
 
-- Supervision is **three-valued** and the state is always written (§2.2, decision 2).
+- Supervision is **three-valued** and the state is always written (`SupervisionState`; the compiler
+  writes `unlabelled` for every actor and flow that no row names).
 - An annotation is **authored intent**; a derived geometric relation is context and never a label
-  (§2.1, §8.5, decision 3). **Illumination joins area relations as the second class of derived
-  context** — computed identically for every capture, legitimately a covariate, never a label (§3.6).
+  (`SupervisionPlanCompiler` builds every row from the specification and computes no predicate).
+  **Illumination joins area relations as the second class of derived context** — computed identically
+  for every capture, legitimately a covariate, never a label (§3.6).
 
-Under SUMO both are at greater risk than doc 20 anticipated, and §3.1 and §3.6 say how each is held.
+Under SUMO both are at greater risk than the storyboard design anticipated, and §3.1 and §3.6 say how
+each is held.
 
 **One new failure mode is introduced by the change of surface, and it is exactly the kind this section
 exists to prevent.** The capture window is placed in simulated time; the sun is set by a separate
@@ -279,9 +288,9 @@ answer key stapled to the front.
 
 | Leak | Where | Why it is a leak |
 |---|---|---|
-| `special_type` is set to the literal string `"marked"` for any flagged vehicle | `CarlaControl/src/carlacontrol/SumoCotBridge.py:321-322` | `special_type` is a **vehicle class** field ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md): emergency / taxi / electric). [09 §9](../../Findings/09_Telemetry_CoT_Contract.md) describes a downstream comparison reading that field as the class — a comparison external to this pipeline, but the field's meaning is ours to keep clean. The ground-truth label is sitting in a field that is supposed to say what kind of vehicle it is |
-| CoT affiliation is assigned per `vType`, and every anomaly `vType` maps to `u` | `.labels.json` `affiliation_by_type`; applied at `SumoCotBridge.py:263-265` | Exactly what [20 decision 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) prohibits: the label becomes readable from the CoT `type` string, which a detector-derived track can never produce |
-| Anomaly `vType`s carry conspicuous colours and distinct ids | `rou.xml:29-33`; colours `1.00,0.45,0.00`, `1.00,0.10,0.10`, `1.00,0.20,0.60` | [20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s appearance confounder. [01 D1.6](01_Architecture.md) already blocks the colour reaching a blueprint; the `type_id` string still reaches the truth record, at `CotUdpEmitter.py:137` |
+| `special_type` is set to the literal string `"marked"` for any flagged vehicle | `CarlaControl/src/carlacontrol/SumoCotBridge.py:321-322` | `special_type` is a **vehicle class** field (the catalogue's `cot_special_type`: `emergency`, `taxi`, `electric` or empty). A downstream comparison of truth against detections reads that field as the class — a comparison external to this pipeline, but the field's meaning is ours to keep clean. The ground-truth label is sitting in a field that is supposed to say what kind of vehicle it is |
+| CoT affiliation is assigned per `vType`, and every anomaly `vType` maps to `u` | `.labels.json` `affiliation_by_type`; applied at `SumoCotBridge.py:263-265` | The overload the storyboard design prohibited: the label becomes readable from the CoT `type` string, which a detector-derived track can never produce |
+| Anomaly `vType`s carry conspicuous colours and distinct ids | `rou.xml:29-33`; colours `1.00,0.45,0.00`, `1.00,0.10,0.10`, `1.00,0.20,0.60` | An appearance confounder: a model can learn the label from how a vehicle looks (compiler check 17 warns on a vehicle class that draws from one body). [01 D1.6](01_Architecture.md) already blocks the colour reaching a blueprint; the `type_id` string still reaches the truth record, at `CotUdpEmitter.py:137` |
 
 **Status, 2026-09-29: the first two are fixed in the standalone producer (D6.18).** `special_type`
 carries the vehicle's kind and nothing else, and a legacy labels file's `u` is withheld
@@ -354,11 +363,11 @@ authored *stationary* vehicle-seconds, the annotated dwells total 489 600 s (the
 plus two 300 s probe waits) against the guard postings' 335 x 28 800 = 9 648 000 s, a prevalence of
 **4.8 %** — a factor of **372** apart.
 
-[20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) says prevalence must be
-recorded rather than reconstructed. This measurement says something sharper: **prevalence is
-meaningless without its unit, and two defensible units differ here by more than two orders of
-magnitude.** The manifest records it in three units, over the captured span only (§8.4), and §5.3 adds
-a fourth axis to each of them: the illumination the capture was taken under.
+The storyboard design required prevalence to be recorded rather than reconstructed (not built:
+`RunManifestWriter` writes no prevalence, §5.3). This measurement says something sharper:
+**prevalence is meaningless without its unit, and two defensible units differ here by more than two
+orders of magnitude.** The manifest records it in three units, over the captured span only (§8.4),
+and §5.3 adds a fourth axis to each of them: the illumination the capture was taken under.
 
 ### 2.7 The solar record as it exists today
 
@@ -417,13 +426,14 @@ four rather than replacing them:
 - **`time_zone` is a solar zone, not a civil offset, and the two differ by a real amount.** Measured
   from the sizing scenario's own network: `projParameter="+proj=tmerc +lat_0=27.15012 +lon_0=56.18065 …"`
   (`BahonarPatternOfLife/scenario/Shahid_Bahonar_Port.net.xml`, `<location>` element — the same element
-  also shows `netOffset="0.00,0.00"`, confirming at Bahonar what [23 §2](../../Findings/23_SUMO_Traffic_Integration.md)
-  measured at Arapahoe). So the world's time zone is 56.18065 ÷ 15 = **+3.745377 h**, while Iran's
-  civil offset is **+3.5 h**. A caller who passes a declared civil hour straight into `set_solar_time`
-  puts the sun **14 min 43 s** away from the civil time it thinks it asked for. Small, and at 23:00
-  irrelevant — but it is a units mismatch, not an approximation, and near sunrise it moves the sun
-  through a few degrees of azimuth. The conversion is arithmetic and belongs in the contract
-  ([11](11_Time_And_Illumination.md) owns it); the residual of §4.5 is what proves it was applied.
+  also shows `netOffset="0.00,0.00"`, the zero offset `NetworkFrameCheck.Require` demands of every
+  network, so SUMO's (x, y) is CARLA's (x, −y)). So the world's time zone is 56.18065 ÷ 15 =
+  **+3.745377 h**, while Iran's civil offset is **+3.5 h**. A caller who passes a declared civil hour
+  straight into `set_solar_time` puts the sun **14 min 43 s** away from the civil time it thinks it
+  asked for. Small, and at 23:00 irrelevant — but it is a units mismatch, not an approximation, and
+  near sunrise it moves the sun through a few degrees of azimuth. The conversion is arithmetic and
+  belongs in the contract ([11](11_Time_And_Illumination.md) owns it); the residual of §4.5 is what
+  proves it was applied.
 - **The advancing clock wraps at midnight and never advances the date.** Measured:
   `SolarTime = Fmod(Fmod(SolarTime + DeltaHours, 24.0) + 24.0, 24.0)` and nothing touches `Year`,
   `Month` or `Day` (`CesiumTimeOfDayController.cpp:34-36`). `set_solar_time` wraps the same way
@@ -452,9 +462,9 @@ Python shim accepts `Count >= 9` and substitutes `advancing=False, rate=1.0` for
 
 ### 3.1 Three-valued supervision, and how each state is authored
 
-[20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) requires three states, not
-two, because a long capture will produce genuine instances of the target pattern by chance and filing
-those as negatives makes the corpus assert that the target behaviour is normal. That argument is unchanged
+Supervision has three states, not two (`SupervisionState`: `Annotated`, `Nominal`, `Unlabelled`),
+because a long capture will produce genuine instances of the target pattern by chance and filing those
+as negatives makes the corpus assert that the target behaviour is normal. That argument is unchanged
 and the three states survive verbatim.
 
 | State | Meaning | Who gets it in a SUMO scenario |
@@ -473,16 +483,16 @@ guard postings and the 21 routine hauls — 356 deliberately authored ordinary b
 indistinguishable from the 68 880 ambient flow vehicles, and both are indistinguishable from "not
 asserted".
 
-That is not an abstract loss. **A guard posting is a textbook hard negative in
-[20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s exact sense: an eight-hour
-authored parked dwell, in a legitimate place, for a legitimate reason, sharing the site with an
-annotated dwell** — the stay-behind parks for 489 000 s, the guards for 28 800 s each, and the only
+That is not an abstract loss. **A guard posting is a textbook hard negative: an eight-hour authored
+parked dwell, in a legitimate place, for a legitimate reason, sharing the site with an annotated
+dwell** — the stay-behind parks for 489 000 s, the guards for 28 800 s each, and the only
 trajectory-level difference is duration and place (§2.1, measured). A corpus that cannot say "this
 eight-hour stop is ordinary" is a corpus in which duration alone looks like the signal.
 
 **How each state is authored.** The annotation travels in a companion file beside the `.sumocfg`,
-`<scenario>.supervision.json`, keyed by SUMO ids and flow ids. Doc 20 decision 6 made the in-file
-custom action the primary channel and the companion file an equal-status alternative; under SUMO the
+`<scenario>.supervision.json`, keyed by SUMO ids and flow ids. The storyboard design made the in-file
+custom action the primary channel and the companion file an equal-status alternative (neither was
+built for storyboards: `OpenScenarioParser.ParseActions` refuses `CustomCommandAction`); under SUMO the
 in-file channel does not exist:
 
 - A SUMO route file is validated against `routes_file.xsd`
@@ -493,26 +503,28 @@ in-file channel does not exist:
   reads keys out of — `device.ssm.file` on a vehicle and on its `vType`
   (`microsim/devices/MSDevice_SSM.cpp:3890-3898`), `device.glosa.range` on a traffic light
   (`microsim/devices/MSDevice_GLOSA.cpp:344`). Supervision written there shares a namespace with
-  simulation behaviour, which is the failure [20 §4.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-  identified when it rejected `role_name`. `<param>` is fit for **identity transport** and unfit for
-  an annotation channel.
+  simulation behaviour, which is the failure that rules out `role_name` as a carrier: its value `hero`
+  changes what the simulation does (`ALSM` never culls a `hero`, and `ActorDispatcher` wires ROS2
+  control to `hero` and `ego`). `<param>` is fit for **identity transport** and unfit for an
+  annotation channel.
 - The route file is **generated**, never hand-edited — a compiled scenario's carries "compiled by
   `carlacontrol.ScenarioCompiler` … from the specification of …; edit that, not this"
   (`Gardnerville_Centerville_Lane_NeighborhoodOrbit.rou.xml:2`, and its `.sumocfg:2`), and the
   Bahonar pattern of life is compiled from a specification ([07 §3.4.1](07_Scenario_Authoring.md)). Putting
   authored intent into a generated file makes the generator the only author.
-- Doc 20's second argument for the companion file applies with more force here: run identity, the
-  world digest and the vocabulary version describe a *capture*, not a scenario, and the scenario
-  artifact is regenerated whenever the network is.
+- The storyboard design's second argument for the companion file applies with more force here: run
+  identity, the world digest and the vocabulary version describe a *capture*, not a scenario, and the
+  scenario artifact is regenerated whenever the network is.
 
-So **decision 6 changes**: the companion file is the sole channel, the builder emits it alongside the
-routes, and the two are bound by digest (§8.1). Everything else about decision 6 stands — one compiled
-representation, unknown terms are errors, name conventions are never the sole carrier.
+So **the channel decision changes**: the companion file is the sole channel, the builder emits it
+alongside the routes, and the two are bound by digest (§8.1). Everything else about that decision
+stands — one compiled representation, unknown terms are errors, name conventions are never the sole
+carrier.
 
 ### 3.2 Two kinds of subject
 
-Doc 20 knew one kind of subject, the storyboard entity. SUMO needs two, because a `<flow>` is a
-generator rather than a thing.
+A storyboard has one kind of subject, the entity (`ScenarioEntity`). SUMO needs two, because a
+`<flow>` is a generator rather than a thing.
 
 | Subject | Names | Realises as | May carry |
 |---|---|---|---|
@@ -521,12 +533,11 @@ generator rather than a thing.
 
 **A cohort may not carry a phased annotation.** A phase needs an onset, an onset needs a specific
 vehicle, and a flow's members are interchangeable and unbounded — 68 880 of them here. What a cohort
-*can* carry is the whole-life case doc 20 called class-conditioned presence
-([20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) class 4): "every vehicle
-this flow emits is a heavy goods vehicle in a residential area at 03:00" is an assertion about the
-flow, true of every member for its whole life, and needs no onset. Attaching a phased annotation to a
-cohort must be a compile error rather than a silent per-member expansion, because the expansion would
-assert an interval for each of tens of thousands of vehicles that nobody looked at.
+*can* carry is the whole-life case of class-conditioned presence: "every vehicle this flow emits is a
+heavy goods vehicle in a residential area at 03:00" is an assertion about the flow, true of every member
+for its whole life, and needs no onset. Attaching a phased annotation to a cohort must be a compile
+error rather than a silent per-member expansion, because the expansion would assert an interval for each
+of tens of thousands of vehicles that nobody looked at.
 
 There is no third kind. An occasion of a recurring series (§3.4) is a vehicle's: its slot names the
 vehicle that realises it, and an occasion no vehicle comes to is no subject at all — SUMO reports
@@ -535,11 +546,11 @@ vehicles, not places, and a label follows the vehicle it is about (§3.5, the ow
 
 ### 3.3 The three interval onsets on the SUMO surface
 
-[20 §2.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) records three defensible
-answers to "when did the phase begin", derived from the executor's decomposition of a speed action:
-the tick the action fired, the tick the ramp finished and the brake went on, and the tick the world
-first reported at or below 0.15 m/s (`ScenarioExecutor.cs:22`, `:252`). Doc 20's decision 5 is to
-record all three.
+A storyboard has three defensible answers to "when did the phase begin", from the executor's
+decomposition of a speed action: the tick the action fired (`ApplySpeed` stores the ramp), the tick the
+ramp finished and the brake went on (`Hold`), and the tick the world first reported at or below
+0.15 m/s (`ScenarioExecutor.cs:22`, `:252`). The storyboard design decided to record all three; the
+executor records none of them.
 
 Under SUMO there is no ramp, so the three have to be re-derived from the SUMO artifacts. They are
 still three, and they still cannot be reconstructed from each other, but what separates them changes.
@@ -564,23 +575,24 @@ Filled in for the two phase kinds SUMO actually has:
 (`Build/sumo-install/tools/traci/_vehicle.py:37-70`, read back by `getNextStops` at `:760` and
 `getStops` at `:785`). This is not an
 analogy being stretched onto SUMO. It is a distinction SUMO already makes for its own reasons, and it
-lines up with doc 20's exactly.
+lines up exactly with the three storyboard onsets.
 
-**Four consequences, and they change the justification for decision 5 rather than the decision.**
+**Four consequences. They change the reason for recording all three onsets; the decision to record
+them stands.**
 
 1. **The declared onset can be legitimately absent.** Measured: 337 of the 338 stops in the Bahonar
    scenario use `duration`, and the stay-behind's uses `until` the run's end (§2.1). A `duration` stop declares a *length*, anchored
    wherever SUMO happens to arrive, so there is no declared instant to record. The record must carry
    `declared_duration_s` with `declared_start_tick` absent, and a consumer must distinguish "not
-   declared" from "declared at tick 0". Doc 20's schema had no such case; every onset there was always
-   available.
+   declared" from "declared at tick 0". The storyboard schema had no such case; every onset there was
+   always available.
 2. **The declared-to-committed gap becomes a measured simulation output, not a scenario constant.**
    For an entry it is exactly `getDepartDelay`, which the `.sumocfg`'s `max-depart-delay` bounds — at
-   900 s in this scenario (§2.5). For a stop it is `arrival - intendedArrival`. Doc 20 argued the gap
-   "is not a constant and cannot be calibrated away" because the ramp is an authored property; the
-   SUMO version is stronger, because the gap is *congestion*, which is the very phenomenon the corpus
-   exists to depict. Anyone who collapsed the three onsets into one would be throwing away a
-   measurement of the thing being captured.
+   900 s in this scenario (§2.5). For a stop it is `arrival - intendedArrival`. For a storyboard the
+   gap is not a constant and cannot be calibrated away, because the ramp is an authored property of
+   each speed action (`SpeedAction.TransitionSeconds`); the SUMO version is stronger, because the
+   gap is *congestion*, which is the very phenomenon the corpus exists to depict. Anyone who collapsed
+   the three onsets into one would be throwing away a measurement of the thing being captured.
 3. **The committed-to-observed gap is a property of the co-simulation seam, not of the scenario, and
    nothing else is mixed into it.** It is the transport lag between a SUMO step and the CARLA tick
    that renders its result, and under the integer-ratio clock contract of
@@ -593,12 +605,13 @@ lines up with doc 20's exactly.
 
    **It is also the only one of the three that can fail to exist** — if the participant was never
    rendered there is no observed onset at all, which is §5's subject.
-4. **Which onset defines the interval remains the trainer's choice** — unchanged from doc 20, and now
-   better supported, because the three have different provenances rather than being three points on
-   one ramp.
+4. **Which onset defines the interval remains the trainer's choice** — unchanged, and now better
+   supported, because the three have different provenances rather than being three points on one
+   ramp.
 
-**Decision 5 therefore survives, with the onsets renamed and one of them made optional.** Recording
-all three is more valuable here than in doc 20, not less.
+**Recording all three therefore survives, with the onsets renamed and one of them made optional**
+(`SupervisionIntervalRecord` holds the declared, committed and observed onsets, each null where it did
+not happen). Recording all three is more valuable here than for a storyboard, not less.
 
 **Which SUMO event commits an interval is the author's declaration: the anchor** (ruled 2026-10-05).
 An interval in the specification is declared either by its civil `begin`, with an `end` or a
@@ -688,9 +701,10 @@ annotated on the frame at 11 s and not on the one before.
 
 ### 3.4 Pattern instances, participants and recurring series
 
-[20 §2.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s unit of supervision — a
-pattern instance with participants, roles and intervals — is adopted unchanged and is what
-`marked_ids` cannot express. Measured against the Bahonar anomalies (§2.3), a flat id list loses:
+The unit of supervision — a pattern instance with participants, roles and intervals
+(`PatternInstance`, `InstanceParticipant` and `PlannedInterval` in `SupervisionPlanRows.cs`) — is
+adopted unchanged and is what `marked_ids` cannot express. Measured against the Bahonar anomalies
+(§2.3), a flat id list loses:
 
 - **the convoy** — `escort_0`..`escort_4` are one phenomenon with five participants and, on the
   README's own measurement, a 16 s departure spread over a 10.3 km run. As five flat ids they are five
@@ -704,7 +718,7 @@ pattern instance with participants, roles and intervals — is adopted unchanged
 - **a schedule's occasions** — the 335 guard postings are one cadence, each posting a vehicle's, and a
   flat list cannot say so.
 
-One record is added above doc 20's `PatternInstance`, so a cadence is one thing and not 335 unrelated
+One record is added above `PatternInstance`, so a cadence is one thing and not 335 unrelated
 instances:
 
 ```
@@ -761,9 +775,9 @@ stateDiagram-v2
     end note
 ```
 
-`closed_by` extends doc 20's four values (`trigger`, `scenario_end`, `entity_removed`, `aborted`) to
-eight, because SUMO and the render set between them produce more ways for an interval to end and they
-are not interchangeable:
+`closed_by` extends the storyboard design's four values (`trigger`, `scenario_end`, `entity_removed`,
+`aborted`) to eight (`ClosedBy`), because SUMO and the render set between them produce more ways for an
+interval to end and they are not interchangeable:
 
 | `closed_by` | Means | Source |
 |---|---|---|
@@ -776,15 +790,16 @@ are not interchangeable:
 | `capture_window_end` | The capture window closed while it was open | `CaptureSession` |
 | `scenario_end` | The simulation ended while it was open | `PlaybackClock` |
 
-**`render_released` must never be conflated with `entity_arrived`.** The first says the capture
-stopped looking; the second says the behaviour finished. Doc 20 did not need the distinction because
-nothing released a scripted entity mid-behaviour. Here it is rare rather than routine: inside a
-capture window every vehicle SUMO has is drawn, and a body is released only when SUMO removes the
-vehicle or the window closes, each of which has its own value above. `render_released` is what is
-left — CARLA lost the body while SUMO still had the vehicle and the window was still open, a
-CARLA-side destruction (§4.4) — and it is a defect signal. A consumer that treats a released interval
-as a completed one will train on truncated examples believing they are whole. This is the shape of doc
-20's open question 3 (is a truncated instance a usable example) with new causes (§15 question 8).
+**`render_released` must never be conflated with `entity_arrived`.** The first says the capture stopped
+looking; the second says the behaviour finished. A storyboard does not need the distinction: its
+executor removes an entity only on an authored `DeleteEntityAction` or when the scenario stops
+(`ScenarioExecutor.DestroyPlacedEntities`). Here it is rare rather than routine: inside a capture window
+every vehicle SUMO has is drawn, and a body is released only when SUMO removes the vehicle or the window
+closes, each of which has its own value above. `render_released` is what is left — CARLA lost the body
+while SUMO still had the vehicle and the window was still open, a CARLA-side destruction (§4.4) — and it
+is a defect signal. A consumer that treats a released interval as a completed one will train on
+truncated examples believing they are whole. This is the open question of whether a truncated instance
+is a usable example, with new causes (§15 question 8).
 
 **As built (2026-10-05), the binder closes each interval for the reason its cause names:** `trigger` on the
 event or declared second that ends it; `physical_predicate_never_held` where a stop it opened on ended while
@@ -867,10 +882,10 @@ or flow.
 
 ### 3.6 The authored-intent rule, stated operationally
 
-[20 §2.1 and §8.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) set the rule:
-annotations are authored intent, area relations are derived context, and no geometric predicate ever
-writes an annotation. Doc 20 flagged that areas make derivation easy. Under SUMO it is worse, because
-SUMO hands the runtime a finished answer: `Vehicle.getStopState` returns a stopped-and-parking flag
+The rule: annotations are authored intent, area relations are derived context, and no geometric
+predicate ever writes an annotation (`SupervisionPlanCompiler` builds every row from the specification
+and computes no predicate). Areas make derivation easy. Under SUMO it is worse, because SUMO hands the
+runtime a finished answer: `Vehicle.getStopState` returns a stopped-and-parking flag
 (`_vehicle.py:855`), `simulation.getStopStartingVehiclesIDList` returns the ids that just started
 stopping (`_simulation.py:402`), and either is a one-line label of apparently excellent quality.
 
@@ -895,9 +910,8 @@ Restating the rule so it is enforceable rather than aspirational:
    if that ever stops being true the labels have become the rule.
 5. **Everything SUMO knows is available, and none of it is a label.** `getStopState`, the current
    edge, the current lane, `getWaitingTime`, `getTimeLoss` are derived context. They belong beside the
-   area relations, where a human auditing for the accidental positives of
-   [20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) will want them, and
-   nowhere near `<_supervision>`.
+   area relations, where a human auditing for accidental positives — ambient vehicles that execute a
+   target pattern by chance — will want them, and nowhere near `<_supervision>`.
 6. **Illumination is derived context, of exactly the same class as an area relation.** §3.6's rule was
    written about geometry; the argument does not depend on geometry, it depends on *who computes the
    value*. An area relation is computed identically for every vehicle from the world's own state; the
@@ -928,26 +942,28 @@ two places, and both are cheap:
 
 - **At authoring**, §9.3 rule 5 requires an annotated instance's time of day to be drawn from the same
   distribution as the nominal population it is a negative for, unless time of day *is* the annotated
-  pattern — which is a real case, since [20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-  class 4 is "a heavy goods vehicle in a residential area **at 03:00**".
+  pattern — which is a real case: class-conditioned presence is "a heavy goods vehicle in a
+  residential area **at 03:00**".
 - **At corpus level**, §5.3 reports prevalence per illumination band, which turns the confounder into a
   number a reviewer can read off the manifest: if the annotated prevalence in one band is orders of
   magnitude above another, the lighting is carrying signal. §10.2 makes that check the gate on whether
   solar state may be exported as a model input at all.
 
 Placement: the record types and the published state belong in `CarlaNet.Types`, which references
-nothing and is the common ancestor of every assembly that needs them — doc 20 §7.3's argument,
-unchanged. Doc 20's decision 11 (a process-local registry) is superseded by
-[01 D1.10](01_Architecture.md), which publishes world-scoped state to the server; that resolves doc
-20's own open concern in the direction doc 20 preferred, and this section adopts it without
+nothing and is the common ancestor of every assembly that needs them (as built,
+`CarlaNet.Types.Supervision` holds the core enumerations and `SupervisionInForce`). The storyboard
+design's process-local registry is superseded by [01 D1.10](01_Architecture.md), which publishes
+world-scoped state to the server (as built, `CarlaClient.UpdateSupervisionAsync` calls
+`update_supervision`, D6.41); that resolves the concern that a recorder in another process would read
+an empty registry, in the direction the storyboard design preferred, and this section adopts it without
 re-litigating.
 
-**Auditing is required from the start, not deferred.**
-[20 §2.8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) argued that relaxing the
-idle cull would raise the accidental-positive rate and that the relaxation and the audit are coupled.
-Under SUMO drive the cull is simply absent (§6.1) — a vehicle parks for 489 000 s and stays reported,
-measured. So the "relaxed" regime is the only regime, and doc 20's open question 5 (what to do with an
-accidental positive) arrives with the first capture rather than with a later change.
+**Auditing is required from the start, not deferred.** Relaxing the traffic manager's idle cull
+(`ALSM` destroys a registered vehicle stationary past `BLOCKED_TIME_THRESHOLD`) would raise the
+accidental-positive rate, so the relaxation and the audit are coupled. Under SUMO drive the cull is
+simply absent (§6.1) — a vehicle parks for 489 000 s and stays reported, measured. So the "relaxed"
+regime is the only regime, and the open question of what to do with an accidental positive arrives
+with the first capture rather than with a later change.
 
 ### 3.7 The vocabulary is layered, and one test decides where a term sits
 
@@ -1019,9 +1035,9 @@ that counts them is not yet. An author never supplies either.
 |---|---|---|
 | `labels[]` | `bahonar:tower_posting`, `bahonar:coordinated_group_transit` | The pipeline never inspects a label. It copies it from plan to manifest to sidecar and never branches on its value |
 | `role` values beyond `subject` | `bahonar:lead`, `bahonar:follower`, `bahonar:guard` | Nothing branches on `lead`. What §3.4 needs is that a participant *has* a role and that the triple is stable; the word is the author's |
-| `phase` values | `approach`, `wait`, `depart`, `transit`, `dwell` | [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls a phase "a free term within the instance". Only its **stability** matters, and §3.6's diff enforces that without knowing the word |
-| `parameters{}` keys and values | `group_size: 5`, `departure_spread_s: 16`, `dwell_s: 300` | [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) sends magnitudes and places here precisely so they stay out of terms |
-| area-of-interest `kind` | `bahonar:guard_post`, `bahonar:gate`, `bahonar:drydock` | [20 §8.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls it "a declared term, for stratification". Nothing branches on it |
+| `phase` values | `approach`, `wait`, `depart`, `transit`, `dwell` | A phase is a free term within the instance: the compiler checks only that a namespace it names is declared (`AnnotationVocabulary.check_namespaced`). Only its **stability** matters, and §3.6's diff enforces that without knowing the word |
+| `parameters{}` keys and values | `group_size: 5`, `departure_spread_s: 16`, `dwell_s: 300` | Magnitudes and places go here so they stay out of terms; each key must be declared by one of the row's labels' terms (`AnnotationVocabulary.check_parameters`, check 56) |
+| area-of-interest `kind` | `bahonar:guard_post`, `bahonar:gate`, `bahonar:drydock` | A declared term, for stratification: `AreaOfInterestSource` carries a `kind` through unchanged, and the compiler checks only its namespace (`check_namespaced`). Nothing branches on it |
 | what a series *means* | what `tower_relief` is | Only the cadence form is consumed; the meaning is carried |
 
 **Role values are author space, with one reserved term.** Closing the role list would make Bahonar's
@@ -1031,10 +1047,11 @@ role *presence* and *arity*, not a fixed word — with the single exception of `
 that a consumer reading a one-participant instance never has to guess which track the instance is
 about. A phase is the author's outright: the pipeline reserves none (§3.5).
 
-**Labels are a set, and the set may mix namespaces.** [20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-requires multi-label because its classes 2 and 4 co-occur on one vehicle; the escort of §9.2 carries two
-labels for the same reason. Nothing in the layering changes that, and a set drawn from two author
-namespaces is legal — a consumer reads each term against the namespace that defines it.
+**Labels are a set, and the set may mix namespaces.** Multi-label is required because a high-rate
+approach and class-conditioned presence can co-occur on one vehicle (`AnnotationInForce.Labels` is a
+list, written space-separated in `<annotation labels>`); the escort of §9.2 carries two labels for the
+same reason. Nothing in the layering changes that, and a set drawn from two author namespaces is legal —
+a consumer reads each term against the namespace that defines it.
 
 ### 3.8 Declaring a term, so it is readable by a consumer who never met the author
 
@@ -1044,13 +1061,13 @@ considered and are not published (§3.9).
 
 | Field | Required | What breaks without it |
 |---|---|---|
-| `term` — `<namespace>:<name>` | yes | Two authors mint `loiter` with different meanings and a merged corpus cannot tell. [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) argues that one concept spelled three ways is not a corpus; one spelling covering three concepts is the worse half of the same failure, because nothing surfaces it. The prefix rule is already this plan's convention for compiled `<param>` keys ([07 §3.6](07_Scenario_Authoring.md)) |
+| `term` — `<namespace>:<name>` | yes | Two authors mint `loiter` with different meanings and a merged corpus cannot tell. One concept spelled three ways is not a corpus, which is why check 18 refuses a label that is not a declared term; one spelling covering three concepts is the worse half of the same failure, because nothing surfaces it. The prefix rule is already this plan's convention for compiled `<param>` keys ([07 §3.6](07_Scenario_Authoring.md)) |
 | `definition` — natural language, non-empty | yes | The whole requirement: a term that arrives without its meaning is an opaque string, and a consumer who has never spoken to the author has nothing to read |
 | `applies_to[]` — `entity` · `cohort` | yes | **This is what makes D6.2 enforceable for a term the compiler does not understand.** D6.2 blocks `nominal` on a cohort, but nothing otherwise stops an author attaching a per-member behavioural term to a `<flow>`, which asserts something about 68 880 vehicles nobody looked at (§2.1, measured). The compiler can refuse that only if the term states what it applies to |
 | `since` — the namespace version the term appeared at | yes | Half of the rename rule below |
 | `status` — `active` · `deprecated`, with `superseded_by` when deprecated | yes | The other half. **Renaming is deliberately not expressible.** The only sanctioned retirement is deprecate-and-add, and `superseded_by` is what joins a corpus captured under the old name to one captured under the new. Without it the cheap operation and the expensive one look identical to an author |
 | `broader` — one parent term | no | §3.9(b) |
-| `parameters{}` — per key, `{type, unit, definition}` | no | `group_size` in one scenario and `n_vehicles` in another cannot be stratified together. [20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) sends magnitudes to `parameters` and then says nothing about what a key means; §8.4 already emits `group_size`, `departure_spread_s` and `route_length_m` undocumented |
+| `parameters{}` — per key, `{type, unit, definition}` | no | `group_size` in one scenario and `n_vehicles` in another cannot be stratified together. Sending magnitudes to `parameters` says nothing about what a key means (as built, check 56 refuses a key no label's term declares, `AnnotationVocabulary.check_parameters`); §8.4 already emits `group_size`, `departure_spread_s` and `route_length_m` undocumented |
 | `counterfactual` — `{kind, ref}` | no | §3.9(c) |
 | `contrast_with[]` — sibling terms | no | §3.9(b) |
 | `hard_negative_for[]` — terms this `nominal` term is a matched negative for | no | §3.9(d) |
@@ -1210,9 +1227,9 @@ not executing *any* target pattern. In the sizing scenario the 335 guard posting
 specifically for the dwell-shaped terms, because an eight-hour authored parked dwell, a five-minute
 standoff dwell and a 489 000 s stay-behind differ only in duration and place (§2.1, measured); the 21
 hauls are matched negatives specifically for the escort, because they are the route the escort deviates
-from. A trainer who cannot see that samples 356 negatives at random instead of building the matched set
-that [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) calls this system's
-unique product.
+from. A trainer who cannot see that samples 356 negatives at random instead of building the matched
+set, which only authored vehicles can supply (check 24: "hard negatives come only from authored
+entities").
 
 *Against:* a consumer could read an absent `hard_negative_for` as "a negative for nothing". The
 mitigation is in the artifact rather than in a plan document, in these words: **the field narrows and
@@ -1255,11 +1272,13 @@ explaining why that edge and no other.
 way (`SumoScenarioBuilder.py:547-551`), rewrites the permission list on every restricted edge
 (`:571-576`) and reports the count (`:582`). The junctions at which a restricted edge meets an
 unrestricted one are computable from that same pass. **They are emitted as areas of interest with
-`kind` naming a gate, at world build, in the area table [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-already defines.** Three things fall out: `bahonar:standoff_dwell_at_access_point` resolves against a
-named area instead of an opaque edge literal; any gate-sited instance has its area at no authoring cost;
-and the fence becomes a fact in the corpus rather than a comment in a script. It is derived context of exactly the class §3.6 point 5 describes — computed
-identically for every vehicle, from the network's own state, and never a label.
+`kind` naming a gate, at world build, in the area table the world package already carries
+(`areas.resolved.json`).** (Not built: nothing in `restrict_private_roads` or `AreaOfInterestResolver`
+emits a gate area.) Three things fall out: `bahonar:standoff_dwell_at_access_point` resolves against a
+named area instead of an opaque edge literal; any gate-sited instance has its area at no authoring
+cost; and the fence becomes a fact in the corpus rather than a comment in a script. It is derived
+context of exactly the class §3.6 point 5 describes — computed identically for every vehicle, from the
+network's own state, and never a label.
 
 ---
 
@@ -1278,7 +1297,7 @@ different place.
 | Height | drape / bare-earth decoupling: `hae` and `hae_dtm`, `:83-86` | a lookup in `bareearth.bin` at (x, y), `BareEarthGrid.height_at`, `:115-119` |
 | Velocity | `WorldObserver.cpp:385` serialises `GetActor()->GetVelocity()`, which for a pose-applied non-simulating body **is the velocity the bridge wrote with its pose** — SUMO's own ([03](03_CoSimulation_Runtime.md) D3.5) | `Vehicle.getSpeed` and `getAngle`, exact and never zero for a moving vehicle (measured: 0 of 2000 sample rows have speed 0) |
 | Dimensions | the **spawned blueprint's** bounding box, `:103,110` | the `vType`'s declared `length`/`width`/`height`, `:323-325` |
-| Camera-relative | where the box fell against the picture (`in_frame`) and apparent size, from the box's projection; occlusion fraction, band and sample count where measured, and otherwise why not (`occlusion_unmeasured`) ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md), [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
+| Camera-relative | where the box fell against the picture (`in_frame`) and apparent size, from the box's projection; occlusion fraction, band and sample count where measured, and otherwise why not (`occlusion_unmeasured`) (`BoxProjector` projects the box; `OcclusionEstimator` samples a depth capture over it); sensor pose and full pinhole intrinsics (`CotWriter.cs:101-124`) | none. There is no camera |
 | Network state | none | edge, lane, lane position, stop state, waiting time |
 | Illumination | the solar block paired to this tick, read from the world-observer cache with no RPC (`CarlaClient.cs:1988-1991`) and already emitted (`CotWriter.cs:52-65`) | **none.** SUMO has no sun, no date and no concept of illumination. It does not even know what civil time its own seconds mean (§4.5) |
 | Identity | `actor_id`, assigned at spawn, different every run | the SUMO vehicle id, which for a `<trip>` is **authored and stable across runs** |
@@ -1310,12 +1329,12 @@ field, because a producer-level answer is wrong in both directions.
 | Existence in the simulation | **SUMO** | It creates and removes vehicles ([01 D1.2](01_Architecture.md)) | CARLA has no opinion |
 | Existence in the world | **CARLA** (`RenderedVehicleRegistry`) | It instantiates the bodies: every vehicle SUMO has inside a capture window | recorded as `render_state` |
 | `lat`, `lon` | **CARLA**, for any vehicle it rendered | The frame was drawn from the applied transform; truth that disagrees with it is not truth about that frame ([01 D1.3](01_Architecture.md)) | kept, as the command; the difference is the residual (§4.3) |
-| `hae`, `hae_dtm` | **CARLA** where rendered | The SUMO network is flat — zero distinct `z` in any lane shape ([23 §2](../../Findings/23_SUMO_Traffic_Integration.md), carried forward) — so SUMO has no height of its own, while CARLA's is the surface the body is actually seated on: the draped ground where its road is at grade, and the OpenDRIVE profile of the road it is on where that road is a structure ([03](03_CoSimulation_Runtime.md) §7.5, D3.8). A vehicle on a bridge deck is the case that separates the two: a grid lookup holds one height per cell, and under every deck that height is the ground beneath it, while the body sits on the deck. So on a deck `hae` is the deck's altitude in the bare-earth datum and `hae_dtm` the ground beneath it, metres lower — `hae − hae_dtm` is the deck's height plus the pivot, 3.0–7.3 m plus the pivot on Arapahoe's decks, and is not a body in the air | a grid lookup, used for unrendered vehicles, where it is the only value available — on a deck, the ground beneath it |
+| `hae`, `hae_dtm` | **CARLA** where rendered | The SUMO network is flat — zero distinct `z` in any lane shape, and `PoseConverter` takes no height, pitch or roll from it — so SUMO has no height of its own, while CARLA's is the surface the body is actually seated on: the draped ground where its road is at grade, and the OpenDRIVE profile of the road it is on where that road is a structure ([03](03_CoSimulation_Runtime.md) §7.5, D3.8). A vehicle on a bridge deck is the case that separates the two: a grid lookup holds one height per cell, and under every deck that height is the ground beneath it, while the body sits on the deck. So on a deck `hae` is the deck's altitude in the bare-earth datum and `hae_dtm` the ground beneath it, metres lower — `hae − hae_dtm` is the deck's height plus the pivot, 3.0–7.3 m plus the pivot on Arapahoe's decks, and is not a body in the air | a grid lookup, used for unrendered vehicles, where it is the only value available — on a deck, the ground beneath it |
 | `speed`, `course`, `vx`, `vy`, `vz` | **SUMO**, always | `WorldObserver.cpp:385` reports, for a pose-applied body, the velocity the bridge wrote — SUMO's, so it adds nothing. Deriving it from successive CARLA positions would be a second implementation of a quantity SUMO computed exactly, and would be indistinguishable from detector-derived speed in a record whose purpose is to be compared against detector output ([01 D1.4](01_Architecture.md)) | never used; not silently substituted |
-| `length_m`, `width_m`, `height_m` | **CARLA** where rendered | A box is a **label**, and a label is only true of the thing that was rendered: the box in the record must be the box that was drawn. [20 §5.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) records that the authored dimensions and the spawned actor's disagree today and nothing notices | `vType` dimensions are recorded separately, because they are **behaviour inputs** (they set car-following gaps), and their divergence from the blueprint is a defect to report, not a rounding difference |
+| `length_m`, `width_m`, `height_m` | **CARLA** where rendered | A box is a **label**, and a label is only true of the thing that was rendered: the box in the record must be the box that was drawn. A storyboard's authored dimensions and the spawned actor's can disagree with nothing noticing: `OpenScenarioParser` does not read `<BoundingBox>`, and `VehicleTelemetryService` reports the spawned actor's bounding box | `vType` dimensions are recorded separately, because they are **behaviour inputs** (they set car-following gaps), and their divergence from the blueprint is a defect to report, not a rounding difference |
 | `type_id` | **CARLA** where rendered | Same reason as the box: the field in the record names the thing that was rendered rather than the thing SUMO intended | the SUMO `vType` id, which the world truth track and the standalone producer write for every vehicle |
 | `base_type`, `special_type` | **the vehicle catalogue**, for the blueprint of the body that drew the vehicle, and for one no body drew, the blueprint its type names | Ruled by the owner: `special_type` 2026-10-02, `base_type` 2026-10-05 (D6.18). The content build's own values are hand-edited — when first swept, `base_type` was wrong or absent for 7 of 17 blueprints and `special_type` empty for all 17 ([04](04_Contracts.md) §3.1) — while the catalogue curates both per class ([04](04_Contracts.md) §3.4.3). The class in the record is a label, and it names the body that was rendered. The session hands its catalogue's tables to the client it drives through (`SumoDriveSession.cs:576-577`), and the truth telemetry gives a curated blueprint the class's base type and kind, an empty kind included (`VehicleTelemetryService.cs:158-168`); the callsign `<base_type>-<id>` is built from it (`CotWriter.cs:218`) | the blueprint's own declared values only for a blueprint no catalogue class draws, its base type from its wheel count where it declares none, and on a client no drive handed a catalogue — a reader in another process. The world truth track and the standalone producer take both from the catalogue for the blueprint a type names (`WorldTruthVehicleType.cs:80-83`, `SumoCotBridge.py:475-501`), and only for a type that names none of its blueprints the base type through `BASE_TYPE_BY_VEHICLE_CLASS` and no kind |
-| Occlusion, apparent size | **CARLA** only | Camera-relative; SUMO has no camera ([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)) | none |
+| Occlusion, apparent size | **CARLA** only | Camera-relative; SUMO has no camera, and `CotWriter` writes them only on a record a camera projected | none |
 | Edge, lane, lane position, stop state | **SUMO** only | Network state; CARLA does not have it | none |
 | Identity | **SUMO** | §7 | `actor_id` recorded alongside |
 | Supervision | **the plan** | Neither simulator. §3.6 | — |
@@ -1453,14 +1472,14 @@ because a body nothing reported is itself one of its figures.
 
 **There are three.** A vehicle admitted to the render set is drawn at full visibility from its first
 tick ([01 D1.11](01_Architecture.md)), and the truth producer reports every vehicle actor except a body
-the pool has parked on that frame (§4.1, [09 §5.2](../../Findings/09_Telemetry_CoT_Contract.md)). So
-**a vehicle is admitted and is immediately rendered and reported**, and there is no
-`render_state="arriving"` and no intermediate span to account for.
+the pool has parked on that frame (§4.1; `VehicleTelemetryService` skips a body the frame's
+`ObservedRenderSet` names parked). So **a vehicle is admitted and is immediately rendered and
+reported**, and there is no `render_state="arriving"` and no intermediate span to account for.
 
 The vehicle fade, which drew staging traffic part-transparent at the edge of the scene, was removed
 from the code on 2026-10-18, together with the arrival gate that kept such a vehicle out of truth until
-it was fully drawn ([17 §12.2](../../Findings/17_Photoreal_Occlusion_Metric.md)). A SUMO drive never
-set the fade, so the gate never withheld a SUMO vehicle.
+it was fully drawn; `VehicleTelemetryService` leaves out only a parked body. A SUMO drive never set the
+fade, so the gate never withheld a SUMO vehicle.
 
 | State | In SUMO | In CARLA | Capture sidecar | World truth track | Manifest |
 |---|---|---|---|---|---|
@@ -1474,10 +1493,10 @@ abruptly and vanishes abruptly, so there is no ramp to attribute and no latching
 written per vehicle as the manifest's `render_admitted` and `render_released` rows, and each
 `interval_closed` row carries the spans its participant was not drawn (§8.4).
 
-The first row is the one doc 20 had no concept of and the one most likely to be got wrong. **A vehicle
-SUMO is simulating and CARLA is not rendering is not absent from the world; it is absent from the
-view.** Leaving it out of the world truth track would make the corpus claim the world was emptier than
-it was, and would make the base rate of §2.6 wrong in the direction that makes the corpus look
+The first row is the one a storyboard has no concept of and the one most likely to be got wrong. **A
+vehicle SUMO is simulating and CARLA is not rendering is not absent from the world; it is absent from
+the view.** Leaving it out of the world truth track would make the corpus claim the world was emptier
+than it was, and would make the base rate of §2.6 wrong in the direction that makes the corpus look
 denser in annotated content than it is.
 
 **Two things put a vehicle in that row, and nothing else does.** Every vehicle SUMO has inside a
@@ -1576,9 +1595,9 @@ so a reader does not merely learn that something is wrong but what.
    before the window opens rather than discovered halfway through it. This costs nothing: it is three
    existing RPCs (`CarlaServer.cpp:614`, `:625`, `:661`) once per window.
 2. **The residual is recorded, never absorbed.** Same stance as §4.3's pose, heading, speed and
-   dimension separations, and the same
-   precedent: `OcclusionEstimator` refuses a mismatched pair rather than measuring it approximately
-   ([17 §12.1](../../Findings/17_Photoreal_Occlusion_Metric.md)). A residual beyond a hard threshold
+   dimension separations, and the same precedent: `OcclusionEstimator` refuses a mismatched pair
+   rather than measuring it approximately (`MatchTo` returns no depth capture taken from another pose,
+   and each vehicle of the frame says `depth_pose_mismatch`). A residual beyond a hard threshold
    fails the session; between a soft and a hard threshold it is recorded and the capture ships flagged.
    The thresholds are open question 10, and for the same reason as open question 7 — they should be set
    from the first measured distribution, not guessed.
@@ -1606,7 +1625,7 @@ site-coverage threshold — or was a count or ratio built from the words those m
 is built, and none of it will be. What remains is the set of plain facts the truth files already carry,
 listed per subsection so a reader who arrives from a citation finds what stands.
 
-### 5.1 Five outcomes where doc 20 had two
+### 5.1 Five outcomes where the storyboard design had two
 
 Withdrawn 2026-10-05. The outcomes `observed`, `occluded` and `site_unobserved` each needed a pass mark
 ("below the cutoff", "too few pixels to be a usable example", "below a stated threshold"); "collection
@@ -1672,12 +1691,14 @@ is inert (`CarlaServer.cpp:611-612`). Two things remain with 11 and the owner:
 
 ### 6.1 The idle cull, re-examined
 
-[20 §2.8 and decision 14](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) are about
-the .NET traffic manager's idle cull: a registered vehicle idle past `BLOCKED_TIME_THRESHOLD` is
-destroyed, so no ambient vehicle can ever be observed parked, and the cull's firing point is not
-reproducible because it is measured against wall clock.
+The storyboard design's requirement that the idle cull be switchable per capture concerns the .NET
+traffic manager's idle cull: a registered vehicle idle past `BLOCKED_TIME_THRESHOLD` is destroyed
+(`ALSM.IsVehicleStuck`: 90 s, or 180 s at a red light), so no ambient vehicle can ever be observed
+parked, and the cull's firing point is not reproducible because it is measured against wall clock. (The
+code measures it in simulated time wherever the world reports one, `ALSM.GetCurrentElapsedSeconds`, and
+has no switch over it.)
 
-**Under SUMO drive, decision 14 does not apply, for three independent reasons.**
+**Under SUMO drive, that requirement does not apply, for three independent reasons.**
 
 1. The traffic manager is locked out by an exclusive world-scoped lease
    ([01 D1.7](01_Architecture.md)), so the cull cannot run.
@@ -1687,14 +1708,15 @@ reproducible because it is measured against wall clock.
    the authoring skill records "A parked vehicle is still reported by TraCI, so it stays in the
    dataset — verified" (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`).
 
-So the ninety-second ceiling doc 20 worried about is gone and the ambient stationary distribution is
+So the ninety-second ceiling the cull imposes is gone and the ambient stationary distribution is
 whatever the author wrote. That is a **capability gain**, and it should be recorded as one: the
-scenario system can now produce the long ordinary stop that doc 20 called impossible, which is exactly
-the hard negative of [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md).
+scenario system can now produce the long ordinary stop the cull made impossible, which is exactly the
+authored hard negative that only a scenario supplies.
 
-The coupled consequence arrives with it, unchanged and immediate: doc 20 noted that relaxing the cull
-raises the accidental-positive rate, and the relaxed regime is now the only regime. §3.6 records that
-this makes doc 20's open question 5 a first-capture concern rather than a deferrable one.
+The coupled consequence arrives with it, unchanged and immediate: relaxing the cull raises the
+accidental-positive rate, and the relaxed regime is now the only regime. §3.6 records that this makes
+the question of what to do with an accidental positive a first-capture concern rather than a
+deferrable one.
 
 ### 6.2 What SUMO does instead
 
@@ -1706,7 +1728,7 @@ SUMO's housekeeping is not absent, it is different, and three of its mechanisms 
 | **Jam teleport** — `time-to-teleport`, default 300 s | A vehicle jumps position. No detector track can follow it; no downstream consumer can reproduce it | **Forbid** | Session start refuses unless `time-to-teleport <= 0`. Bahonar already sets `-1`. **Built 2026-09-28** ([03](03_CoSimulation_Runtime.md) §11.6, D3.14) |
 | **Highway, disconnected and other teleport** — `time-to-teleport.highways` (default 0), `.disconnected` (default -1), `.bidi` and `.railsignal-deadlock` (default -1), and a vehicle type's own `timeToTeleport` and `timeToTeleportBidi` | Further teleport paths that the main option does **not** cover | **Forbid** | Each is off at SUMO's default, so the trap is a value that turns one on, which `time-to-teleport=-1` does not turn off. `.highways` teleports a vehicle waiting on a lane that does not continue its route, on a road faster than 69 km/h, only where it is positive (`MSLane.cpp:2413`): measured under `time-to-teleport` -1, such a vehicle stood for a whole 1000 s run with the option absent, 0 or -1, and was teleported after 5 s with 5. `.disconnected` is on from **0** up (`MSLane.cpp:2406`, `>= 0`): measured on a disconnected route, -1 and absent never, 0 after one step of waiting. A type's own attribute stands in for the option for its vehicles: a type setting `timeToTeleport` 5 under `time-to-teleport` -1 was teleported after 5 s. **Built 2026-10-02:** every one refused at session start, unless the run accepts teleporting explicitly as for the jam teleport, and each named on the run report with the value it ran under, read from the configuration and from every route and additional file |
 | **Collision action** — default `teleport` | `teleport` jumps, `remove` destroys, both silently; `none` edits nothing but leaves no record | **Constrain** to `warn` (owner's ruling, 2026-10-05) | Refused otherwise. Every collision recorded from `simulation.getCollidingVehiclesIDList` (`_simulation.py:430`) into the manifest as a corpus-affecting event, per [01 D1.17](01_Architecture.md). **Built 2026-10-02:** `teleport` and `remove` refused at session start, SUMO's default included, and so is an action SUMO does not name — measured, `Warn` is an error on SUMO's console and the run goes on under `teleport`; no acceptance overrides it. The report names the action in force. Each collision is recorded as one span on the report ([03](03_CoSimulation_Runtime.md) §11.5); the manifest is not built. **Since 2026-10-05** `none` is refused too, and `ignore-accidents`, which skips the check whatever the action: under either SUMO does not look for collisions, so the run could not say whether any happened, and the record of collisions must always exist ([13](13_Work_Breakdown.md) §13 decision 5: record it, mark the span, never stop). Under `warn` SUMO changes nothing about the traffic and only registers the event |
-| **Departure skip** — `max-depart-delay`, default `-1` (never) | A vehicle that cannot insert within the delay is **discarded**. It never exists. This is the direct SUMO analogue of doc 20 §2.8's cull | **Record, always; hard-fail for a plan subject** | Counted per flow and per trip. A discarded vehicle that the supervision plan names as an entity or a slot realisation **fails the run**, because the plan asserts something that did not happen. **Built 2026-10-02:** the value the run ran under is on the run report, and every vehicle discarded is recorded as one not inserted ([03](03_CoSimulation_Runtime.md) §11.4). **Built at compile time 2026-10-05:** a vehicle the plan names that SUMO never inserts refuses the scenario before any run ([07](07_Scenario_Authoring.md) check 59), because a SUMO-only run of the compiled files discards exactly the vehicles a drive will; the compile report states every planned vehicle's wait and how many others were discarded, and the lock records the run. Counting per flow at run time needs the plan bound there, and is not built |
+| **Departure skip** — `max-depart-delay`, default `-1` (never) | A vehicle that cannot insert within the delay is **discarded**. It never exists. This is the direct SUMO analogue of the traffic manager's idle cull | **Record, always; hard-fail for a plan subject** | Counted per flow and per trip. A discarded vehicle that the supervision plan names as an entity or a slot realisation **fails the run**, because the plan asserts something that did not happen. **Built 2026-10-02:** the value the run ran under is on the run report, and every vehicle discarded is recorded as one not inserted ([03](03_CoSimulation_Runtime.md) §11.4). **Built at compile time 2026-10-05:** a vehicle the plan names that SUMO never inserts refuses the scenario before any run ([07](07_Scenario_Authoring.md) check 59), because a SUMO-only run of the compiled files discards exactly the vehicles a drive will; the compile report states every planned vehicle's wait and how many others were discarded, and the lock records the run. Counting per flow at run time needs the plan bound there, and is not built |
 | **Insertion backlog** — `getPendingVehicles` (`_simulation.py:515`) | Not a removal, a deferral. It moves the departure onset | **Record** | It is the declared-to-committed gap of §3.3, and it is a measurement of congestion, which is signal |
 | **Emergency braking** — `getEmergencyStoppingVehiclesIDList` (`_simulation.py:443`) | Physically implausible deceleration that reaches both imagery and truth kinematics | **Record** | Harmless to the population, not harmless to the behaviour distribution |
 | **Arrival** — `getArrivedIDList` (`_simulation.py:329`) | A vehicle reaching its destination is removed. Ordinary and correct | **Harmless, but record** | It closes intervals with `closed_by = entity_arrived` and is the third of the three destruction signals of [issue #18](https://github.com/sbrett9/carla/issues/18) |
@@ -1717,8 +1739,9 @@ SUMO's housekeeping is not absent, it is different, and three of its mechanisms 
 | **Instantaneous lane change** — `lanechange.duration`, default 0 | Not a population edit, but the vehicle crosses a lane width inside one step | **Set above zero and record the value** | At the default the imagery shows a sideways jump and §4.3's residual spikes at every lane change. The right value is a physical one; [04](04_Contracts.md) owns it. **Built 2026-10-01:** the compiler writes 3 s ([04](04_Contracts.md) D4.42), the lock records it and the session's run report states it; SUMO then moves the vehicle across steadily and the bridge renders it where SUMO has it ([03](03_CoSimulation_Runtime.md) §6.4), so the position neither jumps nor leaves SUMO's. Since 2026-10-02 the body turns with the change: its heading is the heading of its own path, sideways movement included, and its velocity the path's, so the truth's course follows the change ([03](03_CoSimulation_Runtime.md) §6.4, D3.40) |
 
 The pattern: **SUMO's edits are on insertion and on jam resolution, where the traffic manager's were on
-idleness.** Doc 20's diagnosis — that housekeeping silently reshapes the distribution being learned and
-must be switchable, recorded, or both — transfers intact. Its specific remedy does not.
+idleness.** The storyboard design's diagnosis — that housekeeping silently reshapes the distribution
+being learned and must be switchable, recorded, or both — transfers intact. Its specific remedy, a
+switch over the idle cull, does not transfer, and `ALSM` has no such switch.
 
 ### 6.3 Two corrections to the shipped scenario's own account of itself
 
@@ -1746,8 +1769,8 @@ built, takes it from there.
 
 ### 7.1 Six identifiers
 
-[20 §6.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) names four. SUMO adds one
-and splits another.
+A storyboard needs four: `actor_id`, `entity_id`, `instance_id` and `sensor_id`. SUMO adds one and
+splits another.
 
 | Identifier | Answers | Stable within a run | Stable across runs | Where it comes from |
 |---|---|---|---|---|
@@ -1758,12 +1781,13 @@ and splits another.
 | `series_id` + `slot_key` | Which scheduled occasion is this, **including ones that never happened** | yes | yes | compiler |
 | `sensor_id` | Which collection sensor produced this imagery and these tracks | yes | yes once authored | the camera's name, held on the server as its `role_name`: given by the client, or issued by the server as `Camera_<n>` for a camera spawned without one — from a counter the server keeps for its lifetime, so the default has `actor_id`'s defect across runs. The server refuses a name a live camera holds, and every client reads the name back from the spawned camera. Every capture's file name begins with it and the platform event's callsign is it; the platform event's uid stays `CARLA-SENSOR-<camera actor id>`, which is an unnamed camera's name only on a server built before it named cameras ([04](04_Contracts.md) §6.1) |
 
-**SUMO closes doc 20 §4.4's cross-run identity gap for free.** Doc 20's minimum viable fix was to
-carry the storyboard entity name into truth, because CARLA actor ids are assigned at spawn and a
-parameter sweep needs runs to be joinable. Under SUMO the vehicle id is already the authored name —
-`escort_0`, `guard_d4_h15_t3` — and it is already in the truth record today, as the `uid` suffix and
-the callsign (measured in the shipped CSV sample: `uid` = `SUMO-TRUTH-corridor_d0_p0_h0.0`). So
-`entity_id` is `sumo_id` unless an author overrides it, and nothing has to be invented.
+**SUMO closes the storyboard's cross-run identity gap for free.** For a storyboard the minimum viable
+fix was to carry the entity name into truth (`ScenarioEntity.Name` is parsed, and no truth record
+carries it), because CARLA actor ids are assigned at spawn and a parameter sweep needs runs to be
+joinable. Under SUMO the vehicle id is already the authored name — `escort_0`, `guard_d4_h15_t3` —
+and it is already in the truth record today, as the `uid` suffix and the callsign (measured in the
+shipped CSV sample: `uid` = `SUMO-TRUTH-corridor_d0_p0_h0.0`). So `entity_id` is `sumo_id` unless an
+author overrides it, and nothing has to be invented.
 
 **Under the pool, `actor_id` is stable as an object and names a succession of vehicles.** A body is
 lent to one SUMO vehicle, given back, and lent to the next ([03](03_CoSimulation_Runtime.md) D3.9), so
@@ -1777,15 +1801,19 @@ where it says which body drew the vehicle on that frame (§8.2). This is the sid
 standalone SUMO producer already does with its `SUMO-TRUTH-<sumo_id>` uid, keeping the `CARLA-TRUTH`
 prefix that says which producer wrote the record.
 
-`role_name` stays a provenance field, per doc 20 decision 8, and the SUMO producer already uses it that
-way: it is set to `vehicle_id.rsplit(".", 1)[0]` (`SumoCotBridge.py:329`), which is the flow id for a
-flow member and the trip id for a scheduled vehicle. That is the cohort identity, and it is exactly
-what a provenance field should say. `hero` and `ego` are not used for anything in this section, for
-doc 20 §4.3's reasons.
+`role_name` stays a provenance field (`VehicleBodyPool.RoleName`: `autopilot` for traffic-manager
+traffic, `scenario` for storyboard entities, `sumo` for SUMO-driven bodies), and the SUMO producer
+already uses it that way: it is set to `vehicle_id.rsplit(".", 1)[0]` (`SumoCotBridge.py:329`), which
+is the flow id for a flow member and the trip id for a scheduled vehicle. That is the cohort identity,
+and it is exactly what a provenance field should say. `hero` and `ego` are not used for anything in
+this section, because the engine gives them behaviour: `ActorDispatcher` wires ROS2 control to both,
+`ALSM` never culls a `hero`, and the replayer special-cases `hero` (`CarlaReplayer.cpp:500`).
 
-**`scenario_id` must finally be supplied.** Doc 20 §4.2 records that the recorder accepts it and
-nothing passes it. **Re-resolved against `carla/CarlaControl/` on 2026-09-17** (doc 20's original
-`SCTMV.py` citation is stale — that file no longer exists in the tree): the live call site is
+**`scenario_id` must finally be supplied.** The recorder accepts it, and nothing passed it (in the
+code `NativeRecorder` passes one now, from `--scenario-id` or the storyboard's file name; a
+`CaptureSession` recorder is given none, and the scenario's id is on the manifest's opening row).
+**Re-resolved against `carla/CarlaControl/` on 2026-09-17** (`SCTMV.py`, where the gap was first
+found, no longer exists in the tree): the live call site is
 `carla/CarlaControl/src/carlacontrol/NativeRecorder.py:96-111`, which passes `run_id` (`:107`) and
 `seed` (`:108`) and no `scenario_id`, while the shim accepts one
 (`CarlaNet/python/carlanet/__init__.py:1876`) and `CotWriter` writes it when present (`CotWriter.cs:45`).
@@ -1795,11 +1823,11 @@ joined to captures by that field, and `scenario_id` must bind the `.sumocfg`, th
 
 Likewise the per-recorder run identity: `FrameRecorder` derives one from its own start instant when
 none is given, and its comment calls it "unique enough per recorder"
-(`FrameRecorder.cs:98-103`) — the wrong property when several recorders cover one scenario, as doc 20
-§7.5 notes and [01 D1.12](01_Architecture.md) resolves — one `CaptureSessionHost` process holds
-every camera's recorder, so there is one session identity to derive from. `CarlaControl/scripts/run_SCTMV.py:152`
-supplies one derived from
-wall clock, which is a session identity in the right place with the wrong derivation.
+(`FrameRecorder.cs:98-103`) — the wrong property when several recorders cover one scenario, which
+[01 D1.12](01_Architecture.md) resolves — one `CaptureSessionHost` process holds every camera's
+recorder, so there is one session identity to derive from. `CarlaControl/scripts/run_SCTMV.py:152`
+supplies one derived from wall clock, which is a session identity in the right place with the wrong
+derivation.
 
 ### 7.2 A reproducibility caveat that decides how far identity can be trusted
 
@@ -1810,11 +1838,12 @@ That condition depends on which actuation strategy is in use, and the two differ
 
 - **Pose application** (the accepted mode): the bridge reads SUMO and commands CARLA. Nothing flows
   back. SUMO is open-loop, `n` is reproducible, and two runs of one scenario name the same vehicles.
-- **The actuated shape** of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md), retained as the
-  tracking oracle ([01 D1.16](01_Architecture.md)): step 1 pushes CARLA's measured pose back into SUMO
-  with `moveToXY` every tick. **SUMO is then closed-loop and is no longer reproducible from its own
-  seed**, because CARLA's control error perturbs the very state SUMO steps from. Insertion order can
-  differ, and `<flow id>.<n>` can name a different vehicle in the second run.
+- **The actuated shape**, retained as the tracking oracle ([01 D1.16](01_Architecture.md)) and not
+  built (`SumoDriveSession` never calls `SumoVehicleDomain.MoveToXY`): each tick it pushes CARLA's
+  measured pose back into SUMO with `moveToXY` before SUMO steps. **SUMO is then closed-loop and is no
+  longer reproducible from its own seed**, because CARLA's control error perturbs the very state SUMO
+  steps from. Insertion order can differ, and `<flow id>.<n>` can name a different vehicle in the
+  second run.
 
 This is an inference from the control topology, not a measurement — nobody has run the actuated shape
 here. But it is a consequence of the loop rather than of an implementation detail, and it is the
@@ -1891,7 +1920,7 @@ and the frame-by-frame `_solar` comparison tells you exactly which frames it did
 ## 8. The artifacts
 
 Four, each with one writer and one job. Naming them apart matters because three of them were one
-undifferentiated idea in doc 20 and the fourth did not exist.
+undifferentiated idea in the storyboard design and the fourth did not exist.
 
 | Artifact | Scope | Writer | Contains |
 |---|---|---|---|
@@ -2013,7 +2042,8 @@ The properties the plan must have, each for a reason already established:
   over the result. A plan that named a term into a file somebody could edit afterwards is precisely the
   drift the digest binding below exists to prevent, and a term is as load-bearing as a route.
 - **Instance ids are deterministic** — derived from the scenario id and the authored instance name,
-  with no counter and no timestamp, so a sweep's runs are joinable (doc 20 §7.1).
+  with no counter and no timestamp, so a sweep's runs are joinable (`SupervisionPlanCompiler` writes
+  `<scenario_id>/<name>`, and check 21 refuses a duplicate).
 - **Every reference resolves or the compile fails** — unknown entity, unknown flow, unknown area,
   unknown vocabulary term, a phased annotation on a cohort (§3.2), and a `<trip>` id in the plan that
   the route file does not contain. The measured authoring surface already validates edge references
@@ -2241,8 +2271,8 @@ Notes, each carrying a decision:
   ([12](12_Operator_Control_Surface.md) §7.2); the nearest set still held would be a guess of exactly
   the kind §4.3 refuses. With no render set — traffic-manager traffic, whose actors are its vehicles —
   the attribute is absent and the sidecar is what it always was.
-- **The uid and callsign follow the SUMO vehicle, not the body.** [09 §3](../../Findings/09_Telemetry_CoT_Contract.md)
-  makes a truth uid "stable per (source, track)", and in a SUMO drive the track is the SUMO vehicle:
+- **The uid and callsign follow the SUMO vehicle, not the body.** A truth uid is stable per source and
+  track (`CotWriter` builds it from the track), and in a SUMO drive the track is the SUMO vehicle:
   identity is SUMO's (§4.2), and a pooled actor id names each vehicle its body carries in turn (§7.1).
   So the uid is `CARLA-TRUTH-SUMO-<sumo_id>` — the `CARLA-TRUTH` prefix keeping the producer, `SUMO-`
   saying the key is a SUMO id so a numeric one is never read as an actor id — and the callsign
@@ -2267,7 +2297,7 @@ Notes, each carrying a decision:
   tell at a glance which strings this pipeline authored and which it only carried.
 - **The onsets are renamed** `declared_` / `committed_` / `observed_`, and `declared_start_tick` is
   **absent** on a duration stop, with `declared_duration_s` carried on the instance in the manifest
-  (§3.3). A consumer must handle absence; doc 20's shape could not produce it.
+  (§3.3). A consumer must handle absence; the storyboard design's shape could not produce it.
 - **`_carla` keeps its name even when the source is SUMO**, exactly as the standalone bridge already
   does (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md`, "The `_carla` detail block name is kept even
   though the source is SUMO, so the two producers are directly comparable"). What is added is
@@ -2290,12 +2320,13 @@ Notes, each carrying a decision:
   light bus is a `bus` and the ambulance a `van` whatever their blueprints declare.
 - **The CoT `type` affiliation is untouched**: every vehicle stays `a-n-G-E-V` unless an author
   overrides for display reasons unrelated to supervision. The `affiliation_by_type` mapping of
-  anomaly types to `u` is removed (§9). Doc 20 decision 9, enforced rather than restated.
+  anomaly types to `u` is removed (§9), so the rule that the affiliation carries no label is enforced
+  rather than restated (`CotDisplayConvention.from_legacy_labels` withholds the `u` half).
 - **`<_aoi>` is planned for every vehicle**, capped to areas containing the vehicle plus those within
-  a configured radius with the nearest always present, per doc 20 §7.4. Nothing writes it today: it
-  needs the server-side holder for areas ([04](04_Contracts.md) C5 §7.4), which is not built, and
-  whether to build either is with the owner; the relations are derivable downstream from the published
-  positions and the package's area outlines.
+  a configured radius with the nearest always present. Nothing writes it today: it needs the
+  server-side holder for areas ([04](04_Contracts.md) C5 §7.4), which is not built, and whether to
+  build either is with the owner; the relations are derivable downstream from the published positions
+  and the package's area outlines.
 - **`<_solar>` is world-scoped and is extended, not restructured.** The nine existing attributes keep
   their names, their formats and their source, because they are already written into shipped corpora
   and into PNG chunks (§2.7) and renaming them would strand every capture taken so far. The four
@@ -2309,11 +2340,11 @@ Notes, each carrying a decision:
   omits an unknown fraction of its frames. As built, the recorder counts every such capture and the
   run's closeout records the count as a gate not met at the first one (below).
 - **`<_supervision>` is identical in every camera's sidecar for a given tick**; only the sensor block
-  and anything derived from it differs. A disagreement between two sidecars at one tick is a defect
-  (doc 20 decision 15), which is why the snapshot is tick-stamped and captured into the encoding job
-  alongside `CaptureIdentity` (`FrameRecorder.cs:179-183`) rather than read at write time. **Since
-  2026-10-05 the supervision itself is held on the server and rides on that snapshot** (D6.41, below), so
-  two sidecars of one tick read it from the same bytes, whichever process wrote each.
+  and anything derived from it differs. A disagreement between two sidecars at one tick is a defect,
+  which is why the snapshot is tick-stamped and captured into the encoding job alongside
+  `CaptureIdentity` (`FrameRecorder.cs:179-183`) rather than read at write time. **Since 2026-10-05 the
+  supervision itself is held on the server and rides on that snapshot** (D6.41, below), so two sidecars
+  of one tick read it from the same bytes, whichever process wrote each.
 
 The PNG carries `carla:capture` so a still is self-describing when separated from its sidecar
 (`CaptureMetadata.cs:31-36`), **`carla:solar`** for the same reason (`SolarMetadata.cs:14-20`, composed
@@ -2525,12 +2556,13 @@ five occlusion attributes are written only where occlusion was measured, which i
 word and never beside a measurement: `behind_camera`, `outside_frame`, `beyond_draw_distance`,
 `no_depth_camera`, `no_depth_capture`, `depth_out_of_step`, `depth_pose_mismatch`,
 `beyond_depth_range` or `no_sample`, the reason nearest the vehicle where several hold
-([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)). The projection (`BoxProjector`) is separated
-from the depth sampling (`OcclusionEstimator.Sample`), which runs over it and reports its own reasons.
-The live pull has no camera and carries none of this; the PNG carries none. `TruthSidecarAudit`
-(`audit_truth_sidecars.py`) holds every vehicle record of a capture to `in_frame`, to occlusion fields
-only where the picture has a view of the vehicle, and to a reason wherever they are absent, so a
-capture written before this date shows the defect it carries.
+(`OcclusionUnmeasured`: the box against the picture first, then the draw distance, then what the depth
+camera delivered, then what its sampling met). The projection (`BoxProjector`) is separated from the
+depth sampling (`OcclusionEstimator.Sample`), which runs over it and reports its own reasons. The live
+pull has no camera and carries none of this; the PNG carries none. `TruthSidecarAudit`
+(`audit_truth_sidecars.py`) holds every vehicle record of a capture to `in_frame`, to occlusion
+fields only where the picture has a view of the vehicle, and to a reason wherever they are absent, so
+a capture written before this date shows the defect it carries.
 
 **As built (2026-10-06): a vehicle in the picture carries its box.** The owner ruled that the box
 fields go on each vehicle's existing record in the sidecar, with no separate label file per image
@@ -2545,14 +2577,13 @@ center, the attribute and the method the draw distance mark already used, one ra
 **`<_box3d frame="geodetic">`** of eight `<corner lat lon hae>`, the bottom face around from the front
 left and then the top face, each converted exactly as the record's own point is -- the same conversion
 from the same origin, less the height-align offset taken off the point, one offset for all eight -- so a
-corner and the point agree and the box is never warped by a drape's gradient across it
-([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md); `CaptureBox`, `CaptureBoxes`,
-`BoxProjector.Mark`). A vehicle outside the picture or behind the lens carries none of it, its range
-apart where the draw distance reached it; a record no camera projected, the live pull's, carries none;
-the PNG carries none. `TruthSidecarAudit` holds every vehicle in the picture to the whole box and every
-other to none of it; pointed at the Arapahoe check capture of 2026-10-06
-(`cap-20261006-171114-1747f6`), written before this, it reports all 472 records in the picture as
-lacking it.
+corner and the point agree and the box is never warped by a drape's gradient across it (`CaptureBox`,
+`CaptureBoxes.GeodeticCorners`, `BoxProjector.Mark`). A vehicle outside the picture or behind the
+lens carries none of it, its range apart where the draw distance reached it; a record no camera
+projected, the live pull's, carries none; the PNG carries none. `TruthSidecarAudit` holds every
+vehicle in the picture to the whole box and every other to none of it; pointed at the Arapahoe check
+capture of 2026-10-06 (`cap-20261006-171114-1747f6`), written before this, it reports all 472 records
+in the picture as lacking it.
 
 **And its lights and its pose source (the owner's rulings of 2026-10-06).** A vehicle in the picture also
 carries `lights`, the lights commanded on for it on the frame, in words in CARLA's order or `none`
@@ -2721,8 +2752,9 @@ opened, closed and never opened, defects) are what a reader gets. The object bel
 carry between them, for reading, and is not a file anything writes.
 
 Incremental writing is not an optimisation here. A capture session against a seven-day scenario can
-run a long time, and doc 20 §7.5 already requires that a run which fails part way keeps its
-supervision rather than keeping every capture and losing the thing that explains them.
+run a long time, and a run which fails part way must keep its supervision rather than keeping every
+capture and losing the thing that explains them (`RunManifestWriter` flushes each row before it
+composes the next, so a manifest cut off at any instant keeps every row already written).
 
 **As built (2026-10-05): the rows, before supervision.** The capture session writes the manifest
 (`RunManifestWriter`, registered beside the world truth track, switched on by
@@ -2996,9 +3028,11 @@ records stay in the run result.
 }
 ```
 
-The manifest, not the sidecar, is the authoritative supervision artifact — doc 20 decision 4,
-unchanged. The sidecar is a per-tick projection and cannot express an instance, an unclosed interval,
-or a tick that was not captured.
+The manifest, not the sidecar, is the authoritative supervision artifact, as the storyboard design
+decided. The sidecar is a per-tick projection and cannot express an instance, an unclosed interval, or
+a tick that was not captured. A sidecar's `<annotation>` carries the instance, labels, phase and role
+in force (`CaptureSupervision.WriteVehicle`); the manifest carries each `instance` row and every
+`interval_opened` and `interval_closed` row (`RunManifestWriter`).
 
 **Three checks become possible from the manifest alone, and each of them catches a failure that is
 otherwise invisible.** They are listed here rather than in §4.5 because they are properties of the
@@ -3294,11 +3328,11 @@ Each key migrates to a different place, and two of them are deleted rather than 
 |---|---|---|
 | `marked_ids` — 9 flat ids | **Five pattern instances** (§9.2) | A flat id list cannot say that five of them are one convoy, or that two of them are separate instances of one pattern |
 | `affiliation_by_type` — **display** half (civilian neutral, military friendly) | Kept, as a display convention in the run manifest | Legitimate: it is what makes a TAK view readable and it says nothing about supervision |
-| `affiliation_by_type` — **supervision** half (every `anomaly_*` type to `u`) | **Deleted** — done: withheld when a legacy labels file is read (`CotDisplayConvention.from_legacy_labels`, D6.18) | [20 decision 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): a detector-derived track cannot produce an affiliation, so encoding the label there breaks the truth-versus-detection comparison the identical-shape contract exists for |
-| `special_type = "marked"` (`SumoCotBridge.py:321-322`) | **Deleted** — done: `special_type` is the vehicle's kind for every vehicle, planted or not, and the truth sidecar's XML and CSV say which vehicles were planted in their own `marked` field (D6.18, §8.3) | It writes the answer into a field whose entire job is to say what kind of vehicle this is ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
+| `affiliation_by_type` — **supervision** half (every `anomaly_*` type to `u`) | **Deleted** — done: withheld when a legacy labels file is read (`CotDisplayConvention.from_legacy_labels`, D6.18) | A detector-derived track cannot produce an affiliation, so encoding the label there breaks the truth-versus-detection comparison the identical-shape contract exists for |
+| `special_type = "marked"` (`SumoCotBridge.py:321-322`) | **Deleted** — done: `special_type` is the vehicle's kind for every vehicle, planted or not, and the truth sidecar's XML and CSV say which vehicles were planted in their own `marked` field (D6.18, §8.3) | It writes the answer into a field whose entire job is to say what kind of vehicle this is (`SumoCotBridge` writes the catalogue's `cot_special_type` there: `emergency`, `taxi`, `electric` or empty) |
 | `anomaly_notes` — free text | **The schedule's skip, and the vehicle that deviates** (§3.5): the schedule's gap is declared where the schedule is and stated in the resolution report, and the guard who should have taken the posting parks elsewhere for the shift and carries `bahonar:posting_not_taken_up` | A row for an empty place is a label with no vehicle to follow (the owner's ruling of 2026-10-05); the omission is the deviating guard's label (the owner's ruling of 2026-10-06). The series joins the 335 postings a guard realises; the skipped one has no row |
 | nothing | **`nominal` on 356 scheduled vehicles** (335 guard postings, 21 hauls) | The hard negatives that make the corpus teach that duration alone is not the signal (§3.1) |
-| nothing | **`unlabelled`, explicitly, on every flow member** | Doc 20 §2.2: absence of an element must not stand for "asserted negative" |
+| nothing | **`unlabelled`, explicitly, on every flow member** | Absence of an element must not stand for "asserted negative" (`SupervisionPlanCompiler` writes `unlabelled` for every actor and flow that no row names) |
 
 ### 9.2 The nine marked ids, resolved
 
@@ -3317,8 +3351,8 @@ one stop (§3.5). Two facts fall out of this table that `marked_ids` cannot
 state and that a trainer needs:
 
 - **The stay-behind's dwell is unclosed at scenario end.** 489 000 s of a 604 800 s scenario, starting
-  at 115 800 s (measured). Its `closed_by` is `scenario_end`, and doc 20's open question 3 — whether a
-  truncated instance is a usable training example — applies to it directly.
+  at 115 800 s (measured). Its `closed_by` is `scenario_end`, and the open question of whether a
+  truncated instance is a usable training example (§15 question 8) applies to it directly.
 - **The two gate probes are one pattern, two instances.** Read per instance, the corpus contains two
   independent positives 259 611 s apart; a consumer that treated them as one instance with two
   intervals would read out of the corpus a single revisiting vehicle that never existed. The corpus
@@ -3337,8 +3371,9 @@ Not new policy — these are the measured confounders of §2.4 turned into check
    `type_id` (`CotUdpEmitter.py:137`). The type names a vehicle kind; the plan names the behaviour.
 3. **`vType` colour is display metadata only**, already blocked from reaching a blueprint by
    [01 D1.6](01_Architecture.md). It may stay conspicuous in the SUMO GUI, where it is useful.
-4. **A nominal entity must share the entry style of the population it is a negative for.** Doc 20
-   §2.6's spawn-signature confounder, restated for SUMO: a `<trip>` inserted with
+4. **A nominal entity must share the entry style of the population it is a negative for.** The
+   spawn-signature confounder (a storyboard sets each entity down mid-scene at the `LanePosition` its
+   initial action names, `OpenScenarioParser`), restated for SUMO: a `<trip>` inserted with
    `departLane="best" departSpeed="max"` and a flow member inserted with `departLane="free"
    departSpeed="max"` (measured, both used in the shipped file) are different insertion behaviours,
    and if every annotated vehicle uses one and every ambient vehicle uses the other, insertion style
@@ -3347,11 +3382,10 @@ Not new policy — these are the measured confounders of §2.4 turned into check
    population it is a negative for — unless time of day *is* the annotated pattern.** This is rule 1
    in the temporal dimension, and it has the same exception for the same reason. `anomaly_shadow`'s
    `speedFactor="0.45"` is legitimate because the crawl *is* the pattern; a 03:00 heavy goods vehicle
-   in a residential area is legitimate because the hour *is* the pattern
-   ([20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) class 4). What is not
-   legitimate is annotating five anomalies that have nothing to do with darkness and capturing all
-   five in the night window while every hard negative is captured at 07:00 — that is the
-   `anomaly_escort` dimension mistake with hours instead of metres.
+   in a residential area is legitimate because the hour *is* the pattern (class-conditioned
+   presence). What is not legitimate is annotating five anomalies that have nothing to do with
+   darkness and capturing all five in the night window while every hard negative is captured at
+   07:00 — that is the `anomaly_escort` dimension mistake with hours instead of metres.
 
    Two things make this rule harder to keep than the other four, and both are worth stating because
    they change where it has to be enforced. First, **it is not a property of the route file.** Rules 1
@@ -3390,9 +3424,9 @@ reconstructible from the shipped generator (*read*, `CarlaControl/scripts/make_b
 
 The ferry pulses are `annotated` and not `nominal` because D6.2 forbids `nominal` on a cohort, and
 because what is true of them *is* true of every member for its whole life: each one is port-cleared
-traffic that transits a checkpoint and enters. That is class-conditioned presence
-([20 §3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) class 4), which needs no
-onset and is the one annotation a cohort may carry (§3.2).
+traffic that transits a checkpoint and enters. That is class-conditioned presence, which needs no
+onset and is the one annotation a cohort may carry (§3.2; `SupervisionPlanCompiler` refuses a
+cohort's intervals, check 23).
 
 **The terms, in the form §3.8 declares them.** Nine terms, three roles, one reserved role and the
 area kinds, in one namespace at version 2, the version that added `bahonar:posting_not_taken_up`.
@@ -3465,8 +3499,8 @@ every vehicle SUMO has is drawn (§10.4).
 
 ### 10.1 The format guarantee, and the transfer rule this pipeline publishes but does not apply
 
-This is doc 20 §7.6's descendant, split into the two halves it always contained and which the earlier
-draft ran together.
+This descends from the storyboard design's transfer of supervision to detector tracks, split into the
+two halves it always contained and which the earlier draft ran together.
 
 **The format guarantee — what this pipeline does.** Truth is emitted in an **associable** form. That
 is a property of the artifact, and it is met by things §4, §5, §7 and §8 already require:
@@ -3481,13 +3515,13 @@ is a property of the artifact, and it is met by things §4, §5, §7 and §8 alr
 | **Qualified** — occlusion fraction and sample count, apparent size, illumination band and sun elevation, render state, and the admission and release instants, so a consumer can tell which records are usable evidence and which are not | §5.1, §4.4 |
 
 **The transfer rule — what this pipeline documents so that somebody else can apply it.** Unchanged in
-substance from [20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md), which is
-correct; what changes is that it is written here as a **published rule**, not as a step in this
-pipeline:
+substance from the storyboard design, and published for the teams that receive capture folders as
+[`Docs/Tracking/Matching_Tracks_To_Truth.md`](../../Tracking/Matching_Tracks_To_Truth.md); what changes
+is that it is written here as a **published rule**, not as a step in this pipeline:
 
 1. Detector tracks carry detector track ids. They are associated to truth **by position and time,
-   never by uid** — [09 §9](../../Findings/09_Telemetry_CoT_Contract.md) fixes that, and it is why the
-   truth record's uid is deliberately useless for the join.
+   never by uid** — rule 1 of the published document says so, and it is why the truth record's uid
+   (`CARLA-TRUTH-SUMO-<sumo_id>`, `CotWriter`) is deliberately useless for the join.
 2. One truth entity maps to several detector tracks (identity switches, re-acquisitions), so
    transferred supervision is per **(detector track, interval)**, never per entity.
 3. With several cameras there are several detectors, so a truth entity maps to a track set **per
@@ -3620,16 +3654,17 @@ is withheld for them (D6.16, withdrawn).
 
 ---
 
-## 11. Doc 20's decisions, audited
+## 11. The storyboard design's decisions, audited
 
-Every decision in [20 §10](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md), with
-what happened to it here. "Survives" means adopted unchanged; where it changed, the justification is
-from the SUMO surface and the section is given.
+Every decision of the storyboard design, with what happened to it here. `CarlaNet.Scenario` built none
+of them: its parser refuses `CustomCommandAction`, and its executor writes no annotation. "Survives"
+means adopted unchanged; where it changed, the justification is from the SUMO surface and the section
+is given.
 
-| Doc 20 | Outcome | Note |
+| Storyboard decision | Outcome | Note |
 |---|---|---|
 | 1 — scenario membership is not an annotation | **Survives, and matters more** | 356 of 365 scheduled vehicles here are deliberately ordinary. Treating scenario membership as a positive would poison the best hard negatives available (§3.1) |
-| 2 — supervision is three-valued, always written | **Survives unchanged** | Today's `marked` bool is the binary collapse doc 20 warned about, measured (§3.1) |
+| 2 — supervision is three-valued, always written | **Survives unchanged** | Today's `marked` bool is the binary collapse the storyboard design warned about, measured (§3.1) |
 | 3 — authored intent versus derived context | **Survives, restated operationally, and extended to a second class of context** | SUMO hands the runtime a one-line label, so the rule gains a testable invariant: the triple set is identical across runs (§3.6). Illumination joins area relations as derived context — a legitimate covariate, a legitimate input to a fielded system that knows the time and its own location, and never a label. The invariant extends with it: two runs under *different solar policies* must still produce identical triples (§3.6) |
 | 4 — the unit is the pattern instance; the manifest is authoritative | **Survives unchanged** | §3.4, §8.4 |
 | 5 — record all three onsets | **Survives; onsets renamed and one made optional** | `declared` / `committed` / `observed`. `declared_start_tick` is absent for a `duration` stop — 337 of the 338 stops here; the stay-behind's uses `until` the run's end (§3.3). The justification inverts: one gap is a measured congestion output, the other a seam property |
@@ -3638,42 +3673,49 @@ from the SUMO surface and the section is given.
 | 8 — `role_name` stays provenance | **Survives; already honoured** | The SUMO producer sets it to the flow or trip id (`SumoCotBridge.py:329`), which is exactly a provenance value |
 | 9 — CoT affiliation not overloaded | **Survives for every recorded output; qualified on the live display feed** | `affiliation_by_type` mapped every anomaly type to `u`, measured; that half is withheld from a legacy labels file (§9.1, D6.18). No recorded output — the truth sidecar's XML and CSV, a capture sidecar — overloads the affiliation. The one qualification is [08](08_Collection_And_EPoL.md) D8.23's: an operator may explicitly opt in to a distinct affiliation for planted vehicles on the live display feed only (`--marked-affiliation`), off by default and never recorded |
 | 10 — areas of interest adopted as GeoJSON | **Survives** | A series' slot is sited at an area (check 20) and an instance may name areas; an area is never a subject (§3.5, D6.7 withdrawn) |
-| 11 — the annotation registry is process-local | **Superseded** | By [01 D1.10](01_Architecture.md), which publishes world-scoped state to the server. This is the direction doc 20 preferred; not re-litigated here |
+| 11 — the annotation registry is process-local | **Superseded** | By [01 D1.10](01_Architecture.md), which publishes world-scoped state to the server. This is the direction the storyboard design preferred; not re-litigated here |
 | 12 — catalogue reference versus category-to-a-set | **Survives, re-seated** | The selection surface is the `vType`, not `vehicleCategory`. [04](04_Contracts.md) owns the binding; §9.3 owns the confounder rules |
 | 13 — text authoring primary, canvas is preview | **Survives** | The SUMO authoring path is already text and code, with no canvas |
 | 14 — idle cull switchable, detection separable | **Does not apply to this mode** | The traffic manager is locked out and SUMO has no idle cull; a vehicle parks for 489 000 s, measured. SUMO's own distribution edits are on **insertion and jam resolution** instead and are enumerated separately (§6) |
 | 15 — supervision world-scoped, observability sensor-scoped | **Survives, extended twice** | Observability gains a rendered-span gate upstream of the observed-span gate, and `not_rendered` is accounted separately from `out_of_frame` and `occluded` (§5.1). It also gains an illumination qualifier, which is **world-scoped like supervision** rather than sensor-scoped like the outcomes — one sun lit every camera, so `<_solar>` is identical in every sidecar for a tick and a disagreement is a defect of the same kind as a `<_supervision>` disagreement (§8.2) |
 
-Doc 20's open questions 1, 3, 4, 6, 7, 8 and 9 all remain open and are unaffected by the change of
-surface. Question 5 (what to do with an accidental positive) becomes **immediate** rather than
-deferrable, because the regime it was coupled to is now the only regime (§3.6, §6.1). Question 2 (what
-the vocabulary contains at v1) is **answered** by §3.7: it asked for a single list settled against the
-model's requirements, and no requirements exist to settle it against — so the list is layered instead,
-and only the part this pipeline branches on is ours to fix (§15 question 1).
+The storyboard design's other open questions all remain open and are unaffected by the change of
+surface: whether an annotated interval yields a detector track at all, whether a truncated instance is
+a usable example, whether area relations are emitted per frame, how an area edit is digested, whether
+counterfactual pairing belongs in a sweep, how a movement through a junction is named, and whether the
+authoring conventions ship as a packaged skill. (The code answers two of them: `ScenarioSweep`
+compiles counterfactual pairs, and `CarlaControl/skills/sumo-traffic-scenarios` holds the authoring
+conventions as a skill.) The question of what to do with an accidental positive becomes **immediate**
+rather than deferrable, because the regime it was coupled to is now the only regime (§3.6, §6.1). The
+question of what the vocabulary contains at v1 is **answered** by §3.7: it asked for a single list
+settled against the model's requirements, and no requirements exist to settle it against — so the list
+is layered instead, and only the part this pipeline branches on is ours to fix (§15 question 1).
 
-**Doc 20 §6.2 survives in full and is the foundation of §3.7**, which is worth saying because it is a
-section rather than a numbered decision and would otherwise be audited nowhere. Its three assertions
-all hold: terms come from a declared list rather than being invented per scenario, `vocabulary_version`
-lets a consumer refuse a corpus it does not understand, and magnitudes and places stay in `parameters`
-rather than in terms. What §3.7 adds is the answer to a question doc 20 did not face, because its
+**The storyboard design's declared, versioned vocabulary survives in full and is the foundation of
+§3.7** (as built, `AnnotationVocabulary`), which is worth saying because it is a section rather than a
+numbered decision and would otherwise be audited nowhere. Its three assertions all hold: terms come
+from a declared list rather than being invented per scenario, `vocabulary_version` lets a consumer
+refuse a corpus it does not understand, and magnitudes and places stay in `parameters` rather than in
+terms. What §3.7 adds is the answer to a question the storyboard design did not face, because its
 authoring surface was a storyboard written by the same people who read the corpus: who declares the
 list when the author and the trainer are strangers.
 
-**None of doc 20's fifteen decisions is disturbed by the scope narrowing of
+**None of the storyboard design's fifteen decisions is disturbed by the scope narrowing of
 [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md), and that is worth recording rather than assumed.** Every one of
 them is an assertion about how supervision is authored, carried and recorded — about *our data* — and
-none of them measures a model. The one part of doc 20 that did assume this pipeline would measure
-something is **§7.6, the supervision transfer**, which is not a numbered decision. It survives, split
-into a format guarantee and a published rule (§10.1): the format half is ours and is built here, and
-the association half is documented here and applied elsewhere. Doc 20's own exclusion of scoring
-([18 §3.2](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md), driving-quality criteria) is
-unchanged and is now the narrower of the two exclusions in force.
+none of them measures a model. The one part of that design that did assume this pipeline would measure
+something is **the supervision transfer to detector tracks**, which is not a numbered decision. It
+survives, split into a format guarantee and a published rule (§10.1): the format half is ours and is
+built here, and the association half is documented here and applied elsewhere. The storyboard design's
+own exclusion of scoring (pass/fail verdicts and driving-quality criteria, neither of which
+`CarlaNet.Scenario` has) is unchanged and is now the narrower of the two exclusions in force.
 
-**Doc 20 has no decision about illumination, and that is not an omission on its part.** Its authoring
-surface was an OpenSCENARIO storyboard executed as a short scripted episode in a world whose lighting
-nobody varied; there was no window to place in simulated time and therefore no sun to bind it to. The
-decisions D6.20–D6.25 are additions to the model rather than amendments to doc 20's, which is why none
-of the fifteen rows above changes on their account beyond rows 3 and 15.
+**The storyboard design has no decision about illumination, and that is not an omission on its part.**
+Its authoring surface was an OpenSCENARIO storyboard executed as a short scripted episode in a world
+whose lighting nobody varied; there was no window to place in simulated time and therefore no sun to
+bind it to. The decisions D6.20–D6.25 are additions to the model rather than amendments to the
+storyboard design's, which is why none of the fifteen rows above changes on their account beyond rows
+3 and 15.
 
 ---
 
@@ -3692,7 +3734,9 @@ of the fifteen rows above changes on their account beyond rows 3 and 15.
 - The cost of computing area relations and reconciliation residuals per vehicle per capture —
   [10](10_Scale_And_Performance.md).
 - Area-of-interest file format, build-time validation, the world-scoped actor and the RPC pair —
-  [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md), adopted unchanged.
+  [04](04_Contracts.md) C5, adopted unchanged from the storyboard design. As built,
+  `AreaOfInterestSource` validates the GeoJSON before the world is built and `AreaOfInterestResolver`
+  writes `areas.resolved.json` into the world package; no world-scoped actor or RPC pair exists.
 - **The scenario epoch contract**, the semantics of the solar policy under synchronous ticking, the
   fix for the date that never rolls over, and **whether night capture produces usable imagery at
   all** — [11](11_Time_And_Illumination.md). This section consumes all four and pre-judges none of
@@ -3741,20 +3785,20 @@ owner acts on it rather than rediscovers it.
 
 | # | Decision |
 |---|---|
-| **D6.1** | **The behavioural annotation travels in a companion supervision file beside the `.sumocfg`, and that is the only channel.** SUMO has no sanctioned vendor extension point in a route file, and route files are generated rather than hand-edited (measured). This **changes [20 decision 6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)**, which made an in-file custom action primary; everything else about that decision — one compiled representation, unknown terms are errors, name conventions never the sole carrier — stands (§3.1) |
+| **D6.1** | **The behavioural annotation travels in a companion supervision file beside the `.sumocfg`, and that is the only channel.** SUMO has no sanctioned vendor extension point in a route file, and route files are generated rather than hand-edited (measured). This **changes the storyboard design's channel decision**, which made an in-file custom action primary (never built: `OpenScenarioParser` refuses `CustomCommandAction`); everything else about that decision — one compiled representation, unknown terms are errors, name conventions never the sole carrier — stands (§3.1) |
 | **D6.2** | **Supervision has two kinds of subject: entity and cohort** (amended 2026-10-05 by the owner's ruling, §3.5). A cohort names a `<flow>` and may carry only `unlabelled` or a whole-life annotation. **A cohort may never be `nominal`**: `nominal` asserts that a subject is not executing any target pattern, and a flow's members are generated rather than individually reasoned about, so one blocked member can contradict the assertion silently. `nominal` is assertable only of a subject the author wrote one by one — an entity or a `<trip>`. A phased annotation on a cohort is a compile error, and so is `nominal` on one. There is no subject that is a place or an occasion: a recurring series' slot names the vehicle that realises it, and an occasion no vehicle comes to is no subject at all (§3.2) |
-| **D6.3** | **The three interval onsets are renamed for the authority that produces each — `declared`, `committed`, `observed` — and all three are still recorded.** [20 decision 5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) survives; its justification is replaced. The declared-to-committed gap is a measured congestion output (`getDepartDelay`, `arrival - intendedArrival`); the committed-to-observed gap is a property of the co-simulation seam and a free health check (§3.3) |
+| **D6.3** | **The three interval onsets are renamed for the authority that produces each — `declared`, `committed`, `observed` — and all three are still recorded.** The storyboard design's decision to record all three survives; its justification is replaced. `SupervisionIntervalRecord` holds the three, each null where it did not happen. The declared-to-committed gap is a measured congestion output (`getDepartDelay`, `arrival - intendedArrival`); the committed-to-observed gap is a property of the co-simulation seam and a free health check (§3.3) |
 | **D6.4** | **A declared onset may be legitimately absent.** A `duration` stop declares a length, not a time; 337 of the 338 stops in the sizing scenario are of that kind, and the stay-behind's uses `until` the run's end (measured). The record carries `declared_duration_s` with no `declared_start_tick`, and a consumer must distinguish absent from zero (§3.3) |
 | **D6.5** | **`RecurringSeries` and `SeriesSlot` are added above `PatternInstance`** (amended 2026-10-05). A cadence is a first-class record and its slots are the occasions a vehicle realises, each naming its vehicle (`entity_id`): the 335 guard postings are 335 slots of one series, each a guard's, in one declared state. An occasion the schedule skips has no slot, because there is no vehicle for a label to follow (§3.4, §3.5) |
 | **D6.6** | **Withdrawn 2026-10-05 by the owner's ruling.** A label with an empty place as its subject is the wrong shape: SUMO reports vehicles, not places, and attribution follows vehicles. There is no `realisation`, no `expected` block, no `slot_ref`, no world-scoped supervision and no `<absence>` anywhere in the pipeline. An author conveys a planted omission by labelling the vehicle that deviates, or as a note at scenario level, never per frame (§3.5) |
-| **D6.7** | **Withdrawn 2026-10-05 by the owner's ruling.** With no absence there is nothing an area is a prerequisite for. A series' slot is still sited at an area (check 20), and areas stay what [20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) makes them for every other class: stratification a consumer applies, never a subject (§3.5) |
-| **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of [20 decision 3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and is a regression test (§3.6). **As built (2026-10-05):** the plan's types expose no writer — sealed records made only by reading the plan, with private constructors, no setter and only immutable collections, held to that by a test over every type the plan reaches — and a session binds the plan the lock names to the files it runs (§8.1). The binder holds one record per interval of the plan and states only copies of the plan's rows (§3.3); a test runs one scenario three ways -- at another SUMO step, and with its window opening mid-run -- and finds the same triples, the plan's own, with the times differing. **As built (2026-10-05), the diff:** the run manifest writes every interval as the binder opens and closes it and names every triple the plan declares, and `CarlaControl/scripts/diff_run_manifests.py` compares two runs' manifests by those triples, exiting non-zero on any difference (§8.4); it passes on the manifests of the three runs above and fails on one altered to name a phase its plan does not declare. |
+| **D6.7** | **Withdrawn 2026-10-05 by the owner's ruling.** With no absence there is nothing an area is a prerequisite for. A series' slot is still sited at an area (check 20), and areas stay what they are for every other class (`areas.resolved.json`, which an instance's `aoi_refs` and a slot's `aoi_ref` name): stratification a consumer applies, never a subject (§3.5) |
+| **D6.8** | **The supervision row set is fixed before the run; the runtime may only bind rows.** Two runs of one scenario must produce manifests with identical `(instance_id, participant, phase)` triples, differing only in ticks, observability and residuals. That diff is the enforcement of the rule that no geometric predicate ever writes an annotation, and is a regression test (§3.6). **As built (2026-10-05):** the plan's types expose no writer — sealed records made only by reading the plan, with private constructors, no setter and only immutable collections, held to that by a test over every type the plan reaches — and a session binds the plan the lock names to the files it runs (§8.1). The binder holds one record per interval of the plan and states only copies of the plan's rows (§3.3); a test runs one scenario three ways -- at another SUMO step, and with its window opening mid-run -- and finds the same triples, the plan's own, with the times differing. **As built (2026-10-05), the diff:** the run manifest writes every interval as the binder opens and closes it and names every triple the plan declares, and `CarlaControl/scripts/diff_run_manifests.py` compares two runs' manifests by those triples, exiting non-zero on any difference (§8.4); it passes on the manifests of the three runs above and fails on one altered to name a phase its plan does not declare. |
 | **D6.9** | **Truth authority is settled field by field, not producer by producer.** CARLA is authoritative for pose, height, bounding box and everything camera-relative; SUMO is authoritative for kinematics, existence in the simulation and network state. Neither producer is discarded and the reconciled record can recover both (§4.2) |
 | **D6.10** | **The SUMO-to-CARLA disagreement is recorded, never absorbed.** It is the only mechanism that catches a pose-convention error, which otherwise produces plausible imagery and bounding boxes wrong by half a car length (§4.3). **As built and as ruled (2026-10-05): a run-level measurement.** The session compares every commanded pose and velocity with what the world applied on the same tick, and the run's figures -- samples, vehicle-ticks nothing read back, worst and mean position, worst yaw, pitch and roll, worst and mean velocity against the mean commanded speed, and the vehicle and instant of each worst -- are written on the manifest's `manifest_closed` row as `bridge_divergence`, in the run result, and as two closeout gates with limits, `bridge.position_divergence` (0.01 m) and `bridge.velocity_divergence` (0.01 m/s), set from the measured distribution. The four per-capture fields this decision once named, `pose_separation_m`, `heading_separation_deg`, `speed_separation_mps` and `dimension_separation_m`, are withdrawn: no sidecar carries them. `heading_separation` is defined once, in §4.3. An independent test holds the pose convention to numbers worked out by hand |
 | **D6.11** | **Withdrawn 2026-10-05 by the owner's ruling.** The five outcomes rested on pass marks nobody valued, and coverage was a fraction of them ([`_EXECUTION_CHARTER.md`](_EXECUTION_CHARTER.md) §4b). What stands: `render_state` and `render_reason` on every world-truth-track row, the `render_admitted` and `render_released` rows and the `not_drawn` spans in the manifest, each a happened fact bounded by the recorded instants of D6.19 (§5.1) |
-| **D6.12** | **[20 decision 14](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) does not apply to this mode, and SUMO's own distribution edits are governed instead.** Teleports (all three options) are forbidden; `collision.action` is constrained to `warn` (amended 2026-10-05 by the owner's ruling, from `warn` or `none`: the record of collisions must always exist, as [13](13_Work_Breakdown.md) §13 decision 5 settles — record it, mark the span, never stop — and under `none` SUMO skips the check, so a run could not say whether any collision happened, where under `warn` it changes nothing about the traffic and only registers the event); `max-depart-delay` skips are always recorded and are a hard failure when they discard a plan subject; arrivals, emergency stops and insertion backlog are recorded; an unseeded run and `random-depart-offset` are forbidden. `lanechange.duration` must be above zero (§6); the compiler writes 3 s ([04](04_Contracts.md) D4.42). **Built at session start (2026-10-02):** every teleport trigger is refused unless the run accepts teleporting explicitly, as `time-to-teleport` already was; a collision action other than `warn` — `none` and `ignore-accidents` among them since 2026-10-05 — a positive `random-depart-offset` and `random` are refused with no acceptance; the scale, the cap on vehicles running and `max-depart-delay` are recorded, and the run report states every one as it ran. **Built at compile time (2026-10-05), as the owner ruled:** the hard failure for a plan subject. SUMO's insertion and its discards are deterministic for one configuration and seed, so the scenario compiler runs the compiled files in SUMO alone over the whole span and refuses the scenario when a vehicle the plan names -- an instance's participant or a series' realised slot -- is discarded or still waiting at the end ([07](07_Scenario_Authoring.md) check 59), and the lock records that the run happened. **Built in the binder (2026-10-05):** a plan subject SUMO gives up inserting closes its intervals `never_inserted` and makes the advance that showed it refuse at the window stage, naming the vehicle. A `lanechange.duration` of zero is recorded on the report, not refused |
-| **D6.13** | **`entity_id` defaults to the SUMO vehicle id**, which closes [20 §4.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s cross-run identity gap for authored trips at no cost (§7.1) |
-| **D6.14** | **An annotation may never be attached to a flow member by ordinal.** `<flow id>.<n>` is reproducible only while SUMO runs open-loop, which the accepted pose-application mode is and the actuated shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) is not. The manifest records which actuation strategy ran (§7.2) |
+| **D6.12** | **The storyboard design's requirement that the traffic manager's idle cull be switchable per capture does not apply to this mode, and SUMO's own distribution edits are governed instead.** Teleports (all three options) are forbidden; `collision.action` is constrained to `warn` (amended 2026-10-05 by the owner's ruling, from `warn` or `none`: the record of collisions must always exist, as [13](13_Work_Breakdown.md) §13 decision 5 settles — record it, mark the span, never stop — and under `none` SUMO skips the check, so a run could not say whether any collision happened, where under `warn` it changes nothing about the traffic and only registers the event); `max-depart-delay` skips are always recorded and are a hard failure when they discard a plan subject; arrivals, emergency stops and insertion backlog are recorded; an unseeded run and `random-depart-offset` are forbidden. `lanechange.duration` must be above zero (§6); the compiler writes 3 s ([04](04_Contracts.md) D4.42). **Built at session start (2026-10-02):** every teleport trigger is refused unless the run accepts teleporting explicitly, as `time-to-teleport` already was; a collision action other than `warn` — `none` and `ignore-accidents` among them since 2026-10-05 — a positive `random-depart-offset` and `random` are refused with no acceptance; the scale, the cap on vehicles running and `max-depart-delay` are recorded, and the run report states every one as it ran. **Built at compile time (2026-10-05), as the owner ruled:** the hard failure for a plan subject. SUMO's insertion and its discards are deterministic for one configuration and seed, so the scenario compiler runs the compiled files in SUMO alone over the whole span and refuses the scenario when a vehicle the plan names -- an instance's participant or a series' realised slot -- is discarded or still waiting at the end ([07](07_Scenario_Authoring.md) check 59), and the lock records that the run happened. **Built in the binder (2026-10-05):** a plan subject SUMO gives up inserting closes its intervals `never_inserted` and makes the advance that showed it refuse at the window stage, naming the vehicle. A `lanechange.duration` of zero is recorded on the report, not refused |
+| **D6.13** | **`entity_id` defaults to the SUMO vehicle id**, which closes the storyboard's cross-run identity gap for authored trips at no cost (§7.1): `SupervisionPlanCompiler` writes each participant's `entity_id` and `sumo_id` as the actor's name |
+| **D6.14** | **An annotation may never be attached to a flow member by ordinal.** `<flow id>.<n>` is reproducible only while SUMO runs open-loop, which the accepted pose-application mode is and the actuated shape is not: it pushes CARLA's pose back into SUMO each tick (not built: `SumoDriveSession` never calls `MoveToXY`). The manifest records which actuation strategy ran (§7.2) |
 | **D6.15** | **Withdrawn 2026-10-05 by the owner's ruling.** Imagery and truth stay side by side in one capture folder; there is no export step, no separate imagery folder, no held-back partition and no validator over an imagery folder. What stands: the PNG carries only `carla:capture`, `carla:solar`, `carla:illumination` and `carla:sensor`, held by a test, the truth sidecar sits beside it, and the supervision-transfer rule of §10.1 is published and not applied here. As decided: **The corpus is written as two separate artifacts by a corpus export step: a `training export` and a `full-truth export`**, and a downstream trainer is given a path only to the first. Truth may define the target and may filter which examples are included; it may never travel with an example as a field the model can read (§10.2, §10.3). **The split survives the scope narrowing of [`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md) as a held-back partition of our own data: of *fields*, not a held-out test set of examples, which is a downstream team's choice to make.** It was never a measurement, so nothing about it depended on scoring; what changed is that the second artifact is named for what it contains rather than for what somebody might do with it, and that no component here writes, reads or checks a model's output |
 | **D6.16** | **Withdrawn 2026-09-30.** There is no render cap: every vehicle SUMO has is drawn, so scene density cannot depend on the label and no span is withheld from the training export (§10.4) |
 | **D6.17** | **Four artifacts, one writer each**: the supervision plan (compile time), the capture truth sidecar (per camera per capture), the world truth track (per run, every SUMO vehicle), and the run supervision manifest (per session, authoritative). The world truth track is new and is what keeps the base rate from being computed over a render-filtered population (§8) |
@@ -3772,10 +3816,10 @@ owner acts on it rather than rediscovers it.
 | **D6.29** | **Core terms are unprefixed and reserved; every author term carries a namespace; a namespace is first-come and free-form.** `vocabulary_version` covers the core alone; each author namespace versions independently as `{namespace, version}` and a term's identity is the pair `(namespace, name)`. **There is no rename operation** — the only sanctioned retirement is `status: deprecated` plus `superseded_by`, which is what joins a corpus captured under the old spelling to one captured under the new. No registry governs namespaces: a collision is made **visible** by the release attestation recording every namespace present, not prevented by us (§3.8) |
 | **D6.30** | **The vocabulary is resolved into the supervision plan and is not a fifth truth artifact.** D6.17's four stand. The plan carries the import-flattened term set with a `vocabulary_digest`; `<events>` and every `<_supervision>` element carry the version **and** the digest, and the PNG carries no supervision (§8.2, withdrawn by the owner's ruling of 2026-10-05); the manifest carries both plus every author namespace and its version; the release step republishes the whole document. **The core half is generated from the enumerations in `CarlaNet.Types`**, so a new `closed_by` value reaches every shipped vocabulary without anyone remembering — [07 §8.5](07_Scenario_Authoring.md)'s mechanism applied where a stale copy would misdescribe a corpus already handed over. Three enforcement points: the compiler refuses an undeclared term, the runtime cannot mint one (D6.8), and the release validator refuses a corpus containing a term the published vocabulary does not define (§8.7). **As built (2026-10-05):** the enumerations are `CarlaNet.Types.Supervision`, published by its `CoreVocabulary` at version 3, which the scenario compiler reads through `carlanet` into every plan and the world truth track writes its render state and reasons from; nothing in the tree restates the core by hand (§3.7). The session's reader of the plan reads every core value through the same enumerations and refuses a plan whose vocabulary publishes any other core, or does not digest as it says (§8.1) |
 | **D6.31** | **`nominal` may carry labels, and the assertion lives in `state` alone.** A `nominal` instance may carry `<annotation>` children in the sidecar exactly as an `annotated` one does, and labels in the plan and the manifest; a `nominal` element with children and one without assert precisely the same thing. An anonymous hard negative is worth little: a sidecar-only consumer that can read `bahonar:tower_posting` can build the matched negative set, while one reading a bare `state="nominal"` has 356 indistinguishable vehicles and is one bit away from §3.1's binary collapse (§8.2) |
-| **D6.32** | **A `nominal` term may declare `hard_negative_for`, and the field narrows and never widens.** `nominal` as defined in §3.1 is untargeted — not executing *any* target pattern — and cannot say which negative a subject is a negative *for*. The 335 guard postings are matched negatives for the dwell-shaped terms and the 21 hauls for the escort terms, and without the field a trainer samples 356 negatives at random instead of building the matched set [20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) calls this system's unique product. **The published vocabulary states in these words that the field narrows, never widens, and that its absence means unspecified rather than none** (§3.9) |
+| **D6.32** | **A `nominal` term may declare `hard_negative_for`, and the field narrows and never widens.** `nominal` as defined in §3.1 is untargeted — not executing *any* target pattern — and cannot say which negative a subject is a negative *for*. The 335 guard postings are matched negatives for the dwell-shaped terms and the 21 hauls for the escort terms, and without the field a trainer samples 356 negatives at random instead of building the matched set, which only authored vehicles can supply (check 24). **The published vocabulary states in these words that the field narrows, never widens, and that its absence means unspecified rather than none** (§3.9) |
 | **D6.33** | **A term may declare one `broader` parent and a resolved `counterfactual`, and a counterfactual is a pointer rather than a supervision write.** `broader` is one parent, acyclic, resolving inside the published document, never branched on — it lets a consumer roll an unknown term up to a known ancestor and makes adding a term cheap. `counterfactual` is `{kind: series \| cohort \| instance \| term, ref}`, resolved by the compiler and a compile error when it dangles; free text is refused because it joins to nothing. **A counterfactual reference asserts nothing about the referenced subjects beyond what they already carry**: naming `tower_relief` as the no-show's counterfactual annotates none of the 335 postings and adds no triple, which §3.6 point 2's row-set invariant enforces (§3.9) |
 | **D6.34** | **No executable pattern schema is built, now or later.** A machine-readable description of what a convoy or a rendezvous *is* would be **exactly the "concept of a pattern to compare against" whose absence is the reason §15 question 6 is closed**; once it exists, running it over the `unlabelled` population is an afternoon's work and the result is a geometric predicate writing supervision, disguised as a helpful audit. It also duplicates the plan, whose participants, roles, intervals and `RecurringSeries` **are** a pattern's structure. The published form is the narrow one: a per-term `parameters` declaration describing the record. The rule: **a vocabulary may describe what we wrote down; it may never describe what a vehicle would have to do** (§3.9) |
-| **D6.35** | **Role values are author space with one reserved word, and phase values are author space outright** (amended 2026-10-05: `vacancy` went with the absence writer, §3.5). `subject` is reserved and required of the single participant of a one-participant instance, so a consumer never guesses which track an instance is about. Every other role and every phase is the author's, because nothing branches on `lead` and [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) already calls a phase a free term within the instance. What the records require is role presence and arity and phase stability, and §3.6's triple diff enforces stability without knowing the word (§3.7) |
+| **D6.35** | **Role values are author space with one reserved word, and phase values are author space outright** (amended 2026-10-05: `vacancy` went with the absence writer, §3.5). `subject` is reserved and required of the single participant of a one-participant instance, so a consumer never guesses which track an instance is about. Every other role and every phase is the author's, because nothing branches on `lead` and a phase is a free term within the instance (`AnnotationVocabulary.check_namespaced` checks only a namespace it names). What the records require is role presence and arity and phase stability, and §3.6's triple diff enforces stability without knowing the word (§3.7) |
 | **D6.36** | **The gates are emitted as areas of interest at world build, derived from the private-road restriction.** `restrict_private_roads` reads the OSM access tag per way (`CarlaControl/src/carlacontrol/SumoScenarioBuilder.py:547-551`), rewrites the permission list on every restricted edge (`:571-576`) and reports the count (`:582`); the junctions where a restricted edge meets an unrestricted one fall out of the same pass and become areas whose `kind` names a gate. That converts a hand-found literal into a build artifact (`make_bahonar_scenario.py:90`, `PORT_GATE_APPROACH = "-431672573#2"`, measured), satisfies D6.7's hard area prerequisite for any gate-sited absence at no authoring cost, and puts the fence — the structure the whole sizing scenario rests on and that no label mentions — into the corpus. It is derived context of §3.6 point 5's class: computed identically for every vehicle, from the network's own state, never a label (§3.9) |
 | **D6.37** | **The training export's copy of the vocabulary carries a term's definitional fields only.** `exemplar_instances[]`, and a `counterfactual` whose `kind` is `instance`, `cohort` or `series`, name subjects of this scenario by `instance_id`, `series_id` or `slot_key` — the identifiers §10.2 withholds from the training export as build-time join keys. Publishing the document verbatim would reintroduce them through a different door. The full-truth copy carries every field; the training copy drops the pointers, and the release step checks that it did, in the mechanical style of §9.4. A `counterfactual` with `kind: term` is definitional and stays — it names another term, not a subject (§10.2) |
 | **D6.38** | **Supervision reaches the training export per image, attached to the box**: the three-valued state, the labels in force and the phase at that instant. The pattern-instance *structure* — participants, phase sequences, interval bounds, series and slot membership — does not. It is joinable only through `instance_id` and its siblings, which §10.2 withholds; shipping the structure without them yields rows that cannot be assembled, and shipping the identifiers to make them assemblable yields a handle constant across every frame of an instance — the memorisation defect [04](04_Contracts.md) D4.20 excluded `scenario_id` for. Assembling supervision onto tracks is the consumer's step, performed on **its own** tracks through the transfer rule §10.1 publishes (§10.2) |
@@ -3788,24 +3832,24 @@ owner acts on it rather than rediscovers it.
 ## 15. Open questions
 
 1. **CLOSED — the vocabulary is layered, and only the part this pipeline branches on is ours to fix**
-   (D6.27). Doc 20's question 2 asked for a single list settled against the model's requirements. **No
-   requirements exist to settle it against**: the estimated-pattern-of-life model is external
-   ([`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md)) and the team that owns it has stated none. Waiting is not
-   available, because a corpus shipped with no vocabulary leaves every consumer to invent their own
-   reading of the sidecar. Dictating is not available either, because a SUMO network can express
-   almost anything and the label is a statement the *author* makes to the *model trainer*. So the
-   closed core is authored here and versioned (§3.7), author terms are carried opaquely and
-   self-describingly (§3.8), and the rename asymmetry is designed out rather than documented — there
-   is no rename operation, only deprecate-and-supersede (D6.29). **The accepted cost** is that two
-   authors can mint colliding terms in different namespaces and nothing stops them; the release
-   attestation makes the collision visible to whoever merges the corpora, and that is the most a
-   pipeline that never meets either author can honestly offer.
+   (D6.27). The storyboard design's question of what the vocabulary contains at v1 asked for a single
+   list settled against the model's requirements. **No requirements exist to settle it against**: the
+   estimated-pattern-of-life model is external ([`_TEAM_BRIEF.md` §3b](_TEAM_BRIEF.md)) and the team
+   that owns it has stated none. Waiting is not available, because a corpus shipped with no vocabulary
+   leaves every consumer to invent their own reading of the sidecar. Dictating is not available either,
+   because a SUMO network can express almost anything and the label is a statement the *author* makes to
+   the *model trainer*. So the closed core is authored here and versioned (§3.7), author terms are
+   carried opaquely and self-describingly (§3.8), and the rename asymmetry is designed out rather than
+   documented — there is no rename operation, only deprecate-and-supersede (D6.29). **The accepted
+   cost** is that two authors can mint colliding terms in different namespaces and nothing stops them;
+   the release attestation makes the collision visible to whoever merges the corpora, and that is the
+   most a pipeline that never meets either author can honestly offer.
 2. **CLOSED — both, via `broader`** (D6.33). A per-domain term reads better than a general one, and a
    parent link makes the choice unnecessary: a term declares `broader`, a consumer stratifying coarsely
-   rolls every child up to the parent, and one that cares about the child reads it. Doc 20 §6.2's rule
-   that places and magnitudes stay out of terms is untouched (§3.9). The example this question once
-   rested on, Bahonar's two place-labelling terms, is gone with the absence (§3.5); the mechanism stands
-   for any author who declares a parent.
+   rolls every child up to the parent, and one that cares about the child reads it. The rule that
+   places and magnitudes stay out of terms, in `parameters`, is untouched (§3.9; check 56). The
+   example this question once rested on, Bahonar's two place-labelling terms, is gone with the absence
+   (§3.5); the mechanism stands for any author who declares a parent.
 3. **Moot (2026-10-05).** The question was how much of an absence window must be observed before the
    absence is evaluable. The absence is withdrawn by the owner's ruling (§3.5): no label has an empty
    place as its subject, so there is no absence window to observe. The stance the answer carried —
@@ -3821,19 +3865,20 @@ owner acts on it rather than rediscovers it.
    `<flow>`, whose members are generated. The 335 guard postings are trips and remain assertable; the
    68 880 flow members are `unlabelled`, which asserts nothing and therefore cannot be contradicted.
    **The accepted cost** is that hard negatives come only from authored trips, so a corpus that wants
-   many of them must author many — doc 20 §2.7 values hard negatives highly, and this makes them
-   deliberate rather than free.
-6. **CLOSED — no accidental-positive audit is built, because it cannot be and is not ours.** Doc 20
-   sketched a human reviewing `unlabelled` vehicles "whose derived relations look like an annotated
-   pattern". **This system has no concept of a pattern to compare against, and acquiring one would be
-   the geometric predicate §3.6 forbids.** The most that could ever be offered is a sort of the
-   derived quantities an authored instance happens to be defined against — which exists only for
+   many of them must author many — the storyboard design values hard negatives highly, and this makes
+   them deliberate rather than free (check 24 warns on a scenario that annotates and declares nothing
+   nominal).
+6. **CLOSED — no accidental-positive audit is built, because it cannot be and is not ours.** The
+   storyboard design sketched a human reviewing `unlabelled` vehicles "whose derived relations look like
+   an annotated pattern". **This system has no concept of a pattern to compare against, and acquiring
+   one would be the geometric predicate §3.6 forbids.** The most that could ever be offered is a sort of
+   the derived quantities an authored instance happens to be defined against — which exists only for
    dwell-like patterns with a scalar axis, and not at all for convoy, rendezvous, revisit cadence or
    route repetition. It is also not this system's place: the author owns labelling, and an audit that
-   hunts for things the author labelled wrongly is a judgement about their work. What we publish is
-   the derived context — area relations, continuous time inside, render state, the world truth track —
-   identically for every vehicle. Interrogating it is the author's prerogative and burden.
-   **The residual risk is bounded by D6.2**: an accidental positive can only sit in the corpus as
+   hunts for things the author labelled wrongly is a judgement about their work. What we publish is the
+   derived context — area relations, continuous time inside, render state, the world truth track —
+   identically for every vehicle. Interrogating it is the author's prerogative and burden. **The
+   residual risk is bounded by D6.2**: an accidental positive can only sit in the corpus as
    `unlabelled`, which asserts nothing, so a consumer that files it as a negative has violated the
    three-valued contract rather than been misled by it.
 7. **CLOSED (2026-10-05) -- the divergence gates the run, not a capture, and the limits are from the
@@ -3845,13 +3890,14 @@ owner acts on it rather than rediscovers it.
    met deletes nothing and hides nothing, as every gate ([12](12_Operator_Control_Surface.md) §7.2);
    the reader has the figures, the vehicle and the instant.
 8. **Whether truncated intervals — `closed_by = capture_window_end` or `render_released` — are usable
-   training examples at all.** Doc 20's question 3 with new causes. Every vehicle SUMO has is drawn
-   inside a window, so a body is released mid-behaviour only when the window closes on it — a committed
-   interval that ran past the declared one — or when CARLA loses the body, which is a defect signal
-   (§3.4). This is a question for whoever trains on the corpus and not one this pipeline can answer.
-   What this section can do is make sure the question is *answerable from the data*: `closed_by`
-   distinguishes the cause, and the release instant is recorded, so a consumer can find and filter
-   every truncated interval without guessing (§3.4, §4.4).
+   training examples at all.** The storyboard design's question of whether a truncated instance is
+   usable, with new causes. Every vehicle SUMO has is drawn inside a window, so a body is released
+   mid-behaviour only when the window closes on it — a committed interval that ran past the declared
+   one — or when CARLA loses the body, which is a defect signal (§3.4). This is a question for whoever
+   trains on the corpus and not one this pipeline can answer. What this section can do is make sure the
+   question is *answerable from the data*: `closed_by` distinguishes the cause, and the release instant
+   is recorded, so a consumer can find and filter every truncated interval without guessing (§3.4,
+   §4.4).
 9. **Whether the supervision plan should also be emitted for stock content and storyboard runs.** The
    plan, the manifest and the sidecar elements are not SUMO-specific; only the compiler's front end
    is. Making the artifacts shared would let a storyboard capture and a SUMO capture sit in one

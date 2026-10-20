@@ -35,7 +35,7 @@ external process starts, observes and stops (§5b) — plus the handover (§6).
 command surface should be. A use case here is a contract about *what must be possible and what must fail
 loudly*; it is not a user manual.
 **Grounding:** Claims about existing behaviour are cited `path:line` against the working tree as read on
-2026-09-17 and 2026-09-18, or carried forward from a Findings document and marked as such. Measurements
+2026-09-17 and 2026-09-18, or carried forward from earlier research and marked as such. Measurements
 say how they were taken. Anything marked **inference** is reasoning, not a reading.
 
 **Sibling sections this one leans on and does not duplicate.**
@@ -87,12 +87,12 @@ preconditions differ.
 
 | Actor | Kind | What they are trying to do | Why they are a distinct actor |
 |---|---|---|---|
-| **Scenario author** | Human | Decide what pattern of life a scene depicts, what in it is anomalous, and **what civil time the scenario's simulated seconds mean** | Owns intent. The only source of behavioural truth ([20 §2.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), and now the only source of the **epoch** — see §1.1 |
-| **Authoring assistant** | Software agent, acting for the author | Turn a description in ordinary terms — street names, times, who goes where — into a scenario package that resolves | Needs machine-readable inputs and loud failures. It is fluent in SUMO and OpenSCENARIO and cannot know this fork's conventions unless they are written down and validated ([20 §5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) preamble) |
+| **Scenario author** | Human | Decide what pattern of life a scene depicts, what in it is anomalous, and **what civil time the scenario's simulated seconds mean** | Owns intent. The only source of behavioural truth (`SupervisionPlanCompiler` builds every supervision row from what the author declared and from nothing else), and now the only source of the **epoch** — see §1.1 |
+| **Authoring assistant** | Software agent, acting for the author | Turn a description in ordinary terms — street names, times, who goes where — into a scenario package that resolves | Needs machine-readable inputs and loud failures. It is fluent in SUMO and OpenSCENARIO and cannot know this fork's conventions unless they are written down and validated (`CarlaControl/skills/sumo-traffic-scenarios/SKILL.md` writes them down; `ScenarioCompiler` validates a specification against the checks in `ScenarioCheckCatalogue`) |
 | **World-builder operator** | Human | Turn an OSM extract into a world and its authoring reference set | Needs a GPU, a running server and a Cesium ion token; the only actor with that precondition |
 | **Capture operator** | Human | Produce a corpus from a scenario and a world | Owns the session: mode, window, cameras, seed, and **illumination policy** — see §1.1 |
 | **Live exercise operator** | Human | Drive an end-to-end demonstration: a live world, live imagery, an attached chain consuming it, and truth held alongside for the observers | Owns a session paced against a **wall clock** rather than run as fast as the machine allows, with an audience and an attached consumer — so a declared pacing band, an emission endpoint and a truth-feed decision are theirs, and nobody else's session has them (UC-8, §8a). UC-8 is a primary use case, not one that survives on sufferance |
-| **TAK / CoT consumer** | External system | Display tracks | Receives CoT over UDP; ignores unknown `<detail>` children ([09 §5](../../Findings/09_Telemetry_CoT_Contract.md)) |
+| **TAK / CoT consumer** | External system | Display tracks | Receives CoT over UDP; ignores unknown `<detail>` children (`CotUdpEmitter.vehicle_telemetry_to_cot` puts the truth extras in custom `<detail>` children: `_carla`, `_capture`, `_solar`) |
 | **Attached exploitation chain** | External system, attached to a live session | Consume what we emit while the world is running, and — if it chooses to — return something | The single actor UC-8 associates with, and the only thing we honestly know about the far side: that something is connected. Its **internal composition is unspecified.** The brief's own picture of it — a detect-and-track stage feeding an EPoL model service that produces reports — is *one illustrative adapter*, and no step of UC-8 depends on it. Distinct from the external model team for the reason in §1.4: **its state is an input to our control flow.** Never given truth (D2.9) |
 | **Detect-and-track stage** | External system, in the one role that is ours | Turn imagery into tracks | Named because the brief names it, and kept for the role we genuinely occupy with it: an **instrument** run on our own data in UC-11's corpus fitness probe, the way a thermometer checks an oven. Its other role — a stage inside an attached exploitation chain — is illustrative only, and nothing associates with it there. It is never the subject of a measurement ([`_TEAM_BRIEF.md`](_TEAM_BRIEF.md) §3b) |
 | **EPoL model service** | External system, illustrative | Assess tracks and produce reports, live | Named because the brief names it. **Nothing in this section associates with it directly.** It appears only inside an attached exploitation chain, and a chain that has no separate model service — one monolith, ten stages, a human analyst — changes no step of UC-8. Never given truth; anything it returns is recorded **as received** and is never compared against the truth the same session is holding (UC-8, D2.24) |
@@ -115,7 +115,7 @@ the two halves are different kinds of thing.
 | Half | Owner | Why | Scope | Where it is enforced |
 |---|---|---|---|---|
 | **The epoch** — the civil date, the civil UTC offset, and the civil instant that `t = 0` means | **Scenario author** | It is a statement about what the scenario *means*, without which its annotations are not interpretable. "Guards relieve at 07:00, 15:00 and 23:00" is an authored fact, not a run-time preference. It is also not a free choice at capture: nobody but the author can say whether `t = 82,800` is 23:00 or 11:00 | Scenario-scoped. One epoch per scenario package | Declared in UC-3, checked in UC-5, **refused at compile** |
-| **The illumination policy** — frozen or advancing, the rate, and any deliberate departure from the derived civil time | **Capture operator** | It is a property of the *experiment*, not of the scenario. A sweep holds it constant to keep a behavioural comparison clean (UC-6); a replay deliberately varies it to make a second corpus of the same behaviour under different appearance (UC-9, [18 D4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)). The author is not in the loop for either | Run-scoped. One policy per run | Chosen in UC-12, applied in UC-7, recorded in the manifest |
+| **The illumination policy** — frozen or advancing, the rate, and any deliberate departure from the derived civil time | **Capture operator** | It is a property of the *experiment*, not of the scenario. A sweep holds it constant to keep a behavioural comparison clean (UC-6); a replay deliberately varies it to make a second corpus of the same behaviour under different appearance (UC-9; not built: `RunConfigurationValidator` check 4 refuses the `recorded_replay` mode). The author is not in the loop for either | Run-scoped. One policy per run | Chosen in UC-12, applied in UC-7, recorded in the manifest |
 
 **The operator owns the policy; the operator does not own the civil time.** The window's civil time is
 *derived* from the epoch and the window's simulated begin instant. An operator who wants a different
@@ -126,8 +126,8 @@ override is a fact a later reader needs, and a silently different time is indist
 **Why not give the author both.** The author cannot know the sweep. Handing the author the freeze/advance
 choice would mean a run list could not vary illumination without editing the scenario, which would change
 the scenario's identity and therefore the world-digest-and-recipe binding UC-5 step 1 rests on. Behaviour
-and appearance would stop being separate axes, which is the property [18
-D4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) exists to preserve.
+and appearance would stop being separate axes (the code holds the policy in the run configuration's
+`solar.*` fields, `RunConfiguration`, which override the scenario's illumination default at launch).
 
 **Why not give the operator both.** An operator handed a bare hour would be inventing the scenario's
 meaning at launch. The measured state of the sizing scenario is exactly this failure already in progress:
@@ -424,15 +424,18 @@ extract exists with a `<bounds>` element; an optional `<extract>.aoi.geojson` si
 - *Cesium does not stream* — height sampling has nothing to sample. Refuse the build rather than emit a
   world whose drape is a plane; a silently flat world produces vehicles floating or buried and is
   discovered much later.
-- *An area's envelope is disjoint from the OSM bounds* — refuse, per
-  [20 §8.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). An area that crosses the
-  sandbox edge, or that sits inside the staging ring, or that has no drivable road near it, warns.
+- *An area's envelope is disjoint from the OSM bounds* — refuse (`AreaOfInterestSource` rule V5.3). An
+  area that crosses the sandbox edge, or that sits inside the staging ring, or that has no drivable road
+  near it, warns (`AreaOfInterestResolver`, V5.5 to V5.7).
 - *`netconvert` reports restriction relations it cannot apply* — warn and record the count in the build
   recipe, because under SUMO drive a discarded restriction becomes visible bad behaviour and must not be
-  mistaken for a bridge defect ([23 §6.6](../../Findings/23_SUMO_Traffic_Integration.md)).
+  mistaken for a bridge defect (not built: `OsmClipper` copies relations verbatim and `WorldBuilder` logs
+  how many the clip carried, but nothing counts the relations `netconvert` ignores, and the world package
+  records no build recipe).
 
 **Postconditions.** A world package exists; the server holds the world; the OpenDRIVE's digest is the
-world's identity ([18 §5.5](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)).
+world's identity (`WorldPackage` records it as `OpenDriveSha256`, beside the network's
+`NetworkFingerprint`, and `LoadedWorldCheck` compares it with the OpenDRIVE the server serves).
 
 **Artifacts.** World package (`world.json`, `map.xodr`, `map.net.xml`, `bareearth.bin`), the resolved area
 table, the build recipe.
@@ -451,11 +454,13 @@ table, the build recipe.
 **Main flow.**
 1. `VehicleCatalogueGenerator` projects the server's blueprint definitions into a versioned vehicle
    catalogue carrying, per entry, the real bounding-box dimensions and the attributes truth already reads
-   — `base_type`, `special_type`, `number_of_wheels`, `color`
-   ([20 §5.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+   — `base_type`, `special_type`, `number_of_wheels`, `color` (`VehicleCatalogueBuilder._measure` spawns
+   each blueprint, measures the body, and records `declared_base_type`, `declared_special_type`,
+   `number_of_wheels` and the `color` palette).
 2. A street-name-to-road index is extracted from the generated OpenDRIVE. This is what makes a description
    in street names resolvable: non-junction roads carry the real name, junction internals carry the
-   converter's own edge identifier ([20 §5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+   converter's own edge identifier (`PlaceIndex` indexes the street names netconvert writes on the SUMO
+   network's normal edges, and leaves junction-internal edges out).
 3. The annotation vocabulary and its version are attached.
 4. The area table from UC-1 is attached.
 5. **The world's solar frame is attached** — the pinned origin latitude and longitude, and the time zone
@@ -545,8 +550,9 @@ thing that has to set a sun.
 **Alternate flows.**
 - *Author works by hand* — every convention the assistant uses is documented and validated, so a
   hand-written scenario passes or fails the same checks. This is a requirement, not a courtesy
-  ([20 decision 13](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)). It applies to the
-  epoch too: a hand-written scenario declares one or it does not compile.
+  (`ScenarioCompiler` checks every specification against `ScenarioSchema` and the `ScenarioCheckCatalogue`
+  checks, whoever wrote it). It applies to the epoch too: a hand-written scenario declares one or it does
+  not compile.
 - *Secure site* — private roads are kept, then fenced per vehicle class. The internal junction-connector
   lanes must be cleared too, or the restricted class cannot cross any junction and the interior fragments
   (the subtlest measured bug of the Bahonar build, recorded in the skill).
@@ -571,9 +577,9 @@ thing that has to set a sun.
 - *A named street does not resolve* — error naming the street and offering the nearest matches. Never a
   silent nearest-match substitution.
 - *A movement through a junction is named as a turn* — junction internals have no human name
-  ([20 open question 8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), so the
-  assistant must express it as the roads either side, and the error must say that rather than reporting
-  the name as unknown.
+  (`PlaceResolver`'s junction-movement form, `from_street` and `to_street`, resolves to the two edges
+  either side, never the internal edge), so the assistant must express it as the roads either side, and
+  the error must say that rather than reporting the name as unknown.
 - *A route no router can find* — error naming the origin, the destination and the vehicle class, because
   the usual cause is an access class the fence excluded.
 
@@ -599,11 +605,14 @@ vocabulary and its version.
 1. Author names each phenomenon they are asserting: what it is, who takes part, in what role, over what
    spans.
 2. Author marks the deliberately ordinary vehicles as `nominal` — the authored hard negatives that make
-   duration alone stop being the signal ([20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+   duration alone stop being the signal (`SupervisionPlanCompiler` copies a `nominal` row's
+   `hard_negative_for` from its terms, and warns, check 24, when a plan annotates subjects and declares
+   none nominal).
 3. **An annotation whose definition includes an hour says so as an hour**, in civil time, resolved through
-   the epoch to the simulated seconds the interval actually spans. Doc 20's pattern class 4 — *a heavy
-   goods vehicle in a residential area at 03:00* — is a pattern the epoch makes expressible and whose
-   absence made it unrenderable (brief §3a). The annotation names **the hour**, never the light.
+   the epoch to the simulated seconds the interval actually spans. A pattern such as *a heavy goods
+   vehicle in a residential area at 03:00* is one the epoch makes expressible (`SupervisionPlanCompiler`
+   accepts an interval declared by a civil begin, resolved by `CivilTimeResolver`) and whose absence made
+   it unrenderable (brief §3a). The annotation names **the hour**, never the light.
 4. `BehaviouralAnnotationCompiler` produces the `AnnotationSet`: pattern instances with participants,
    roles, intervals and parameters, and instance ids derived deterministically from the scenario and the
    authored name so a sweep's runs are joinable. Each interval carries its civil time alongside its
@@ -611,7 +620,9 @@ vocabulary and its version.
 5. **Any instance whose distinguishing feature is its hour is flagged for UC-11**, because its label will
    correlate with illumination by construction and someone has to have checked (UC-11, D2.20).
 6. Every vehicle the author said nothing about is `unlabelled`, and that state is written explicitly
-   rather than by omission ([20 decision 2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+   rather than by omission (`SupervisionPlanCompiler` writes every unnamed actor's state as
+   `unlabelled`, and `CotWriter` writes `<_supervision state>` for every drawn vehicle, `unlabelled`
+   included).
 
 **Alternate flows.**
 - *An anomaly that is an absence* — **withdrawn 2026-10-05 by the owner's ruling**
@@ -628,11 +639,13 @@ vocabulary and its version.
 
 **Failure flows.**
 - *A label outside the vocabulary* — error. A corpus assembled from scenarios that each spelled `loiter`
-  differently is not a corpus ([20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+  differently is not a corpus (`AnnotationVocabulary` refuses a label that is not a term of its
+  namespace, check 18, and a namespace nothing declared, check 46).
 - *A participant naming a vehicle the scenario does not contain* — error.
 - *An annotation derived from geometry* — cannot happen, because no geometric predicate is an input to
   this case at all. This is stated as a failure to make the boundary visible where it is most likely to
-  erode ([20 §8.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+  erode (`SupervisionPlanCompiler` fixes the rows from the author's declarations before any run, and
+  `SupervisionBinder` binds them and never makes one).
 - *An annotation that names an illumination state* — error, for the same reason and with the same force.
   "At night", "in darkness", "under low sun" are not labels; **03:00** is. Illumination is derived context
   computed identically for every capture, never a supervision signal (brief §3a, standing constraint).
@@ -659,8 +672,10 @@ hour-defined instances handed to UC-11.
 
 **Main flow.**
 1. **Bind.** The package's world digest matches the world it names. A mismatch in the build recipe is a
-   refusal; a digest mismatch with a matching recipe is a warning requiring an explicit override
-   ([18 §5.5](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)'s two-tier gate).
+   refusal; a digest mismatch with a matching recipe is a warning requiring an explicit override (the
+   code has no build recipe and no warning tier: `ScenarioCompiler` check 1 refuses a network fingerprint
+   other than the one the specification names, and `RunConfigurationValidator` check 5 refuses any
+   difference in network fingerprint or OpenDRIVE digest).
 2. **Frame.** The network's `convBoundary` equals the OpenDRIVE header's extent, and `netOffset` is zero —
    the check that the coordinate identity holds.
 3. **Epoch.** Present; the date is real; the civil UTC offset is within `[-12, +14]` and a multiple of 15
@@ -706,8 +721,9 @@ hour-defined instances handed to UC-11.
 13. **Report.** The validator prints what it *resolved*, not only what it rejected — the roads a street
     name bound to, the catalogue entries each type bound to, the areas each annotation bound to, **and the
     civil date and time of every declared window and every annotation interval**. A preview cannot check
-    any of this ([20 §5.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), so the
-    report is the only place an author sees whether the scenario says what they meant.
+    any of this (`ResolutionReport`: `sumo-gui`, the only preview of a SUMO scenario, knows nothing about
+    supervision, areas, catalogue entries, dates or the sun), so the report is the only place an author
+    sees whether the scenario says what they meant.
 
 **Alternate flow.** *Validation without a world* — steps 1, 5 and 9 need the reference set but not a
 server, so the whole case runs offline. This matters because authoring is the part of the workflow that
@@ -736,7 +752,8 @@ validator's version, the resolution report, and the computed solar-frame offset.
 **Main flow.**
 1. Author sets the bounds of the behavioural parameters to sweep and the appearance parameters to cross
    them with — **illumination**, weather, camera track. Behaviour and appearance are separate axes
-   ([18 D4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)).
+   (`ScenarioSweep` treats any axis whose path touches `epoch`, `illumination` or a capture window's
+   `begin` as an illumination axis, check 43).
 2. The machine expands the cross product into a run list, each entry carrying a seed, a capture window, a
    camera set, the instance ids the variation touched, and **an illumination stratum**: the derived civil
    time, the policy (frozen or advancing), the rate, and any override.
@@ -773,9 +790,9 @@ between window start and a given frame changes that frame's sun.
 **Alternate flows.**
 - *Counterfactual pairing* — the same seed and the same ambient population with one instance's behaviour
   switched off, which isolates the authored behaviour as the only difference between two runs.
-  [20 open question 7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) leaves this open;
-  the run list is where it would be expressed, and it costs almost nothing here because the seed and the
-  parameters are already run inputs. **A counterfactual pair whose two arms have different suns is worth
+  `ScenarioSweep` builds it as a counterfactual pair (`absent`, `nominal` or `displaced`); the run list
+  is where it would be expressed, and it costs almost nothing here because the seed and the parameters
+  are already run inputs. **A counterfactual pair whose two arms have different suns is worth
   nothing**, because the pixel difference the pairing exists to isolate is then partly a lighting
   difference. Frozen illumination is a precondition of the pairing, not a refinement of it.
 - *An illumination-only sweep* — one window, one seed, the sun stepped across a set of civil times. The
@@ -838,9 +855,9 @@ The run's records name it as the default.
    every recorder — replacing the per-recorder default derived from its own start instant
    (`CarlaNet.Recording/FrameRecorder.cs:101-103`). It also supplies the `scenario_id`, which the
    recorder has always accepted and nothing has ever passed (`NativeRecorder.py:107-108` passes `run_id`
-   and `seed` only; this carries forward
-   [20 §4.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s gap to the current entry
-   point).
+   and `seed` only; in the code now, `NativeRecorder.apply_want` passes a `scenario_id`, and
+   `CaptureSession._record` passes the session id as `run_id` and no `scenario_id`; the run manifest's
+   header carries the scenario id).
 6. `SumoSession` launches `sumo` and connects; the `AnnotationSet` is published as `WorldSupervisionState`.
 7. The clock steps SUMO with nothing rendered until the capture window's start. **Advancement stays off
    through this pre-roll**, so the sun positioned in step 4 cannot drift before the first captured frame
@@ -877,11 +894,15 @@ The run's records name it as the default.
   exact second down is [11](11_Time_And_Illumination.md)'s job and is open question 9.
 - *Deliberate illumination override* — the operator names a civil time other than the derived one, to
   capture the same behaviour at dusk. Permitted, and the manifest records it **as an override**, marking
-  the corpus as one whose illumination deliberately does not match its scenario's clock. This is
-  [18 D4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)'s appearance axis used on purpose
-  rather than by accident, and the distinction between the two is exactly the record.
+  the corpus as one whose illumination deliberately does not match its scenario's clock. This is the
+  appearance axis used on purpose rather than by accident (`solar.policy` `freeze_at` holds the sun at
+  `solar.freeze_at_civil_time`, and `RunConfigurationResolver` records an override of the scenario's
+  illumination default against the value it replaced), and the distinction between the two is exactly
+  the record.
 - *Live feed alongside* — CoT goes to a TAK consumer as it is written. It is diagnostic; the sidecar is
-  authoritative ([20 §7.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+  authoritative (the code has no live feed on the capture path: `CaptureSession` writes sidecars through
+  `CotWriter` only; live CoT comes from `TelemetryController` under `run_SCTMV.py` and from
+  `carla-cot-telemetry`).
 - *Several cameras* — extra cameras run in the default single process, or in tick-follower processes that
   never cue. Either way they read supervision, the render set, session identity **and solar state** from
   the server, so their sidecars agree at each tick ([01 §3.4](01_Architecture.md)). Solar state is
@@ -1163,8 +1184,9 @@ an interrupt per drop is noise. That tension is open question 13, and it is
   time and the site; it is never told a *label*, and the solar state it is given is the same derived
   quantity every capture computes, not a truth-sourced field.
 - *A live TAK feed for the observers* — CoT to a TAK consumer as it is written, on the truth endpoint and
-  therefore subject to step 6's default. It is diagnostic; the sidecar is authoritative
-  ([20 §7.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+  therefore subject to step 6's default. It is diagnostic; the sidecar is authoritative (the code has no
+  truth endpoint; live CoT comes from `TelemetryController` under `run_SCTMV.py` and from
+  `carla-cot-telemetry`, and the recorded sidecar from `CotWriter`).
 
 **Failure flows.**
 
@@ -1255,16 +1277,17 @@ a loaded world whose digest matches.
    authority, and read back and verified — the same four properties as UC-7 step 4, for the same reasons.
    **Reproducing is the default; differing is an override.**
 4. The replayer respawns and drives the actors from the log. Record and replay are verified working end to
-   end in this fork ([18 §5.4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)).
+   end in this fork (`CarlaClient` calls the engine's `start_recorder`, `replay_file` and `stop_replayer`
+   RPCs and the Python shim wraps them; no capture tool calls them).
 5. New captures are taken under the restored illumination, or — when the operator has asked for it
    explicitly — **under a deliberately different appearance**: time of day, weather, camera track, while
-   the behaviour is exactly the recorded behaviour
-   ([18 D4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)). The replayed corpus's manifest
-   records which of the two happened, cites the original run, and states the difference.
+   the behaviour is exactly the recorded behaviour (not built: no capture path replays a log). The
+   replayed corpus's manifest records which of the two happened, cites the original run, and states the
+   difference.
 6. Supervision is recovered from the original run's manifest, joined by `entity_id` and normalised tick
-   ([20 §7.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)); the static identity
-   attributes survive because the recorder log preserves spawn attributes verbatim
-   ([20 §4.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+   (not built: the code has no replay path); the static identity attributes survive because the recorder
+   log preserves spawn attributes verbatim (`ACarlaRecorder::CreateRecorderEventAdd` copies every
+   attribute of an actor's description into the log's actor-add event).
 
 **Why reproduce rather than inherit.** Replayed imagery whose light does not match the truth that travels
 with it is the same internally contradictory corpus as UC-7's no-epoch failure, one generation removed —
@@ -1282,8 +1305,7 @@ not a neutral default; it is a random one.
   is what lets UC-11's separability test have something to compare against.
 
 **Failure flows.**
-- *No manifest* — refuse to treat the log as replayable
-  ([18 §5.5](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)).
+- *No manifest* — refuse to treat the log as replayable (not built: the code has no replay path).
 - *The manifest carries no solar record* — refuse to replay **for capture**; permit replay for review. The
   original illumination is unrecoverable, so the new corpus could not state its relationship to the old
   one, and a corpus that cannot state that is not joinable to it. This is the one case where an older run,
@@ -1293,7 +1315,8 @@ not a neutral default; it is a random one.
   an override.
 - *Relying on the engine's own map guard* — it is inert for generated worlds and must never be the check.
   The comparison is between a value and itself, and every generated world loads under one level name
-  ([18 §5.3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)).
+  (`CarlaReplayer::ReplayFile` compares `Episode->GetMapName()` with the `Mapfile` that
+  `UCarlaEpisode::StartRecorder` stored from the same episode's `MapName`).
 - *Kinematics in a replayed capture* — the SUMO bridge is not running, so the compensation of
   [01 §4.3](01_Architecture.md) is unavailable and replayed bodies are moved by the replayer. Whether
   replayed truth can carry speed at all is an open question, recorded in §8.
@@ -1411,8 +1434,9 @@ report was a precondition until 2026-10-05; UC-11 is withdrawn.)
   labelled. Without the record the recipient cannot tell what light a frame was taken under.
 - *A vocabulary version the recipient's tooling does not understand* — refuse until it is resolved. A
   corpus assembled from scenarios that each spelled `loiter` differently is not a corpus
-  ([20 §6.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), and the boundary is the
-  cheapest place left to catch it.
+  (`AnnotationVocabulary` refuses a label outside its declared namespaces at compile, and
+  `CaptureSupervision.WriteVocabulary` puts the vocabulary's version and digest on every sidecar), and
+  the boundary is the cheapest place left to catch it.
 - *Corpora from different worlds or different scenarios bundled without saying so* — refuse; the world
   digest is part of the corpus identity.
 - *Truth reaching a training input by the back door* — *withdrawn 2026-10-05 by the owner's ruling*
@@ -1543,7 +1567,7 @@ entry from UC-6 or an operator composing one directly. A running server is neede
 - *An illumination policy that cannot be previewed* — composing offline, there is no server to ask for a
   sun elevation. Permitted, but the configuration is marked *unpreviewed* and UC-7 re-derives and
   re-verifies at session start regardless. **A preview is never a check**; it is the same rule UC-5 step
-  13 and [20 §5.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) apply to annotations.
+  13 applies to annotations (`ResolutionReport`: `sumo-gui` knows nothing about supervision).
 - *Population authority is already held* — surfaced at composition as a warning naming the holder, so an
   operator finds out before configuring a whole run. The hard refusal stays where D2.6 put it, at session
   start; showing it early is a courtesy and must not be mistaken for the gate.
@@ -1861,10 +1885,9 @@ Five things this diagram is asserting, each grounded:
   checked only the hour would pass a scenario whose day-6 window renders under day-0's sun.
 - **The author's acceptance is of the resolution report, not of the scenario file.** An annotation carried
   in a vendor construct is invisible to a foreign previewer, so a preview cannot check that annotations
-  are right — only the compile step can
-  ([20 §5.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)). The report now carries
-  the civil times as well, which is the only place an author can catch an epoch that is right in form and
-  a day out in fact.
+  are right — only the compile step can (`ResolutionReport`: `sumo-gui`, the only preview of a SUMO
+  scenario, knows nothing about supervision). The report now carries the civil times as well, which is
+  the only place an author can catch an epoch that is right in form and a day out in fact.
 
 ---
 
@@ -1984,9 +2007,10 @@ Six things this diagram is asserting:
   [03](03_CoSimulation_Runtime.md) owns closing that. `F5` joins the same queue: solar state comes from the
   tick-paired cache (`carlanet/__init__.py:1511-1533`), so it must be the cache for *this* frame's tick.
 - **The manifest is written throughout, not at the end.** A run that fails at minute forty of forty-five
-  otherwise keeps every capture and loses all its supervision
-  ([20 §7.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)). The solar record is
-  written at `T6` at the start and completed at the end, for the same reason.
+  otherwise keeps every capture and loses all its supervision (`RunManifestWriter` appends each row as
+  one JSON line and flushes it before composing the next, so a manifest cut off at any instant keeps
+  every row already written). The solar record is written at `T6` at the start and completed at the
+  end, for the same reason.
 
 **This diagram's per-tick mechanics also govern UC-13**, entered by an automation process through UC-12
 exactly as a human enters it. What is not on this diagram at all is the thing UC-13 adds: an external stop
@@ -2347,13 +2371,14 @@ renumbered.
    purely ordinary movement is what an EPoL model most needs, and nothing above requires an
    `AnnotationSet` to be non-empty; the compiler accepts a specification with no supervision rows, and the
    manifest then declares none. Whether such a run is shippable as a named control is the owner's call.
-4. **How does an author preview a SUMO scenario?** [18 §8.3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)'s
-   graphical canvas previews OpenSCENARIO storyboards, not SUMO demand. `sumo-gui` is the obvious
-   candidate and is already built ([23 §1.2](../../Findings/23_SUMO_Traffic_Integration.md)), but it
-   previews the microsimulation rather than the imagery. Whether that is enough, or whether a preview
-   against the world's own geometry is wanted, is unsettled and affects how much UC-3's dry run has to
-   carry. A preview that showed the *light* as well as the demand would answer part of UC-12 step 4, but
-   `sumo-gui` cannot; a single rendered probe frame from the server could.
+4. **How does an author preview a SUMO scenario?** The drawtonomy graphical canvas, whose vehicle
+   properties `OpenScenarioParser` reads (`drawtonomy:template`, `drawtonomy:color`), previews
+   OpenSCENARIO storyboards, not SUMO demand. `sumo-gui` is the obvious candidate and is already built
+   (`CarlaSetup.ps1` builds it with `netconvert`, `sumo` and `duarouter`, and `SumoInstallation.sumo_gui`
+   finds it), but it previews the microsimulation rather than the imagery. Whether that is enough, or
+   whether a preview against the world's own geometry is wanted, is unsettled and affects how much UC-3's
+   dry run has to carry. A preview that showed the *light* as well as the demand would answer part of
+   UC-12 step 4, but `sumo-gui` cannot; a single rendered probe frame from the server could.
 5. **What does the capture operator see while a capture runs?** Largely answered by UC-12 step 8, which
    makes the live health display part of the contract rather than an afterthought. What remains is which
    figures it shows and at what cost to the tick thread — that is
@@ -2362,10 +2387,11 @@ renumbered.
    the one figure already known to be free (`carlanet/__init__.py:1511-1533`).
 6. **Is UC-6's counterfactual pairing worth building?** It is the strongest **control** a corpus can carry
    — the same seed, the same ambient population, one instance's behaviour switched off — and it is nearly
-   free here, but it doubles the run list and its value depends on a modelling question outside this plan. Carried forward unresolved from
-   [20 open question 7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). Note that
-   §6a adds a hard precondition to it: both arms must share a frozen sun, or the pairing measures two
-   things at once.
+   free here, but it doubles the run list and its value depends on a modelling question outside this
+   plan. The code builds it: `ScenarioSweep` compiles counterfactual pairs, and an `absent` or `nominal`
+   pair inherits its base's epoch, windows and illumination verbatim (check 43). Note that §6a adds a
+   hard precondition to it: both arms must share a frozen sun, or the pairing measures two things at
+   once.
 7. **The civil time zone is not settable, and for the sizing scenario it is wrong by ~15 minutes.**
    The engine derives `TimeZone = longitude / 15` once, at sun spawn
    (`CesiumHeightSampler.cpp:411-412`), and **no setter exists anywhere on the surface** — measured

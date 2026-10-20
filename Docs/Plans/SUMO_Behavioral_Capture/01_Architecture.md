@@ -7,13 +7,13 @@ tree's name is the one to search for.
 **Owner role:** Systems architect. Companion section: [02 — Use cases](02_Use_Cases.md).
 **Scope:** The component decomposition, the process topology, the authority model, the mode matrix, the
 ownership of simulated civil time and of the world's illumination, the ownership of real-time pacing for
-a live exercise, the resolution of the conflict between
-[23](../../Findings/23_SUMO_Traffic_Integration.md) §4 and the accepted teleport decision, and the
+a live exercise, the resolution of the conflict between the earlier SUMO integration research's
+recommendation that CARLA physics execute SUMO's decisions and the accepted teleport decision, and the
 architectural answer to a simulation far longer than can be rendered.
 **Audience:** An engineer who has not read the conversation that produced this plan, and who will
 implement or review one of the other sections in this folder.
 **Grounding:** Every claim about existing behaviour is cited `path:line` against the working tree as read
-on 2026-09-17 or 2026-09-18, or carried forward from a Findings document and marked as carried forward.
+on 2026-09-17 or 2026-09-18, or carried forward from earlier research and marked as carried forward.
 Measurements taken for this section are marked **measured** and say how. Everything else that is not
 cited is marked **inference**.
 
@@ -21,7 +21,7 @@ cited is marked **inference**.
 
 | Revision | What changed |
 |---|---|
-| 1 — 2026-09-17 | First draft: components, topology, authority model, mode matrix, doc 23 reconciliation, sizing. |
+| 1 — 2026-09-17 | First draft: components, topology, authority model, mode matrix, reconciliation with the earlier SUMO integration research, sizing. |
 | 2 — 2026-09-18 | Simulated civil time, solar policy and illumination given named owners. Adds D1.19–D1.25. |
 | 3 — 2026-09-18 | Detect-and-track and EPoL model fixed as external; no evaluation or association component. |
 | 4 — 2026-09-18 | Live exercise a primary use case; real-time pacing owned by `PlaybackClock`. Adds D1.26–D1.29. |
@@ -133,9 +133,9 @@ back in.** Both are drawn inside `ext`, the external-systems subgraph, under a l
 under a stored corpus — nothing inside `sys` draws either as its own. Everything `sys` sends them is a
 one-way handover, batched or live (§4.6); nothing inside `sys` reads an edge from either of them for
 meaning. `CorpusAudit` is inside `sys`, because it checks this pipeline's own labels against this
-pipeline's own derived area relations
-([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) and needs no external
-model's output to do it.
+pipeline's own derived area relations (not built: no code computes area relations per vehicle, and
+`CorpusLeakValidator` checks a different thing, a field value only planted vehicles carry) and needs no
+external model's output to do it.
 
 **The two dashed edges are the only edges this architecture draws returning from `ext` into `sys`.**
 They exist because team brief §3c permits, but does not require, an
@@ -158,18 +158,19 @@ their current location; the rest are new. Nothing here is named for a stage numb
 | Component | Exists as | Responsibility |
 |---|---|---|
 | `OsmClipper` | `CarlaControl/src/carlacontrol/OsmClipper.py` | Cuts the extract to its `<bounds>`, preserving node ids |
-| `RoadNetworkConverter` | `CarlaNet.Map` `OsmConverter` | One `netconvert` run producing **both** the OpenDRIVE and the SUMO network. It already asks for both and then deletes the network (carried forward from [23 §6.4](../../Findings/23_SUMO_Traffic_Integration.md), `OsmConverter.cs:135`); retaining it is the change. Ramp meters (OSM `traffic_signals=ramp_meter`) are kept out of junction joining, so a meter never signals the freeway it feeds, and run a metering cycle read in the same invocation (`--tllogic-files`, [07](07_Scenario_Authoring.md) D7.38). A meter's programme names its links, which exist only once netconvert has built them, so an extract with meters is converted twice: the first run, meters already excluded, is read for their links, and the second, which also reads the programmes, is the one recorded and returned — measured on Arapahoe, the two differ in the meters' programmes alone. An extract with none is converted once, exactly as before |
+| `RoadNetworkConverter` | `CarlaNet.Map` `OsmConverter` | One `netconvert` run producing **both** the OpenDRIVE and the SUMO network. It already asks for both and then deletes the network (carried forward from earlier research, `OsmConverter.cs:135`; as built, `ConvertFileWithNetworkAsync` returns the network as `OsmConversionResult.Network` and `WorldPackage` writes it as `map.net.xml`); retaining it is the change. Ramp meters (OSM `traffic_signals=ramp_meter`) are kept out of junction joining, so a meter never signals the freeway it feeds, and run a metering cycle read in the same invocation (`--tllogic-files`, [07](07_Scenario_Authoring.md) D7.38). A meter's programme names its links, which exist only once netconvert has built them, so an extract with meters is converted twice: the first run, meters already excluded, is read for their links, and the second, which also reads the programmes, is the one recorded and returned — measured on Arapahoe, the two differ in the meters' programmes alone. An extract with none is converted once, exactly as before |
 | `ElevationInjector`, `SignInjector`, `TrafficLightInjector` | `CarlaNet.Map` | Unchanged |
 | `WorldPackageWriter` | `WorldBuilder._write_world_package` → `client.write_world_package` | Writes `world.json`, `map.xodr`, `bareearth.bin`. Gains `map.net.xml` from the same converter run, and `map.tll.xml`, the ramp meters' programme file that run read, when the extract has meters |
-| `VehicleCatalogueGenerator` | **new** | Spawns every registered blueprint against a running server, measures the box the spawned actor carries, and writes a versioned catalogue ([20 §5.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md), decision 12). It is **not** a projection of `GetActorDefinitionsAsync`: a definition carries no dimensions, so there is nothing to project ([04](04_Contracts.md) `D4.1`) |
-| `AreaOfInterestCompiler` | **new** | Reads `<extract>.aoi.geojson`, validates, resolves to CARLA-local metres ([20 §8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
-| `AuthoringReferenceSet` | **new artifact** | The machine-readable inputs an author needs: vehicle catalogue, area table, street-name-to-road index, annotation vocabulary, world digest. [20 open question 9](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) asks whether this should be packaged; this architecture requires it, because the assistant actor of [02](02_Use_Cases.md) cannot author without it |
+| `VehicleCatalogueGenerator` | **new** | Spawns every registered blueprint against a running server, measures the box the spawned actor carries, and writes a versioned catalogue (built as `VehicleCatalogueBuilder`, which writes `CarlaControl/catalogue/vehicles.catalogue.json`). It is **not** a projection of `GetActorDefinitionsAsync`: a definition carries no dimensions, so there is nothing to project ([04](04_Contracts.md) `D4.1`) |
+| `AreaOfInterestCompiler` | **new** | Reads `<extract>.aoi.geojson`, validates, resolves to CARLA-local metres (built as `AreaOfInterestSource`, which validates the GeoJSON, and `AreaOfInterestResolver`, which writes `areas.resolved.json` in CARLA metres and on SUMO lanes) |
+| `AuthoringReferenceSet` | **new artifact** | The machine-readable inputs an author needs: vehicle catalogue, area table, street-name-to-road index, annotation vocabulary, world digest. Earlier research left open whether this should be packaged (as built, `AuthoringReferenceSet` writes the resolved areas, the place index and the solar frame into the world package, and the vehicle catalogue ships in `CarlaControl/catalogue/`); this architecture requires it, because the assistant actor of [02](02_Use_Cases.md) cannot author without it |
 
 The invariant that makes the whole system cheap is already established and must be preserved: because the
 SUMO network and the OpenDRIVE come from one `netconvert` run at one pinned origin with
 `--offset.disable-normalization`, **SUMO (x, y) equals CARLA (x, −y)** with no offset arithmetic
-(carried forward from [23 §2](../../Findings/23_SUMO_Traffic_Integration.md), measured `netOffset`
-`0.00,0.00`). Any design that re-derives one artifact from the other forfeits this.
+(as built, `NetworkFrameCheck.Require` refuses a session whose network's `netOffset` is not
+`0.00,0.00` or whose projection is not the world's georeference string). Any design that re-derives one
+artifact from the other forfeits this.
 
 ### 2.2 Authoring time — produces a scenario package, with no CARLA in the loop
 
@@ -177,9 +178,9 @@ SUMO network and the OpenDRIVE come from one `netconvert` run at one pinned orig
 |---|---|---|
 | `SumoNetworkBuilder` | `SumoScenarioBuilder.build_network` (`SumoScenarioBuilder.py:309`) | Rebuilds the SUMO network at the world's origin. Becomes redundant once `RoadNetworkConverter` retains `map.net.xml`; kept for scenarios authored against a world package rather than a live build |
 | `SumoDemandAuthor` | `SumoScenarioBuilder`, and `ScenarioCompiler`, which compiles the specification `make_bahonar_scenario.py` emits for the multi-day pattern of life ([07](07_Scenario_Authoring.md) §3.4.1) | Flows, scheduled vehicles, stops, fencing, opposite-lane overtaking, config |
-| `BehaviouralAnnotationCompiler` | **new** | Reads the authored annotation channel and emits the `AnnotationSet` of [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): pattern instances, participants, intervals, supervision state, vocabulary version |
+| `BehaviouralAnnotationCompiler` | **new** | Reads the authored annotation channel and emits the `AnnotationSet`: pattern instances, participants, intervals, supervision state, vocabulary version (built as `SupervisionPlanCompiler`, which compiles the specification's supervision block into the supervision plan) |
 | `ScenarioValidator` | **new**, over existing practice | Route validation through `duarouter` rather than a graph walk, departure-sort check, reference resolution against catalogue, area table and vocabulary, **and the presence and well-formedness of the epoch declaration**. The gotchas it enforces are already recorded in `CarlaControl/skills/sumo-traffic-scenarios/SKILL.md` |
-| `ScenarioPackage` | **new artifact** | The shippable unit: `map.net.xml`, `.rou.xml`, `.sumocfg`, the `AnnotationSet`, the resolved area table, the vType-to-catalogue binding, **the epoch declaration** (§4.4), and the world digest that binds it to one world ([18 §5.5](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)) |
+| `ScenarioPackage` | **new artifact** | The shippable unit: `map.net.xml`, `.rou.xml`, `.sumocfg`, the `AnnotationSet`, the resolved area table, the vType-to-catalogue binding, **the epoch declaration** (§4.4), and the world digest that binds it to one world (as built, `ScenarioNetworkCheck` refuses a scenario whose network's canonical fingerprint is not that of the package's `map.net.xml`, and `LoadedWorldCheck` refuses a package whose `map.xodr` digest and ground grids are not the loaded world's) |
 
 **The epoch declaration is a new required member of the scenario package**, and it is required because
 nothing machine-readable states it today. **Measured** 2026-09-17 on the sizing scenario: guard shifts
@@ -192,17 +193,16 @@ validation rather than fall back to a guess.
 
 ### 2.3 Run time
 
-**In `CarlaNet.CoSim`, a new assembly** (the name is carried forward from
-[23 §5](../../Findings/23_SUMO_Traffic_Integration.md)). Its reference set is `CarlaNet.Types`,
-`CarlaNet.Transport`, `CarlaNet.Map` and `CarlaNet.Sumo` (the TraCI client). It must **not** reference
-`CarlaNet.TrafficManager` for the playback mode; see §5.3. The existing reference graph
-(`CarlaNet/src/*/*.csproj`, read 2026-09-17) confirms `CarlaNet.Types` references nothing and is the only
-common ancestor of `CarlaNet.Scenario` and `CarlaNet.Recording`.
+**In `CarlaNet.CoSim`, a new assembly** (the name is carried forward from earlier research). Its
+reference set is `CarlaNet.Types`, `CarlaNet.Transport`, `CarlaNet.Map` and `CarlaNet.Sumo` (the TraCI
+client). It must **not** reference `CarlaNet.TrafficManager` for the playback mode; see §5.3. The
+existing reference graph (`CarlaNet/src/*/*.csproj`, read 2026-09-17) confirms `CarlaNet.Types`
+references nothing and is the only common ancestor of `CarlaNet.Scenario` and `CarlaNet.Recording`.
 
 | Component | Responsibility |
 |---|---|
 | `SumoSession` | Owns the `sumo` process lifetime and the TraCI connection to it; restartable without restarting the world |
-| `SumoStateReader` | One bulk read per SUMO step through a TraCI subscription, not one call per vehicle. Non-optional at Bahonar scale ([23 §6.11](../../Findings/23_SUMO_Traffic_Integration.md)) |
+| `SumoStateReader` | One bulk read per SUMO step through a TraCI subscription, not one call per vehicle. Non-optional at Bahonar scale (as built, `SubscribedPopulation` subscribes every SUMO vehicle to nine variables, delivered with each step's response) |
 | `PlaybackClock` | **The sole owner of the advance of simulated time, and therefore of simulated civil time and of the sun.** Decides when the world is cued and when SUMO is stepped, enforces the step ratio of §6.1, and is the only component that commands the world's solar state (§4.4) |
 | `ScenarioEpochResolver` | Resolves the scenario package's epoch declaration and the run's `SolarPolicy` into one immutable session input: the civil instant of `t = 0`, the civil UTC offset, and whether the sun is frozen or advancing and at what rate. Runs once at session start; produces the projection `PlaybackClock` then evaluates. It is also what a replay uses, reading the epoch and policy back out of a run manifest instead of a scenario package (§5.5) |
 | `SolarStateActuator` | Applies `PlaybackClock`'s projected civil instant to the world through `set_solar_date` / `set_solar_time` / `set_time_advance`, and compares the projection against the published solar state each tick. The peer of `PoseApplicationActuator`: the clock decides, the actuator writes, and neither holds the other's knowledge |
@@ -211,10 +211,10 @@ common ancestor of `CarlaNet.Scenario` and `CarlaNet.Recording`.
 | `RenderSetSelector` | Decides which SUMO vehicles are CARLA actors, over which span of simulated time. **The single place the size reduction of §9 happens** |
 | `RenderedVehicleRegistry` | The actor pool. Instantiates, binds and releases; the sole creator and destroyer of a SUMO-driven actor. An admitted vehicle appears on its admission tick and a released one disappears on its release tick (§7) |
 | `VehicleTypeCatalogueBinder` | Maps a SUMO `vType` to a CARLA blueprint drawn from the world's vehicle catalogue by the run seed, reconciling dimensions |
-| `SumoPoseProjector` | SUMO pose to CARLA transform: Y negation, `yaw = sumoAngle − 90`, the front-bumper-to-body-centre half-length shift ([23 §6.7](../../Findings/23_SUMO_Traffic_Integration.md)), and Z, pitch and roll from the drape where the vehicle's road is at grade and from that road's profile where it is a structure (D1.5) |
+| `SumoPoseProjector` | SUMO pose to CARLA transform: Y negation, `yaw = sumoAngle − 90`, the front-bumper-to-body-centre half-length shift (as built, `PoseConverter` shifts SUMO's front-bumper position back by `VehicleExtent.BumperToOriginMetres`, half the catalogue's measured body length plus the box centre's offset from the actor origin), and Z, pitch and roll from the drape where the vehicle's road is at grade and from that road's profile where it is a structure (D1.5) |
 | `SumoMotionStateSource` | Speed, course and stopped-state per vehicle, taken from SUMO and carried into truth. The compensation for §8.2's headline cost |
 | `PoseApplicationActuator` | Applies the projected pose. The actuation strategy used by the `SumoDrivenPlayback` mode |
-| `ControlLoopActuator` | The alternative actuation strategy of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) — SUMO's target fed through a controller, CARLA physics executing. Not used by this mode; see §8.4 |
+| `ControlLoopActuator` | The alternative actuation strategy earlier research recommended — SUMO's target fed through a controller, CARLA physics executing (not built: nothing in `CarlaNet.CoSim` feeds a SUMO target to a controller). Not used by this mode; see §8.4 |
 | `DriveAuthorityLease` | The client handle on the world's exclusive population authority (§5.3) |
 
 **The names the tree has** (`CarlaNet/src/CarlaNet.CoSim/`, read 2026-10-05). The responsibilities above
@@ -246,8 +246,8 @@ shim at `CarlaNet/python/carlanet/__init__.py:1589,1596`):
 | Component | Responsibility |
 |---|---|
 | `WorldDriveAuthority` | Which component holds population authority over this world, and under which mode. Read by every client; granted to at most one. **As built, in-process only**: the class of that name in `CarlaNet.CoSim` is a process-scoped lease, so a second client can still start traffic-manager traffic during a SUMO drive; the server-side lease this row describes is not built, and building it is the owner's decision |
-| `WorldSupervisionState` | The tick-stamped annotation projection ([20 §7.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), published so a recorder in **any** process reads the same thing. **Built (2026-10-05)**: the plan and the absences held on the episode (`FWorldSupervisionState`), each lent body's supervision on its own record (`FActorSupervision`), put by `update_supervision` and carried on every world-observer snapshot |
-| `WorldAreasOfInterest` | The resolved area table ([20 §8.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
+| `WorldSupervisionState` | The tick-stamped annotation projection, published so a recorder in **any** process reads the same thing. **Built (2026-10-05)**: the plan and the absences held on the episode (`FWorldSupervisionState`), each lent body's supervision on its own record (`FActorSupervision`), put by `update_supervision` and carried on every world-observer snapshot |
+| `WorldAreasOfInterest` | The resolved area table (not built on the server: the plugin has no areas-of-interest actor or RPC; the table is `areas.resolved.json` in the world package, written by `AuthoringReferenceSet`) |
 | **Solar state** — `ACesiumSunSky` plus `ACesiumTimeOfDayController` | **Already built, already world-scoped, already published.** `CesiumSunSky` is named in the server binding as "the single sun/lighting authority for the georeferenced world (CARLA weather is inert here)" (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Server/CarlaServer.cpp:611-612`). `ACesiumTimeOfDayController` is spawned on demand by `set_time_advance` and advances the solar clock on the world tick (`CesiumTimeOfDayController.cpp:14-38`). Nothing new is needed here; see §4.4 |
 
 **Collection and truth:**
@@ -256,9 +256,9 @@ shim at `CarlaNet/python/carlanet/__init__.py:1589,1596`):
 |---|---|---|
 | `CollectionCamera` | `SensorRig` + camera actor | An RGB camera and its paired depth camera |
 | `FrameRecorder` | `CarlaNet.Recording/FrameRecorder.cs` | Decimates a camera stream, writes PNG plus CoT sidecar. One per camera |
-| `CaptureSession` | **new** | Assigns one capture-session identity to every recorder in a session, and a stable `sensor_id` per camera. Closes [20 §7.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s per-recorder run-id defect |
+| `CaptureSession` | **new** | Assigns one capture-session identity to every recorder in a session, and a stable `sensor_id` per camera. Closes the per-recorder run-id defect (a `FrameRecorder` given no `runId` derives one from its own start instant; as built, `CaptureSession._record` hands every recorder the session's `session_id` as `run_id` and the channel's `sensor_id` as `camera_name`) |
 | `VehicleTelemetryService`, `CotWriter` | `CarlaNet.Recording` | Positional truth and the sidecar |
-| `RunManifestWriter` | **new** | The authoritative supervision artifact ([20 §7.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)), written incrementally |
+| `RunManifestWriter` | **new** | The authoritative supervision artifact, written incrementally (as built, `CarlaNet.CoSim.RunManifestWriter` appends one JSON object per line, flushed before the next, and ends with a `manifest_closed` row) |
 | `SumoCotBridge` | `carlacontrol/SumoCotBridge.py` | **Retained unchanged** as the standalone, no-CARLA telemetry path. It is not in the capture path |
 
 ### 2.4 Post-run — the handover, and the one check that stays ours
@@ -273,7 +273,7 @@ pipeline reads nothing back from either.
 |---|---|
 | `DetectAndTrackStage` | **External.** Consumes the capture corpus, batched or live; emits its own detection-sourced tracks. This pipeline supplies its input and reads none of its output for meaning; anything it pushes back is, at most, optionally received as an opaque transcript (D1.28) |
 | `EPoLModelService` | **External.** Consumes tracks; emits its own per-track assessments, live or offline. Never given truth, and nothing it emits is read back into this pipeline for meaning; anything it pushes back is, at most, optionally received as an opaque transcript (D1.28) |
-| `CorpusAudit` | **Ours.** Finds accidental positives in the unlabelled population ([20 §2.2](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) — a check of this pipeline's own labels against its own derived area relations, needing no output from either external system above |
+| `CorpusAudit` | **Ours.** Finds accidental positives in the unlabelled population (not built: no code computes area relations per vehicle; `CorpusLeakValidator` checks only for field values that planted vehicles alone carry) — a check of this pipeline's own labels against its own derived area relations, needing no output from either external system above |
 
 This architecture specifies nothing about either external system's API, format, transport or latency, by
 design (D1.28) — they are none of this plan's business, live or offline. Where a concrete integration
@@ -286,10 +286,11 @@ and no harness associating `DetectAndTrackStage`'s tracks to truth, because that
 external system's output back in, which is the one thing the handover forecloses. What stands in their
 place is a contract, not a component: this pipeline publishes truth that is
 *associable* — per tick, positioned, timed, boxed — and documents the rule by which supervision
-*would* transfer onto a detector's tracks ([20 §7.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)),
-so that an external consumer can perform that association itself. [04](04_Contracts.md) and
-[06](06_Truth_And_Annotation.md) own that contract's wire shape; this section owns only the fact that no
-runtime component here executes it.
+*would* transfer onto a detector's tracks (published as
+[`Docs/Tracking/Matching_Tracks_To_Truth.md`](../../Tracking/Matching_Tracks_To_Truth.md); no code in the
+tree applies it), so that an external consumer can perform that association itself.
+[04](04_Contracts.md) and [06](06_Truth_And_Annotation.md) own that contract's wire shape; this section
+owns only the fact that no runtime component here executes it.
 
 ### 2.5 Build-time pipeline
 
@@ -318,12 +319,14 @@ flowchart LR
 
 Two properties of this pipeline are load-bearing. **The OpenDRIVE and the SUMO network must come from the
 same `netconvert` invocation**, never from re-deriving one from the other — that is what keeps the
-coordinate identity and the junction identifiers aligned for free ([23
-§6.4](../../Findings/23_SUMO_Traffic_Integration.md)). And **turn restrictions must survive the clip**;
-`osm_clip.py` drops all OSM relations today ([issue #12](https://github.com/sbrett9/carla/issues/12)),
-which costs little while nothing enforces turn legality and costs a great deal once SUMO is routing every
-vehicle ([23 §6.6](../../Findings/23_SUMO_Traffic_Integration.md)). It is a prerequisite of this
-architecture, not an improvement to it.
+coordinate identity and the junction identifiers aligned for free (as built,
+`OsmConverter.ConvertFileWithNetworkAsync` returns both from one invocation, and its remarks record that a
+second run with identical flags produces a different graph, 743 of 4,978 canonical rows). And **turn
+restrictions must survive the clip**; `osm_clip.py` drops all OSM relations today
+([issue #12](https://github.com/sbrett9/carla/issues/12)), which costs little while nothing enforces turn
+legality and costs a great deal once SUMO is routing every vehicle (as built, `OsmClipper` copies every
+relation verbatim, with every node its members name). It is a prerequisite of this architecture, not an
+improvement to it.
 
 ### 2.6 Run-time dataflow
 
@@ -409,17 +412,16 @@ Today the scenario executor and the recorder are in **one process** and on **one
 `self._scenario` and `self._recorder` (`CarlaNet/python/carlanet/__init__.py:1932`, `:1873`, `:1924`).
 `run_SCTMV.py` constructs both and steps them from one loop (`run_SCTMV.py:222`, `:279-284`).
 
-The constraint is stronger than [20 §7.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)
-records. Starting a second recording on the same client **stops the first**:
-`start_recording` calls `self.stop_recording()` before constructing the new one
-(`carlanet/__init__.py:1908`). So a second collection camera today does not merely mean a second registry
-reader — it means a second **process**, unconditionally.
+The constraint is stronger than earlier research recorded. Starting a second recording on the same
+client **stops the first**: `start_recording` calls `self.stop_recording()` before constructing the new
+one (`carlanet/__init__.py:1908`). So a second collection camera today does not merely mean a second
+registry reader — it means a second **process**, unconditionally.
 
 And there are **two** process-local registries, not one, each of which a second process reads wrongly:
 
 | Registry | Where it lives | What a second process sees |
 |---|---|---|
-| Annotation state | Proposed process-local in [20 §7.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md), decision 11 | Empty — every vehicle `unlabelled`, silently |
+| Annotation state | Proposed process-local by earlier research (as built, held on the server: `FWorldSupervisionState` on the episode and `FActorSupervision` on each body's record) | Empty — every vehicle `unlabelled`, silently |
 | Render set | New | Would be invisible to any process that did not build it |
 
 That is one failure mode with two instances, and it is the reason the topology decision below is what it
@@ -428,9 +430,9 @@ is rather than a matter of taste.
 **A note on stale citations, for every author in this folder.** `CarlaNet/python/SCTMV.py` **no longer
 exists** — verified 2026-09-17 by searching the tree, which finds no file of that name outside `Build/`.
 It was replaced by `CarlaControl/scripts/run_SCTMV.py` over the `carlacontrol` package. Every
-`SCTMV.py:NNN` citation in [20](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) and in
-`_TEAM_BRIEF.md` therefore points at a file that is gone, and must be re-grounded against the current
-tree before it is relied on. The gaps those citations recorded have not gone away: `scenario_id` is still
+`SCTMV.py:NNN` citation in the earlier annotation research and in `_TEAM_BRIEF.md` therefore points at a
+file that is gone, and must be re-grounded against the current tree before it is relied on. The gaps
+those citations recorded have not gone away: `scenario_id` is still
 accepted by the recorder and still never supplied, now at `NativeRecorder.py:107-108`, which passes
 `run_id` and `seed` and nothing else.
 
@@ -485,14 +487,14 @@ architecture states nothing further about that transport (D1.28).
 
 | From | To | Transport | Notes |
 |---|---|---|---|
-| Python entry | CarlaNet assemblies | **No transport** — same process, pythonnet | This is why there is no Python in the per-tick path ([18 D2](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)) |
+| Python entry | CarlaNet assemblies | **No transport** — same process, pythonnet | This is why there is no Python in the per-tick path (as built, Python calls `SumoDriveSession.Advance` once per SUMO step; inside that call, .NET computes every pose and sends the cue for each world tick the step covers) |
 | `CarlaNet.Transport` | CARLA server | CARLA RPC (msgpack over TCP) and the sensor/world-observer streams | `SendTickCueAsync` (`CarlaClient.cs:403`) is the synchronous rendezvous |
-| `CarlaNet.CoSim` | `sumo` | TraCI over TCP, spoken directly by `CarlaNet.Sumo` — a managed socket client ported from SUMO's own reference client | Out of process structurally: nothing of SUMO's is loaded into this process, so a SUMO assertion cannot take the client down and `sumo` is restartable ([23 §1.1, §6.3](../../Findings/23_SUMO_Traffic_Integration.md)) |
+| `CarlaNet.CoSim` | `sumo` | TraCI over TCP, spoken directly by `CarlaNet.Sumo` — a managed socket client ported from SUMO's own reference client | Out of process structurally: nothing of SUMO's is loaded into this process, so a SUMO assertion cannot take the client down and `sumo` is restartable (as built, `SumoConnection` starts `sumo --remote-port` as a child process and speaks TraCI to it over a socket) |
 | Any client | World-scoped state | CARLA RPC pairs, in the manner of `set_staging_bounds`/`get_staging_bounds` | Published on change, not per tick; see §4.1 |
 | `SolarStateActuator` | CARLA server | `set_solar_time`, `set_solar_date`, `set_time_advance` — three RPCs (`CarlaServer.cpp:614`, `:625`, `:661`) | **Write path only.** As built (`SolarLease`, 11 D11.19): under `freeze`, one `set_solar_epoch` of date, clock and civil offset at window open and `set_time_advance(false, 0)`; under `advance`, one `set_solar_epoch` per tick after the pose batch and before the cue, at the whole second nearest the frame's instant, the date carried across midnight, the engine's own advance off throughout; 0.128 ms median per write (§4.4) |
 | CARLA server | Any client | Solar state, **on the world-observer snapshot header** — eleven doubles appended at offset 36 (`Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Sensor/WorldObserver.cpp:322-339`; cached at `CarlaClient.cs:1850-1855`, exposed at `:1991`) | **No RPC at all**, tick-paired, lock-free. The read path costs nothing and is already consumed by the recorder (`FrameRecorder.cs:160-162`) |
 | `FrameRecorder` | Disk | PNG + CoT XML sidecar pairs, per camera | |
-| Truth producer | TAK client | CoT over UDP | Diagnostic; the sidecar is authoritative ([20 §7.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)) |
+| Truth producer | TAK client | CoT over UDP | Diagnostic; the sidecar is authoritative (as built, `CotUdpEmitter` writes `_carla`, `_capture` and `_solar` only, and `CotWriter` writes the box, occlusion and `<_supervision>` into the recorded sidecar) |
 | Capture corpus | `DetectAndTrackStage` | Filesystem, or a live transport the external system chooses | The transport past this boundary is `DetectAndTrackStage`'s choice, not this architecture's. For a live exercise the handover is **continuous rather than deferred**: the same frame and sidecar `FrameRecorder` already produces become available as they are produced, at the pace `PlaybackClock` is pacing to (§4.6) — what crosses the boundary is unchanged, only the timing of the handover differs, and how a consumer is notified or polled is [08](08_Collection_And_EPoL.md)'s to define |
 | `DetectAndTrackStage` / `EPoLModelService` | `CaptureSessionHost` | Whatever the external system offers, if anything; opaque to this architecture | **Optional, and one-way in only.** Recorded verbatim and tick-stamped as a transcript with a source id and a content type; never parsed for meaning and never fed into truth, supervision or the clock (D1.28). [04](04_Contracts.md) and [08 §11.6](08_Collection_And_EPoL.md) own the container shape |
 
@@ -506,10 +508,10 @@ their own memory.**
 Two halves, and both are needed:
 
 - **Correctness does not depend on co-location.** Annotation state, drive authority, areas of interest and
-  the render set are published to the server. This is [20 decision
-  11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s first option, chosen over its
-  second, and it resolves both registry failures of §3.1 together rather than one at a time. The cost is
-  an engine change; per the standing rule, that is not a cost worth avoiding.
+  the render set are published to the server. Earlier research left two options open, publishing the
+  state to the server or keeping every recorder in the executor's process; this is the first, chosen
+  over the second, and it resolves both registry failures of §3.1 together rather than one at a time.
+  The cost is an engine change; per the standing rule, that is not a cost worth avoiding.
 - **The default is still one process**, because one tick owner is simpler, because the recorder already
   does its work off the interpreter on a .NET worker pool (`FrameRecorder.cs:115-123`), and because the
   shim's one-recorder-per-`World` limit (`carlanet/__init__.py:1908,1924`) is a shim defect to fix, not a
@@ -541,14 +543,14 @@ applies it, or is forbidden from touching it.
 | **Vehicle kinematics** (speed, course, stopped-state) | `sumo`, via `SumoMotionStateSource` | The truth producer must take these from the bridge and **not** from `Actor.GetVelocity`, which for a pose-applied body reports only the velocity the bridge wrote — SUMO's, once per tick ([`03`](03_CoSimulation_Runtime.md) D3.5; `Unreal/.../Sensor/WorldObserver.cpp:385`) — so it can be no better than the source it copies |
 | **Positional truth** (what a sensor saw, and where) | CARLA, via `VehicleTelemetryService` | SUMO's position is the *command*; CARLA's applied transform is the *record*. See §4.2 |
 | **Vehicle appearance** | `VehicleTypeCatalogueBinder`, from the world's vehicle catalogue and the run seed | SUMO's `vType` contributes class and dimensions only. **SUMO's `vType` colour is display metadata and must not reach the blueprint** — see §4.3 |
-| **Behavioural truth** | The scenario author, compiled into the `AnnotationSet`, published as `WorldSupervisionState` | Nothing derives an annotation from a trajectory, ever ([20 §2.1, §8.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)). Derived area relations are a separate element and are never a label |
+| **Behavioural truth** | The scenario author, compiled into the `AnnotationSet`, published as `WorldSupervisionState` | Nothing derives an annotation from a trajectory, ever (as built, `SupervisionBinder` binds the compiled plan's rows to SUMO's events and makes no row of its own). Derived area relations are a separate element and are never a label |
 | **Population authority over the world** | Exactly one mode holder, leased from `WorldDriveAuthority` | Every other population-producing component refuses to start. See §5.3 |
 | **Run and session identity** | `CaptureSession` | Recorders are *given* the session id, the scenario id and a stable `sensor_id`; they stop deriving them from their own start instant (`FrameRecorder.cs:101-103`) |
 
 `WorldSupervisionState` is published **on change**, not per tick. An interval opens or closes a handful of
 times across a capture, so the RPC traffic is negligible and no per-tick round trip is introduced. What is
 stamped with the tick is the state itself, so a recorder can tell which simulated instant a snapshot
-describes ([20 §7.3](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)).
+describes.
 
 **As built (2026-10-05), on the render set's mechanism.** The owner ruled that per-frame supervision is
 held on the server and not in one client: "They have to be on the server. I do not want two clients ever
@@ -585,12 +587,13 @@ reasons:
 1. **The pixels were rendered from the applied transform.** Truth that disagrees with the pose the frame
    was drawn at is not truth about that frame.
 2. **Z does not come from SUMO.** The SUMO network is flat — zero distinct `z` in any lane shape
-   (carried forward from [23 §2](../../Findings/23_SUMO_Traffic_Integration.md), measured). Height comes
-   from the drape at grade and off every road, and from the profile of the road the vehicle is on where
-   that road is a structure (D1.5).
+   (carried forward from earlier research, measured; `PoseConverter` takes no height, pitch or roll from
+   SUMO for that reason). Height comes from the drape at grade and off every road, and from the profile
+   of the road the vehicle is on where that road is a structure (D1.5).
 3. **An apply can fail or be clamped**, and a vehicle can be destroyed between the command and the frame.
 4. **Occlusion, apparent size and bounding box are camera-relative** and exist only on the CARLA side
-   ([09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)).
+   (`CotWriter` writes `in_frame`, `apparent_width_px`, `box_px` and `occlusion` per capture, from
+   `BoxProjector` and `OcclusionEstimator`).
 
 So: **SUMO's pose is the command; CARLA's applied pose is the record.** A measurable divergence between
 them is a bridge defect and should be reported, which gives the mode a free self-check.
@@ -614,10 +617,10 @@ parsing `BahonarPatternOfLife.zip`'s route file: the scenario declares 14 `vType
 carry deliberately conspicuous colours — `anomaly_probe` `1.00,0.45,0.00`, `anomaly_escort`
 `1.00,0.10,0.10`, `anomaly_shadow` `1.00,0.20,0.60` — against muted civilian greys. Those colours exist to
 make the SUMO GUI readable. Carried into CARLA blueprints they would make **colour the label**, which is
-exactly the appearance confounder of
-[20 §2.6](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md): a corpus in which the
-annotation is trivially recoverable from a covariate that has nothing to do with behaviour, whether or
-not anything downstream ever exploits it. The binder therefore ignores `vType` colour entirely.
+exactly the appearance confounder (as built, `VehicleBodyPool` spawns a body from its blueprint, slot
+and role name alone, so no `vType` colour reaches it): a corpus in which the annotation is trivially
+recoverable from a covariate that has nothing to do with behaviour, whether or not anything downstream
+ever exploits it. The binder therefore ignores `vType` colour entirely.
 
 Dimensions run the other way and must be respected: a `vType`'s `length` and `width` change car-following
 gaps and therefore the behaviour itself, so the blueprint must be chosen to match the declared dimensions
@@ -852,7 +855,7 @@ not a live-only flag.
 | `SumoDrivenPlayback` | `sumo`, poses applied | Held by `CarlaNet.CoSim` | `PlaybackClock`, projecting through the scenario's epoch | New |
 | `TrafficManagerAmbient` | The .NET traffic manager, over the inward staging ring | Held by `TrafficController` | The operator, as an absolute civil instant — there is no scenario epoch to project through | Yes — `carlacontrol/TrafficController.py` |
 | `StoryboardExecution` | `CarlaNet.Scenario`, over named entities only | **None** — it places named entities, it does not generate a population | **Nobody, when it is coexisting.** Holding no population authority, it holds no solar command authority either (§4.5, §5.5) | Yes — `CarlaNet.Scenario/ScenarioExecutor.cs` |
-| `RecordedReplay` | The engine replayer, from a log | Held by the server | The replay client, re-establishing the original run's epoch and policy **from the run manifest**, because the engine log carries no sun (§5.5) | Yes — validated in [18 §5.4](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) |
+| `RecordedReplay` | The engine replayer, from a log | Held by the server | The replay client, re-establishing the original run's epoch and policy **from the run manifest**, because the engine log carries no sun (§5.5) | Yes — the engine recorder and replayer, reached through `CarlaClient.StartRecorderAsync` and `ReplayFileAsync` |
 
 ### 5.2 The coexistence matrix
 
@@ -866,10 +869,10 @@ not a live-only flag.
 - `SumoDrivenPlayback` × `TrafficManagerAmbient` is **mutually exclusive** by user decision, and the
   architecture makes it structural rather than advisory (§5.3). Both claim population authority.
 - `SumoDrivenPlayback` × `StoryboardExecution` is **conditional**: permitted only once every storyboard
-  entity is mirrored into SUMO so SUMO's car-following yields to it ([23
-  §6.9](../../Findings/23_SUMO_Traffic_Integration.md)). Until that exists the combination is **refused at
-  session start**, not warned about, because an unmirrored storyboard entity is invisible to every SUMO
-  vehicle and the resulting imagery shows cars driving through it.
+  entity is mirrored into SUMO so SUMO's car-following yields to it (not built: `CarlaNet.Scenario` has
+  no SUMO reference, and only tests call `SumoVehicleDomain.MoveToXY`). Until that exists the combination
+  is **refused at session start**, not warned about, because an unmirrored storyboard entity is invisible
+  to every SUMO vehicle and the resulting imagery shows cars driving through it.
 - Anything × `RecordedReplay` is exclusive: the replayer respawns actors from the log and owns their pose.
 
 **The matrix itself does not change with illumination, and that is a result rather than an omission.**
@@ -915,8 +918,8 @@ report says the lockout was not in force (`CoSimRunReport.DriveLeaseRefused`).
 **Three — mandatory announcement.** While a population-authority holder exists, any component that
 creates a vehicle actor must announce it to the holder. A storyboard entity that cannot be announced
 cannot be placed. This is what makes the conditional case of §5.2 safe rather than merely discouraged,
-and it is the mechanism by which the mirror of [23 §6.9](../../Findings/23_SUMO_Traffic_Integration.md)
-becomes a precondition rather than an aspiration. Not built: no component announces, and the storyboard
+and it is the mechanism by which mirroring every storyboard entity into SUMO (§5.2) becomes a
+precondition rather than an aspiration. Not built: no component announces, and the storyboard
 executor is on another branch.
 
 Two capabilities are deliberately distinguished, because conflating them would forbid something worth
@@ -1093,8 +1096,8 @@ not the content of a single tick.
 
 **What happens when one side stalls.** The clock owns both, so neither can run away from the other. If a
 SUMO step exceeds its budget the world simply is not cued until it returns — the capture slows, the
-content does not change, and `tick` remains the time base ([18
-D3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md)). If the world does not deliver the cued
+content does not change, and `tick` remains the time base (`FrameRecorder` stamps each capture's
+`CaptureIdentity` with the frame number from the image header). If the world does not deliver the cued
 frame, `WaitForFrame` times out and returns null rather than deadlocking (`CarlaClient.cs:425-433`); the
 clock must treat that as a session fault and stop, because a capture that silently drops frames produces a
 corpus whose tick spacing is not what the manifest says it is. **That is the stored-corpus case, where
@@ -1234,13 +1237,13 @@ The contract this state machine encodes, stated once so the other sections can r
 - **A vehicle CARLA is not rendering is still simulating**, and truth must say so rather than implying it
   does not exist. It is absent from a capture sidecar, because a sidecar is the record of what a camera
   could have seen; it is present in the run manifest's accounting, marked as not rendered.
-- **A rendered span gate sits upstream of
-  [20 §2.5](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s observed span.** An
-  annotated interval can now fail to be observable for two independent reasons — the participant was never
-  rendered, or it was rendered and not seen. Both must be recorded per interval, or a consumer computing
-  prevalence or coverage from this corpus gets a wrong answer with nothing in the corpus to flag it. This
-  is a requirement the render set introduces and that doc 20 did not have;
-  [06](06_Truth_And_Annotation.md) owns its shape.
+- **A rendered span gate sits upstream of the observed span**, the span over which a sensor could see
+  the participant (as built, `SupervisionIntervalRecord.NotDrawn` records the spans no body drew the
+  participant; no per-sensor observed span is recorded). An annotated interval can now fail to be
+  observable for two independent reasons — the participant was never rendered, or it was rendered and
+  not seen. Both must be recorded per interval, or a consumer computing prevalence or coverage from this
+  corpus gets a wrong answer with nothing in the corpus to flag it. This is a requirement the render set
+  introduces and that earlier research did not have; [06](06_Truth_And_Annotation.md) owns its shape.
 - **The rendered span is delimited by two recorded instants, and those instants are the gate.** A vehicle
   appears in the world at the tick it was admitted and vanishes at the tick it was released. That abrupt
   appearance and disappearance is a fact about the capture, so `RenderedVehicleRegistry` records the
@@ -1258,30 +1261,30 @@ The contract this state machine encodes, stated once so the other sections can r
 
 ---
 
-## 8. Resolving doc 23 §4 against the accepted teleport
+## 8. Resolving the physics-execution recommendation against the accepted teleport
 
-### 8.1 What doc 23 actually argued
+### 8.1 What the earlier recommendation argued
 
-[23 §4](../../Findings/23_SUMO_Traffic_Integration.md) recommends against teleporting and for "SUMO
-decides, CARLA physics executes", on the grounds that adopting upstream's teleport shape would regress
-four capabilities this fork has built. That argument was made for a different requirement: **ambient
+The earlier SUMO integration research recommends against teleporting and for "SUMO decides, CARLA
+physics executes", on the grounds that adopting upstream's teleport shape would regress four
+capabilities this fork has built. That argument was made for a different requirement: **ambient
 traffic as believable background for an OpenSCENARIO storyboard**, at ordinary scale, where physics
 fidelity is most of the point. It was not made for a seven-day, 245-flow behavioural capture whose product
 is imagery plus behavioural truth. The user has accepted teleport-style control **for this mode**. Neither
 document is wrong; each was written without the other's requirement in hand.
 
-What follows is doc 23 §4's own table, cost by cost, with what this architecture does about each. Nothing
-is waved away.
+What follows is that research's own table of costs, cost by cost, with what this architecture does about
+each. Nothing is waved away.
 
 ### 8.2 Cost by cost
 
-| Doc 23 §4 cost | Is it real here | What the architecture does |
+| Cost the earlier research named | Is it real here | What the architecture does |
 |---|---|---|
-| **Truth telemetry velocity reads zero.** `WorldObserver.cpp:373` serialises `GetActor()->GetVelocity()`, which a transform on a non-simulating body does not update | **Yes, verified at that exact line 2026-09-17** | Fully compensated, and arguably improved. `SumoMotionStateSource` carries SUMO's own speed and angle into the truth record, and the record says the kinematics came from the simulation rather than from the body. SUMO's angle is additionally *better* than a velocity-derived course for the case that matters most: a stationary vehicle has no course, and [18 §6.3](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) measured two stationary vehicles broadcasting `course="271.8"` and `course="299.3"` as pure noise. `SumoCotBridge.py:302-303` already relies on exactly this property |
-| **Seating on the draped terrain** — SUMO poses arrive with no usable Z | Yes; the SUMO network is flat, zero distinct `z` (carried forward from [23 §2](../../Findings/23_SUMO_Traffic_Integration.md)) | Fully compensated, and cheaply. The drape grid — a **client-side bilinear lookup with no RPC and no raycast**, the surface `CarlaClient.SampleDrapeGroundElevation` (`CarlaClient.cs:241-263`) samples and [23 §6.5](../../Findings/23_SUMO_Traffic_Integration.md) named for this purpose — seats a body where its road is at grade and wherever it is on no road; the OpenDRIVE profile of the road it is on, read in process from the world package and joined once to the SUMO lanes, seats it where that road is a structure. The drape alone cannot seat a body at a two-level crossing: it holds one height per cell, the ground beneath every deck; the profile alone stands above a cambered road's outer lanes, being the left edge's height built flat across ([03](03_CoSimulation_Runtime.md) §7.5) |
-| **Suspension, pitch and wheel rotation** | Partly | **Partly compensated, partly a stated loss.** Terrain-following pitch and roll come from the drape grid's gradients where the road is at grade, which is the visible part at EO altitude, and pitch from the slope of the road profile with no roll on a structure; the projector owns them. Suspension travel and load transfer are **gone and stay gone**. Wheel rotation is already dead in this fork's record and replay path — `#if 0 // @CARLAUE5` at `Recorder/CarlaRecorder.cpp:209` and `Recorder/CarlaReplayerHelper.cpp:348`, carried forward from [18 §5.2](../../Findings/18_Scenario_Fabrication_For_EPoL_Training.md) — and is sub-pixel at the altitudes [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md) measured, where a vehicle is about three pixels long at 1.1 km |
-| **Vehicle light state**, which under the traffic manager is computed by a stage that does not run when the traffic manager does not run. **This is a fifth cost doc 23 §4 did not enumerate** | **No — there is nothing to lose, measured** | **A gain, not a cost, and the ledger should say so.** The only component with automatic vehicle lights is the .NET traffic manager's `VehicleLightStage`, and in a georeferenced world it cannot work: it is **off per actor by default** (`Parameters.cs:437-438` returns false for any actor nobody enabled), and its entire night branch is wrapped in `if (_isWeatherEnabled)` with the sun read from `_weather.SunAltitudeAngle` (`Stages/VehicleLightStage.cs:228-241`) — CARLA weather, which `CarlaServer.cpp:611-612` records as inert in this world. So **no existing mode turns a headlight on at night in a generated world.** SUMO-sourced signals plus solar-derived lamps are new capability over a baseline of none. See §8.5 |
-| **Vehicle fade and the staging ring** are built around a client-side registry keyed to vehicles the staging controller owns | The staging ring, yes. The fade, no | **The staging ring is replaced.** The ring exists to solve a spawn-model problem that SUMO's insertion model solves better and directly — [23 §3.1](../../Findings/23_SUMO_Traffic_Integration.md) sets that out at length, including that exactly two of Arapahoe's 212 fringe entries are freeway — so `RenderSetSelector` supersedes it for this mode while the staging controller itself is untouched and remains the `TrafficManagerAmbient` mode's mechanism. Doc 23 §4 counted the fade as a capability a teleport shape would cost. No mode in the stack fades a vehicle, so there is nothing here to cost: an admitted vehicle appears and a released one disappears, and the admission and release ticks are recorded (§7) |
+| **Truth telemetry velocity reads zero.** `WorldObserver.cpp:373` serialises `GetActor()->GetVelocity()`, which a transform on a non-simulating body does not update | **Yes, verified at that exact line 2026-09-17** | Fully compensated, and arguably improved. `SumoMotionStateSource` carries SUMO's own speed and angle into the truth record, and the record says the kinematics came from the simulation rather than from the body. SUMO's angle is additionally *better* than a velocity-derived course for the case that matters most: a stationary vehicle has no course, and earlier telemetry research measured two stationary vehicles broadcasting `course="271.8"` and `course="299.3"` as pure noise (as built, the sidecar's `_carla` also carries `heading_deg`, the body's yaw, and in a SUMO drive `sumo_angle_deg`: `CotWriter.cs:304`, `:410`). `SumoCotBridge.py:302-303` already relies on exactly this property |
+| **Seating on the draped terrain** — SUMO poses arrive with no usable Z | Yes; the SUMO network is flat, zero distinct `z` (carried forward from earlier research) | Fully compensated, and cheaply. The drape grid — a **client-side bilinear lookup with no RPC and no raycast**, the surface `CarlaClient.SampleDrapeGroundElevation` (`CarlaClient.cs:241-263`) samples and `GroundSurface` reads out of the world package and samples in process for this purpose — seats a body where its road is at grade and wherever it is on no road; the OpenDRIVE profile of the road it is on, read in process from the world package and joined once to the SUMO lanes, seats it where that road is a structure. The drape alone cannot seat a body at a two-level crossing: it holds one height per cell, the ground beneath every deck; the profile alone stands above a cambered road's outer lanes, being the left edge's height built flat across ([03](03_CoSimulation_Runtime.md) §7.5) |
+| **Suspension, pitch and wheel rotation** | Partly | **Partly compensated, partly a stated loss.** Terrain-following pitch and roll come from the drape grid's gradients where the road is at grade, which is the visible part at EO altitude, and pitch from the slope of the road profile with no roll on a structure; the projector owns them. Suspension travel and load transfer are **gone and stay gone**. Wheel rotation is already dead in this fork's record and replay path — `#if 0 // @CARLAUE5` at `Recorder/CarlaRecorder.cpp:209` and `Recorder/CarlaReplayerHelper.cpp:348`, carried forward from earlier research — and is sub-pixel at the altitudes earlier telemetry research measured, where a vehicle is about three pixels long at 1.1 km (the sidecar records each vehicle's size in the picture as `apparent_width_px` and `apparent_height_px`: `CotWriter`) |
+| **Vehicle light state**, which under the traffic manager is computed by a stage that does not run when the traffic manager does not run. **This is a fifth cost the earlier research did not enumerate** | **No — there is nothing to lose, measured** | **A gain, not a cost, and the ledger should say so.** The only component with automatic vehicle lights is the .NET traffic manager's `VehicleLightStage`, and in a georeferenced world it cannot work: it is **off per actor by default** (`Parameters.cs:437-438` returns false for any actor nobody enabled), and its entire night branch is wrapped in `if (_isWeatherEnabled)` with the sun read from `_weather.SunAltitudeAngle` (`Stages/VehicleLightStage.cs:228-241`) — CARLA weather, which `CarlaServer.cpp:611-612` records as inert in this world. So **no existing mode turns a headlight on at night in a generated world.** SUMO-sourced signals plus solar-derived lamps are new capability over a baseline of none. See §8.5 |
+| **Vehicle fade and the staging ring** are built around a client-side registry keyed to vehicles the staging controller owns | The staging ring, yes. The fade, no | **The staging ring is replaced.** The ring exists to solve a spawn-model problem that SUMO's insertion model solves better and directly — earlier research set that out at length, including that exactly two of Arapahoe's 212 fringe entries are freeway, because `TrafficController` draws from the map's recommended spawn points and `AOpenDriveGenerator::GenerateSpawnPoints` makes those only at road entries (`GenerateWaypointsOnRoadEntries`) — so `RenderSetSelector` supersedes it for this mode while the staging controller itself is untouched and remains the `TrafficManagerAmbient` mode's mechanism. The earlier research counted the fade as a capability a teleport shape would cost. No mode in the stack fades a vehicle, so there is nothing here to cost: an admitted vehicle appears and a released one disappears, and the admission and release ticks are recorded (§7) |
 
 ### 8.3 What is genuinely lost, and stays lost
 
@@ -1293,10 +1296,10 @@ Named so it is not quietly assumed away:
    treat SUMO collision warnings as corpus-affecting events, recorded in the manifest.
 2. **Suspension and load-transfer dynamics**, as above.
 3. **Any emergent interaction between a vehicle and the terrain** other than following it: no wheel slip,
-   no grade-limited acceleration. Note that [23 §3.3](../../Findings/23_SUMO_Traffic_Integration.md)
-   already establishes that stock SUMO does not model grade either, so this is not a regression against
-   the alternative — it is a gap both shapes share and that doc 23's per-lane speed derivation addresses
-   independently of which actuator is used.
+   no grade-limited acceleration. Note that earlier research already established that stock SUMO does
+   not model grade either, so this is not a regression against the alternative — it is a gap both shapes
+   share and that the per-lane speed derivation proposed in that research addresses independently of
+   which actuator is used (not built: no code derives a lane speed from grade or curvature).
 4. **The nomenclature trap.** SUMO has its own "teleport", which is a jam-breaking jump within the
    microsimulation and is a different thing entirely. The sizing scenario disables it —
    `<time-to-teleport value="-1"/>`, **measured**, with the authored comment that a vehicle jumping
@@ -1304,7 +1307,7 @@ Named so it is not quietly assumed away:
    this plan must be explicit about which is meant; the architecture's term for ours is **pose
    application**, and `PoseApplicationActuator` is named that way for this reason.
 
-### 8.4 Should doc 23's recommended shape still exist?
+### 8.4 Should the physics-execution shape still exist?
 
 **Yes, as a second actuation strategy behind the same bridge, and it should be built second, not first.**
 
@@ -1312,18 +1315,18 @@ The two shapes differ in exactly one component. Everything upstream — the sess
 session and state reader, the render-set selector, the vehicle registry, the type binder, the pose
 projector — is shared. What differs is whether the projected target becomes a transform
 (`PoseApplicationActuator`) or a control input through a controller and the traffic manager's motion-plan
-stage (`ControlLoopActuator`, the shape of
-[23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md)). Making that a strategy rather than a second
-system is what keeps them from diverging into two half-maintained integrations.
+stage (`ControlLoopActuator`, the shape the earlier research recommended; not built: the bridge applies
+poses through `TickBatch` only). Making that a strategy rather than a second system is what keeps them
+from diverging into two half-maintained integrations.
 
 Why playback first: it is the shape the accepted requirement asks for, it has no tracking-tolerance
-question ([23 open question 2](../../Findings/23_SUMO_Traffic_Integration.md)) because there is no
-tracking error to bound, and it is the one that can sustain the render counts of §9. Why the actuated
+question (how far a control loop may lag SUMO, which the earlier research left open) because there is
+no tracking error to bound, and it is the one that can sustain the render counts of §9. Why the actuated
 shape should still exist: it is the honest oracle for whether a control loop can track SUMO at all, it is
 the right answer for oblique or ground-level imagery where body dynamics are visible, and it is the path
-by which storyboard coupling ([23 §6.9](../../Findings/23_SUMO_Traffic_Integration.md)) becomes
-believable. Doc 23's recommendation is therefore not overturned — it is scoped to the mode it was written
-for.
+by which storyboard coupling (mirroring storyboard entities into SUMO, §5.2; not built) becomes
+believable. The earlier recommendation is therefore not overturned — it is scoped to the mode it was
+written for.
 
 **Illumination is neutral between the two strategies**, and that is worth one line so nobody has to work
 it out later. The sun is world-scoped and is commanded by the clock, which both strategies share; vehicle
@@ -1474,7 +1477,7 @@ civil offset of **+03:30**. Sun elevation in degrees above the horizon, at the s
 | **07:00** | **+4.0°** | +18.7° | +25.1° | +16.8° |
 | 15:00 | +22.4° | +39.9° | +46.9° | +30.8° |
 | **23:00** | **−77.6°** | −54.6° | −38.7° | −66.4° |
-| 03:00 *(doc 20's class-4 pattern hour)* | −47.0° | −33.0° | −22.1° | −36.1° |
+| 03:00 *(the hour in the pattern example of a heavy goods vehicle in a residential area)* | −47.0° | −33.0° | −22.1° | −36.1° |
 
 Four consequences follow, and each is a thing the architecture must expose rather than leave to be
 discovered in the imagery.
@@ -1554,9 +1557,9 @@ Stated as properties, not as a design:
 | [04 — Contracts](04_Contracts.md) | The vType-to-blueprint dimension tolerance and its fallback (§4.3). The render-set contract's wire shape (§7). The kinematics provenance field in truth (§4.3). The wire shape of the epoch declaration and of `SolarPolicy` as a run input, and the tolerance for the projection-versus-record check of §4.4.3 |
 | [05 — Capability audit](05_CarlaNet_Capability_Audit.md) | Whether `set_transform`, `set_simulate_physics` and `apply_batch` are implemented end to end through `CarlaNet.Transport` to the server, at batch sizes this mode uses; add `SetVehicleLightStateCommand` in batch form to that list (§8.5) |
 | [06 — Truth and annotation](06_Truth_And_Annotation.md) | The rendered span gate upstream of the observed span (§7). Where kinematics provenance is carried. **That the run manifest carries the declared epoch and the `SolarPolicy`**, because the sidecar's `<_solar>` records local solar time and the engine's longitude-derived zone (`CotWriter.cs:52-66`) and nothing in it states the *civil* offset the scenario declared — so without the manifest a consumer cannot convert a recorded frame back to scenario civil time, and a replay cannot re-establish the sun (§5.5) |
-| [07 — Scenario authoring](07_Scenario_Authoring.md) | How [20 §2.4](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s three interval onsets are produced on a SUMO surface, where there is no authored speed-action ramp to separate them. That the validator rejects a package with no epoch declaration, and rejects an author-declared lamp that would breach §8.5.3 |
+| [07 — Scenario authoring](07_Scenario_Authoring.md) | How the three interval onsets (action issued, phase committed, physical predicate observed) are produced on a SUMO surface, where there is no authored speed-action ramp to separate them (as built, `SupervisionIntervalRecord` carries `DeclaredStartSeconds`, `CommittedStartSeconds` and `ObservedStartSeconds`). That the validator rejects a package with no epoch declaration, and rejects an author-declared lamp that would breach §8.5.3 |
 | [08 — Collection and EPoL](08_Collection_And_EPoL.md) | That truth never reaches the model service — it consumes tracks only, and this pipeline reads nothing it emits back in. That solar state remains an available covariate for stratifying a corpus; this pipeline does not train or judge any model against it. **The ruling on what `PlaybackClock` does when a live external chain cannot sustain the declared real-time factor** — hold, slow, or drop — and what the operator sees while it happens (§4.6); this section fixes only that the lever is the clock's |
-| [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | `sumo` and `duarouter` staged and shipped with `tools/traci`, `SUMO_HOME` set ([23 §6.1, §6.2, §6.12](../../Findings/23_SUMO_Traffic_Integration.md)) |
+| [09 — Toolchain and packaging](09_Toolchain_And_Packaging.md) | `sumo` and `duarouter` staged and shipped with `tools/traci`, `SUMO_HOME` set (as built, `MakeDistribution.ps1` copies `netconvert`, `sumo` and `duarouter` with the DLLs they import and the `traci` and `sumolib` tools into `tools\sumo`, and the environment script it writes sets `SUMO_HOME` there) |
 | [10 — Scale and performance](10_Scale_And_Performance.md) | The seven properties of §9.4 |
 | [11 — Time and illumination](11_Time_And_Illumination.md) | Five properties, stated in §10.1 below |
 | [12 — Operator control surface](12_Operator_Control_Surface.md) | Four properties, stated in §10.2 below |
@@ -1630,14 +1633,16 @@ around by the client.
 
 **Gained: the ambient stationary distribution stops being truncated.** The .NET traffic manager's idle
 cull destroys any registered vehicle idle beyond 90 s, at a wall-clock-measured and therefore
-irreproducible moment — the mechanism, the thresholds and the reproducibility problem are set out in
-[20 §2.8](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md). Under `SumoDrivenPlayback`
-the traffic manager does not run, so the cull does not exist and no ambient vehicle is destroyed for
-standing still. A forty-five-minute parked car in the ambient population becomes possible, which
-[20 §2.7](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) argues is the single most
-valuable thing this corpus can contain. The corresponding SUMO-side control is `time-to-teleport`, which
-the sizing scenario already sets to `-1` (**measured**). Doc 20's decision 14 — that cull behaviour must
-be switchable per capture — is unaffected and still applies to the `TrafficManagerAmbient` mode.
+irreproducible moment — `ALSM.IsVehicleStuck` holds the thresholds, 90 s, or 180 s at a red light (the
+code now measures idle time in simulated seconds wherever the world reports its clock, and on the wall
+clock only where it does not: `ALSM.GetCurrentElapsedSeconds`). Under `SumoDrivenPlayback` the traffic
+manager does not run, so the cull does not exist and no ambient vehicle is destroyed for standing still.
+A forty-five-minute parked car in the ambient population becomes possible, which earlier research
+argued is the single most valuable thing this corpus can contain when it is authored as a near-miss
+(supervision carries an authored near-miss as the `nominal` state: `SupervisionState.Nominal`). The
+corresponding SUMO-side control is `time-to-teleport`, which the sizing scenario already sets to `-1`
+(**measured**). The earlier requirement that cull behaviour be switchable per capture is unaffected and
+still applies to the `TrafficManagerAmbient` mode (not built: `ALSM` culls with no switch).
 
 **Gained: illumination becomes a declared, controlled covariate instead of an accident of spawn.** Today
 a generated world is lit at local solar noon because that is the value the spawn path writes
@@ -1704,13 +1709,13 @@ than left to be rediscovered:
 | D1.7 | **Population authority is an exclusive, engine-held, world-scoped lease**, in the manner of staging bounds. **Built 2026-10-05** as the episode's drive lease (`FDriveLease`; `take_drive_lease`, `release_drive_lease`, `break_drive_lease`, `get_drive_lease`), beside the process-local `WorldDriveAuthority`. SUMO-driven playback takes both before SUMO starts; ambient traffic asks the server before it spawns. A second drive is refused at its claim and a traffic manager's every control write is refused while the lease is held, each naming the holder, so the lockout is a failed session start naming the current holder, never a runtime warning. Released by its holder, by a world reload, or by `break_drive_lease`, which is logged: the RPC server gives no disconnect notice (§5.3) |
 | D1.8 | **Motion authority is per actor and is distinct from population authority.** This is what lets storyboard execution coexist with an ambient mode, and what lets the actuated shape of §8.4 exist without contradicting D1.7 (§5.3) |
 | D1.9 | **While a population-authority holder exists, every vehicle any component creates must be announced to it.** A placement that cannot be announced is refused. This is what makes SUMO-plus-storyboard safe rather than merely discouraged (§5.2, §5.3). Not built: the drive lease refuses every other traffic system's control writes outright, and no component announces |
-| D1.10 | **World-scoped facts are published to the server, not held in a client process.** Two of them: supervision state and the render set, alongside drive authority and the area table which are world-scoped by construction. This resolves [20 decision 11](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md) in favour of publication and dissolves both process-local registry failures of §3.1 together. **Solar state is a third published world-scoped fact, and it is already implemented.** Eleven doubles ride the world-observer snapshot header (`WorldObserver.cpp:322-339`), the client exposes them as a lock-free tick-paired cache read with **no RPC** (`CarlaClient.cs:1850-1855`, `:1991`), and the recorder already consumes them (`FrameRecorder.cs:160-162`). This is the same mechanism [08 D8.3](08_Collection_And_EPoL.md) chose for the other two — and the precedent D8.3 cited for choosing it was `_solar` itself, so publishing solar state costs nothing and introduces nothing new (§4.1). **Both of the other two are now built on it.** The render set since 2026-10-01 ([03](03_CoSimulation_Runtime.md) D3.39), and supervision state since 2026-10-05, as the owner ruled: "They have to be on the server. I do not want two clients ever having different truth state." The session puts each supervision change on the server with `update_supervision`; the server holds the plan and the absences on the episode and each lent body's supervision on that actor's record; and the world observer carries it on every snapshot after the render set's entries, so no client holds truth of its own ([03](03_CoSimulation_Runtime.md) D3.43, [04](04_Contracts.md) §8.3b, [06](06_Truth_And_Annotation.md) D6.41) |
+| D1.10 | **World-scoped facts are published to the server, not held in a client process.** Two of them: supervision state and the render set, alongside drive authority and the area table which are world-scoped by construction. This resolves the choice earlier research left open, between publishing annotation state to the server and keeping every recorder in the executor's process, in favour of publication and dissolves both process-local registry failures of §3.1 together. **Solar state is a third published world-scoped fact, and it is already implemented.** Eleven doubles ride the world-observer snapshot header (`WorldObserver.cpp:322-339`), the client exposes them as a lock-free tick-paired cache read with **no RPC** (`CarlaClient.cs:1850-1855`, `:1991`), and the recorder already consumes them (`FrameRecorder.cs:160-162`). This is the same mechanism [08 D8.3](08_Collection_And_EPoL.md) chose for the other two — and the precedent D8.3 cited for choosing it was `_solar` itself, so publishing solar state costs nothing and introduces nothing new (§4.1). **Both of the other two are now built on it.** The render set since 2026-10-01 ([03](03_CoSimulation_Runtime.md) D3.39), and supervision state since 2026-10-05, as the owner ruled: "They have to be on the server. I do not want two clients ever having different truth state." The session puts each supervision change on the server with `update_supervision`; the server holds the plan and the absences on the episode and each lent body's supervision on that actor's record; and the world observer carries it on every snapshot after the render set's entries, so no client holds truth of its own ([03](03_CoSimulation_Runtime.md) D3.43, [04](04_Contracts.md) §8.3b, [06](06_Truth_And_Annotation.md) D6.41) |
 | D1.11 | **A rendered vehicle's admission and release are recorded instants.** A vehicle admitted to the render set appears on its admission tick and a released one disappears on its release tick. `RenderedVehicleRegistry` records both **ticks**, and they delimit the rendered span of D1.15 (§7, §8.2) |
 | D1.12 | **The default deployment is one `CaptureSessionHost` process holding the clock, the bridge and every camera's recorder.** Extra camera processes are permitted and are tick followers. The shim's one-recorder-per-`World` limit (`carlanet/__init__.py:1908,1924`) is a defect to fix, not a reason to fan out (§3.4) |
 | D1.13 | **The SUMO step, the world delta and the capture rate are an integer-ratio contract validated at session start**, and the bridge runs SUMO one step ahead so sub-step pose is interpolated rather than stepped (§6.1) |
 | D1.14 | **`RenderSetSelector` reduces once, in simulated time: the capture window.** Inside a window every vehicle SUMO has is drawn — no render volume, no cap, no priority — and every admission and release is recorded in the manifest (§9.2) |
-| D1.15 | **A rendered-span gate sits upstream of doc 20's observed-span gate.** An annotated interval can fail to be observable because nothing rendered the participant or because nothing saw it, and both must be recorded per interval (§7) |
-| D1.16 | **Pose application and the control-loop shape of [23 §4.1](../../Findings/23_SUMO_Traffic_Integration.md) are two actuation strategies behind one bridge**, not two systems. Playback is built first; the actuated strategy is retained as the tracking oracle and as the path to believable storyboard coupling (§8.4) |
+| D1.15 | **A rendered-span gate sits upstream of the observed-span gate.** An annotated interval can fail to be observable because nothing rendered the participant or because nothing saw it, and both must be recorded per interval (§7). As built, `SupervisionIntervalRecord.NotDrawn` records the first; no per-sensor observed span is recorded |
+| D1.16 | **Pose application and the control-loop shape the earlier research recommended — SUMO decides, CARLA physics executes — are two actuation strategies behind one bridge**, not two systems (the control-loop strategy is not built). Playback is built first; the actuated strategy is retained as the tracking oracle and as the path to believable storyboard coupling (§8.4) |
 | D1.17 | **The losses of pose application are named and bounded to this mode**: collision response, suspension dynamics, and the staging spawn model. SUMO collision warnings are recorded into the manifest as corpus-affecting events. The other modes retain all three (§8.3, §11) |
 | D1.18 | **`SumoCotBridge` is retained unchanged** as the standalone, CARLA-free telemetry path. It is reference material and a comparison producer, not a component of the capture path (§2.3) |
 | D1.19 | **Simulated civil time is a projection of simulated elapsed time through the declared epoch, owned by `PlaybackClock`. There is no `SolarClock`.** A second clock would hold no state that is not derivable and would be a second owner of a concern D1.1 already assigns; worse, it would be a second accumulator running beside the engine's own (`CesiumTimeOfDayController.cpp:34-35`) and the two would drift. `ScenarioEpochResolver` supplies the epoch and the policy; `SolarStateActuator` performs the writes (§4.4) |
@@ -1730,11 +1735,12 @@ than left to be rediscovered:
 
 1. **Does a pose-applied vehicle read correctly to a detector at EO altitude?** Everything here assumes
    that removing suspension and wheel motion is invisible at collection range, on the strength of
-   [09 §5.1](../../Findings/09_Telemetry_CoT_Contract.md)'s measurement that a vehicle is about three
-   pixels long at 1.1 km. That is an argument, not a measurement of *this* question. The cheap experiment
-   is one scene captured twice — physics-driven and pose-applied along the same path — and the detector run
-   over both. Recommend running it before the first corpus is captured, because the answer decides whether
-   the actuated strategy of §8.4 is optional or necessary.
+   earlier telemetry research's measurement that a vehicle is about three pixels long at 1.1 km (the
+   sidecar records each vehicle's size in the picture as `apparent_width_px` and `apparent_height_px`).
+   That is an argument, not a measurement of *this* question. The cheap experiment is one scene captured
+   twice — physics-driven and pose-applied along the same path — and the detector run over both.
+   Recommend running it before the first corpus is captured, because the answer decides whether the
+   actuated strategy of §8.4 is optional or necessary.
 2. *Withdrawn 2026-09-30.* There is no render volume, so there is no margin to size: every vehicle
    SUMO has in a window is drawn.
 3. **Where does the capture window come from?** Either the author declares it in the scenario package, or
@@ -1742,11 +1748,12 @@ than left to be rediscovered:
    pattern instance implies a window, and an operator wants to capture an arbitrary hour of ambient life.
    Recommend both, with the scenario's declared windows as named presets and the operator free to give
    another — and the manifest recording which was used.
-4. **What happens to an annotated pattern instance whose window is only partly captured?** [20 §6.1](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s
-   `closed_by` distinguishes an orbit that finished from one the run truncated; a capture window
-   introduces a third case — the instance completed in SUMO but the capture stopped inside it. It needs
-   its own value rather than being filed as `scenario_end`, and [06](06_Truth_And_Annotation.md) should
-   decide what it is called.
+4. **What happens to an annotated pattern instance whose window is only partly captured?** The
+   interval record's `closed_by` (`ClosedBy`, which as built also has `CaptureWindowEnd` for this case)
+   distinguishes an orbit that finished from one the run truncated; a capture window introduces a third
+   case — the instance completed in SUMO but the capture stopped inside it. It needs its own value
+   rather than being filed as `scenario_end`, and [06](06_Truth_And_Annotation.md) should decide what it
+   is called.
 5. **Is one `sumo` process per capture session, or one shared across sessions?** One per session is
    simpler and is what makes a seed reproducible. A shared long-running process would let an operator
    capture several windows of one seven-day run without re-stepping the lead-in each time, which §9.3's
@@ -1754,8 +1761,8 @@ than left to be rediscovered:
 6. **How is a SUMO collision warning surfaced?** §8.3 requires recording it, but not what a capture should
    do about it. Options: record and continue, record and mark the affected interval unusable, or stop the
    session. Leaning towards recording and marking, because a collision in a corpus is a fact about the
-   corpus rather than a failure of the run — but this interacts with [20 open question 10](../../Findings/20_Behavioral_Annotation_And_Areas_Of_Interest.md)'s
-   question about what a degraded span of a capture is worth, and the two should be settled together.
+   corpus rather than a failure of the run — but this interacts with the question, left open by earlier
+   research, of what a degraded span of a capture is worth, and the two should be settled together.
 7. **Do the two truth producers have to agree, and how is that checked?** `SumoCotBridge` and the CARLA
    truth path emit the same schema deliberately, so a capture could carry both and be diffed. That is a
    ready-made integration check — the pose the bridge commanded against the pose the world reported — and
