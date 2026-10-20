@@ -27,7 +27,8 @@ one.
 
 **Time.** Simulated second zero is 07:26:00 Mountain Daylight Time on 29 September 2026, the morning
 the Arapahoe dwell starts on, chosen so the sun crosses the +6 degree line between the `golden` and
-`day` illumination bands between the two capture windows: the first opens at 07:27:00 under a 5.69
+`day` illumination bands (`golden` is the sun no more than 6 degrees above the horizon) between the
+two capture windows: the first opens at 07:27:00 under a 5.69
 degree sun, the second at 07:30:00 under a 6.26 degree one. The dwell and the transit's pass lie in the first
 window and the van's stop in the second. The run lasts 360 s. The sun is frozen at each window's
 opening (`freeze_at_window_start`). Each window then stays in its one band. The other scenarios

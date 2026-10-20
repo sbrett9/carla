@@ -379,6 +379,7 @@ The launch echo says what the run will do, with the window's civil times and the
 The scenario's sun policy, `advance`, sets the sun to the civil time the window opens.\
 From there the sun follows simulated time.\
 The echo shows that it climbs from +2.56° to +3.29° over this window, in the `golden` band.\
+`golden` is the sun no more than 6° above the horizon, morning or evening (photographers call it the golden hour).\
 Then run it for real:
 
 ```

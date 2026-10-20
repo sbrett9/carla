@@ -109,7 +109,8 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `warnings` | array of strings | | The codes of the warnings the offline checks raised. |
 | `not_predicted` | array of strings | | What the echo cannot say before the run. |
 
-`band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and `night`.
+`band` is one of `day`, `golden`, `civil_twilight`, `nautical_twilight`, `astronomical_twilight` and `night`.\
+`golden` is the sun no more than 6° above the horizon, morning or evening (photographers call it the golden hour).
 
 ## Example
 

@@ -18,7 +18,10 @@ public enum IlluminationBand
     /// <summary>Above +6 degrees.</summary>
     Day,
 
-    /// <summary>Above 0, up to +6 degrees.</summary>
+    /// <summary>
+    /// Above 0, up to +6 degrees: the sun no more than 6 degrees above the horizon, morning or evening,
+    /// which photographers call the golden hour.
+    /// </summary>
     Golden,
 
     /// <summary>Above -6, up to 0 degrees.</summary>

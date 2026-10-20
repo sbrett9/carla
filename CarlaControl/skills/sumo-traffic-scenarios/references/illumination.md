@@ -46,7 +46,8 @@ statistic below buckets by it and the vocabulary spells it:
 | `astronomical_twilight` | −12° to −18° |
 | `night` | below −18° |
 
-Each band holds its upper edge. They are terms the pipeline derives, never an author's labels.
+`golden` is the sun no more than 6° above the horizon, morning or evening (photographers call it the golden hour). Each band holds its upper edge. They are terms the pipeline derives,
+never an author's labels.
 
 ## Night
 

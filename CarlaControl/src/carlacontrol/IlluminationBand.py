@@ -2,7 +2,9 @@
 
 A coarse stratification key computed from the sun elevation, so a report and a corpus can speak in
 regimes rather than degrees: `day` above +6 degrees, `golden` +6 to 0, `civil_twilight` 0 to -6,
-`nautical_twilight` -6 to -12, `astronomical_twilight` -12 to -18, `night` below -18. Each band
+`nautical_twilight` -6 to -12, `astronomical_twilight` -12 to -18, `night` below -18. `golden` is the
+sun no more than 6 degrees above the horizon, morning or evening, which photographers call the golden
+hour. Each band
 includes its lower edge's upper side: `golden` is (0, 6], `civil_twilight` (-6, 0], and so on. The
 elevation is the one a declaration is made against, refraction-corrected (`DeclaredSunElevation`), and
 an elevation that is not a sun's -- outside -90 to +90 degrees, like the -180 the engine reports for a

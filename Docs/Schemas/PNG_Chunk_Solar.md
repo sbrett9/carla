@@ -46,7 +46,7 @@ Its closing checks require the count to be zero.
 **Illumination bands**, defined by the sun's refraction-corrected elevation in degrees:
 
 - `day` above 6
-- `golden` above 0
+- `golden` above 0: the sun no more than 6° above the horizon, morning or evening (photographers call it the golden hour)
 - `civil_twilight` above -6
 - `nautical_twilight` above -12
 - `astronomical_twilight` above -18
