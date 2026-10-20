@@ -10,7 +10,7 @@ a SUMO process holding the world's own network (`SumoNetworkQuery`) -- the trans
 lane. CARLA-local metres are then the co-simulation bridge's identity, `carla(x, y) = sumo(x, -y)`,
 so an area, a lane and a rendered road are in one frame by construction. Each vertex is also placed
 independently by `GeodeticFrame`, the WGS84 transform the telemetry, the drape and the Cesium imagery
-share, and the two must agree within `GEODESY_AGREEMENT_LIMIT_M` (V5.12) or the table is refused:
+share, and the two must agree within `GEODESY_AGREEMENT_LIMIT_M` or the table is refused:
 they measured within 0.4 mm on every shipped world, so a disagreement means the network is not in the
 geographic frame the world claims -- a road-offset build, or a package whose manifest and network
 came from different builds -- and an area's position would then depend on which frame was meant.
@@ -26,7 +26,7 @@ when its whole length is contained, `crossing` when part is, `near` when none is
 `near_m`. An edge is `inside` when all its lanes are, `crossing` when any is inside or crossing, `near`
 otherwise. Permitted classes are SUMO's own expansion of the lane's attributes.
 
-**Warnings** (V5.5-V5.7): an area crossing the edge of the staging rectangle; an area lying wholly
+**Warnings**: an area crossing the edge of the staging rectangle; an area lying wholly
 in the staging ring, where traffic enters and leaves; an area no four-wheeled road vehicle can reach.
 
 What it cannot see. The permissions reported are the world network's. A scenario that rewrites them
@@ -59,14 +59,18 @@ RESOLVED_VERSION = 1
 # A lane passing within this distance of an area is `near` it.
 DEFAULT_NEAR_M = 50.0
 
-# V5.12's limit: two orders of magnitude above the worst disagreement measured on the shipped
-# worlds.
+# How far SUMO's projection and the world's geographic frame may disagree: two orders of
+# magnitude above the worst disagreement measured on the shipped worlds.
 GEODESY_AGREEMENT_LIMIT_M = 0.05
+
+# The words every unreachable-area warning carries. The scenario compiler reports a warning that
+# carries them under its reachability check, and every other area warning under its staging check.
+UNREACHABLE = "so no vehicle can reach it"
 
 # SUMO classes a four-wheeled road vehicle can carry. Pedestrians are outside this project and so
 # are two-wheelers (bicycle, motorcycle, moped); the rest of SUMO's classes
 # -- rail, tram, ship, aircraft, cable car, subway, container, wheelchair, scooter, drone -- are not
-# road vehicles. Used only to decide whether an area is reachable (V5.7), which is a warning.
+# road vehicles. Used only to decide whether an area is reachable, which is a warning.
 FOUR_WHEELED_ROAD_CLASSES = frozenset({
     "private", "emergency", "authority", "army", "vip", "passenger", "hov", "taxi", "bus", "coach",
     "delivery", "truck", "trailer", "evehicle", "custom1", "custom2"})
@@ -220,7 +224,7 @@ class AreaOfInterestResolver:
             projected_by="", worst_residual=None, areas=[])
 
     def resolve(self, source: AreaOfInterestSource) -> dict:
-        """The resolved table. Raises `AreaOfInterestError` when the two frames disagree (V5.12)."""
+        """The resolved table. Raises `AreaOfInterestError` when the two frames disagree."""
         if any(self.net_offset):
             self.warnings.append(
                 f"the network carries netOffset {self.net_offset}: its meters are shifted from the "
@@ -232,7 +236,7 @@ class AreaOfInterestResolver:
             sumo_area, residual, worst_vertex = self._place(area)
             if residual > GEODESY_AGREEMENT_LIMIT_M:
                 refusals.append(
-                    f"V5.12 area '{area.area_id}': SUMO's projection and the world's geographic "
+                    f"area '{area.area_id}': SUMO's projection and the world's geographic "
                     f"frame disagree by {residual:.3f} m at [{worst_vertex[0]:.7f}, "
                     f"{worst_vertex[1]:.7f}] (limit {GEODESY_AGREEMENT_LIMIT_M} m); the network is "
                     "not in the frame this world's origin describes"
@@ -294,9 +298,9 @@ class AreaOfInterestResolver:
         if not any(set(lane["allowed_vclasses"]) & FOUR_WHEELED_ROAD_CLASSES
                    or "all" in lane["allowed_vclasses"] for lane in lanes):
             warnings.append(
-                f"V5.7 area '{area.area_id}': no lane a four-wheeled road vehicle may use lies "
-                f"inside it, crosses it, or passes within {self.near_m:g} m of it, so no vehicle "
-                "can reach it and it will gather no vehicle relations")
+                f"area '{area.area_id}': no lane a four-wheeled road vehicle may use lies "
+                f"inside it, crosses it, or passes within {self.near_m:g} m of it, {UNREACHABLE} "
+                "and it will gather no vehicle relations")
         for warning in warnings:
             logger.warning(warning)
         return {
@@ -405,16 +409,16 @@ class AreaOfInterestResolver:
         warnings = []
         within = ex0 >= sx0 and ey0 >= sy0 and ex1 <= sx1 and ey1 <= sy1
         if ex1 < sx0 or ex0 > sx1 or ey1 < sy0 or ey0 > sy1:
-            warnings.append(f"V5.5 area '{area.area_id}' lies wholly outside the staging rectangle; "
+            warnings.append(f"area '{area.area_id}' lies wholly outside the staging rectangle; "
                             "nothing is simulated there")
         elif not within:
-            warnings.append(f"V5.5 area '{area.area_id}' crosses the edge of the staging rectangle; "
+            warnings.append(f"area '{area.area_id}' crosses the edge of the staging rectangle; "
                             "relations derived for the part outside it describe an unsimulated "
                             "world")
         inner = (sx0 + margin, sy0 + margin, sx1 - margin, sy1 - margin)
         if within and margin > 0 and inner[2] > inner[0] and inner[3] > inner[1] \
                 and not self._meets_rectangle(placed, inner):
-            warnings.append(f"V5.6 area '{area.area_id}' lies wholly in the {margin:g} m staging "
+            warnings.append(f"area '{area.area_id}' lies wholly in the {margin:g} m staging "
                             "ring, where traffic enters and leaves the world")
         return warnings
 

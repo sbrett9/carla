@@ -73,6 +73,7 @@ from CarlaNet.Sumo import SumoReleaseAgreement
 from lxml import etree
 
 from carlacontrol.AnnotationVocabulary import AnnotationVocabulary
+from carlacontrol.AreaOfInterestResolver import UNREACHABLE
 from carlacontrol.CivilTimeResolver import CivilTimeResolver, ResolvedInstant
 from carlacontrol.CompileFindings import CompileFindings
 from carlacontrol.CompileResult import CompileResult
@@ -819,7 +820,7 @@ class ScenarioCompiler:
         self.plan_rows = self.supervision.compile(self.spec.get("supervision"), inputs)
         for area_id in sorted(self.supervision.referenced_areas):
             for warning in self.areas[area_id].get("warnings", []):
-                check = 28 if warning.startswith("V5.7") else 27
+                check = 28 if UNREACHABLE in warning else 27
                 self.findings.warn(check, f"area {area_id}", warning)
 
     # -- stage: epoch and illumination --------------------------------------------------------------------

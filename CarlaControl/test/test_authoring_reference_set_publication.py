@@ -157,7 +157,7 @@ def test_refused_areas_leave_the_rest_published_and_no_stale_areas(tmp_path, ins
 
     report = AuthoringReferenceSet(package, installation, source(kerb_area())).publish()
     assert not report.areas_published
-    assert report.refusals and report.refusals[0].startswith("V5.12")
+    assert report.refusals and "frame disagree" in report.refusals[0]
     names = [i.filename for i in entries(package)]
     assert "places.json" in names and "solar.json" in names
     assert "areas.resolved.json" not in names and "areas.aoi.geojson" not in names
@@ -169,7 +169,7 @@ def test_an_area_outside_the_network_is_refused_when_the_extract_had_no_bounds(t
     package = write_package(tmp_path)
     far = kerb_area(x=5000.0, y=0.0, radius=5.0)
     report = AuthoringReferenceSet(package, installation, source(far, checked=False)).publish()
-    assert report.refusals and report.refusals[0].startswith("V5.3")
+    assert report.refusals and "lies wholly outside" in report.refusals[0]
 
 
 def test_no_sumo_means_no_areas_rather_than_areas_placed_some_other_way(tmp_path):
