@@ -1853,7 +1853,7 @@ class World:
         return bool(_sync(self._client.SetRoadRenderedAsync(bool(rendered))))
 
     def set_layer_visible(self, layer: str, visible: bool):
-        """Per-layer visibility (08_Layer_Architecture). `layer` is a Cesium tileset tag
+        """Per-layer visibility. `layer` is a Cesium tileset tag
         ('photoreal'/'ground', '' = all tilesets), 'road' (the OpenDRIVE mesh) or 'signals'
         (the traffic lights and stop/yield/speed-limit signs generated from OpenDRIVE — signals
         matched to a hand-placed actor, as in the shipped towns, are not affected). Rendering
@@ -1862,7 +1862,7 @@ class World:
         return bool(_sync(self._client.SetLayerVisibleAsync(str(layer), bool(visible))))
 
     def set_layer_collision(self, layer: str, enabled: bool):
-        """Per-layer physics collision (08_Layer_Architecture). Same layer naming as
+        """Per-layer physics collision. Same layer naming as
         set_layer_visible; independent of visibility."""
         return bool(_sync(self._client.SetLayerCollisionAsync(str(layer), bool(enabled))))
 
@@ -2130,7 +2130,7 @@ class World:
 
     def get_vehicle_telemetry(self, origin=None):
         """Pull per-vehicle TRUTH telemetry for every vehicle in the world as plain dicts (the
-        09_Telemetry_CoT_Contract field set). Cheap — positions/velocities are world-observer cache
+        truth sidecar's <_carla> field set). Cheap — positions/velocities are world-observer cache
         reads; one get_actors() RPC per call refreshes the vehicle set. `origin` is an optional
         (lat, lon, height_m) WGS84 tuple for the local->geodetic transform; if omitted it is fetched
         once via get_cesium_origin() (pass it in from a 5 Hz loop to avoid the per-tick RPC).

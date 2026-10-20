@@ -448,7 +448,7 @@ function (
   # is what a world cooked later as DLC against this build reads. It does not conflict with the
   # -iterate below: UAT refuses iterative cooking only with -BasedOnReleaseVersion (ProjectParams.cs),
   # which binds the per-world DLC cook, not this one. Turning it on costs one full recook, after which
-  # cooks are incremental again (Docs/CAT_Research/Findings/24a_Shipping_A_Generated_World.md).
+  # cooks are incremental again.
   set (
     CARLA_COOK_UAT_ARGS
       BuildCookRun

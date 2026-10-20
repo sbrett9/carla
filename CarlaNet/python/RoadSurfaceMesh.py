@@ -7,8 +7,7 @@ welds, never deduplicates and never shares a vertex between strips. A junction i
 therefore one mesh *object* built from many overlapping strips rather than one surface.
 
 This module reproduces those vertices from the .xodr alone, so the seams between strips
-can be measured without the engine. See
-``Docs/CAT_Research/Findings/21_Road_Elevation_Profile_Continuity.md`` §18.
+can be measured without the engine.
 
 Faithful to `Lane::GetCornerPositions` (`LibCarla/source/carla/road/Lane.cpp:206-268`):
 the lateral offset accumulates the widths of the lanes between the reference line and

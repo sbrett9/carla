@@ -399,7 +399,7 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
 | `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-population affiliation (a compiled type's class, read from its `carla:class_id`) + multi-marked support, real-time pacing. |
 | `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario (`<scenario>.display.json`, `beside()` names it), never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
-| `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`. |
+| `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/CAT_Research/Schemas/CoT_Telemetry_Stream.md`. |
 
 The command-line scripts.
 In a distribution, each `make_*_scenario.py` sits beside the scenario it writes, under `Scenarios/<Place>/` (Gardnerville, Arapahoe or Bahonar).
@@ -610,7 +610,8 @@ The compiler enforces four of these on a specification — departure order, `--`
 
 ## CoT dataset shape and ground truth
 
-Events are CoT `<event>`s (schema in `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md`),
+Events are CoT `<event>`s (schemas in `Docs/CAT_Research/Schemas/SUMO_CoT_Event_File.md` and
+`SUMO_CoT_Table.md`),
 emitted identically to UDP, an XML file, and a 31-column CSV (one row per vehicle per update). The
 `_carla` detail block name is kept even though the source is SUMO, so the two producers are directly
 comparable. The XML and CSV are the truth sidecar: they say which vehicles were planted in `marked`
@@ -645,6 +646,6 @@ run against the wall clock (0 = as fast as possible, for datasets; 1 = real time
 
 ## Related
 
-- `Docs/CAT_Research/Findings/23_SUMO_Traffic_Integration.md` — the original scouting and rationale.
-- `Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md` — the CoT event schema.
+- `Docs/CAT_Research/Schemas/SUMO_CoT_Event_File.md` and `CoT_Telemetry_Stream.md` — the CoT event
+  schemas.
 - `carla/AGENTS.md` — the Python conventions these modules follow.

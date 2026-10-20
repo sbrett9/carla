@@ -18,7 +18,7 @@ the run's default.
 
 **It never names a vehicle.** Which vehicles a scenario planted is supervision, and the CoT type is
 the one field every consumer of the feed reads, so a letter that picked the planted vehicles out
-would put the answer there (doc 20 decision 9). A file carrying anything but populations -- a
+would put the answer there. A file carrying anything but populations -- a
 `marked_ids`, say -- is refused rather than partly read.
 
 The same map once travelled in a scenario's legacy `*.labels.json`, beside a second half that gave

@@ -6,8 +6,9 @@ rota is a 07:00 / 15:00 / 23:00 phenomenon because that is when shifts change. M
 `I(hour; label) / H(label) = 0.600` (`07_Scenario_Authoring.md` §5.6.1). A model trained on imagery
 from such a corpus can learn the light instead of the behaviour, and the failure this check exists for
 is discovering that after training. So it computes the number, states it in the resolution report and
-the lock, and **never refuses**: refusing would make doc 20's class 4 -- a pattern *defined* by its
-hour -- unauthorable, and a check that fires on the only large scenario gets switched off (§5.6.4).
+the lock, and **never refuses**: refusing would make a class-conditioned presence -- a heavy goods
+vehicle in a residential area at 03:00, a pattern *defined* by its hour -- unauthorable, and a check
+that fires on the only large scenario gets switched off (§5.6.4).
 
 **Buckets are illumination bands, not clock hours** (§5.6.2): 07:00 is a different sun in December and
 in June. The band is `IlluminationBand.of` applied to the declared sun (`WindowSun`), so the statistic

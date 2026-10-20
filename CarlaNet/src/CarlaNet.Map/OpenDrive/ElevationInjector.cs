@@ -1,20 +1,21 @@
-// Phase B of the dynamic georeferenced-world pipeline (see
-// carla/Docs/CAT_Research/DYNAMIC_WORLD_PIPELINE_PLAN.md).
+// Gives a generated world's roads the heights of the Cesium terrain they are built on.
 //
 // The flat .xodr that netconvert/OsmConverter produces has no <elevationProfile>,
 // so CARLA builds dead-flat roads that float above / sink below the 3D Cesium
 // terrain. This class post-processes the .xodr to make roads conform to Cesium:
 //
 //   ExtractCenterlineSamples(map, step)  -> per-road (roadId, s, x, y) reference-line points
-//   ToGeo(samples, origin)               -> (roadId, s, lat, lon)   [via Track-B Geodesy]
+//   ToGeo(samples, origin)               -> (roadId, s, lat, lon)   [via Geodesy]
 //   -- engine boundary: ACesium3DTileset.SampleHeightMostDetailed gives ellipsoidal heights --
 //   InjectElevation(xodr, samples, heights, originHeight) -> elevated .xodr
 //
 // Coordinate frames (the subtle bit): the OpenDRIVE planView is +X=East, +Y=North.
 // CARLA's world frame is +X=East, -Y=North (the "Unreal Y-axis hack"). We emit
 // samples in the CARLA world frame and convert with Geodesy.CarlaLocalToGeodetic so
-// the elevation hand-off shares ONE projection with Track-B telemetry truth (this is
-// what kills the tmerc-vs-spherical-Mercator drift class — plan §3).
+// the elevation hand-off shares ONE projection with the truth telemetry. netconvert places the
+// network with an ellipsoidal transverse Mercator and CARLA's own GeoLocation transform is
+// spherical Mercator; a point converted through a different projection from the one that placed
+// the road is sampled at the wrong spot.
 //
 // Nothing in CARLA's road model or mesh code changes: both the road mesh and the
 // waypoint z already follow OpenDRIVE <elevation> (see Map.GetDirectedPointIn). The
@@ -60,7 +61,7 @@ public enum ElevationFitMode
 
 public static class ElevationInjector
 {
-    // ── P2: extract reference-line sample points from the flat map ───────────
+    // ── Extract reference-line sample points from the flat map ───────────────
 
     /// <summary>
     /// Walks each road's reference line and emits points every <paramref name="stepMeters"/>
@@ -131,7 +132,7 @@ public static class ElevationInjector
         return stations;
     }
 
-    // ── P3: reproject to WGS84 via the Track-B ellipsoidal transform ─────────
+    // ── Reproject to WGS84 via the ellipsoidal transform ─────────────────────
 
     /// <summary>
     /// Reprojects samples to WGS84 using the shared ENU-tangent ellipsoidal transform
@@ -151,7 +152,7 @@ public static class ElevationInjector
         return result;
     }
 
-    // ── P5: inject the sampled heights back into the .xodr ───────────────────
+    // ── Inject the sampled heights back into the .xodr ───────────────────────
 
     /// <summary>
     /// Rewrites <paramref name="openDriveXml"/> so each sampled road carries an

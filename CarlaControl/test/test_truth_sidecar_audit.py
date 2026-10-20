@@ -376,7 +376,8 @@ def test_a_capture_of_a_run_with_no_plan_expects_no_supervision(tmp_path):
 
 
 # Where each vehicle fell against the picture and why its occlusion is absent, as `CotWriter` writes
-# them for every record (09 §5.1): the in-picture fact for all, the five fields where measured, one
+# them for every record (`in_frame` and `occlusion_unmeasured` in the truth sidecar's `<_carla>`
+# record): the in-picture fact for all, the five fields where measured, one
 # reason otherwise.
 def test_a_capture_whose_every_record_says_where_it_fell_and_why_has_no_defect(tmp_path):
     sidecar(tmp_path, 100, [
@@ -490,7 +491,7 @@ def test_the_in_picture_checks_apply_to_traffic_manager_captures_too(tmp_path):
 
 
 # The box of a vehicle in the picture, as `CotWriter` writes it since the owner's ruling of 2026-10-06
-# (09 §5.1): six fields in `_carla` and a geodetic `<_box3d>` of eight corners beside it, on every record
+# (the truth sidecar's `<_carla>` record): six fields in `_carla` and a geodetic `<_box3d>` of eight corners beside it, on every record
 # in the picture and on no other.
 def test_a_capture_whose_every_record_in_the_picture_carries_its_box_has_no_defect(tmp_path):
     sidecar(tmp_path, 100, [

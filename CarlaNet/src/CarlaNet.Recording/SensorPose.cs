@@ -4,7 +4,7 @@ namespace CarlaNet.Recording;
 /// The EO collection platform's derived state at the instant a frame was captured — geodetic position,
 /// pointing, motion, and full pinhole intrinsics — produced from the sensor-header world transform plus
 /// the client-supplied <see cref="SensorPlatformOptions"/>. Emitted as a CoT air-track event and a
-/// carla:sensor PNG tEXt chunk (see Docs/CAT_Research/Findings/16_Sensor_Pose_In_Recordings.md §4).
+/// carla:sensor PNG tEXt chunk (see Docs/CAT_Research/Schemas/PNG_Chunk_Sensor.md).
 /// <para>
 /// <see cref="Hae"/> is BARE-EARTH ellipsoidal WGS84 altitude — the camera's physical altitude minus the
 /// height-align offset — so it shares the vehicle telemetry's datum; <see cref="AlignOffsetM"/> records

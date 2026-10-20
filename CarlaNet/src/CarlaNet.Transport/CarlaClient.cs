@@ -848,7 +848,7 @@ public sealed class CarlaClient : IAsyncDisposable
                 + $"{drapeSystematicOffset:F2} m");
         }
 
-        // 4b) Height reconciliation (09_Layer_Architecture follow-up). The bare-earth GROUND layer
+        // 4b) Height reconciliation. The bare-earth GROUND layer
         //     (DTM) sits at a different height than the visible PHOTOREAL surface (DSM), so road-Z
         //     taken from the DTM is offset from where the photogrammetry renders. Sample the photoreal
         //     layer at the same points and shift ALL road heights by ONE constant offset so they sit on
@@ -1201,7 +1201,7 @@ public sealed class CarlaClient : IAsyncDisposable
     /// (latitude, longitude, altitude=OriginHeight) and optionally set the ion token /
     /// asset id on its tilesets. Call after generate_opendrive_world so the reloaded
     /// OpenDriveMap lines up with the active .xodr before sampling terrain heights.
-    /// Configure the layered Cesium globe (08_Layer_Architecture). <paramref name="ionAssetId"/>
+    /// Configure the layered Cesium globe. <paramref name="ionAssetId"/>
     /// is the visual "photoreal" layer; <paramref name="groundIonAssetId"/> (&gt;0) adds a hidden,
     /// collidable bare-earth "ground" layer (e.g. Cesium World Terrain asset 1) used as the
     /// height-sample source.
@@ -1268,7 +1268,7 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetRoadRenderedAsync(bool rendered)
         => _rpc.CallAsync<bool>("set_road_rendered", rendered);
 
-    /// Per-layer visibility (08_Layer_Architecture). <paramref name="layer"/> is a Cesium
+    /// Per-layer visibility. <paramref name="layer"/> is a Cesium
     /// tileset tag ("photoreal"/"ground", "" = all tilesets), "road" (the OpenDRIVE mesh) or
     /// "signals" (the traffic lights and stop/yield/speed-limit signs generated from OpenDRIVE;
     /// signals matched to a hand-placed actor are not affected). Rendering only, so hidden
@@ -1276,7 +1276,7 @@ public sealed class CarlaClient : IAsyncDisposable
     public Task<bool> SetLayerVisibleAsync(string layer, bool visible)
         => _rpc.CallAsync<bool>("set_layer_visible", layer, visible);
 
-    /// Per-layer physics collision (08_Layer_Architecture). Same layer naming as
+    /// Per-layer physics collision. Same layer naming as
     /// <see cref="SetLayerVisibleAsync"/>; independent of visibility.
     public Task<bool> SetLayerCollisionAsync(string layer, bool enabled)
         => _rpc.CallAsync<bool>("set_layer_collision", layer, enabled);

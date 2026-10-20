@@ -6,9 +6,8 @@ TAK situational-awareness multicast group), one XML file holding every event, an
 vehicle per update for use as a plain dataset.
 
 The events are built by `CotUdpEmitter.vehicle_telemetry_to_cot`, the same formatter the CARLA truth
-producer uses, so what comes out here is the schema described in
-`Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md` and is directly comparable to CARLA truth
-rather than a second dialect of it.
+producer uses, so what comes out here is the event `Docs/CAT_Research/Schemas/SUMO_CoT_Event_File.md`
+describes and is directly comparable to CARLA truth rather than a second dialect of it.
 
 Two conversions matter and both avoid guesswork:
 

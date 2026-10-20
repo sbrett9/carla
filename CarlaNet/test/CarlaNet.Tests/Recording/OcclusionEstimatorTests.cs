@@ -1,6 +1,6 @@
 // Exercises the depth-based occlusion measurement against synthetic depth captures: a vehicle with
-// nothing in front of it, one behind a wall, and the sweep from one to the other. See
-// Docs/CAT_Research/Findings/17_Photoreal_Occlusion_Metric.md.
+// nothing in front of it, one behind a wall, and the sweep from one to the other. OcclusionEstimator
+// describes the method; the fields it fills are in Docs/CAT_Research/Schemas/Truth_Sidecar.md.
 using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 

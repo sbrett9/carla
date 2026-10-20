@@ -1,5 +1,5 @@
-// Guards the CoT sidecar's _carla block against the schema in
-// Docs/CAT_Research/Findings/09_Telemetry_CoT_Contract.md.
+// Guards the CoT sidecar's _carla block against the truth record the truth sidecar's page
+// describes, Docs/CAT_Research/Schemas/Truth_Sidecar.md.
 using System.Xml.Linq;
 using CarlaNet.Recording;
 using CarlaNet.Types.Illumination;

@@ -5,9 +5,9 @@ series from the ``a`` attributes (which are the sampled heights under every fit 
 that keys one record per sample), re-fits it with a candidate scheme, and measures what
 changed. No server and no editor are involved.
 
-The measurements mirror the baseline tables in
-``Docs/CAT_Research/Findings/21_Road_Elevation_Profile_Continuity.md`` §3, which the
-probe must reproduce on the "before" side before any fit change is trusted.
+It measures a census of the emitted records, the slope breaks at internal record
+boundaries, the height and slope mismatch across road-to-road links, and junction connector
+grades.
 """
 
 from __future__ import annotations

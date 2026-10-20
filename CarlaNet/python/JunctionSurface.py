@@ -14,9 +14,9 @@ and at `Arapahoe_I25` junction 144 the I-25 deck runs 6.8 m above the road benea
 Collapsing those into one surface would bury the underpass, so surfaces are clustered by
 height first and each layer triangulated separately.
 
-Prototype for the engine-side change in `MeshFactory`; kept here so the result can be
-measured against the same baselines the ribbons were measured against. See
-``Docs/CAT_Research/Findings/21_Road_Elevation_Profile_Continuity.md`` §18.
+An offline prototype of a single mesh surface per junction, which the engine's `MeshFactory`
+never adopted: CarlaNet's `JunctionSurfaceReconciler` instead solves the connectors' heights in
+the .xodr so that their overlapping surfaces agree.
 """
 
 from __future__ import annotations

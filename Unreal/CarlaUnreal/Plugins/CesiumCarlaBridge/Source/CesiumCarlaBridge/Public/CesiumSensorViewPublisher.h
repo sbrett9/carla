@@ -24,8 +24,8 @@
 // USceneCaptureComponent2D, so all of them qualify by construction with no type list to maintain.
 //
 // All of them SHOULD qualify. The depth camera in particular measures how much of each vehicle the
-// photoreal tiles occlude, so that occluded vehicles are not trained on as cleanly visible ones
-// (Docs/CAT_Research/Findings/17_Photoreal_Occlusion_Metric.md). A tile culled in the depth camera's
+// photoreal tiles occlude, so that occluded vehicles are not trained on as cleanly visible ones.
+// A tile culled in the depth camera's
 // frustum reads as empty space, which silently scores an occluded vehicle as visible. Registering
 // views is monotonic — a tile survives if it is visible in ANY registered view, and refinement
 // follows the largest screen-space error across views — so an extra view can only add geometry and
