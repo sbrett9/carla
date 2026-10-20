@@ -27,31 +27,19 @@ import fnmatch
 import importlib.util
 import logging
 
-# This logger records an optional CarlaNet assembly that is missing, a call that failed where the
-# shim carries on without it, and an exception raised by a caller's callback. With no logging
-# configured, Python's last-resort handler writes warnings and errors to stderr.
 _logger = logging.getLogger(__name__)
 
-# This removes the shim's own directory from sys.path before pythonnet loads. A script run from that
-# directory puts the directory first on sys.path. Python's PathFinder sits ahead of pythonnet's
-# DotNetFinder in sys.meta_path, so a module or folder there named like a .NET namespace, such as a
-# CarlaNet.py or a CarlaNet/Transport folder, would be imported in place of the namespace, and
-# `from CarlaNet.Transport import CarlaClient` would fail.
+# Python's PathFinder runs before pythonnet's DotNetFinder, so a CarlaNet.py or a CarlaNet/Transport
+# folder in this directory would be imported in place of the .NET namespace.
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir in sys.path:
     sys.path.remove(_this_dir)
 
 
 # ── Release version ───────────────────────────────────────────────────────────
-# The distribution's one release number, which carlacontrol and the server carry too: CARLA_VERSION
-# in the top-level CMakeLists.txt, with the short CARLA commit as a PEP 440 local part on a build that
-# is not the tagged release (0.10.0+g1a2b3c4d5). A wheel reads what its build stamped into
-# carlanet/_version.py (python/setup.py); the shim run from a checkout, which holds no stamp, reads the
-# checkout it sits in (Util/ReleaseVersion.py); outside both it is "unknown", never a guess. The
-# assemblies loaded below carry the same number as their informational version, which
-# CarlaNet.Types.Provenance.Producer.CarlaNetVersion reads.
+# Util/ReleaseVersion.py defines the release number and its format. python/setup.py writes the
+# number into carlanet/_version.py when it builds the wheel.
 def _release_version_from_checkout():
-    # CarlaNet/python/carlanet/__init__.py: the checkout's root is three directories up.
     checkout = os.path.normpath(os.path.join(_this_dir, "..", "..", ".."))
     path = os.path.join(checkout, "Util", "ReleaseVersion.py")
     if not os.path.isfile(path):
