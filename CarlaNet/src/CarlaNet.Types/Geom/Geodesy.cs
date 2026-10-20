@@ -1,4 +1,4 @@
-// WGS84 ellipsoidal geodesy for CARLA <-> Cesium georeferenced telemetry ("Track B").
+// WGS84 ellipsoidal geodesy between CARLA's local frame and the geodetic coordinates Cesium uses.
 //
 // CarlaNet ports the geo ORIGIN parser (CarlaNet.Map) but NOT a local->geo transform.
 // CARLA's runtime carla::geom::GeoLocation::Transform uses a SPHERICAL Web-Mercator
@@ -89,7 +89,9 @@ public static class Geodesy
                 cLat * cLon * dx + cLat * sLon * dy + sLat * dz);
     }
 
-    // ---- CARLA local frame conveniences (the Track-B telemetry API) ----
+    // ---- CARLA local frame conveniences ----
+    // The one conversion the truth telemetry, the capture boxes, the terrain drape and the map
+    // generators share, so every height and position they exchange is in one projection.
     // CARLA local metres: +X = East, -Y = North, +Z = Up. Matches carla/geom/GeoLocation.cpp.
 
     /// <summary>CARLA local position (x,y,z metres) at a georeference origin -> accurate WGS84 geodetic.</summary>

@@ -1,5 +1,5 @@
 // Tests for CarlaNet.Types.Geom.Geodesy — the WGS84 ellipsoidal local<->geo transform
-// used for Cesium-coherent georeferenced telemetry (Track B), plus the legacy spherical
+// used for Cesium-coherent georeferenced telemetry, plus the legacy spherical
 // Web-Mercator port (CARLA GNSS parity) and the spherical-vs-ellipsoid residual it removes.
 using CarlaNet.Types.Geom;
 
