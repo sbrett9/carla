@@ -56,13 +56,15 @@ internal static class SumoLaunchCheck
         }
 
         throw new CoSimSessionRefusedException(
-            "The session was asked to launch sumo-gui in place of sumo (SumoGui; run_sumo_drive.py "
+            "The session was asked to launch sumo-gui in place of sumo (SumoGui; carla-drive "
             + $"--sumo-gui), and the SUMO installation at {installation.Home} (matched by "
-            + $"{installation.Source}) has no {installation.SumoGui}. SUMO builds it only where the FOX "
-            + "toolkit is found, and the repository's setup script builds and stages it with the rest of "
-            + "the SUMO toolchain: run CarlaSetup.ps1 on Windows or CarlaSetup.sh on Linux, which rebuilds "
-            + "a staged installation that is missing it. Or name an installation that has one (SumoHome; "
-            + "run_sumo_drive.py --sumo-home), or run without the GUI. SUMO has not been started.");
+            + $"{installation.Source}) has no {installation.SumoGui}. A CARLA distribution's own SUMO "
+            + "has none: name an installation of your own that has one, of the release that converted "
+            + "the world (SumoHome; carla-drive --sumo-home). In a source checkout, SUMO builds it only "
+            + "where the FOX toolkit is found, and the repository's setup script builds and stages it with "
+            + "the rest of the SUMO toolchain: run CarlaSetup.ps1 on Windows or CarlaSetup.sh on Linux, "
+            + "which rebuilds a staged installation that is missing it. Or run without the GUI. SUMO has "
+            + "not been started.");
     }
 
     /// <summary>
