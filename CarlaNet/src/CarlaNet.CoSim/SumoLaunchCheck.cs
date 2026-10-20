@@ -107,9 +107,10 @@ internal static class SumoLaunchCheck
                 + $" (the installation at {release.Home}, matched by {release.Source}). Two SUMO releases are not "
                 + "guaranteed to build the same network from the same OSM or to drive it the same way, "
                 + "so SUMO has not been started. Name an installation of the world's release (SumoHome; "
-                + "run_sumo_drive.py --sumo-home), rebuild the world with this one, or accept the "
-                + "mismatch explicitly (AllowSumoVersionMismatch; run_sumo_drive.py "
-                + "--allow-sumo-version-mismatch), which the run report then records.");
+                + "carla-drive --sumo-home; sumo.home in carla-capture's site profile), rebuild the world "
+                + "with this one, or accept the mismatch explicitly (AllowSumoVersionMismatch; carla-drive "
+                + "--allow-sumo-version-mismatch; carla-capture --set sumo.allow_version_mismatch=true), "
+                + "which the run report then records.");
         }
 
         return release;

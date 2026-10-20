@@ -358,8 +358,8 @@ public sealed class ScenarioLockCheck
                 + "when the scenario ends -- and a capture that starts without it finds the same fault only "
                 + "when SUMO drops the vehicle, hours of rendering in. SUMO has not been started. Recompile "
                 + "the scenario without --skip-dry-run, or accept the skipped run explicitly "
-                + "(AcceptSkippedDryRun; run_sumo_drive.py --accept-skipped-dry-run; run_capture "
-                + "scenario.accept_skipped_dry_run), which the run report then records.");
+                + "(AcceptSkippedDryRun; carla-drive --accept-skipped-dry-run; carla-capture --set "
+                + "scenario.accept_skipped_dry_run=true), which the run report then records.");
         }
 
         return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null, plan,
