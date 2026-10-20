@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Turns a world package on disk into a level that can be opened, edited by hand, and loaded by name.
 //
 // A world package is what a build writes out: the road network, the per-cell fields relating the

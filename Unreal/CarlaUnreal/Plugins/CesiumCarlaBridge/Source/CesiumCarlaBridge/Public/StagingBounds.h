@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Staging bounds: the digital-twin sandbox extent in CARLA-local metres, plus the inward
 // staging-ring margin reserved at the OSM edge for traffic entry and exit. Boundary-aware traffic
 // spawns inside that ring, drives into the scene and despawns on leaving it; the scene perimeter

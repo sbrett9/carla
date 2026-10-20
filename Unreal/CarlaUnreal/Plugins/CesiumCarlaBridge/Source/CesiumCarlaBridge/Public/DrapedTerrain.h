@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Per-point draped collision terrain as a Chaos heightfield ("drape" height-align mode).
 //
 // UDrapedTerrainComponent is a hidden, collision-only UPrimitiveComponent backed by a

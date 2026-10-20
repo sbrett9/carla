@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Re-homes an imported world into a plugin of its own, so it can be added to a build after that build
 // was made.
 //

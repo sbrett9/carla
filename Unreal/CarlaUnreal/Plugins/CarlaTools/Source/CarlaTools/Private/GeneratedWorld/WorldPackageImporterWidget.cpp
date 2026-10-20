@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-
 #include "GeneratedWorld/WorldPackageImporterWidget.h"
 
 #include "CarlaTools.h"

@@ -5,8 +5,8 @@
 //     navmesh blob via DotRecast's `DtMeshSetReader.Read32Bit`)
 //   - the dtCrowd that drives all walker agents
 //   - HashSet shims for the CARLA-patched `paused` / `dead` agent flags
-//     (NAV_PORT_SPEC.md Risk R1 — DotRecast is not patched and we don't
-//     vendor it; the shims live above the crowd)
+//     (DotRecast is not patched and we don't vendor it; the shims live
+//     above the crowd)
 //   - VehicleObbTracker for the OBB-based walker-vs-vehicle separation
 //     workaround
 //

@@ -1,5 +1,5 @@
 // CARLA-only workaround for DotRecast's missing oriented-bounding-box
-// (OBB) obstacle support in dtCrowd. See NAV_PORT_SPEC.md Risk R1.
+// (OBB) obstacle support in dtCrowd.
 //
 // Upstream CARLA patches DetourCrowd to carry `useObb` + `obb[12]` on
 // dtCrowdAgentParams; vehicles get inserted into the crowd as zero-speed

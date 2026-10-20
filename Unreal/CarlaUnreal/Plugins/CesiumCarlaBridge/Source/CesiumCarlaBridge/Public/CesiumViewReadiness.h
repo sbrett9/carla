@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // What the server can say about whether a camera's photoreal tiles have arrived.
 //
 // A capture must not write its first frame while the camera's own tiles are still streaming, and

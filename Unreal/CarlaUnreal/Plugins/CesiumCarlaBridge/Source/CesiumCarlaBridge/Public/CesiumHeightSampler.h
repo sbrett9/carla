@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // UCesiumHeightSampler — a BlueprintFunctionLibrary that wraps the C++-only
 // ACesium3DTileset::SampleHeightMostDetailed into a poll-friendly, static,
 // BlueprintCallable (and therefore Python-callable) surface.
