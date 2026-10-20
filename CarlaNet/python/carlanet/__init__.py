@@ -27,8 +27,9 @@ import fnmatch
 import importlib.util
 import logging
 
-# The shim reports what it falls back to through this logger. A caller that configures no logging
-# still sees warnings and errors on stderr, from Python's last-resort handler.
+# This logger records an optional CarlaNet assembly that is missing, a call that failed where the
+# shim carries on without it, and an exception raised by a caller's callback. With no logging
+# configured, Python's last-resort handler writes warnings and errors to stderr.
 _logger = logging.getLogger(__name__)
 
 # This removes the shim's own directory from sys.path before pythonnet loads. A script run from that
@@ -121,10 +122,8 @@ def _ref(name):
 _ref("CarlaNet.Types")
 _ref("CarlaNet.Transport")
 _ref("CarlaNet.Sensors")
-# CarlaNet.Map + CarlaNet.TrafficManager provide the
-# in-process TrafficManager. Failure to load these is non-fatal — the shim
-# falls back to _NoOpTrafficManager in get_trafficmanager() if the assemblies
-# aren't available.
+# CarlaNet.Map and CarlaNet.TrafficManager provide the in-process TrafficManager. Where either
+# assembly is missing, get_trafficmanager() returns a _NoOpTrafficManager.
 try:
     _ref("CarlaNet.Map")
     _ref("CarlaNet.TrafficManager")
@@ -132,10 +131,9 @@ try:
 except FileNotFoundError:
     _CARLANET_TM_AVAILABLE = False
 
-# CarlaNet.Nav provides the pedestrian-navigation
-# subsystem. Same lazy-with-fallback pattern as the TM block above —
-# users without walkers never load the navmesh, and a missing Nav
-# assembly falls back to a no-op WalkerAIController stub.
+# CarlaNet.Nav provides pedestrian navigation. Client._get_walker_navigation() fetches the navmesh on
+# the first walker call, so a script with no walkers never loads it. Where the assembly is missing,
+# walker navigation is a _NoOpWalkerNavigation, which does nothing.
 try:
     _ref("CarlaNet.Nav")
     _CARLANET_NAV_AVAILABLE = True
@@ -571,9 +569,8 @@ from CarlaNet.Types.Rpc.Commands import (
     Command, SpawnActorCommand, DestroyActorCommand, SetAutopilotCommand,
     ApplyVehicleControlCommand, ApplyTransformCommand, ApplyLocationCommand,
     ConsoleCommandCommand, SetVehicleLightStateCommand, CommandResponse)
-# The in-process TrafficManager. The import is guarded
-# because the Map / TrafficManager assemblies may be missing in stripped-down
-# deployments — get_trafficmanager() falls back to a no-op stub if so.
+# The import runs only when CarlaNet.Map and CarlaNet.TrafficManager loaded. If it fails,
+# get_trafficmanager() returns a _NoOpTrafficManager.
 if _CARLANET_TM_AVAILABLE:
     try:
         from CarlaNet.TrafficManager import TrafficManager as _CSTrafficManager
@@ -583,10 +580,10 @@ if _CARLANET_TM_AVAILABLE:
 else:
     _CSTrafficManager = None  # type: ignore
 
-# NavigationFactory hands out the process-wide WalkerNavigation
-# instance lazily on first walker-related call. WalkerNavigation itself is
-# the C# facade matching upstream carla.WalkerAIController + the three
-# World.set_pedestrians_* / get_random_location_from_navigation entry points.
+# NavigationFactory creates the process-wide WalkerNavigation on the first walker call.
+# WalkerNavigation is the C# counterpart of upstream's carla.WalkerAIController and of
+# World.set_pedestrians_seed, World.set_pedestrians_cross_factor and
+# World.get_random_location_from_navigation.
 if _CARLANET_NAV_AVAILABLE:
     try:
         from CarlaNet.Nav import NavigationFactory as _CSNavigationFactory
