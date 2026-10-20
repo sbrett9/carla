@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
 # CarlaNet-targeted variant of manual_control.py.
-# This file is a near byte-for-byte copy of the upstream PythonAPI/examples/manual_control.py,
-# differing only in the `carla` import lines (and an optional set_timeout value) so that it
-# runs against the CarlaNet pythonnet shim instead of the boost.python `carla` egg.
-# See CarlaNet/MANUAL_CONTROL_PORT_SPEC.md §10 for the exact edits applied.
+# This file is a copy of the upstream PythonAPI/examples/manual_control.py that runs against the
+# CarlaNet pythonnet shim instead of the boost.python `carla` egg. It differs from upstream in the
+# `carla` import lines, the set_timeout value, the Cesium support in World (the spectator follows
+# the ego and the OpenDRIVE road mesh is hidden) and the --co-run option.
 #
-# Running alongside SCTMV.py (drive a keyboard-controlled ego inside SCTMV's aerial EO scene):
+# Running alongside SCTMV (drive a keyboard-controlled ego inside SCTMV's aerial EO scene):
 # only one client may be the synchronous tick-master, so start SCTMV first (it builds the world
 # and owns world.tick()), then start this client with --co-run. --co-run keeps this client
-# asynchronous and hands the shared spectator camera and road-mesh rendering to SCTMV:
-#     python SCTMV.py --height-align drape --start-traffic          # terminal 1 (tick-master)
-#     python manual_control_carlanet.py --co-run                    # terminal 2 (participant)
+# asynchronous and hands the shared spectator camera and road-mesh rendering to SCTMV.
+# From the repository root:
+#     python CarlaControl/scripts/run_SCTMV.py --height-align drape --start-traffic   # terminal 1
+#     python PythonAPI/examples/manual_control_carlanet.py --co-run                   # terminal 2
 # The ego (role_name "hero") is streamed by SCTMV's telemetry and appears in its EO view.
 
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
@@ -243,9 +244,10 @@ class World(object):
         self._gamma = args.gamma
         self.restart()
         # Digital-twin (Cesium) support: cache the spectator and hide the OpenDRIVE road mesh.
-        # tick() drives the spectator to the ego pose each frame so the photogrammetry STREAMS
-        # (an attached camera sensor's frustum does NOT pull Cesium tiles; the spectator does),
-        # and the road mesh is hidden because it z-fights the photoreal streets (collision intact —
+        # tick() moves the spectator to the ego pose every third frame. Cesium selects tiles from the
+        # spectator's view and, where the server has configured a Cesium world, from each camera
+        # sensor's view (ACesiumSensorViewPublisher), so the attached camera streams the tiles it
+        # sees. The road mesh is hidden because it z-fights the photoreal streets (collision intact —
         # the car still drives on the roads). Both no-op on a plain (non-Cesium) town.
         #
         # When running as a secondary client alongside SCTMV (--co-run), SCTMV owns the shared
@@ -387,8 +389,7 @@ class World(object):
 
     def tick(self, clock):
         self.hud.tick(self, clock)
-        # Stream Cesium photogrammetry around the ego by moving the spectator to the car every ~3rd
-        # frame (~20 Hz at 60 fps); the attached camera then captures the streamed tiles. See __init__.
+        # Move the spectator to the car every 3rd frame (~20 Hz at 60 fps). See __init__.
         self._spec_n = getattr(self, "_spec_n", 0) + 1
         if (getattr(self, "spectator", None) is not None and self.player is not None
                 and self._spec_n % 3 == 0):
@@ -1417,7 +1418,7 @@ def main():
         help='Activate synchronous mode execution')
     argparser.add_argument(
         '--co-run', action='store_true',
-        help='run as a secondary client alongside SCTMV.py: stay asynchronous (never become the '
+        help='run as a secondary client alongside SCTMV: stay asynchronous (never become the '
              'synchronous tick-master, since only one client may own the world clock) and leave '
              'the shared spectator camera and OpenDRIVE road-mesh rendering to SCTMV. Use this '
              'when SCTMV owns the world clock and the aerial EO view.')

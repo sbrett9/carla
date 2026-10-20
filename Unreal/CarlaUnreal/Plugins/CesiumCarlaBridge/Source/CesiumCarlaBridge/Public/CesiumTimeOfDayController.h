@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // ACesiumTimeOfDayController advances a CesiumSunSky's solar clock over time so the sun moves as
 // the scene runs, carrying whole days onto the sun's calendar date so a run that crosses local
 // midnight renders (and records) the next day rather than returning to 00:00 of the same one. It is

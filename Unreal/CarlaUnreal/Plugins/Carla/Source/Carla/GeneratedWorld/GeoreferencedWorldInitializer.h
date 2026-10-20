@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Applies a generated world's settings when the level stands on its own.
 //
 // A world assembled by a client reaches its correct state through a series of remote calls made after

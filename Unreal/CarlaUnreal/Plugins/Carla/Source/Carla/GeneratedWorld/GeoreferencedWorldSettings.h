@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // What a world generated from OpenStreetMap needs in order to be correct, stored as level content.
 //
 // A generated world is normally assembled by a client issuing a series of remote calls after the map

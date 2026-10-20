@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // The human-facing half of the world package importer: a small editor panel with a folder, a world
 // name, a button and a result line.
 //

@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Bare-earth reference: everything the telemetry path needs to turn a vehicle's PHYSICAL height
 // (the height it is actually driving at, on a surface that may have been shifted to seat on the
 // photoreal imagery) into BARE-EARTH truth.

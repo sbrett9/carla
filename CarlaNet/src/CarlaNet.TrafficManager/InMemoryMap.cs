@@ -24,7 +24,8 @@
 //     until SetUp() runs.
 //
 //   • The C++ implementation has a binary-cache Load/Save path (cooked .bin
-//     per-map). Skipped in v1 per TRAFFIC_MANAGER_PORT_SPEC.md §6 risk-7.
+//     per-map). This port has no such cache; SetUp() builds the waypoint
+//     graph from the OpenDRIVE map for every new InMemoryMap.
 #nullable enable
 
 using CarlaNet.Map.Geom;

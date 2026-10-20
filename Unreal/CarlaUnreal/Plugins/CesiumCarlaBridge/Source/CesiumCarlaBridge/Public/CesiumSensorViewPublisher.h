@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // ACesiumSensorViewPublisher makes CARLA's camera sensors drive Cesium tile selection.
 //
 // Cesium picks and refines tiles from a list of registered views. It gathers those from player

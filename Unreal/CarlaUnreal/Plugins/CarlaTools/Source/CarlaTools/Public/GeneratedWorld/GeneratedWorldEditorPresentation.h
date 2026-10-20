@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Presents a generated world the way the simulation does when its level is opened for editing.
 //
 // A generated world hides layers that exist to be measured rather than looked at -- above all the

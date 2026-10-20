@@ -1,5 +1,3 @@
-// Copyright (c) 2026 CARLA-Cesium digital-twin project.
-//
 // Turns the road surface described by an OpenDRIVE file into static mesh assets placed in a level.
 //
 // A generated world normally builds its road surface at play time into procedural mesh actors, which
