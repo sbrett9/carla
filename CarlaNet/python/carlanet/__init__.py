@@ -16,9 +16,6 @@ Environment:
                           layout).  If that subdirectory is missing, the loader
                           falls back to DLLs sitting alongside this script
                           (legacy publish/ layout).
-
-§12: sys.path bootstrapper — MUST remove this file's directory before importing clr.
-§13.8: Python namespace package finder can shadow CLR imports otherwise.
 """
 import sys
 import os
@@ -34,6 +31,11 @@ import logging
 # still sees warnings and errors on stderr, from Python's last-resort handler.
 _logger = logging.getLogger(__name__)
 
+# This removes the shim's own directory from sys.path before pythonnet loads. A script run from that
+# directory puts the directory first on sys.path. Python's PathFinder sits ahead of pythonnet's
+# DotNetFinder in sys.meta_path, so a module or folder there named like a .NET namespace, such as a
+# CarlaNet.py or a CarlaNet/Transport folder, would be imported in place of the namespace, and
+# `from CarlaNet.Transport import CarlaClient` would fail.
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir in sys.path:
     sys.path.remove(_this_dir)
@@ -3298,9 +3300,10 @@ class Client:
         _sync(self._inner.UnloadDeliveredWorldAsync(world_name))
 
     def get_world(self) -> World:
-        # Auto-start the world observer stream so that actor transforms,
-        # velocities, on_tick events, and wait_for_tick all function out
-        # of the box (per spec §11.3).
+        # Start the world-observer stream on the first get_world(). Actor transforms, velocities and
+        # accelerations come from its cached snapshots and are zero until it runs. World.on_tick
+        # fires once per snapshot, and World.wait_for_tick waits for the next one. It is not started
+        # in Client.__init__, where it raced the first RPC calls and could make them time out.
         if not self._observer_started:
             try:
                 self.start_observer()
@@ -3652,7 +3655,7 @@ class Client:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §1, §4 — VehicleLightState  (Python int subclass with named class attributes)
+# VehicleLightState  (Python int subclass with named class attributes)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class VehicleLightState(int):
@@ -3677,7 +3680,7 @@ class VehicleLightState(int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §1 — Color  (lightweight Python wrapper compatible with C# Color)
+# Color  (lightweight Python wrapper compatible with C# Color)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Color:
@@ -3716,7 +3719,7 @@ def _to_cs_color(c):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §1, §11.7 — _WorldSettings  (mutable Python wrapper for EpisodeSettings)
+# _WorldSettings  (mutable Python wrapper for EpisodeSettings)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _WorldSettings:
@@ -3771,7 +3774,7 @@ class _WorldSettings:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §1 — Timestamp  (returned by World.on_tick callback)
+# Timestamp  (returned by World.on_tick callback)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Timestamp:
@@ -3790,7 +3793,7 @@ class Timestamp:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §5 — ColorConverter + in-place image conversions
+# ColorConverter + in-place image conversions
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ColorConverter:
@@ -3870,7 +3873,7 @@ def _convert_cityscapes_inplace(buf):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §2 — SensorData base + concrete wrappers
+# SensorData base + concrete wrappers
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SensorData:
@@ -4086,9 +4089,9 @@ class _WrappedSensorActor:
 class LaneInvasionEvent(SensorData):
     """Lane-invasion event.
 
-    Spec §11.1: server-side payload is empty (NoopSerializer); upstream's
-    client-side lane-marking computation is not implemented in CarlaNet, so
-    `crossed_lane_markings` is always [].
+    The server sends this sensor an empty payload (`NoopSerializer`). Upstream CARLA computes the
+    crossed lane markings in the client (`LibCarla/source/carla/client/LaneInvasionSensor.cpp`);
+    CarlaNet does not, so `crossed_lane_markings` is always [].
     """
     __slots__ = ("actor", "crossed_lane_markings")
 
@@ -4311,7 +4314,7 @@ class DVSEventArray(SensorData):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §8 — type_id -> parser dispatch table for Actor.listen()
+# type_id -> parser dispatch table for Actor.listen()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _p_image(sf, a):           return Image(sf)
@@ -4346,7 +4349,7 @@ _SENSOR_PARSERS = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §7 — DebugHelper (world.debug.draw_*)
+# DebugHelper (world.debug.draw_*)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class DebugHelper:
@@ -4388,7 +4391,7 @@ class DebugHelper:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §6 — WeatherParameters preset attributes
+# WeatherParameters preset attributes
 # ─────────────────────────────────────────────────────────────────────────────
 # `WeatherParameters` is the C# record struct (already imported). Attach the
 # named preset class attributes via setattr — the underlying type is a CLR
@@ -4446,7 +4449,7 @@ def _weather_preset(name: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# §1 — MapLayer.NONE alias  (Python reserves `None`; expose both names)
+# MapLayer.NONE  (an alias for the C# member None, which Python cannot write as MapLayer.None)
 # ─────────────────────────────────────────────────────────────────────────────
 try:
     MapLayer.NONE = getattr(MapLayer, "None")
