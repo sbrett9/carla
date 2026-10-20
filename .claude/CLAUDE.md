@@ -187,3 +187,26 @@ Check that descriptions match the implementation, terminology is consistent, and
 After editing, inspect the complete affected passage for broken sentences, duplicated text, misplaced fragments, incomplete statements, and malformed references.
 
 Correct problems in the actual files. Do not merely report them.
+
+## 18. Justify the Existence of Every Comment
+
+Before writing a comment, determine whether the code needs one.
+
+Do not add a comment merely to name an operation, paraphrase an expression, describe a familiar programming idiom, or summarize behavior that the surrounding code makes clear.
+
+Prefer no comment over a comment that adds no useful information. A short, self-explanatory operation may need no comment at all.
+
+Write comments when they explain information that the code cannot communicate adequately on its own, such as:
+- The reason for a non-obvious implementation choice.
+- A constraint, invariant, or assumption that affects correctness.
+- A side effect or failure mode that callers or maintainers need to understand.
+- A workaround for a known limitation.
+- A deliberate behavior that might otherwise appear accidental or incorrect.
+
+Place each comment near the code it explains. Explain a decision where it is made, a failure mode where it matters, and a broader policy where readers can find it without repeating it throughout the implementation.
+
+Do not document every behavior associated with a function or object simply because the information is accurate. Include only details that help the intended reader understand, maintain, or safely modify the code.
+
+When a comment seems useful, consider whether a shorter comment would serve the same purpose. When no wording adds meaningful information, omit the comment entirely.
+
+Apply these standards to existing comments as well as new ones. Remove redundant comments, shorten comments that explain too much, and correct comments that no longer match the implementation. Inspect the surrounding code after editing to ensure that the remaining comments are accurate and useful.
