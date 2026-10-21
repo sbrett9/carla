@@ -38,8 +38,8 @@ class CameraFollower:
     rather than sitting on a picture that looks frozen.
 
     The overlay carries only what the frame itself carries -- its frame number and the simulated
-    time stamped on it -- plus the channel's `sensor_id` and pattern. It computes no figures about
-    the run: a monitor that computes its own numbers can disagree with the record.
+    time stamped on it -- plus the camera's name on the server and its pattern. It computes no
+    figures about the run: a monitor that computes its own numbers can disagree with the record.
 
     An orbit is flown by the server: `OrbitSensorController` gives the circle to the server's orbit
     mover once, which advances the angle by each tick's delta on the simulation clock, so the camera
@@ -112,18 +112,19 @@ class CameraFollower:
             self._restore_signal_handlers(previous_handlers)
 
     def overlay_lines(self, image: Any) -> list[str]:
-        """The text drawn over a frame: the channel's identity, and what the frame carries."""
+        """The text drawn over a frame: the camera's name, and what the frame carries."""
         return [
             f"{self.sensor_label()}   {self.channel.pattern}",
             f"frame {image.frame}   sim t {image.timestamp:.3f} s",
         ]
 
     def sensor_label(self) -> str:
-        """The channel's `sensor_id`, or the camera's actor id where none was given."""
+        """The name the server holds the camera under. Before the camera is placed, the channel's
+        `sensor_id`, or "unnamed camera" where none was given."""
+        if self.camera is not None:
+            return self.camera.name
         if self.channel.sensor_id is not None:
             return self.channel.sensor_id
-        if self.camera is not None:
-            return f"unnamed camera, actor {self.camera.id}"
         return "unnamed camera"
 
     def _run(self) -> int:
@@ -148,6 +149,10 @@ class CameraFollower:
             try:
                 self.camera = FollowerCamera(world, self.channel, self._start_transform(),
                                              logger=self.logger)
+            except ValueError as refused:
+                # A refusal of the name, whose message is the server's reason as it gave it.
+                self.logger.error("could not place the camera: %s", refused)
+                return 1
             except Exception as failure:
                 self.logger.error("could not place the camera: %r", failure)
                 return 1

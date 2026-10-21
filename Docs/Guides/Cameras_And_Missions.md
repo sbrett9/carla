@@ -237,10 +237,13 @@ Some things to know:
 - Its camera is a plain RGB camera with the camera's default exposure, the `Default` profile's.\
   It renders on every tick.\
   It has no depth camera.
-- `--sensor-id` is shown over the picture only.\
-  The follower does not give it to the server.\
-  The server names the follower's camera `Camera_<n>`.\
-  The name must still follow the camera-name rules: ASCII letters, digits, hyphens and the _ character, up to 63.
+- `--sensor-id` names the follower's camera on the server.\
+  Any other client finds the camera by that name, and the follower shows it over the picture.\
+  Without `--sensor-id`, the server names the camera `Camera_<n>`.\
+  The name must follow the camera-name rules: ASCII letters, digits, hyphens and the _ character, up to 63.\
+  The server refuses a name that another live camera holds, compared without regard to case.\
+  The follower then logs the server's reason and closes.\
+  While the follower runs, a `carla-capture` channel with the same `sensor_id` is refused the same way.
 - An orbit is flown by the server, as above.\
   With a server that cannot fly orbits, the follower says so and closes.
 - A map load removes every actor, this camera too.\
@@ -254,7 +257,7 @@ Its options:
 | `--host HOST` | `127.0.0.1` | The server's address. |
 | `--port PORT` | `2000` | The server's port. |
 | `--timeout SECONDS` | `10` | Seconds to wait for the server to answer. |
-| `--sensor-id NAME` | none | A name for the camera, shown over its picture. |
+| `--sensor-id NAME` | `Camera_<n>`, from the server | The camera's name on the server, shown over its picture. |
 | `--pattern {stare,orbit}` | `stare` | `stare` holds one pose. `orbit` circles a center. |
 | `--fov DEGREES` | `90.0` | Horizontal field of view. |
 | `--width PIXELS`, `--height PIXELS` | `1280`, `720` | Picture size. |

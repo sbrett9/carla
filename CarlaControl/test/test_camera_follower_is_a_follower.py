@@ -43,7 +43,7 @@ from carlacontrol.OrbitSensorController import OrbitSensorController  # noqa: E4
 from carlacontrol.StareAim import StareAim  # noqa: E402
 
 # What a viewer may call. Anything else on the world or the client is a failure.
-WORLD_CALLS_ALLOWED = {"get_blueprint_library", "spawn_actor", "get_settings"}
+WORLD_CALLS_ALLOWED = {"get_blueprint_library", "spawn_camera", "camera_name", "get_settings"}
 CLIENT_CALLS_ALLOWED = {"get_world"}
 
 # Named individually as well, so a failure says which forbidden thing happened.
@@ -192,15 +192,20 @@ class _World(_Recording):
         self._record("get_blueprint_library")
         return _Library(self)
 
-    def spawn_actor(self, blueprint: _Blueprint, transform) -> _Actor:
-        self._record("spawn_actor")
+    def spawn_camera(self, blueprint: _Blueprint, transform, name: str | None = None) -> _Actor:
+        self._record("spawn_camera")
         if self.refuse_spawn:
             raise RuntimeError("spawn refused")
         actor = _Actor(self._calls, 100 + len(self.spawned), blueprint.id)
         actor.flies_orbits = self.flies_orbits
+        actor.held_name = name if name is not None else f"Camera_{len(self.spawned) + 1}"
         self.spawned.append(actor)
         self.spawn_transforms.append(transform)
         return actor
+
+    def camera_name(self, camera: _Actor) -> str:
+        self._record("camera_name")
+        return camera.held_name
 
     def get_settings(self) -> _Settings:
         self._record("get_settings")
@@ -464,15 +469,6 @@ def test_the_overlay_carries_only_what_the_frame_carries():
     assert session.window.shown == [
         (4812, ["OVERWATCH-1   stare", "frame 4812   sim t 240.550 s"]),
     ]
-
-
-def test_an_unnamed_camera_is_labelled_by_its_actor_id():
-    session = _Session(AN_ORBIT)
-    session.step(lambda: session.camera.callback(_Image(7, 0.35)))
-
-    session.run()
-
-    assert session.window.shown == [(7, ["unnamed camera, actor 100   orbit", "frame 7   sim t 0.350 s"])]
 
 
 def test_the_window_says_it_is_waiting_before_the_first_frame():

@@ -11,9 +11,13 @@ keeps showing whatever the world delivers: frames at the drive's tick rate while
 clock, frames at the server's own rate when nothing does. If no frame arrives for a few seconds it
 says so once in the log, rather than looking frozen.
 
-It records nothing. A recorder in a separate process would read an empty annotation registry and
-write every vehicle as unlabelled: the annotation state is held by the process that drives the
-world, and nothing publishes it to the server yet. Record from the process that drives the world.
+The camera is spawned under --sensor-id, which is then its name on the server, so any other client
+can find it by that name. Without --sensor-id the server names it Camera_<n>. A name another live
+camera holds is refused: the follower logs the server's reason and ends.
+
+It records nothing. To record, use carla-capture or carla-drive. The supervision a recorder writes
+for each vehicle, what the scenario's author asserts of it, is held on the server and carried on
+every world snapshot, so a recorder in any process writes the same.
 
 The three steps of watching SUMO drive a world, each its own command:
 
@@ -75,8 +79,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     camera = parser.add_argument_group("camera")
     camera.add_argument("--sensor-id", metavar="NAME",
-                        help="a name for this camera, shown over its picture "
-                             "(letters, digits and _ . : -, up to 63; default: none)")
+                        help="the camera's name on the server, shown over its picture, and refused "
+                             "where another live camera holds it (ASCII letters, digits, _ and -, "
+                             "up to 63; default: the server names it Camera_<n>)")
     camera.add_argument("--pattern", choices=ChannelDescription.PATTERNS,
                         help=f"'stare' holds one pose; 'orbit' circles a center "
                              f"(default {DEFAULT('pattern')})")
