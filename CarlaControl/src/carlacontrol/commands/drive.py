@@ -68,6 +68,11 @@ stops a run that falls behind, and the final report says by how much it did. The
 world package that does not describe the world the server has loaded, so a package from another
 build of the world cannot put the traffic somewhere the world is not.
 
+`--end SECOND` ends the drive at a simulated second in place of a number of steps: the SUMO step that
+second falls in is the last step drawn, and the live feed's sample of it is sent before the drive
+stops. On a scenario that steps 1.0 s from zero, `--warm-up 271169 --end 271433` draws the 265 steps
+from 271169 to 271433, where `--steps 264` stops after the step at 271432.
+
 Which SUMO runs is named, not left to the environment. The session launches the installation this
 tool names: `--sumo-home` where given, otherwise `CARLANET_SUMO_HOME`, otherwise, run from a
 checkout, this repository's pinned build (`Build/sumo-install`, then `Build/sumo-src`); only where
@@ -267,6 +272,10 @@ TOOL = "carla-drive"
 # fixed camera's as it always was, and the free view's as carla-free-camera opens its window.
 VIEW_OPTICS = {"fixed": (1920, 1080, 60.0), "free": (1280, 720, 90.0)}
 
+# SUMO steps a drive runs where neither --steps nor --end is given. --steps is parsed with no default,
+# so that one given with --end can be refused.
+DEFAULT_STEPS = 600
+
 # The live feed's options besides --cot-udp, with the value each takes when it is left out. Each is
 # parsed with no default, so that one given without --cot-udp can be told from one left out.
 FEED_DEFAULTS = {
@@ -347,10 +356,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "before the run stops because SUMO has stopped answering. Must exceed "
                              "the slowest step the scenario produces (default 60)")
 
-    parser.add_argument("--steps", type=int, default=600,
-                        help="SUMO steps to run. 0 runs until the scenario ends -- until SUMO has "
-                             "no vehicle left to simulate or insert -- which is what a live watcher "
-                             "wants")
+    parser.add_argument("--steps", type=int, default=None,
+                        help=f"SUMO steps to run (default {DEFAULT_STEPS}, unless --end is given). 0 "
+                             "runs until the scenario ends -- until SUMO has no vehicle left to "
+                             "simulate or insert -- which is what a live watcher wants")
+    parser.add_argument("--end", type=float, default=None, metavar="SECOND",
+                        help="the simulated second the drive ends at, in place of --steps: the SUMO "
+                             "step that second falls in is the last step drawn, and the live feed's "
+                             "sample of it is sent before the drive stops. Refused with --steps, and "
+                             "where it is not after --warm-up and --window-opens-at")
     parser.add_argument("--real-time-factor", type=float, default=0.0,
                         help="hold the world's ticks to the wall clock: simulated seconds per "
                              "wall-clock second. 1.0 is the pace of real traffic, 0.5 half of it, 2.0 "
@@ -554,7 +568,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         if getattr(args, name) is None:
             setattr(args, name, default)
     _refuse_unusable_feed_options(parser, args)
+    _refuse_an_unusable_end(parser, args)
     return args
+
+
+def _refuse_an_unusable_end(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Exit 2 where --end cannot be used, before anything connects; give --steps its default where
+    neither is given."""
+    if args.end is None:
+        if args.steps is None:
+            args.steps = DEFAULT_STEPS
+        return
+    end = f"--end {args.end:.10g}"
+    if args.steps is not None:
+        parser.error(f"{end} and --steps {args.steps} both say when the drive stops: give one")
+    if not math.isfinite(args.end):
+        parser.error(f"{end} must be a simulated second")
+    if not args.end > args.warm_up:
+        parser.error(f"{end} is not after --warm-up {args.warm_up:.10g}: the drive draws its first "
+                     "step at --warm-up")
+    if args.window_opens_at is not None and not args.end > args.window_opens_at:
+        parser.error(f"{end} is not after --window-opens-at {args.window_opens_at:.10g}: the drive "
+                     "would stop before its capture window opens")
 
 
 def _refuse_unusable_feed_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:

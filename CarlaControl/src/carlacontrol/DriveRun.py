@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import os
 import time
 from datetime import UTC, datetime
@@ -41,6 +42,10 @@ class DriveRun:
     # How long any one server call may take once the session is driving.
     RUN_TIMEOUT_S = 30.0
 
+    # In SUMO steps: how far short of a whole number of steps from the first an --end may fall and still
+    # be read as the start of a step, for the binary rounding of a step length such as 0.1 s.
+    END_TOLERANCE_STEPS = 1e-6
+
     def __init__(self, args: argparse.Namespace, tool: str) -> None:
         self.args = args
         # The command the run manifest's header names, as every other file the drive writes does.
@@ -54,6 +59,8 @@ class DriveRun:
         self.cot: DriveCotFeed | None = None
         self.run_id = ""
         self.steps = 0
+        # Under --end, the SUMO steps the drive draws in all, counted once the session has started.
+        self.steps_to_end: int | None = None
         self.free = FreeViewParts()
         self.aim = RenderedVehicleCentre()
         self.progress = PacingProgress()
@@ -90,6 +97,7 @@ class DriveRun:
                 return 1
             if self.cot is not None:
                 self.cot.start(self.session)
+            self.steps_to_end = self._steps_to_the_end()
             self._announce_session()
 
             # Everything up to the recorder starting happens with the world already in synchronous mode:
@@ -246,6 +254,11 @@ class DriveRun:
         logger.info("run manifest: %s", session.RunManifest.Path if session.RunManifest is not None
                     else "none written; give --run-manifest to write one")
         logger.info("cot feed: %s", DriveReport.describe_cot_feed(self.cot))
+        if self.steps_to_end is not None:
+            per_step = session.Clock.RenderedSecondsPerSumoStep
+            logger.info("end: the step at t=%.2f s is the last drawn, %d SUMO steps from t=%.2f s",
+                        session.FirstRenderedSeconds + (self.steps_to_end - 1) * per_step,
+                        self.steps_to_end, session.FirstRenderedSeconds)
 
     def _open_free_view(self) -> int | None:
         """Open the window with the camera the operator flies. 1 where it cannot open."""
@@ -345,7 +358,9 @@ class DriveRun:
         args, session = self.args, self.session
         started = time.time()
         try:
-            while True:
+            # Checked before the first step as well: the aim step may already have drawn the step --end
+            # falls in.
+            while not self._at_the_end():
                 more = session.Advance()
                 # The step SUMO ended on was rendered too, and its frames sampled.
                 self._send_the_feed()
@@ -353,7 +368,7 @@ class DriveRun:
                     break
                 self.steps += 1
                 self.footprints.after_step(session)
-                if args.steps and self.steps >= args.steps:
+                if (args.steps and self.steps >= args.steps) or self._at_the_end():
                     break
                 self.progress.after_step(session, self.steps)
                 if self.free.closed:
@@ -370,6 +385,23 @@ class DriveRun:
 
         self._report(time.time() - started)
         return 0
+
+    def _steps_to_the_end(self) -> int | None:
+        """Under --end, how many SUMO steps the drive draws: from its first rendered step to the one the
+        --end second falls in, both included. None without --end."""
+        end = self.args.end
+        if end is None:
+            return None
+        session = self.session
+        whole_steps = ((end - session.FirstRenderedSeconds) / session.Clock.RenderedSecondsPerSumoStep
+                       + self.END_TOLERANCE_STEPS)
+        # The first rendered step is drawn whatever --end says: the fast-forward lands on SUMO's own
+        # step, which may lie past an --end that is after --warm-up.
+        return max(1, math.floor(whole_steps) + 1)
+
+    def _at_the_end(self) -> bool:
+        """Whether the step --end falls in has been drawn."""
+        return self.steps_to_end is not None and self.steps >= self.steps_to_end
 
     def _send_the_feed(self) -> None:
         """Send the live feed's samples of the advance just made, where the run sends one."""
