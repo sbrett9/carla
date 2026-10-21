@@ -539,4 +539,17 @@ public sealed record SumoDriveSessionOptions(
     /// <see cref="RunManifestPath"/> to write it to.
     /// </remarks>
     public string? RunManifestHeader { get; set; }
+
+    /// <summary>
+    /// What the session's live track sends, where it keeps one: on each sampled frame, a Cursor-on-Target
+    /// event per body the frame drew, built from the truth a capture of the frame records
+    /// (<see cref="LiveTrackFeed"/>, <see cref="SumoDriveSession.LiveTrack"/>). Null, the default, keeps
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// It sends nothing itself: its caller takes each sample's events and sends them on. It changes
+    /// nothing about which vehicles get a body or what any frame draws. Refused before anything is
+    /// started for a session with no <see cref="World"/>, which renders no frame to sample.
+    /// </remarks>
+    public LiveTrackOptions? LiveTrack { get; set; }
 }

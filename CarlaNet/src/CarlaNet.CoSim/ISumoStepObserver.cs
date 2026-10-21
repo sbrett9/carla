@@ -30,7 +30,9 @@ namespace CarlaNet.CoSim;
 ///
 /// <para><b>Who it is for.</b> A world truth track reads every vehicle's state at each SUMO frame and
 /// each rendered frame's illumination; a run manifest writes the events, the rendered frames and the
-/// end; an interval binder takes a committed onset from an event at the clock it carries, asks SUMO for a
+/// end; a live track reads the truth of a sampled rendered frame from the world, cuts it to the frame's
+/// render set and formats an event per body, stamped with the frame's civil instant
+/// (<see cref="LiveTrackFeed"/>); an interval binder takes a committed onset from an event at the clock it carries, asks SUMO for a
 /// vehicle's departure or completed stops when an event says one has changed
 /// (<see cref="SumoStepRecord.Vehicles"/>), and closes what is still open at the end, telling a window
 /// that closed from a scenario that finished (<see cref="SessionEndRecord.ScenarioFinished"/>).</para>

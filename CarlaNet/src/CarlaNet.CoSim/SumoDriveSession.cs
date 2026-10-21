@@ -56,11 +56,13 @@ namespace CarlaNet.CoSim;
 /// distance it was drawn under so a recorder marks those vehicles in that camera's sidecar.</para>
 ///
 /// <para><b>Observers, where any are registered.</b> What follows the run from inside it -- a truth
-/// track, a manifest, an interval binder -- is told of every SUMO frame read, with what SUMO did to its
-/// vehicles in that step at TraCI's clock, of every frame rendered, and of the session's end
+/// track, a manifest, a live track, an interval binder -- is told of every SUMO frame read, with what SUMO
+/// did to its vehicles in that step at TraCI's clock, of every frame rendered, and of the session's end
 /// (<see cref="SumoDriveSessionOptions.StepObservers"/>), rather than being written into the loop. The
-/// world truth track and the run manifest are two, built by the session itself where it is asked for them
-/// (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>, <see cref="SumoDriveSessionOptions.RunManifestPath"/>).</para>
+/// world truth track, the run manifest and the live track are three, built by the session itself where it
+/// is asked for them (<see cref="SumoDriveSessionOptions.WorldTruthTrackPath"/>,
+/// <see cref="SumoDriveSessionOptions.RunManifestPath"/>, <see cref="SumoDriveSessionOptions.LiveTrack"/>),
+/// and told ahead of the caller's.</para>
 /// </remarks>
 public sealed class SumoDriveSession : IDisposable
 {
@@ -88,6 +90,7 @@ public sealed class SumoDriveSession : IDisposable
     private readonly ISumoStepObserver[] _observers;
     private readonly WorldTruthTrackWriter? _track;
     private readonly RunManifestWriter? _manifest;
+    private readonly LiveTrackFeed? _liveTrack;
     private readonly SumoConsoleTail _console;
     private readonly SubscribedPopulation _population;
     private readonly RenderSetManager _renderSet;
@@ -290,6 +293,14 @@ public sealed class SumoDriveSession : IDisposable
             throw;
         }
 
+        // The options check refuses a live track with no world. The class a vehicle type names is read
+        // from SUMO, which only the session holds.
+        _liveTrack = options.LiveTrack is { } live
+            ? new LiveTrackFeed(live, world!, clock.WorldDeltaSeconds,
+                                typeId => sumo.TraCI.GetParameter(TraCIConstants.CMD_GET_VEHICLETYPE_VARIABLE,
+                                                                  typeId, VehicleCatalogue.ClassParameter))
+            : null;
+
         // Read once, as the pace is: an observer added to the options after the start is told nothing,
         // rather than part of a run.
         ISumoStepObserver[] given = options.StepObservers is { } observers ? [.. observers] : [];
@@ -318,6 +329,11 @@ public sealed class SumoDriveSession : IDisposable
         if (_manifest is { } manifest)
         {
             told.Add(manifest);
+        }
+
+        if (_liveTrack is { } liveTrack)
+        {
+            told.Add(liveTrack);
         }
 
         told.AddRange(given);
@@ -440,6 +456,17 @@ public sealed class SumoDriveSession : IDisposable
     /// the run's closing gates (<see cref="RunManifestWriter.Close"/>).
     /// </summary>
     public RunManifestWriter? RunManifest => _manifest;
+
+    /// <summary>
+    /// The session's live track -- the events of each sampled frame, waiting to be taken, and what it
+    /// counted -- or null where none was asked for (<see cref="SumoDriveSessionOptions.LiveTrack"/>). Its
+    /// caller takes the samples between advances (<see cref="LiveTrackFeed.TakeSamplesJson"/>) and sends
+    /// each event on.
+    /// </summary>
+    public LiveTrackFeed? LiveTrack => _liveTrack;
+
+    /// <summary>Every observer the session tells, in the order it tells them.</summary>
+    internal IReadOnlyList<ISumoStepObserver> Observers => _observers;
 
     /// <summary>
     /// Whether SUMO had nothing left to simulate at the last advance, which then answered false.

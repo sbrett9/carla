@@ -1,3 +1,4 @@
+using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
@@ -14,18 +15,24 @@ namespace CarlaNet.CoSim.Tests;
 /// A CARLA world that records what was asked of it and answers as a server would.
 /// </summary>
 /// <remarks>
-/// <para>Everything the bridge does to a world is twenty-one operations wide, so a world that keeps a
+/// <para>Everything the bridge does to a world is twenty-six operations wide, so a world that keeps a
 /// dictionary of actors, a list of batches and a simulated sun exercises the whole driving path --
 /// the check of which world is loaded, the pool, the batch, the render set named to the server, the
 /// supervision put to it, the draw distance set on the bodies, the read-back, the tick, the settings
 /// restoration, the sun's
-/// binding and audit, and the cameras an optional render set follows -- with no server,
-/// no engine and no render. What it
+/// binding and audit, the cameras an optional render set follows, and a frame's vehicle truth -- with
+/// no server, no engine and no render. What it
 /// cannot establish is what a body looks like once the pose is applied, which is the one thing only
 /// a live run can answer.</para>
 ///
 /// <para>A camera is placed and moved by the test (<see cref="PlaceCamera"/>, <see cref="MoveCamera"/>),
 /// as a script spawns and flies one, and its pose is answered for any frame as it stands now.</para>
+///
+/// <para>A frame's vehicle truth is built from what the world held as it produced the frame, as a
+/// client's snapshot of it is: each body's pose and velocity then, its box from the fixture catalogue's
+/// measurement of its blueprint, and the render set the frame carried, so a body named parked is left
+/// out and a lent one is named by its vehicle. The last <see cref="TruthFramesHeld"/> frames are held,
+/// and a test can have the world hold none of a frame (<see cref="TruthNotHeld"/>).</para>
 ///
 /// <para>It answers the read-back with exactly what was commanded, plus whatever
 /// <see cref="TransformDrift"/> is set to. A drift of zero is a world that does what it is told and
@@ -66,6 +73,8 @@ internal class RecordedWorld : ICarlaWorld
     private readonly List<(IReadOnlyList<ActorId> Bodies, double Metres, long AtTick)> _drawDistanceWrites = [];
     private readonly Dictionary<ActorId, double> _drawDistances = [];
     private readonly Dictionary<ActorId, CameraOptics> _cameras = [];
+    private readonly Dictionary<ActorId, (string Blueprint, string RoleName)> _bodies = [];
+    private readonly Dictionary<ulong, Dictionary<ActorId, (Transform Pose, Vector3D Velocity)>> _truthFrames = [];
     private ActorId _nextActor = 1;
     private (string Operation, Exception Failure)? _severAt;
     private Exception? _severedWith;
@@ -463,6 +472,7 @@ internal class RecordedWorld : ICarlaWorld
         SpawnedRoleNames.Add(roleName);
         ActorId actor = _nextActor++;
         _actors[actor] = at;
+        _bodies[actor] = (blueprintId, roleName);
 
         // A vehicle is spawned simulating, as the server spawns one.
         _simulating.Add(actor);
@@ -844,6 +854,77 @@ internal class RecordedWorld : ICarlaWorld
         return _cameras.TryGetValue(camera, out CameraOptics optics) ? optics : null;
     }
 
+    /// <summary>How many of the newest frames' truth the world holds, as a client holds snapshots idle.</summary>
+    public const int TruthFramesHeld = 16;
+
+    /// <summary>The fixture catalogue, whose measured boxes the truth's bodies carry.</summary>
+    private static readonly Lazy<VehicleCatalogue> Catalogue =
+        new(() => VehicleCatalogue.Load(CoSimFixtures.VehicleCatalogue));
+
+    /// <summary>Frames whose truth the world holds none of, as a client that dropped them.</summary>
+    public HashSet<ulong> TruthNotHeld { get; } = [];
+
+    /// <summary>The frames whose vehicle truth was asked for, in order.</summary>
+    public List<ulong> TruthFramesAsked { get; } = [];
+
+    /// <inheritdoc/>
+    public IReadOnlyList<VehicleTelemetry>? VehicleTruthAt(ulong frame)
+    {
+        Connected(nameof(VehicleTruthAt));
+        TruthFramesAsked.Add(frame);
+        if (TruthNotHeld.Contains(frame)
+            || !_truthFrames.TryGetValue(frame, out Dictionary<ActorId, (Transform Pose, Vector3D Velocity)>? held))
+        {
+            return null;
+        }
+
+        PublishedRenderSet? published = PublishedRenderSetOf(frame);
+        IReadOnlyDictionary<string, string> baseTypes =
+            BaseTypeAdoptions.Count > 0 ? BaseTypeAdoptions[^1].BaseTypes : new Dictionary<string, string>();
+        IReadOnlyDictionary<string, string> kinds =
+            SpecialTypeAdoptions.Count > 0 ? SpecialTypeAdoptions[^1].SpecialTypes : new Dictionary<string, string>();
+        var origin = new GeoLocation(Loaded.OriginLatitude, Loaded.OriginLongitude, Loaded.OriginHeightMetres);
+        List<VehicleTelemetry> records = [];
+        foreach ((ActorId actor, (Transform pose, Vector3D velocity)) in held)
+        {
+            if (published is not null && published.Parked.Contains(actor))
+            {
+                continue;
+            }
+
+            (string blueprint, string roleName) = _bodies[actor];
+            Catalogue.Value.TryResolve(blueprint, blueprint, out VehicleExtent extent, out _);
+            GeoLocation at = Geodesy.CarlaLocalToGeodetic(origin, pose.Location.X, pose.Location.Y, pose.Location.Z);
+            double speed = Math.Sqrt((velocity.X * velocity.X) + (velocity.Y * velocity.Y));
+            double yaw = pose.Rotation.Yaw * Math.PI / 180.0;
+            double heading = Bearing(Math.Atan2(Math.Cos(yaw), -Math.Sin(yaw)));
+            records.Add(new VehicleTelemetry(
+                actor, blueprint, baseTypes.GetValueOrDefault(blueprint, "car"), kinds.GetValueOrDefault(blueprint, ""),
+                "", roleName, at.Latitude, at.Longitude, at.Altitude, double.NaN,
+                speed, speed >= 0.5 ? Bearing(Math.Atan2(velocity.X, -velocity.Y)) : heading,
+                velocity.X, velocity.Y, velocity.Z,
+                extent.LengthMetres, extent.WidthMetres, extent.HeightMetres)
+            {
+                HeadingDeg = heading,
+                ActorTransform = pose,
+                BoundingBox = new BoundingBox(
+                    new Location((float)extent.BoxCentreMetres.X, (float)extent.BoxCentreMetres.Y,
+                                 (float)extent.BoxCentreMetres.Z),
+                    new Vector3D((float)(extent.LengthMetres / 2.0), (float)(extent.WidthMetres / 2.0),
+                                 (float)(extent.HeightMetres / 2.0)),
+                    default),
+                Rendered = published is not null && published.Lent.TryGetValue(actor, out var lent)
+                    ? new RenderedVehicle(actor, lent.VehicleId, lent.VehicleTypeId, lent.AdmittedFrame)
+                    : null,
+            });
+        }
+
+        return records;
+    }
+
+    /// <summary>A direction in radians clockwise from north, as degrees in [0, 360).</summary>
+    private static double Bearing(double radians) => ((radians * 180.0 / Math.PI % 360.0) + 360.0) % 360.0;
+
     /// <inheritdoc/>
     /// <remarks>The frame is the tick count, which is what a server's frame counter is to a session.</remarks>
     public ulong? Tick()
@@ -877,6 +958,11 @@ internal class RecordedWorld : ICarlaWorld
                     _supervisionHeld.Where(pair => _namedLent.ContainsKey(pair.Key))
                         .ToDictionary(pair => pair.Key, pair => pair.Value));
             }
+
+            // And every body's pose and velocity as the frame has them, for the frame's truth.
+            _truthFrames[(ulong)Ticks] = _bodies.Keys.Where(_actors.ContainsKey).ToDictionary(
+                actor => actor, actor => (_actors[actor], _velocities.GetValueOrDefault(actor, Still)));
+            _truthFrames.Remove((ulong)Ticks - TruthFramesHeld);
 
             // And the pose source, while a step is declared or a body named: only lent bodies carry a name.
             Dictionary<ActorId, PoseSource> poseNamed = _poseNamed.Where(pair => _namedLent.ContainsKey(pair.Key))

@@ -31,6 +31,13 @@ public sealed class VehicleCatalogue
     public const string BlueprintParameter = "carla:blueprint";
 
     /// <summary>
+    /// The <c>&lt;param&gt;</c> on the same <c>&lt;vType&gt;</c> naming the catalogue class a compiled
+    /// scenario drew the type's body for. A class draws several bodies, one type each, so this names the
+    /// population a vehicle belongs to; a hand-written type carries none.
+    /// </summary>
+    public const string ClassParameter = "carla:class_id";
+
+    /// <summary>
     /// The schema shape this reader implements. A catalogue declaring anything else is refused
     /// rather than read on a best-effort basis: a field that moved silently is worse than one that
     /// is absent.

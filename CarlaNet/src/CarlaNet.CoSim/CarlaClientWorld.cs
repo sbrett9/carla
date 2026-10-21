@@ -1,3 +1,4 @@
+using CarlaNet.Recording;
 using CarlaNet.Transport;
 using CarlaNet.Transport.MsgPackRpc;
 using CarlaNet.Types.Geom;
@@ -32,6 +33,8 @@ public sealed class CarlaClientWorld : ICarlaWorld
 
     private readonly CarlaClient _client;
     private readonly Dictionary<string, ActorDescription> _blueprints = [];
+    private VehicleTelemetryService? _truth;
+    private GeoLocation? _truthOrigin;
 
     private CarlaClientWorld(CarlaClient client, IReadOnlyList<ActorDefinition> definitions)
     {
@@ -430,6 +433,20 @@ public sealed class CarlaClientWorld : ICarlaWorld
         }
 
         return CameraOptics.FromAttributes(attributes);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The recorder's own read (<see cref="VehicleTelemetryService.ComputeAt"/>), from a telemetry service
+    /// of this client made on the first call, with the georeference origin read once as a recorder reads
+    /// it (<see cref="VehicleTelemetryService.GetOrigin"/>). An origin that could not be read is asked for
+    /// again on the next call.
+    /// </remarks>
+    public IReadOnlyList<VehicleTelemetry>? VehicleTruthAt(ulong frame)
+    {
+        _truth ??= new VehicleTelemetryService(_client);
+        _truthOrigin ??= _truth.GetOrigin();
+        return _truth.ComputeAt(_truthOrigin.Value, frame, out _, out _);
     }
 
     /// <inheritdoc/>

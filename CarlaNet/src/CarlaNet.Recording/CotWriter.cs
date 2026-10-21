@@ -554,6 +554,9 @@ public static class CotWriter
     public static bool PoseSourceUnknown(IReadOnlyList<VehicleTelemetry> recs) =>
         recs.Any(r => (r.InFrame is InFrame.Wholly or InFrame.Partly) && r.Rendered is not null && r.PoseSource is null);
 
+    /// <summary>An instant as every event's <c>time</c>, <c>start</c> and <c>stale</c> spell it.</summary>
+    public static string Timestamp(DateTime instant) => Iso(instant);
+
     // CoT timestamp: ISO-8601 UTC, millisecond precision, trailing 'Z'.
     private static string Iso(DateTime dt) =>
         dt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture) + "Z";

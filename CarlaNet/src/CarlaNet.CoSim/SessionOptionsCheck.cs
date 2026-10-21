@@ -29,6 +29,26 @@ internal static class SessionOptionsCheck
         RequireARenderSetPolicy(options);
         RequireAUsableWorldTruthTrack(options);
         RequireAUsableRunManifest(options);
+        RequireAWorldForTheLiveTrack(options);
+    }
+
+    /// <summary>
+    /// Refuse a live track given to a session with no world.
+    /// </summary>
+    /// <remarks>
+    /// Its events are built from the truth of each frame the session renders, and a session with no world
+    /// renders none, so the setting would do nothing. Its own values are checked where it is built
+    /// (<see cref="LiveTrackOptions"/>).
+    /// </remarks>
+    private static void RequireAWorldForTheLiveTrack(SumoDriveSessionOptions options)
+    {
+        if (options.LiveTrack is not null && options.World is null)
+        {
+            throw new CoSimSessionRefusedException(
+                "The session was given a live track and no world. Its events are built from the truth of each "
+                + "frame the session renders, and a session with no world renders none: give the world, or leave "
+                + "the live track unset.");
+        }
     }
 
     /// <summary>
