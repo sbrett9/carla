@@ -11,8 +11,9 @@ What it does, from this checkout: runs carla-drive three times in a process of i
 
   1. without the feed;
   2. with the feed, every vehicle, to a UDP listener on 127.0.0.1;
-  3. with the feed in view of a camera named Cot_Pace_1 that this script spawns over the port gate,
-     looking down, and destroys in `finally` once the drives have exited.
+  3. with the feed in view of a camera named Cot_Pace_1 that this script spawns over the busiest
+     stretch of Bahonar's traffic at the default warm-up, looking down, and destroys in `finally`
+     once the drives have exited.
 
 For each run it prints the closing pace line, the pace over the whole run, the worst window, the
 seconds behind schedule and, with the feed, the feed's drain seconds per drain, on average and at
@@ -46,8 +47,10 @@ WORLD_PACKAGE = BAHONAR / "Shahid_Bahonar_Port.cwp"
 EPOCH = BAHONAR / "Shahid_Bahonar_Port_PatternOfLife.scenario.json"
 
 NAME = "Cot_Pace_1"
-# The port gate area's centre in CARLA metres, as the package's areas.resolved.json gives it.
-GATE = (1998.4, -1035.0)
+# Where Bahonar's traffic is densest in the minute from step 271169, in CARLA metres, read from that
+# minute's world truth track: within 400 m of it a vehicle is in every second, about nine at a time.
+# Over the port gate the in-view run would send almost nothing, and measure almost nothing.
+TRAFFIC_CENTRE = (-1400.0, -1300.0)
 
 # The drive's closing line (DriveRun._report) and its feed's summary (DriveCotFeed._summarise).
 CLOSING = re.compile(r"^(\d+) SUMO steps in ([\d.]+) s wall clock; pace (.*?): (.*)$")
@@ -104,7 +107,7 @@ class DriveCotPaceCheck:
             self.failures.append(what)
 
     def _spawn_camera(self) -> None:
-        """A camera over the gate looking straight down, which only the in-view run follows."""
+        """A camera over the traffic looking straight down, which only the in-view run follows."""
         self.client = carla.Client(self.args.host, self.args.port)
         self.client.set_timeout(30.0)
         world = self.client.get_world()
@@ -113,7 +116,7 @@ class DriveCotPaceCheck:
         blueprint.set_attribute("image_size_y", "720")
         blueprint.set_attribute("fov", "90")
         self.camera = world.spawn_camera(
-            blueprint, carla.Transform(carla.Location(x=GATE[0], y=GATE[1], z=365.76),
+            blueprint, carla.Transform(carla.Location(x=TRAFFIC_CENTRE[0], y=TRAFFIC_CENTRE[1], z=365.76),
                                        carla.Rotation(pitch=-90.0)), name=NAME)
         self.logger.info("spawned camera %s, actor %d", NAME, self.camera.id)
 

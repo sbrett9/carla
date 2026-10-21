@@ -7,8 +7,8 @@ camera named Cot_Orbit_Probe_1, and the carlanet wheel built from this checkout.
 
 What it does, from this checkout:
 
-  1. Spawns a camera named Cot_Orbit_Probe_1 and has the server fly it round an orbit over the port
-     gate, as carla-camera-follower does.
+  1. Spawns a camera named Cot_Orbit_Probe_1 and has the server fly it round an orbit over the
+     busiest stretch of Bahonar's traffic at the default warm-up, as carla-camera-follower does.
   2. Starts carla-drive in a process of its own (`CarlaNet/python/run_sumo_drive.py`) at the pace of
      real traffic, sending only the vehicles in that camera's picture to a UDP listener on 127.0.0.1.
   3. Once the drive follows the camera and datagrams have arrived, destroys the camera. Once the drive
@@ -45,8 +45,10 @@ WORLD_PACKAGE = BAHONAR / "Shahid_Bahonar_Port.cwp"
 EPOCH = BAHONAR / "Shahid_Bahonar_Port_PatternOfLife.scenario.json"
 
 NAME = "Cot_Orbit_Probe_1"
-# The port gate area's centre in CARLA metres, as the package's areas.resolved.json gives it.
-GATE = (1998.4, -1035.0)
+# Where Bahonar's traffic is densest in the minute from step 271169, in CARLA metres, read from that
+# minute's world truth track: within 400 m of it a vehicle is in every second, about nine at a time.
+# The port gate, (1998.4, -1035.0), sees two vehicles' datagrams in that minute, too few to start on.
+TRAFFIC_CENTRE = (-1400.0, -1300.0)
 # Datagrams that must arrive from the first camera before it is destroyed.
 DATAGRAMS_FIRST = 3
 # How long the camera stays gone before another is spawned under its name.
@@ -140,7 +142,7 @@ class DriveCotNamedCameraLiveCheck:
             self.failures.append(what)
 
     def _spawn_camera(self):
-        """A camera under the name, flown round the gate by the server."""
+        """A camera under the name, flown round the orbit centre by the server."""
         centre_x, centre_y = self.args.orbit_centre
         blueprint = self.world.get_blueprint_library().find("sensor.camera.rgb")
         blueprint.set_attribute("image_size_x", "1280")
@@ -260,9 +262,10 @@ def main() -> int:
                         help="simulated second the drive fast-forwards SUMO to (default 271169)")
     parser.add_argument("--steps", type=int, default=60,
                         help="SUMO steps the drive runs, one per second of wall clock (default 60)")
-    parser.add_argument("--orbit-centre", type=float, nargs=2, metavar=("X", "Y"), default=GATE,
-                        help="the point the camera circles and looks at, CARLA metres (default: the "
-                             "port gate)")
+    parser.add_argument("--orbit-centre", type=float, nargs=2, metavar=("X", "Y"),
+                        default=TRAFFIC_CENTRE,
+                        help="the point the camera circles and looks at, CARLA metres (default: "
+                             "-1400 -1300, where the traffic is densest after step 271169)")
     parser.add_argument("--orbit-centre-z-m", type=float, default=0.0, metavar="Z",
                         help="the height of that point, CARLA metres (default 0)")
     parser.add_argument("drive_args", nargs="*",
