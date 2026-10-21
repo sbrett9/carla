@@ -23,6 +23,8 @@
   <ItemGroup>
     <!-- Real netconvert output the network-fingerprint tests read; see NetworkFingerprintTests. -->
     <None Include="Map\Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Truth sidecars as the writer wrote them, which CotWriterFieldSetTests holds it to byte for byte. -->
+    <None Include="Recording\Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
