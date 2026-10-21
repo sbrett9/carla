@@ -115,7 +115,7 @@ This section also covers the legacy files a SUMO bridge run reads or writes besi
 
 | Page | Schema | URN | What it describes |
 |---|---|---|---|
-| [CoT telemetry stream](CoT_Telemetry_Stream.md) | `cot_telemetry.xsd`, written by hand, with `cot_event_body.xsd` | `urn:carla-sumo-capture:schema:cot-telemetry:1` | One UDP datagram of the live feed: one CoT event for one vehicle at one instant. `cot_event_body.xsd` holds the event's parts. It has no URN of its own. |
+| [CoT telemetry stream](CoT_Telemetry_Stream.md) | `cot_telemetry.xsd`, written by hand, with `cot_event_body.xsd` | `urn:carla-sumo-capture:schema:cot-telemetry:1` | One UDP datagram of the live feed that `carla-sctmv`, `carla-cot-telemetry --udp` and `carla-drive --cot-udp` send: one CoT event for one vehicle at one instant. `cot_event_body.xsd` holds the event's parts. It has no URN of its own. |
 | [SUMO bridge event file](SUMO_CoT_Event_File.md) | `sumo_cot_events.xsd`, written by hand | `urn:carla-sumo-capture:schema:sumo-cot-events:1` | The file `carla-cot-telemetry --xml` writes: every event of a run, each with its whole record. |
 | [SUMO bridge table](SUMO_CoT_Table.md) | `sumo_cot_telemetry.tableschema.json` | `urn:carla-sumo-capture:schema:sumo-cot-telemetry:1` | The file `carla-cot-telemetry --csv` writes: one row per vehicle per update. |
 | [SUMO bridge table](SUMO_CoT_Table.md), its summary | `sumo_cot_telemetry_summary.schema.json` | `urn:carla-sumo-capture:schema:sumo-cot-telemetry-summary:1` | `<name>.summary.json` beside the table: its format, its columns and what made it. |

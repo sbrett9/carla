@@ -23,7 +23,7 @@ A convention names populations, never single vehicles.\
 In a compiled scenario a population is a vehicle class: the `carla:class_id` parameter of its vehicle types (see [SUMO files](SUMO_Files.md)).\
 In a hand-written route file, whose types name no class, it is the vehicle type's id.
 
-A population the convention does not name takes the run's default, `carla-cot-telemetry --affiliation`.
+A population the convention does not name takes the run's default: `carla-cot-telemetry --affiliation` or `carla-drive --cot-affiliation`.
 
 ## Writers and readers
 
@@ -31,6 +31,10 @@ A population the convention does not name takes the run's default, `carla-cot-te
 - `carla-cot-telemetry` reads it: the file `--display-convention` names, or any convention file beside `--config`.\
   A file that cannot be read is refused.\
   The run records which convention it drew with.
+- `carla-drive` reads it for its live feed, `--cot-udp`: the file `--cot-display-convention` names, or the scenario's own convention file beside `--scenario`.\
+  A file that cannot be read is refused before the drive connects to the server, with exit status 2.\
+  The drive's log names the convention it drew with.\
+  The drive hands the map to its session, which reads each vehicle type's `carla:class_id` from SUMO once.
 - The reader refuses a file in any of these cases:
   - it is not a JSON object
   - it names planted vehicles (`marked_ids`)

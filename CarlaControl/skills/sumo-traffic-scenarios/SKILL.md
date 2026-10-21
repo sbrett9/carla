@@ -387,7 +387,8 @@ identical inputs, never identical trajectories.
 
 ## The Python builders (carla/CarlaControl/src/carlacontrol/)
 
-All pure standard library. One public class per file (repo convention, see `carla/AGENTS.md`).
+All pure standard library but `DriveCotFeed.py`, which runs inside carla-drive and needs carlanet. One
+public class per file (repo convention, see `carla/AGENTS.md`).
 
 | module | responsibility |
 |---|---|
@@ -398,7 +399,9 @@ All pure standard library. One public class per file (repo convention, see `carl
 | `VehicleCatalogue.py` | Read side of `vehicles.catalogue.json`: measured extent per blueprint, the bumper-to-origin shift the pose conversion needs, and the refusal reason for a type it cannot answer for. |
 | `SumoCotBridge.py` | Drives a scenario through **TraCI** and emits CoT. `BareEarthGrid` (reads `bareearth.bin`, loose or inside a `.cwp`), per-population affiliation (a compiled type's class, read from its `carla:class_id`) + multi-marked support, real-time pacing. |
 | `CotDisplayConvention.py` | A run's display convention: the CoT affiliation per vehicle population, read from a file beside the scenario (`<scenario>.display.json`, `beside()` names it), never part of it. Refuses a file naming vehicles; reads a legacy `.labels.json`'s display half and withholds its anomaly `u`. |
-| `CotUdpEmitter.py` | The CoT event formatter (shared with the CARLA truth producer, so datasets are comparable) and the UDP socket. Schema: `Docs/Schemas/CoT_Telemetry_Stream.md`. |
+| `CotUdpEmitter.py` | The CoT event formatter of `carla-sctmv` and the SUMO bridge (shared with the CARLA truth producer, so datasets are comparable), and the UDP socket every live feed sends with. Schema: `Docs/Schemas/CoT_Telemetry_Stream.md`. |
+| `DriveCotFeed.py` | `carla-drive --cot-udp HOST:PORT`, a live CoT feed of a SUMO drive. Hands the session its live track (rate in whole world ticks, staleness, uid prefix, and the display convention found beside the `.sumocfg` or named), takes the samples after each advance and sends each event's XML as one datagram. Each event is the one a capture of the frame writes in its truth sidecar (`CotWriter.StreamEvent`), less what depends on a picture and `vtype_id`: uid `CARLA-TRUTH-SUMO-<id>`, where the bridge's is `SUMO-TRUTH-<id>`, and `hae` the body origin's as CARLA seated it. `--cot-emit in-view --cot-camera NAME` keeps the vehicles in a named live camera's picture. `--end SECOND` ends the drive after the step at that second. |
+| `CameraByName.py` | Finds the live camera that holds a name, without regard to case, asking the server only about actors it has not examined: how in-view mode finds, and finds again, the camera it follows. |
 
 The command-line scripts.
 In a distribution, each `make_*_scenario.py` sits beside the scenario it writes, under `Scenarios/<Place>/` (Gardnerville, Arapahoe or Bahonar).

@@ -6,7 +6,7 @@ Two more pages follow on from this one:
 
 - [Running a capture](Running_A_Capture.md): capture a window of a compiled scenario with `carla-capture`.
 - [Cameras and missions](Cameras_And_Missions.md): drive cameras from your own code.\
-  It also shows how to watch a drive live.
+  It also shows how to watch a drive live and send what a camera sees as a live feed.
 
 ## What the distribution holds
 
@@ -39,13 +39,13 @@ The commands `carlacontrol` installs include these:
 | `carla-sctmv` | Builds a world, then lets you fly, drive and record in it. |
 | `carla-compile-scenario` | Compiles a scenario against a world package. |
 | `carla-capture` | Captures a window of a compiled scenario. |
-| `carla-drive` | Drives a world's vehicles from SUMO. Records while it drives. |
+| `carla-drive` | Drives a world's vehicles from SUMO. Records while it drives, and can send the vehicles it draws as a live Cursor-on-Target feed over UDP. |
 | `carla-camera-follower` | Shows one camera of your own on a running world, live. |
 | `carla-free-camera` | Flies a camera of your own around a running world, live. |
 | `carla-validate` | Checks the files the tools write against their schemas. |
 | `carla-audit-sidecars` | Checks the truth sidecars of a capture: the XML truth files written beside each still. |
 | `carla-check-sumo` | Says which SUMO the commands use. Checks that it is complete. |
-| `carla-cot-telemetry` | Makes Cursor-on-Target telemetry for every vehicle in a SUMO scenario, to a UDP socket, an XML file or a CSV. |
+| `carla-cot-telemetry` | Makes Cursor-on-Target telemetry for every vehicle in a SUMO scenario, with no CARLA server, to a UDP socket, an XML file or a CSV. |
 | `carla-diff-manifests` | Checks that two runs of one scenario name the same supervision rows in their run manifests. |
 | `carla-check-label-leaks` | Checks that a telemetry dataset does not give away which vehicles a scenario planted. |
 | `carla-publish-reference-set` | Refreshes a world package's areas of interest (named places a label can point to) and place index. |

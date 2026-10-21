@@ -300,10 +300,7 @@ def display_convention(args: argparse.Namespace, labels: dict) -> CotDisplayConv
     half of its own affiliation map and never the anomaly half; without either, every vehicle takes
     `--affiliation`.
     """
-    path = args.display_convention
-    beside = CotDisplayConvention.beside(args.config)
-    if path is None and beside.is_file():
-        path = beside
+    path = CotDisplayConvention.given_or_beside(args.display_convention, args.config)
     if path is not None:
         convention = CotDisplayConvention.from_file(path)
         logging.info("display convention %s%s: %d populations; any other takes %s", path,
@@ -312,7 +309,8 @@ def display_convention(args: argparse.Namespace, labels: dict) -> CotDisplayConv
         if args.labels and labels.get("affiliation_by_type"):
             logging.info("  it replaces the affiliations in %s", args.labels.name)
         return convention
-    missing = f"no display convention: none given and no {beside.name} beside the configuration"
+    missing = (f"no display convention: none given and no "
+               f"{CotDisplayConvention.beside(args.config).name} beside the configuration")
     if not args.labels:
         logging.info("%s; every vehicle takes %s", missing, args.affiliation)
         return CotDisplayConvention({})

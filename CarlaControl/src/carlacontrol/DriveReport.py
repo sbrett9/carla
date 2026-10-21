@@ -38,6 +38,22 @@ class DriveReport:
                 f"summary {track.SummaryPath}")
 
     @staticmethod
+    def describe_cot_feed(feed) -> str:
+        """The live Cursor-on-Target feed as the launch states it: none, or where it goes, which vehicles
+        it sends, how often, and the affiliations it draws them with."""
+        if feed is None:
+            return "none sent; give --cot-udp to send one"
+        track = feed.track
+        ticks = int(track.TicksPerSample)
+        every = "every world tick" if ticks == 1 else f"every {ticks} world ticks"
+        sent = (f"only the vehicles in camera {feed.camera_name}'s picture" if feed.in_view
+                else "every vehicle with a body")
+        return (f"to {feed.target()}, ttl {feed.ttl}: {sent}, one datagram each, on "
+                f"the newest frame of {every} ({track.SampleIntervalSeconds:.2f} s), the prewarm's "
+                f"included; stale {feed.stale_s:g} s after its stamp; uid "
+                f"{feed.uid_prefix}-SUMO-<SUMO id>; {feed.describe_convention()}")
+
+    @staticmethod
     def print_collision(span) -> None:
         """One collision as it ends, under --collision-detail. Called from the session's tick thread; a log
         line does not block it."""

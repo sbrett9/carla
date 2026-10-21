@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<events format_version="1" captured="2026-10-02T06:49:29.950Z" count="2" source="truth" tick="5423419" sim_time_s="271170.95" vehicles="rendered" supervision="unknown" lights="unknown" pose_source="unknown">
+  <_producer tool="run_sumo_drive" carlanet="0.10.0" written_utc="2026-10-02T06:49:29.950Z">
+    <_server available="false" release="0.10.0" world_interface="1.0" reason="built before the call" />
+  </_producer>
+  <_solar solar_time="7.45" date="2026-10-02" time_zone="3.5" lat="27.1501200" lon="56.1806500" sun_elevation_deg="5.549" sun_corrected_elevation_deg="5.694" sun_azimuth_deg="97.827" advancing="true" rate="1" illumination_band="golden" illumination_band_elevation="refraction_corrected" />
+  <event version="2.0" uid="CARLA-SENSOR-107" type="a-f-A-M-F-Q" how="m-g" time="2026-10-02T06:49:29.950Z" start="2026-10-02T06:49:29.950Z" stale="2026-10-02T06:49:32.950Z">
+    <point lat="27.1521345" lon="56.1781363" hae="380.06" ce="0.0" le="0.0" />
+    <detail>
+      <contact callsign="Gate_Orbit_1200ft" />
+      <track course="90.0" speed="12.50" />
+      <sensor azimuth="90" elevation="-70.346" roll="0" fov="90" vfov="58.716" range="0" type="EO" model="sensor.camera.rgb" />
+      <_carla_intrinsics width="1280" height="720" fx="640" fy="640" cx="640" cy="360" hfov_deg="90" vfov_deg="58.716" model="pinhole" distortion="none" align_offset_m="-0.63" />
+      <_carla_exposure post_process_profile="Default" method="manual" iso="100" shutter_s="0.003125" fstop="4" compensation_ev="0" ev100="12.322" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-shadow" type="a-n-G-E-V" how="m-g" time="2026-10-02T06:49:29.950Z" start="2026-10-02T06:49:29.950Z" stale="2026-10-02T06:49:32.950Z">
+    <point lat="27.1501234" lon="56.1806789" hae="12.34" ce="0.0" le="0.0" />
+    <detail>
+      <track course="271.3" speed="8.25" />
+      <contact callsign="car-shadow" />
+      <_carla source="truth" actor_id="31" type_id="vehicle.jeep.wrangler_rubicon" base_type="car" special_type="" length_m="3.86" width_m="1.93" height_m="1.88" color="17,213,91" role_name="sumo" vx="-8.24" vy="-0.19" vz="0.00" heading_deg="270.9" pitch_deg="0.24" roll_deg="-0.39" in_frame="wholly" apparent_width_px="123" apparent_height_px="57" box_px="165.41 842.97 288.37 899.83" box_oriented_px="165.74 842.91 288.41 843.72 288.04 899.87 165.37 899.06" truncation="0.000" occlusion_unmeasured="no_depth_camera" camera_range_m="87.9" sumo_id="shadow" vtype_id="car.vehicle.audi.tt" admitted_tick="5423380" sumo_angle_deg="271.4" />
+      <_box3d frame="geodetic">
+        <corner lat="27.1501180" lon="56.1806710" hae="12.36" />
+        <corner lat="27.1501190" lon="56.1806710" hae="12.36" />
+        <corner lat="27.1501200" lon="56.1806710" hae="12.36" />
+        <corner lat="27.1501210" lon="56.1806710" hae="12.36" />
+        <corner lat="27.1501220" lon="56.1806710" hae="14.24" />
+        <corner lat="27.1501230" lon="56.1806710" hae="14.24" />
+        <corner lat="27.1501240" lon="56.1806710" hae="14.24" />
+        <corner lat="27.1501250" lon="56.1806710" hae="14.24" />
+      </_box3d>
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-escort_4" type="a-n-G-E-V" how="m-g" time="2026-10-02T06:49:29.950Z" start="2026-10-02T06:49:29.950Z" stale="2026-10-02T06:49:32.950Z">
+    <point lat="27.1501234" lon="56.1806789" hae="12.34" ce="0.0" le="0.0" />
+    <detail>
+      <track course="271.3" speed="8.25" />
+      <contact callsign="car-escort_4" />
+      <_carla source="truth" actor_id="32" type_id="vehicle.jeep.wrangler_rubicon" base_type="car" special_type="" length_m="3.86" width_m="1.93" height_m="1.88" color="17,213,91" role_name="sumo" vx="-8.24" vy="-0.19" vz="0.00" heading_deg="270.9" in_frame="none" apparent_width_px="9" apparent_height_px="4" occlusion_unmeasured="no_depth_camera" sumo_id="escort_4" vtype_id="mil_jeep.vehicle.jeep.wrangler_rubicon" admitted_tick="5423380" sumo_angle_deg="271.4" />
+    </detail>
+  </event>
+</events>

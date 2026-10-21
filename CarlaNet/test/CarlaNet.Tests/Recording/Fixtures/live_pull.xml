@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<events format_version="1" captured="2026-10-02T06:49:29.950Z" count="3" source="truth">
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-escort_1" type="a-f-G-E-V" how="m-g" time="2026-10-02T06:49:29.950Z" start="2026-10-02T06:49:29.950Z" stale="2026-10-02T06:49:34.950Z">
+    <point lat="27.1501234" lon="56.1806789" hae="12.34" ce="0.0" le="0.0" />
+    <detail>
+      <track course="271.3" speed="8.25" />
+      <contact callsign="car-escort_1" />
+      <_carla source="truth" actor_id="41" type_id="vehicle.jeep.wrangler_rubicon" base_type="car" special_type="" length_m="3.86" width_m="1.93" height_m="1.88" color="17,213,91" role_name="sumo" vx="-8.24" vy="-0.19" vz="0.00" heading_deg="270.9" sumo_id="escort_1" vtype_id="mil_truck.vehicle.carlamotors.european_hgv" admitted_tick="5423380" sumo_angle_deg="271.4" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-SUMO-42" type="a-f-G-E-V" how="m-g" time="2026-10-02T06:49:29.950Z" start="2026-10-02T06:49:29.950Z" stale="2026-10-02T06:49:34.950Z">
+    <point lat="27.1501234" lon="56.1806789" hae="12.34" ce="0.0" le="0.0" />
+    <detail>
+      <track course="271.3" speed="8.25" />
+      <contact callsign="car-42" />
+      <_carla source="truth" actor_id="42" type_id="vehicle.jeep.wrangler_rubicon" base_type="car" special_type="" length_m="3.86" width_m="1.93" height_m="1.88" color="17,213,91" role_name="sumo" vx="-8.24" vy="-0.19" vz="0.00" sumo_id="42" vtype_id="car.vehicle.audi.tt" admitted_tick="7" />
+    </detail>
+  </event>
+  <event version="2.0" uid="CARLA-TRUTH-9" type="a-f-G-E-V" how="m-g" time="2026-10-02T06:49:29.950Z" start="2026-10-02T06:49:29.950Z" stale="2026-10-02T06:49:34.950Z">
+    <point lat="27.1481234" lon="56.1786789" hae="7.50" ce="0.0" le="0.0" />
+    <detail>
+      <track course="182.4" speed="11.30" />
+      <contact callsign="car-9" />
+      <_carla source="truth" actor_id="9" type_id="vehicle.audi.tt" base_type="car" special_type="" length_m="4.50" width_m="2.00" height_m="1.40" color="0,0,0" role_name="autopilot" vx="11.20" vy="-1.40" vz="0.00" />
+    </detail>
+  </event>
+</events>

@@ -1,3 +1,4 @@
+using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
@@ -11,7 +12,7 @@ namespace CarlaNet.CoSim;
 /// Everything the playback bridge asks of a CARLA world, and nothing else.
 /// </summary>
 /// <remarks>
-/// <para>Twenty-four operations. The bridge asks which world is loaded and what the server was built
+/// <para>Twenty-six operations. The bridge asks which world is loaded and what the server was built
 /// from, hands the world's truth
 /// telemetry the package's ground and the catalogue's base types and vehicle kinds once the package
 /// is established as that world's, takes and gives back the world's drive lease, places bodies,
@@ -22,8 +23,8 @@ namespace CarlaNet.CoSim;
 /// fast it says they are moving, advances the world a tick, reads and
 /// writes the episode settings so it can hand the world back as it found it, shows or hides the
 /// rendering layers whose presence is a property of the imagery, reads and writes the sun the
-/// imagery is lit by, and reads the cameras an optional render set that follows them is decided
-/// from. Anything larger
+/// imagery is lit by, reads the cameras an optional render set that follows them is decided
+/// from, and reads a rendered frame's vehicle truth for an optional live track. Anything larger
 /// than that would be the client's whole surface, and a driving session tested against the client's
 /// whole surface is a session that can only be tested against a running server.</para>
 ///
@@ -282,7 +283,7 @@ public interface ICarlaWorld
     /// holds that one -- not a round trip. A render set that follows the cameras reads each registered
     /// camera's pose here on the last frame the session rendered, which in synchronous mode is also the
     /// newest frame, named by its number so that a camera flown from another thread is read where the
-    /// frame had it.
+    /// frame had it; a live track reads the camera it follows here on each frame it samples.
     /// </remarks>
     Transform? ObservedTransformAt(ActorId actor, ulong frame);
 
@@ -291,10 +292,29 @@ public interface ICarlaWorld
     /// <see langword="null"/> where the actor is unknown or is not a camera.
     /// </summary>
     /// <remarks>
-    /// One round trip, asked once when a camera is registered with the session and never on the tick
-    /// thread's schedule: a camera's attributes are fixed when it is spawned.
+    /// One round trip, asked once when a camera is registered with the session or followed by its live
+    /// track, and never on the tick thread's schedule: a camera's attributes are fixed when it is
+    /// spawned.
     /// </remarks>
     CameraOptics? DescribeCamera(ActorId camera);
+
+    /// <summary>
+    /// Every vehicle's truth as of <paramref name="frame"/>, as a recorder pairs it with a capture of
+    /// that frame (<see cref="VehicleTelemetryService.ComputeAt"/>), or <see langword="null"/> where the
+    /// client does not hold the frame.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read from the client's snapshot of the frame, with the render set the server published on
+    /// it: a body parked on the frame is left out, and a lent one is named by its vehicle. The base
+    /// types and kinds are the catalogue's this connection adopted
+    /// (<see cref="AdoptCatalogueBaseTypes"/>, <see cref="AdoptCatalogueSpecialTypes"/>), so they are a
+    /// sidecar's for the same vehicle and frame.</para>
+    ///
+    /// <para>No round trip, except the first time a body is seen: its description and bounding box are
+    /// asked for once and kept, and the world's georeference origin once on the first read. Asked on the
+    /// tick thread, for the frame the last tick produced.</para>
+    /// </remarks>
+    IReadOnlyList<VehicleTelemetry>? VehicleTruthAt(ulong frame);
 
     /// <summary>
     /// Advance the world one tick, answering the simulation frame it produced, or

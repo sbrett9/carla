@@ -237,10 +237,13 @@ Some things to know:
 - Its camera is a plain RGB camera with the camera's default exposure, the `Default` profile's.\
   It renders on every tick.\
   It has no depth camera.
-- `--sensor-id` is shown over the picture only.\
-  The follower does not give it to the server.\
-  The server names the follower's camera `Camera_<n>`.\
-  The name must still follow the camera-name rules: ASCII letters, digits, hyphens and the _ character, up to 63.
+- `--sensor-id` names the follower's camera on the server.\
+  Any other client finds the camera by that name, and the follower shows it over the picture.\
+  Without `--sensor-id`, the server names the camera `Camera_<n>`.\
+  The name must follow the camera-name rules: ASCII letters, digits, hyphens and the _ character, up to 63.\
+  The server refuses a name that another live camera holds, compared without regard to case.\
+  The follower then logs the server's reason and closes.\
+  While the follower runs, a `carla-capture` channel with the same `sensor_id` is refused the same way.
 - An orbit is flown by the server, as above.\
   With a server that cannot fly orbits, the follower says so and closes.
 - A map load removes every actor, this camera too.\
@@ -254,7 +257,7 @@ Its options:
 | `--host HOST` | `127.0.0.1` | The server's address. |
 | `--port PORT` | `2000` | The server's port. |
 | `--timeout SECONDS` | `10` | Seconds to wait for the server to answer. |
-| `--sensor-id NAME` | none | A name for the camera, shown over its picture. |
+| `--sensor-id NAME` | `Camera_<n>`, from the server | The camera's name on the server, shown over its picture. |
 | `--pattern {stare,orbit}` | `stare` | `stare` holds one pose. `orbit` circles a center. |
 | `--fov DEGREES` | `90.0` | Horizontal field of view. |
 | `--width PIXELS`, `--height PIXELS` | `1280`, `720` | Picture size. |
@@ -341,6 +344,57 @@ carla-camera-follower --sensor-id Underpass_Stare_1 --stare-look-at -171.6 -672.
 
 That camera stands 150 m south of the spot and 150 m up.\
 It looks north at the spot.
+
+### Worked example: a live Cursor-on-Target feed of what the orbit sees
+
+`carla-drive --cot-udp HOST:PORT` sends a live Cursor-on-Target (CoT) feed while it drives, one event per UDP datagram.\
+Each event is the one a capture of the frame writes for the vehicle in its truth sidecar, less what depends on a picture.\
+[CoT telemetry stream](../Schemas/CoT_Telemetry_Stream.md) describes the datagrams.\
+With `--cot-emit in-view --cot-camera NAME`, the drive sends only the vehicles in the picture of the live camera that holds NAME on the server.\
+The follower's `--sensor-id` gives its camera that name.
+
+This example sends the feed of the Arapahoe drive above to a receiver on this machine, at port 6969.
+
+1. Start the server and the follower's orbit, as in steps 1 and 2 above.\
+   The follower's camera is named `Underpass_Orbit_1`.
+
+2. To send every vehicle with a body, start the drive with `--cot-udp`:
+
+```sh
+carla-drive \
+    --scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg \
+    --world-package Scenarios/Arapahoe/Arapahoe_I25.cwp \
+    --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json \
+    --no-record --real-time-factor 1.0 --steps 0 --cot-udp 127.0.0.1:6969
+```
+
+The drive's log names the target and how often it samples: every 20 world ticks, 1.00 s, at the default `--cot-hz 1`.\
+Each sample is the newest frame of its interval.\
+The log also names the display convention, `<scenario>.display.json` beside `--scenario`.\
+The Arapahoe scenario has none, so every vehicle takes `--cot-affiliation`, `n` by default.
+
+3. To send only what the orbit sees, stop the drive with Ctrl+C.\
+   Start it again with two more options:
+
+```sh
+carla-drive \
+    --scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg \
+    --world-package Scenarios/Arapahoe/Arapahoe_I25.cwp \
+    --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json \
+    --no-record --real-time-factor 1.0 --steps 0 --cot-udp 127.0.0.1:6969 \
+    --cot-emit in-view --cot-camera Underpass_Orbit_1
+```
+
+The drive looks for the live camera named `Underpass_Orbit_1` before it starts, compared without regard to case, and logs its actor id, picture size and field of view once it follows it.\
+A vehicle is in view when its box falls wholly or partly in the camera's picture, the test a capture's `in_frame` records, and it is not wholly beyond a `--draw-distance`.\
+A vehicle hidden behind another is in view.\
+The mode filters the feed and nothing else: the camera is not registered with the drive's session, so it changes nothing about which vehicles get a body.
+
+Close the follower while the drive runs, and the drive logs that the camera has gone.\
+It sends nothing until a live camera holds the name again.\
+Start the follower again with the same `--sensor-id`, and the drive logs that it follows the new camera and goes on sending.\
+When the drive ends, it says how many samples it sent nothing for.\
+To follow the drive's own camera instead, leave out `--no-record` and give `--cot-camera` the drive's `--camera-name`.
 
 ### Flying a camera to find a view: `carla-free-camera`
 

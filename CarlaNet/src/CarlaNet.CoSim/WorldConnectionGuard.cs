@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using CarlaNet.Recording;
 using CarlaNet.Types.Geom;
 using CarlaNet.Types.Provenance;
 using CarlaNet.Types.Rpc.Commands;
@@ -108,6 +109,10 @@ internal sealed class WorldConnectionGuard : ICarlaWorld
     /// <inheritdoc/>
     public CameraOptics? DescribeCamera(ActorId camera) =>
         Guard(nameof(DescribeCamera), () => _world.DescribeCamera(camera));
+
+    /// <inheritdoc/>
+    public IReadOnlyList<VehicleTelemetry>? VehicleTruthAt(ulong frame) =>
+        Guard(nameof(VehicleTruthAt), () => _world.VehicleTruthAt(frame));
 
     /// <inheritdoc/>
     public ulong? Tick() => Guard(nameof(Tick), _world.Tick);

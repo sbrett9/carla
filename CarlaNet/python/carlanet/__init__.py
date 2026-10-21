@@ -2479,7 +2479,7 @@ class World:
                          render_admit_lead_s=3.0, render_release_lag_s=5.0,
                          render_max_speed_mps=40.0,
                          world_truth_track=None, world_truth_track_interval_s=None,
-                         run_manifest=None, run_manifest_header=None,
+                         run_manifest=None, run_manifest_header=None, live_track=None,
                          collision_detail=False,
                          on_pose=None, on_release=None, on_divergence=None,
                          on_admission_pass=None, on_collision=None,
@@ -2587,6 +2587,46 @@ class World:
         run was interrupted. `session.RunManifest.Close(reason)` writes it now -- for a caller that
         reads its closing gates before disposing the session -- and the session's end writes it
         otherwise. A path that already holds a manifest is refused before anything starts.
+
+        `live_track` keeps a live Cursor-on-Target track of the drive, None (the default) keeping
+        none: a dict or its JSON text, read by the C# side (`LiveTrackOptions.FromJson`), with five
+        keys, each optional -- `rate_hz`, samples per simulated second (default 1.0); `stale_s`, the
+        seconds after its stamp each event goes stale (default 3.0); `uid_prefix`, what every uid
+        begins with (default 'CARLA-TRUTH', with no whitespace); `affiliation`, the CoT affiliation
+        letter of a population the map does not name (default 'n'); and `affiliation_by_type`, a
+        display convention's map from each population to its letter, a population being the class a
+        compiled vType names in its `carla:class_id` parameter, or the vType id where it names none.
+        Any other key, or a value that breaks its rule, is refused, naming every one; so is a live
+        track for a session with no world. The rate is counted in whole world ticks: the newest frame
+        of every `max(1, round(1 / (rate_hz * fixed_delta)))` ticks from the first is sampled,
+        prewarm frames included. On each sampled frame the session reads the frame's truth as a
+        recorder of that frame reads it, cuts it to the bodies the frame drew, and writes one event per
+        body with the truth sidecar's own writer: the event a capture of the frame writes for that
+        vehicle, without the fields that depend on a picture, `vtype_id` or `sumo_angle_deg`, its uid
+        `<uid_prefix>-SUMO-<SUMO id>`, its `time` the frame's civil instant in UTC and its `stale`
+        `stale_s` after it. A vehicle with no body on the frame is in no sample, and nothing about which
+        vehicles get a body changes. The session sends nothing: `session.LiveTrack.TakeSamplesJson()`
+        returns the samples completed since the last call, oldest first, as a JSON array, and the
+        caller sends each event's `xml` as one UDP datagram. Each sample is an object with `frame`,
+        `sim_time_s`, `time_utc` (spelled as each event's `time`), `in_window` (false on a prewarm
+        frame), `camera`, `camera_id` and `events`, each event an object with `sumo_id`, `in_view` and
+        `xml`. Up to 64 samples wait to be taken; beyond that the oldest is dropped.
+
+        `session.LiveTrack.Follow(camera_id)` follows a live camera, spawned by any client, from the
+        next sampled frame on, reading its image size and field of view once, now; it raises for an
+        actor that is not a camera, and `Unfollow()` stops. Following changes nothing about which
+        vehicles get a body: the camera is not registered with `session.AddCamera`. While a camera is
+        followed, each sample's `camera` is 'followed' where the frame's snapshot holds the camera,
+        with every event's `in_view` true where the vehicle's box falls wholly or partly in the
+        camera's picture and the vehicle is not wholly beyond a draw distance in force -- the test a
+        capture's `in_frame` records, hidden vehicles included -- and false otherwise; and 'missing'
+        where the snapshot does not hold it, with every `in_view` null. `camera_id` is the followed
+        camera's actor id. With no camera followed, `camera` is 'none', `camera_id` null and every
+        `in_view` null. The flag adds nothing to the event itself. `session.LiveTrack.TicksPerSample`
+        and `SampleIntervalSeconds` give the rate in force, `FollowedCamera` and `FollowedOptics` the
+        camera followed, and `Samples`, `FramesUnpaired` (sampled frames whose truth was not to be had,
+        which make no sample), `BodiesMissing`, `SamplesCameraMissing` and `SamplesDropped` what it
+        counted.
 
         `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
         because the imagery this mode produces is of the photogrammetry: the generated road mesh is
@@ -2809,8 +2849,8 @@ class World:
         from CarlaNet.CoSim import (AdmissionPass, CameraFootprintRenderSetPolicy, CarlaClientWorld,
                                     CollisionSpan, CoSimPoseRecord, EveryVehicleRenderSetPolicy,
                                     IlluminationPolicy, PoseDivergence, RegionRenderSetPolicy,
-                                    RenderedVehicleInterval, SolarEpoch, SumoDriveSession,
-                                    SumoDriveSessionOptions, VehicleNotInserted)
+                                    LiveTrackOptions, RenderedVehicleInterval, SolarEpoch,
+                                    SumoDriveSession, SumoDriveSessionOptions, VehicleNotInserted)
 
         if render_set not in ("all", "circle", "cameras"):
             raise ValueError(f"render_set is 'all', 'circle' or 'cameras', not {render_set!r}")
@@ -2877,8 +2917,11 @@ class World:
                                          else _json.dumps(run_manifest_header))
         options.CollisionDetail = bool(collision_detail)
         options.RenderSet = policy
-        # Both are read by the C# side, which is the one validator: a declaration checked twice is
-        # a declaration two implementations will eventually disagree about.
+        # All three are read by the C# side, which is the one validator: a declaration checked twice
+        # is a declaration two implementations will eventually disagree about.
+        if live_track is not None:
+            options.LiveTrack = LiveTrackOptions.FromJson(
+                live_track if isinstance(live_track, str) else _json.dumps(live_track))
         if epoch is not None:
             options.Epoch = SolarEpoch.FromJson(
                 epoch if isinstance(epoch, str) else _json.dumps(epoch))
@@ -3022,7 +3065,13 @@ class World:
         from the spawned actor (`camera_name`), so every client holds the same name for it.
 
         Raises ValueError for a name refused, saying why: by the rule before the spawn, or by the
-        server, with the server's reason."""
+        server, with the server's reason. Raises RuntimeError, before anything is spawned, where
+        CarlaNet.Recording is not loaded: the rule and the read-back of the server's name are its."""
+        # Checked before the spawn: the read-back of an unnamed camera's name needs it too, and a
+        # camera spawned before that failed would be left in the world with no caller holding it.
+        if not _CARLANET_RECORDING_AVAILABLE:
+            raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                               "(rebuild the wheel/DLLs)")
         if name is not None:
             name = str(name)
             problem = camera_name_problem(name)

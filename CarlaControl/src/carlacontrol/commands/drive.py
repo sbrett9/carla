@@ -68,6 +68,11 @@ stops a run that falls behind, and the final report says by how much it did. The
 world package that does not describe the world the server has loaded, so a package from another
 build of the world cannot put the traffic somewhere the world is not.
 
+`--end SECOND` ends the drive at a simulated second in place of a number of steps: the SUMO step that
+second falls in is the last step drawn, and the live feed's sample of it is sent before the drive
+stops. On a scenario that steps 1.0 s from zero, `--warm-up 3600 --end 3900` draws the 301 steps from
+3600 to 3900, where `--steps 300` stops after the step at 3899.
+
 Which SUMO runs is named, not left to the environment. The session launches the installation this
 tool names: `--sumo-home` where given, otherwise `CARLANET_SUMO_HOME`, otherwise, run from a
 checkout, this repository's pinned build (`Build/sumo-install`, then `Build/sumo-src`); only where
@@ -196,6 +201,37 @@ row saying why the drive ended. A manifest without that row is one whose drive w
 fixed camera is named on it as it is spawned. Off unless asked for here; `carla-capture` always writes
 one. A path that already holds a manifest is refused before anything starts.
 
+`--cot-udp HOST:PORT` sends a live Cursor-on-Target feed to that address while the drive runs, one
+event per UDP datagram: every vehicle with a body on each sampled frame, posed and seated as CARLA drew
+it, which is every vehicle SUMO has unless its type names no measured blueprint, an optional limit
+leaves it out, or it stands off the world's ground. Each event is the one a capture of that frame
+writes for the vehicle in its truth sidecar, with the same uid (`CARLA-TRUTH-SUMO-<SUMO id>`, where
+carla-cot-telemetry's is `SUMO-TRUTH-<SUMO id>`; `--cot-uid-prefix` changes its first part), point,
+height and fields, less what depends on a picture, the vehicle's SUMO type, which names the scenario
+author's class, and the angle SUMO gave it. Its height is the body origin's with the height-align
+offset removed, so a vehicle on a bridge is reported on the bridge. A port left out is 6969, a
+multicast group works as given, with `--cot-udp-ttl` its time-to-live, and a host name is looked up
+once, as the drive starts. Each event is stamped with its frame's civil time, the epoch plus the
+frame's simulated second, and goes stale `--cot-stale` seconds after that stamp. `--cot-hz` samples
+per simulated second in whole world ticks, the newest frame of each interval, counted from the first
+frame drawn, so the frames before the capture window opens are sent too. Each vehicle's affiliation is
+the display convention's for its population: `--cot-display-convention`, or `<scenario>.display.json`
+beside `--scenario`, with `--cot-affiliation` for any population it does not name. A send that fails is
+counted and said, and the drive goes on. The feed writes no file: a capture's sidecars and
+`--world-truth-track` record what it sends.
+
+`--cot-emit in-view --cot-camera NAME` sends only the vehicles in the picture of the live camera named
+NAME, compared without regard to case (a carla-camera-follower's `--sensor-id`, or this drive's
+`--camera-name`), on each sampled frame: a body whose box falls wholly or partly in the picture, the
+test a capture's `in_frame` records, and not wholly beyond a `--draw-distance`. A vehicle hidden behind
+another is in view. It filters the feed and nothing else: which vehicles get a body is unchanged. While
+no live camera holds the name nothing is sent, and the log says when the camera goes and when it is
+found again. To send what a follower's orbiting camera sees:
+
+    carla-camera-follower --sensor-id Orbit_1 --pattern orbit --orbit-centre 120 -340
+    carla-drive --scenario ... --world-package ... --epoch ... --no-record --real-time-factor 1.0 \\
+        --steps 0 --cot-udp 239.2.3.1:6969 --cot-emit in-view --cot-camera Orbit_1
+
 Every still is named after its camera and its frame's simulated civil time at the epoch's offset,
 `<camera name>_<yyyyMMdd_HHmmss.fff>.png` and `.xml`, and the camera's platform track carries the
 name as its callsign. `--camera-name` names the camera, fixed or
@@ -216,9 +252,11 @@ On Linux the window needs a display.
 """
 import argparse
 import logging
+import math
 import os
 import sys
 
+from carlacontrol.DriveCotFeed import DriveCotFeed
 from carlacontrol.DriveRun import DriveRun
 from carlacontrol.ProducerRecord import ProducerRecord
 from carlacontrol.ToolLayout import ToolLayout
@@ -233,6 +271,23 @@ TOOL = "carla-drive"
 # Image width, height and horizontal field of view per view, where the command line gives none: the
 # fixed camera's as it always was, and the free view's as carla-free-camera opens its window.
 VIEW_OPTICS = {"fixed": (1920, 1080, 60.0), "free": (1280, 720, 90.0)}
+
+# SUMO steps a drive runs where neither --steps nor --end is given. --steps is parsed with no default,
+# so that one given with --end can be refused.
+DEFAULT_STEPS = 600
+
+# The live feed's options besides --cot-udp, with the value each takes when it is left out. Each is
+# parsed with no default, so that one given without --cot-udp can be told from one left out.
+FEED_DEFAULTS = {
+    "--cot-udp-ttl": DriveCotFeed.DEFAULT_TTL,
+    "--cot-hz": DriveCotFeed.DEFAULT_RATE_HZ,
+    "--cot-stale": DriveCotFeed.DEFAULT_STALE_S,
+    "--cot-affiliation": DriveCotFeed.DEFAULT_AFFILIATION,
+    "--cot-display-convention": None,
+    "--cot-uid-prefix": DriveCotFeed.DEFAULT_UID_PREFIX,
+    "--cot-emit": DriveCotFeed.DEFAULT_EMIT,
+    "--cot-camera": None,
+}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -301,10 +356,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                              "before the run stops because SUMO has stopped answering. Must exceed "
                              "the slowest step the scenario produces (default 60)")
 
-    parser.add_argument("--steps", type=int, default=600,
-                        help="SUMO steps to run. 0 runs until the scenario ends -- until SUMO has "
-                             "no vehicle left to simulate or insert -- which is what a live watcher "
-                             "wants")
+    parser.add_argument("--steps", type=int, default=None,
+                        help=f"SUMO steps to run (default {DEFAULT_STEPS}, unless --end is given). 0 "
+                             "runs until the scenario ends -- until SUMO has no vehicle left to "
+                             "simulate or insert -- which is what a live watcher wants")
+    parser.add_argument("--end", type=float, default=None, metavar="SECOND",
+                        help="the simulated second the drive ends at, in place of --steps: the SUMO "
+                             "step that second falls in is the last step drawn, and the live feed's "
+                             "sample of it is sent before the drive stops. Refused with --steps, and "
+                             "where it is not after --warm-up and --window-opens-at")
     parser.add_argument("--real-time-factor", type=float, default=0.0,
                         help="hold the world's ticks to the wall clock: simulated seconds per "
                              "wall-clock second. 1.0 is the pace of real traffic, 0.5 half of it, 2.0 "
@@ -374,6 +434,47 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="write the run manifest to PATH: one JSON object per line, from what the "
                              "run is to a closing row saying why it ended. Refused where PATH already "
                              "holds a manifest. Default: none written")
+    parser.add_argument("--cot-udp", default=None, metavar="HOST:PORT",
+                        help="send a live Cursor-on-Target feed to this address while the drive "
+                             "runs, one event per UDP datagram, for every vehicle with a body on each "
+                             "sampled frame: the event a capture of the frame writes in its truth "
+                             "sidecar, less what depends on a picture. A port left out is 6969; a "
+                             "multicast group, such as TAK's 239.2.3.1:6969, works as given. Default: "
+                             "no feed")
+    parser.add_argument("--cot-udp-ttl", type=int, default=None, metavar="N",
+                        help="with --cot-udp: the multicast time-to-live, 0 to 255 hops (default 1)")
+    parser.add_argument("--cot-hz", type=float, default=None, metavar="HZ",
+                        help="with --cot-udp: samples per simulated second, counted in whole world "
+                             "ticks; each is the newest frame of its interval (default 1)")
+    parser.add_argument("--cot-stale", type=float, default=None, metavar="SECONDS",
+                        help="with --cot-udp: seconds after its stamp, the frame's civil time, each "
+                             "event goes stale (default 3)")
+    parser.add_argument("--cot-affiliation", default=None, metavar="A",
+                        help="with --cot-udp: the CoT affiliation letter of a vehicle population the "
+                             "display convention does not name, and of every vehicle where there is "
+                             "no convention: n neutral, f friend, h hostile, u unknown, or another of "
+                             "a j k o p s x (default n)")
+    parser.add_argument("--cot-display-convention", default=None, metavar="FILE",
+                        help="with --cot-udp: the display convention, a JSON file giving each vehicle "
+                             "population its CoT affiliation, a population being a vType's "
+                             "carla:class_id or, where it has none, its id. Refused where it cannot be "
+                             "read. Default: <scenario>.display.json beside --scenario, where there "
+                             "is one")
+    parser.add_argument("--cot-uid-prefix", default=None, metavar="P",
+                        help="with --cot-udp: what every event's uid begins with, as "
+                             "<P>-SUMO-<SUMO id>; no whitespace (default CARLA-TRUTH, the truth "
+                             "sidecars' own)")
+    parser.add_argument("--cot-emit", choices=(DriveCotFeed.ALL, DriveCotFeed.IN_VIEW), default=None,
+                        help="with --cot-udp: which vehicles are sent: 'all' (default) every vehicle "
+                             "with a body; 'in-view' only those in the picture of the --cot-camera "
+                             "camera, wholly or partly, and not wholly beyond a --draw-distance. It "
+                             "filters the feed and changes nothing about which vehicles get a body")
+    parser.add_argument("--cot-camera", default=None, metavar="NAME",
+                        help="with --cot-emit in-view: the name of the live camera whose picture the "
+                             "feed keeps, compared without regard to case: a carla-camera-follower's "
+                             "--sensor-id, this drive's --camera-name, or a server's Camera_<n>. "
+                             "Looked for before the drive starts and after each step while none holds "
+                             "the name; nothing is sent while none does")
 
     parser.add_argument("--show-road-mesh", action="store_true",
                         help="draw the generated road surface. Hidden by default: it is a flat gray "
@@ -466,7 +567,80 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     for name, default in zip(("width", "height", "fov"), VIEW_OPTICS[args.view], strict=True):
         if getattr(args, name) is None:
             setattr(args, name, default)
+    _refuse_unusable_feed_options(parser, args)
+    _refuse_an_unusable_end(parser, args)
     return args
+
+
+def _refuse_an_unusable_end(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Exit 2 where --end cannot be used, before anything connects; give --steps its default where
+    neither is given."""
+    if args.end is None:
+        if args.steps is None:
+            args.steps = DEFAULT_STEPS
+        return
+    end = f"--end {args.end:.10g}"
+    if args.steps is not None:
+        parser.error(f"{end} and --steps {args.steps} both say when the drive stops: give one")
+    if not math.isfinite(args.end):
+        parser.error(f"{end} must be a simulated second")
+    if not args.end > args.warm_up:
+        parser.error(f"{end} is not after --warm-up {args.warm_up:.10g}: the drive draws its first "
+                     "step at --warm-up")
+    if args.window_opens_at is not None and not args.end > args.window_opens_at:
+        parser.error(f"{end} is not after --window-opens-at {args.window_opens_at:.10g}: the drive "
+                     "would stop before its capture window opens")
+
+
+def _refuse_unusable_feed_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Exit 2 naming every live feed option that cannot be used, before anything connects; then give
+    each one left out its default."""
+    given = [option for option in FEED_DEFAULTS if getattr(args, _destination(option)) is not None]
+    if args.cot_udp is None:
+        if given:
+            parser.error(f"{', '.join(given)} {'sets' if len(given) == 1 else 'set'} the live feed "
+                         "that --cot-udp HOST:PORT turns on: give --cot-udp, or leave "
+                         f"{'it' if len(given) == 1 else 'them'} out")
+        return
+    problems = []
+    try:
+        DriveCotFeed.address(args.cot_udp)
+    except ValueError as malformed:
+        problems.append(f"--cot-udp {malformed}")
+    if args.cot_udp_ttl is not None and not 0 <= args.cot_udp_ttl <= 255:
+        problems.append(f"--cot-udp-ttl {args.cot_udp_ttl} is outside 0 to 255")
+    for option, value, unit in (("--cot-hz", args.cot_hz, "samples per simulated second"),
+                                ("--cot-stale", args.cot_stale, "seconds")):
+        if value is not None and not (math.isfinite(value) and value > 0.0):
+            problems.append(f"{option} {value:g} must be a positive number of {unit}")
+    if args.cot_affiliation is not None:
+        refused = DriveCotFeed.affiliation_problem(args.cot_affiliation)
+        if refused is not None:
+            problems.append(f"--cot-affiliation {refused}")
+    if args.cot_uid_prefix is not None:
+        refused = DriveCotFeed.uid_prefix_problem(args.cot_uid_prefix)
+        if refused is not None:
+            problems.append(f"--cot-uid-prefix {refused}")
+    # Not held to the camera-name rule, which refuses the server's own Camera_<n>: any name a live
+    # camera holds can be followed.
+    if args.cot_camera is not None and not args.cot_camera:
+        problems.append("--cot-camera names no camera")
+    if args.cot_emit == DriveCotFeed.IN_VIEW and args.cot_camera is None:
+        problems.append("--cot-emit in-view needs --cot-camera NAME, the live camera whose picture it "
+                        "keeps")
+    if args.cot_emit != DriveCotFeed.IN_VIEW and args.cot_camera:
+        problems.append("--cot-camera needs --cot-emit in-view: every vehicle is sent otherwise, and "
+                        "no camera decides which")
+    if problems:
+        parser.error("; ".join(problems))
+    for option, default in FEED_DEFAULTS.items():
+        if getattr(args, _destination(option)) is None:
+            setattr(args, _destination(option), default)
+
+
+def _destination(option: str) -> str:
+    """The attribute argparse stores an option under."""
+    return option.removeprefix("--").replace("-", "_")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -9,8 +9,9 @@ namespace CarlaNet.CoSim;
 /// <param name="ImageHeight">Picture height, pixels (<c>image_size_y</c>).</param>
 /// <param name="HorizontalFovDegrees">Horizontal field of view, degrees (<c>fov</c>).</param>
 /// <remarks>
-/// Read once, when a camera is registered with a session, and never on the tick thread: a camera's
-/// attributes are fixed at its spawn, so asking again could only ever give the same answer.
+/// Read once, when a camera is registered with a session or followed by its live track, and never on
+/// the tick thread: a camera's attributes are fixed at its spawn, so asking again could only ever give
+/// the same answer.
 /// </remarks>
 public readonly record struct CameraOptics(int ImageWidth, int ImageHeight, double HorizontalFovDegrees)
 {

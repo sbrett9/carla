@@ -21,6 +21,10 @@ class FollowerCamera:
     its frames arrive at whatever rate the world is being advanced -- the tick rate of whoever owns
     a synchronous world's clock, or the server's own rate when it runs free.
 
+    The camera is spawned under the channel's `sensor_id` where one is given; without one the server
+    names it `Camera_<n>`. `name` is the name the server holds it under, read back from the spawned
+    camera; any other client finds the camera by that name.
+
     It offers the methods `OrbitSensorController` calls on the rig it moves (`set_transform`,
     `set_pose`, `get_current_transform`, `get_position`, `get_initial_pose`), so the orbit
     controller drives this one camera exactly as it drives `SensorRig`'s, unchanged.
@@ -39,9 +43,14 @@ class FollowerCamera:
 
         Args:
             world: The world to spawn into.
-            channel: The channel whose optics the camera takes (`fov`, `width`, `height`).
+            channel: The channel whose optics the camera takes (`fov`, `width`, `height`), and
+                whose `sensor_id`, where given, names it.
             transform: Where the camera starts.
             logger: Where to report; this module's logger by default.
+
+        Raises:
+            ValueError: when the server refuses the name because a live camera holds it, compared
+                without regard to case, with the server's reason. Nothing has been spawned then.
         """
         self.logger = logger or logging.getLogger(__name__)
         self.channel = channel
@@ -55,10 +64,17 @@ class FollowerCamera:
         blueprint.set_attribute("image_size_y", str(channel.height))
         if blueprint.has_attribute("fov"):
             blueprint.set_attribute("fov", str(channel.fov))
-        self.actor = world.spawn_actor(blueprint, transform)
-        self.logger.info("spawned camera actor %d, %dx%d, fov %.1f", self.actor.id,
-                         channel.width, channel.height, channel.fov)
-        self.actor.listen(self._on_frame)
+        self.actor = world.spawn_camera(blueprint, transform, name=channel.sensor_id)
+        try:
+            self.name: str = world.camera_name(self.actor)
+            self.logger.info("spawned camera %s, actor %d, %dx%d, fov %.1f", self.name,
+                             self.actor.id, channel.width, channel.height, channel.fov)
+            self.actor.listen(self._on_frame)
+        except BaseException:
+            # No caller holds this object until it is returned, so a camera left here would outlive
+            # the follower.
+            self.destroy()
+            raise
 
     @property
     def id(self) -> int:

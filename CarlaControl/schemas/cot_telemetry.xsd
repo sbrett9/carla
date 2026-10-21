@@ -4,14 +4,17 @@
 
   Every UDP datagram holds exactly one event, UTF-8, with no XML declaration. carla-sctmv sends CARLA
   vehicles (TelemetryController). The SUMO bridge, carla-cot-telemetry given a UDP address, sends SUMO
-  vehicles (SumoCotBridge).
+  vehicles (SumoCotBridge). carla-drive given a UDP address sends the vehicles its SUMO drive drew on
+  each sampled frame (DriveCotFeed), as its session's live track wrote them (CotWriter.StreamEvent).
 
   A vehicle event has the shape of a vehicle event in a capture's truth sidecar. The parts the two
   share (Point, Track, Contact and the simple types under them) are taken from truth_sidecar.xsd, which
   must sit beside this file; the event's own parts are in cot_event_body.xsd. A datagram differs from a
-  sidecar event: it never carries the picture's fields (in_frame, the box, occlusion, lights, pose
-  source), _box3d or _supervision; a SUMO vehicle's datagram leaves out type_id, special_type,
-  role_name and marked; and carla-sctmv's carries _capture and _solar inside <detail>.
+  sidecar event: it never carries the picture's fields (pitch and roll, in_frame, the apparent size,
+  the box, occlusion, lights, pose source, beyond_draw_distance, camera_range_m), _box3d or
+  _supervision; a SUMO vehicle's datagram leaves out type_id, special_type, role_name and marked;
+  carla-drive's leaves out vtype_id and sumo_angle_deg; and carla-sctmv's carries _capture and _solar
+  inside <detail>.
 
   Including truth_sidecar.xsd also makes its root, <events>, a root of this schema. A datagram is
   checked as <event>.
