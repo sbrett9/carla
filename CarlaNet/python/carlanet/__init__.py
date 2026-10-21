@@ -3022,7 +3022,13 @@ class World:
         from the spawned actor (`camera_name`), so every client holds the same name for it.
 
         Raises ValueError for a name refused, saying why: by the rule before the spawn, or by the
-        server, with the server's reason."""
+        server, with the server's reason. Raises RuntimeError, before anything is spawned, where
+        CarlaNet.Recording is not loaded: the rule and the read-back of the server's name are its."""
+        # Checked before the spawn: the read-back of an unnamed camera's name needs it too, and a
+        # camera spawned before that failed would be left in the world with no caller holding it.
+        if not _CARLANET_RECORDING_AVAILABLE:
+            raise RuntimeError("camera names are ruled by CarlaNet.Recording, which is not loaded "
+                               "(rebuild the wheel/DLLs)")
         if name is not None:
             name = str(name)
             problem = camera_name_problem(name)

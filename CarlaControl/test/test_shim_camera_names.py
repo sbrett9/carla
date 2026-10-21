@@ -193,6 +193,20 @@ def test_a_name_the_rule_refuses_is_refused_before_the_server_is_reached(shim, n
     assert client.spawned == []
 
 
+@pytest.mark.parametrize("name", [None, "Overwatch_1"])
+def test_a_shim_without_the_camera_name_rule_spawns_no_camera(shim, monkeypatch, name):
+    # Without CarlaNet.Recording neither the rule nor the read-back of the server's name can run, and
+    # a camera spawned before finding that out would be left in the world.
+    monkeypatch.setattr(shim, "_CARLANET_RECORDING_AVAILABLE", False)
+    client = _Client(shim)
+    world = shim.World(client)
+
+    with pytest.raises(RuntimeError, match="CarlaNet.Recording, which is not loaded"):
+        world.spawn_camera(_rgb_blueprint(shim), _anywhere(shim), name=name)
+
+    assert client.spawned == []
+
+
 def test_a_name_a_live_camera_holds_is_refused_by_the_server_with_its_reason(shim):
     client = _Client(shim)
     world = shim.World(client)
